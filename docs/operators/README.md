@@ -1,0 +1,47 @@
+# Application Atlas: what we need from each team
+
+Application Atlas maps which systems a Kubernetes application talks to, over which ports, seen by which network devices, and under which ACI policy. It builds that map inside Splunk from data your systems already produce. This folder lists, per team, exactly what to configure and what to send back before the pilot.
+
+Pilot scope: one Cisco ACI fabric (with Nexus Dashboard), one Kubernetes cluster running Cilium, Splunk Enterprise 10.6. Splunk Cloud and NX-OS standalone fabrics come later.
+
+## Data flow
+
+```text
+ACI leaves ──NetFlow v9──► Splunk Stream forwarder ──► index netflow
+APIC / Nexus Dashboard ──API polling (DC Networking add-on)──► index cisco_dc
+FMC ──eStreamer (Cisco Security Cloud app)──► index cisco_secure_fw
+Isovalent Runtime Security ──HEC──► index cisco_isovalent
+Kubernetes API (pods, services, endpointslices, ingresses, gateways, nodes) ──Splunk OTel Collector──► index k8s
+Application spans ──Splunk OTel Collector──► index otel_traces
+Hubble flow log file on each node ──Splunk OTel Collector──► index cilium_hubble
+                                   │
+                      Application Atlas scheduled searches
+                                   │
+                      index adm_summary + KV store lookups ──► dependency map
+```
+
+## Who does what
+
+| Team | Handout | What we need | Needed before |
+| --- | --- | --- | --- |
+| Splunk platform | [splunk-platform.md](splunk-platform.md) | Indexes, HEC tokens, add-on placement, app install and configuration, roles | Everything else (other teams send data here) |
+| ACI / network | [aci-network.md](aci-network.md) | Read-only APIC and Nexus Dashboard accounts, extra ACI object classes, LLDP, ACI NetFlow export, optional contract logging | Pilot start |
+| Splunk Stream / NetFlow | [network-stream.md](network-stream.md) | Stream forwarder with a NetFlow receiver, NetFlow stream enabled | ACI NetFlow export |
+| Kubernetes platform | [kubernetes-platform.md](kubernetes-platform.md) | Splunk OTel Collector Helm values, RBAC, Hubble file tail, LLDP on nodes | Pilot start |
+| Cilium / Isovalent | [cilium-isovalent.md](cilium-isovalent.md) | Hubble flow export, load-balancing facts, Isovalent HEC export, Enterprise export sample | Pilot start |
+| Firewall / security | [firewall-security.md](firewall-security.md) | FTD connection events via eStreamer, NAT sample | Only if traffic crosses the FTD |
+| Application owners | [application-teams.md](application-teams.md) | OpenTelemetry resource attributes, client spans, trace propagation through ingress | Pilot start |
+
+## Send us back (one consolidated list)
+
+- [ ] Versions: Splunk, APIC, Nexus Dashboard, leaf/spine NX-OS (ACI mode), Cilium, Isovalent/Tetragon, Kubernetes, Splunk OTel Collector chart, FMC/FTD, Splunk Stream.
+- [ ] Address plan: Kubernetes node subnet(s), pod CIDR(s), LoadBalancer IP pool(s), NodePort range, client and VM subnets, external/NAT ranges.
+- [ ] ACI names: tenant(s), VRF(s), bridge domains, EPGs, L3Outs and external EPGs used by the app and its clients.
+- [ ] Routing scope table: one row per observer (see [splunk-platform.md](splunk-platform.md#routing-scope-lookup)).
+- [ ] One hour of sample events per new sourcetype once data flows (export as JSON from Splunk search).
+- [ ] An Isovalent Enterprise flow-export sample event, if you use Isovalent's exporter instead of (or alongside) Hubble's built-in file export.
+- [ ] Contacts: one owner per system for pilot questions.
+
+## Data handling
+
+Flow and trace data contain internal IP addresses, host and pod names, and (for Hubble L7 and spans) HTTP paths and headers. Each handout notes where to limit or redact. Never put tokens or passwords in tickets, chat or these documents; share them through your normal secret-management process.
