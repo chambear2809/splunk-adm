@@ -1,0 +1,19 @@
+# Project defaults. Codex may require the repository to be trusted before it
+# loads project-local settings. Keep credentials and provider auth user-scoped.
+model = "gpt-6.1-sol"
+review_model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+[agents]
+enabled = true
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "medium"
+max_concurrent_threads_per_session = 4
+max_depth = 1
+
+[agents.reviewer]
+description = "Independent, read-only GPT-6.1 Sol review of implementation diffs for defects, regressions, security risks, and missing tests."
+config_file = "./agents/reviewer.toml"
+nickname_candidates = ["reviewer", "auditor"]

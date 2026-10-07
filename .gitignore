@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+.agent-runs/
+.agent-worktrees/
+
+# Downloaded vendor archives and extracted source are local research artifacts.
+/research/packages/
+/research/extracted/
+
+# Build and local development outputs
+node_modules/
+dist/
+splunk_app/splunk_adm/appserver/static/
+__pycache__/
+*.pyc

@@ -1,0 +1,878 @@
+/* Keep every product selector inside the React mount to protect Splunk chrome. */
+#adm-root {
+  --ink: #263349;
+  --muted: #7b879a;
+  --purple: #7057d7;
+  --border: #e4e8f0;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: var(--ink);
+  background: #f5f7fb;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+#adm-root * {
+  box-sizing: border-box;
+}
+#adm-root button,
+#adm-root input,
+#adm-root select {
+  font: inherit;
+}
+#adm-root button {
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+#adm-root button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+#adm-root button:focus-visible,
+#adm-root a:focus-visible,
+#adm-root input:focus-visible,
+#adm-root select:focus-visible,
+#adm-root g:focus-visible {
+  outline: 2px solid #7057d7;
+  outline-offset: 3px;
+}
+#adm-root h1,
+#adm-root h2,
+#adm-root h3,
+#adm-root p {
+  margin: 0;
+}
+#adm-root .atlas {
+  display: flex;
+  min-height: 100vh;
+}
+#adm-root .sidebar {
+  width: 70px;
+  flex-shrink: 0;
+  background: #202d44;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0;
+  gap: 14px;
+}
+#adm-root .brand-mark {
+  color: #c4b8ff;
+  margin-bottom: 12px;
+}
+#adm-root .sidebar-rule {
+  width: 26px;
+  height: 1px;
+  background: #435069;
+  margin-bottom: 12px;
+}
+#adm-root .nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #a0aec5;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  text-decoration: none;
+}
+#adm-root .nav-icon.active {
+  background: #44516b;
+  color: #fff;
+}
+#adm-root .nav-icon:hover {
+  background: #35435d;
+}
+#adm-root .help {
+  margin-top: auto;
+}
+#adm-root .sidebar-bottom {
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #8291ab;
+}
+#adm-root .main {
+  min-width: 0;
+  flex: 1;
+  padding: 0 32px;
+  max-width: 2000px;
+  margin: auto;
+}
+#adm-root .topbar {
+  height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+#adm-root .wordmark {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.7px;
+  display: flex;
+  align-items: center;
+}
+#adm-root .wordmark > span:first-child {
+  color: var(--purple);
+  font-weight: 400;
+}
+#adm-root .version {
+  margin-left: 16px;
+  letter-spacing: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8792a5;
+  padding-left: 16px;
+  border-left: 1px solid #d6dce7;
+}
+#adm-root .topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+#adm-root .splunk-label {
+  color: #8792a5;
+  font-size: 12px;
+}
+#adm-root .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #778499;
+}
+#adm-root .icon-button:hover {
+  background: #edf0f7;
+  color: #49348f;
+}
+#adm-root .page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 32px 0 24px;
+}
+#adm-root .breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+  letter-spacing: 1.6px;
+  color: #8290a4;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+#adm-root h1 {
+  font-size: 32px;
+  letter-spacing: -1.1px;
+  line-height: 1.18;
+  font-weight: 650;
+}
+#adm-root h1 span {
+  color: #8b96a8;
+  font-weight: 400;
+}
+#adm-root .page-heading p {
+  color: #7b8799;
+  font-size: 12px;
+  margin-top: 12px;
+}
+#adm-root .mode-control,
+#adm-root .tabs {
+  display: flex;
+  background: #e9edf4;
+  border-radius: 8px;
+  padding: 4px;
+  flex-shrink: 0;
+}
+#adm-root .mode-control button,
+#adm-root .tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  padding: 7px 13px;
+  font-size: 11px;
+  color: #7e889a;
+  white-space: nowrap;
+}
+#adm-root .mode-control button.selected,
+#adm-root .tabs button.selected {
+  color: #57468f;
+  background: #fff;
+  box-shadow: 0 1px 4px #26334912;
+}
+#adm-root .notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border: 1px solid #dce5ef;
+  border-radius: 8px;
+  background: #edf5fc;
+  font-size: 11px;
+  margin-bottom: 18px;
+  color: #527094;
+}
+#adm-root .demo-notice {
+  background: #f0ecfa;
+  border-color: #e2daf4;
+  color: #7a68a2;
+}
+#adm-root .notice button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 11px;
+}
+#adm-root .boundary-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+}
+#adm-root .boundary-icon {
+  background: #eee9fb;
+  color: var(--purple);
+  padding: 10px;
+  border-radius: 10px;
+  display: flex;
+}
+#adm-root .eyebrow {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
+  color: #96a1b3;
+}
+#adm-root .boundary-bar h2 {
+  font-size: 19px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+#adm-root .scope-pill,
+#adm-root .count-pill {
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: #f0ecfa;
+  color: #7d68ad;
+  font-size: 10px;
+}
+#adm-root .scope-items {
+  margin-left: auto;
+  display: flex;
+  gap: 30px;
+}
+#adm-root .scope-items span {
+  color: #66758c;
+  font-size: 11px;
+}
+#adm-root .scope-items b {
+  display: block;
+  font-size: 9px;
+  color: #9aa5b5;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+#adm-root .metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 22px;
+}
+#adm-root .metric {
+  padding: 17px 20px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+#adm-root .metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #8995a8;
+  font-size: 11px;
+}
+#adm-root .metric-top svg {
+  color: #a197c7;
+}
+#adm-root .metric strong {
+  font-weight: 500;
+  font-size: 32px;
+  letter-spacing: -1px;
+  display: block;
+  margin-top: 7px;
+}
+#adm-root .metric p {
+  font-size: 10px;
+  color: #9ba5b5;
+}
+#adm-root .metric.caution strong,
+#adm-root .metric.caution svg {
+  color: #c68b32;
+}
+#adm-root .panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow: hidden;
+}
+#adm-root .workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 285px;
+  gap: 18px;
+}
+#adm-root .map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 22px 16px;
+}
+#adm-root h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.25px;
+}
+#adm-root .map-header h2 {
+  margin-top: 4px;
+}
+#adm-root .secondary-button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  border: 1px solid #e2e6ed;
+  border-radius: 6px;
+  font-size: 10px;
+  color: #76849a;
+  padding: 6px 10px;
+}
+#adm-root .map-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #f0f2f6;
+  border-bottom: 1px solid #e7ecf3;
+  padding: 12px 20px;
+}
+#adm-root .tabs {
+  background: #f0f2f8;
+  padding: 3px;
+}
+#adm-root .tabs button {
+  font-size: 10px;
+  padding: 6px 10px;
+}
+#adm-root .search-field {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a0aabc;
+}
+#adm-root .search-field input {
+  width: 160px;
+  border: 0;
+  font-size: 10px;
+  background: transparent;
+  color: #66758c;
+}
+#adm-root .search-field input::placeholder {
+  color: #a1aabc;
+}
+#adm-root .graph-wrap {
+  position: relative;
+  background: #fbfcff;
+}
+#adm-root .graph-scroll {
+  height: 460px;
+  overflow: auto;
+}
+#adm-root .lane-label {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  fill: #9da8ba;
+  font-weight: 600;
+}
+#adm-root .graph-node,
+#adm-root .graph-edge {
+  cursor: pointer;
+}
+#adm-root .graph-node:hover rect:first-child {
+  stroke: #8a73d4;
+  stroke-width: 2px;
+}
+#adm-root .node-label {
+  font-size: 12px;
+  fill: #354259;
+  font-weight: 600;
+}
+#adm-root .node-kind {
+  font-size: 9px;
+  fill: #939bad;
+}
+#adm-root .node-meta {
+  font-size: 9px;
+  fill: #8491a6;
+}
+#adm-root .graph-tools {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e3e8ef;
+  background: #fff;
+  padding: 3px 7px;
+  border-radius: 7px;
+  box-shadow: 0 3px 8px #26334908;
+}
+#adm-root .graph-tools button {
+  border: 0;
+  background: transparent;
+  color: #8793a7;
+  display: flex;
+  padding: 5px;
+}
+#adm-root .graph-tools span {
+  color: #919aab;
+  font-size: 10px;
+  width: 32px;
+  text-align: center;
+}
+#adm-root .legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 13px 20px;
+  border-top: 1px solid #edf0f5;
+}
+#adm-root .legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #8c98ab;
+  font-size: 9px;
+}
+#adm-root .legend i {
+  display: inline-block;
+  width: 13px;
+  height: 2px;
+}
+#adm-root .call {
+  background: #8471f2;
+}
+#adm-root .flow {
+  background: #20a6ad;
+}
+#adm-root .binding {
+  background: #64758f;
+}
+#adm-root .unknown {
+  background: #d59132;
+}
+#adm-root .detail-panel {
+  padding: 21px;
+}
+#adm-root .detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+}
+#adm-root .detail-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 18px 0;
+  width: 54px;
+  height: 54px;
+  border-radius: 15px;
+  color: #8f7bb7;
+  background: #f1edf8;
+}
+#adm-root .detail-panel h2 {
+  overflow-wrap: anywhere;
+  font-size: 18px;
+  font-weight: 550;
+}
+#adm-root .inspector-copy {
+  color: #8e9aac;
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 12px 0 24px;
+}
+#adm-root .evidence-card {
+  display: flex;
+  gap: 11px;
+  margin-bottom: 19px;
+}
+#adm-root .source-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+#adm-root .purple {
+  background: #9680df;
+}
+#adm-root .teal {
+  background: #54b0b4;
+}
+#adm-root .amber {
+  background: #fff2dd;
+  color: #b78635;
+}
+#adm-root .source-dot.amber {
+  background: #dca24b;
+}
+#adm-root .evidence-card b {
+  font-size: 11px;
+  font-weight: 550;
+  color: #6a7790;
+}
+#adm-root .evidence-card p {
+  font-size: 10px;
+  color: #9aa4b5;
+  line-height: 1.7;
+  margin-top: 4px;
+}
+#adm-root .planned {
+  margin-top: 28px;
+  border-top: 1px solid #edf0f5;
+  padding-top: 20px;
+}
+#adm-root .planned p {
+  font-size: 10px;
+  color: #96a2b5;
+  line-height: 1.8;
+  margin: 7px 0 8px;
+}
+#adm-root .planned > span:last-child {
+  font-size: 9px;
+  color: #b0b8c6;
+}
+#adm-root .type-pill {
+  font-size: 10px;
+  display: inline-block;
+  padding: 3px 8px;
+  background: #ece8f7;
+  color: #8a71b2;
+  border-radius: 5px;
+  margin-top: 10px;
+}
+#adm-root .type-pill.amber {
+  background: #fff2dd;
+  color: #b78635;
+}
+#adm-root dl {
+  margin: 20px 0;
+}
+#adm-root dt {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #9aa5b6;
+  margin-top: 14px;
+}
+#adm-root dd {
+  margin: 3px 0 0;
+  color: #66758b;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+#adm-root .mono {
+  font-family: monospace;
+  font-size: 10px;
+}
+#adm-root .explanation {
+  background: #f5f7fc;
+  border-radius: 7px;
+  padding: 12px;
+  font-size: 11px;
+  color: #8592a7;
+}
+#adm-root h3 {
+  font-size: 11px;
+  margin-top: 22px;
+  font-weight: 600;
+}
+#adm-root .related-list button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #edf0f5;
+  font-size: 10px;
+  text-align: left;
+  color: #66758b;
+}
+#adm-root .related-list small {
+  display: block;
+  color: #a2aabb;
+  font-size: 9px;
+  margin-top: 2px;
+}
+#adm-root .bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 285px;
+  gap: 18px;
+  margin-top: 18px;
+}
+#adm-root .section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+#adm-root .section-title h2 {
+  margin-top: 4px;
+}
+#adm-root .table-scroll {
+  overflow-x: auto;
+  padding: 0 20px 12px;
+}
+#adm-root table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+#adm-root th {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #a0aabc;
+  font-weight: 500;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf0f5;
+}
+#adm-root td {
+  padding: 12px 8px 12px 0;
+  font-size: 10px;
+  color: #8c98aa;
+  border-bottom: 1px solid #f0f2f6;
+}
+#adm-root td button {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #6c7990;
+  padding: 0;
+  font-size: 10px;
+  text-align: left;
+}
+#adm-root .status {
+  font-size: 9px;
+  background: #e9f6f4;
+  color: #479998;
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+#adm-root .status.amber {
+  background: #fff2dd;
+  color: #b78635;
+}
+#adm-root .coverage-panel {
+  padding: 20px;
+}
+#adm-root .coverage-panel h2 {
+  margin: 5px 0 12px;
+}
+#adm-root .coverage-panel ul {
+  padding-left: 16px;
+  font-size: 10px;
+  color: #9a8e79;
+  line-height: 1.8;
+}
+#adm-root .coverage-panel > p {
+  font-size: 11px;
+  color: #8795aa;
+}
+#adm-root .fine-print {
+  color: #9ca7b8;
+  font-size: 10px;
+  margin-top: 14px;
+  line-height: 1.8;
+}
+#adm-root footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 0;
+  color: #a1aaba;
+  font-size: 9px;
+}
+#adm-root .config-panel {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+}
+#adm-root .config-panel .section-title p {
+  color: #8b97a9;
+  font-size: 11px;
+  margin-top: 6px;
+}
+#adm-root .config-fields {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 0 20px;
+}
+#adm-root .config-fields label {
+  flex: 1;
+  font-size: 10px;
+  color: #7d899c;
+  min-width: 180px;
+}
+#adm-root .config-fields input,
+#adm-root .config-fields select {
+  display: block;
+  width: 100%;
+  border: 1px solid #dce2ec;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  color: #65738b;
+  background: #fff;
+  margin-top: 5px;
+}
+#adm-root .primary-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #7057d7;
+  color: white;
+  border: 0;
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 11px;
+}
+#adm-root .config-note {
+  margin: 16px 20px 0;
+  font-size: 10px;
+  line-height: 1.8;
+  color: #94a0b3;
+}
+#adm-root .error {
+  color: #a84546;
+  background: #fff0f0;
+  border: 1px solid #f2d5d5;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-bottom: 18px;
+}
+#adm-root .empty {
+  padding: 70px 32px;
+  color: #8c97aa;
+  text-align: center;
+}
+#adm-root .empty h2,
+#adm-root .empty h3 {
+  color: #63728a;
+  margin: 10px 0;
+}
+#adm-root .empty p {
+  max-width: 480px;
+  margin: auto;
+  font-size: 12px;
+}
+@media (min-width: 1550px) {
+  #adm-root .main {
+    padding: 0 48px;
+  }
+  #adm-root .workspace,
+  #adm-root .bottom-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+@media (max-width: 1150px) {
+  #adm-root .main {
+    padding: 0 20px;
+  }
+  #adm-root .scope-items {
+    gap: 16px;
+  }
+  #adm-root .workspace,
+  #adm-root .bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #adm-root .detail-panel {
+    min-height: 220px;
+  }
+  #adm-root .metrics {
+    gap: 10px;
+  }
+}
+@media (max-width: 750px) {
+  #adm-root .sidebar {
+    width: 48px;
+  }
+  #adm-root .main {
+    padding: 0 12px;
+  }
+  #adm-root .page-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+  #adm-root h1 {
+    font-size: 27px;
+  }
+  #adm-root .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  #adm-root .boundary-bar {
+    flex-wrap: wrap;
+  }
+  #adm-root .scope-items {
+    width: 100%;
+    margin: 0;
+    flex-wrap: wrap;
+  }
+  #adm-root .map-controls {
+    flex-wrap: wrap;
+  }
+  #adm-root .search-field {
+    margin: 0;
+  }
+  #adm-root .splunk-label,
+  #adm-root .version {
+    display: none;
+  }
+  #adm-root .notice {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  #adm-root footer {
+    flex-direction: column;
+  }
+}

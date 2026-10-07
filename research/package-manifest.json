@@ -1,0 +1,178 @@
+{
+  "research_date": "2026-10-07",
+  "scope": "Static TA package inspection for a VM and Kubernetes application/network dependency map",
+  "packages": [
+    {
+      "title": "Stream Wire Data",
+      "splunkbase_id": "5234",
+      "version": "8.1.6",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-add-on-for-stream-wire-data_816.tgz",
+      "extracted_path": "research/extracted/splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data",
+      "source_url": "https://attack-range-appbinaries.s3.us-west-2.amazonaws.com/splunk-add-on-for-stream-wire-data_816.tgz",
+      "source_metadata_url": "https://github.com/splunk/security_content/blob/b3eabf7af2e7f556838b18b3c08b07e33f058c50/contentctl.yml",
+      "sha256": "206100a732cedbee90af4c9412301a2a5d894cbf561f05cfad2ace19be14f1d9",
+      "bytes": 30518,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "8.1.6"
+      },
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Stream Forwarders",
+      "splunkbase_id": "5238",
+      "version": "8.1.3",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-add-on-for-stream-forwarders_813.tgz",
+      "extracted_path": "research/extracted/splunk-add-on-for-stream-forwarders_813/Splunk_TA_stream",
+      "source_url": "https://attack-range-appbinaries.s3.us-west-2.amazonaws.com/splunk-add-on-for-stream-forwarders_813.tgz",
+      "source_metadata_url": "https://github.com/splunk/security_content/blob/b3eabf7af2e7f556838b18b3c08b07e33f058c50/contentctl.yml",
+      "sha256": "aae74100dbdd08ed207b4ed9cbfc8db4b4c757b2aeebba48dffe7a42f6fbd6e2",
+      "bytes": 99791053,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "launcher": "8.1.3"
+      },
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Cisco Security Cloud",
+      "splunkbase_id": "7404",
+      "version": "3.6.5",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-security-cloud_365.tgz",
+      "extracted_path": "research/extracted/cisco-security-cloud_365/CiscoSecurityCloud",
+      "source_url": "https://attack-range-appbinaries.s3.us-west-2.amazonaws.com/cisco-security-cloud_365.tgz",
+      "source_metadata_url": "https://github.com/splunk/security_content/blob/b3eabf7af2e7f556838b18b3c08b07e33f058c50/contentctl.yml",
+      "sha256": "d98f072c37279d52ce673ebcc27e4b62644ac0353f245ead681633eec60b3efc",
+      "bytes": 35767943,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "launcher": "3.6.5",
+        "id": "3.6.5"
+      },
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Cisco Splunk Add-on for AppDynamics",
+      "splunkbase_id": "3471",
+      "version": "3.2.1",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-splunk-add-on-for-appdynamics_321.tgz",
+      "extracted_path": "research/extracted/cisco-splunk-add-on-for-appdynamics_321/Splunk_TA_AppDynamics",
+      "source_url": "https://attack-range-appbinaries.s3.us-west-2.amazonaws.com/cisco-splunk-add-on-for-appdynamics_321.tgz",
+      "source_metadata_url": "https://github.com/splunk/security_content/blob/b3eabf7af2e7f556838b18b3c08b07e33f058c50/contentctl.yml",
+      "sha256": "10c0c7ec606fcbf0e03c24352e3e69935ff4ed76ba3f95b9fa4db4dd6b851c6c",
+      "bytes": 6624371,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "3.2.1",
+        "id": "3.2.1"
+      },
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Splunk Add-on for OpenTelemetry Collector, Linux x86_64",
+      "splunkbase_id": "7125",
+      "version": "0.162.0",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/Splunk_TA_otel_linux_x86_64.tgz",
+      "extracted_path": "research/extracted/Splunk_TA_otel_linux_x86_64_01620/Splunk_TA_otel_linux_x86_64",
+      "source_url": "https://github.com/signalfx/splunk-otel-collector/releases/download/v0.162.0/Splunk_TA_otel_linux_x86_64.tgz",
+      "source_metadata_url": "https://github.com/signalfx/splunk-otel-collector/releases/tag/v0.162.0",
+      "sha256": "6096ae569a1119f1afc4b6d3dae193ed30d96c015c53976cccbfd04f779280dc",
+      "bytes": 157568547,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "0.162.0",
+        "id": "0.162.0"
+      },
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Cisco DC Networking",
+      "splunkbase_id": "7777",
+      "version": "1.2.2",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-dc-networking_122.tar.gz",
+      "extracted_path": "research/extracted/cisco-dc-networking_122/cisco_dc_networking_app_for_splunk",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7777/releases/1.2.2/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/7777",
+      "sha256": "9e2b8534b4c0ddfd5750d3d5924e07ba6d4cf689300164bed041f5cfadb08497",
+      "bytes": 12108530,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "1.2.2",
+        "id": "1.2.2"
+      },
+      "extraction_scope": "Regular static source/configuration files no larger than 5 MB; symlinks and executables excluded",
+      "license_acceptance": "Displayed Cisco End User License and Splunk terms/privacy accepted with user confirmation on 2026-10-07",
+      "installed": false,
+      "executed": false
+    },
+    {
+      "title": "Cisco Security Cloud",
+      "splunkbase_id": "7404",
+      "version": "3.7.2",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-security-cloud_372.tar.gz",
+      "extracted_path": "research/extracted/cisco-security-cloud_372/CiscoSecurityCloud",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7404/releases/3.7.2/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/7404",
+      "sha256": "37f66fa369356f7394f267e2c825bdea26684b3460e4eedc5870c0ce3d2c6686",
+      "bytes": 35843864,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "3.7.2",
+        "id": "3.7.2"
+      },
+      "extraction_scope": "Regular UTF-8 text files up to 5 MB; symlinks and binary files excluded",
+      "extracted_text_files": 2613,
+      "license_url": "https://www.cisco.com/c/dam/en_us/about/doing_business/legal/Cisco_General_Terms.pdf",
+      "license_acceptance": "Displayed package license and Splunk terms/privacy approved by the user on 2026-10-07",
+      "installed": false,
+      "executed": false,
+      "download_method": "Authenticated Splunkbase browser flow; issued official CDN link fetched with HTTPS client"
+    },
+    {
+      "title": "Splunk App for Stream",
+      "splunkbase_id": "1809",
+      "version": "8.1.6",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-app-for-stream_816.tgz",
+      "extracted_path": "research/extracted/splunk-app-for-stream_816/splunk_app_stream",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/1809/releases/8.1.6/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/1809",
+      "sha256": "f9436b71f0bc791b6b74384d23e741e077f61b4852f2133c2bad7edab49fc399",
+      "bytes": 52179186,
+      "publisher_digest_verified": true,
+      "app_conf_versions": {
+        "launcher": "8.1.6"
+      },
+      "extraction_scope": "Regular UTF-8 text files up to 5 MB; symlinks and binary files excluded",
+      "extracted_text_files": 427,
+      "license_url": "https://www.splunk.com/en_us/legal/splunk-general-terms.html",
+      "license_acceptance": "Displayed package license and Splunk terms/privacy approved by the user on 2026-10-07",
+      "installed": false,
+      "executed": false,
+      "download_method": "Authenticated Splunkbase browser download"
+    }
+  ],
+  "pending": [
+    {
+      "title": "Cisco Enterprise Networking Add-on for Splunk",
+      "splunkbase_id": "7538",
+      "version": "4.0.35",
+      "expected_filename": "cisco-enterprise-networking-add-on-for-splunk_4035.tgz",
+      "expected_sha256": "61d04492c62d73dfac18b78b85eb42ffae6595c2570a5028c782fe524499a0e9",
+      "status": "conditional_on_switch_models_not_yet_downloaded",
+      "source_url": "https://splunkbase.splunk.com/app/7538"
+    }
+  ]
+}
