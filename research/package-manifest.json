@@ -162,6 +162,31 @@
       "installed": false,
       "executed": false,
       "download_method": "Authenticated Splunkbase browser download"
+    },
+    {
+      "title": "Splunk OpenTelemetry Collector for Kubernetes (Helm chart)",
+      "chart_name": "splunk-otel-collector",
+      "version": "0.161.0",
+      "app_version": "0.161.0",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-otel-collector-0.161.0.tgz",
+      "extracted_path": "research/extracted/splunk-otel-collector-chart_01610/splunk-otel-collector",
+      "source_url": "https://github.com/signalfx/splunk-otel-collector-chart/releases/download/splunk-otel-collector-0.161.0/splunk-otel-collector-0.161.0.tgz",
+      "source_metadata_url": "https://github.com/signalfx/splunk-otel-collector-chart/releases/tag/splunk-otel-collector-0.161.0",
+      "sha256": "e3e02156e0b3ac2f733c8340d54b982d801c548aa48cfa6f89d598ab6188ecc3",
+      "bytes": 176972,
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "GitHub release asset digest",
+      "upstream_code_references": {
+        "collector_go_mod": "https://github.com/signalfx/splunk-otel-collector/blob/v0.161.0/go.mod (splunkhecexporter v0.161.0, k8sattributesprocessor v1.0.0)",
+        "span_hec_format": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.161.0/pkg/translator/splunk/traces_to_splunk.go",
+        "log_hec_format": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.161.0/pkg/translator/splunk/logs_to_splunk.go",
+        "k8sobjects_log_shape": "https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.161.0/receiver/k8sobjectsreceiver/unstructured_to_logdata.go"
+      },
+      "static_rendering": "helm template with splunkPlatform endpoint/token/index/metricsIndex/tracesIndex and metricsEnabled/tracesEnabled=true; rendered manifests inspected only",
+      "installed": false,
+      "executed": false,
+      "download_method": "gh release download from publisher GitHub release"
     }
   ],
   "pending": [
@@ -171,7 +196,7 @@
       "version": "4.0.35",
       "expected_filename": "cisco-enterprise-networking-add-on-for-splunk_4035.tgz",
       "expected_sha256": "61d04492c62d73dfac18b78b85eb42ffae6595c2570a5028c782fe524499a0e9",
-      "status": "conditional_on_switch_models_not_yet_downloaded",
+      "status": "out_of_scope_nexus_only_pilot",
       "source_url": "https://splunkbase.splunk.com/app/7538"
     }
   ]
