@@ -1,0 +1,9 @@
+[http]
+disabled = 0
+enableSSL = 1
+
+[http://adm-lab]
+disabled = 0
+token = @HEC_TOKEN@
+index = main
+indexes = main,netflow,cisco_dc,cisco_secure_fw,cisco_isovalent,k8s,otel_traces,adm_summary,adm

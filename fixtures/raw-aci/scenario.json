@@ -1,0 +1,2235 @@
+{
+  "description": "ACI pilot scenario: a single ACI fabric with Kubernetes (Cilium) nodes and VMs. Entity and traffic facts only; event formats come from the TA/product schemas cited in tools/gen_raw_fixtures.py and fixtures/raw-aci/FIELDS.md. Addresses: RFC 1918 internal, RFC 5737 for management and external hosts.",
+  "window": {
+    "start": "2026-10-07T11:45:00Z",
+    "end": "2026-10-07T12:00:00Z"
+  },
+  "assumptions": [
+    "Single ACI fabric aci-1 (APIC apic1 192.0.2.50, pod 1): leaves leaf-101/102/103, spines spine-201/202, each leaf eth1/49 -> spine-201 and eth1/50 -> spine-202.",
+    "Tenant shop, VRF prod, policy control enforcement ingress. Traffic entering an EPG port is classified by that EPG; traffic entering an L3Out is classified by source prefix (ExtEPG l3extSubnet, import-security); destinations that are endpoints classify by their EPG, other destinations by longest-prefix ExtEPG.",
+    "node-a and node-b are endpoints in EPG k8s/nodes (Cisco 'basic' design). node-c attaches through the floating-SVI L3Out k8s-bgp on leaf-103 (Cisco 'advanced' design), so it is not an fvCEp; its leaf port is known only from LLDP. Its address 10.10.22.13 is in the L3Out SVI subnet 10.10.22.0/24, because an L3Out SVI subnet cannot overlap bd-nodes 10.10.20.0/24 in the same VRF.",
+    "Cilium 1.20: routingMode native, kubeProxyReplacement true, ipv4NativeRoutingCIDR 10.0.0.0/8, bpf.masquerade true (traffic to destinations outside 10.0.0.0/8 is masqueraded to the node IP), loadBalancer.mode snat with bpf.lbModeAnnotation true and loadBalancer.dsrDispatch ipip (cart-api opts into DSR via service.cilium.io/forwarding-mode: dsr), LB IPAM pool 10.50.0.0/24, BGP control plane advertising LoadBalancer VIPs and pod CIDRs to L3Out k8s-bgp, Hubble static exporter writing /var/run/cilium/hubble/events.log with default monitor aggregation (medium).",
+    "With default monitor aggregation Hubble emits the post-translation TO_ENDPOINT flow at the backend; a SNAT forwarding trace (TO_NETWORK with IP.source_xlated) is present for c3a and c6 and absent for c3b, to exercise both attribution rules.",
+    "Cilium Gateway: Gateway shop (class cilium) creates Service cilium-gateway-shop with a dummy EndpointSlice 192.192.192.192:9999; Envoy on the receiving node proxies upstream from the node's ingress IP (Node annotation network.cilium.io/ipv4-Ingress-ip). Envoy emits no OTel spans; Hubble L7 flows carry X-Forwarded-For and trace context.",
+    "Cilium Ingress: Ingress shop/shop-www (ingressClassName cilium, ingress.cilium.io/loadbalancer-mode: dedicated) creates Service shop/cilium-ingress-shop-www with label cilium.io/ingress=true and a dummy EndpointSlice 192.192.192.192:9999; Envoy behaves as for the Gateway.",
+    "ACI NetFlow v9 exports from each leaf's OOB address to Splunk Stream, with monitors on the node, client and DB bridge domains and on the L3Out interfaces; records carry the ingress interface only. Nexus Dashboard Insights monitors site aci-1.",
+    "Contract subjects of win-to-shop and win-to-nodeports, and the deny subject of win-deny-db, use directives=log, so ACL-log records exist only for those."
+  ],
+  "fabric": {
+    "name": "aci-1",
+    "apic": {
+      "name": "apic1",
+      "node_id": 1,
+      "oob": "192.0.2.50",
+      "tep": "10.0.0.1"
+    },
+    "pod_id": 1,
+    "router_mac": "00:22:BD:F8:19:FF",
+    "switches": [
+      {
+        "name": "leaf-101",
+        "node_id": 101,
+        "role": "leaf",
+        "oob": "192.0.2.101",
+        "tep": "10.0.200.101",
+        "serial": "FDO26410A01",
+        "model": "N9K-C93180YC-FX3"
+      },
+      {
+        "name": "leaf-102",
+        "node_id": 102,
+        "role": "leaf",
+        "oob": "192.0.2.102",
+        "tep": "10.0.200.102",
+        "serial": "FDO26410A02",
+        "model": "N9K-C93180YC-FX3"
+      },
+      {
+        "name": "leaf-103",
+        "node_id": 103,
+        "role": "leaf",
+        "oob": "192.0.2.103",
+        "tep": "10.0.200.103",
+        "serial": "FDO26410A03",
+        "model": "N9K-C93180YC-FX3"
+      },
+      {
+        "name": "spine-201",
+        "node_id": 201,
+        "role": "spine",
+        "oob": "192.0.2.201",
+        "tep": "10.0.200.201",
+        "serial": "FDO26410S01",
+        "model": "N9K-C9332D-GX2B"
+      },
+      {
+        "name": "spine-202",
+        "node_id": 202,
+        "role": "spine",
+        "oob": "192.0.2.202",
+        "tep": "10.0.200.202",
+        "serial": "FDO26410S02",
+        "model": "N9K-C9332D-GX2B"
+      }
+    ],
+    "fabric_links": [
+      {
+        "leaf": "leaf-101",
+        "leaf_port": "eth1/49",
+        "spine": "spine-201",
+        "spine_port": "eth1/1"
+      },
+      {
+        "leaf": "leaf-101",
+        "leaf_port": "eth1/50",
+        "spine": "spine-202",
+        "spine_port": "eth1/1"
+      },
+      {
+        "leaf": "leaf-102",
+        "leaf_port": "eth1/49",
+        "spine": "spine-201",
+        "spine_port": "eth1/2"
+      },
+      {
+        "leaf": "leaf-102",
+        "leaf_port": "eth1/50",
+        "spine": "spine-202",
+        "spine_port": "eth1/2"
+      },
+      {
+        "leaf": "leaf-103",
+        "leaf_port": "eth1/49",
+        "spine": "spine-201",
+        "spine_port": "eth1/3"
+      },
+      {
+        "leaf": "leaf-103",
+        "leaf_port": "eth1/50",
+        "spine": "spine-202",
+        "spine_port": "eth1/3"
+      }
+    ],
+    "tenant": "shop",
+    "vrf": "prod",
+    "bds": [
+      {
+        "name": "bd-nodes",
+        "subnet": "10.10.20.1/24"
+      },
+      {
+        "name": "bd-clients",
+        "subnet": "10.30.40.1/24"
+      },
+      {
+        "name": "bd-db",
+        "subnet": "10.20.30.1/24"
+      }
+    ],
+    "epgs": [
+      {
+        "ap": "k8s",
+        "name": "nodes",
+        "bd": "bd-nodes",
+        "encap": "vlan-1020",
+        "pc_tag": 32772
+      },
+      {
+        "ap": "clients",
+        "name": "win-clients",
+        "bd": "bd-clients",
+        "encap": "vlan-1030",
+        "pc_tag": 32773
+      },
+      {
+        "ap": "orders",
+        "name": "db",
+        "bd": "bd-db",
+        "encap": "vlan-1040",
+        "pc_tag": 32774
+      }
+    ],
+    "l3outs": [
+      {
+        "name": "k8s-bgp",
+        "kind": "floating-svi",
+        "leaves": ["leaf-101", "leaf-102", "leaf-103"],
+        "svi_subnet": "10.10.22.0/24",
+        "ext_epgs": [
+          {
+            "name": "k8s-services",
+            "subnets": ["10.50.0.0/24"],
+            "pc_tag": 49153
+          },
+          {
+            "name": "k8s-pods",
+            "subnets": ["10.42.0.0/16"],
+            "pc_tag": 49154
+          },
+          {
+            "name": "k8s-nodes",
+            "subnets": ["10.10.22.0/24"],
+            "pc_tag": 49155
+          }
+        ],
+        "encap": "vlan-1022"
+      },
+      {
+        "name": "internet",
+        "kind": "routed",
+        "leaves": ["leaf-102"],
+        "interface": "eth1/48",
+        "ext_epgs": [
+          {
+            "name": "internet",
+            "subnets": ["0.0.0.0/0"],
+            "pc_tag": 15
+          }
+        ]
+      }
+    ],
+    "contracts": [
+      {
+        "name": "win-to-shop",
+        "subjects": [
+          {
+            "name": "shop-frontends",
+            "filters": [
+              {
+                "name": "shop-web",
+                "directives": "log",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "https",
+                    "prot": "tcp",
+                    "d_from": 443,
+                    "d_to": 443
+                  },
+                  {
+                    "name": "tcp-8080",
+                    "prot": "tcp",
+                    "d_from": 8080,
+                    "d_to": 8080
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "clients/win-clients"
+          }
+        ],
+        "providers": [
+          {
+            "instp": "k8s-bgp/k8s-services"
+          }
+        ]
+      },
+      {
+        "name": "win-to-nodeports",
+        "subjects": [
+          {
+            "name": "nodeports",
+            "filters": [
+              {
+                "name": "k8s-nodeports",
+                "directives": "log",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "nodeports",
+                    "prot": "tcp",
+                    "d_from": 30080,
+                    "d_to": 30081
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "clients/win-clients"
+          }
+        ],
+        "providers": [
+          {
+            "epg": "k8s/nodes"
+          }
+        ]
+      },
+      {
+        "name": "win-to-pods",
+        "subjects": [
+          {
+            "name": "pods",
+            "filters": [
+              {
+                "name": "pod-8080",
+                "directives": "none",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "tcp-8080",
+                    "prot": "tcp",
+                    "d_from": 8080,
+                    "d_to": 8080
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "clients/win-clients"
+          }
+        ],
+        "providers": [
+          {
+            "instp": "k8s-bgp/k8s-pods"
+          }
+        ]
+      },
+      {
+        "name": "k8s-to-db",
+        "subjects": [
+          {
+            "name": "postgres",
+            "filters": [
+              {
+                "name": "postgres",
+                "directives": "none",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "tcp-5432",
+                    "prot": "tcp",
+                    "d_from": 5432,
+                    "d_to": 5432
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "k8s/nodes"
+          },
+          {
+            "instp": "k8s-bgp/k8s-pods"
+          }
+        ],
+        "providers": [
+          {
+            "epg": "orders/db"
+          }
+        ]
+      },
+      {
+        "name": "k8s-fabric",
+        "subjects": [
+          {
+            "name": "any-ip",
+            "filters": [
+              {
+                "name": "any-ip",
+                "directives": "none",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "ip",
+                    "prot": "unspecified",
+                    "ether_t": "ip",
+                    "d_from": "unspecified",
+                    "d_to": "unspecified"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "k8s/nodes"
+          }
+        ],
+        "providers": [
+          {
+            "instp": "k8s-bgp/k8s-pods"
+          },
+          {
+            "instp": "k8s-bgp/k8s-nodes"
+          }
+        ]
+      },
+      {
+        "name": "k8s-to-internet",
+        "subjects": [
+          {
+            "name": "https-out",
+            "filters": [
+              {
+                "name": "https-out",
+                "directives": "none",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "https",
+                    "prot": "tcp",
+                    "d_from": 443,
+                    "d_to": 443
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "k8s/nodes"
+          }
+        ],
+        "providers": [
+          {
+            "instp": "internet/internet"
+          }
+        ]
+      },
+      {
+        "name": "win-deny-db",
+        "subjects": [
+          {
+            "name": "deny-postgres",
+            "filters": [
+              {
+                "name": "postgres-deny",
+                "directives": "log",
+                "action": "deny",
+                "entries": [
+                  {
+                    "name": "tcp-5432",
+                    "prot": "tcp",
+                    "d_from": 5432,
+                    "d_to": 5432
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "clients/win-clients"
+          }
+        ],
+        "providers": [
+          {
+            "epg": "orders/db"
+          }
+        ]
+      }
+    ],
+    "vrf_vnid": 2752512
+  },
+  "hypervisors": [
+    {
+      "name": "esx-03",
+      "leaf": "leaf-103",
+      "interface": "eth1/5",
+      "mac": "00:50:56:01:03:05"
+    },
+    {
+      "name": "esx-01",
+      "leaf": "leaf-102",
+      "interface": "eth1/6",
+      "mac": "00:50:56:01:01:06"
+    }
+  ],
+  "nexus_dashboard": {
+    "host": "192.0.2.60",
+    "fabric": "aci-1"
+  },
+  "kubernetes": {
+    "cluster": "demo-cluster",
+    "cni": {
+      "plugin": "cilium",
+      "version": "1.20.2",
+      "routing_mode": "native",
+      "kube_proxy_replacement": true,
+      "ipv4_native_routing_cidr": "10.0.0.0/8",
+      "masquerade": true,
+      "lb_ipam_pool": "10.50.0.0/24"
+    },
+    "nodes": [
+      {
+        "name": "node-a",
+        "uid": "545cfd24-bde6-553d-9c1e-5f09566d52ce",
+        "ip": "10.10.20.11",
+        "mac": "00:50:56:B0:20:11",
+        "leaf": "leaf-101",
+        "interface": "eth1/11",
+        "attachment": "epg",
+        "pod_cidr": "10.42.0.0/24",
+        "ingress_ip": "10.42.0.200",
+        "host_nic": "ens1f0"
+      },
+      {
+        "name": "node-b",
+        "uid": "7eb9fb3d-dd49-57ad-98a4-d384b7ce8f7a",
+        "ip": "10.10.20.12",
+        "mac": "00:50:56:B0:20:12",
+        "leaf": "leaf-102",
+        "interface": "eth1/12",
+        "attachment": "epg",
+        "pod_cidr": "10.42.1.0/24",
+        "ingress_ip": "10.42.1.200",
+        "host_nic": "ens1f0"
+      },
+      {
+        "name": "node-c",
+        "uid": "ad6e99b8-fdd2-5c3a-baaf-dde2062264e9",
+        "ip": "10.10.22.13",
+        "mac": "00:50:56:B0:22:13",
+        "leaf": "leaf-103",
+        "interface": "eth1/13",
+        "attachment": "l3out",
+        "pod_cidr": "10.42.2.0/24",
+        "ingress_ip": "10.42.2.200",
+        "host_nic": "ens1f0"
+      }
+    ],
+    "pods": [
+      {
+        "name": "frontend-7d9c6b5f4-x2k8p",
+        "namespace": "shop",
+        "uid": "a2327fe6-1a48-52d0-962d-e72c643c9f00",
+        "ip": "10.42.0.15",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "frontend-7d9c6b5f4",
+        "pod_template_hash": "7d9c6b5f4",
+        "service": "frontend",
+        "labels": {
+          "app": "frontend",
+          "pod-template-hash": "7d9c6b5f4"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "frontend-7d9c6b5f4-q4m9z",
+        "namespace": "shop",
+        "uid": "3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+        "ip": "10.42.1.15",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "frontend-7d9c6b5f4",
+        "pod_template_hash": "7d9c6b5f4",
+        "service": "frontend",
+        "labels": {
+          "app": "frontend",
+          "pod-template-hash": "7d9c6b5f4"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "checkout-5f8b9c7d6-m4n7q",
+        "namespace": "shop",
+        "uid": "999151a5-7418-5939-b573-6de8631b4ffc",
+        "ip": "10.42.1.20",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "checkout-5f8b9c7d6",
+        "pod_template_hash": "5f8b9c7d6",
+        "service": "checkout",
+        "labels": {
+          "app": "checkout",
+          "pod-template-hash": "5f8b9c7d6"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "catalog-6a1c2d3e4-p9r5t",
+        "namespace": "shop",
+        "uid": "4293c40e-b562-5861-8081-7f71d1530e6a",
+        "ip": "10.42.2.30",
+        "node": "node-c",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "catalog-6a1c2d3e4",
+        "pod_template_hash": "6a1c2d3e4",
+        "service": "catalog",
+        "labels": {
+          "app": "catalog",
+          "pod-template-hash": "6a1c2d3e4"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "payment-2b4d6f8a1-k3j6h",
+        "namespace": "shop",
+        "uid": "b84ac4d6-8895-5f93-9b92-219da9c120fb",
+        "ip": "10.42.0.40",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "payment-2b4d6f8a1",
+        "pod_template_hash": "2b4d6f8a1",
+        "service": "payment",
+        "labels": {
+          "app": "payment",
+          "pod-template-hash": "2b4d6f8a1"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "cart-4c2e5a7b9-w8v2c",
+        "namespace": "shop",
+        "uid": "7d11108f-3c09-56f5-a20c-68e3532e2456",
+        "ip": "10.42.2.50",
+        "node": "node-c",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "cart-4c2e5a7b9",
+        "pod_template_hash": "4c2e5a7b9",
+        "service": "cart",
+        "labels": {
+          "app": "cart",
+          "pod-template-hash": "4c2e5a7b9"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "coredns-7c65d6cfc9-h2x4l",
+        "namespace": "kube-system",
+        "uid": "90b97fda-73a0-5daa-9eb7-31a02b846b31",
+        "ip": "10.42.1.53",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "coredns-7c65d6cfc9",
+        "pod_template_hash": "7c65d6cfc9",
+        "service": null,
+        "labels": {
+          "k8s-app": "kube-dns",
+          "pod-template-hash": "7c65d6cfc9"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      }
+    ],
+    "services": [
+      {
+        "name": "frontend",
+        "namespace": "shop",
+        "uid": "ffba4050-bf18-5118-ab94-f77b7eedf32a",
+        "type": "ClusterIP",
+        "cluster_ip": "10.43.0.15",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "selector": {
+          "app": "frontend"
+        }
+      },
+      {
+        "name": "checkout",
+        "namespace": "shop",
+        "uid": "0134b09a-493b-54db-b1fe-2447b1c3285b",
+        "type": "ClusterIP",
+        "cluster_ip": "10.43.0.20",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "selector": {
+          "app": "checkout"
+        }
+      },
+      {
+        "name": "cilium-gateway-shop",
+        "namespace": "shop",
+        "uid": "8fa21675-f732-58f6-a19d-1ac990da3520",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.10",
+        "ports": [
+          {
+            "name": "port-443",
+            "port": 443,
+            "target_port": 443,
+            "protocol": "TCP",
+            "node_port": 31443
+          }
+        ],
+        "selector": null,
+        "external_traffic_policy": "Cluster",
+        "load_balancer_ip": "10.50.0.10",
+        "labels": {
+          "io.cilium.gateway/owning-gateway": "shop",
+          "gateway.networking.k8s.io/gateway-name": "shop"
+        },
+        "owner": {
+          "kind": "Gateway",
+          "name": "shop"
+        }
+      },
+      {
+        "name": "catalog-api",
+        "namespace": "shop",
+        "uid": "610d937f-8869-542d-b456-1e4685055d44",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.30",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 31030
+          }
+        ],
+        "selector": {
+          "app": "catalog"
+        },
+        "external_traffic_policy": "Cluster",
+        "load_balancer_ip": "10.50.0.30"
+      },
+      {
+        "name": "cart-api",
+        "namespace": "shop",
+        "uid": "858405a3-f437-51d2-b642-3acd42d56330",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.40",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 31040
+          }
+        ],
+        "selector": {
+          "app": "cart"
+        },
+        "external_traffic_policy": "Cluster",
+        "load_balancer_ip": "10.50.0.40",
+        "annotations": {
+          "service.cilium.io/forwarding-mode": "dsr"
+        }
+      },
+      {
+        "name": "payment-np",
+        "namespace": "shop",
+        "uid": "8e4e200d-85b7-5d00-8553-29265d58ec40",
+        "type": "NodePort",
+        "cluster_ip": "10.43.0.41",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 30080
+          }
+        ],
+        "selector": {
+          "app": "payment"
+        },
+        "external_traffic_policy": "Local"
+      },
+      {
+        "name": "catalog-np",
+        "namespace": "shop",
+        "uid": "dd61933d-94eb-5a2c-9b68-a7e4c9b32f8f",
+        "type": "NodePort",
+        "cluster_ip": "10.43.0.31",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 30081
+          }
+        ],
+        "selector": {
+          "app": "catalog"
+        },
+        "external_traffic_policy": "Cluster"
+      },
+      {
+        "name": "checkout-api",
+        "namespace": "shop",
+        "uid": "60e1a43f-62ed-57f3-a48b-7001b4fd0c53",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.21",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 31021
+          }
+        ],
+        "selector": {
+          "app": "checkout"
+        },
+        "external_traffic_policy": "Local",
+        "load_balancer_ip": "10.50.0.20"
+      },
+      {
+        "name": "cilium-ingress-shop-www",
+        "namespace": "shop",
+        "uid": "22593e25-138c-5dde-aa48-2afed77d1c6c",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.11",
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "target_port": 80,
+            "protocol": "TCP",
+            "node_port": 31180
+          },
+          {
+            "name": "https",
+            "port": 443,
+            "target_port": 443,
+            "protocol": "TCP",
+            "node_port": 31443
+          }
+        ],
+        "selector": null,
+        "external_traffic_policy": "Cluster",
+        "load_balancer_ip": "10.50.0.11",
+        "labels": {
+          "cilium.io/ingress": "true"
+        },
+        "owner": {
+          "kind": "Ingress",
+          "name": "shop-www"
+        }
+      }
+    ],
+    "ingresses": [
+      {
+        "name": "shop-www",
+        "namespace": "shop",
+        "uid": "ccc9de29-60bc-5db8-90c0-649cc0fcb433",
+        "class": "cilium",
+        "annotations": {
+          "ingress.cilium.io/loadbalancer-mode": "dedicated"
+        },
+        "host": "www.shop.example.internal",
+        "path": "/",
+        "backend": {
+          "service": "frontend",
+          "port": 8080
+        },
+        "tls_secret": "shop-www-tls",
+        "lb_ip": "10.50.0.11"
+      }
+    ],
+    "gateways": [
+      {
+        "name": "shop",
+        "namespace": "shop",
+        "class": "cilium",
+        "listener": {
+          "name": "https",
+          "protocol": "HTTPS",
+          "port": 443,
+          "hostname": "shop.example.internal",
+          "tls_secret": "shop-tls"
+        },
+        "address": "10.50.0.10",
+        "uid": "272c622f-f35e-5fd6-a430-d250c7270bd5"
+      }
+    ],
+    "httproutes": [
+      {
+        "name": "shop-frontend",
+        "namespace": "shop",
+        "gateway": "shop",
+        "hostname": "shop.example.internal",
+        "path": "/",
+        "backend": {
+          "service": "frontend",
+          "port": 8080
+        },
+        "uid": "b7dfea3d-aee1-5fc2-b420-4358995a0c87"
+      }
+    ]
+  },
+  "vms": [
+    {
+      "name": "win-client-01",
+      "ip": "10.30.40.25",
+      "mac": "00:50:56:AA:40:25",
+      "ap": "clients",
+      "epg": "win-clients",
+      "encap": "vlan-1030",
+      "leaf": "leaf-103",
+      "interface": "eth1/5",
+      "os": "Microsoft Windows Server 2022 (64-bit)",
+      "hypervisor": "esx-03",
+      "nd_endpoint": true
+    },
+    {
+      "name": "orders-db-01",
+      "ip": "10.20.30.40",
+      "mac": "00:50:56:AA:10:40",
+      "ap": "orders",
+      "epg": "db",
+      "encap": "vlan-1040",
+      "leaf": "leaf-102",
+      "interface": "eth1/6",
+      "os": "Red Hat Enterprise Linux 9 (64-bit)",
+      "hypervisor": "esx-01",
+      "nd_endpoint": true
+    }
+  ],
+  "external": [
+    {
+      "name": "payment-gateway",
+      "ip": "203.0.113.40"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "c1-gateway",
+      "summary": "VM -> Cilium Gateway VIP; Envoy on node-a proxies two HTTP requests (to frontend on node-b and on node-a).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:10.000Z",
+      "end": "2026-10-07T11:50:10.600Z",
+      "access": {
+        "method": "gateway",
+        "service": "shop/cilium-gateway-shop",
+        "frontend": "10.50.0.10:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "route": "HTTPRoute shop/shop-frontend host shop.example.internal -> frontend:8080",
+        "expected_rule": "l7_forwarded_for",
+        "backends": ["frontend-7d9c6b5f4-q4m9z", "frontend-7d9c6b5f4-x2k8p"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51001",
+          "dst": "10.50.0.10:443",
+          "proto": "tcp",
+          "bytes": 3600,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11",
+          "nd": true
+        },
+        {
+          "src": "10.50.0.10:443",
+          "dst": "10.30.40.25:51001",
+          "proto": "tcp",
+          "bytes": 18400,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.42.0.200:40110",
+          "dst": "10.42.1.15:8080",
+          "proto": "tcp",
+          "bytes": 1500,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/12",
+          "nd": true
+        },
+        {
+          "src": "10.42.1.15:8080",
+          "dst": "10.42.0.200:40110",
+          "proto": "tcp",
+          "bytes": 8800,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40110",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T11:50:10.050Z",
+          "http": {
+            "method": "GET",
+            "url": "http://shop.example.internal/checkout",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "0af7651916cd43dd8448eb211c80319c"
+        },
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40110",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T11:50:10.040Z",
+          "syn": true
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40111",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T11:50:10.300Z",
+          "http": {
+            "method": "GET",
+            "url": "http://shop.example.internal/catalog",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "b9c7c989f97918e1d8c1f4a2e7a8b301"
+        },
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40111",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T11:50:10.290Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51001",
+          "dst": "10.50.0.10:443",
+          "time": "2026-10-07T11:50:10.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": ["frontend-7d9c6b5f4-q4m9z", "frontend-7d9c6b5f4-x2k8p"]
+      }
+    },
+    {
+      "id": "c1b-frontend-a-checkout",
+      "summary": "frontend on node-a calls checkout on node-b (cross-node pod traffic on the fabric).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:10.320Z",
+      "end": "2026-10-07T11:50:10.420Z",
+      "aci_class": {
+        "client": "epg:k8s/nodes",
+        "server": "instp:k8s-bgp/k8s-pods",
+        "contract": "k8s-fabric"
+      },
+      "wire": [
+        {
+          "src": "10.42.0.15:40121",
+          "dst": "10.42.1.20:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/12",
+          "nd": true
+        },
+        {
+          "src": "10.42.1.20:8080",
+          "dst": "10.42.0.15:40121",
+          "proto": "tcp",
+          "bytes": 1300,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.15:40121",
+          "dst": "10.42.1.20:8080",
+          "src_ep": "frontend-7d9c6b5f4-x2k8p",
+          "dst_ep": "checkout-5f8b9c7d6-m4n7q",
+          "time": "2026-10-07T11:50:10.321Z",
+          "syn": true
+        }
+      ],
+      "isovalent": [
+        {
+          "pod": "frontend-7d9c6b5f4-x2k8p",
+          "src": "10.42.0.15:40121",
+          "dst": "10.42.1.20:8080",
+          "time": "2026-10-07T11:50:10.320Z"
+        }
+      ],
+      "expected": {
+        "pod_to_pod": true
+      }
+    },
+    {
+      "id": "c1c-frontend-b-checkout",
+      "summary": "frontend on node-b calls checkout on the same node; never reaches the fabric.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:10.060Z",
+      "end": "2026-10-07T11:50:10.180Z",
+      "wire": [],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.1.15:40120",
+          "dst": "10.42.1.20:8080",
+          "src_ep": "frontend-7d9c6b5f4-q4m9z",
+          "dst_ep": "checkout-5f8b9c7d6-m4n7q",
+          "time": "2026-10-07T11:50:10.061Z",
+          "syn": true
+        }
+      ],
+      "isovalent": [
+        {
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "src": "10.42.1.15:40120",
+          "dst": "10.42.1.20:8080",
+          "time": "2026-10-07T11:50:10.060Z"
+        }
+      ],
+      "expected": {
+        "same_node": true
+      }
+    },
+    {
+      "id": "c2-checkout-lb-local",
+      "summary": "VM -> checkout-api LoadBalancer VIP (externalTrafficPolicy Local); only node-b hosts checkout, so only node-b advertises the VIP and the client IP is preserved.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:20.000Z",
+      "end": "2026-10-07T11:50:20.500Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/checkout-api",
+        "frontend": "10.50.0.20:8080",
+        "external_traffic_policy": "Local",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "expected_rule": "hubble_client_tuple",
+        "backends": ["checkout-5f8b9c7d6-m4n7q"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51002",
+          "dst": "10.50.0.20:8080",
+          "proto": "tcp",
+          "bytes": 2400,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12",
+          "nd": true
+        },
+        {
+          "src": "10.50.0.20:8080",
+          "dst": "10.30.40.25:51002",
+          "proto": "tcp",
+          "bytes": 6200,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.25:51002",
+          "dst": "10.42.1.20:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "checkout-5f8b9c7d6-m4n7q",
+          "time": "2026-10-07T11:50:20.001Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51002",
+          "dst": "10.50.0.20:8080",
+          "time": "2026-10-07T11:50:20.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_client_tuple",
+        "backend_pods": ["checkout-5f8b9c7d6-m4n7q"]
+      }
+    },
+    {
+      "id": "c2b-checkout-db",
+      "summary": "checkout (node-b), serving the c2 request, -> orders-db-01 VM on leaf-102; pod source IP preserved (inside ipv4NativeRoutingCIDR).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:20.120Z",
+      "end": "2026-10-07T11:50:20.380Z",
+      "aci_class": {
+        "client": "epg:k8s/nodes",
+        "server": "epg:orders/db",
+        "contract": "k8s-to-db"
+      },
+      "wire": [
+        {
+          "src": "10.42.1.20:40330",
+          "dst": "10.20.30.40:5432",
+          "proto": "tcp",
+          "bytes": 2100,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-102:eth1/6",
+          "nd": true
+        },
+        {
+          "src": "10.20.30.40:5432",
+          "dst": "10.42.1.20:40330",
+          "proto": "tcp",
+          "bytes": 18000,
+          "ingress": "leaf-102:eth1/6",
+          "egress": "leaf-102:eth1/12"
+        }
+      ],
+      "isovalent": [
+        {
+          "pod": "checkout-5f8b9c7d6-m4n7q",
+          "src": "10.42.1.20:40330",
+          "dst": "10.20.30.40:5432",
+          "time": "2026-10-07T11:50:20.120Z"
+        }
+      ],
+      "expected": {
+        "server_vm": "orders-db-01"
+      }
+    },
+    {
+      "id": "c1d-cilium-ingress",
+      "summary": "VM -> Cilium Ingress (dedicated mode) VIP lands on node-b; Envoy on node-b proxies to the frontend pod on the same node (upstream never reaches the fabric).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:40.000Z",
+      "end": "2026-10-07T11:50:40.300Z",
+      "access": {
+        "method": "ingress",
+        "service": "shop/cilium-ingress-shop-www",
+        "frontend": "10.50.0.11:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "route": "Ingress shop/shop-www (class cilium) host www.shop.example.internal -> frontend:8080",
+        "expected_rule": "l7_forwarded_for",
+        "backends": ["frontend-7d9c6b5f4-q4m9z"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51010",
+          "dst": "10.50.0.11:443",
+          "proto": "tcp",
+          "bytes": 1700,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.50.0.11:443",
+          "dst": "10.30.40.25:51010",
+          "proto": "tcp",
+          "bytes": 8300,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.1.200:40150",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T11:50:40.050Z",
+          "http": {
+            "method": "GET",
+            "url": "http://www.shop.example.internal/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "c9d9c9d9c9d9c9d9c9d9c9d9c9d9c901"
+        },
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.1.200:40150",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T11:50:40.040Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51010",
+          "dst": "10.50.0.11:443",
+          "time": "2026-10-07T11:50:40.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": ["frontend-7d9c6b5f4-q4m9z"]
+      }
+    },
+    {
+      "id": "c3a-catalog-lb-snat",
+      "summary": "VM -> catalog-api VIP (Cluster, SNAT) lands on node-a; node-a SNATs to its IP towards catalog on node-c. Hubble forwarding trace present.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:51:00.000Z",
+      "end": "2026-10-07T11:51:00.300Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "hubble_xlate",
+        "backends": ["catalog-6a1c2d3e4-p9r5t"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51003",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.25:51003",
+          "proto": "tcp",
+          "bytes": 7600,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:42001",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:42001",
+          "proto": "tcp",
+          "bytes": 7600,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51003",
+          "src_xlated": "10.10.20.11",
+          "src_port_xlated": 42001,
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T11:51:00.001Z",
+          "syn": true
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:42001",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T11:51:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51003",
+          "dst": "10.50.0.30:8080",
+          "time": "2026-10-07T11:51:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": ["catalog-6a1c2d3e4-p9r5t"]
+      }
+    },
+    {
+      "id": "c3b-catalog-lb-snat-no-trace",
+      "summary": "Same Service, another connection; Hubble emitted no forwarding trace (default monitor aggregation). Exactly one node-a -> catalog flow within one second.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:52:00.000Z",
+      "end": "2026-10-07T11:52:00.250Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "time_inferred",
+        "backends": ["catalog-6a1c2d3e4-p9r5t"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51004",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.25:51004",
+          "proto": "tcp",
+          "bytes": 7100,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:42002",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:42002",
+          "proto": "tcp",
+          "bytes": 7100,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:42002",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T11:52:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51004",
+          "dst": "10.50.0.30:8080",
+          "time": "2026-10-07T11:52:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "time_inferred",
+        "backend_pods": ["catalog-6a1c2d3e4-p9r5t"]
+      }
+    },
+    {
+      "id": "c4-cart-lb-dsr",
+      "summary": "VM -> cart-api VIP (Cluster, DSR via IPIP) lands on node-b; node-b encapsulates to node-c; cart replies directly from node-c with the VIP as source (asymmetric).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:53:00.000Z",
+      "end": "2026-10-07T11:53:00.200Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/cart-api",
+        "frontend": "10.50.0.40:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "dsr",
+        "dsr_dispatch": "ipip",
+        "landing_node": "node-b",
+        "expected_rule": "hubble_client_tuple",
+        "backends": ["cart-4c2e5a7b9-w8v2c"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51005",
+          "dst": "10.50.0.40:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12",
+          "nd": true
+        },
+        {
+          "src": "10.10.20.12",
+          "dst": "10.10.22.13",
+          "proto": "ipip",
+          "bytes": 960,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.50.0.40:8080",
+          "dst": "10.30.40.25:51005",
+          "proto": "tcp",
+          "bytes": 3300,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.25:51005",
+          "dst": "10.42.2.50:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "cart-4c2e5a7b9-w8v2c",
+          "time": "2026-10-07T11:53:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51005",
+          "dst": "10.50.0.40:8080",
+          "time": "2026-10-07T11:53:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_client_tuple",
+        "backend_pods": ["cart-4c2e5a7b9-w8v2c"],
+        "asymmetric_return_leaf": "leaf-103"
+      }
+    },
+    {
+      "id": "c5-payment-nodeport-local",
+      "summary": "VM -> node-a:30080 (NodePort, Local); payment runs on node-a.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:54:00.000Z",
+      "end": "2026-10-07T11:54:00.400Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/payment-np",
+        "frontend": "10.10.20.11:30080",
+        "external_traffic_policy": "Local",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "hubble_client_tuple",
+        "backends": ["payment-2b4d6f8a1-k3j6h"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51006",
+          "dst": "10.10.20.11:30080",
+          "proto": "tcp",
+          "bytes": 1300,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30080",
+          "dst": "10.30.40.25:51006",
+          "proto": "tcp",
+          "bytes": 2900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.25:51006",
+          "dst": "10.42.0.40:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "payment-2b4d6f8a1-k3j6h",
+          "time": "2026-10-07T11:54:00.001Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51006",
+          "dst": "10.10.20.11:30080",
+          "time": "2026-10-07T11:54:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_client_tuple",
+        "backend_pods": ["payment-2b4d6f8a1-k3j6h"]
+      }
+    },
+    {
+      "id": "c5b-payment-egress",
+      "summary": "payment calls an external API; Cilium masquerades the pod IP to node-a's IP (destination outside ipv4NativeRoutingCIDR). Isovalent sees the pod IP; the fabric sees node-a.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:54:00.100Z",
+      "end": "2026-10-07T11:54:00.350Z",
+      "aci_class": {
+        "client": "epg:k8s/nodes",
+        "server": "instp:internet/internet",
+        "contract": "k8s-to-internet"
+      },
+      "wire": [
+        {
+          "src": "10.10.20.11:41001",
+          "dst": "203.0.113.40:443",
+          "proto": "tcp",
+          "bytes": 450,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/48"
+        },
+        {
+          "src": "203.0.113.40:443",
+          "dst": "10.10.20.11:41001",
+          "proto": "tcp",
+          "bytes": 3100,
+          "ingress": "leaf-102:eth1/48",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "isovalent": [
+        {
+          "pod": "payment-2b4d6f8a1-k3j6h",
+          "src": "10.42.0.40:40440",
+          "dst": "203.0.113.40:443",
+          "time": "2026-10-07T11:54:00.100Z"
+        }
+      ],
+      "expected": {
+        "masqueraded_to": "10.10.20.11"
+      }
+    },
+    {
+      "id": "c6-catalog-nodeport-cluster",
+      "summary": "VM -> node-b:30081 (NodePort, Cluster, SNAT) -> catalog on node-c; Hubble forwarding trace present.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:55:00.000Z",
+      "end": "2026-10-07T11:55:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.12:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "expected_rule": "hubble_xlate",
+        "backends": ["catalog-6a1c2d3e4-p9r5t"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51007",
+          "dst": "10.10.20.12:30081",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.10.20.12:30081",
+          "dst": "10.30.40.25:51007",
+          "proto": "tcp",
+          "bytes": 7500,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.12:43001",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.12:43001",
+          "proto": "tcp",
+          "bytes": 7500,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-102:eth1/12"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51007",
+          "src_xlated": "10.10.20.12",
+          "src_port_xlated": 43001,
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T11:55:00.001Z",
+          "syn": true
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.12:43001",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T11:55:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51007",
+          "dst": "10.10.20.12:30081",
+          "time": "2026-10-07T11:55:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": ["catalog-6a1c2d3e4-p9r5t"]
+      }
+    },
+    {
+      "id": "c7-direct-pod",
+      "summary": "VM -> frontend pod IP 10.42.1.15:8080 directly (pod CIDR advertised by Cilium BGP).",
+      "transport": "tcp",
+      "start": "2026-10-07T11:56:00.000Z",
+      "end": "2026-10-07T11:56:00.200Z",
+      "access": {
+        "method": "pod_ip",
+        "frontend": "10.42.1.15:8080",
+        "expected_rule": "hubble_client_tuple",
+        "backends": ["frontend-7d9c6b5f4-q4m9z"]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-pods",
+        "contract": "win-to-pods"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51008",
+          "dst": "10.42.1.15:8080",
+          "proto": "tcp",
+          "bytes": 800,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12",
+          "nd": true
+        },
+        {
+          "src": "10.42.1.15:8080",
+          "dst": "10.30.40.25:51008",
+          "proto": "tcp",
+          "bytes": 4100,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.25:51008",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T11:56:00.001Z",
+          "syn": true
+        }
+      ],
+      "expected": {
+        "direct_pod": "frontend-7d9c6b5f4-q4m9z"
+      }
+    },
+    {
+      "id": "c8-blocked-db",
+      "summary": "VM tries orders-db-01:5432 directly; the deny-with-log subject of contract win-deny-db drops it at leaf-103. Seen only as acllogDropL3Pkt.",
+      "transport": "tcp",
+      "start": "2026-10-07T11:57:00.000Z",
+      "end": "2026-10-07T11:57:00.000Z",
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:orders/db",
+        "contract": "win-deny-db"
+      },
+      "wire": [],
+      "acl": [
+        {
+          "action": "drop",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51009",
+          "dst": "10.20.30.40:5432",
+          "time": "2026-10-07T11:57:00.000Z"
+        }
+      ],
+      "expected": {
+        "blocked": true
+      }
+    }
+  ],
+  "traces": [
+    {
+      "trace_id": "0af7651916cd43dd8448eb211c80319c",
+      "note": "c1 request 1 via Cilium Gateway (Envoy, no spans) to frontend on node-b",
+      "spans": [
+        {
+          "span_id": "a1a1a1a1a1a1a101",
+          "parent": null,
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /checkout",
+          "start": "2026-10-07T11:50:10.050Z",
+          "end": "2026-10-07T11:50:10.200Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/checkout",
+            "url.path": "/checkout",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.42.0.200",
+            "network.peer.port": 40110
+          }
+        },
+        {
+          "span_id": "a1a1a1a1a1a1a102",
+          "parent": "a1a1a1a1a1a1a101",
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:50:10.060Z",
+          "end": "2026-10-07T11:50:10.180Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "checkout.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.1.20",
+            "network.peer.port": 8080
+          }
+        },
+        {
+          "span_id": "a1a1a1a1a1a1a103",
+          "parent": "a1a1a1a1a1a1a102",
+          "service": "checkout",
+          "pod": "checkout-5f8b9c7d6-m4n7q",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /api/checkout",
+          "start": "2026-10-07T11:50:10.062Z",
+          "end": "2026-10-07T11:50:10.178Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/api/checkout",
+            "url.path": "/api/checkout",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.42.1.15",
+            "network.peer.address": "10.42.1.15",
+            "network.peer.port": 40120
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "b9c7c989f97918e1d8c1f4a2e7a8b301",
+      "note": "c1 request 2 via Cilium Gateway to frontend on node-a, which calls checkout on node-b",
+      "spans": [
+        {
+          "span_id": "b2b2b2b2b2b2b201",
+          "parent": null,
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-x2k8p",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /catalog",
+          "start": "2026-10-07T11:50:10.300Z",
+          "end": "2026-10-07T11:50:10.450Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/catalog",
+            "url.path": "/catalog",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.42.0.200",
+            "network.peer.port": 40111
+          }
+        },
+        {
+          "span_id": "b2b2b2b2b2b2b202",
+          "parent": "b2b2b2b2b2b2b201",
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-x2k8p",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:50:10.320Z",
+          "end": "2026-10-07T11:50:10.420Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "checkout.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.1.20",
+            "network.peer.port": 8080
+          }
+        },
+        {
+          "span_id": "b2b2b2b2b2b2b203",
+          "parent": "b2b2b2b2b2b2b202",
+          "service": "checkout",
+          "pod": "checkout-5f8b9c7d6-m4n7q",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /api/checkout",
+          "start": "2026-10-07T11:50:10.322Z",
+          "end": "2026-10-07T11:50:10.418Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/api/checkout",
+            "url.path": "/api/checkout",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.42.0.15",
+            "network.peer.address": "10.42.0.15",
+            "network.peer.port": 40121
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "c3d3c3d3c3d3c3d3c3d3c3d3c3d3c301",
+      "note": "c2 via checkout-api LoadBalancer (Local keeps the client IP); checkout writes to orders-db",
+      "spans": [
+        {
+          "span_id": "c3c3c3c3c3c3c303",
+          "parent": null,
+          "service": "checkout",
+          "pod": "checkout-5f8b9c7d6-m4n7q",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /api/cart",
+          "start": "2026-10-07T11:50:20.002Z",
+          "end": "2026-10-07T11:50:20.480Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/api/cart",
+            "url.path": "/api/cart",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.30.40.25",
+            "network.peer.port": 51002
+          }
+        },
+        {
+          "span_id": "c3c3c3c3c3c3c304",
+          "parent": "c3c3c3c3c3c3c303",
+          "service": "checkout",
+          "pod": "checkout-5f8b9c7d6-m4n7q",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "INSERT orders",
+          "start": "2026-10-07T11:50:20.120Z",
+          "end": "2026-10-07T11:50:20.380Z",
+          "attributes": {
+            "db.system.name": "postgresql",
+            "db.operation.name": "INSERT",
+            "db.collection.name": "orders",
+            "server.address": "orders-db.shop.internal",
+            "server.port": 5432,
+            "network.peer.address": "10.20.30.40",
+            "network.peer.port": 5432
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "c9d9c9d9c9d9c9d9c9d9c9d9c9d9c901",
+      "note": "c1d via Cilium Ingress (Envoy on node-b, no spans) to frontend on node-b",
+      "spans": [
+        {
+          "span_id": "c9c9c9c9c9c9c901",
+          "parent": null,
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /",
+          "start": "2026-10-07T11:50:40.050Z",
+          "end": "2026-10-07T11:50:40.250Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/",
+            "url.path": "/",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.42.1.200",
+            "network.peer.port": 40150
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "d4e4d4e4d4e4d4e4d4e4d4e4d4e4d401",
+      "spans": [
+        {
+          "span_id": "d4d4d4d4d4d4d401",
+          "parent": null,
+          "service": "catalog",
+          "pod": "catalog-6a1c2d3e4-p9r5t",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /items",
+          "start": "2026-10-07T11:51:00.003Z",
+          "end": "2026-10-07T11:51:00.290Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/items",
+            "url.path": "/items",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.10.20.11",
+            "network.peer.address": "10.10.20.11",
+            "network.peer.port": 42001
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "d4e4d4e4d4e4d4e4d4e4d4e4d4e4d402",
+      "spans": [
+        {
+          "span_id": "d4d4d4d4d4d4d402",
+          "parent": null,
+          "service": "catalog",
+          "pod": "catalog-6a1c2d3e4-p9r5t",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /items",
+          "start": "2026-10-07T11:52:00.003Z",
+          "end": "2026-10-07T11:52:00.240Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/items",
+            "url.path": "/items",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.10.20.11",
+            "network.peer.address": "10.10.20.11",
+            "network.peer.port": 42002
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "e5f5e5f5e5f5e5f5e5f5e5f5e5f5e501",
+      "spans": [
+        {
+          "span_id": "e5e5e5e5e5e5e501",
+          "parent": null,
+          "service": "cart",
+          "pod": "cart-4c2e5a7b9-w8v2c",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /cart",
+          "start": "2026-10-07T11:53:00.003Z",
+          "end": "2026-10-07T11:53:00.190Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/cart",
+            "url.path": "/cart",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.30.40.25",
+            "network.peer.port": 51005
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "f6a6f6a6f6a6f6a6f6a6f6a6f6a6f601",
+      "spans": [
+        {
+          "span_id": "f6f6f6f6f6f6f601",
+          "parent": null,
+          "service": "payment",
+          "pod": "payment-2b4d6f8a1-k3j6h",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /charge",
+          "start": "2026-10-07T11:54:00.002Z",
+          "end": "2026-10-07T11:54:00.390Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/charge",
+            "url.path": "/charge",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.30.40.25",
+            "network.peer.port": 51006
+          }
+        },
+        {
+          "span_id": "f6f6f6f6f6f6f602",
+          "parent": "f6f6f6f6f6f6f601",
+          "service": "payment",
+          "pod": "payment-2b4d6f8a1-k3j6h",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:54:00.100Z",
+          "end": "2026-10-07T11:54:00.350Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "api.payments.example",
+            "server.port": 443,
+            "network.peer.address": "203.0.113.40",
+            "network.peer.port": 443
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "a7b7a7b7a7b7a7b7a7b7a7b7a7b7a701",
+      "spans": [
+        {
+          "span_id": "a7a7a7a7a7a7a701",
+          "parent": null,
+          "service": "catalog",
+          "pod": "catalog-6a1c2d3e4-p9r5t",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /items",
+          "start": "2026-10-07T11:55:00.003Z",
+          "end": "2026-10-07T11:55:00.290Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/items",
+            "url.path": "/items",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.10.20.12",
+            "network.peer.address": "10.10.20.12",
+            "network.peer.port": 43001
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "b8c8b8c8b8c8b8c8b8c8b8c8b8c8b801",
+      "spans": [
+        {
+          "span_id": "b8b8b8b8b8b8b801",
+          "parent": null,
+          "service": "frontend",
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /",
+          "start": "2026-10-07T11:56:00.002Z",
+          "end": "2026-10-07T11:56:00.190Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/",
+            "url.path": "/",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.30.40.25",
+            "network.peer.port": 51008
+          }
+        }
+      ]
+    }
+  ],
+  "otel": {
+    "environment": "demo",
+    "traces_sourcetype": "otel:traces",
+    "k8s_objects_mode": "watch",
+    "hubble_sourcetype": "cilium:hubble:flow",
+    "hubble_index": "cilium",
+    "hubble_file": "/var/run/cilium/hubble/events.log"
+  }
+}

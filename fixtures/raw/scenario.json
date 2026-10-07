@@ -1,0 +1,832 @@
+{
+  "description": "Synthetic shop scenario. Entity facts only; per-sourcetype event formats come from the TA definitions cited in tools/gen_raw_fixtures.py. Addresses: RFC 1918 internal, RFC 5737 documentation ranges for devices and external hosts.",
+  "window": {
+    "start": "2026-10-07T11:45:00Z",
+    "end": "2026-10-07T12:00:00Z"
+  },
+  "assumptions": [
+    "Kubernetes uses Cilium in native-routing mode with BGP to the NX-OS leaves (no VXLAN/Geneve tunnel), so pod IPs appear on the fabric and in NetFlow exported by the leaves. Cilium kube-proxy replacement translates Service ClusterIPs to backend pod IPs at connect time, so ClusterIPs do not appear on the wire.",
+    "The NX-OS VXLAN fabric dc1-vxlan is managed by Nexus Dashboard; leaves export NetFlow to Splunk Stream.",
+    "The ACI fabric aci-1 hosts the VM tier (orders database) in tenant shop, VRF prod, EPG db.",
+    "Cisco FTD ftd-edge sits at the internet edge and performs DNAT for the public entry VIP and SNAT for outbound traffic.",
+    "Isovalent Runtime Security (Tetragon) on the Cilium nodes emits processConnect events through the Cisco Security Cloud HEC input.",
+    "Cilium routing mode is undecided for the pilot. Conversations marked encapsulation=vxlan model tunnel mode: the fabric sees only node-to-node UDP 8472, and inner pod tuples are available only from Isovalent."
+  ],
+  "kubernetes": {
+    "cluster": "demo-cluster",
+    "nodes": [
+      {
+        "name": "node-a",
+        "ip": "10.10.20.11",
+        "leaf": "leaf-101",
+        "interface": "Ethernet1/11"
+      },
+      {
+        "name": "node-b",
+        "ip": "10.10.20.12",
+        "leaf": "leaf-102",
+        "interface": "Ethernet1/12"
+      },
+      {
+        "name": "node-c",
+        "ip": "10.10.20.13",
+        "leaf": "leaf-102",
+        "interface": "Ethernet1/13",
+        "mac": "02:00:0A:0A:14:0D",
+        "start": "2026-10-07T09:00:00Z",
+        "end": "2026-10-07T11:46:30Z",
+        "edge_case": "replaced by node-d, which reuses its IP"
+      },
+      {
+        "name": "node-d",
+        "ip": "10.10.20.13",
+        "leaf": "leaf-102",
+        "interface": "Ethernet1/13",
+        "mac": "02:00:0A:0A:14:DD",
+        "start": "2026-10-07T11:47:00Z",
+        "end": null,
+        "edge_case": "replacement node reusing node-c's IP"
+      }
+    ],
+    "pods": [
+      {
+        "name": "ingress-nginx-controller-6b9d7c8f5-q7m2z",
+        "namespace": "ingress-nginx",
+        "uid": "5d0c6f1e-2a4b-4c8d-9e0f-1a2b3c4d5e01",
+        "ip": "10.42.1.5",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "ingress-nginx-controller-6b9d7c8f5",
+        "pod_template_hash": "6b9d7c8f5",
+        "service": null,
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "frontend-7d9c6b5f4-x2k8p",
+        "namespace": "shop",
+        "uid": "7f1e2d3c-4b5a-4968-8776-655443322101",
+        "ip": "10.42.0.10",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "frontend-7d9c6b5f4",
+        "pod_template_hash": "7d9c6b5f4",
+        "service": "frontend",
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "checkout-5f8b9c7d6-m4n7q",
+        "namespace": "shop",
+        "uid": "8a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c02",
+        "ip": "10.42.0.20",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "checkout-5f8b9c7d6",
+        "pod_template_hash": "5f8b9c7d6",
+        "service": "checkout",
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "catalog-6a1c2d3e4-p9r5t",
+        "namespace": "shop",
+        "uid": "9b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d03",
+        "ip": "10.42.0.30",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "catalog-6a1c2d3e4",
+        "pod_template_hash": "6a1c2d3e4",
+        "service": "catalog",
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "payment-2b4d6f8a1-k3j6h",
+        "namespace": "shop",
+        "uid": "ac4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e04",
+        "ip": "10.42.0.40",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "payment-2b4d6f8a1",
+        "pod_template_hash": "2b4d6f8a1",
+        "service": "payment",
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "name": "cart-4c2e5a7b9-old01",
+        "namespace": "shop",
+        "uid": "bd5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f05",
+        "ip": "10.42.0.50",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "cart-4c2e5a7b9",
+        "pod_template_hash": "4c2e5a7b9",
+        "service": "cart",
+        "start": "2026-10-07T09:00:00Z",
+        "end": "2026-10-07T11:40:00Z"
+      },
+      {
+        "name": "cart-4c2e5a7b9-w8v2c",
+        "namespace": "shop",
+        "uid": "ce6f7a8b-9c0d-4e1f-8a3b-4c5d6e7f8a06",
+        "ip": "10.42.0.50",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "cart-4c2e5a7b9",
+        "pod_template_hash": "4c2e5a7b9",
+        "service": "cart",
+        "start": "2026-10-07T11:41:00Z",
+        "end": null
+      },
+      {
+        "name": "coredns-7c65d6cfc9-h2x4l",
+        "namespace": "kube-system",
+        "uid": "df7a8b9c-0d1e-4f2a-9b4c-5d6e7f8a9b07",
+        "ip": "10.42.1.53",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "coredns-7c65d6cfc9",
+        "pod_template_hash": "7c65d6cfc9",
+        "service": null,
+        "start": "2026-10-07T09:00:00Z",
+        "end": null
+      },
+      {
+        "service": null,
+        "end": "2026-10-07T11:52:00Z",
+        "name": "reports-7f6d5c4b3-aaaaa",
+        "namespace": "shop",
+        "uid": "e1a2b3c4-d5e6-4f70-8a9b-0c1d2e3f4a08",
+        "ip": "10.42.0.60",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "reports-7f6d5c4b3",
+        "pod_template_hash": "7f6d5c4b3",
+        "start": "2026-10-07T11:30:00Z",
+        "labels": {
+          "app": "reports",
+          "pod-template-hash": "7f6d5c4b3"
+        },
+        "edge_case": "IP reused inside the window"
+      },
+      {
+        "service": null,
+        "end": null,
+        "name": "reports-7f6d5c4b3-bbbbb",
+        "namespace": "shop",
+        "uid": "f2b3c4d5-e6f7-4a81-9b0c-1d2e3f4a5b09",
+        "ip": "10.42.0.60",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "reports-7f6d5c4b3",
+        "pod_template_hash": "7f6d5c4b3",
+        "start": "2026-10-07T11:52:30Z",
+        "labels": {
+          "app": "reports",
+          "pod-template-hash": "7f6d5c4b3"
+        },
+        "edge_case": "IP reused inside the window"
+      },
+      {
+        "service": null,
+        "end": null,
+        "name": "inventory-8d7c6b5a4-g5r2n",
+        "namespace": "shop",
+        "uid": "a3c4d5e6-f7a8-4b92-8c1d-2e3f4a5b6c10",
+        "ip": "10.42.0.70",
+        "node": "node-b",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "inventory-8d7c6b5a4",
+        "pod_template_hash": "8d7c6b5a4",
+        "start": "2026-10-07T09:00:00Z",
+        "labels": {
+          "app": "inventory",
+          "pod-template-hash": "8d7c6b5a4"
+        },
+        "edge_case": "gRPC server on high port 50051"
+      },
+      {
+        "service": null,
+        "end": null,
+        "name": "cilium-x7k2p",
+        "namespace": "kube-system",
+        "uid": "b4d5e6f7-a8b9-4ca3-9d2e-3f4a5b6c7d11",
+        "ip": "10.10.20.11",
+        "node": "node-a",
+        "owner_kind": "DaemonSet",
+        "owner_name": "cilium",
+        "pod_template_hash": "6f9d8c7b5",
+        "start": "2026-10-07T09:00:00Z",
+        "host_network": true,
+        "labels": {
+          "k8s-app": "cilium",
+          "controller-revision-hash": "6f9d8c7b5",
+          "pod-template-generation": "1"
+        },
+        "edge_case": "hostNetwork pod: podIP equals the node IP"
+      },
+      {
+        "service": "batch-worker",
+        "end": "2026-10-07T11:46:00Z",
+        "name": "batch-worker-5c6d7e8f9-old11",
+        "namespace": "batch",
+        "uid": "c5e6f7a8-b9c0-4db4-8e3f-4a5b6c7d8e12",
+        "ip": "10.42.2.10",
+        "node": "node-c",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "batch-worker-5c6d7e8f9",
+        "pod_template_hash": "5c6d7e8f9",
+        "start": "2026-10-07T09:00:00Z",
+        "labels": {
+          "app": "batch-worker",
+          "pod-template-hash": "5c6d7e8f9"
+        },
+        "edge_case": "pod on node-c (replaced)"
+      },
+      {
+        "service": "batch-worker",
+        "end": null,
+        "name": "batch-worker-5c6d7e8f9-new22",
+        "namespace": "batch",
+        "uid": "d6f7a8b9-c0d1-4ec5-9f4a-5b6c7d8e9f13",
+        "ip": "10.42.2.11",
+        "node": "node-d",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "batch-worker-5c6d7e8f9",
+        "pod_template_hash": "5c6d7e8f9",
+        "start": "2026-10-07T11:48:00Z",
+        "labels": {
+          "app": "batch-worker",
+          "pod-template-hash": "5c6d7e8f9"
+        },
+        "edge_case": "pod on node-d (replacement)"
+      },
+      {
+        "service": null,
+        "end": null,
+        "name": "legacy-agent-6a5b4c3d2-zz9yy",
+        "namespace": "default",
+        "uid": "e7a8b9c0-d1e2-4fd6-8a5b-6c7d8e9f0a14",
+        "ip": "10.42.1.90",
+        "node": "node-a",
+        "owner_kind": "ReplicaSet",
+        "owner_name": "legacy-agent-6a5b4c3d2",
+        "pod_template_hash": "6a5b4c3d2",
+        "start": "2026-10-07T09:00:00Z",
+        "omit_cluster_field": true,
+        "labels": {
+          "app": "legacy-agent",
+          "pod-template-hash": "6a5b4c3d2"
+        },
+        "edge_case": "pod object event without the k8s.cluster.name field"
+      }
+    ],
+    "services": [
+      {
+        "name": "frontend",
+        "namespace": "shop",
+        "cluster_ip": "10.43.0.10",
+        "port": 8080,
+        "selector": {
+          "app": "frontend"
+        }
+      },
+      {
+        "name": "checkout",
+        "namespace": "shop",
+        "cluster_ip": "10.43.0.20",
+        "port": 8080,
+        "selector": {
+          "app": "checkout"
+        }
+      }
+    ],
+    "cni": {
+      "plugin": "cilium",
+      "routing_mode": "native (main scenario); tunnel-mode variant records included",
+      "kube_proxy_replacement": true
+    }
+  },
+  "aci": {
+    "fabric": "aci-1",
+    "apic_host": "192.0.2.50",
+    "endpoints": [
+      {
+        "ip": "10.20.30.40",
+        "mac": "00:50:56:AA:10:40",
+        "tenant": "shop",
+        "vrf": "prod",
+        "app_profile": "orders",
+        "epg": "db",
+        "encap": "vlan-1040",
+        "leaf": "leaf-201",
+        "pod_id": 1,
+        "node_id": 201,
+        "interface": "eth1/5",
+        "vm_name": "orders-db-01",
+        "hypervisor": "esx-07",
+        "nd_endpoint": true,
+        "edge_case_nd": "Nexus Dashboard also reports this ACI endpoint"
+      }
+    ]
+  },
+  "nexus_dashboard": {
+    "host": "192.0.2.60",
+    "fabric": "dc1-vxlan",
+    "switches": [
+      {
+        "name": "leaf-101",
+        "mgmt_ip": "192.0.2.11",
+        "serial": "FDO24411AAA",
+        "model": "N9K-C93180YC-FX3",
+        "nxos": "10.4(3)"
+      },
+      {
+        "name": "leaf-102",
+        "mgmt_ip": "192.0.2.12",
+        "serial": "FDO24411BBB",
+        "model": "N9K-C93180YC-FX3",
+        "nxos": "10.4(3)"
+      },
+      {
+        "name": "border-1",
+        "mgmt_ip": "192.0.2.21",
+        "serial": "FDO24411CCC",
+        "model": "N9K-C9336C-FX2",
+        "nxos": "10.4(3)"
+      }
+    ],
+    "cdp_neighbors": [
+      {
+        "device": "leaf-101",
+        "local_interface": "Ethernet1/49",
+        "neighbor": "border-1",
+        "neighbor_interface": "Ethernet1/1"
+      },
+      {
+        "device": "leaf-102",
+        "local_interface": "Ethernet1/49",
+        "neighbor": "border-1",
+        "neighbor_interface": "Ethernet1/2"
+      }
+    ],
+    "interfaces": [
+      {
+        "device": "leaf-101",
+        "name": "Ethernet1/11",
+        "snmp_ifindex": 436212736,
+        "description": "node-a"
+      },
+      {
+        "device": "leaf-101",
+        "name": "Ethernet1/49",
+        "snmp_ifindex": 436232192,
+        "description": "uplink border-1"
+      },
+      {
+        "device": "leaf-102",
+        "name": "Ethernet1/12",
+        "snmp_ifindex": 436213248,
+        "description": "node-b"
+      },
+      {
+        "device": "leaf-102",
+        "name": "Ethernet1/49",
+        "snmp_ifindex": 436232192,
+        "description": "uplink border-1"
+      },
+      {
+        "device": "leaf-102",
+        "name": "Ethernet1/13",
+        "snmp_ifindex": 436213760,
+        "description": "node-c/node-d"
+      }
+    ]
+  },
+  "firewall": {
+    "name": "ftd-edge",
+    "device_ip": "192.0.2.1",
+    "interfaces": {
+      "outside": {
+        "zone": "OUTSIDE"
+      },
+      "inside": {
+        "zone": "INSIDE"
+      }
+    },
+    "public_vip": "203.0.113.10",
+    "snat_address": "203.0.113.5"
+  },
+  "external": [
+    {
+      "name": "client",
+      "ip": "198.51.100.8"
+    },
+    {
+      "name": "payment-gateway",
+      "ip": "203.0.113.40"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "c-entry",
+      "client": "198.51.100.8:51400",
+      "server": "203.0.113.10:443",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08Z",
+      "end": "2026-10-07T11:50:09Z",
+      "bytes_c2s": 620,
+      "bytes_s2c": 4800,
+      "seen_by": ["ftd"],
+      "nat": {
+        "kind": "dnat",
+        "server_after": "10.42.1.5:443"
+      }
+    },
+    {
+      "id": "c-ingress-frontend",
+      "client": "10.42.1.5:43110",
+      "server": "10.42.0.10:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.200Z",
+      "end": "2026-10-07T11:50:08.900Z",
+      "bytes_c2s": 540,
+      "bytes_s2c": 4400,
+      "seen_by": ["isovalent"]
+    },
+    {
+      "id": "c-frontend-checkout",
+      "client": "10.42.0.10:43120",
+      "server": "10.42.0.20:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.300Z",
+      "end": "2026-10-07T11:50:08.800Z",
+      "bytes_c2s": 1200,
+      "bytes_s2c": 900,
+      "seen_by": ["isovalent"]
+    },
+    {
+      "id": "c-checkout-catalog",
+      "client": "10.42.0.20:43121",
+      "server": "10.42.0.30:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.350Z",
+      "end": "2026-10-07T11:50:08.500Z",
+      "bytes_c2s": 800,
+      "bytes_s2c": 5200,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102", "nd", "isovalent"]
+    },
+    {
+      "id": "c-checkout-payment",
+      "client": "10.42.0.20:43122",
+      "server": "10.42.0.40:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.350Z",
+      "end": "2026-10-07T11:50:08.700Z",
+      "bytes_c2s": 1600,
+      "bytes_s2c": 700,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102", "nd", "isovalent"]
+    },
+    {
+      "id": "c-checkout-cart",
+      "client": "10.42.0.20:43123",
+      "server": "10.42.0.50:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.360Z",
+      "end": "2026-10-07T11:50:08.450Z",
+      "bytes_c2s": 700,
+      "bytes_s2c": 300,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102", "isovalent"]
+    },
+    {
+      "id": "c-checkout-orders-db",
+      "client": "10.42.0.20:43130",
+      "server": "10.20.30.40:5432",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.400Z",
+      "end": "2026-10-07T11:50:08.650Z",
+      "bytes_c2s": 2100,
+      "bytes_s2c": 18000,
+      "seen_by": ["netflow:leaf-101", "nd", "isovalent"],
+      "ipv4_mapped_in": ["nd"],
+      "edge_case": "Nexus Dashboard reports both addresses as full-form IPv4-mapped IPv6"
+    },
+    {
+      "id": "c-payment-gateway",
+      "client": "10.42.0.40:43200",
+      "server": "203.0.113.40:443",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.450Z",
+      "end": "2026-10-07T11:50:08.690Z",
+      "bytes_c2s": 450,
+      "bytes_s2c": 3100,
+      "seen_by": ["netflow:leaf-102", "ftd", "isovalent"],
+      "nat": {
+        "kind": "snat",
+        "client_after": "203.0.113.5:61200"
+      }
+    },
+    {
+      "id": "c-unknown-cart",
+      "client": "10.99.0.7:52011",
+      "server": "10.42.0.50:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:52:00Z",
+      "end": "2026-10-07T11:52:01Z",
+      "bytes_c2s": 90,
+      "bytes_s2c": 60,
+      "seen_by": ["netflow:leaf-102"],
+      "late_segment": true,
+      "edge_case": "each exporter splits the flow into two records; the second arrives late (fixtures/raw/late/)"
+    },
+    {
+      "id": "c-dns",
+      "client": "10.42.0.20:53001",
+      "server": "10.42.1.53:53",
+      "transport": "udp",
+      "start": "2026-10-07T11:50:08.310Z",
+      "end": "2026-10-07T11:50:08.320Z",
+      "bytes_c2s": 74,
+      "bytes_s2c": 130,
+      "seen_by": ["isovalent"]
+    },
+    {
+      "id": "c-old-cart-before-window",
+      "client": "10.42.0.20:43001",
+      "server": "10.42.0.50:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:39:00Z",
+      "end": "2026-10-07T11:39:01Z",
+      "bytes_c2s": 300,
+      "bytes_s2c": 200,
+      "seen_by": ["netflow:leaf-101"]
+    },
+    {
+      "id": "c-tunnel-node-a-node-b",
+      "client": "10.10.20.11:40001",
+      "server": "10.10.20.12:8472",
+      "transport": "udp",
+      "start": "2026-10-07T11:53:00Z",
+      "end": "2026-10-07T11:53:02Z",
+      "bytes_c2s": 5400,
+      "bytes_s2c": 3900,
+      "seen_by": ["netflow:leaf-101", "nd"],
+      "encapsulation": "vxlan"
+    },
+    {
+      "id": "ec-reports-a",
+      "client": "10.42.0.60:40100",
+      "server": "10.42.0.20:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:48:00Z",
+      "end": "2026-10-07T11:48:01Z",
+      "bytes_c2s": 400,
+      "bytes_s2c": 250,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102"]
+    },
+    {
+      "id": "ec-reports-b",
+      "client": "10.42.0.60:40200",
+      "server": "10.42.0.20:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:56:00Z",
+      "end": "2026-10-07T11:56:01Z",
+      "bytes_c2s": 410,
+      "bytes_s2c": 260,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102"]
+    },
+    {
+      "id": "ec-grpc-inventory",
+      "client": "10.42.0.20:41500",
+      "server": "10.42.0.70:50051",
+      "transport": "tcp",
+      "start": "2026-10-07T11:50:08.370Z",
+      "end": "2026-10-07T11:50:08.480Z",
+      "bytes_c2s": 900,
+      "bytes_s2c": 3300,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102", "isovalent"]
+    },
+    {
+      "id": "ec-icmp-orders-db",
+      "client": "10.42.0.20",
+      "server": "10.20.30.40",
+      "transport": "icmp",
+      "start": "2026-10-07T11:51:00Z",
+      "end": "2026-10-07T11:51:04Z",
+      "bytes_c2s": 336,
+      "bytes_s2c": 336,
+      "seen_by": ["netflow:leaf-101"]
+    },
+    {
+      "id": "ec-node-d-probe",
+      "client": "10.10.20.13:51000",
+      "server": "10.42.0.20:8080",
+      "transport": "tcp",
+      "start": "2026-10-07T11:55:00Z",
+      "end": "2026-10-07T11:55:01Z",
+      "bytes_c2s": 120,
+      "bytes_s2c": 80,
+      "seen_by": ["netflow:leaf-101", "netflow:leaf-102"]
+    }
+  ],
+  "traces": [
+    {
+      "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+      "spans": [
+        {
+          "span_id": "00f067aa0ba902b7",
+          "parent": null,
+          "service": "frontend",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /checkout",
+          "start": "2026-10-07T11:50:08.250Z",
+          "end": "2026-10-07T11:50:08.880Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/checkout",
+            "url.scheme": "http",
+            "server.port": 8080,
+            "network.peer.address": "10.42.1.5"
+          }
+        },
+        {
+          "span_id": "b7ad6b7169203331",
+          "parent": "00f067aa0ba902b7",
+          "service": "frontend",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:50:08.300Z",
+          "end": "2026-10-07T11:50:08.800Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "checkout.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.0.20"
+          }
+        },
+        {
+          "span_id": "c8be7c827a2b4f10",
+          "parent": "b7ad6b7169203331",
+          "service": "checkout",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /api/checkout",
+          "start": "2026-10-07T11:50:08.310Z",
+          "end": "2026-10-07T11:50:08.790Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/api/checkout",
+            "server.port": 8080,
+            "network.peer.address": "10.42.0.10"
+          }
+        },
+        {
+          "span_id": "d9cf8d938b3c5021",
+          "parent": "c8be7c827a2b4f10",
+          "service": "checkout",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "GET",
+          "start": "2026-10-07T11:50:08.350Z",
+          "end": "2026-10-07T11:50:08.500Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "server.address": "catalog.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.0.30"
+          }
+        },
+        {
+          "span_id": "e0d09ea49c4d6132",
+          "parent": "d9cf8d938b3c5021",
+          "service": "catalog",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /items",
+          "start": "2026-10-07T11:50:08.355Z",
+          "end": "2026-10-07T11:50:08.495Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/items",
+            "server.port": 8080
+          }
+        },
+        {
+          "span_id": "f1e1afb5ad5e7243",
+          "parent": "c8be7c827a2b4f10",
+          "service": "checkout",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:50:08.350Z",
+          "end": "2026-10-07T11:50:08.700Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "payment.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.0.40"
+          }
+        },
+        {
+          "span_id": "a2f2b0c6be6f8354",
+          "parent": "f1e1afb5ad5e7243",
+          "service": "payment",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /charge",
+          "start": "2026-10-07T11:50:08.355Z",
+          "end": "2026-10-07T11:50:08.695Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/charge",
+            "server.port": 8080
+          }
+        },
+        {
+          "span_id": "b3a3c1d7cf709465",
+          "parent": "a2f2b0c6be6f8354",
+          "service": "payment",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "POST",
+          "start": "2026-10-07T11:50:08.450Z",
+          "end": "2026-10-07T11:50:08.690Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "server.address": "api.payments.example",
+            "server.port": 443,
+            "network.peer.address": "203.0.113.40"
+          }
+        },
+        {
+          "span_id": "c4b4d2e8d0815576",
+          "parent": "c8be7c827a2b4f10",
+          "service": "checkout",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "GET",
+          "start": "2026-10-07T11:50:08.360Z",
+          "end": "2026-10-07T11:50:08.450Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "server.address": "cart.shop.svc.cluster.local",
+            "server.port": 8080,
+            "network.peer.address": "10.42.0.50"
+          }
+        },
+        {
+          "span_id": "d5c5e3f9e1926687",
+          "parent": "c4b4d2e8d0815576",
+          "service": "cart",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /cart",
+          "start": "2026-10-07T11:50:08.365Z",
+          "end": "2026-10-07T11:50:08.445Z",
+          "attributes": {
+            "http.request.method": "GET",
+            "http.route": "/cart",
+            "server.port": 8080
+          }
+        },
+        {
+          "span_id": "e6d6f4a0f2a37798",
+          "parent": "c8be7c827a2b4f10",
+          "service": "checkout",
+          "kind": "SPAN_KIND_CLIENT",
+          "name": "INSERT orders",
+          "start": "2026-10-07T11:50:08.400Z",
+          "end": "2026-10-07T11:50:08.650Z",
+          "attributes": {
+            "db.system.name": "postgresql",
+            "db.operation.name": "INSERT",
+            "db.collection.name": "orders",
+            "server.address": "orders-db.shop.internal",
+            "server.port": 5432,
+            "network.peer.address": "10.20.30.40"
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "9a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "edge_case": "trace with no span in the shop boundary",
+      "spans": [
+        {
+          "span_id": "1a2b3c4d5e6f7081",
+          "parent": null,
+          "service": "batch-worker",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "POST /jobs",
+          "start": "2026-10-07T11:52:00Z",
+          "end": "2026-10-07T11:52:00.200Z",
+          "attributes": {
+            "http.request.method": "POST",
+            "http.route": "/jobs",
+            "server.port": 8080
+          }
+        }
+      ]
+    }
+  ],
+  "otel": {
+    "environment": "demo",
+    "traces_sourcetype": "otel:traces",
+    "k8s_objects_mode": "watch"
+  },
+  "edge_cases": "Entities and conversations whose id or name starts with 'ec-' (or carry an 'edge_case' note) exist only to exercise data-layer corner cases in tests/splunk: IP reuse inside the window, hostNetwork pods, node replacement reusing an IP, ACI and Nexus Dashboard describing one endpoint, ICMP without ports, a high-port gRPC server, late NetFlow export, an IPv4-mapped IPv6 literal, a pod event without k8s.cluster.name, and a trace outside the boundary."
+}

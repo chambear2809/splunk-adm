@@ -1,0 +1,76 @@
+{
+  "description": "adm_topology expectations derived from fixtures/raw/scenario.json (nexus_dashboard switches, interfaces, cdp_neighbors; aci endpoints' leaf; firewall) and the grounded collection behavior in fixtures/raw/FIELDS.md. Not copied from search output.",
+  "window": { "earliest": 1791366000, "latest": 1791374400 },
+  "devices": {
+    "leaf-101": {
+      "mgmt_ip": "192.0.2.11",
+      "device_kind": "switch",
+      "platform": "N9K-C93180YC-FX3",
+      "os_version": "10.4(3)",
+      "serial": "FDO24411AAA",
+      "fabric": "dc1-vxlan",
+      "sources": ["cdp", "nd", "nxos"]
+    },
+    "leaf-102": {
+      "mgmt_ip": "192.0.2.12",
+      "device_kind": "switch",
+      "platform": "N9K-C93180YC-FX3",
+      "os_version": "10.4(3)",
+      "serial": "FDO24411BBB",
+      "fabric": "dc1-vxlan",
+      "sources": ["cdp", "nd", "nxos"]
+    },
+    "border-1": {
+      "mgmt_ip": "192.0.2.21",
+      "device_kind": "switch",
+      "platform": "N9K-C9336C-FX2",
+      "os_version": "10.4(3)",
+      "serial": "FDO24411CCC",
+      "fabric": "dc1-vxlan",
+      "sources": ["cdp", "nd", "nxos"]
+    },
+    "leaf-201": {
+      "device_kind": "switch",
+      "fabric": "apic:192.0.2.50",
+      "aci_node": "pod-1/node-201",
+      "sources": ["aci"]
+    },
+    "ftd-edge": {
+      "mgmt_ip": "192.0.2.1",
+      "device_kind": "firewall",
+      "sources": ["ftd"]
+    }
+  },
+  "links": [
+    ["border-1", "Ethernet1/1", "leaf-101", "Ethernet1/49"],
+    ["border-1", "Ethernet1/2", "leaf-102", "Ethernet1/49"]
+  ],
+  "interfaces": {
+    "leaf-101|Ethernet1/11": { "description": "node-a", "state": "up" },
+    "leaf-101|Ethernet1/49": {
+      "ifindex": "436232192",
+      "description": "uplink border-1",
+      "state": "up"
+    },
+    "leaf-102|Ethernet1/12": { "description": "node-b", "state": "up" },
+    "leaf-102|Ethernet1/13": { "description": "node-c/node-d", "state": "up" },
+    "leaf-102|Ethernet1/49": {
+      "ifindex": "436232192",
+      "description": "uplink border-1",
+      "state": "up"
+    },
+    "border-1|Ethernet1/1": {},
+    "border-1|Ethernet1/2": {}
+  },
+  "interfaces_without_ifindex": [
+    "leaf-101|Ethernet1/11",
+    "leaf-102|Ethernet1/12",
+    "leaf-102|Ethernet1/13"
+  ],
+  "meta": {
+    "devices": "5",
+    "links": "2",
+    "interfaces": "7",
+    "warning_contains": "SNMP ifIndex is known only for CDP-connected ports"
+  }
+}
