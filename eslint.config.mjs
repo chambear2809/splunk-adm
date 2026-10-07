@@ -10,6 +10,10 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
+    files: ["frontend/src/**/*.test.ts"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
+  {
     files: ["tools/*.mjs", "eslint.config.mjs"],
     languageOptions: { globals: globals.node },
   },

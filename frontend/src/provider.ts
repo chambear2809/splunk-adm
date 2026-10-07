@@ -1,9 +1,33 @@
-import demo from "../../fixtures/demo-graph.json";
-import { parseGraph, type Graph } from "./graph";
-export const demoGraph = () => parseGraph(demo);
+import demo from "../../fixtures/demo-rows.json";
+import { type Graph } from "./graph";
+import { MAX_ROWS, rowsToGraph, type GraphArgs, type Row } from "./rows";
+import {
+  emptyTopology,
+  MAX_TOPOLOGY_ROWS,
+  rowsToTopology,
+  type Topology,
+} from "./topology";
+
+export const demoArgs: GraphArgs = demo.args;
+/** Demo mode assembles captured lab rows through the same path as live mode. */
+export const demoGraph = () => rowsToGraph(demo.rows, demoArgs, { demo: true });
+// Captured `adm_topology` output, when the lab export exists.
+const demoTopologyFiles = import.meta.glob<unknown>(
+  "../../fixtures/demo-topology.json",
+  { eager: true, import: "default" },
+);
+export const demoTopology = (): Topology => {
+  const file = Object.values(demoTopologyFiles)[0];
+  if (file === undefined) return emptyTopology();
+  return rowsToTopology(
+    Array.isArray(file) ? file : (file as { rows?: unknown }).rows,
+  );
+};
+export const TOPOLOGY_SEARCH = "`adm_topology`";
+
 interface Results {
-  fields: string[];
-  rows: string[][];
+  fields: (string | { name?: string })[];
+  rows: unknown[][];
 }
 interface ResultModel {
   on(event: string, callback: () => void): void;
@@ -12,14 +36,11 @@ interface ResultModel {
   data(): Results;
 }
 interface Manager {
-  data(kind: string, options: { count: number }): ResultModel;
-  on(
-    event: string,
-    callback: (state: {
-      content?: { resultCount?: number };
-      message?: string;
-    }) => void,
-  ): void;
+  data(
+    kind: string,
+    options: { count: number; output_mode?: string },
+  ): ResultModel;
+  on(event: string, callback: (state?: unknown) => void): void;
   off(): void;
   startSearch(): void;
   cancel(): void;
@@ -29,46 +50,179 @@ export type SearchConstructor = new (
   options: Record<string, unknown>,
 ) => Manager;
 let sequence = 0;
-export interface LiveRequest {
-  index: string;
-  boundary: string;
+export const TIME_RANGES = [
+  { value: "-15m", label: "Last 15 minutes" },
+  { value: "-1h", label: "Last hour" },
+  { value: "-4h", label: "Last 4 hours" },
+  { value: "-24h", label: "Last 24 hours" },
+] as const;
+export interface LiveRequest extends GraphArgs {
   earliest: string;
 }
-// Restrict user input to literal identifiers: it can never introduce SPL operators.
+const MAX_MESSAGE_CHARS = 300;
+/**
+ * Argument formats. None admits quotes, backslashes, backticks, parentheses,
+ * commas, `$`, `|` or whitespace, so a value cannot close its quoted macro
+ * argument, inject another argument, or reference a macro token.
+ */
+export const ARG_RULES: Record<keyof GraphArgs, { re: RegExp; hint: string }> =
+  {
+    service: {
+      re: /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/,
+      hint: "letters, numbers and . _ : / @ -",
+    },
+    environment: {
+      re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
+      hint: "letters, numbers and . _ -",
+    },
+    cluster: {
+      re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/,
+      hint: "letters, numbers and . _ -",
+    },
+    namespace: {
+      // Kubernetes namespace names are RFC 1123 labels.
+      re: /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/,
+      hint: "lowercase letters, numbers and -, at most 63 characters",
+    },
+  };
+export function argError(key: keyof GraphArgs, value: string) {
+  return ARG_RULES[key].re.test(value)
+    ? undefined
+    : `${key[0].toUpperCase()}${key.slice(1)} may contain ${ARG_RULES[key].hint}.`;
+}
+/** Builds the graph SPL from validated arguments only. */
+export function buildGraphSearch(request: LiveRequest): string {
+  for (const key of Object.keys(ARG_RULES) as (keyof GraphArgs)[]) {
+    const error = argError(key, String(request[key] ?? ""));
+    if (error) throw new Error(error);
+  }
+  if (!TIME_RANGES.some((r) => r.value === request.earliest))
+    throw new Error("Unsupported time range.");
+  const { service, environment, cluster, namespace } = request;
+  return `\`adm_graph("${service}","${environment}","${cluster}","${namespace}")\``;
+}
+/** Extracts a bounded, plain-text Splunk message from a search event payload. */
+export function splunkMessage(payload: unknown): string | undefined {
+  let text: unknown;
+  if (typeof payload === "string") text = payload;
+  else if (payload && typeof payload === "object") {
+    const p = payload as {
+      message?: unknown;
+      content?: { messages?: { text?: unknown }[] };
+    };
+    text =
+      typeof p.message === "string"
+        ? p.message
+        : p.content?.messages
+            ?.map((m) => m?.text)
+            .filter((t) => typeof t === "string" && t.trim())
+            .join(" ");
+  }
+  if (typeof text !== "string") return undefined;
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return undefined;
+  return clean.length > MAX_MESSAGE_CHARS
+    ? `${clean.slice(0, MAX_MESSAGE_CHARS - 1)}…`
+    : clean;
+}
+/** Converts SplunkJS json_rows results into row objects. */
+export function resultRows(data: Results): Row[] {
+  const fields = data.fields.map((f) => (typeof f === "string" ? f : f?.name));
+  if (!fields.every((f) => typeof f === "string" && f))
+    throw new Error("Splunk returned results without field names.");
+  return (data.rows ?? []).map((values) => {
+    const row: Row = {};
+    fields.forEach((f, i) => {
+      if (values[i] !== null && values[i] !== undefined)
+        row[f as string] = values[i];
+    });
+    return row;
+  });
+}
+const withDetail = (base: string, payload: unknown) => {
+  const detail = splunkMessage(payload);
+  return new Error(detail ? `${base} Splunk reported: ${detail}` : base);
+};
+const tooLarge = () =>
+  new Error(
+    "Graph exceeds the pilot limit (500 nodes / 2,000 edges). Narrow the time range or namespace.",
+  );
 export function loadLive(
   SearchManager: SearchConstructor,
   request: LiveRequest,
   signal: AbortSignal,
   release?: (id: string) => void,
 ): Promise<Graph> {
-  if (
-    !/^[a-zA-Z0-9_-]{1,100}$/.test(request.index) ||
-    !/^[a-zA-Z0-9_.:-]{1,160}$/.test(request.boundary)
-  )
-    return Promise.reject(
-      new Error(
-        "Use letters, numbers, dots, colons, underscores or hyphens for the boundary; index names cannot contain dots or colons.",
-      ),
-    );
-  if (!["-15m", "-1h", "-24h", "-7d", "0"].includes(request.earliest))
-    return Promise.reject(new Error("Unsupported search window."));
+  let search: string;
+  try {
+    search = buildGraphSearch(request);
+  } catch (e) {
+    return Promise.reject(e);
+  }
+  return runRows(SearchManager, {
+    search,
+    earliest: request.earliest,
+    maxRows: MAX_ROWS,
+    signal,
+    release,
+    tooLarge,
+    empty:
+      "The graph search returned no rows. Check that the Application Atlas macros are installed and shared with your role.",
+  }).then((rows) => rowsToGraph(rows, request));
+}
+/** Loads network inventory for candidate paths; callers treat failure as "no topology". */
+export function loadTopology(
+  SearchManager: SearchConstructor,
+  earliest: string,
+  signal: AbortSignal,
+  release?: (id: string) => void,
+): Promise<Topology> {
+  if (!TIME_RANGES.some((r) => r.value === earliest))
+    return Promise.reject(new Error("Unsupported time range."));
+  return runRows(SearchManager, {
+    search: TOPOLOGY_SEARCH,
+    earliest,
+    maxRows: MAX_TOPOLOGY_ROWS,
+    signal,
+    release,
+    tooLarge: () => new Error("Topology exceeds the pilot limit."),
+    empty: "The topology search returned no rows.",
+  }).then(rowsToTopology);
+}
+interface RunOptions {
+  search: string;
+  earliest: string;
+  maxRows: number;
+  signal: AbortSignal;
+  release?: (id: string) => void;
+  tooLarge: () => Error;
+  empty: string;
+}
+function runRows(
+  SearchManager: SearchConstructor,
+  { search, earliest, maxRows, signal, release, tooLarge, empty }: RunOptions,
+): Promise<Row[]> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new Error("Search cancelled."));
       return;
     }
-    const id = `adm-snapshot-${++sequence}`;
+    const id = `adm-search-${++sequence}`;
     const manager = new SearchManager({
       id,
       app: "splunk_adm",
       autostart: false,
       preview: false,
       cancelOnUnload: true,
-      earliest_time: request.earliest,
+      earliest_time: earliest,
       latest_time: "now",
-      search: `index="${request.index}" sourcetype="adm:graph" | spath path=boundary.id output=boundary_id | where boundary_id="${request.boundary}" | sort 0 - _time | head 1 | table _raw`,
+      search,
     });
-    const results = manager.data("results", { count: 1 });
+    // One more than the limit, so an oversized result is detected rather than cut.
+    const results = manager.data("results", {
+      count: maxRows + 1,
+      output_mode: "json_rows",
+    });
     let finished = false;
     const cleanup = () => {
       clearTimeout(timer);
@@ -88,12 +242,12 @@ export function loadLive(
         }
       }
     };
-    const finish = (graph?: Graph, error?: Error) => {
+    const finish = (rows?: Row[], error?: Error) => {
       if (finished) return;
       finished = true;
       cleanup();
-      if (graph) resolve(graph);
-      else reject(error ?? new Error("No snapshot found."));
+      if (rows) resolve(rows);
+      else reject(error ?? new Error(empty));
     };
     const abort = () => finish(undefined, new Error("Search cancelled."));
     const timer = setTimeout(
@@ -101,49 +255,57 @@ export function loadLive(
         finish(
           undefined,
           new Error(
-            "Search timed out after 60 seconds. Narrow the search window or check Splunk access.",
+            "Search timed out after 120 seconds. Narrow the time range or check that the ADM saved searches are enabled.",
           ),
         ),
-      60000,
+      120000,
     );
     signal.addEventListener("abort", abort);
     results.on("data", () => {
       if (!results.hasData()) return;
       try {
-        const data = results.data();
-        const raw = data.rows?.[0]?.[data.fields.indexOf("_raw")];
-        if (!raw || raw.length > 2_000_000)
-          throw new Error("Missing snapshot or snapshot exceeds 2 MB.");
-        const graph = parseGraph(JSON.parse(raw));
-        if (graph.boundary.id !== request.boundary)
-          throw new Error("Snapshot boundary does not match selection.");
-        finish(graph);
+        const rows = resultRows(results.data());
+        if (rows.length > maxRows) throw tooLarge();
+        finish(rows);
       } catch (e) {
         finish(
           undefined,
-          e instanceof Error ? e : new Error("Invalid graph event."),
+          e instanceof Error ? e : new Error("Invalid search result."),
         );
       }
     });
     manager.on("search:done", (state) => {
-      if (Number(state.content?.resultCount) === 0)
-        finish(
-          undefined,
-          new Error(
-            "No snapshot found for this boundary in the selected search window.",
-          ),
-        );
+      const count = Number(
+        (state as { content?: { resultCount?: unknown } })?.content
+          ?.resultCount,
+      );
+      if (count === 0) finish(undefined, new Error(empty));
+      else if (count > maxRows) finish(undefined, tooLarge());
     });
-    manager.on("search:error", () =>
+    manager.on("search:error", (payload) =>
       finish(
         undefined,
-        new Error(
+        withDetail(
           "Splunk search failed. Check index access and search permissions.",
+          payload,
         ),
       ),
     );
-    manager.on("search:failed", () =>
-      finish(undefined, new Error("Splunk could not complete the search.")),
+    for (const event of ["search:fail", "search:failed"])
+      manager.on(event, (payload) =>
+        finish(
+          undefined,
+          withDetail("Splunk could not complete the search.", payload),
+        ),
+      );
+    manager.on("search:cancelled", (payload) =>
+      finish(
+        undefined,
+        withDetail(
+          "The Splunk search was cancelled before the graph loaded.",
+          payload,
+        ),
+      ),
     );
     manager.startSearch();
   });

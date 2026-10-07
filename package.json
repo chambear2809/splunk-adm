@@ -1,6 +1,6 @@
 {
   "name": "splunk-adm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint frontend/src vite*.ts tools/package-app.mjs && tsc --noEmit && prettier --check frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
     "format": "prettier --write frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
-    "package": "npm run build && node tools/package-app.mjs"
+    "package": "npm run build && node tools/package-app.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "lucide-react": "1.52.0",
@@ -26,6 +27,7 @@
     "prettier": "^3.6.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1",
-    "vite": "8.3.3"
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
   }
 }
