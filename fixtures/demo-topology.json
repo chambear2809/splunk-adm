@@ -52,6 +52,7 @@
     "serial": "FDO58171LF",
     "fabric": "apic:192.0.2.50",
     "aci_node": "pod-1/node-201",
+    "role": "leaf",
     "sources": "aci"
   },
   {
@@ -124,7 +125,10 @@
     "devices": "5",
     "links": "2",
     "interfaces": "7",
-    "warnings": "SNMP ifIndex is known only for CDP-connected ports. NetFlow interfaces on other ports are shown by ifIndex unless 'show interface snmp-ifindex' output is collected.",
+    "warnings": [
+      "ACI leaves were found but no fabricLink or lldpAdjEp objects; add them to a DC Networking classInfo input to draw leaf-spine paths.",
+      "SNMP ifIndex is known only for CDP-connected ports. NetFlow interfaces on other ports are shown by ifIndex unless 'show interface snmp-ifindex' output is collected."
+    ],
     "generated_at": "1791374400"
   }
 ]

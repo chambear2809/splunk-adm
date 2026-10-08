@@ -6,4 +6,4 @@ enableSSL = 1
 disabled = 0
 token = @HEC_TOKEN@
 index = main
-indexes = main,netflow,cisco_dc,cisco_secure_fw,cisco_isovalent,k8s,otel_traces,adm_summary,adm
+indexes = main,netflow,cisco_dc,cisco_secure_fw,cisco_isovalent,k8s,otel_traces,cilium_hubble,adm_summary,adm,adm_alt_nf,adm_alt_nd,adm_alt_x,adm_alt_y

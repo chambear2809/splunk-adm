@@ -1,0 +1,2087 @@
+{
+  "description": "Edge cases for the ACI pilot data layer (reviewer findings C1-C2, M1-M9, m1-m6), applied on top of scenario.json in a later window and loaded as later index-time batches (edge/, then edge/late/). Every conversation id starts with ec-.",
+  "window": {
+    "start": "2026-10-07T12:15:00Z",
+    "end": "2026-10-07T12:30:00Z"
+  },
+  "add": {
+    "vms": [
+      {
+        "name": "win-client-02",
+        "ip": "10.30.40.26",
+        "mac": "00:50:56:AA:40:26",
+        "ap": "clients",
+        "epg": "win-clients",
+        "encap": "vlan-1030",
+        "leaf": "leaf-103",
+        "interface": "eth1/7",
+        "os": "Microsoft Windows Server 2022 (64-bit)",
+        "hypervisor": "esx-04",
+        "nd_endpoint": true
+      }
+    ],
+    "hypervisors": [
+      {
+        "name": "esx-04",
+        "leaf": "leaf-103",
+        "interface": "eth1/7",
+        "mac": "00:50:56:01:04:07"
+      }
+    ],
+    "nodes": [
+      {
+        "name": "node-d",
+        "uid": "d216e190-e677-5758-921d-146e0abfdb7f",
+        "ip": "10.10.20.14",
+        "mac": "00:50:56:B0:20:14",
+        "leaf": "leaf-102",
+        "interface": "eth1/14",
+        "attachment": "epg",
+        "pod_cidr": "10.42.3.0/24",
+        "ingress_ip": "10.42.3.200",
+        "host_nic": "ens1f0"
+      }
+    ],
+    "pods": [
+      {
+        "name": "node-exporter-hn4kq",
+        "namespace": "monitoring",
+        "uid": "6e3329c0-e530-5162-bb62-f11c3bd9a402",
+        "ip": "10.10.20.12",
+        "node": "node-b",
+        "owner_kind": "DaemonSet",
+        "owner_name": "node-exporter",
+        "pod_template_hash": "",
+        "service": null,
+        "labels": {
+          "app.kubernetes.io/name": "node-exporter"
+        },
+        "start": "2026-10-07T09:00:00Z",
+        "end": null,
+        "host_network": true
+      }
+    ],
+    "services": [
+      {
+        "name": "frontend-np",
+        "namespace": "shop",
+        "uid": "a252d955-36e1-51db-9b90-684c65658815",
+        "type": "NodePort",
+        "cluster_ip": "10.43.0.16",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": 8080,
+            "protocol": "TCP",
+            "node_port": 30082
+          }
+        ],
+        "selector": {
+          "app": "frontend"
+        },
+        "external_traffic_policy": "Cluster"
+      },
+      {
+        "name": "checkout-mp",
+        "namespace": "shop",
+        "uid": "e62b5ff9-85aa-5bfe-8d97-4b8de0fd6b26",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.22",
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "target_port": "http",
+            "protocol": "TCP",
+            "node_port": 31022
+          },
+          {
+            "name": "metrics",
+            "port": 9090,
+            "target_port": 9090,
+            "protocol": "TCP",
+            "node_port": 31023
+          }
+        ],
+        "selector": {
+          "app": "checkout"
+        },
+        "external_traffic_policy": "Local",
+        "load_balancer_ip": "10.50.0.21"
+      },
+      {
+        "name": "cilium-gateway-shared",
+        "namespace": "gateway-system",
+        "uid": "81672f22-ee58-5c8d-b7f6-8e7908be8385",
+        "type": "LoadBalancer",
+        "cluster_ip": "10.43.0.12",
+        "ports": [
+          {
+            "name": "port-443",
+            "port": 443,
+            "target_port": 443,
+            "protocol": "TCP",
+            "node_port": 31445
+          }
+        ],
+        "selector": null,
+        "external_traffic_policy": "Cluster",
+        "load_balancer_ip": "10.50.0.12",
+        "labels": {
+          "io.cilium.gateway/owning-gateway": "shared",
+          "gateway.networking.k8s.io/gateway-name": "shared"
+        },
+        "owner": {
+          "kind": "Gateway",
+          "name": "shared"
+        }
+      }
+    ],
+    "gateways": [
+      {
+        "name": "shared",
+        "namespace": "gateway-system",
+        "class": "cilium",
+        "listener": {
+          "name": "https",
+          "protocol": "HTTPS",
+          "port": 443,
+          "hostname": "shared.example.internal",
+          "tls_secret": "shared-tls"
+        },
+        "address": "10.50.0.12",
+        "uid": "7ea503ed-87a5-5f2a-b4e4-1c1bba82118f",
+        "allowed_routes_from": "All"
+      }
+    ],
+    "httproutes": [
+      {
+        "name": "shop-shared",
+        "namespace": "shop",
+        "gateway": "shared",
+        "gateway_namespace": "gateway-system",
+        "hostname": "shared.example.internal",
+        "path": "/",
+        "backend": {
+          "service": "frontend",
+          "port": 8080
+        },
+        "uid": "dc7726a3-a89a-579a-aa22-d21edec12875"
+      }
+    ],
+    "contracts": [
+      {
+        "name": "win-to-pods-ext",
+        "subjects": [
+          {
+            "name": "pods-ext",
+            "filters": [
+              {
+                "name": "pod-ext",
+                "directives": "none",
+                "action": "permit",
+                "entries": [
+                  {
+                    "name": "tcp-9443-est",
+                    "prot": "tcp",
+                    "d_from": 9443,
+                    "d_to": 9443,
+                    "tcp_rules": "est"
+                  },
+                  {
+                    "name": "tcp-9445-sport",
+                    "prot": "tcp",
+                    "d_from": 9445,
+                    "d_to": 9445,
+                    "s_from": 1024,
+                    "s_to": 65535
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "consumers": [
+          {
+            "epg": "clients/win-clients"
+          }
+        ],
+        "providers": [
+          {
+            "instp": "k8s-bgp/k8s-pods"
+          }
+        ]
+      }
+    ]
+  },
+  "updates": [
+    {
+      "batch": "edge",
+      "time": "2026-10-07T12:10:00Z",
+      "kind": "MODIFIED",
+      "endpointslice": "frontend",
+      "note": "C1: frontend EndpointSlice re-reported unchanged (condition refresh)"
+    },
+    {
+      "batch": "edge",
+      "time": "2026-10-07T12:10:00Z",
+      "kind": "MODIFIED",
+      "endpointslice": "payment-np",
+      "not_ready": true,
+      "note": "C1: payment endpoint becomes not ready"
+    },
+    {
+      "batch": "late",
+      "time": "2026-10-07T12:40:00Z",
+      "kind": "PULL",
+      "endpointslice": "payment-np",
+      "note": "C1: pull re-poll: payment endpoint ready again"
+    },
+    {
+      "batch": "late",
+      "time": "2026-10-07T12:40:00Z",
+      "kind": "PULL",
+      "endpointslice": "frontend",
+      "note": "C1: pull re-poll of the unchanged frontend slice"
+    }
+  ],
+  "conversations": [
+    {
+      "id": "ec-c2-gw-vm1",
+      "summary": "C2: VM1 through the shop Gateway; Envoy on node-a forwards to frontend on node-a. A malicious header request on the same upstream connection must be dropped.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:16:00.000Z",
+      "end": "2026-10-07T12:16:00.600Z",
+      "access": {
+        "method": "gateway",
+        "service": "shop/cilium-gateway-shop",
+        "frontend": "10.50.0.10:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "l7_forwarded_for",
+        "backends": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51101",
+          "dst": "10.50.0.10:443",
+          "proto": "tcp",
+          "bytes": 1800,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.10:443",
+          "dst": "10.30.40.25:51101",
+          "proto": "tcp",
+          "bytes": 9000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40201",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:16:00.040Z",
+          "syn": true
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40201",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:16:00.050Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "e1e1e1e1e1e1e1e1e1e1e1e1e1e1e101"
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40201",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:16:00.320Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25",
+            "xff_header": "10.30.40.25\" OR x=\"1\n",
+            "external_address": "10.30.40.25\" OR x=\"1"
+          },
+          "trace_id": "zz\"; | delete"
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51101",
+          "dst": "10.50.0.10:443",
+          "time": "2026-10-07T12:16:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ],
+        "per_connection": true
+      }
+    },
+    {
+      "id": "ec-c2-gw-vm2",
+      "summary": "C2: VM2 through the same Gateway in the same bucket; Envoy on node-a forwards to frontend on node-b. VM2 sent X-Forwarded-For: 10.30.40.25 (spoofed leftmost); Envoy appended the real peer. A request naming a client with no conversation must be ignored.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:16:00.200Z",
+      "end": "2026-10-07T12:16:00.700Z",
+      "access": {
+        "method": "gateway",
+        "service": "shop/cilium-gateway-shop",
+        "frontend": "10.50.0.10:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "l7_forwarded_for",
+        "backends": [
+          "frontend-7d9c6b5f4-q4m9z"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:51201",
+          "dst": "10.50.0.10:443",
+          "proto": "tcp",
+          "bytes": 1700,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.10:443",
+          "dst": "10.30.40.26:51201",
+          "proto": "tcp",
+          "bytes": 8800,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.42.0.200:40202",
+          "dst": "10.42.1.15:8080",
+          "proto": "tcp",
+          "bytes": 1500,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.42.1.15:8080",
+          "dst": "10.42.0.200:40202",
+          "proto": "tcp",
+          "bytes": 8500,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40202",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:16:00.240Z",
+          "syn": true
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40202",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:16:00.250Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.26",
+            "xff_header": "10.30.40.25, 10.30.40.26",
+            "external_address": "10.30.40.26"
+          },
+          "trace_id": "e2e2e2e2e2e2e2e2e2e2e2e2e2e2e201"
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40202",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:16:00.300Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.27"
+          },
+          "trace_id": "e3e3e3e3e3e3e3e3e3e3e3e3e3e3e301"
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.26:51201",
+          "dst": "10.50.0.10:443",
+          "time": "2026-10-07T12:16:00.200Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": [
+          "frontend-7d9c6b5f4-q4m9z"
+        ],
+        "per_connection": true
+      }
+    },
+    {
+      "id": "ec-m1-parallel-1",
+      "summary": "M1: three parallel connections from VM1 to catalog-api; node-a SNATs each to its own port and Hubble emits three SNAT traces.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:17:00.000Z",
+      "end": "2026-10-07T12:17:00.300Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "hubble_xlate",
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51301",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.25:51301",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:43301",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43301",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51301",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.001Z",
+          "syn": true,
+          "src_xlated": "10.10.20.11",
+          "src_port_xlated": 43301
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43301",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      }
+    },
+    {
+      "id": "ec-m1-parallel-2",
+      "summary": "M1: three parallel connections from VM1 to catalog-api; node-a SNATs each to its own port and Hubble emits three SNAT traces.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:17:00.010Z",
+      "end": "2026-10-07T12:17:00.310Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "hubble_xlate",
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51302",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.25:51302",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:43302",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43302",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51302",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.011Z",
+          "syn": true,
+          "src_xlated": "10.10.20.11",
+          "src_port_xlated": 43302
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43302",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.012Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      }
+    },
+    {
+      "id": "ec-m1-parallel-3",
+      "summary": "M1: three parallel connections from VM1 to catalog-api; node-a SNATs each to its own port and Hubble emits three SNAT traces.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:17:00.020Z",
+      "end": "2026-10-07T12:17:00.320Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "hubble_xlate",
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51303",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.25:51303",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:43303",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43303",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51303",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.021Z",
+          "syn": true,
+          "src_xlated": "10.10.20.11",
+          "src_port_xlated": 43303
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43303",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:17:00.022Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      }
+    },
+    {
+      "id": "ec-m1-ambiguous-1",
+      "summary": "M1: two parallel connections from VM2 to catalog-api but only one SNAT trace; neither connection can be paired uniquely.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:18:00.000Z",
+      "end": "2026-10-07T12:18:00.300Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:51401",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.26:51401",
+          "proto": "tcp",
+          "bytes": 6000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.10.20.11:43401",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43401",
+          "proto": "tcp",
+          "bytes": 6000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.26:51401",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:18:00.001Z",
+          "syn": true,
+          "src_xlated": "10.10.20.11",
+          "src_port_xlated": 43401
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43401",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:18:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null
+      }
+    },
+    {
+      "id": "ec-m1-ambiguous-2",
+      "summary": "M1: two parallel connections from VM2 to catalog-api but only one SNAT trace; neither connection can be paired uniquely.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:18:00.005Z",
+      "end": "2026-10-07T12:18:00.305Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/catalog-api",
+        "frontend": "10.50.0.30:8080",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:51402",
+          "dst": "10.50.0.30:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.30:8080",
+          "dst": "10.30.40.26:51402",
+          "proto": "tcp",
+          "bytes": 6000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.10.20.11:43402",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43402",
+          "proto": "tcp",
+          "bytes": 6000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43402",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:18:00.007Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null
+      }
+    },
+    {
+      "id": "ec-m5-nodeport-node-d",
+      "summary": "M5: VM1 to catalog-np on node-d, which hosts no application pod; node-d SNATs to catalog on node-c (Hubble trace present).",
+      "transport": "tcp",
+      "start": "2026-10-07T12:19:00.000Z",
+      "end": "2026-10-07T12:19:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.14:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-d",
+        "expected_rule": "hubble_xlate",
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51501",
+          "dst": "10.10.20.14:30081",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/14"
+        },
+        {
+          "src": "10.10.20.14:30081",
+          "dst": "10.30.40.25:51501",
+          "proto": "tcp",
+          "bytes": 7500,
+          "ingress": "leaf-102:eth1/14",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.14:43501",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1100,
+          "ingress": "leaf-102:eth1/14",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.14:43501",
+          "proto": "tcp",
+          "bytes": 7500,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-102:eth1/14"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-d",
+          "type": "L3_L4",
+          "point": "TO_NETWORK",
+          "src": "10.30.40.25:51501",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:19:00.001Z",
+          "syn": true,
+          "src_xlated": "10.10.20.14",
+          "src_port_xlated": 43501
+        },
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.14:43501",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:19:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.25:51501",
+          "dst": "10.10.20.14:30081",
+          "time": "2026-10-07T12:19:00.000Z"
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_xlate",
+        "backend_pods": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      }
+    },
+    {
+      "id": "ec-m2-time-ok",
+      "summary": "M2: VM2 to catalog-np on node-a without a SNAT trace; exactly one leg from node-a to catalog, with the client's source port (Cilium keeps the port when free).",
+      "transport": "tcp",
+      "start": "2026-10-07T12:20:00.000Z",
+      "end": "2026-10-07T12:20:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.11:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "time_inferred",
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:51601",
+          "dst": "10.10.20.11:30081",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30081",
+          "dst": "10.30.40.26:51601",
+          "proto": "tcp",
+          "bytes": 7100,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.10.20.11:51601",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:51601",
+          "proto": "tcp",
+          "bytes": 7100,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:51601",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:20:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "time_inferred",
+        "backend_pods": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      }
+    },
+    {
+      "id": "ec-m2-local-backend",
+      "summary": "M2: VM1 to frontend-np on node-a, which hosts a frontend backend; one leg node-a to frontend on node-b exists but the connection could have been served locally.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:21:00.000Z",
+      "end": "2026-10-07T12:21:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/frontend-np",
+        "frontend": "10.10.20.11:30082",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "frontend-7d9c6b5f4-x2k8p",
+          "frontend-7d9c6b5f4-q4m9z"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51701",
+          "dst": "10.10.20.11:30082",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30082",
+          "dst": "10.30.40.25:51701",
+          "proto": "tcp",
+          "bytes": 4000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:51701",
+          "dst": "10.42.1.15:8080",
+          "proto": "tcp",
+          "bytes": 900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.42.1.15:8080",
+          "dst": "10.10.20.11:51701",
+          "proto": "tcp",
+          "bytes": 4000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:51701",
+          "dst": "10.42.1.15:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:21:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null,
+        "reason": "local backend on the receiving node"
+      }
+    },
+    {
+      "id": "ec-m2-hostnet",
+      "summary": "M2: VM2 to catalog-np on node-b, which runs a hostNetwork pod; the leg from node-b could be that pod's.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:22:00.000Z",
+      "end": "2026-10-07T12:22:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.12:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:51801",
+          "dst": "10.10.20.12:30081",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.10.20.12:30081",
+          "dst": "10.30.40.26:51801",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.10.20.12:51801",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.12:51801",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-102:eth1/12"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.12:51801",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:22:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null,
+        "reason": "hostNetwork pod on the receiving node"
+      }
+    },
+    {
+      "id": "ec-m2-two-conns-1",
+      "summary": "M2: two connections from VM1 to catalog-np on node-a and two legs with other source ports, no traces: no exclusive assignment.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:23:00.000Z",
+      "end": "2026-10-07T12:23:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.11:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51901",
+          "dst": "10.10.20.11:30081",
+          "proto": "tcp",
+          "bytes": 950,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30081",
+          "dst": "10.30.40.25:51901",
+          "proto": "tcp",
+          "bytes": 6900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:43901",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 950,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43901",
+          "proto": "tcp",
+          "bytes": 6900,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43901",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:23:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null
+      }
+    },
+    {
+      "id": "ec-m2-two-conns-2",
+      "summary": "M2: two connections from VM1 to catalog-np on node-a and two legs with other source ports, no traces: no exclusive assignment.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:23:00.004Z",
+      "end": "2026-10-07T12:23:00.304Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.11:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:51902",
+          "dst": "10.10.20.11:30081",
+          "proto": "tcp",
+          "bytes": 950,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30081",
+          "dst": "10.30.40.25:51902",
+          "proto": "tcp",
+          "bytes": 6900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.10.20.11:43902",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 950,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.11:43902",
+          "proto": "tcp",
+          "bytes": 6900,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.11:43902",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:23:00.006Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null
+      }
+    },
+    {
+      "id": "ec-m2-wrong-node",
+      "summary": "M2: VM2 to catalog-np on node-a; the only leg to catalog at that time starts at node-b, not the NodePort node.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:24:00.000Z",
+      "end": "2026-10-07T12:24:00.300Z",
+      "access": {
+        "method": "nodeport",
+        "service": "shop/catalog-np",
+        "frontend": "10.10.20.11:30081",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": null,
+        "backends": [
+          "catalog-6a1c2d3e4-p9r5t"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "epg:k8s/nodes",
+        "contract": "win-to-nodeports"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:52001",
+          "dst": "10.10.20.11:30081",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.10.20.11:30081",
+          "dst": "10.30.40.26:52001",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/7"
+        },
+        {
+          "src": "10.10.20.12:52001",
+          "dst": "10.42.2.30:8080",
+          "proto": "tcp",
+          "bytes": 1000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.42.2.30:8080",
+          "dst": "10.10.20.12:52001",
+          "proto": "tcp",
+          "bytes": 7000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-102:eth1/12"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-c",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.10.20.12:52001",
+          "dst": "10.42.2.30:8080",
+          "src_ep": "reserved:remote-node",
+          "dst_ep": "catalog-6a1c2d3e4-p9r5t",
+          "time": "2026-10-07T12:24:00.002Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": null
+      }
+    },
+    {
+      "id": "ec-m3-long-flow",
+      "summary": "M3: one 90-second connection from VM1 to checkout-api: the forward NetFlow record is re-exported at the 60 s active timeout, the return record and the Nexus Dashboard copy start a few milliseconds later.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:25:00.000Z",
+      "end": "2026-10-07T12:26:30.000Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/checkout-api",
+        "frontend": "10.50.0.20:8080",
+        "external_traffic_policy": "Local",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "expected_rule": "hubble_client_tuple",
+        "backends": [
+          "checkout-5f8b9c7d6-m4n7q"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:52101",
+          "dst": "10.50.0.20:8080",
+          "proto": "tcp",
+          "bytes": 6000,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-102:eth1/12",
+          "nd": true,
+          "nd_start": "2026-10-07T12:25:00.010Z",
+          "segments": [
+            [
+              "2026-10-07T12:25:00.000Z",
+              "2026-10-07T12:26:00.000Z"
+            ],
+            [
+              "2026-10-07T12:26:00.000Z",
+              "2026-10-07T12:26:30.000Z"
+            ]
+          ]
+        },
+        {
+          "src": "10.50.0.20:8080",
+          "dst": "10.30.40.25:52101",
+          "proto": "tcp",
+          "bytes": 24000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/5",
+          "start": "2026-10-07T12:25:00.050Z"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.25:52101",
+          "dst": "10.42.1.20:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "checkout-5f8b9c7d6-m4n7q",
+          "time": "2026-10-07T12:25:00.001Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "hubble_client_tuple",
+        "backend_pods": [
+          "checkout-5f8b9c7d6-m4n7q"
+        ],
+        "connections": 1
+      }
+    },
+    {
+      "id": "ec-m6-shared-gw-1",
+      "summary": "M6: VM1 through the shared Gateway in gateway-system (HTTPRoute in shop); lands on node-c, Envoy there forwards to frontend on node-a.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:27:00.000Z",
+      "end": "2026-10-07T12:27:00.300Z",
+      "access": {
+        "method": "gateway",
+        "service": "gateway-system/cilium-gateway-shared",
+        "frontend": "10.50.0.12:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-c",
+        "expected_rule": "l7_forwarded_for",
+        "backends": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:52201",
+          "dst": "10.50.0.12:443",
+          "proto": "tcp",
+          "bytes": 1600,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-103:eth1/13"
+        },
+        {
+          "src": "10.50.0.12:443",
+          "dst": "10.30.40.25:52201",
+          "proto": "tcp",
+          "bytes": 8000,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-103:eth1/5"
+        },
+        {
+          "src": "10.42.2.200:40301",
+          "dst": "10.42.0.15:8080",
+          "proto": "tcp",
+          "bytes": 1400,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.42.0.15:8080",
+          "dst": "10.42.2.200:40301",
+          "proto": "tcp",
+          "bytes": 7600,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/13"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.2.200:40301",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:27:00.040Z",
+          "syn": true
+        },
+        {
+          "node": "node-c",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.2.200:40301",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:27:00.050Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "e4e4e4e4e4e4e4e4e4e4e4e4e4e4e401"
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ]
+      }
+    },
+    {
+      "id": "ec-m6-shared-gw-2",
+      "summary": "M6/m4: a second VM1 connection to the shared Gateway lands on node-a; Envoy on node-a forwards to frontend on node-a. The hand-off now has two receiving nodes.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:27:30.000Z",
+      "end": "2026-10-07T12:27:30.300Z",
+      "access": {
+        "method": "gateway",
+        "service": "gateway-system/cilium-gateway-shared",
+        "frontend": "10.50.0.12:443",
+        "external_traffic_policy": "Cluster",
+        "lb_mode": "snat",
+        "landing_node": "node-a",
+        "expected_rule": "l7_forwarded_for",
+        "backends": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.25:52202",
+          "dst": "10.50.0.12:443",
+          "proto": "tcp",
+          "bytes": 1500,
+          "ingress": "leaf-103:eth1/5",
+          "egress": "leaf-101:eth1/11"
+        },
+        {
+          "src": "10.50.0.12:443",
+          "dst": "10.30.40.25:52202",
+          "proto": "tcp",
+          "bytes": 7900,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-103:eth1/5"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-a",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40302",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:27:30.040Z",
+          "syn": true
+        },
+        {
+          "node": "node-a",
+          "type": "L7",
+          "point": "TO_ENDPOINT",
+          "src": "10.42.0.200:40302",
+          "dst": "10.42.0.15:8080",
+          "src_ep": "reserved:ingress",
+          "dst_ep": "frontend-7d9c6b5f4-x2k8p",
+          "time": "2026-10-07T12:27:30.050Z",
+          "http": {
+            "method": "GET",
+            "url": "/",
+            "protocol": "HTTP/1.1",
+            "xff": "10.30.40.25"
+          },
+          "trace_id": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e501"
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "handoff_basis": "l7_forwarded_for",
+        "backend_pods": [
+          "frontend-7d9c6b5f4-x2k8p"
+        ]
+      }
+    },
+    {
+      "id": "ec-m9-acl-repoll",
+      "summary": "M9: VM2 to checkout-api; the permit ACL-log record stays in the leaf buffer and is reported by three consecutive polls.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:28:00.000Z",
+      "end": "2026-10-07T12:28:00.300Z",
+      "access": {
+        "method": "loadbalancer",
+        "service": "shop/checkout-api",
+        "frontend": "10.50.0.20:8080",
+        "external_traffic_policy": "Local",
+        "lb_mode": "snat",
+        "landing_node": "node-b",
+        "expected_rule": "hubble_client_tuple",
+        "backends": [
+          "checkout-5f8b9c7d6-m4n7q"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-services",
+        "contract": "win-to-shop"
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:52301",
+          "dst": "10.50.0.20:8080",
+          "proto": "tcp",
+          "bytes": 1200,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.50.0.20:8080",
+          "dst": "10.30.40.26:52301",
+          "proto": "tcp",
+          "bytes": 3000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/7"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.26:52301",
+          "dst": "10.42.1.20:8080",
+          "src_ep": "reserved:world",
+          "dst_ep": "checkout-5f8b9c7d6-m4n7q",
+          "time": "2026-10-07T12:28:00.001Z",
+          "syn": true
+        }
+      ],
+      "acl": [
+        {
+          "action": "permit",
+          "leaf": "leaf-103",
+          "src": "10.30.40.26:52301",
+          "dst": "10.50.0.20:8080",
+          "time": "2026-10-07T12:28:00.000Z",
+          "repolls": 2
+        }
+      ],
+      "expected": {
+        "handoff_basis": "hubble_client_tuple",
+        "backend_pods": [
+          "checkout-5f8b9c7d6-m4n7q"
+        ],
+        "acl_permits": 1
+      }
+    },
+    {
+      "id": "ec-m8-intra-epg",
+      "summary": "M8: payment (node-a) scrapes node-b:9100; both sides are classified into EPG k8s/nodes (intra-EPG).",
+      "transport": "tcp",
+      "start": "2026-10-07T12:29:00.000Z",
+      "end": "2026-10-07T12:29:00.100Z",
+      "access": null,
+      "aci_class": {
+        "client": "epg:k8s/nodes",
+        "server": "epg:k8s/nodes",
+        "contract": null
+      },
+      "wire": [
+        {
+          "src": "10.42.0.40:44001",
+          "dst": "10.10.20.12:9100",
+          "proto": "tcp",
+          "bytes": 400,
+          "ingress": "leaf-101:eth1/11",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.10.20.12:9100",
+          "dst": "10.42.0.40:44001",
+          "proto": "tcp",
+          "bytes": 9000,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-101:eth1/11"
+        }
+      ],
+      "hubble": [],
+      "acl": null,
+      "expected": {
+        "contract_basis": "intra_epg"
+      },
+      "isovalent": [
+        {
+          "pod": "payment-2b4d6f8a1-k3j6h",
+          "src": "10.42.0.40:44001",
+          "dst": "10.10.20.12:9100",
+          "time": "2026-10-07T12:29:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "ec-m8-unresolved-private",
+      "summary": "M8: cart (node-c) to an unknown private address; only 0.0.0.0/0 would match, so the policy cannot be evaluated.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:29:10.000Z",
+      "end": "2026-10-07T12:29:10.200Z",
+      "access": null,
+      "aci_class": null,
+      "wire": [
+        {
+          "src": "10.42.2.50:44101",
+          "dst": "10.99.5.5:443",
+          "proto": "tcp",
+          "bytes": 500,
+          "ingress": "leaf-103:eth1/13",
+          "egress": "leaf-102:eth1/48"
+        },
+        {
+          "src": "10.99.5.5:443",
+          "dst": "10.42.2.50:44101",
+          "proto": "tcp",
+          "bytes": 2500,
+          "ingress": "leaf-102:eth1/48",
+          "egress": "leaf-103:eth1/13"
+        }
+      ],
+      "hubble": [],
+      "acl": null,
+      "expected": {
+        "contract_basis": "not_evaluated"
+      },
+      "isovalent": [
+        {
+          "pod": "cart-4c2e5a7b9-w8v2c",
+          "src": "10.42.2.50:44101",
+          "dst": "10.99.5.5:443",
+          "time": "2026-10-07T12:29:10.000Z"
+        }
+      ]
+    },
+    {
+      "id": "ec-m8-no-match",
+      "summary": "M8: VM2 directly to a frontend pod on port 9444: no filter entry for the port.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:29:20.000Z",
+      "end": "2026-10-07T12:29:20.200Z",
+      "access": {
+        "method": "pod_ip",
+        "frontend": "10.42.1.15:9444",
+        "backends": [
+          "frontend-7d9c6b5f4-q4m9z"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-pods",
+        "contract": null
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:52404",
+          "dst": "10.42.1.15:9444",
+          "proto": "tcp",
+          "bytes": 600,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.42.1.15:9444",
+          "dst": "10.30.40.26:52404",
+          "proto": "tcp",
+          "bytes": 1200,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/7"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.26:52404",
+          "dst": "10.42.1.15:9444",
+          "src_ep": "reserved:world",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:29:20.001Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "contract_basis": "not_evaluated",
+        "contract_basis_if_policy_complete": "none"
+      }
+    },
+    {
+      "id": "ec-m8-tcp-rules",
+      "summary": "M8: VM2 directly to a frontend pod on port 9443: the only matching entry has tcpRules est.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:29:30.000Z",
+      "end": "2026-10-07T12:29:30.200Z",
+      "access": {
+        "method": "pod_ip",
+        "frontend": "10.42.1.15:9443",
+        "backends": [
+          "frontend-7d9c6b5f4-q4m9z"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-pods",
+        "contract": null
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:52403",
+          "dst": "10.42.1.15:9443",
+          "proto": "tcp",
+          "bytes": 600,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.42.1.15:9443",
+          "dst": "10.30.40.26:52403",
+          "proto": "tcp",
+          "bytes": 1200,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/7"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.26:52403",
+          "dst": "10.42.1.15:9443",
+          "src_ep": "reserved:world",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:29:30.001Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "contract_basis": "not_evaluated",
+        "contract_basis_if_policy_complete": "not_evaluated"
+      }
+    },
+    {
+      "id": "ec-m8-source-ports",
+      "summary": "M8: VM2 directly to a frontend pod on port 9445: the only matching entry restricts source ports.",
+      "transport": "tcp",
+      "start": "2026-10-07T12:29:40.000Z",
+      "end": "2026-10-07T12:29:40.200Z",
+      "access": {
+        "method": "pod_ip",
+        "frontend": "10.42.1.15:9445",
+        "backends": [
+          "frontend-7d9c6b5f4-q4m9z"
+        ]
+      },
+      "aci_class": {
+        "client": "epg:clients/win-clients",
+        "server": "instp:k8s-bgp/k8s-pods",
+        "contract": null
+      },
+      "wire": [
+        {
+          "src": "10.30.40.26:52405",
+          "dst": "10.42.1.15:9445",
+          "proto": "tcp",
+          "bytes": 600,
+          "ingress": "leaf-103:eth1/7",
+          "egress": "leaf-102:eth1/12"
+        },
+        {
+          "src": "10.42.1.15:9445",
+          "dst": "10.30.40.26:52405",
+          "proto": "tcp",
+          "bytes": 1200,
+          "ingress": "leaf-102:eth1/12",
+          "egress": "leaf-103:eth1/7"
+        }
+      ],
+      "hubble": [
+        {
+          "node": "node-b",
+          "type": "L3_L4",
+          "point": "TO_ENDPOINT",
+          "src": "10.30.40.26:52405",
+          "dst": "10.42.1.15:9445",
+          "src_ep": "reserved:world",
+          "dst_ep": "frontend-7d9c6b5f4-q4m9z",
+          "time": "2026-10-07T12:29:40.001Z",
+          "syn": true
+        }
+      ],
+      "acl": null,
+      "expected": {
+        "contract_basis": "not_evaluated",
+        "contract_basis_if_policy_complete": "not_evaluated"
+      }
+    }
+  ],
+  "traces": [
+    {
+      "trace_id": "e1e1e1e1e1e1e1e1e1e1e1e1e1e1e101",
+      "note": "ec-c2-gw-vm1",
+      "spans": [
+        {
+          "span_id": "e1e1e1e1e1e1e101",
+          "parent": null,
+          "service": "frontend",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /",
+          "pod": "frontend-7d9c6b5f4-x2k8p",
+          "start": "2026-10-07T12:16:00.052Z",
+          "end": "2026-10-07T12:16:00.500Z",
+          "attributes": {
+            "server.port": 8080,
+            "client.address": "10.30.40.25",
+            "network.peer.address": "10.42.0.200"
+          }
+        }
+      ]
+    },
+    {
+      "trace_id": "e2e2e2e2e2e2e2e2e2e2e2e2e2e2e201",
+      "note": "ec-c2-gw-vm2",
+      "spans": [
+        {
+          "span_id": "e2e2e2e2e2e2e201",
+          "parent": null,
+          "service": "frontend",
+          "kind": "SPAN_KIND_SERVER",
+          "name": "GET /",
+          "pod": "frontend-7d9c6b5f4-q4m9z",
+          "start": "2026-10-07T12:16:00.252Z",
+          "end": "2026-10-07T12:16:00.600Z",
+          "attributes": {
+            "server.port": 8080,
+            "client.address": "10.30.40.26",
+            "network.peer.address": "10.42.0.200"
+          }
+        }
+      ]
+    }
+  ]
+}

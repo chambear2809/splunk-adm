@@ -1,0 +1,610 @@
+{
+  "description": "Expected adm_graph rows for fixtures/raw-aci (derived by reasoning from fixtures/raw-aci/scenario.json: access methods, attribution rules, ACI classification and contracts). node:node-a is absent because its only conversations are consumed SNAT legs and the masqueraded internet leg; coredns has no conversation in this scenario. Edge count is the number of client connections (one per scenario conversation), not flow records.",
+  "args": {
+    "service": "frontend",
+    "environment": "demo",
+    "cluster": "demo-cluster",
+    "namespace": "shop"
+  },
+  "window": {
+    "earliest": 1791373500,
+    "latest": 1791374400
+  },
+  "nodes": {
+    "service:demo-cluster/shop/frontend/demo": {
+      "kind": "service",
+      "label": "frontend"
+    },
+    "service:demo-cluster/shop/checkout/demo": {
+      "kind": "service"
+    },
+    "service:demo-cluster/shop/catalog/demo": {
+      "kind": "service"
+    },
+    "service:demo-cluster/shop/payment/demo": {
+      "kind": "service"
+    },
+    "service:demo-cluster/shop/cart/demo": {
+      "kind": "service"
+    },
+    "pod:demo-cluster/a2327fe6-1a48-52d0-962d-e72c643c9f00": {
+      "kind": "workload",
+      "label": "frontend-7d9c6b5f4-x2k8p",
+      "attr_node": "node-a",
+      "addresses": [
+        "10.42.0.15"
+      ]
+    },
+    "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6": {
+      "kind": "workload",
+      "label": "frontend-7d9c6b5f4-q4m9z",
+      "attr_node": "node-b",
+      "addresses": [
+        "10.42.1.15"
+      ]
+    },
+    "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc": {
+      "kind": "workload",
+      "label": "checkout-5f8b9c7d6-m4n7q",
+      "attr_node": "node-b"
+    },
+    "pod:demo-cluster/4293c40e-b562-5861-8081-7f71d1530e6a": {
+      "kind": "workload",
+      "label": "catalog-6a1c2d3e4-p9r5t",
+      "attr_node": "node-c"
+    },
+    "pod:demo-cluster/b84ac4d6-8895-5f93-9b92-219da9c120fb": {
+      "kind": "workload",
+      "label": "payment-2b4d6f8a1-k3j6h",
+      "attr_node": "node-a"
+    },
+    "pod:demo-cluster/7d11108f-3c09-56f5-a20c-68e3532e2456": {
+      "kind": "workload",
+      "label": "cart-4c2e5a7b9-w8v2c",
+      "attr_node": "node-c"
+    },
+    "vm:prod/10.30.40.25": {
+      "kind": "endpoint",
+      "endpoint_kind": "vm",
+      "label": "win-client-01",
+      "attr_tenant": "shop",
+      "attr_app_profile": "clients",
+      "attr_epg": "win-clients",
+      "attr_attach_device": "pod-1/node-103",
+      "attr_attach_interface": "eth1/5",
+      "attr_vm_name": "win-client-01"
+    },
+    "vm:prod/10.20.30.40": {
+      "kind": "endpoint",
+      "endpoint_kind": "vm",
+      "label": "orders-db-01",
+      "attr_epg": "db",
+      "attr_attach_device": "pod-1/node-102",
+      "attr_attach_interface": "eth1/6"
+    },
+    "ip:prod/203.0.113.40": {
+      "kind": "endpoint",
+      "endpoint_kind": "external"
+    },
+    "k8s_service:demo-cluster/shop/cilium-gateway-shop/10.50.0.10:443": {
+      "endpoint_kind": "k8s_service",
+      "label": "cilium-gateway-shop · 10.50.0.10:443",
+      "attr_service": "cilium-gateway-shop",
+      "attr_frontend": "10.50.0.10:443",
+      "attr_type": "LoadBalancer",
+      "attr_traffic_policy": "Cluster",
+      "attr_lb_mode": "snat",
+      "attr_controller": "cilium_gateway",
+      "attr_route": "shop.example.internal/ → frontend:8080"
+    },
+    "k8s_service:demo-cluster/shop/cilium-ingress-shop-www/10.50.0.11:443": {
+      "endpoint_kind": "k8s_service",
+      "attr_type": "LoadBalancer",
+      "attr_controller": "cilium_ingress",
+      "attr_route": "www.shop.example.internal/ → frontend:8080"
+    },
+    "k8s_service:demo-cluster/shop/checkout-api/10.50.0.20:8080": {
+      "endpoint_kind": "k8s_service",
+      "attr_type": "LoadBalancer",
+      "attr_traffic_policy": "Local"
+    },
+    "k8s_service:demo-cluster/shop/catalog-api/10.50.0.30:8080": {
+      "endpoint_kind": "k8s_service",
+      "attr_type": "LoadBalancer",
+      "attr_traffic_policy": "Cluster",
+      "attr_lb_mode": "snat"
+    },
+    "k8s_service:demo-cluster/shop/cart-api/10.50.0.40:8080": {
+      "endpoint_kind": "k8s_service",
+      "attr_lb_mode": "dsr"
+    },
+    "k8s_service:demo-cluster/shop/payment-np/10.10.20.11:30080": {
+      "endpoint_kind": "k8s_service",
+      "attr_type": "NodePort",
+      "attr_traffic_policy": "Local",
+      "attr_frontend": "10.10.20.11:30080"
+    },
+    "k8s_service:demo-cluster/shop/catalog-np/10.10.20.12:30081": {
+      "endpoint_kind": "k8s_service",
+      "attr_type": "NodePort",
+      "attr_traffic_policy": "Cluster",
+      "attr_frontend": "10.10.20.12:30081"
+    },
+    "k8s_node_proxy:demo-cluster/node-a": {
+      "endpoint_kind": "k8s_node_proxy",
+      "label": "Envoy on node-a",
+      "attr_node": "node-a",
+      "addresses": [
+        "10.42.0.200"
+      ]
+    },
+    "k8s_node_proxy:demo-cluster/node-b": {
+      "endpoint_kind": "k8s_node_proxy",
+      "label": "Envoy on node-b",
+      "attr_node": "node-b"
+    },
+    "node:demo-cluster/node-b": {
+      "endpoint_kind": "k8s_node",
+      "attr_epg": "nodes",
+      "attr_attach_device": "pod-1/node-102",
+      "attr_attach_interface": "eth1/12"
+    },
+    "node:demo-cluster/node-c": {
+      "endpoint_kind": "k8s_node",
+      "attr_epg": null,
+      "attr_attach_device": null
+    }
+  },
+  "absent_nodes": [
+    "node:demo-cluster/node-a",
+    "ip:prod/10.42.1.20",
+    "pod:demo-cluster/90b97fda-73a0-5daa-9eb7-31a02b846b31"
+  ],
+  "edges": [
+    {
+      "relationship": "calls",
+      "source": "service:demo-cluster/shop/frontend/demo",
+      "target": "service:demo-cluster/shop/checkout/demo",
+      "count": "2"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/frontend/demo",
+      "target": "pod:demo-cluster/a2327fe6-1a48-52d0-962d-e72c643c9f00"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/frontend/demo",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/checkout/demo",
+      "target": "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/catalog/demo",
+      "target": "pod:demo-cluster/4293c40e-b562-5861-8081-7f71d1530e6a"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/payment/demo",
+      "target": "pod:demo-cluster/b84ac4d6-8895-5f93-9b92-219da9c120fb"
+    },
+    {
+      "relationship": "runs_on",
+      "source": "service:demo-cluster/shop/cart/demo",
+      "target": "pod:demo-cluster/7d11108f-3c09-56f5-a20c-68e3532e2456"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/cilium-gateway-shop/10.50.0.10:443",
+      "server_port": "443",
+      "transport": "tcp",
+      "direction_basis": "port_rule",
+      "via_node": "node-a",
+      "bytes": "18400",
+      "acl_action": "permit",
+      "acl_leaf": "pod-1/node-103",
+      "acl_permits": "1",
+      "sources": [
+        "aci_acllog",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-shop",
+      "contract_subject": "shop-frontends",
+      "contract_filter": "shop-web",
+      "contract_entry": "tcp 443"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "k8s_node_proxy:demo-cluster/node-a",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "bytes": "8800",
+      "sources": [
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "k8s-fabric",
+      "contract_entry": "ip"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "k8s_node_proxy:demo-cluster/node-a",
+      "target": "pod:demo-cluster/a2327fe6-1a48-52d0-962d-e72c643c9f00",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "sources": [
+        "hubble"
+      ],
+      "contract_basis": null,
+      "bytes": null
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "k8s_node_proxy:demo-cluster/node-b",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "sources": [
+        "hubble"
+      ],
+      "contract_basis": null
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/cilium-ingress-shop-www/10.50.0.11:443",
+      "server_port": "443",
+      "transport": "tcp",
+      "direction_basis": "port_rule",
+      "via_node": "node-b",
+      "bytes": "8300",
+      "acl_action": "permit",
+      "sources": [
+        "aci_acllog",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-shop",
+      "contract_subject": "shop-frontends",
+      "contract_filter": "shop-web",
+      "contract_entry": "tcp 443"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/checkout-api/10.50.0.20:8080",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "via_node": "node-b",
+      "bytes": "6200",
+      "acl_action": "permit",
+      "sources": [
+        "aci_acllog",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-shop",
+      "contract_subject": "shop-frontends",
+      "contract_filter": "shop-web",
+      "contract_entry": "tcp 8080"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "pod:demo-cluster/a2327fe6-1a48-52d0-962d-e72c643c9f00",
+      "target": "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "bytes": "1300",
+      "sources": [
+        "hubble",
+        "isovalent",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "k8s-fabric",
+      "span_ids": [
+        "b2b2b2b2b2b2b202"
+      ]
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "target": "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "sources": [
+        "hubble",
+        "isovalent"
+      ],
+      "contract_basis": null,
+      "bytes": null,
+      "span_ids": [
+        "a1a1a1a1a1a1a102"
+      ]
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc",
+      "target": "vm:prod/10.20.30.40",
+      "server_port": "5432",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "bytes": "20100",
+      "count": "1",
+      "sources": [
+        "isovalent",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "k8s-to-db",
+      "contract_subject": "postgres",
+      "contract_filter": "postgres",
+      "contract_entry": "tcp 5432",
+      "span_ids": [
+        "c3c3c3c3c3c3c304"
+      ]
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/catalog-api/10.50.0.30:8080",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "port_rule",
+      "via_node": "node-a",
+      "bytes": "14700",
+      "count": "2",
+      "acl_action": "permit",
+      "acl_permits": "2",
+      "sources": [
+        "aci_acllog",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-shop",
+      "contract_subject": "shop-frontends",
+      "contract_filter": "shop-web",
+      "contract_entry": "tcp 8080"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/cart-api/10.50.0.40:8080",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "via_node": "node-b",
+      "bytes": "4200",
+      "count": "1",
+      "acl_action": "permit",
+      "sources": [
+        "aci_acllog",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-shop",
+      "contract_subject": "shop-frontends",
+      "contract_filter": "shop-web",
+      "contract_entry": "tcp 8080"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "node:demo-cluster/node-b",
+      "target": "node:demo-cluster/node-c",
+      "transport": "ipip",
+      "server_port": null,
+      "encapsulation": null,
+      "bytes": "960",
+      "direction_basis": "unknown",
+      "contract_basis": "intent",
+      "contract": "k8s-fabric",
+      "contract_entry": "ip",
+      "sources": [
+        "netflow"
+      ]
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/payment-np/10.10.20.11:30080",
+      "server_port": "30080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "via_node": "node-a",
+      "bytes": "2900",
+      "acl_action": "permit",
+      "sources": [
+        "aci_acllog",
+        "hubble",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-nodeports",
+      "contract_subject": "nodeports",
+      "contract_filter": "k8s-nodeports",
+      "contract_entry": "tcp 30080-30081"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "pod:demo-cluster/b84ac4d6-8895-5f93-9b92-219da9c120fb",
+      "target": "ip:prod/203.0.113.40",
+      "server_port": "443",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "confidence": "unresolved",
+      "sources": [
+        "isovalent"
+      ],
+      "bytes": null,
+      "contract_basis": "intent",
+      "contract": "k8s-to-internet",
+      "contract_entry": "tcp 443",
+      "span_ids": [
+        "f6f6f6f6f6f6f602"
+      ]
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "k8s_service:demo-cluster/shop/catalog-np/10.10.20.12:30081",
+      "server_port": "30081",
+      "transport": "tcp",
+      "direction_basis": "port_rule",
+      "via_node": "node-b",
+      "bytes": "7500",
+      "acl_action": "permit",
+      "sources": [
+        "aci_acllog",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-nodeports",
+      "contract_entry": "tcp 30080-30081"
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator",
+      "bytes": "4100",
+      "sources": [
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "contract_basis": "intent",
+      "contract": "win-to-pods",
+      "contract_subject": "pods",
+      "contract_filter": "pod-8080",
+      "contract_entry": "tcp 8080",
+      "acl_action": null
+    },
+    {
+      "relationship": "communicates_with",
+      "source": "vm:prod/10.30.40.25",
+      "target": "vm:prod/10.20.30.40",
+      "server_port": "5432",
+      "transport": "tcp",
+      "direction_basis": "port_rule",
+      "sources": [
+        "aci_acllog"
+      ],
+      "bytes": null,
+      "acl_action": "drop",
+      "acl_leaf": "pod-1/node-103",
+      "acl_drops": "1",
+      "contract_basis": "none",
+      "contract": null
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/cilium-gateway-shop/10.50.0.10:443",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "handoff_basis": "l7_forwarded_for",
+      "via_node": "node-a",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/cilium-gateway-shop/10.50.0.10:443",
+      "target": "pod:demo-cluster/a2327fe6-1a48-52d0-962d-e72c643c9f00",
+      "handoff_basis": "l7_forwarded_for",
+      "via_node": "node-a",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/cilium-ingress-shop-www/10.50.0.11:443",
+      "target": "pod:demo-cluster/3f71df45-2ba1-555e-8c88-c22276d1ebe6",
+      "handoff_basis": "l7_forwarded_for",
+      "via_node": "node-b",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/checkout-api/10.50.0.20:8080",
+      "target": "pod:demo-cluster/999151a5-7418-5939-b573-6de8631b4ffc",
+      "handoff_basis": "hubble_client_tuple",
+      "via_node": "node-b",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/catalog-api/10.50.0.30:8080",
+      "target": "pod:demo-cluster/4293c40e-b562-5861-8081-7f71d1530e6a",
+      "handoff_basis": "hubble_xlate",
+      "via_node": "node-a",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/catalog-api/10.50.0.30:8080",
+      "target": "pod:demo-cluster/4293c40e-b562-5861-8081-7f71d1530e6a",
+      "handoff_basis": "time_inferred",
+      "via_node": "node-a",
+      "confidence": "inferred"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/cart-api/10.50.0.40:8080",
+      "target": "pod:demo-cluster/7d11108f-3c09-56f5-a20c-68e3532e2456",
+      "handoff_basis": "hubble_client_tuple",
+      "via_node": "node-b",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/payment-np/10.10.20.11:30080",
+      "target": "pod:demo-cluster/b84ac4d6-8895-5f93-9b92-219da9c120fb",
+      "handoff_basis": "hubble_client_tuple",
+      "via_node": "node-a",
+      "confidence": "observed"
+    },
+    {
+      "relationship": "forwards_to",
+      "source": "k8s_service:demo-cluster/shop/catalog-np/10.10.20.12:30081",
+      "target": "pod:demo-cluster/4293c40e-b562-5861-8081-7f71d1530e6a",
+      "handoff_basis": "hubble_xlate",
+      "via_node": "node-b",
+      "confidence": "observed"
+    }
+  ],
+  "edge_counts": {
+    "calls": 1,
+    "runs_on": 6,
+    "communicates_with": 17,
+    "forwards_to": 9
+  },
+  "meta": {
+    "root_present": "1",
+    "nodes": "25",
+    "edges": "33",
+    "spans": "16",
+    "ambiguous_conversations": "0",
+    "unresolved_conversations": "1"
+  }
+}

@@ -813,7 +813,7 @@
             "port": 443,
             "target_port": 443,
             "protocol": "TCP",
-            "node_port": 31443
+            "node_port": 31444
           }
         ],
         "selector": null,
@@ -2229,7 +2229,7 @@
     "traces_sourcetype": "otel:traces",
     "k8s_objects_mode": "watch",
     "hubble_sourcetype": "cilium:hubble:flow",
-    "hubble_index": "cilium",
+    "hubble_index": "cilium_hubble",
     "hubble_file": "/var/run/cilium/hubble/events.log"
   }
 }

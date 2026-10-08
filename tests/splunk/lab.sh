@@ -14,7 +14,7 @@ TAS=(
   "cisco-dc-networking_122/cisco_dc_networking_app_for_splunk"
 )
 SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros)
-LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent k8s otel_traces adm_summary adm)
+LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent k8s otel_traces cilium_hubble adm_summary adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y)
 
 py() { python3 "$HERE/lab.py" "$@"; }
 

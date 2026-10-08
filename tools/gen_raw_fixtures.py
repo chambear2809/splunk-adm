@@ -1094,6 +1094,20 @@ class AciScenario:
         return owner["mac"] if owner else None
 
 
+def leg_segments(leg: dict, start: datetime, end: datetime):
+    """NetFlow records of one leg: the whole leg, or one record per active-timeout segment.
+
+    A leg may override the conversation's start/end ("start", "end"); "segments" lists
+    [start, end] pairs of successive exports of one long flow (bytes split evenly).
+    """
+    start = parse(leg["start"]) if leg.get("start") else start
+    end = parse(leg["end"]) if leg.get("end") else end
+    segs = leg.get("segments")
+    if not segs:
+        return [((start, end), leg["bytes"])]
+    return [((parse(a), parse(b)), leg["bytes"] // len(segs)) for a, b in segs]
+
+
 def leg_endpoints(leg: dict) -> tuple[str, int | None, str, int | None]:
     s_ip, s_port = endpoint(leg["src"])
     d_ip, d_port = endpoint(leg["dst"])
@@ -1114,9 +1128,13 @@ def aci_netflow(s: AciScenario) -> list[dict]:
     router_mac = s.fabric["router_mac"]
     for conv in s.doc["conversations"]:
         start, end = parse(conv["start"]), parse(conv["end"])
-        for leg in conv["wire"]:
-            if leg.get("netflow") is False:
-                continue
+        records = [
+            (leg, *span, b)
+            for leg in conv["wire"]
+            if leg.get("netflow") is not False
+            for span, b in leg_segments(leg, start, end)
+        ]
+        for leg, start, end, nbytes in records:
             leaf, port = split_at(leg["ingress"])
             sw = s.switches[leaf]
             s_ip, s_port, d_ip, d_port = leg_endpoints(leg)
@@ -1137,8 +1155,8 @@ def aci_netflow(s: AciScenario) -> list[dict]:
                 "dest_port": d_port,
                 "protoid": ACI_PROTO_NUMBER[proto],
                 "tos": 0,
-                "bytes": leg["bytes"],
-                "packets": packets(leg["bytes"]),
+                "bytes": nbytes,
+                "packets": packets(nbytes),
                 "tcp_flags": TCP_FLAGS_FULL_SESSION if proto == "tcp" else 0,
                 "flow_end_rel": rel_end,
                 "flow_start_rel": rel_start,
@@ -1192,7 +1210,7 @@ def aci_nd_flows(s: AciScenario) -> list[dict]:
             }
             payload = {
                 "flowId": str(stable_int(conv["id"], s_ip, s_port)),
-                "ts": iso_ms(start),
+                "ts": iso_ms(parse(leg["nd_start"]) if leg.get("nd_start") else start),
                 "srcIp": s_ip,
                 "dstIp": d_ip,
                 "srcPort": s_port,
@@ -1451,10 +1469,16 @@ def contract_objects(s: AciScenario) -> list[tuple[str, list]]:
                                     ("icmpv6T", "unspecified"),
                                     ("matchDscp", "unspecified"),
                                     ("prot", e["prot"]),
-                                    ("sFromPort", "unspecified"),
-                                    ("sToPort", "unspecified"),
+                                    (
+                                        "sFromPort",
+                                        aci_port_value(e.get("s_from", "unspecified")),
+                                    ),
+                                    (
+                                        "sToPort",
+                                        aci_port_value(e.get("s_to", "unspecified")),
+                                    ),
                                     ("stateful", "no"),
-                                    ("tcpRules", ""),
+                                    ("tcpRules", e.get("tcp_rules", "")),
                                 ]
                             ),
                         )
@@ -1827,7 +1851,7 @@ def aci_collections(s: AciScenario) -> tuple[list[dict], list[dict]]:
     router_mac = f["router_mac"]
     record = 0
     for conv in s.doc["conversations"]:
-        for acl in conv.get("acl", []):
+        for acl in conv.get("acl") or []:
             record += 1
             leaf = sw_by_name[acl["leaf"]]
             s_ip, s_port = endpoint(acl["src"])
@@ -1881,14 +1905,16 @@ def aci_collections(s: AciScenario) -> tuple[list[dict], list[dict]]:
                 ("timeStamp", ts),
                 ("vrfEncap", f"vxlan-{f['vrf_vnid']}"),
             ]
-            emit(
-                klass,
-                "cisco_nexus_aci://classInfo_fvRsCEpToPathEp",
-                "cisco:dc:aci:class",
-                next_poll(at),
-                attrs,
-                component,
-            )
+            # A record stays in the leaf's ACL-log buffer and can be reported by later polls too.
+            for k in range(1 + acl.get("repolls", 0)):
+                emit(
+                    klass,
+                    "cisco_nexus_aci://classInfo_fvRsCEpToPathEp",
+                    "cisco:dc:aci:class",
+                    next_poll(at) + k * POLL_INTERVAL,
+                    attrs,
+                    component,
+                )
     return stats, klass
 
 
@@ -2170,7 +2196,9 @@ def gateway_object(gw: dict) -> dict:
                             {"group": "", "kind": "Secret", "name": lst["tls_secret"]}
                         ],
                     },
-                    "allowedRoutes": {"namespaces": {"from": "Same"}},
+                    "allowedRoutes": {
+                        "namespaces": {"from": gw.get("allowed_routes_from", "Same")}
+                    },
                 }
             ],
         },
@@ -2190,6 +2218,11 @@ def httproute_object(r: dict) -> dict:
                 {
                     "group": "gateway.networking.k8s.io",
                     "kind": "Gateway",
+                    **(
+                        {"namespace": r["gateway_namespace"]}
+                        if r.get("gateway_namespace")
+                        else {}
+                    ),
                     "name": r["gateway"],
                 }
             ],
@@ -2385,8 +2418,14 @@ def hubble_flows(s: AciScenario) -> list[dict]:
                         "protocol": http["protocol"],
                         "headers": [
                             {"key": "Traceparent", "value": traceparent},
-                            {"key": "X-Envoy-External-Address", "value": http["xff"]},
-                            {"key": "X-Forwarded-For", "value": http["xff"]},
+                            {
+                                "key": "X-Envoy-External-Address",
+                                "value": http.get("external_address", http["xff"]),
+                            },
+                            {
+                                "key": "X-Forwarded-For",
+                                "value": http.get("xff_header", http["xff"]),
+                            },
                             {"key": "X-Forwarded-Proto", "value": "https"},
                         ],
                     },
@@ -2551,7 +2590,150 @@ def main_aci() -> int:
     }
     for name, events in outputs.items():
         print(f"{name}: {write(name, events, RAW_ACI)}")
+    main_aci_edge(s.doc)
     return 0
+
+
+def aci_edge_doc(base: dict, edge: dict) -> dict:
+    """The ACI scenario with the edge-case additions, window, conversations and traces."""
+    doc = json.loads(json.dumps(base))
+    add = edge["add"]
+    doc["vms"] += add.get("vms", [])
+    doc["hypervisors"] += add.get("hypervisors", [])
+    doc["fabric"]["contracts"] += add.get("contracts", [])
+    k8s = doc["kubernetes"]
+    for key in ("nodes", "pods", "services", "gateways", "httproutes"):
+        k8s[key] += add.get(key, [])
+    doc["window"] = edge["window"]
+    doc["conversations"] = edge["conversations"]
+    doc["traces"] = edge["traces"]
+    return doc
+
+
+# Edge-case Kubernetes objects (watch events, plus pull-mode snapshots whose body is the object
+# itself: k8sobjectsreceiver pullObjectsToLogData@v0.161.0); same envelope as aci_kube_objects().
+def aci_edge_kube_objects(s: AciScenario, edge: dict) -> list[dict]:
+    add = edge["add"]
+    out = []
+
+    def emit(at: datetime, resource: str, kind: str | None, obj: dict) -> None:
+        fields = {
+            "metric_source": "kubernetes",
+            "k8s.cluster.name": s.cluster,
+            "k8s.resource.name": resource,
+            "event.domain": "k8s",
+            "event.name": obj["metadata"]["name"],
+        }
+        if obj["metadata"].get("namespace"):
+            fields = {"k8s.namespace.name": obj["metadata"]["namespace"], **fields}
+        body = obj if kind is None else {"type": kind, "object": obj}
+        out.append(
+            envelope(
+                epoch(at),
+                CLUSTER_RECEIVER_NODE,
+                "kubernetes",
+                f"kube:object:{resource}",
+                "k8s",
+                body,
+                fields,
+            )
+        )
+
+    created = parse("2026-10-07T09:00:00Z")
+    for p in add.get("pods", []):
+        start = parse(p["start"])
+        emit(start, "pods", "ADDED", pod_object(s, p, "Pending"))
+        emit(
+            start + timedelta(seconds=3),
+            "pods",
+            "MODIFIED",
+            pod_object(s, p, "Running"),
+        )
+    new_svcs = {(v["namespace"], v["name"]) for v in add.get("services", [])}
+    for svc in add.get("services", []):
+        emit(created, "services", "ADDED", service_object(s, svc, with_status=False))
+        if svc["type"] == "LoadBalancer":
+            emit(
+                created + timedelta(seconds=1),
+                "services",
+                "MODIFIED",
+                service_object(s, svc, with_status=True),
+            )
+    slices = {}
+    for eps in endpointslice_objects(s):
+        svc_name = eps["metadata"]["labels"]["kubernetes.io/service-name"]
+        key = (eps["metadata"]["namespace"], svc_name)
+        slices[key] = eps
+        if key in new_svcs:
+            emit(
+                parse(eps["metadata"]["creationTimestamp"]),
+                "endpointslices",
+                "ADDED",
+                eps,
+            )
+    for gw in add.get("gateways", []):
+        emit(created, "gateways", "ADDED", gateway_object(gw))
+    for r in add.get("httproutes", []):
+        emit(created, "httproutes", "ADDED", httproute_object(r))
+    for at in polls(s.window_start - timedelta(minutes=10), s.window_end):
+        for n in s.doc["kubernetes"]["nodes"]:
+            emit(at, "nodes", "MODIFIED", node_object(n))
+    late = []
+    for upd in edge["updates"]:
+        eps = json.loads(json.dumps(slices[("shop", upd["endpointslice"])]))
+        if upd.get("not_ready"):
+            for ep in eps["endpoints"]:
+                ep["conditions"] = {
+                    "ready": False,
+                    "serving": False,
+                    "terminating": True,
+                }
+        before = len(out)
+        emit(
+            parse(upd["time"]),
+            "endpointslices",
+            None if upd["kind"] == "PULL" else upd["kind"],
+            eps,
+        )
+        if upd["batch"] == "late":
+            late.append(out.pop(before))
+    return out, late
+
+
+def main_aci_edge(base: dict) -> None:
+    edge = json.loads((RAW_ACI / "edge-cases.json").read_text())
+    s = AciScenario(aci_edge_doc(base, edge))
+    end = epoch(s.window_end)
+    aci_stats, aci_class = aci_collections(s)
+    kube, kube_late = aci_edge_kube_objects(s, edge)
+    new_owners = {v["ip"] for v in edge["add"].get("vms", [])} | {
+        n["ip"] for n in edge["add"].get("nodes", [])
+    }
+    nd_endpoints_new = [
+        e for e in aci_nd_endpoints(s) if json.loads(e["event"])["ip"][0] in new_owners
+    ]
+    outputs = {
+        "stream_netflow.ndjson": aci_netflow(s),
+        "nd_flows.ndjson": aci_nd_flows(s),
+        "nd_endpoints.ndjson": nd_endpoints_new,
+        "aci_stats.ndjson": aci_stats,
+        "aci_class.ndjson": aci_class,
+        "kube_objects.ndjson": kube,
+        "hubble_flows.ndjson": hubble_flows(s),
+        "isovalent.ndjson": aci_isovalent(s),
+        "otel_traces.ndjson": aci_otel_traces(s),
+    }
+    edge_dir, late_dir = RAW_ACI / "edge", RAW_ACI / "edge" / "late"
+    late_dir.mkdir(parents=True, exist_ok=True)
+    late = {"kube_objects.ndjson": kube_late}
+    for name, events in outputs.items():
+        # Later polls (ACL-log re-reports) belong to the batch indexed after the edge window.
+        late.setdefault(name, []).extend(e for e in events if e["time"] > end)
+        events = [e for e in events if e["time"] <= end]
+        print(f"edge/{name}: {write(name, events, edge_dir)}")
+    for name, events in late.items():
+        if events:
+            print(f"edge/late/{name}: {write(name, events, late_dir)}")
 
 
 def write(name: str, events: list[dict], out_dir: Path = RAW) -> int:

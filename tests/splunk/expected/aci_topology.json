@@ -1,0 +1,124 @@
+{
+  "description": "Expected adm_topology rows for fixtures/raw-aci (from scenario.json fabric: 3 leaves, 2 spines, APIC; leaf eth1/49 -> spine-201 and eth1/50 -> spine-202; host LLDP neighbors).",
+  "window": {
+    "earliest": 1791366000,
+    "latest": 1791374400
+  },
+  "devices": {
+    "leaf-101": {
+      "role": "leaf",
+      "mgmt_ip": "192.0.2.101",
+      "aci_node": "pod-1/node-101",
+      "device_kind": "switch",
+      "fabric": "apic:192.0.2.50"
+    },
+    "leaf-102": {
+      "role": "leaf",
+      "mgmt_ip": "192.0.2.102",
+      "aci_node": "pod-1/node-102"
+    },
+    "leaf-103": {
+      "role": "leaf",
+      "mgmt_ip": "192.0.2.103",
+      "aci_node": "pod-1/node-103"
+    },
+    "spine-201": {
+      "role": "spine",
+      "mgmt_ip": "192.0.2.201",
+      "aci_node": "pod-1/node-201"
+    },
+    "spine-202": {
+      "role": "spine",
+      "mgmt_ip": "192.0.2.202",
+      "aci_node": "pod-1/node-202"
+    },
+    "apic1": {
+      "role": "controller",
+      "device_kind": "controller",
+      "mgmt_ip": "192.0.2.50"
+    }
+  },
+  "links": [
+    [
+      "aci",
+      "leaf-101",
+      "Ethernet1/49",
+      "spine-201",
+      "Ethernet1/1"
+    ],
+    [
+      "aci",
+      "leaf-101",
+      "Ethernet1/50",
+      "spine-202",
+      "Ethernet1/1"
+    ],
+    [
+      "aci",
+      "leaf-102",
+      "Ethernet1/49",
+      "spine-201",
+      "Ethernet1/2"
+    ],
+    [
+      "aci",
+      "leaf-102",
+      "Ethernet1/50",
+      "spine-202",
+      "Ethernet1/2"
+    ],
+    [
+      "aci",
+      "leaf-103",
+      "Ethernet1/49",
+      "spine-201",
+      "Ethernet1/3"
+    ],
+    [
+      "aci",
+      "leaf-103",
+      "Ethernet1/50",
+      "spine-202",
+      "Ethernet1/3"
+    ],
+    [
+      "lldp",
+      "leaf-101",
+      "Ethernet1/11",
+      "node-a",
+      null
+    ],
+    [
+      "lldp",
+      "leaf-102",
+      "Ethernet1/12",
+      "node-b",
+      null
+    ],
+    [
+      "lldp",
+      "leaf-103",
+      "Ethernet1/13",
+      "node-c",
+      null
+    ],
+    [
+      "lldp",
+      "leaf-102",
+      "Ethernet1/6",
+      "esx-01",
+      null
+    ],
+    [
+      "lldp",
+      "leaf-103",
+      "Ethernet1/5",
+      "esx-03",
+      null
+    ]
+  ],
+  "meta": {
+    "devices": "6",
+    "links": "11"
+  }
+}

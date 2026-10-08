@@ -30,7 +30,14 @@ SAVED = [
     "ADM - Identity prune",
     "ADM - Service binding prune",
 ]
-COLLECTIONS = ["adm_ip_identity", "adm_service_workload", "adm_interfaces"]
+COLLECTIONS = [
+    "adm_ip_identity",
+    "adm_service_workload",
+    "adm_interfaces",
+    "adm_service_backends",
+    "adm_service_routes",
+    "adm_aci_policy",
+]
 SCOPE_ROWS = [
     ("exporter", "192.0.2.11", "prod", ""),
     ("exporter", "192.0.2.12", "prod", ""),
@@ -317,7 +324,8 @@ class DataLayerTest(unittest.TestCase):
             "ip:prod/10.99.0.7",
             "pod:demo-cluster/ce6f7a8b-9c0d-4e1f-8a3b-4c5d6e7f8a06",
         )
-        self.assertEqual((e["bytes"], e["count"]), ("150", "4"))
+        # One connection (client port 52011) continued by the late record.
+        self.assertEqual((e["bytes"], e["count"]), ("150", "1"))
 
     def test_every_flow_record_is_counted_exactly_once(self):
         records = self.count("| `adm_flows`")

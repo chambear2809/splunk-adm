@@ -1,0 +1,180 @@
+[
+  {
+    "row_type": "device",
+    "device_id": "apic1",
+    "name": "apic1",
+    "mgmt_ip": "192.0.2.50",
+    "device_kind": "controller",
+    "serial": "FCH2024V1AP",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-1",
+    "role": "controller",
+    "sources": "aci"
+  },
+  {
+    "row_type": "device",
+    "device_id": "leaf-101",
+    "name": "leaf-101",
+    "mgmt_ip": "192.0.2.101",
+    "device_kind": "switch",
+    "serial": "FDO26410A01",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-101",
+    "role": "leaf",
+    "sources": ["aci", "nd"]
+  },
+  {
+    "row_type": "device",
+    "device_id": "leaf-102",
+    "name": "leaf-102",
+    "mgmt_ip": "192.0.2.102",
+    "device_kind": "switch",
+    "serial": "FDO26410A02",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-102",
+    "role": "leaf",
+    "sources": ["aci", "nd"]
+  },
+  {
+    "row_type": "device",
+    "device_id": "leaf-103",
+    "name": "leaf-103",
+    "mgmt_ip": "192.0.2.103",
+    "device_kind": "switch",
+    "serial": "FDO26410A03",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-103",
+    "role": "leaf",
+    "sources": ["aci", "nd"]
+  },
+  {
+    "row_type": "device",
+    "device_id": "spine-201",
+    "name": "spine-201",
+    "mgmt_ip": "192.0.2.201",
+    "device_kind": "switch",
+    "serial": "FDO26410S01",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-201",
+    "role": "spine",
+    "sources": "aci"
+  },
+  {
+    "row_type": "device",
+    "device_id": "spine-202",
+    "name": "spine-202",
+    "mgmt_ip": "192.0.2.202",
+    "device_kind": "switch",
+    "serial": "FDO26410S02",
+    "fabric": "apic:192.0.2.50",
+    "aci_node": "pod-1/node-202",
+    "role": "spine",
+    "sources": "aci"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-101",
+    "a_interface": "Ethernet1/49",
+    "b_device": "spine-201",
+    "b_interface": "Ethernet1/1",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-101",
+    "a_interface": "Ethernet1/50",
+    "b_device": "spine-202",
+    "b_interface": "Ethernet1/1",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-102",
+    "a_interface": "Ethernet1/49",
+    "b_device": "spine-201",
+    "b_interface": "Ethernet1/2",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-102",
+    "a_interface": "Ethernet1/50",
+    "b_device": "spine-202",
+    "b_interface": "Ethernet1/2",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-103",
+    "a_interface": "Ethernet1/49",
+    "b_device": "spine-201",
+    "b_interface": "Ethernet1/3",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-103",
+    "a_interface": "Ethernet1/50",
+    "b_device": "spine-202",
+    "b_interface": "Ethernet1/3",
+    "link_source": "aci",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-101",
+    "a_interface": "Ethernet1/11",
+    "b_device": "node-a",
+    "b_interface": "ens1f0",
+    "link_source": "lldp",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-102",
+    "a_interface": "Ethernet1/12",
+    "b_device": "node-b",
+    "b_interface": "ens1f0",
+    "link_source": "lldp",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-102",
+    "a_interface": "Ethernet1/6",
+    "b_device": "esx-01",
+    "b_interface": "vmnic2",
+    "link_source": "lldp",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-103",
+    "a_interface": "Ethernet1/13",
+    "b_device": "node-c",
+    "b_interface": "ens1f0",
+    "link_source": "lldp",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "link",
+    "a_device": "leaf-103",
+    "a_interface": "Ethernet1/5",
+    "b_device": "esx-03",
+    "b_interface": "vmnic2",
+    "link_source": "lldp",
+    "last_seen": "1791374100.0"
+  },
+  {
+    "row_type": "meta",
+    "devices": "6",
+    "links": "11",
+    "interfaces": "0",
+    "generated_at": "1791374400"
+  }
+]
