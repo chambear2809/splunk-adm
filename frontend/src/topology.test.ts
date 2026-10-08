@@ -13,9 +13,9 @@ import {
   rowsToTopology,
 } from "./topology";
 
-const graph = demoGraph();
+const graph = demoGraph("nxos");
 const index = indexGraph(graph);
-const topo = indexTopology(demoTopology());
+const topo = indexTopology(demoTopology("nxos"));
 const byLabel = (label: string) =>
   graph.nodes.find((n) => n.label === label)!.id;
 const conv = (from: string, to: string): GraphEdge =>
@@ -50,7 +50,7 @@ describe("rowsToTopology", () => {
         (i) => i.device_id === "leaf-101" && i.interface === "Ethernet1/49",
       )?.ifindex,
     ).toBe(436232192);
-    expect(t.warnings[0]).toMatch(/ifIndex/);
+    expect(t.warnings.some((w) => /ifIndex/.test(w))).toBe(true);
   });
   it.each([
     ["not an array", { rows: [] }],

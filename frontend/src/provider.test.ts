@@ -118,7 +118,7 @@ describe("resultRows", () => {
 
 describe("demoGraph", () => {
   it("assembles the captured lab rows as a synthetic graph", () => {
-    const g = demoGraph();
+    const g = demoGraph("nxos");
     expect(g.demo).toBe(true);
     expect(g.nodes.length).toBeGreaterThan(0);
   });

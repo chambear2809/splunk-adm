@@ -134,7 +134,11 @@ function toEdge(row: Row): GraphEdge {
     "unknown",
   ]);
   if (basis) edge.direction_basis = basis;
-  const encapsulation = oneOf(row, "encapsulation", ["vxlan", "geneve"]);
+  const encapsulation = oneOf(row, "encapsulation", [
+    "vxlan",
+    "geneve",
+    "ipip",
+  ]);
   if (encapsulation) edge.encapsulation = encapsulation;
   for (const key of ["observers", "sources", "span_ids"] as const) {
     const v = many(row, key);
@@ -142,8 +146,10 @@ function toEdge(row: Row): GraphEdge {
   }
   const handoff = oneOf<HandoffBasis>(row, "handoff_basis", HANDOFF_BASES);
   if (handoff) edge.handoff_basis = handoff;
+  const via = many(row, "via_node");
+  if (via) edge.via_node = via;
   for (const key of [
-    "via_node",
+    "contract_reason",
     "contract",
     "contract_subject",
     "contract_filter",

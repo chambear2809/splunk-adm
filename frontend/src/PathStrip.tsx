@@ -18,7 +18,7 @@ import type { CandidatePath, Stage } from "./topology";
 
 const FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 const TITLE_FONT = `650 13px ${FAMILY}`;
-const CARD_TEXT_W = 136;
+const CARD_TEXT_W = 152;
 
 function StageIcon({ stage }: { stage: Stage }) {
   const p = { size: 16, strokeWidth: 1.8, "aria-hidden": true };
@@ -51,10 +51,12 @@ export function PathStrip({
   path,
   title,
   onClose,
+  onBackend,
 }: {
   path: CandidatePath;
   title: string;
   onClose: () => void;
+  onBackend?: (id: string) => void;
 }) {
   const scroller = useRef<HTMLOListElement>(null);
   const [fade, setFade] = useState({ left: false, right: false });
@@ -103,6 +105,25 @@ export function PathStrip({
           <X size={16} />
         </button>
       </header>
+      {path.backends.length > 1 && onBackend && (
+        <label className="path-backend">
+          <span>Backend</span>
+          <select
+            value={path.backend}
+            onChange={(e) => onBackend(e.target.value)}
+          >
+            {path.backends.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.label}
+                {b.state === "inferred" ? " (inferred)" : ""}
+              </option>
+            ))}
+          </select>
+          <small className="muted">
+            {path.backends.length} pods served this frontend
+          </small>
+        </label>
+      )}
       {path.policy.length > 0 && (
         <div className="path-policy">
           {path.policy.map((p) => {
@@ -194,6 +215,11 @@ export function PathStrip({
           );
         })}
       </ol>
+      {path.notes.map((n) => (
+        <p key={n} className="path-note">
+          {n}
+        </p>
+      ))}
       {(path.sameHost || path.unplaced.length > 0) && (
         <p className="path-note">
           {path.sameHost &&

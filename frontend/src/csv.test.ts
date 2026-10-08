@@ -24,11 +24,11 @@ describe("csvCell", () => {
 });
 
 describe("requiredFlowsCsv", () => {
-  const graph = demoGraph();
+  const graph = demoGraph("nxos");
   const csv = requiredFlowsCsv(
     graph,
     indexGraph(graph),
-    indexTopology(demoTopology()),
+    indexTopology(demoTopology("nxos")),
   );
   const lines = csv.trimEnd().split("\r\n");
   it("writes a header and one row per conversation", () => {

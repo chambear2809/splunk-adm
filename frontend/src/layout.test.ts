@@ -3,7 +3,7 @@ import { indexGraph, parseGraph, type Graph } from "./graph";
 import { computeLayout, type Layout } from "./layout";
 import { demoGraph } from "./provider";
 
-const graph = demoGraph();
+const graph = demoGraph("nxos");
 const index = indexGraph(graph);
 const network = computeLayout(graph, index, "network");
 const idOf = (label: string) => graph.nodes.find((n) => n.label === label)!.id;

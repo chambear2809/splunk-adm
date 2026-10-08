@@ -3,7 +3,7 @@ import { directionLabel } from "./glossary";
 import { indexGraph, matchesQuery, parseGraph, type Graph } from "./graph";
 import { demoGraph } from "./provider";
 
-const demo = demoGraph();
+const demo = demoGraph("nxos");
 const clone = (): Record<string, any> => structuredClone(demo);
 const kindOf = (g: Record<string, any>, id: string) =>
   g.nodes.find((n: { id: string }) => n.id === id).kind;

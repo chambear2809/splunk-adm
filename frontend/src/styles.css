@@ -343,6 +343,14 @@
 }
 .adm .warning-list li {
   color: var(--adm-warn-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.adm .warning-list li span {
+  color: var(--adm-ink-2);
+  font-size: 12.5px;
 }
 
 .adm .banner {
@@ -823,11 +831,11 @@
 }
 .adm .stage-card,
 .adm .gap-card {
-  height: 108px;
+  height: 134px;
   border-radius: 10px;
 }
 .adm .stage-card {
-  width: 160px;
+  width: 176px;
   padding: 8px 10px;
   border: 1px solid var(--adm-card-border);
   background: var(--adm-card);
@@ -839,6 +847,17 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: none;
+}
+/* Subtitle and evidence may take two lines; cards keep one height. */
+.adm .stage-card > small,
+.adm .stage-card .handoff-text {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .adm .stage.unseen .stage-card {
   border-style: dashed;
@@ -958,6 +977,30 @@
   color: var(--adm-error-ink);
   font-weight: 650;
 }
+.adm .path-backend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -2px 0 8px;
+  font-size: 12px;
+  color: var(--adm-ink-2);
+}
+.adm .path-backend select,
+.adm .scenario select {
+  font: inherit;
+  color: var(--adm-ink);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.adm .scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
 .adm .policy-line {
   font-size: 13px;
   margin: 2px 0 6px;
@@ -996,9 +1039,10 @@
   font-size: 12px;
   color: var(--adm-ink-2);
   margin-top: 4px;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Pills, tooltip, summary rows */

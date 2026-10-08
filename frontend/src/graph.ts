@@ -19,9 +19,10 @@ export const HANDOFF_BASES: readonly HandoffBasis[] = [
   "time_inferred",
   "l7_forwarded_for",
 ];
-export type ContractBasis = "intent" | "not_evaluated" | "none";
+export type ContractBasis = "intent" | "intra_epg" | "not_evaluated" | "none";
 export const CONTRACT_BASES: readonly ContractBasis[] = [
   "intent",
+  "intra_epg",
   "not_evaluated",
   "none",
 ];
@@ -59,7 +60,10 @@ export interface GraphEdge {
   /** forwards_to only. */
   handoff_basis?: HandoffBasis;
   /** Kubernetes node that received the frontend traffic, when known. */
-  via_node?: string;
+  /** Kubernetes nodes that received the frontend traffic (one or several). */
+  via_node?: string[];
+  /** Why the collected ACI policy was not evaluated, when the search says. */
+  contract_reason?: string;
   contract?: string;
   contract_subject?: string;
   contract_filter?: string;
@@ -138,6 +142,18 @@ const allowedEdges: Record<Relationship, [NodeKind[], NodeKind[]]> = {
 };
 const optionalText = (v: unknown) => v === undefined || typeof v === "string";
 const optionalCount = (v: unknown) => v === undefined || number(v);
+/**
+ * Node-to-node tunnel of a conversation. Cilium DSR forwards to remote
+ * backends over IPIP, which flow records report as transport `ipip`.
+ */
+export function tunnelOf(e: GraphEdge): string | undefined {
+  return (
+    e.encapsulation ??
+    (e.transport?.toLowerCase() === "ipip" ? "ipip" : undefined)
+  );
+}
+export const tunnelLabel = (t: string) =>
+  t === "ipip" ? "IPIP (DSR)" : t.toUpperCase();
 /** Reject malformed snapshots before using untrusted indexed content in the UI. */
 export function parseGraph(value: unknown): Graph {
   if (
@@ -249,7 +265,8 @@ export function parseGraph(value: unknown): Graph {
       (e.reason !== undefined && typeof e.reason !== "string") ||
       (e.evidence_truncated !== undefined &&
         typeof e.evidence_truncated !== "boolean") ||
-      !optionalText(e.via_node) ||
+      (e.via_node !== undefined && !strings(e.via_node)) ||
+      !optionalText(e.contract_reason) ||
       !optionalText(e.contract) ||
       !optionalText(e.contract_subject) ||
       !optionalText(e.contract_filter) ||
@@ -282,8 +299,10 @@ export function parseGraph(value: unknown): Graph {
           "acl_permits",
           "acl_drops",
         ].some((k) => e[k] !== undefined)) ||
-      // A named contract is intent; the other bases never name one.
-      (e.contract !== undefined && e.contract_basis !== "intent") ||
+      // A contract is named for intent (permit) or, with basis none, a deny.
+      (e.contract !== undefined &&
+        e.contract_basis !== "intent" &&
+        e.contract_basis !== "none") ||
       (e.contract_basis === "intent" && e.contract === undefined)
     )
       throw new Error("Snapshot contains an invalid handoff or policy field.");

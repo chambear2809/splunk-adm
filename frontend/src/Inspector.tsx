@@ -1,12 +1,20 @@
 import { Fragment } from "react";
 import { ChevronRight, Route, X } from "lucide-react";
-import type { GraphEdge, GraphIndex, GraphNode } from "./graph";
+import {
+  tunnelLabel,
+  tunnelOf,
+  type GraphEdge,
+  type GraphIndex,
+  type GraphNode,
+} from "./graph";
 import {
   aclSummary,
   attributeLabels,
   attributeValue,
-  confidenceLabel,
+  handoffConfidence,
   contractSummary,
+  policyReason,
+  receivedOn,
   directionLabel,
   edgeIdentity,
   handoffExplanation,
@@ -14,6 +22,7 @@ import {
   identityLabel,
   isUnknown,
   kindLabel,
+  plural,
   portLabel,
   prettyBytes,
   relationshipLabel,
@@ -23,6 +32,7 @@ import {
 import type { Selection } from "./MapView";
 import {
   deviceName,
+  backendChoices,
   observationsByDevice,
   type TopologyIndex,
 } from "./topology";
@@ -55,7 +65,7 @@ export function handoffText(edge: GraphEdge, index: GraphIndex): string {
   return handoffExplanation(edge.handoff_basis!, {
     service: service?.attributes?.service ?? service?.label,
     clients,
-    node: edge.via_node,
+    node: receivedOn(edge.via_node),
   });
 }
 
@@ -123,7 +133,7 @@ function ConnectionList({
                             : "bytes not reported",
                         ].join(" · ")
                       : e.relationship === "forwards_to"
-                        ? `${handoffShort[e.handoff_basis!]} · ${confidenceLabel[e.confidence]}`
+                        ? `${handoffShort[e.handoff_basis!]} · ${handoffConfidence(e.confidence)}`
                         : `${relationshipLabel[e.relationship]} · ${e.count.toLocaleString()} span${e.count === 1 ? "" : "s"}`}
                   </small>
                 </span>
@@ -195,10 +205,13 @@ export function Inspector({
   const seen = conv ? observationsByDevice(edge, topo) : [];
   const backends =
     conv && to?.endpoint_kind === "k8s_service"
-      ? (index.outgoing.get(to.id) ?? []).filter(
-          (e) => e.relationship === "forwards_to",
-        )
+      ? backendChoices(index, to.id)
       : [];
+  const siblings = forward
+    ? (index.outgoing.get(edge.source) ?? []).filter(
+        (e) => e.relationship === "forwards_to" && e.target === edge.target,
+      )
+    : [];
   const contract = conv ? contractSummary(edge) : undefined;
   const acl = conv
     ? aclSummary(
@@ -240,23 +253,22 @@ export function Inspector({
             to?.label,
           ],
           [
-            "How the backend was determined",
-            forward ? handoffText(edge, index) : undefined,
+            "Determined by",
+            forward && siblings.length <= 1
+              ? handoffText(edge, index)
+              : undefined,
           ],
           [
             "Confidence",
-            forward ? (
+            forward && siblings.length <= 1 ? (
               <span
                 className={`status ${edge.confidence === "inferred" ? "warn" : "ok"}`}
               >
-                {confidenceLabel[edge.confidence]}
+                {handoffConfidence(edge.confidence)}
               </span>
             ) : undefined,
           ],
-          [
-            "Received on",
-            edge.via_node ? `Kubernetes node ${edge.via_node}` : undefined,
-          ],
+          ["Received on", receivedOn(edge.via_node)],
           [
             "Identity",
             conv ? (
@@ -269,7 +281,7 @@ export function Inspector({
               ? backends
                   .map(
                     (b) =>
-                      `${lookup(b.target)?.label ?? b.target}${b.confidence === "inferred" ? " (inferred)" : ""}`,
+                      `${b.label}${b.state === "inferred" ? " (inferred)" : ""}`,
                   )
                   .join(", ")
               : to?.attributes?.handoff === "service_only"
@@ -280,13 +292,18 @@ export function Inspector({
           ["Direction", directionLabel(edge)],
           [
             "Encapsulation",
-            edge.encapsulation
-              ? `${edge.encapsulation.toUpperCase()} between nodes; pod traffic inside is not visible here`
+            tunnelOf(edge)
+              ? tunnelOf(edge) === "ipip"
+                ? "IPIP between nodes (Cilium DSR to a remote backend); the client connection inside is not visible here"
+                : `${tunnelLabel(tunnelOf(edge)!)} between nodes; pod traffic inside is not visible here`
               : undefined,
           ],
           [
-            conv ? "Flow records" : forward ? "Connections" : "Spans",
-            edge.count.toLocaleString(),
+            conv || forward ? "Connections" : "Spans",
+            (siblings.length > 1
+              ? siblings.reduce((n, s) => n + s.count, 0)
+              : edge.count
+            ).toLocaleString(),
           ],
           [
             "Bytes",
@@ -304,6 +321,37 @@ export function Inspector({
           ],
         ]}
       />
+      {siblings.length > 1 && (
+        <>
+          <h3>
+            How the backend was chosen{" "}
+            <span className="count">{siblings.length}</span>
+          </h3>
+          <ul className="seen-list">
+            {[...siblings]
+              .sort(
+                (a, b) =>
+                  Number(a.confidence !== "observed") -
+                  Number(b.confidence !== "observed"),
+              )
+              .map((s) => (
+                <li key={s.id}>
+                  <b>
+                    <span
+                      className={`status ${s.confidence === "inferred" ? "warn" : "ok"}`}
+                    >
+                      {handoffConfidence(s.confidence)}
+                    </span>{" "}
+                    {handoffShort[s.handoff_basis!]}
+                  </b>
+                  <small>
+                    {handoffText(s, index)} · {plural(s.count, "connection")}
+                  </small>
+                </li>
+              ))}
+          </ul>
+        </>
+      )}
       {(contract || acl) && (
         <>
           <h3>Fabric policy</h3>
@@ -324,6 +372,9 @@ export function Inspector({
               Intent from collected ACI policy objects, not proof the fabric
               permitted this traffic.
             </p>
+          )}
+          {policyReason(edge) && (
+            <p className="muted small">{policyReason(edge)}</p>
           )}
           {acl && (
             <p

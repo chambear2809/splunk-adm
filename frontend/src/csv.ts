@@ -6,6 +6,7 @@ import {
   kindLabel,
 } from "./glossary";
 import {
+  backendChoices,
   deviceName,
   observationsByDevice,
   type TopologyIndex,
@@ -72,12 +73,11 @@ export function requiredFlowsCsv(
     .filter((e) => e.relationship === "communicates_with")
     .map((e) => {
       const target = node(e.target);
-      const forwards =
+      const choices =
         target?.endpoint_kind === "k8s_service"
-          ? (index.outgoing.get(target.id) ?? []).filter(
-              (f) => f.relationship === "forwards_to",
-            )
+          ? backendChoices(index, target.id)
           : [];
+      const forwards = choices.flatMap((c) => c.edges);
       return csvRow([
         ...side(node(e.source), e.source),
         ...side(node(e.target), e.target),
@@ -99,10 +99,9 @@ export function requiredFlowsCsv(
         target?.endpoint_kind === "k8s_service"
           ? (target.attributes?.service ?? target.label)
           : "",
-        forwards
+        choices
           .map(
-            (f) =>
-              `${node(f.target)?.label ?? f.target}${f.confidence === "inferred" ? " (inferred)" : ""}`,
+            (c) => `${c.label}${c.state === "inferred" ? " (inferred)" : ""}`,
           )
           .join("; ") ||
           (target?.attributes?.handoff === "service_only"

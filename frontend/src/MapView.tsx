@@ -14,7 +14,12 @@ import {
   Split,
   Users,
 } from "lucide-react";
-import type { GraphEdge, GraphIndex, GraphNode } from "./graph";
+import {
+  tunnelOf,
+  type GraphEdge,
+  type GraphIndex,
+  type GraphNode,
+} from "./graph";
 import { edgeIdentity, endpointKindLabel, isUnknown } from "./glossary";
 import type { Item, Layout, RoutedEdge } from "./layout";
 import { HEADER_H, policyBadge, policyText } from "./layout";
@@ -55,7 +60,12 @@ export function textWidth(text: string, font = FONT): number {
       measureCtx = null;
     }
   }
-  if (!measureCtx) return text.length * 7.2;
+  if (!measureCtx) {
+    // No canvas (tests): estimate from the font size, slightly generous.
+    const px = Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 13);
+    const bold = /^\s*(6|7|8|9)\d\d\b|bold/.test(font) ? 0.04 : 0;
+    return text.length * px * (0.58 + bold);
+  }
   measureCtx.font = font;
   return measureCtx.measureText(text).width;
 }
@@ -70,6 +80,47 @@ export function fitText(text: string, px: number, font = FONT): string {
     else hi = mid - 1;
   }
   return truncateMiddle(text, lo);
+}
+
+/** Shortest prefix a truncated name keeps, so it stays recognizable. */
+export const NAME_PREFIX = 8;
+/**
+ * Truncates a name so it stays identifiable: names fit whole when they can;
+ * otherwise a prefix of at least NAME_PREFIX characters and the last
+ * dash-separated segment (a pod hash, a VM number) are kept around "…".
+ */
+export function fitName(text: string, px: number, font = FONT): string {
+  if (textWidth(text, font) <= px) return text;
+  const dash = text.lastIndexOf("-");
+  const tail =
+    dash > 0 && text.length - dash - 1 <= 8 ? text.slice(dash + 1) : "";
+  if (!tail || dash < NAME_PREFIX) return fitText(text, px, font);
+  let head = dash;
+  while (
+    head > NAME_PREFIX &&
+    textWidth(`${text.slice(0, head)}…${tail}`, font) > px
+  )
+    head--;
+  return `${text.slice(0, head)}…${tail}`;
+}
+/**
+ * A row's name and side text (IP, node, status). The side text moves to a
+ * second line whenever it would cost the name characters.
+ */
+export function rowLabel(
+  name: string,
+  side: string | undefined,
+  width: number,
+  sidePx: number,
+  font = FONT,
+): { name: string; stacked: boolean } {
+  const avail = width - 46;
+  if (!side || textWidth(name, font) <= avail - sidePx)
+    return {
+      name: fitName(name, avail - (side ? sidePx : 0), font),
+      stacked: false,
+    };
+  return { name: fitName(name, avail, font), stacked: true };
 }
 
 /** Fit scale that would show the whole layout in a viewport. */
@@ -105,6 +156,66 @@ function NodeIcon({ node, x, y }: { node?: GraphNode; x: number; y: number }) {
   if (node.endpoint_kind === "ambiguous") return <Users {...props} />;
   if (node.endpoint_kind === "unresolved") return <CircleHelp {...props} />;
   return <Globe {...props} />;
+}
+
+const CHIP_W = 74;
+/** Secondary text shown with a row: node, IP, attachment leaf, Service type. */
+function rowMeta(n: GraphNode, deviceLabel: (raw: string) => string) {
+  if (n.kind === "workload") return n.attributes?.node;
+  if (n.endpoint_kind === "k8s_service")
+    return n.attributes?.type === "LoadBalancer"
+      ? "LB VIP"
+      : n.attributes?.type;
+  if (n.endpoint_kind === "k8s_node_proxy" || n.endpoint_kind === "vm")
+    return n.addresses?.[0];
+  if (n.endpoint_kind === "k8s_node" && n.attributes?.attach_device)
+    return deviceLabel(n.attributes.attach_device);
+  return undefined;
+}
+/** Everything a card shows as text, and how its name was fitted. */
+export function itemText(
+  it: Item,
+  n: GraphNode | undefined,
+  deviceLabel: (raw: string) => string,
+) {
+  const header = it.role === "header";
+  const summary = it.role === "summary";
+  const unknown = !!n && isUnknown(n);
+  // A Service frontend whose backend no evidence determined.
+  const noBackend = header && n?.attributes?.handoff === "service_only";
+  const meta =
+    n && !header
+      ? rowMeta(n, deviceLabel)
+      : n?.endpoint_kind === "k8s_service" &&
+          n.attributes?.handoff !== "service_only"
+        ? policyBadge(n.attributes ?? {}) || undefined
+        : undefined;
+  const kindText = summary
+    ? "Pods"
+    : n?.endpoint_kind
+      ? endpointKindLabel[n.endpoint_kind]
+      : n?.kind === "workload"
+        ? "Pod"
+        : "Service";
+  const text = summary
+    ? `${it.members!.length} pods`
+    : n?.endpoint_kind === "k8s_service"
+      ? header
+        ? (n.attributes?.service ?? n.label)
+        : (n.attributes?.frontend ?? n.label)
+      : n?.endpoint_kind === "k8s_node_proxy"
+        ? (n.attributes?.node ?? n.label)
+        : (n?.label ?? it.nodeId);
+  const metaW = meta ? textWidth(meta, META_FONT) + 12 : 0;
+  const font = header ? HEADER_FONT : FONT;
+  // Headers keep their subtitle line; rows may stack side text.
+  const sideText = unknown ? kindText : noBackend ? "No backend" : meta;
+  const sideW = unknown ? 108 : noBackend ? CHIP_W + 6 : metaW;
+  // Rows stack side text under the name; headers move it to the subtitle line.
+  const fitted = summary
+    ? { name: fitName(text, it.w - 46, font), stacked: false }
+    : rowLabel(text, sideText, it.w, sideW, font);
+  return { header, summary, unknown, noBackend, meta, kindText, text, fitted };
 }
 
 export interface EdgeDescription {
@@ -223,8 +334,17 @@ export function MapView({
       selection && window.matchMedia?.("(max-width: 900px)").matches
         ? Math.min(320, size.w * 0.92)
         : 0;
-    setT((cur) => ensureVisible(cur, b, { w: size.w - overlay, h: size.h }));
-  }, [selection, size, itemBox]);
+    const view = { w: size.w - overlay, h: size.h };
+    setT((cur) => {
+      // An edge too long to show whole: bring its server end into view.
+      const tooBig = b.w * cur.k > view.w - 48 || b.h * cur.k > view.h - 48;
+      const target =
+        tooBig && selection?.kind === "edge"
+          ? layout.items.get(index.edge.get(selection.id)?.target ?? "")
+          : undefined;
+      return ensureVisible(cur, target ?? b, view);
+    });
+  }, [selection, size, itemBox, layout, index]);
   useEffect(() => setActive(layout.order[0]), [layout]);
 
   const centerOn = useCallback(
@@ -245,7 +365,7 @@ export function MapView({
       const it = layout.items.get(focusTarget.id);
       if (it) centerOn(it);
     } else {
-      const r = layout.edges.find((e) => e.id === focusTarget.id);
+      const r = layout.edges.find((e) => e.members.includes(focusTarget.id));
       if (r) centerOn({ x: r.mid.x - 20, y: r.mid.y - 20, w: 40, h: 40 });
     }
   }, [focusTarget, layout, centerOn]);
@@ -351,7 +471,7 @@ export function MapView({
     if (e.relationship === "forwards_to")
       return e.confidence === "inferred" ? "forward inferred" : "forward";
     if (e.acl_action === "drop") return "conv blocked";
-    if (e.encapsulation) return "tunnel";
+    if (tunnelOf(e)) return "tunnel";
     const s = edgeIdentity(e, node);
     return s === "identified"
       ? "conv"
@@ -417,33 +537,22 @@ export function MapView({
   const selectedEdge = selection?.kind === "edge" ? selection.id : undefined;
   const hovered = hover && index.edge.get(hover.id);
   const tip = hovered && describeEdge(hovered);
-  const rowMeta = (n: GraphNode) =>
-    n.kind === "workload"
-      ? n.attributes?.node
-      : n.endpoint_kind === "k8s_service"
-        ? n.attributes?.type === "LoadBalancer"
-          ? "LB VIP"
-          : n.attributes?.type
-        : n.endpoint_kind === "k8s_node_proxy"
-          ? n.addresses?.[0]
-          : n.endpoint_kind === "vm"
-            ? n.addresses?.[0]
-            : n.endpoint_kind === "k8s_node" && n.attributes?.attach_device
-              ? deviceLabel(n.attributes.attach_device)
-              : undefined;
 
   const renderEdge = (r: RoutedEdge) => {
     const cls = edgeClass(r.edge);
-    const selected = r.id === selectedEdge;
+    const selected = !!selectedEdge && r.members.includes(selectedEdge);
     const marker =
       r.arrow === "none"
         ? undefined
         : `url(#adm-arrow-${selected ? "ink" : cls.replace(" ", "-")})`;
-    const dim = edgeDim(r.edge);
+    const dim = r.members.every((id) => {
+      const e = index.edge.get(id);
+      return !e || edgeDim(e);
+    });
     return (
       <g
         key={r.id}
-        className={`edge ${cls} ${selected ? "selected" : ""} ${dim && hover?.id !== r.id ? "dim" : ""} ${hover?.id === r.id ? "hover" : ""} ${matchEdges?.has(r.id) ? "match" : ""}`}
+        className={`edge ${cls} ${selected ? "selected" : ""} ${dim && hover?.id !== r.id ? "dim" : ""} ${hover?.id === r.id ? "hover" : ""} ${r.members.some((id) => matchEdges?.has(id)) ? "match" : ""}`}
         data-hit
         onClick={(ev) => {
           ev.stopPropagation();
@@ -640,38 +749,42 @@ export function MapView({
           {layout.groups.flatMap((g) =>
             g.items.map((it) => {
               const n = it.role === "summary" ? undefined : node(it.nodeId);
-              const header = it.role === "header";
-              const summary = it.role === "summary";
-              const unknown = !!n && isUnknown(n);
-              // A Service frontend whose backend no evidence determined.
-              const noBackend =
-                header && n?.attributes?.handoff === "service_only";
+              const {
+                header,
+                summary,
+                unknown,
+                noBackend,
+                meta,
+                kindText,
+                text,
+                fitted,
+              } = itemText(it, n, deviceLabel);
+              const stacked = fitted.stacked;
+              const chipW = CHIP_W;
               const selected = !!selectedItem && selectedItem === it;
-              const meta =
-                n && !header
-                  ? rowMeta(n)
-                  : n?.endpoint_kind === "k8s_service" &&
-                      n.attributes?.handoff !== "service_only"
-                    ? policyBadge(n.attributes ?? {}) || undefined
-                    : undefined;
-              const kindText = summary
-                ? "Pods"
-                : n?.endpoint_kind
-                  ? endpointKindLabel[n.endpoint_kind]
-                  : n?.kind === "workload"
-                    ? "Pod"
-                    : "Service";
-              const text = summary
-                ? `${it.members!.length} pods`
-                : n?.endpoint_kind === "k8s_service"
-                  ? header
-                    ? (n.attributes?.service ?? n.label)
-                    : (n.attributes?.frontend ?? n.label)
-                  : n?.endpoint_kind === "k8s_node_proxy"
-                    ? (n.attributes?.node ?? n.label)
-                    : (n?.label ?? it.nodeId);
-              const metaW = meta ? textWidth(meta, META_FONT) + 12 : 0;
-              const chipW = 74;
+              const labelY = header
+                ? it.y + 19
+                : stacked
+                  ? it.y + 17
+                  : it.y + it.h / 2 + 4.5;
+              const sideY = header
+                ? stacked
+                  ? it.y + 35
+                  : it.y + 19
+                : stacked
+                  ? it.y + it.h - 9
+                  : it.y + it.h / 2 + 4.5;
+              // A stacked header shares its subtitle line with the side text.
+              const subW =
+                it.w -
+                46 -
+                (header && stacked
+                  ? noBackend
+                    ? chipW + 6
+                    : meta
+                      ? textWidth(meta, META_FONT) + 12
+                      : 0
+                  : 0);
               const focusRing =
                 focused === it.nodeId ||
                 (matching &&
@@ -724,20 +837,10 @@ export function MapView({
                   <NodeIcon
                     node={n}
                     x={it.x + 12}
-                    y={it.y + (header ? 8 : (it.h - 15) / 2)}
+                    y={it.y + (header ? 8 : stacked ? 6 : (it.h - 15) / 2)}
                   />
-                  <text
-                    x={it.x + 34}
-                    y={header ? it.y + 19 : it.y + it.h / 2 + 4.5}
-                    className="item-label"
-                  >
-                    {fitText(
-                      text,
-                      it.w -
-                        46 -
-                        (unknown ? 108 : noBackend ? chipW + 6 : metaW),
-                      header ? HEADER_FONT : FONT,
-                    )}
+                  <text x={it.x + 34} y={labelY} className="item-label">
+                    {fitted.name}
                   </text>
                   {header && (
                     <text x={it.x + 34} y={it.y + 35} className="item-sub">
@@ -747,7 +850,7 @@ export function MapView({
                             ? ` · ${g.collapsed ? g.items[1].members!.length : g.items.length - 1} pod${(g.collapsed ? g.items[1].members!.length : g.items.length - 1) === 1 ? "" : "s"}`
                             : ""
                         }`,
-                        it.w - 46,
+                        subW,
                         META_FONT,
                       )}
                     </text>
@@ -777,14 +880,14 @@ export function MapView({
                       </title>
                       <rect
                         x={it.x + it.w - 10 - chipW}
-                        y={it.y + 6}
+                        y={sideY - 13}
                         width={chipW}
                         height={18}
                         rx={9}
                       />
                       <text
                         x={it.x + it.w - 10 - chipW / 2}
-                        y={it.y + 19}
+                        y={sideY}
                         textAnchor="middle"
                       >
                         No backend
@@ -794,15 +897,15 @@ export function MapView({
                   {unknown && (
                     <g className="status-chip">
                       <rect
-                        x={it.x + it.w - 108}
-                        y={it.y + it.h / 2 - 10}
+                        x={stacked ? it.x + 32 : it.x + it.w - 108}
+                        y={stacked ? sideY - 12 : it.y + it.h / 2 - 10}
                         width={98}
-                        height={20}
-                        rx={10}
+                        height={stacked ? 16 : 20}
+                        rx={8}
                       />
                       <text
-                        x={it.x + it.w - 59}
-                        y={it.y + it.h / 2 + 4}
+                        x={stacked ? it.x + 81 : it.x + it.w - 59}
+                        y={stacked ? sideY : it.y + it.h / 2 + 4}
                         textAnchor="middle"
                       >
                         {kindText}
@@ -811,9 +914,9 @@ export function MapView({
                   )}
                   {!unknown && meta && (
                     <text
-                      x={it.x + it.w - 12}
-                      y={header ? it.y + 19 : it.y + it.h / 2 + 4.5}
-                      textAnchor="end"
+                      x={stacked && !header ? it.x + 34 : it.x + it.w - 12}
+                      y={sideY}
+                      textAnchor={stacked && !header ? "start" : "end"}
                       className="item-meta"
                     >
                       {meta}

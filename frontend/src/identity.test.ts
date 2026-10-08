@@ -3,7 +3,7 @@ import { indexGraph } from "./graph";
 import { edgeIdentity, summarize } from "./glossary";
 import { demoGraph } from "./provider";
 
-const graph = demoGraph();
+const graph = demoGraph("nxos");
 const index = indexGraph(graph);
 const node = (id: string) => index.node.get(id);
 const byLabel = (l: string) => graph.nodes.find((n) => n.label === l)!.id;

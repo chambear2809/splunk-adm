@@ -28,27 +28,31 @@ import {
   type GraphNode,
 } from "./graph";
 import {
-  confidenceLabel,
+  contractCell,
   edgeIdentity,
+  handoffConfidence,
   handoffShort,
   plural,
   portLabel,
   prettyBytes,
   relationshipLabel,
   summarize,
+  warningTitle,
 } from "./glossary";
 import { computeLayout, type View } from "./layout";
 import { FIT_MIN, MapView, type Selection } from "./MapView";
-import { handoffText, IdentityBadge, Inspector } from "./Inspector";
+import { IdentityBadge, Inspector } from "./Inspector";
 import { PathStrip } from "./PathStrip";
 import { DevicesView } from "./DevicesView";
 import { requiredFlowsCsv } from "./csv";
 import { formatUtc, formatUtcRange } from "./time";
 import {
   argError,
-  demoArgs,
+  DEMO_SCENARIOS,
+  demoArgsFor,
   demoGraph,
   demoTopology,
+  type DemoScenario,
   loadLive,
   loadTopology,
   TIME_RANGES,
@@ -110,8 +114,11 @@ export function App({
   demoData?: { graph: () => Graph; topology: () => Topology };
 }) {
   const theme = useTheme(inSplunk, themeOverride());
-  const loadDemo = demoData?.graph ?? demoGraph;
-  const loadDemoTopology = demoData?.topology ?? demoTopology;
+  const [scenario, setScenario] = useState<DemoScenario>("aci");
+  const loadDemo = (sc: DemoScenario = scenario) =>
+    demoData ? demoData.graph() : demoGraph(sc);
+  const loadDemoTopology = (sc: DemoScenario = scenario) =>
+    demoData ? demoData.topology() : demoTopology(sc);
   const [graph, setGraph] = useState<Graph>(() => loadDemo());
   const [topology, setTopology] = useState<Topology>(() => loadDemoTopology());
   const [mode, setMode] = useState<"demo" | "live">("demo");
@@ -130,7 +137,8 @@ export function App({
     nonce: number;
   }>();
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [args, setArgs] = useState<GraphArgs>(demoArgs);
+  const [args, setArgs] = useState<GraphArgs>(() => demoArgsFor("aci"));
+  const [backend, setBackend] = useState<string>();
   const [earliest, setEarliest] = useState("-1h");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -149,6 +157,7 @@ export function App({
   const select = (s: Selection | null) => {
     setSelection(s);
     setPathHidden(false);
+    setBackend(undefined);
   };
   /** Clears the selection and returns keyboard focus to its card on the map. */
   const clearSelection = () => {
@@ -162,14 +171,15 @@ export function App({
     setCollapse(false);
     setExpanded(new Set());
   };
-  const showDemo = () => {
+  const showDemo = (sc: DemoScenario = scenario) => {
     request.current?.abort();
     request.current = null;
     setBusy(false);
-    setGraph(loadDemo());
-    setTopology(loadDemoTopology());
+    setScenario(sc);
+    setGraph(loadDemo(sc));
+    setTopology(loadDemoTopology(sc));
     setMode("demo");
-    setArgs(demoArgs);
+    setArgs(demoArgsFor(sc));
     setHasLiveGraph(false);
     setError("");
     resetView();
@@ -295,6 +305,8 @@ export function App({
     ];
   }, [matchNodes, matchEdges, layout]);
   useEffect(() => setMatchIdx(-1), [query, layout]);
+  // A search jump applies once; a remounted map must not replay it.
+  useEffect(() => setFocusTarget(undefined), [query, tab]);
   const cycleMatch = (step: number) => {
     if (!matchList.length) return;
     const next = (matchIdx + step + matchList.length) % matchList.length;
@@ -314,9 +326,9 @@ export function App({
   const path = useMemo(
     () =>
       selectedEdge?.relationship === "communicates_with"
-        ? buildPath(selectedEdge, graph, index, topo)
+        ? buildPath(selectedEdge, graph, index, topo, { backend })
         : undefined,
-    [selectedEdge, graph, index, topo],
+    [selectedEdge, graph, index, topo, backend],
   );
   const label = (id: string) => index.node.get(id)?.label ?? id;
   const empty = visible && graph.nodes.length === 0;
@@ -333,14 +345,18 @@ export function App({
           title,
           lines: [`Traced call · ${plural(e.count, "span")}`],
         };
-      if (e.relationship === "forwards_to")
+      if (e.relationship === "forwards_to") {
+        const all = (index.outgoing.get(e.source) ?? []).filter(
+          (f) => f.relationship === "forwards_to" && f.target === e.target,
+        );
         return {
           title,
-          lines: [
-            `${confidenceLabel[e.confidence]} · ${handoffShort[e.handoff_basis!]}`,
-            handoffText(e, index),
-          ],
+          lines: all.map(
+            (f) =>
+              `${handoffConfidence(f.confidence)} · ${handoffShort[f.handoff_basis!]} · ${plural(f.count, "connection")}`,
+          ),
         };
+      }
       const seen = observationsByDevice(e, topo)
         .map((d) => d.label)
         .join(", ");
@@ -350,6 +366,7 @@ export function App({
           [
             portLabel(e),
             e.bytes !== undefined ? prettyBytes(e.bytes) : "bytes not reported",
+            plural(e.count, "connection"),
             edgeIdentity(e, node) === "identified"
               ? "Identified"
               : edgeIdentity(e, node) === "external"
@@ -519,7 +536,7 @@ export function App({
         )}
         <div className="actions">
           <div className="segmented" role="group" aria-label="Data source">
-            <button aria-pressed={mode === "demo"} onClick={showDemo}>
+            <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
               Demo
             </button>
             <button
@@ -605,9 +622,28 @@ export function App({
                 <X size={16} />
               </button>
             </div>
+            {mode === "demo" && !demoData && (
+              <label className="scenario">
+                <span>Demo scenario</span>
+                <select
+                  value={scenario}
+                  onChange={(e) => {
+                    showDemo(e.target.value as DemoScenario);
+                    setPanel("settings");
+                  }}
+                >
+                  {DEMO_SCENARIOS.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {mode === "demo" && (
               <p className="muted">
-                Demo data is fixed. Switch to Splunk to choose an application.
+                Demo data is synthetic search output. Switch to Splunk to choose
+                an application.
               </p>
             )}
             <div className="fields">
@@ -675,7 +711,10 @@ export function App({
             </div>
             <ul className="warning-list">
               {warnings.map((w, i) => (
-                <li key={i}>{w}</li>
+                <li key={i}>
+                  <b>{warningTitle(w)}</b>
+                  <span>{w}</span>
+                </li>
               ))}
             </ul>
           </section>
@@ -866,7 +905,8 @@ export function App({
                   <ul className="state-warnings">
                     {warnings.map((w, i) => (
                       <li key={i}>
-                        <TriangleAlert size={14} aria-hidden /> {w}
+                        <TriangleAlert size={14} aria-hidden />{" "}
+                        <b>{warningTitle(w)}.</b> {w}
                       </li>
                     ))}
                   </ul>
@@ -943,6 +983,7 @@ export function App({
               path={path}
               title={`${label(selectedEdge.source)} → ${label(selectedEdge.target)} · ${portLabel(selectedEdge)}`}
               onClose={() => setPathHidden(true)}
+              onBackend={setBackend}
             />
           )}
         </section>
@@ -1081,15 +1122,7 @@ function TableView({
                   .map((d) => d.label)
                   .join(", ") || "—"}
               </td>
-              <td>
-                {e.contract_basis === "intent"
-                  ? e.contract
-                  : e.contract_basis === "not_evaluated"
-                    ? "Not fully evaluated"
-                    : e.contract_basis === "none"
-                      ? "None found"
-                      : "—"}
-              </td>
+              <td>{contractCell(e)}</td>
               <td className="num">
                 {e.bytes !== undefined ? prettyBytes(e.bytes) : "—"}
               </td>

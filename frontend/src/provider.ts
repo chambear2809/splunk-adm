@@ -1,4 +1,7 @@
-import demo from "../../fixtures/demo-rows.json";
+import nxosRows from "../../fixtures/demo-rows.json";
+import nxosTopology from "../../fixtures/demo-topology.json";
+import aciRows from "../../fixtures/demo-rows-aci.json";
+import aciTopology from "../../fixtures/demo-topology-aci.json";
 import { type Graph } from "./graph";
 import { MAX_ROWS, rowsToGraph, type GraphArgs, type Row } from "./rows";
 import {
@@ -8,16 +11,33 @@ import {
   type Topology,
 } from "./topology";
 
-export const demoArgs: GraphArgs = demo.args;
-/** Demo mode assembles captured lab rows through the same path as live mode. */
-export const demoGraph = () => rowsToGraph(demo.rows, demoArgs, { demo: true });
-// Captured `adm_topology` output, when the lab export exists.
-const demoTopologyFiles = import.meta.glob<unknown>(
-  "../../fixtures/demo-topology.json",
-  { eager: true, import: "default" },
+/** Captured lab output of `adm_graph` and `adm_topology` for each demo scenario. */
+const SCENARIOS = {
+  aci: {
+    label: "ACI pilot fabric",
+    graph: aciRows,
+    topology: aciTopology as unknown,
+  },
+  nxos: {
+    label: "NX-OS fabric",
+    graph: nxosRows,
+    topology: nxosTopology as unknown,
+  },
+} as const;
+export type DemoScenario = keyof typeof SCENARIOS;
+export const DEMO_SCENARIOS = (Object.keys(SCENARIOS) as DemoScenario[]).map(
+  (id) => ({ id, label: SCENARIOS[id].label }),
 );
-export const demoTopology = (): Topology => {
-  const file = Object.values(demoTopologyFiles)[0];
+export const demoArgsFor = (scenario: DemoScenario): GraphArgs =>
+  SCENARIOS[scenario].graph.args;
+export const demoArgs: GraphArgs = demoArgsFor("aci");
+/** Demo mode assembles captured lab rows through the same path as live mode. */
+export const demoGraph = (scenario: DemoScenario = "aci"): Graph =>
+  rowsToGraph(SCENARIOS[scenario].graph.rows, demoArgsFor(scenario), {
+    demo: true,
+  });
+export const demoTopology = (scenario: DemoScenario = "aci"): Topology => {
+  const file = SCENARIOS[scenario].topology;
   if (file === undefined) return emptyTopology();
   return rowsToTopology(
     Array.isArray(file) ? file : (file as { rows?: unknown }).rows,

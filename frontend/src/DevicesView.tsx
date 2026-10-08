@@ -7,7 +7,13 @@ import {
   Waypoints,
 } from "lucide-react";
 import type { Graph, GraphEdge, GraphIndex } from "./graph";
-import { edgeIdentity, plural, portLabel, prettyBytes } from "./glossary";
+import {
+  contractCell,
+  edgeIdentity,
+  plural,
+  portLabel,
+  prettyBytes,
+} from "./glossary";
 import { IdentityBadge } from "./Inspector";
 import {
   deviceSummaries,
@@ -74,15 +80,7 @@ function Conversations({
               </button>
             </td>
             <td>{portLabel(e)}</td>
-            <td>
-              {e.contract_basis === "intent"
-                ? `${e.contract}${e.contract_entry ? ` · ${e.contract_entry}` : ""}`
-                : e.contract_basis === "not_evaluated"
-                  ? "Not fully evaluated"
-                  : e.contract_basis === "none"
-                    ? "None found"
-                    : "—"}
-            </td>
+            <td>{contractCell(e)}</td>
             <td className="num">
               {e.bytes !== undefined ? prettyBytes(e.bytes) : "—"}
             </td>

@@ -63,7 +63,7 @@ export function directionLabel(edge: GraphEdge): string | undefined {
   const basis: DirectionBasis | undefined = edge.direction_basis;
   if (basis === "initiator") {
     const reporters = (edge.sources ?? [])
-      .filter((s) => s === "isovalent" || s === "ftd")
+      .filter((s) => s === "isovalent" || s === "ftd" || s === "hubble")
       .map(sourceLabel);
     return `Initiator reported by ${reporters.join(" and ") || "the source"}`;
   }
@@ -136,6 +136,9 @@ export function handoffExplanation(
       return `Envoy forwarded with X-Forwarded-For ${clientText(ctx)}`;
   }
 }
+/** Hand-off confidence: evidence picked the backend, or timing did. */
+export const handoffConfidence = (c: GraphEdge["confidence"]) =>
+  c === "inferred" ? "Inferred" : "Observed";
 export const handoffShort: Record<HandoffBasis, string> = {
   hubble_client_tuple: "Hubble: same client tuple",
   hubble_xlate: "Hubble: SNAT translation",
@@ -147,11 +150,43 @@ export const handoffShort: Record<HandoffBasis, string> = {
 export function contractSummary(edge: GraphEdge): string | undefined {
   if (edge.contract_basis === "intent" && edge.contract)
     return `Permitted by contract ${edge.contract}${edge.contract_entry ? ` · ${edge.contract_entry}` : ""} (intent)`;
-  if (edge.contract_basis === "not_evaluated")
-    return "Policy not fully evaluated (vzAny, preferred group, taboo, service graph or ESG in this VRF)";
+  if (edge.contract_basis === "intra_epg") return "Same EPG (intra-EPG)";
+  if (edge.contract_basis === "not_evaluated") return "Policy not evaluated";
   if (edge.contract_basis === "none")
-    return "No permitting contract found in the collected policy";
+    return edge.contract
+      ? `Denied by contract ${edge.contract}${edge.contract_entry ? ` · ${edge.contract_entry}` : ""}`
+      : "No permitting contract found in the collected policy";
   return undefined;
+}
+/** Short contract cell for tables and exports. */
+export function contractCell(edge: GraphEdge): string {
+  switch (edge.contract_basis) {
+    case "intent":
+      return `${edge.contract}${edge.contract_entry ? ` · ${edge.contract_entry}` : ""}`;
+    case "intra_epg":
+      return "Same EPG";
+    case "not_evaluated":
+      return "Not evaluated";
+    case "none":
+      return edge.contract ? `Denied by ${edge.contract}` : "None found";
+    default:
+      return "—";
+  }
+}
+/** Why a conversation's policy was not evaluated, in plain words. */
+export function policyReason(edge: GraphEdge): string | undefined {
+  if (edge.contract_basis === "intra_epg")
+    return "Both sides are in one EPG. ACI permits traffic inside an EPG unless intra-EPG isolation is enforced.";
+  if (edge.contract_basis !== "not_evaluated") return undefined;
+  return (
+    edge.contract_reason ??
+    "The collected ACI policy can't settle this conversation: a side is unclassified or in another tenant, the VRF uses vzAny, taboos, ESGs, service graphs, preferred groups or is unenforced, or policy collection is incomplete."
+  );
+}
+/** "node-a", or "one of node-a, node-b" when several nodes received traffic. */
+export function receivedOn(nodes?: string[]): string | undefined {
+  if (!nodes?.length) return undefined;
+  return nodes.length === 1 ? nodes[0] : `one of ${nodes.join(", ")}`;
 }
 export const isBlocked = (edge: GraphEdge) => edge.acl_action === "drop";
 /** ACL-log observation, e.g. "ACL log: permit at leaf-103". */
@@ -177,7 +212,9 @@ export function prettyBytes(bytes: number): string {
 export const portLabel = (edge: GraphEdge) =>
   edge.server_port !== undefined
     ? `${edge.server_port}/${edge.transport ?? "?"}`
-    : (edge.transport ?? "—");
+    : edge.transport?.toLowerCase() === "ipip"
+      ? "IPIP"
+      : (edge.transport ?? "—");
 
 /** How well both ends of a network conversation are identified. */
 export type IdentityState = "identified" | "external" | "unknown" | "multiple";
@@ -249,3 +286,31 @@ export function summarize(
 }
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`;
+
+/** Plain-language title for a search warning; the full text stays as detail. */
+const WARNING_TITLES: [RegExp, string][] = [
+  [/no spans in .* the graph is empty/i, "Entry service not found"],
+  [/^Graph exceeds/i, "Map too large"],
+  [/listed only the first .* connections/i, "Connection list capped"],
+  [
+    /dsrDispatch opt|folded into the hand-off/i,
+    "DSR legs folded into hand-offs",
+  ],
+  [/boundary clients or dependencies/i, "Scope limit reached"],
+  [/boundary traces/i, "Trace limit reached"],
+  [/ACI policy read|adm_aci_policy/i, "Contract policy read incompletely"],
+  [
+    /max_rows_per_query|could not be read completely/i,
+    "Inventory read incompletely",
+  ],
+  [
+    /adm_identity_max_matches|several identities|ambiguous/i,
+    "Address with many owners",
+  ],
+  [/k8s\.cluster\.name|clusterName/i, "Cluster name missing"],
+  [/parent outside the window|missing parent/i, "Traces cut by the time range"],
+  [/No identity record/i, "Unknown address"],
+];
+export function warningTitle(text: string): string {
+  return WARNING_TITLES.find(([re]) => re.test(text))?.[1] ?? "Search warning";
+}

@@ -1,4 +1,11 @@
-import type { Graph, GraphEdge, GraphIndex, GraphNode } from "./graph";
+import {
+  tunnelLabel,
+  tunnelOf,
+  type Graph,
+  type GraphEdge,
+  type GraphIndex,
+  type GraphNode,
+} from "./graph";
 import { isUnknown } from "./glossary";
 
 export type View = "network" | "services";
@@ -74,6 +81,8 @@ export interface RoutedEdge {
   label?: string;
   /** The fabric dropped this conversation (ACL log). */
   blocked?: boolean;
+  /** Every graph edge drawn by this line (parallel hand-offs share one). */
+  members: string[];
   mid: { x: number; y: number };
 }
 export interface Layout {
@@ -96,21 +105,35 @@ export interface LayoutOptions {
   expanded?: ReadonlySet<string>;
 }
 
-export const CARD_W = 216;
-export const GUTTER = 104;
+export const CARD_W = 196;
+/** Gutter holding server-port pills; other gutters are narrow. */
+export const GUTTER = 108;
+export const GUTTER_NARROW = 52;
 export const HEADER_H = 44;
-export const ROW_H = 34;
+export const ROW_H = 40;
 export const GROUP_PAD = 6;
 export const GROUP_GAP = 28;
 export const STACK_GAP = 56;
 export const TOP = 56;
-export const LEFT = 24;
+export const LEFT = 16;
 export const PILL_H = 18;
 const ARROW = 10;
-const COL_STEP = CARD_W + GUTTER;
 const CHANNEL_START = 8;
-const CHANNEL_STEP = 3;
-const CHANNEL_SLOTS = 7;
+const CHANNEL_STEP = 4;
+const CHANNEL_SLOTS = 6;
+
+/** Column x positions and gutter widths (gutter c sits right of column c). */
+interface Columns {
+  x: number[];
+  gutter: number[];
+}
+/** A conversation gets a port pill at its server end unless that is a Service frontend. */
+const pillTarget = (e: GraphEdge, frontDoors: ReadonlySet<string>) =>
+  e.relationship === "communicates_with" &&
+  !tunnelOf(e) &&
+  e.direction_basis !== "unknown" &&
+  e.server_port !== undefined &&
+  !frontDoors.has(e.target);
 
 interface Draft {
   id: string;
@@ -322,7 +345,7 @@ function draftGroups(graph: Graph, index: GraphIndex, view: View): Draft[] {
     if (n.kind === "service" || columnOf.has(n.id) || isFrontDoor(n)) continue;
     if (n.kind === "workload" && n.namespace === ns) continue;
     const convs = conversations(index, n.id);
-    const app = convs.filter((e) => !e.encapsulation);
+    const app = convs.filter((e) => !tunnelOf(e));
     if (n.endpoint_kind === "k8s_node" && convs.length === 0) {
       place(
         n,
@@ -450,6 +473,31 @@ export function computeLayout(
   for (const d of drafts) byColumn[d.column].push(d);
   for (const col of byColumn) col.sort((a, b) => a.sort.localeCompare(b.sort));
 
+  // Gutters are wide only where a server-port pill sits.
+  const colOf = new Map<string, number>();
+  for (const d of drafts) {
+    if (d.header) colOf.set(d.header.id, d.column);
+    for (const r of d.rows) colOf.set(r.id, d.column);
+  }
+  const frontDoorIds = new Set(
+    graph.nodes
+      .filter((n) => n.endpoint_kind === "k8s_service")
+      .map((n) => n.id),
+  );
+  const wide = new Set<number>();
+  for (const e of graph.edges) {
+    const a = colOf.get(e.source),
+      b = colOf.get(e.target);
+    if (a === undefined || b === undefined || a === b) continue;
+    if (pillTarget(e, frontDoorIds)) wide.add(b > a ? b - 1 : b);
+  }
+  const cols: Columns = { x: [], gutter: [] };
+  for (let c = 0, x = LEFT; c < columns; c++) {
+    cols.x.push(x);
+    cols.gutter.push(wide.has(c) ? GUTTER : GUTTER_NARROW);
+    x += CARD_W + cols.gutter[c];
+  }
+
   // Barycenter ordering of groups; stacked infrastructure stays below.
   const memberOf = new Map<string, Draft>();
   for (const d of drafts) {
@@ -511,7 +559,7 @@ export function computeLayout(
   const topLane: LaneKind[] = [];
   byColumn.forEach((col, c) => {
     let y = TOP + (tallest - heights[c]) / 2;
-    const x = LEFT + c * COL_STEP;
+    const x = cols.x[c];
     let prev: Draft | undefined;
     topLane[c] = col.find((d) => !d.stacked)?.lane ?? "infrastructure";
     for (const d of col) {
@@ -601,7 +649,7 @@ export function computeLayout(
   });
   const top: LaneLabel[] = [];
   for (let c = 0; c < columns; c++) {
-    const x = LEFT + c * COL_STEP;
+    const x = cols.x[c];
     const last = top.at(-1);
     if (last && last.kind === topLane[c]) last.width = x + CARD_W - last.x;
     else
@@ -617,8 +665,17 @@ export function computeLayout(
 
   const height = TOP + tallest + 40;
   // Trailing room for same-column loops and their labels (e.g. VXLAN · 8472/udp).
-  const width = LEFT + Math.max(1, columns) * COL_STEP + 20;
-  const { edges, pills } = routeEdges(graph, view, items, groups, columns);
+  const last = Math.max(0, columns - 1);
+  const width = cols.x[last] + CARD_W + 20;
+  const { edges, pills } = routeEdges(
+    graph,
+    view,
+    items,
+    groups,
+    columns,
+    cols,
+    frontDoorIds,
+  );
   return {
     width,
     height,
@@ -662,7 +719,16 @@ export const pillWidth = (label: string) =>
     label.length * 6.2 + 14,
   );
 
+const parallelEdge = (
+  parallel: Map<string, GraphEdge[]>,
+  e: GraphEdge,
+  id: string,
+) => parallel.get(`${e.source}|${e.target}`)!.find((g) => g.id === id)!;
+
 interface Plan {
+  members: string[];
+  /** Draw the label just before the target instead of mid-route. */
+  nearTarget?: boolean;
   edge: GraphEdge;
   s: Item;
   t: Item;
@@ -682,10 +748,30 @@ function routeEdges(
   items: Map<string, Item>,
   groups: Group[],
   columns: number,
+  cols: Columns,
+  frontDoors: ReadonlySet<string>,
 ): { edges: RoutedEdge[]; pills: Pill[] } {
   const plans: Plan[] = [];
   const sorted = [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
-  for (const e of sorted) {
+  // Hand-offs from one Service to one pod are drawn as a single line.
+  const parallel = new Map<string, GraphEdge[]>();
+  for (const e of sorted)
+    if (e.relationship === "forwards_to") {
+      const k = `${e.source}|${e.target}`;
+      parallel.set(k, [...(parallel.get(k) ?? []), e]);
+    }
+  const drawn = new Set<string>();
+  for (const raw of sorted) {
+    let e = raw;
+    let members = [raw.id];
+    if (raw.relationship === "forwards_to") {
+      const k = `${raw.source}|${raw.target}`;
+      if (drawn.has(k)) continue;
+      drawn.add(k);
+      const group = parallel.get(k)!;
+      e = group.find((g) => g.confidence === "observed") ?? group[0];
+      members = group.map((g) => g.id);
+    }
     if (e.relationship === "runs_on") continue;
     if (view === "services" && e.relationship !== "calls") continue;
     const s = items.get(e.source),
@@ -697,12 +783,27 @@ function routeEdges(
       e.server_port !== undefined
         ? `${e.server_port}/${e.transport ?? "?"}`
         : undefined;
-    const plan: Plan = { edge: e, s, t, directed };
-    if (e.relationship === "forwards_to" && e.confidence === "inferred")
+    const plan: Plan = { edge: e, s, t, directed, members };
+    if (members.length > 1) {
+      const group = members.map((id) => parallelEdge(parallel, e, id));
+      const inferred = group.filter((g) => g.confidence === "inferred").length;
+      // Short badge at the target; the inspector lists every hand-off.
+      plan.label =
+        inferred === members.length
+          ? `${members.length} inferred`
+          : inferred
+            ? `+${inferred} inferred`
+            : `${members.length} observed`;
+      plan.nearTarget = true;
+    } else if (
+      e.relationship === "forwards_to" &&
+      e.confidence === "inferred"
+    ) {
       plan.label = "inferred";
-    else if (e.encapsulation)
-      plan.label = `${e.encapsulation.toUpperCase()}${port ? ` · ${port}` : ""}`;
-    else if (conv && directed && port) {
+      plan.nearTarget = true;
+    } else if (tunnelOf(e))
+      plan.label = `${tunnelLabel(tunnelOf(e)!)}${port ? ` · ${port}` : ""}`;
+    else if (conv && directed && port && pillTarget(e, frontDoors)) {
       if (s.column !== t.column)
         plan.pillKey = `${t.nodeId}|${t.column > s.column ? "left" : "right"}|${port}`;
       else plan.label = port;
@@ -727,8 +828,14 @@ function routeEdges(
   const pillMembers = new Map<string, Plan[]>();
   for (const p of plans) {
     const sameCol = p.s.column === p.t.column;
-    const sSide = sameCol || p.s.column < p.t.column ? "right" : "left";
-    const tSide = sameCol ? "right" : sSide === "right" ? "left" : "right";
+    // A loop in the last column turns left, into the gutter, to stay in view.
+    const loopSide = p.s.column === columns - 1 ? "left" : "right";
+    const sSide = sameCol
+      ? loopSide
+      : p.s.column < p.t.column
+        ? "right"
+        : "left";
+    const tSide = sameCol ? loopSide : sSide === "right" ? "left" : "right";
     request(p.s, sSide, `edge:${p.edge.id}`, cy(p.t));
     if (p.pillKey) {
       pillMembers.set(p.pillKey, [...(pillMembers.get(p.pillKey) ?? []), p]);
@@ -835,10 +942,11 @@ function routeEdges(
   };
   // Channel x inside a gutter: near the client side, away from pills.
   const channel = (gutter: number, fromRight: boolean) => {
-    const left = LEFT + gutter * COL_STEP + CARD_W;
+    const left = cols.x[gutter] + CARD_W;
+    const width = cols.gutter[gutter];
     const k = slot(`${gutter}|${fromRight}`);
     return fromRight
-      ? left + GUTTER - CHANNEL_START - k * CHANNEL_STEP
+      ? left + width - CHANNEL_START - k * CHANNEL_STEP
       : left + CHANNEL_START + k * CHANNEL_STEP;
   };
 
@@ -854,8 +962,9 @@ function routeEdges(
     const { s, t, edge } = p;
     const sameCol = s.column === t.column;
     const rightward = sameCol || s.column < t.column;
-    const sSide = rightward ? "right" : "left";
-    const tSide = sameCol ? "right" : rightward ? "left" : "right";
+    const loopSide = s.column === columns - 1 ? "left" : "right";
+    const sSide = sameCol ? loopSide : rightward ? "right" : "left";
+    const tSide = sameCol ? loopSide : rightward ? "left" : "right";
     const sx = sSide === "right" ? s.x + s.w : s.x;
     const sy = at(s, sSide, `edge:${edge.id}`);
     let tx: number, ty: number;
@@ -870,14 +979,18 @@ function routeEdges(
     let pts: [number, number][];
     let mid: { x: number; y: number };
     if (sameCol) {
-      const gx = s.x + s.w + 14 + slot(`loop|${s.column}`) * 4;
+      const k = slot(`loop|${s.column}`) * 4;
+      const left = loopSide === "left";
+      const gx = left ? s.x - 14 - k : s.x + s.w + 14 + k;
       pts = [
         [sx, sy],
         [gx, sy],
         [gx, ty],
         [tx, ty],
       ];
-      mid = { x: gx, y: (sy + ty) / 2 };
+      const w = p.label ? p.label.length * 6.2 + 14 : 0;
+      // Labels sit outside the loop: right of it, or left when it turns left.
+      mid = { x: left ? gx - w - 12 : gx, y: (sy + ty) / 2 };
     } else {
       const lo = Math.min(s.column, t.column),
         hi = Math.max(s.column, t.column);
@@ -923,6 +1036,10 @@ function routeEdges(
         mid = { x: (g1 + g2) / 2, y: track };
       }
     }
+    if (p.nearTarget && p.label) {
+      const w = p.label.length * 6.2 + 14;
+      mid = { x: tx - ARROW - w - 8, y: ty - 12 };
+    }
     edges.push({
       id: edge.id,
       edge,
@@ -933,6 +1050,7 @@ function routeEdges(
       pill: p.pillKey,
       label: p.label,
       blocked: edge.acl_action === "drop" || undefined,
+      members: p.members,
       mid,
     });
   }

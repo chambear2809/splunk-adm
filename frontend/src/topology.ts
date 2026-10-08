@@ -5,6 +5,7 @@ import {
   contractSummary,
   endpointKindLabel,
   handoffExplanation,
+  receivedOn,
   sourceLabel,
 } from "./glossary";
 import { count, many, one, type Row } from "./rows";
@@ -295,9 +296,10 @@ export interface DeviceObservation {
 export function observationsByDevice(
   edge: GraphEdge,
   topo: TopologyIndex,
+  extra: string[] = [],
 ): DeviceObservation[] {
   const groups = new Map<string, DeviceObservation>();
-  for (const o of edgeObservers(edge))
+  for (const o of new Set([...edgeObservers(edge), ...extra]))
     for (const p of parseObserver(o, topo)) {
       const g = groups.get(p.key) ?? {
         key: p.key,
@@ -339,6 +341,11 @@ export interface CandidatePath {
   stages: Stage[];
   unplaced: DeviceObservation[];
   sameHost: boolean;
+  /** Explanations of the path, e.g. DSR return traffic. */
+  notes: string[];
+  /** Backends of a Service frontend, for choosing which leg to show. */
+  backends: { id: string; label: string; state: "observed" | "inferred" }[];
+  backend?: string;
   /** Contract intent and ACL-log observation, in display order. */
   policy: {
     text: string;
@@ -425,6 +432,25 @@ function attachment(
     return {
       stages: [entity, host],
       host: key(hostName),
+      device: at.device,
+      port: at.port,
+    };
+  }
+  if (node.endpoint_kind === "k8s_node_proxy" && attrs.node) {
+    // Cilium Envoy runs on its node; it attaches to the fabric through it.
+    const hostNode = findHost(graph, index, node.cluster, attrs.node);
+    const at = hostAttachment(attrs.node, hostNode, topo);
+    return {
+      stages: [
+        { ...entity, subtitle: `Cilium Envoy · ${node.addresses?.[0] ?? ""}` },
+        stage({
+          kind: "host",
+          title: attrs.node,
+          subtitle: "Kubernetes node",
+          nodeId: hostNode?.id,
+        }),
+      ],
+      host: key(attrs.node),
       device: at.device,
       port: at.port,
     };
@@ -581,6 +607,39 @@ function fabricSegment(
   return [gap("No attachment data for either side")];
 }
 
+/**
+ * Several nodes received a frontend's traffic: one stage naming all of them.
+ * Their shared leaf is kept only when every candidate attaches to it.
+ */
+function candidateNodes(
+  names: string[],
+  graph: Graph,
+  index: GraphIndex,
+  cluster: string | undefined,
+  topo: TopologyIndex,
+): Attachment {
+  const at = names.map((n) =>
+    hostAttachment(n, findHost(graph, index, cluster, n), topo),
+  );
+  const leaves = new Set(at.map((x) => x.device && key(x.device)));
+  const shared = leaves.size === 1 && at[0].device ? at[0] : undefined;
+  return {
+    stages: [
+      stage({
+        kind: "host",
+        title: `One of ${names.length} nodes`,
+        subtitle: `${names.join(", ")} · received the traffic`,
+        alternatives: names,
+      }),
+    ],
+    device: shared?.device,
+    port:
+      shared && new Set(at.map((x) => x.port)).size === 1
+        ? shared.port
+        : undefined,
+  };
+}
+
 /** Clients that reached a Service frontend, by address. */
 function frontendClients(index: GraphIndex, serviceId: string): string[] {
   const out: string[] = [];
@@ -600,7 +659,15 @@ function serviceLeg(
   graph: Graph,
   index: GraphIndex,
   topo: TopologyIndex,
-): { recv: Attachment; stages: Stage[] } {
+  backendId?: string,
+): {
+  recv: Attachment;
+  stages: Stage[];
+  notes: string[];
+  choices: BackendChoice[];
+  backend?: string;
+  observers: string[];
+} {
   const a = service.attributes ?? {};
   const forwards = (index.outgoing.get(service.id) ?? []).filter(
     (e) => e.relationship === "forwards_to",
@@ -608,25 +675,35 @@ function serviceLeg(
   const observedHost = (edge.observers ?? [])
     .map((o) => /^(?:hubble|isovalent):(.+)$/.exec(o)?.[1])
     .find(Boolean);
-  const recvName =
-    edge.via_node ?? forwards.find((f) => f.via_node)?.via_node ?? observedHost;
+  const recvNames = [
+    ...new Set(
+      edge.via_node ??
+        forwards.find((f) => f.via_node?.length)?.via_node ??
+        (observedHost ? [observedHost] : []),
+    ),
+  ];
+  // One receiving node is a fact; several are a set of candidates.
+  const recvName = recvNames.length === 1 ? recvNames[0] : undefined;
   const recvNode = recvName
     ? findHost(graph, index, service.cluster, recvName)
     : undefined;
-  const recv: Attachment = recvName
-    ? {
-        stages: [
-          stage({
-            kind: "host",
-            title: recvName,
-            subtitle: "Kubernetes node · received the traffic",
-            nodeId: recvNode?.id,
-          }),
-        ],
-        host: key(recvName),
-        ...hostAttachment(recvName, recvNode, topo),
-      }
-    : { stages: [gap("Receiving node unknown")] };
+  const recv: Attachment =
+    recvNames.length > 1
+      ? candidateNodes(recvNames, graph, index, service.cluster, topo)
+      : recvName
+        ? {
+            stages: [
+              stage({
+                kind: "host",
+                title: recvName,
+                subtitle: "Kubernetes node · received the traffic",
+                nodeId: recvNode?.id,
+              }),
+            ],
+            host: key(recvName),
+            ...hostAttachment(recvName, recvNode, topo),
+          }
+        : { stages: [gap("Receiving node unknown")] };
 
   const proxy = graph.nodes.find(
     (n) =>
@@ -657,38 +734,52 @@ function serviceLeg(
   ]
     .filter(Boolean)
     .join(" · ");
-  const chosen =
-    forwards.length === 1
-      ? forwards[0]
-      : (forwards.find((f) => f.confidence === "observed") ?? forwards[0]);
+  const choices = backendChoices(index, service.id);
+  const choice = choices.find((c) => c.id === backendId) ?? choices[0];
   const ctx = {
     service: a.service ?? service.label,
     clients: frontendClients(index, service.id),
-    node: recvName,
+    node: receivedOn(recvNames),
   };
   const handoffStage = stage({
     kind: "handoff",
     title,
     subtitle,
     nodeId: service.id,
-    handoff: chosen
-      ? {
-          state: chosen.confidence === "inferred" ? "inferred" : "observed",
-          text: handoffExplanation(chosen.handoff_basis!, ctx),
-        }
+    handoff: choice
+      ? { state: choice.state, text: choiceExplanation(choice, ctx) }
       : {
           state: "undetermined",
           text: `Backend not determined (${a.candidates ?? "unknown number of"} candidates)`,
         },
   });
   const stages: Stage[] = [handoffStage];
-  if (!chosen) return { recv, stages };
-  const pod = index.node.get(chosen.target);
+  const notes: string[] = [];
+  const observers: string[] = [];
+  const leg = { recv, stages, notes, choices, backend: choice?.id, observers };
+  if (!choice) return leg;
+  const pod = index.node.get(choice.id);
   const backend = attachment(pod, graph, index, topo);
-  if (forwards.length > 1)
+  for (const f of choice.edges) observers.push(...edgeObservers(f));
+  // The connection from the receiving node (or its Envoy) to the backend,
+  // including Cilium DSR's IPIP leg between the two nodes.
+  const fromIds = new Set(
+    [recvNode?.id, proxy?.id].filter((x): x is string => !!x),
+  );
+  const toIds = new Set(
+    [choice.id, backend.stages[1]?.nodeId].filter((x): x is string => !!x),
+  );
+  for (const e of graph.edges)
+    if (
+      e.relationship === "communicates_with" &&
+      fromIds.has(e.source) &&
+      toIds.has(e.target)
+    )
+      observers.push(...edgeObservers(e));
+  if (choices.length > 1)
     backend.stages[0] = {
       ...backend.stages[0],
-      subtitle: `${backend.stages[0].subtitle} · 1 of ${forwards.length} backends`,
+      subtitle: `${backend.stages[0].subtitle} · 1 of ${choices.length} backends`,
     };
   if (backend.host && backend.host === recv.host) {
     // Served by a pod on the receiving node: no second fabric crossing.
@@ -701,8 +792,60 @@ function serviceLeg(
       }),
       ...[...backend.stages].reverse(),
     );
+    const backendHost = backend.stages[1]?.title;
+    if (a.lb_mode === "dsr" && !controller && recvName && backendHost)
+      notes.push(
+        `Cilium DSR: ${recvName} forwards to ${backendHost} over IPIP; replies leave ${backendHost} directly with the VIP as source, so return traffic appears at a different leaf.`,
+      );
   }
-  return { recv, stages };
+  return leg;
+}
+
+/** One backend pod chosen for a Service, with every hand-off edge to it. */
+export interface BackendChoice {
+  id: string;
+  label: string;
+  edges: GraphEdge[];
+  state: "observed" | "inferred";
+}
+/** Backends of a Service frontend: observed first, then by name. */
+export function backendChoices(
+  index: GraphIndex,
+  serviceId: string,
+): BackendChoice[] {
+  const by = new Map<string, BackendChoice>();
+  for (const f of index.outgoing.get(serviceId) ?? []) {
+    if (f.relationship !== "forwards_to") continue;
+    const c = by.get(f.target) ?? {
+      id: f.target,
+      label: index.node.get(f.target)?.label ?? f.target,
+      edges: [],
+      state: "inferred" as const,
+    };
+    c.edges.push(f);
+    if (f.confidence === "observed") c.state = "observed";
+    by.set(f.target, c);
+  }
+  return [...by.values()].sort(
+    (x, y) =>
+      Number(x.state !== "observed") - Number(y.state !== "observed") ||
+      x.label.localeCompare(y.label),
+  );
+}
+/** Plain-language summary of a backend's hand-off evidence. */
+export function choiceExplanation(
+  choice: BackendChoice,
+  ctx: Parameters<typeof handoffExplanation>[1],
+): string {
+  const ordered = [...choice.edges].sort(
+    (x, y) =>
+      Number(x.confidence !== "observed") - Number(y.confidence !== "observed"),
+  );
+  const text = handoffExplanation(ordered[0].handoff_basis!, ctx);
+  const inferred = ordered.filter((e) => e.confidence === "inferred").length;
+  if (choice.state === "observed" && inferred)
+    return `${text}; ${inferred === 1 ? "1 more connection" : `${inferred} more connections`} inferred from timing`;
+  return text;
 }
 
 /**
@@ -718,14 +861,27 @@ export function buildPath(
   graph: Graph,
   index: GraphIndex,
   topo: TopologyIndex,
+  options: { backend?: string } = {},
 ): CandidatePath {
+  const notes: string[] = [];
+  const legObservers: string[] = [];
+  let backends: CandidatePath["backends"] = [];
+  let backend: string | undefined;
   const client = attachment(index.node.get(edge.source), graph, index, topo);
   const target = index.node.get(edge.target);
   const nameOf = (n?: GraphNode) => n?.label ?? "this endpoint";
   const stages: Stage[] = [...client.stages];
   let sameHost = false;
   if (target?.endpoint_kind === "k8s_service") {
-    const leg = serviceLeg(edge, target, graph, index, topo);
+    const leg = serviceLeg(edge, target, graph, index, topo, options.backend);
+    notes.push(...leg.notes);
+    backends = leg.choices.map((c) => ({
+      id: c.id,
+      label: c.label,
+      state: c.state,
+    }));
+    backend = leg.backend;
+    legObservers.push(...leg.observers);
     if (leg.recv.host && leg.recv.host === client.host) {
       stages.push(...leg.recv.stages.slice(client.stages.length ? 1 : 0));
     } else {
@@ -776,10 +932,19 @@ export function buildPath(
   }
   collapseGaps(stages);
 
+  // Behind a Service hand-off, the backend leg is marked from its own
+  // evidence: the hand-off edges and the upstream conversation.
+  const split = stages.findIndex((st) => st.kind === "handoff");
+  const legObservations = legObservers.flatMap((o) => parseObserver(o, topo));
   const placed = new Set<string>();
-  for (const s of stages) {
-    if (s.kind === "gap" || s.kind === "entity" || s.kind === "handoff")
-      continue;
+  stages.forEach((s, i) => {
+    if (s.kind === "gap" || s.kind === "entity" || s.kind === "handoff") return;
+    const pool =
+      split < 0
+        ? observations
+        : i < split
+          ? [...observations, ...recvObservations(legObservations, s)]
+          : legObservations;
     const titles = s.alternatives ?? [s.title];
     const keys = new Set<string>();
     for (const t of titles) {
@@ -790,7 +955,7 @@ export function buildPath(
         keys.add(key(d.name));
       }
     }
-    for (const o of observations) {
+    for (const o of pool) {
       if (!keys.has(o.key) && !keys.has(key(o.label))) continue;
       placed.add(o.key);
       const src = sourceLabel(o.source);
@@ -799,8 +964,8 @@ export function buildPath(
       if (ifs && !s.seenInterfaces.includes(ifs)) s.seenInterfaces.push(ifs);
     }
     s.observed = s.observedBy.length > 0;
-  }
-  const unplaced = observationsByDevice(edge, topo).filter(
+  });
+  const unplaced = observationsByDevice(edge, topo, legObservers).filter(
     (d) => !placed.has(d.key),
   );
   const aclLeaf = edge.acl_leaf
@@ -811,7 +976,12 @@ export function buildPath(
   if (contract)
     policy.push({
       text: contract,
-      tone: edge.contract_basis === "intent" ? "intent" : "neutral",
+      tone:
+        edge.contract_basis === "intent" || edge.contract_basis === "intra_epg"
+          ? "intent"
+          : edge.contract_basis === "none" && edge.contract
+            ? "blocked"
+            : "neutral",
     });
   const acl = aclSummary(edge, aclLeaf);
   if (acl)
@@ -819,7 +989,15 @@ export function buildPath(
       text: acl,
       tone: edge.acl_action === "drop" ? "blocked" : "observed",
     });
-  return { stages, unplaced, sameHost, policy };
+  return { stages, unplaced, sameHost, policy, notes, backends, backend };
+}
+
+/** The receiving node is marked seen by host sensors on the hand-off. */
+function recvObservations(
+  points: ObservationPoint[],
+  s: Stage,
+): ObservationPoint[] {
+  return s.kind === "host" ? points.filter((p) => p.role === "host") : [];
 }
 
 function dedupe(points: ObservationPoint[]) {

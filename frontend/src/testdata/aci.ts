@@ -38,6 +38,7 @@ export const ids = {
   nodeC: node("node-c"),
   win: "vm:prod/10.30.40.25",
   db: "vm:prod/10.20.30.40",
+  win2: "vm:prod/10.30.40.26",
   gateway: front("shop-gateway", "10.50.0.10:443"),
   ingressLb: front("cilium-ingress-shop", "10.50.0.20:443"),
   catalogLb: front("catalog-api", "10.50.0.30:8080"),
@@ -202,6 +203,19 @@ export const aciGraphRows: Row[] = [
     attr_attach_device: "pod-1/node-102",
     attr_attach_interface: "eth1/6",
     attr_vm_name: "orders-db-01",
+  }),
+  n({
+    id: ids.win2,
+    label: "win-client-02",
+    kind: "endpoint",
+    endpoint_kind: "vm",
+    addresses: "10.30.40.26",
+    attr_tenant: "shop",
+    attr_app_profile: "clients",
+    attr_epg: "win-clients",
+    attr_attach_device: "pod-1/node-103",
+    attr_attach_interface: "eth1/6",
+    attr_vm_name: "win-client-02",
   }),
   frontDoor(ids.gateway, "shop-gateway", "10.50.0.10:443", {
     type: "LoadBalancer",
@@ -526,6 +540,22 @@ export const aciGraphRows: Row[] = [
     contract_entry: "tcp 8080",
     contract_basis: "intent",
   }),
+  // Two VMs in one EPG: ACI permits intra-EPG traffic by default.
+  e({
+    id: "conv:win-win2",
+    source: ids.win,
+    target: ids.win2,
+    relationship: "communicates_with",
+    confidence: "correlated",
+    server_port: "3389",
+    transport: "tcp",
+    direction_basis: "port_rule",
+    bytes: "12000",
+    count: "1",
+    observers: ["netflow:192.0.2.103:ifIndex 436211712>"],
+    sources: ["netflow"],
+    contract_basis: "intra_epg",
+  }),
   // In-cluster to the database VM, and a blocked attempt from the VM.
   e({
     id: "conv:co-db",
@@ -573,6 +603,11 @@ export const aciGraphRows: Row[] = [
     ambiguous_conversations: "0",
     nodes: "20",
     edges: "23",
+    // Texts copied from adm_graph_output in macros.conf.
+    warnings: [
+      "3 summary rows listed only the first 50 connections; their hand-offs and connection counts are approximate.",
+      "2 fabric records showed a client talking straight to a backend pod while Hubble attributed the connection to a Service frontend; this is DSR forwarding with loadBalancer.dsrDispatch opt (or geneve), so the records were folded into the hand-off instead of being drawn as direct edges. Use dsrDispatch ipip to see the node-to-node leg.",
+    ],
   },
 ];
 

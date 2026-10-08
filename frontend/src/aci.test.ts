@@ -41,7 +41,7 @@ describe("v2 graph contract", () => {
     expect(fwd.find((e) => e.id === "fwd:catlb-a")).toMatchObject({
       confidence: "inferred",
       handoff_basis: "time_inferred",
-      via_node: "node-a",
+      via_node: ["node-a"],
     });
     const gw = g.edges.find((e) => e.id === "conv:win-gw")!;
     expect(gw).toMatchObject({
@@ -76,9 +76,9 @@ describe("v2 graph contract", () => {
       { contract: "x", contract_basis: "intent" },
     ],
     [
-      "a named contract that is not intent",
+      "a named contract that is neither intent nor deny",
       "conv:win-gw",
-      { contract_basis: "none" },
+      { contract_basis: "not_evaluated" },
     ],
     [
       "intent without a contract",
@@ -229,6 +229,19 @@ describe("candidate paths on one ACI fabric", () => {
     expect(p.stages.at(-1)!.subtitle).toBe("Pod · shop · 1 of 2 backends");
   });
 
+  it("keeps an intra-EPG conversation on its leaf with no contract", () => {
+    const p = path("conv:win-win2");
+    expect(p.stages.map(brief)).toEqual([
+      "entity:win-client-01",
+      "switch:leaf-103",
+      "entity:win-client-02",
+    ]);
+    expect(p.stages[1].ports).toEqual({ in: "Eth1/5", out: "Eth1/6" });
+    expect(p.policy).toEqual([
+      { text: "Same EPG (intra-EPG)", tone: "intent" },
+    ]);
+  });
+
   it("shows a blocked conversation with the enforcing leaf", () => {
     const p = path("conv:win-db");
     expect(p.policy).toEqual([
@@ -270,7 +283,7 @@ describe("plain-language policy and hand-off copy", () => {
     const g = graph();
     const edge = (id: string) => g.edges.find((e) => e.id === id)!;
     expect(contractSummary(edge("conv:win-catlb"))).toMatch(
-      /^Policy not fully evaluated/,
+      /^Policy not evaluated$/,
     );
     expect(contractSummary(edge("conv:envoy-fe"))).toBeUndefined();
     expect(aclSummary(edge("conv:co-db"))).toBeUndefined();
