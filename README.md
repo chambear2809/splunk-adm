@@ -66,3 +66,7 @@ Python 3.10+ is needed only for the fixture generator and the lab tests. The lab
 - [Stream and NetFlow research](docs/NETFLOW_DEPENDENCY_MAP_RESEARCH.md)
 - [Research package inventory](research/README.md)
 - [Contributor guidelines](AGENTS.md), [Operating model](docs/OPERATING_MODEL.md), [Security](docs/SECURITY.md)
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). The packaged Splunk app also includes `THIRD_PARTY_NOTICES.txt` with the licenses of the bundled frontend libraries (React, React DOM, scheduler, lucide-react).

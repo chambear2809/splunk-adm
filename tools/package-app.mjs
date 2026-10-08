@@ -48,6 +48,45 @@ await cp(app, stage, {
 });
 await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
+await copyFile("LICENSE", `${stage}/LICENSE`);
+await copyFile("NOTICE", `${stage}/NOTICE`);
+
+// The bundle embeds production dependencies; ship their license texts with it.
+// Type-only packages (no runtime entry point) never reach the bundle.
+const depDirs = execFileSync("npm", [
+  "ls",
+  "--omit=dev",
+  "--all",
+  "--parseable",
+])
+  .toString()
+  .trim()
+  .split("\n")
+  .slice(1);
+const notices = new Map();
+for (const dir of depDirs) {
+  const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
+  const files = await readdir(dir);
+  const runtime =
+    pkg.main || pkg.module || pkg.exports || files.includes("index.js");
+  if (notices.has(pkg.name) || !runtime) continue;
+  const licenseFile = files.find((f) => /^(licen[cs]e|copying)(\.|$)/i.test(f));
+  if (!licenseFile)
+    throw new Error(`${pkg.name} has no license file to include in notices`);
+  const text = await readFile(join(dir, licenseFile), "utf8");
+  notices.set(
+    pkg.name,
+    `${pkg.name} ${pkg.version} (${pkg.license})\n\n${text.trim()}\n`,
+  );
+}
+await writeFile(
+  `${stage}/THIRD_PARTY_NOTICES.txt`,
+  "Third-party software bundled in appserver/static/adm.bundle.js\n\n" +
+    [...notices.keys()]
+      .sort()
+      .map((name) => notices.get(name))
+      .join(`\n${"-".repeat(72)}\n\n`),
+);
 
 // Splunk Web caches appserver/static by build number; bump it on every package.
 const epoch = Number(process.env.SOURCE_DATE_EPOCH ?? Date.now() / 1000);

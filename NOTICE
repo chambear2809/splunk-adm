@@ -1,0 +1,7 @@
+Application Atlas (splunk_adm)
+Copyright 2026 Splunk ADM contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The packaged Splunk app bundles third-party software under its own licenses;
+their notices are included in THIRD_PARTY_NOTICES.txt inside the app package.

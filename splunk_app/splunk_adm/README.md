@@ -12,3 +12,5 @@ To set it up:
 4. Enable the `ADM - …` saved searches, which ship disabled.
 
 See `docs/DATA_LAYER.md` for the searches, lookups, field contracts and source prerequisites.
+
+Licensed under the Apache License, Version 2.0 (`LICENSE`, `NOTICE`). Bundled third-party licenses are in `THIRD_PARTY_NOTICES.txt`.
