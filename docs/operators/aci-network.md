@@ -19,14 +19,25 @@ Create one read-only local user on APIC (password or certificate; the add-on sup
 
 Enable these existing inputs (add-on **Inputs** page, or the equivalent `inputs.conf` keys) with your account and `index = cisco_dc`:
 
-| Input | Collects | Why |
-| --- | --- | --- |
-| `stats` | `fvCEp` with attachment paths | Endpoint IP, MAC, EPG and leaf port |
-| `classInfo_faultInst` | `topSystem`, `compVm`, `compHv`, `fvCEp`, `fvRsCons`, `fvRsProv`, `fvRsVm`, `fvRsHyper` | Switch names and roles, VM names, contract relations |
-| `health_fvTenant` | `fvTenant`, `fvAp`, `fvEPg`, `fvBD`, `vzFilter`, `vzEntry`, `vzBrCP`, `fvCtx`, `l3extOut`, `fabricNode` | Tenant/EPG names, contract filters, node roles |
-| `classInfo_fvRsCEpToPathEp` | `fvRsCEpToPathEp`, `acllogPermitL3Pkt`, `acllogDropL3Pkt` and others | Attachment paths, contract permit/drop logs |
+| Input                       | Collects                                                                                                | Why                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `stats`                     | `fvCEp` with attachment paths                                                                           | Endpoint IP, MAC, EPG and leaf port                  |
+| `classInfo_faultInst`       | `topSystem`, `compVm`, `compHv`, `fvCEp`, `fvRsCons`, `fvRsProv`, `fvRsVm`, `fvRsHyper`                 | Switch names and roles, VM names, contract relations |
+| `health_fvTenant`           | `fvTenant`, `fvAp`, `fvEPg`, `fvBD`, `vzFilter`, `vzEntry`, `vzBrCP`, `fvCtx`, `l3extOut`, `fabricNode` | Tenant/EPG names, contract filters, node roles       |
+| `classInfo_fvRsCEpToPathEp` | `fvRsCEpToPathEp`, `acllogPermitL3Pkt`, `acllogDropL3Pkt` and others                                    | Attachment paths, contract permit/drop logs          |
 
-Add one new `classInfo` input for fabric links, host LLDP neighbors and the contract objects. `vzBrCP` and `vzEntry` are repeated here because the default `health_fvTenant` input writes them merged with health records:
+Add one new `classInfo` input for fabric links, host LLDP neighbors and the contract objects. `vzBrCP` and `vzEntry` are repeated here because the default `health_fvTenant` input writes them merged with health records.
+
+The `cisco-dc-networking-setup` skill's `application-atlas` preset (alias `adm`) creates this input for you, named `classInfo_adm`:
+
+```sh
+cd vendor/splunk-cisco-skills
+bash skills/cisco-dc-networking-setup/scripts/setup.sh \
+  --classinfo-preset application-atlas --account "<your ACI account name>" --index "cisco_dc" --dry-run
+# review the rendered plan, then rerun without --dry-run
+```
+
+Or create it by hand:
 
 ```ini
 [cisco_nexus_aci://classInfo_adm]
@@ -40,7 +51,14 @@ disabled = 0
 
 ### Optional: complete policy evaluation
 
-With only the input above, the map names a permitting contract where one matches, and otherwise shows "Policy not evaluated". It never says "no contract permits this", because vzAny, taboos, preferred groups, ESGs and VRF enforcement can also permit or deny traffic. To let the map report "no permitting contract", also collect:
+With only the input above, the map names a permitting contract where one matches, and otherwise shows "Policy not evaluated". It never says "no contract permits this", because vzAny, taboos, preferred groups, ESGs and VRF enforcement can also permit or deny traffic. To let the map report "no permitting contract", also collect the `adm-policy` preset:
+
+```sh
+bash skills/cisco-dc-networking-setup/scripts/setup.sh \
+  --classinfo-preset adm-policy --account "<your ACI account name>" --index "cisco_dc" --dry-run
+```
+
+Or by hand:
 
 ```ini
 [cisco_nexus_aci://classInfo_adm_policy]
@@ -52,7 +70,7 @@ index = cisco_dc
 disabled = 0
 ```
 
-Then ask the Splunk team to set the app macro `adm_aci_policy_complete` to `1`. Only do this when every policy construct used in the VRF is covered by these classes.
+Then ask the Splunk team to set the app macro `adm_aci_policy_complete` to `1`. Only do this when every policy construct used in the VRF is covered by these classes. Check arrival per class with `bash skills/cisco-dc-networking-setup/scripts/validate.sh --classinfo-preset application-atlas --index cisco_dc` (and `adm-policy` for the second input).
 
 ## LLDP on host ports
 
@@ -62,12 +80,12 @@ Leaf ports facing Kubernetes nodes need an interface policy with LLDP receive en
 
 Configure a NetFlow v9 exporter toward the Splunk Stream receiver (address and UDP port from the Stream owner, see [network-stream.md](network-stream.md)):
 
-| Setting | Value |
-| --- | --- |
-| Exporter version | v9 |
-| Source IP type | `oob-mgmt-ip` (so each record names the leaf by its OOB address) |
-| Destination | Stream receiver IP and UDP port |
-| Record match keys | source/destination IPv4, source/destination port, protocol |
+| Setting              | Value                                                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Exporter version     | v9                                                                                                            |
+| Source IP type       | `oob-mgmt-ip` (so each record names the leaf by its OOB address)                                              |
+| Destination          | Stream receiver IP and UDP port                                                                               |
+| Record match keys    | source/destination IPv4, source/destination port, protocol                                                    |
 | Monitors attached to | the bridge domains of Kubernetes nodes, client VMs and server VMs, and the Kubernetes L3Out interface profile |
 
 Verify with your APIC release:
@@ -99,9 +117,9 @@ Every leaf OOB address should appear as an `exporter_ip`.
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-dc-networking-setup): DC Networking accounts and inputs for APIC, Nexus Dashboard and Nexus 9000, including `classInfo` inputs. It doesn't document a custom `apic_arguments` list, so add the `classInfo_adm` stanza above by hand.
+- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-dc-networking-setup): DC Networking accounts and the default inputs for APIC, Nexus Dashboard and Nexus 9000, plus the `application-atlas`/`adm` and `adm-policy` custom `classInfo` presets used above (`--classinfo-preset`), or any other class list with `--classinfo-input`/`--classinfo-classes`.
 - [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-product-setup): entry point that routes a Cisco product (ACI, Nexus 9000) to the right setup skill.
 - [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): the Stream forwarder's NetFlow receiver that your ACI NetFlow exporter targets (owned by the Stream team; see [network-stream.md](network-stream.md)).
 

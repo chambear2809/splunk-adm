@@ -17,3 +17,17 @@ max_depth = 1
 description = "Independent, read-only GPT-6.1 Sol review of implementation diffs for defects, regressions, security risks, and missing tests."
 config_file = "./agents/reviewer.toml"
 nickname_candidates = ["reviewer", "auditor"]
+
+# Operator setup skills (Splunk platform, Cisco DC Networking/ACI, Isovalent,
+# Stream, etc.) vendored at vendor/splunk-cisco-skills (pinned submodule). The
+# path is explicit because `git rev-parse --show-toplevel` from this repo
+# resolves to splunk-adm, not the submodule, where the runner expects to find
+# its own `shared/` and `.venv/`. See docs/operators/README.md.
+[mcp_servers.splunk-cisco-skills]
+command = "python3"
+args = ["-I", "./vendor/splunk-cisco-skills/agent/run-splunk-cisco-skills-mcp.py"]
+
+[mcp_servers.splunk-cisco-skills.env]
+SPLUNK_SKILLS_MCP_ENABLE_EXECUTION = "1"
+SPLUNK_SKILLS_MCP_ALLOW_GENERIC_EXECUTION = "0"
+SPLUNK_SKILLS_MCP_ALLOW_MUTATION = "0"

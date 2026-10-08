@@ -14,15 +14,15 @@
 1. In FMC, create an eStreamer client for the Splunk input host's IP and download its PKCS#12 certificate and password. Use the FMC menu for your version.
 2. In Cisco Security Cloud, add an **E-Streamer** input:
 
-| Field | Value |
-| --- | --- |
-| FMC host | `<fmc-host>` |
-| Port | `8302` |
-| PKCS certificate / password | from step 1 |
-| Event types | Connection (`connection_log`) |
-| Sourcetype | `cisco:sfw:estreamer` |
-| Index | `cisco_secure_fw` |
-| Interval | `600` (default) |
+| Field                       | Value                         |
+| --------------------------- | ----------------------------- |
+| FMC host                    | `<fmc-host>`                  |
+| Port                        | `8302`                        |
+| PKCS certificate / password | from step 1                   |
+| Event types                 | Connection (`connection_log`) |
+| Sourcetype                  | `cisco:sfw:estreamer`         |
+| Index                       | `cisco_secure_fw`             |
+| Interval                    | `600` (default)               |
 
 The equivalent `inputs.conf` keys are `fmc_host`, `fmc_port`, `event_types`, `sourcetype`, `index`, `estreamer_import_time_range`, `interval`. Certificate handling is done through the input form.
 
@@ -41,7 +41,7 @@ index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | head 5
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
 - [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): Cisco Security Cloud inputs, including the FTD eStreamer input, indexes and product flows.
 

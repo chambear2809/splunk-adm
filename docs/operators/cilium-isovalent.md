@@ -13,6 +13,42 @@
 
 Validated against Cilium 1.20.2. The Kubernetes team tails the file with the Splunk OTel Collector (see [kubernetes-platform.md](kubernetes-platform.md)).
 
+The `cisco-isovalent-platform-setup` skill renders this for you (OSS Cilium chart only; see below) from a `hubble_flow_export` spec block:
+
+```yaml
+# spec.yaml (skill input), not a Helm values file
+hubble_flow_export:
+  enabled: true
+  namespaces: ["<app-namespace>"]
+  allow_list: ['{"destination_ip":["<LoadBalancer pool CIDR>"]}']
+  field_mask:
+    - time
+    - verdict
+    - IP
+    - l4
+    - source
+    - destination
+    - Type
+    - node_name
+    - event_type
+    - traffic_direction
+    - trace_observation_point
+    - is_reply
+    - destination_service
+    - l7
+    - trace_context
+  file_max_size_mb: 10
+  file_max_backups: 5
+```
+
+```sh
+cd vendor/splunk-cisco-skills
+bash skills/cisco-isovalent-platform-setup/scripts/setup.sh --spec /path/to/spec.yaml --dry-run
+# review helm/cilium-values.yaml, then rerun without --dry-run to apply
+```
+
+This coordinates automatically with `splunk-observability-isovalent-integration`'s collector file tail (same file path, index `cilium_hubble`, sourcetype `cilium:hubble:flow`), which the Kubernetes team runs with the same tool. The equivalent raw Helm values, if you configure Cilium directly instead:
+
 ```yaml
 hubble:
   enabled: true
@@ -56,15 +92,15 @@ The default `bpf.monitorAggregation: medium` suppresses Hubble's pre-translation
 
 ## Load-balancing facts we need
 
-| Setting (Cilium Helm) | Why it matters |
-| --- | --- |
-| `kubeProxyReplacement` | Service translation happens in Cilium, so Service ClusterIPs never appear on the network |
-| `routingMode`, `autoDirectNodeRoutes`, `ipv4NativeRoutingCIDR` | Native routing makes pod IPs visible to the fabric; tunnel mode hides them inside node-to-node VXLAN/Geneve |
-| `loadBalancer.mode` (`snat`, `dsr`, `hybrid`) and `loadBalancer.algorithm` | SNAT hides the client IP from remote backends; DSR keeps it and returns traffic directly from the backend node |
-| `loadBalancer.dsrDispatch` | How DSR carries the service address (`opt`, `ipip`, `geneve`). Use `ipip` if DSR is used: the fabric then shows the receiving-node → backend-node hop as IPIP, which the map uses to tie the client to the backend. With `opt`, that hop is indistinguishable from a direct client → pod connection, and the map reports a warning instead of guessing. Per-Service DSR also needs `bpf.lbModeAnnotation: true`. |
-| `bgpControlPlane.enabled` and your BGP advertisements | Which nodes attract VIP traffic. With `externalTrafficPolicy: Local`, only nodes with a local backend advertise |
-| `l2announcements.enabled` | L2 announcements cannot be combined with `externalTrafficPolicy: Local` |
-| `ingressController.enabled`, `gatewayAPI.enabled` | Cilium's Envoy terminates client connections and opens new ones to backends from the node's ingress IP, and adds `X-Forwarded-For` |
+| Setting (Cilium Helm)                                                      | Why it matters                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kubeProxyReplacement`                                                     | Service translation happens in Cilium, so Service ClusterIPs never appear on the network                                                                                                                                                                                                                                                                                                                         |
+| `routingMode`, `autoDirectNodeRoutes`, `ipv4NativeRoutingCIDR`             | Native routing makes pod IPs visible to the fabric; tunnel mode hides them inside node-to-node VXLAN/Geneve                                                                                                                                                                                                                                                                                                      |
+| `loadBalancer.mode` (`snat`, `dsr`, `hybrid`) and `loadBalancer.algorithm` | SNAT hides the client IP from remote backends; DSR keeps it and returns traffic directly from the backend node                                                                                                                                                                                                                                                                                                   |
+| `loadBalancer.dsrDispatch`                                                 | How DSR carries the service address (`opt`, `ipip`, `geneve`). Use `ipip` if DSR is used: the fabric then shows the receiving-node → backend-node hop as IPIP, which the map uses to tie the client to the backend. With `opt`, that hop is indistinguishable from a direct client → pod connection, and the map reports a warning instead of guessing. Per-Service DSR also needs `bpf.lbModeAnnotation: true`. |
+| `bgpControlPlane.enabled` and your BGP advertisements                      | Which nodes attract VIP traffic. With `externalTrafficPolicy: Local`, only nodes with a local backend advertise                                                                                                                                                                                                                                                                                                  |
+| `l2announcements.enabled`                                                  | L2 announcements cannot be combined with `externalTrafficPolicy: Local`                                                                                                                                                                                                                                                                                                                                          |
+| `ingressController.enabled`, `gatewayAPI.enabled`                          | Cilium's Envoy terminates client connections and opens new ones to backends from the node's ingress IP, and adds `X-Forwarded-For`                                                                                                                                                                                                                                                                               |
 
 Also send the LB IPAM pools (`CiliumLoadBalancerIPPool`) and BGP advertisement objects in use.
 
@@ -88,12 +124,11 @@ index=cisco_isovalent sourcetype="cisco:isovalent:processConnect" | head 5
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-isovalent-platform-setup): install and validate Cilium, Tetragon and Hubble.
-- [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-isovalent-integration): ships Tetragon logs to Splunk Platform (collector file tail and HEC) and Hubble metrics to Splunk Observability Cloud.
+- [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-isovalent-platform-setup): install and validate Cilium, Tetragon and Hubble, including the `hubble_flow_export` spec block used above (OSS Cilium chart only; the Isovalent Enterprise chart's flow-export values aren't verified, so the skill fails closed if you point it there — use the raw Helm values in that case).
+- [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-isovalent-integration): ships Tetragon logs to Splunk Platform (collector file tail and HEC), tails the Hubble flow export file into `cilium_hubble` (coordinates automatically with the block above), and ships Hubble metrics to Splunk Observability Cloud.
 - [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): the Cisco Security Cloud Isovalent HEC input (configured by the Splunk team).
-- Gap: no skill configures Hubble **flow** export (`hubble.export.static`). Use the values in this handout; the collector side is in [kubernetes-platform.md](kubernetes-platform.md).
 
 ## What to send back
 

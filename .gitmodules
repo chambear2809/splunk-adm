@@ -1,0 +1,3 @@
+[submodule "vendor/splunk-cisco-skills"]
+	path = vendor/splunk-cisco-skills
+	url = https://github.com/chambear2809/splunk-cisco-skills.git

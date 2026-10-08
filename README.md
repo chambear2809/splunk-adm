@@ -15,9 +15,11 @@ For each application, the map shows:
 
 ## Quick start
 
-Requires Node 22.13+, 24.x or 26+ and npm.
+Requires Node 22.13+, 24.x or 26+ and npm. Clone with submodules so the vendored operator setup skills (`vendor/splunk-cisco-skills`, see [below](#operator-setup-skills)) are present:
 
 ```sh
+git clone --recurse-submodules <this repo>
+# or, if already cloned: git submodule update --init
 npm ci --registry=https://registry.npmjs.org --ignore-scripts
 npm run dev
 ```
@@ -37,23 +39,44 @@ Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It
 - `docs/`: pilot setup, data-layer contract, research and TA analysis.
 - `docs/operators/`: what each team must configure, and the Splunk setup guide.
 - `research/`: vendor package provenance. Downloaded archives and extracted files are git-ignored.
+- `vendor/splunk-cisco-skills/`: pinned submodule of operator setup automation (see below).
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Local demo |
-| `npm run lint` | ESLint, type checks and Prettier checks |
-| `npm run format` | Format frontend and build files |
-| `npm test` | Frontend unit tests (Vitest) |
-| `npm run build` | Build standalone preview and Splunk assets |
-| `npm run package` | Build, stage in `dist/stage/` and archive the Splunk app |
-| `python3 tools/gen_raw_fixtures.py [--scenario aci]` | Regenerate the NX-OS (default) or ACI synthetic events |
-| `tests/splunk/lab.sh up` / `install` / `purge` | Local Splunk lab lifecycle (Docker; see [PILOT.md](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab)) |
-| `ADM_LAB=1 python3 -m unittest discover -s tests/splunk` | Data-layer tests against the lab |
-| `ruff check tools tests` | Python lint (install Ruff separately) |
+| Command                                                  | Purpose                                                                                                  |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                                            | Local demo                                                                                               |
+| `npm run lint`                                           | ESLint, type checks and Prettier checks                                                                  |
+| `npm run format`                                         | Format frontend and build files                                                                          |
+| `npm test`                                               | Frontend unit tests (Vitest)                                                                             |
+| `npm run build`                                          | Build standalone preview and Splunk assets                                                               |
+| `npm run package`                                        | Build, stage in `dist/stage/` and archive the Splunk app                                                 |
+| `python3 tools/gen_raw_fixtures.py [--scenario aci]`     | Regenerate the NX-OS (default) or ACI synthetic events                                                   |
+| `tests/splunk/lab.sh up` / `install` / `purge`           | Local Splunk lab lifecycle (Docker; see [PILOT.md](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab)) |
+| `ADM_LAB=1 python3 -m unittest discover -s tests/splunk` | Data-layer tests against the lab                                                                         |
+| `ruff check tools tests`                                 | Python lint (install Ruff separately)                                                                    |
 
 Python 3.10+ is needed only for the fixture generator and the lab tests. The lab needs Docker. It pulls a Splunk image of about 2 GB and accepts the Splunk General Terms for a local development instance.
+
+## Operator setup skills
+
+What each team must configure to get data into Splunk ([docs/operators/](docs/operators/README.md)) can be automated with [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills), vendored here as a submodule pinned to a reviewed commit so a pilot always uses the version we validated. Each skill renders a plan for review, applies only the requested change, and validates it.
+
+Discoverable from:
+
+- **Claude Code** — project skills under `.claude/skills/<name>/`, or the `splunk-cisco-skills` MCP server (`.mcp.json`).
+- **Cursor** — project skills under `.cursor/skills/<name>/`, or its MCP server (`.cursor/mcp.json`).
+- **Codex** — the MCP server registered in `.codex/config.toml`, or run scripts directly from the submodule.
+
+The MCP server needs its own virtualenv once:
+
+```sh
+cd vendor/splunk-cisco-skills
+python3 -m venv .venv
+.venv/bin/pip install --index-url https://pypi.org/simple -r requirements-agent.txt
+```
+
+Mutating execution stays disabled in every committed registration (`SPLUNK_SKILLS_MCP_ALLOW_MUTATION=0`). See [AGENTS.md](AGENTS.md#operator-setup-skills) and the submodule's own `README.md`/`CLAUDE.md` for credential handling and script usage. To update the pin: `cd vendor/splunk-cisco-skills && git fetch && git checkout <reviewed commit>`, then commit the submodule bump here.
 
 ## Documentation
 

@@ -13,36 +13,36 @@
 
 ## Indexes
 
-| Index | Data | Notes |
-| --- | --- | --- |
-| `netflow` | Splunk Stream NetFlow from ACI leaves | Volume scales with flow count; see [network-stream.md](network-stream.md) |
-| `cisco_dc` | APIC and Nexus Dashboard objects, flows, endpoints | Polled every 5 minutes by default |
-| `cisco_secure_fw` | FTD connection events | Default index of the Security Cloud eStreamer input |
-| `cisco_isovalent` | Isovalent Runtime Security events | Default index of the Security Cloud Isovalent input |
-| `k8s` | Kubernetes objects from the OTel Collector | Container logs also land here unless routed elsewhere |
-| `otel_traces` | Application spans | |
-| `cilium_hubble` | Hubble flow logs | Usually the largest; keep retention short (7–14 days) |
-| `adm_summary` | Application Atlas conversation rollups | Written with the `stash` sourcetype, so it does not count against license |
+| Index             | Data                                               | Notes                                                                     |
+| ----------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `netflow`         | Splunk Stream NetFlow from ACI leaves              | Volume scales with flow count; see [network-stream.md](network-stream.md) |
+| `cisco_dc`        | APIC and Nexus Dashboard objects, flows, endpoints | Polled every 5 minutes by default                                         |
+| `cisco_secure_fw` | FTD connection events                              | Default index of the Security Cloud eStreamer input                       |
+| `cisco_isovalent` | Isovalent Runtime Security events                  | Default index of the Security Cloud Isovalent input                       |
+| `k8s`             | Kubernetes objects from the OTel Collector         | Container logs also land here unless routed elsewhere                     |
+| `otel_traces`     | Application spans                                  |                                                                           |
+| `cilium_hubble`   | Hubble flow logs                                   | Usually the largest; keep retention short (7–14 days)                     |
+| `adm_summary`     | Application Atlas conversation rollups             | Written with the `stash` sourcetype, so it does not count against license |
 
 ## HEC tokens
 
-| Token | Used by | Allowed indexes | Default sourcetype |
-| --- | --- | --- | --- |
-| `otel-k8s` | Splunk OTel Collector Helm chart (`/services/collector/event`) | `k8s`, `otel_traces`, `cilium_hubble` (plus any container-log index) | None; the collector sets each sourcetype |
-| `isovalent` | Isovalent Runtime Security export | `cisco_isovalent` | `cisco:isovalent` |
+| Token       | Used by                                                        | Allowed indexes                                                      | Default sourcetype                       |
+| ----------- | -------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
+| `otel-k8s`  | Splunk OTel Collector Helm chart (`/services/collector/event`) | `k8s`, `otel_traces`, `cilium_hubble` (plus any container-log index) | None; the collector sets each sourcetype |
+| `isovalent` | Isovalent Runtime Security export                              | `cisco_isovalent`                                                    | `cisco:isovalent`                        |
 
 The HEC token name becomes the event `source` (`http:<token name>`). Application Atlas uses that source to map Isovalent events to their cluster, so tell us the token name.
 
 ## Add-on placement
 
-| Package | Search head | Indexers / HEC receivers | Heavy forwarder (inputs) |
-| --- | --- | --- | --- |
-| Application Atlas (`splunk_adm`) | Yes | No | No |
-| Splunk Add-on for Stream Wire Data | Yes | Yes | No |
-| Splunk App for Stream | Yes (manages stream definitions) | No | No |
-| Splunk Add-on for Stream Forwarders | No | No | On the host that receives NetFlow (see [network-stream.md](network-stream.md)) |
-| Cisco Security Cloud | Yes | Yes (its Isovalent sourcetype rename runs at index time) | Yes, if the eStreamer input runs there |
-| Cisco DC Networking | Yes | Yes | Yes, where the APIC / Nexus Dashboard inputs run |
+| Package                             | Search head                      | Indexers / HEC receivers                                 | Heavy forwarder (inputs)                                                       |
+| ----------------------------------- | -------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Application Atlas (`splunk_adm`)    | Yes                              | No                                                       | No                                                                             |
+| Splunk Add-on for Stream Wire Data  | Yes                              | Yes                                                      | No                                                                             |
+| Splunk App for Stream               | Yes (manages stream definitions) | No                                                       | No                                                                             |
+| Splunk Add-on for Stream Forwarders | No                               | No                                                       | On the host that receives NetFlow (see [network-stream.md](network-stream.md)) |
+| Cisco Security Cloud                | Yes                              | Yes (its Isovalent sourcetype rename runs at index time) | Yes, if the eStreamer input runs there                                         |
+| Cisco DC Networking                 | Yes                              | Yes                                                      | Yes, where the APIC / Nexus Dashboard inputs run                               |
 
 Cisco Security Cloud inputs declare `python.required = 3.13`; DC Networking inputs declare `3.9`. Confirm the Splunk 10.6 Python runtime on the input tier satisfies both before enabling inputs.
 
@@ -65,7 +65,6 @@ adm_summary_index_name  adm_summary
 adm_index_hubble        index=cilium_hubble
 adm_hubble_sourcetypes  sourcetype="cilium:hubble:flow"
 ```
-
 
 ### Routing scope lookup
 
@@ -112,7 +111,7 @@ index=adm_summary source="adm:conversation" | stats count by sources
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
 - Step-by-step order of work with a skill for each step: [splunk-setup-guide.md](splunk-setup-guide.md).
 - [splunk-hec-service-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-hec-service-setup), [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install), [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup), [splunk-lookup-file-editing-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-lookup-file-editing-setup), [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-kvstore-admin-setup), [splunk-index-lifecycle-smartstore-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-index-lifecycle-smartstore-setup), [splunk-data-source-readiness-doctor](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-data-source-readiness-doctor).

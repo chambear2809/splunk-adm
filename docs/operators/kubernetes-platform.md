@@ -15,19 +15,19 @@
 Validated against chart 0.161.0. Keep your existing values; merge these in.
 
 ```yaml
-clusterName: <cluster-name>          # becomes k8s.cluster.name on every event
-environment: <environment>           # optional; becomes deployment.environment.name
+clusterName: <cluster-name> # becomes k8s.cluster.name on every event
+environment: <environment> # optional; becomes deployment.environment.name
 
 splunkPlatform:
   endpoint: https://<hec-host>:8088/services/collector/event
-  token: <HEC token "otel-k8s">      # or provide it as a Kubernetes secret
-  index: k8s                         # Kubernetes objects (and container logs, see below)
+  token: <HEC token "otel-k8s"> # or provide it as a Kubernetes secret
+  index: k8s # Kubernetes objects (and container logs, see below)
   tracesEnabled: true
   tracesIndex: otel_traces
-  sourcetype: otel:traces            # default sourcetype for traces; objects keep kube:object:<resource>
+  sourcetype: otel:traces # default sourcetype for traces; objects keep kube:object:<resource>
 
 clusterReceiver:
-  k8sObjects:                        # this list replaces the chart default
+  k8sObjects: # this list replaces the chart default
     - name: pods
       mode: watch
     - name: services
@@ -46,13 +46,13 @@ clusterReceiver:
       mode: watch
     - name: nodes
       mode: watch
-  config:                            # merged over the chart's receiver config
+  config: # merged over the chart's receiver config
     receivers:
       k8s_objects:
-        include_initial_state: true  # also send objects that already exist at start-up
+        include_initial_state: true # also send objects that already exist at start-up
 
 rbac:
-  customRules:                       # pods, services and nodes are already granted by the chart
+  customRules: # pods, services and nodes are already granted by the chart
     - apiGroups: ["discovery.k8s.io"]
       resources: ["endpointslices"]
       verbs: ["get", "list", "watch"]
@@ -112,7 +112,7 @@ Every node should appear as a `host` in the last search.
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
 - [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-otel-collector-setup): renders, preflights, applies and validates the Splunk OTel Collector Helm chart, including `splunkPlatform`, `tracesEnabled`, `clusterReceiver.k8sObjects` and `logsCollection.extraFileLogs`.
 - [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-k8s-auto-instrumentation-setup): zero-code instrumentation for application pods (used with the application teams).
