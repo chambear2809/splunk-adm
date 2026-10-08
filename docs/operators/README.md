@@ -24,13 +24,29 @@ Hubble flow log file on each node ──Splunk OTel Collector──► index cil
 
 | Team | Handout | What we need | Needed before |
 | --- | --- | --- | --- |
-| Splunk platform | [splunk-platform.md](splunk-platform.md) | Indexes, HEC tokens, add-on placement, app install and configuration, roles | Everything else (other teams send data here) |
+| Splunk platform | [splunk-platform.md](splunk-platform.md), step by step in [splunk-setup-guide.md](splunk-setup-guide.md) | Indexes, HEC tokens, add-on placement, app install and configuration, roles | Everything else (other teams send data here) |
 | ACI / network | [aci-network.md](aci-network.md) | Read-only APIC and Nexus Dashboard accounts, extra ACI object classes, LLDP, ACI NetFlow export, optional contract logging | Pilot start |
 | Splunk Stream / NetFlow | [network-stream.md](network-stream.md) | Stream forwarder with a NetFlow receiver, NetFlow stream enabled | ACI NetFlow export |
 | Kubernetes platform | [kubernetes-platform.md](kubernetes-platform.md) | Splunk OTel Collector Helm values, RBAC, Hubble file tail, LLDP on nodes | Pilot start |
 | Cilium / Isovalent | [cilium-isovalent.md](cilium-isovalent.md) | Hubble flow export, load-balancing facts, Isovalent HEC export, Enterprise export sample | Pilot start |
 | Firewall / security | [firewall-security.md](firewall-security.md) | FTD connection events via eStreamer, NAT sample | Only if traffic crosses the FTD |
 | Application owners | [application-teams.md](application-teams.md) | OpenTelemetry resource attributes, client spans, trace propagation through ingress | Pilot start |
+
+## Automation skills
+
+[splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) has skills that automate most of this setup. Each renders a plan for review, applies only the requested change and validates it, from Claude Code, Codex or Cursor, or by running its scripts directly. Its `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+| Team | Skills |
+| --- | --- |
+| Splunk platform | [splunk-hec-service-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-hec-service-setup), [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install), [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup), [splunk-lookup-file-editing-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-lookup-file-editing-setup), [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-kvstore-admin-setup), [splunk-data-source-readiness-doctor](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-data-source-readiness-doctor); full sequence in [splunk-setup-guide.md](splunk-setup-guide.md) |
+| ACI / network | [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-dc-networking-setup), [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-product-setup) |
+| Splunk Stream / NetFlow | [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup) |
+| Kubernetes platform | [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-otel-collector-setup) |
+| Cilium / Isovalent | [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-isovalent-platform-setup), [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-isovalent-integration), [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup) |
+| Firewall / security | [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup) |
+| Application owners | [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-k8s-auto-instrumentation-setup) |
+
+Not covered by any skill: the ACI `classInfo_adm` class list and Hubble flow export (`hubble.export.static`). Use the handout values for those.
 
 ## Send us back (one consolidated list)
 

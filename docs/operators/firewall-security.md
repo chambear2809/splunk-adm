@@ -39,6 +39,12 @@ index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | stats count by DeviceIP
 index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | head 5
 ```
 
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): Cisco Security Cloud inputs, including the FTD eStreamer input, indexes and product flows.
+
 ## What to send back
 
 - FMC and FTD versions; FTD device names and management IPs (the map uses them to name the firewall).

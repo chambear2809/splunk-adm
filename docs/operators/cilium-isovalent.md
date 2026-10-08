@@ -45,7 +45,8 @@ hubble:
       fileMaxBackups: 5
 ```
 
-- Add one `source_pod`/`destination_pod` pair per application namespace, plus each ingress controller's namespace.
+- Add one `source_pod`/`destination_pod` pair per application namespace. Cilium's Envoy (Ingress/Gateway) upstream connections and SNAT forwarding traces are kept by the `destination_pod` filter because their destination is an application pod.
+- The map needs, from these flows: backend arrivals (`TO_ENDPOINT`), SNAT forwarding traces (`TO_NETWORK` with `IP.source_xlated`), and L7 HTTP requests (`l7.http.headers` with `X-Forwarded-For`, and `trace_context`). Keep every field in the mask above.
 - `IP` includes `source_xlated`, which the map uses to follow SNAT.
 - `l7` carries HTTP headers. Ingress and Gateway attribution relies on `X-Forwarded-For`. Consider `hubble.redact` (`enabled`, `http.urlQuery`, `http.userInfo`) so query strings and credentials are not exported.
 
@@ -60,7 +61,7 @@ The default `bpf.monitorAggregation: medium` suppresses Hubble's pre-translation
 | `kubeProxyReplacement` | Service translation happens in Cilium, so Service ClusterIPs never appear on the network |
 | `routingMode`, `autoDirectNodeRoutes`, `ipv4NativeRoutingCIDR` | Native routing makes pod IPs visible to the fabric; tunnel mode hides them inside node-to-node VXLAN/Geneve |
 | `loadBalancer.mode` (`snat`, `dsr`, `hybrid`) and `loadBalancer.algorithm` | SNAT hides the client IP from remote backends; DSR keeps it and returns traffic directly from the backend node |
-| `loadBalancer.dsrDispatch` | How DSR carries the service address (`opt`, `ipip`, `geneve`) |
+| `loadBalancer.dsrDispatch` | How DSR carries the service address (`opt`, `ipip`, `geneve`). Use `ipip` if DSR is used: the fabric then shows the receiving-node → backend-node hop as IPIP, which the map uses to tie the client to the backend. With `opt`, that hop is indistinguishable from a direct client → pod connection, and the map reports a warning instead of guessing. Per-Service DSR also needs `bpf.lbModeAnnotation: true`. |
 | `bgpControlPlane.enabled` and your BGP advertisements | Which nodes attract VIP traffic. With `externalTrafficPolicy: Local`, only nodes with a local backend advertise |
 | `l2announcements.enabled` | L2 announcements cannot be combined with `externalTrafficPolicy: Local` |
 | `ingressController.enabled`, `gatewayAPI.enabled` | Cilium's Envoy terminates client connections and opens new ones to backends from the node's ingress IP, and adds `X-Forwarded-For` |
@@ -84,6 +85,15 @@ index=cilium_hubble sourcetype="cilium:hubble:flow" | spath path=flow.trace_obse
 index=cilium_hubble sourcetype="cilium:hubble:flow" "X-Forwarded-For" | spath path=flow.l7.http.headers{}.key output=header | search header="X-Forwarded-For" | head 5
 index=cisco_isovalent sourcetype="cisco:isovalent:processConnect" | head 5
 ```
+
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-isovalent-platform-setup): install and validate Cilium, Tetragon and Hubble.
+- [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-isovalent-integration): ships Tetragon logs to Splunk Platform (collector file tail and HEC) and Hubble metrics to Splunk Observability Cloud.
+- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): the Cisco Security Cloud Isovalent HEC input (configured by the Splunk team).
+- Gap: no skill configures Hubble **flow** export (`hubble.export.static`). Use the values in this handout; the collector side is in [kubernetes-platform.md](kubernetes-platform.md).
 
 ## What to send back
 

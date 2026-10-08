@@ -51,6 +51,12 @@ index=netflow sourcetype=stream:netflow | table _time timestamp endtime exporter
 
 Every leaf OOB address should appear as an `exporter_ip`, and `timestamp` should be earlier than or equal to `endtime`.
 
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): Splunk Stream, stream forwarder (`streamfwd`) and the NetFlow/IPFIX receiver (`netflowReceiver`).
+
 ## What to send back
 
 - Splunk Stream and forwarder versions, the receiver IP and port.

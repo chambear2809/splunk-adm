@@ -59,6 +59,13 @@ index=otel_traces sourcetype="otel:traces" "SPAN_KIND_CLIENT" | spath | search k
 
 Each service should appear with its environment and namespace, and client spans should show the three peer attributes.
 
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-k8s-auto-instrumentation-setup): zero-code instrumentation for Java, Node.js, Python, .NET, Go and Apache workloads in Kubernetes.
+- [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-otel-collector-setup): the collector your spans are sent to (operated by the Kubernetes platform team).
+
 ## What to send back
 
 - Service list per namespace: entry services, ports, protocols, and dependencies outside the cluster (databases, APIs, VMs).

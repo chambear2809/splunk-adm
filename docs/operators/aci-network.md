@@ -38,6 +38,22 @@ index = cisco_dc
 disabled = 0
 ```
 
+### Optional: complete policy evaluation
+
+With only the input above, the map names a permitting contract where one matches, and otherwise shows "Policy not evaluated". It never says "no contract permits this", because vzAny, taboos, preferred groups, ESGs and VRF enforcement can also permit or deny traffic. To let the map report "no permitting contract", also collect:
+
+```ini
+[cisco_nexus_aci://classInfo_adm_policy]
+apic_account = <your ACI account name>
+apic_input_type = classInfo
+apic_arguments = fvCtx fvAEPg fvEPg fvESg vzAny vzRsAnyToCons vzRsAnyToProv vzRsAnyToConsIf vzInTerm vzOutTerm vzTaboo fvRsProtBy vzRsSubjGraphAtt
+interval = 300
+index = cisco_dc
+disabled = 0
+```
+
+Then ask the Splunk team to set the app macro `adm_aci_policy_complete` to `1`. Only do this when every policy construct used in the VRF is covered by these classes.
+
 ## LLDP on host ports
 
 Leaf ports facing Kubernetes nodes need an interface policy with LLDP receive enabled. The Kubernetes team runs an LLDP agent on each node that advertises the Kubernetes node name as its system name. This is how the map attaches nodes to leaf ports when nodes sit behind a floating-SVI L3Out, where their IPs are not ACI endpoints.
@@ -58,7 +74,7 @@ Verify with your APIC release:
 
 - the exact GUI path and field names;
 - leaf hardware support;
-- whether NetFlow and Nexus Dashboard flow telemetry can run on the same leaf, or the fabric node control policy forces you to pick one per leaf. If you must choose, tell us which leaves use which.
+- whether NetFlow and Nexus Dashboard flow telemetry can run on the same leaf, or the fabric node control policy forces you to pick one per leaf. If you must choose, tell us which leaves use which. The map works with either source alone. Without NetFlow on the leaf that receives LoadBalancer traffic, the map can't tell which node received a DSR connection.
 
 ACI NetFlow records carry the ingress interface only, not egress or VRF.
 
@@ -81,6 +97,14 @@ index=netflow sourcetype=stream:netflow | stats count by exporter_ip
 
 Every leaf OOB address should appear as an `exporter_ip`.
 
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-dc-networking-setup): DC Networking accounts and inputs for APIC, Nexus Dashboard and Nexus 9000, including `classInfo` inputs. It doesn't document a custom `apic_arguments` list, so add the `classInfo_adm` stanza above by hand.
+- [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-product-setup): entry point that routes a Cisco product (ACI, Nexus 9000) to the right setup skill.
+- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): the Stream forwarder's NetFlow receiver that your ACI NetFlow exporter targets (owned by the Stream team; see [network-stream.md](network-stream.md)).
+
 ## What to send back
 
 - APIC and Nexus Dashboard versions; leaf and spine models.
@@ -92,7 +116,7 @@ Every leaf OOB address should appear as an `exporter_ip`.
 ## Open questions
 
 - Are Kubernetes nodes in an EPG/bridge domain, behind a floating-SVI L3Out, or both?
-- Is vzAny, a preferred group, ESGs or a service graph (PBR) used in the application VRF? The map labels policy as "not fully evaluated" there.
+- Is vzAny, a preferred group, ESGs, a service graph (PBR), an unenforced VRF, or contracts with source-port or TCP-flag (`est`) filters used in the application VRF? The map doesn't evaluate those. Where they could apply, or where policy for an address isn't collected, it shows "Policy not evaluated" instead of naming a contract, so tell us which apply.
 - Which leaves run NetFlow vs Nexus Dashboard flow telemetry?
 
 ## Sources

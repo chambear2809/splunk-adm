@@ -62,9 +62,10 @@ adm_index_traces        index=otel_traces
 adm_traces_sourcetype   sourcetype="otel:traces"
 adm_index_summary       index=adm_summary
 adm_summary_index_name  adm_summary
+adm_index_hubble        index=cilium_hubble
+adm_hubble_sourcetypes  sourcetype="cilium:hubble:flow"
 ```
 
-The Hubble index and sourcetype macros arrive with the access-path release; use `cilium_hubble` and `cilium:hubble:flow` so no change is needed later.
 
 ### Routing scope lookup
 
@@ -82,11 +83,13 @@ cluster,<Kubernetes cluster name>,shop-prod,<Kubernetes cluster name>
 hec_source,http:isovalent,shop-prod,<Kubernetes cluster name>
 ```
 
-Unmapped observers fall into scope `default`.
+Unmapped observers fall into scope `default`. The `cluster` row is required: it also scopes Hubble flows and Service frontends (LoadBalancer IPs, NodePorts). The `apic` row also scopes ACI ACL-log records. The cluster, the ACI NetFlow exporters, Nexus Dashboard and the APIC must share one scope, or the map can't link a client's fabric conversation to the backend pod Hubble saw.
+
+Leave `adm_aci_policy_complete` at `0` unless the ACI team collects the optional policy classes in [aci-network.md](aci-network.md#optional-complete-policy-evaluation). With `0`, conversations without a matching permit show "Policy not evaluated" rather than "no permitting contract".
 
 ### Saved searches
 
-Enable after the macros and lookup are set (they ship disabled): **ADM - Identity builder**, **ADM - Service binding**, **ADM - Interface inventory**, **ADM - Conversation rollup**, **ADM - Identity prune**, **ADM - Service binding prune**. They run as their owner, so the owner needs read access to all source indexes and write access to `adm_summary`. Do not run a manual identity backfill while the scheduled builder runs; both write the same KV store collections.
+Enable after the macros and lookup are set (they ship disabled): **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**, **ADM - Identity prune**, **ADM - Service binding prune**, **ADM - Service backends prune**, **ADM - Service routes prune** and **ADM - ACI policy prune**. They run as their owner, so the owner needs read access to all source indexes and write access to `adm_summary`. Do not run a manual identity backfill while the scheduled builder runs; both write the same KV store collections.
 
 ## Roles and KV store
 
@@ -106,6 +109,13 @@ After the saved searches have run for 15 minutes:
 index=adm_summary source="adm:conversation" | stats count by sources
 | inputlookup adm_ip_identity | stats count by source, entity_kind
 ```
+
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- Step-by-step order of work with a skill for each step: [splunk-setup-guide.md](splunk-setup-guide.md).
+- [splunk-hec-service-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-hec-service-setup), [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install), [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup), [splunk-lookup-file-editing-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-lookup-file-editing-setup), [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-kvstore-admin-setup), [splunk-index-lifecycle-smartstore-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-index-lifecycle-smartstore-setup), [splunk-data-source-readiness-doctor](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-data-source-readiness-doctor).
 
 ## What to send back
 

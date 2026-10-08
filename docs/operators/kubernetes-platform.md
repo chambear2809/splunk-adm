@@ -46,6 +46,10 @@ clusterReceiver:
       mode: watch
     - name: nodes
       mode: watch
+  config:                            # merged over the chart's receiver config
+    receivers:
+      k8s_objects:
+        include_initial_state: true  # also send objects that already exist at start-up
 
 rbac:
   customRules:                       # pods, services and nodes are already granted by the chart
@@ -86,9 +90,10 @@ agent:
 Notes:
 
 - **Pull vs watch:** the chart's default pod collection is a pull every 6 hours, which is too coarse to know which pod owned an IP at a given minute. Watch mode sends each change as it happens.
-- **Watch-mode start-up (verify with your collector version):** check whether watch mode also emits the objects that already exist when the collector starts. If it doesn't, add a second `pods` entry in `mode: pull` with `interval: 1h` so stable pods appear, and confirm the receiver accepts the same resource twice.
+- **Watch-mode start-up (required):** in the collector shipped with chart 0.161.0, watch mode sends only changes. Without `include_initial_state: true`, Pods, Services and Nodes that already exist when the collector starts are never reported, and their IPs stay unknown in the map. The chart doesn't expose this option under `k8sObjects`, so it is set through `clusterReceiver.config` as above (receiver `k8s_objects`, merged over the chart defaults). After a collector restart, existing objects are sent once as `ADDED` events.
+- **Required objects:** pods, services, endpointslices, ingresses, httproutes and nodes. Gateways are optional; the map uses HTTPRoutes and the Gateway's Service.
 - **Container logs:** they also go to `splunkPlatform.index` by default. Route them elsewhere with the `splunk.com/index` pod or namespace annotation, or set `logsCollection.containers.enabled: false` if this pilot does not need them.
-- **Gateway API:** collect `gateways` and `httproutes` only if the Gateway API CRDs are installed; otherwise remove those two entries.
+- **Gateway API:** collect `gateways` and `httproutes` only if the Gateway API CRDs are installed; otherwise remove those two entries (and their RBAC rule).
 - **Hubble export:** the file is written by Cilium only when the Hubble exporter is enabled (see [cilium-isovalent.md](cilium-isovalent.md)). Cilium rotates it; the include pattern matches only the active file.
 
 ## LLDP on nodes
@@ -105,6 +110,13 @@ index=cilium_hubble sourcetype="cilium:hubble:flow" | stats count by host
 
 Every node should appear as a `host` in the last search.
 
+## Automation skills
+
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Their `main` branch is verified on Splunk Enterprise 10.4; review plans against 10.6 for this pilot.
+
+- [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-otel-collector-setup): renders, preflights, applies and validates the Splunk OTel Collector Helm chart, including `splunkPlatform`, `tracesEnabled`, `clusterReceiver.k8sObjects` and `logsCollection.extraFileLogs`.
+- [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-k8s-auto-instrumentation-setup): zero-code instrumentation for application pods (used with the application teams).
+
 ## What to send back
 
 - Cluster name, Kubernetes version, chart version, the final values file (without the token).
@@ -119,4 +131,4 @@ Every node should appear as a `host` in the last search.
 
 ## Sources
 
-Chart 0.161.0 `values.yaml:28,36-60,130-134,548-640,683-800,893-897`; `templates/clusterRole.yaml:31-52,124-130`; `templates/config/_otel-k8s-cluster-receiver-config.tpl:209-213` (`kube:object:<resource>` sourcetype); `templates/config/_otel-agent.tpl:745-755` (extra file logs); `templates/config/_common.tpl:227-231` (`splunk.com/index` annotation). Hubble export path: Cilium 1.20.2 Helm `values.yaml:2209-2238`.
+Chart 0.161.0 `values.yaml:28,36-60,130-134,548-640,683-800,893-897`; `templates/clusterRole.yaml:31-52,124-130`; `templates/config/_otel-k8s-cluster-receiver-config.tpl:209-213` (`kube:object:<resource>` sourcetype), `:50-53` (receiver `k8s_objects` renders only `auth_type` and `objects`); `templates/configmap-cluster-receiver.yaml:21` (`clusterReceiver.config` merged over defaults); `include_initial_state`: opentelemetry-collector-contrib v0.161.0 `receiver/k8sobjectsreceiver/README.md:61-62`; `templates/config/_otel-agent.tpl:745-755` (extra file logs); `templates/config/_common.tpl:227-231` (`splunk.com/index` annotation). Hubble export path: Cilium 1.20.2 Helm `values.yaml:2209-2238`.
