@@ -11,7 +11,7 @@ npm ci --registry=https://registry.npmjs.org --ignore-scripts
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Demo mode replays the rows that the app's `adm_graph` and `adm_topology` searches returned in the lab for the synthetic scenario in `fixtures/raw/scenario.json` (October 7, 2026, 11:45–12:00 UTC). It is clearly marked synthetic and never substitutes for a failed live search.
+Open the localhost URL printed by Vite. Demo mode replays the rows that the app's `adm_graph` and `adm_topology` searches returned in the lab for a synthetic scenario (October 7, 2026, 11:45–12:00 UTC). By default that's the ACI pilot scenario in `fixtures/raw-aci/scenario.json`. The NX-OS fabric scenario in `fixtures/raw/scenario.json` is available from **Settings**. It is clearly marked synthetic and never substitutes for a failed live search.
 
 ## Build and test
 
@@ -35,7 +35,7 @@ Expected result: no failures or errors; informational warnings for SplunkJS usag
 
 ### Synthetic fixtures and the Splunk lab
 
-`python3 tools/gen_raw_fixtures.py` regenerates `fixtures/raw/*.ndjson` (HEC envelopes per sourcetype) from `fixtures/raw/scenario.json`. Every field is traced to its TA source in `fixtures/raw/FIELDS.md`.
+`python3 tools/gen_raw_fixtures.py` regenerates `fixtures/raw/*.ndjson` (HEC envelopes per sourcetype) from `fixtures/raw/scenario.json` (NX-OS fabric). `--scenario aci` regenerates the ACI pilot in `fixtures/raw-aci/`. Every field is traced to its TA or product source in each directory's `FIELDS.md`.
 
 `tests/splunk/lab.sh` runs a local Splunk container (`splunk/splunk`, ports bound to 127.0.0.1) with only the TAs' search-time configuration, never their inputs or scripts, and runs the data-layer tests:
 
