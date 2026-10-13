@@ -1,0 +1,148 @@
+{
+  "status": "failed",
+  "mode": "shipped-cron",
+  "targets": [
+    "ADM - Identity builder",
+    "ADM - Service binding",
+    "ADM - Service backends",
+    "ADM - Conversation rollup"
+  ],
+  "downtime_seconds": 330,
+  "environment": {
+    "installed_default_sha256": {
+      "splunk_app/splunk_adm/default/app.conf": "662a9586a1d142d4710acb6707a2b13f71eebabbdebb7b8e7e364ae904150a2f",
+      "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
+      "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
+      "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "cea94eccb2c972bc5ae0b03bd8dd51602190245dc17ffeb4f07a149cc1312750",
+      "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
+    },
+    "host_architecture": "arm64",
+    "python": "3.14.7",
+    "docker_architecture": "aarch64",
+    "docker_cpus": 12,
+    "docker_memory_bytes": 8214585344,
+    "image": "splunk/splunk:10.6.0.5",
+    "image_id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+    "container_memory_limit_bytes": 0,
+    "container_nano_cpus": 0,
+    "container_platform": "linux/amd64 (lab.sh)",
+    "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS"
+  },
+  "fixture_sha256": "02cf8ff399a40616920cfcd1caf289abcc51214c1bb305d882d9a0c410ba71e9",
+  "settings": {
+    "ADM - Identity builder": {
+      "cron_schedule": "1-56/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Service binding": {
+      "cron_schedule": "2-57/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Service backends": {
+      "cron_schedule": "3-58/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Conversation rollup": {
+      "cron_schedule": "*/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "-5m@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    }
+  },
+  "scheduler_rows": [
+    {
+      "_time": "2026-10-13T19:38:01.113+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791920280",
+      "dispatch_time": "1791920280",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791920280_6",
+      "run_time": "0.135"
+    },
+    {
+      "_time": "2026-10-13T19:37:01.089+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791920220",
+      "dispatch_time": "1791920220",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791920220_5",
+      "run_time": "0.119"
+    },
+    {
+      "_time": "2026-10-13T19:36:01.105+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "1791920160",
+      "dispatch_time": "1791920160",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791920160_4",
+      "run_time": "0.157"
+    },
+    {
+      "_time": "2026-10-13T19:35:01.476+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791920100",
+      "dispatch_time": "1791920100",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791920100_3",
+      "run_time": "0.529"
+    },
+    {
+      "_time": "2026-10-13T19:33:01.065+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791919980",
+      "dispatch_time": "1791919980",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791919980_2",
+      "run_time": "0.130"
+    },
+    {
+      "_time": "2026-10-13T19:32:01.106+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791919920",
+      "dispatch_time": "1791919920",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791919920_1",
+      "run_time": "0.198"
+    },
+    {
+      "_time": "2026-10-13T19:40:01.582+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791920400",
+      "dispatch_time": "1791920400",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791920400_7",
+      "run_time": "0.578"
+    }
+  ],
+  "baseline_flow_records": 6,
+  "second_batch_index_times": {
+    "first": 1791920407,
+    "last": 1791920407
+  },
+  "second_batch_rollup_slot": 1791921000,
+  "outage_started": 1791920710.923446,
+  "restart_requested": 1791921054.067786,
+  "ready_after_restart": 1791921054.220313,
+  "error": "ADM - Identity builder: not scheduled",
+  "verification_jobs": {
+    "count": 75,
+    "all_complete": true,
+    "warnings": []
+  },
+  "qualification": "Incomplete: another process restarted the shared container during the planned outage and changed the scheduled-search settings. This run does not establish downtime recovery."
+}

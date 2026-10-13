@@ -10,7 +10,9 @@
     "lint": "eslint frontend/src vite*.ts tools/package-app.mjs && tsc --noEmit && prettier --check frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
     "format": "prettier --write frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
     "package": "npm run build && node tools/package-app.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "typecheck:browser": "tsc -p tsconfig.browser.json --noEmit"
   },
   "dependencies": {
     "lucide-react": "1.52.0",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.0",
     "@types/node": "^26.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

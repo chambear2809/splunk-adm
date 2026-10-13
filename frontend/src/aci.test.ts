@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Inspector } from "./Inspector";
 import { csvCell, FLOW_COLUMNS, requiredFlowsCsv } from "./csv";
 import { indexGraph, type Graph } from "./graph";
 import {
@@ -31,6 +34,32 @@ const withEdge = (id: string, patch: Record<string, unknown>) =>
   rows().map((r) => (r.id === id ? { ...r, ...patch } : r));
 
 describe("v2 graph contract", () => {
+  it("counts distinct backends rather than evidence methods in the inspector", () => {
+    const g = graph();
+    const forward = g.edges.find((e) => e.relationship === "forwards_to")!;
+    g.edges = [
+      forward,
+      {
+        ...forward,
+        id: `${forward.id}:timing`,
+        confidence: "inferred",
+        handoff_basis: "time_inferred",
+      },
+    ];
+    const html = renderToStaticMarkup(
+      createElement(Inspector, {
+        selection: { kind: "node", id: forward.source },
+        index: indexGraph(g),
+        topo: topo(),
+        onSelect: () => {},
+        onClose: () => {},
+        onShowPath: () => {},
+        summary: null,
+      }),
+    );
+    expect(html).toContain("1 identified");
+    expect(html).not.toContain("2 identified");
+  });
   it("accepts Service frontends, Envoy addresses and forwards_to edges", () => {
     const g = graph();
     const kinds = g.nodes.map((n) => n.endpoint_kind).filter(Boolean);

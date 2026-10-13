@@ -153,6 +153,7 @@ export function indexTopology(topo: Topology): TopologyIndex {
     ifName = new Map<string, string>(),
     adjacency = new Map<string, { to: string; out?: string; in?: string }[]>(),
     lldpHost = new Map<string, { device: string; port?: string }>();
+  const ambiguousHosts = new Set<string>();
   for (const d of topo.devices) {
     byKey.set(key(d.id), d);
     byKey.set(key(d.name), d);
@@ -164,14 +165,29 @@ export function indexTopology(topo: Topology): TopologyIndex {
       ifName.set(`${key(i.device_id)}|${i.ifindex}`, i.interface);
   const add = (a: string, b: string, out?: string, inn?: string) => {
     const list = adjacency.get(a) ?? [];
-    if (!list.some((x) => x.to === b)) list.push({ to: b, out, in: inn });
+    const existing = list.find((x) => x.to === b);
+    if (!existing) list.push({ to: b, out, in: inn });
+    else {
+      if (existing.out !== out) existing.out = undefined;
+      if (existing.in !== inn) existing.in = undefined;
+    }
     adjacency.set(a, list);
   };
   for (const l of topo.links) {
     if (l.source === "lldp") {
       // LLDP from a leaf names the attached server by its system name.
       const leaf = byKey.get(key(l.a_device))?.id ?? l.a_device;
-      lldpHost.set(key(l.b_device), { device: leaf, port: l.a_interface });
+      const host = key(l.b_device);
+      const previous = lldpHost.get(host);
+      if (
+        previous &&
+        (previous.device !== leaf || previous.port !== l.a_interface)
+      ) {
+        ambiguousHosts.add(host);
+        lldpHost.delete(host);
+      }
+      if (!ambiguousHosts.has(host))
+        lldpHost.set(host, { device: leaf, port: l.a_interface });
       continue;
     }
     const a = byKey.get(key(l.a_device))?.id ?? l.a_device;
@@ -383,13 +399,16 @@ function findHost(
   cluster: string | undefined,
   hostName: string,
 ): GraphNode | undefined {
-  return (
-    index.node.get(`node:${cluster}/${hostName}`) ??
-    graph.nodes.find(
-      (n) => n.endpoint_kind === "k8s_node" && n.label === hostName,
-    )
+  if (cluster === "unknown") return undefined;
+  if (cluster) return index.node.get(`node:${cluster}/${hostName}`);
+  const matches = graph.nodes.filter(
+    (n) => n.endpoint_kind === "k8s_node" && n.label === hostName,
   );
+  return matches.length === 1 ? matches[0] : undefined;
 }
+
+const hostIdentity = (cluster: string | undefined, name: string) =>
+  cluster && cluster !== "unknown" ? `node:${cluster}/${name}` : undefined;
 
 const podCluster = (node: GraphNode) =>
   node.id.startsWith("pod:") ? node.id.slice(4).split("/")[0] : node.cluster;
@@ -431,7 +450,7 @@ function attachment(
     const at = hostAttachment(hostName, hostNode, topo);
     return {
       stages: [entity, host],
-      host: key(hostName),
+      host: hostNode?.id ?? hostIdentity(podCluster(node), hostName),
       device: at.device,
       port: at.port,
     };
@@ -450,7 +469,7 @@ function attachment(
           nodeId: hostNode?.id,
         }),
       ],
-      host: key(attrs.node),
+      host: hostNode?.id ?? hostIdentity(node.cluster, attrs.node),
       device: at.device,
       port: at.port,
     };
@@ -459,7 +478,7 @@ function attachment(
     const at = hostAttachment(node.label, node, topo);
     return {
       stages: [entity],
-      host: key(node.label),
+      host: node.id,
       device: at.device,
       port: at.port,
     };
@@ -700,7 +719,7 @@ function serviceLeg(
                 nodeId: recvNode?.id,
               }),
             ],
-            host: key(recvName),
+            host: recvNode?.id ?? hostIdentity(service.cluster, recvName),
             ...hostAttachment(recvName, recvNode, topo),
           }
         : { stages: [gap("Receiving node unknown")] };
@@ -842,7 +861,9 @@ export function choiceExplanation(
       Number(x.confidence !== "observed") - Number(y.confidence !== "observed"),
   );
   const text = handoffExplanation(ordered[0].handoff_basis!, ctx);
-  const inferred = ordered.filter((e) => e.confidence === "inferred").length;
+  const inferred = ordered
+    .filter((e) => e.confidence === "inferred")
+    .reduce((sum, e) => sum + e.count, 0);
   if (choice.state === "observed" && inferred)
     return `${text}; ${inferred === 1 ? "1 more connection" : `${inferred} more connections`} inferred from timing`;
   return text;

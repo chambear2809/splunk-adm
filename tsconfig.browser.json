@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@playwright/test"]
+  },
+  "include": ["frontend/src", "tests/browser", "playwright.config.ts"],
+  "exclude": ["frontend/src/**/*.test.ts", "frontend/src/**/*.test.tsx"]
+}

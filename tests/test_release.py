@@ -1,0 +1,151 @@
+import hashlib
+import io
+import tarfile
+import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from tools.check_release import DEPLOYMENT_OWNED, check_release
+
+
+class ReleaseArchiveTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        (self.root / "package.json").write_text(
+            '{"version": "1.2.3"}\n', encoding="utf-8"
+        )
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def _write_archive(self, name, files, extra_members=()):
+        archive = self.root / "dist" / name
+        archive.parent.mkdir(exist_ok=True)
+        with tarfile.open(archive, "w:gz") as output:
+            for path, data in files.items():
+                info = tarfile.TarInfo(path)
+                info.size = len(data)
+                output.addfile(info, io.BytesIO(data))
+            for info in extra_members:
+                output.addfile(info)
+        digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+        archive.with_name(archive.name + ".sha256").write_text(
+            f"{digest}  {archive.name}\n", encoding="utf-8"
+        )
+
+    def _files(self):
+        config = (
+            b"[install]\nbuild = 123\n[id]\nversion = 1.2.3\n"
+            b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
+        )
+        return {
+            "splunk_adm/appserver/static/adm.bundle.js": b"bundle",
+            "splunk_adm/appserver/static/adm.css": b"css",
+            "splunk_adm/default/app.conf": config,
+            "splunk_adm/LICENSE": b"license",
+            "splunk_adm/NOTICE": b"notice",
+            "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
+            "splunk_adm/docs/DATA_LAYER.md": b"docs",
+            "splunk_adm/default/collections.conf": b"[x]\n",
+            "splunk_adm/default/limits.conf": b"[x]\n",
+            "splunk_adm/default/macros.conf": b"[x]\n",
+            "splunk_adm/default/savedsearches.conf": b"[x]\n",
+            "splunk_adm/default/transforms.conf": b"[x]\n",
+            "splunk_adm/default/data/ui/nav/default.xml": b"<nav />\n",
+            "splunk_adm/default/data/ui/views/dependency_map.xml": b"<view />\n",
+            "splunk_adm/metadata/default.meta": b"[x]\n",
+            DEPLOYMENT_OWNED: b"observer,scope\n",
+        }
+
+    def _write_pair(self, install=None, upgrade=None):
+        install = install or self._files()
+        upgrade = upgrade or {
+            key: value for key, value in install.items() if key != DEPLOYMENT_OWNED
+        }
+        self._write_archive("splunk_adm-1.2.3.tar.gz", install)
+        self._write_archive("splunk_adm-1.2.3-upgrade.tar.gz", upgrade)
+
+    def test_accepts_valid_pair(self):
+        self._write_pair()
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_upgrade_byte_drift(self):
+        install = self._files()
+        upgrade = {
+            key: value for key, value in install.items() if key != DEPLOYMENT_OWNED
+        }
+        upgrade["splunk_adm/default/limits.conf"] = b"changed\n"
+        self._write_pair(install, upgrade)
+        with self.assertRaisesRegex(ValueError, "bytes differ"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_critical_config(self):
+        install = self._files()
+        del install["splunk_adm/default/macros.conf"]
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "missing required files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_wrong_id_version_even_with_correct_launcher(self):
+        install = self._files()
+        install["splunk_adm/default/app.conf"] = (
+            b"[install]\nbuild = 123\n[id]\nversion = 0.0.0\n"
+            b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, r"app.conf \[id\]"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_default_version_inheritance(self):
+        install = self._files()
+        install["splunk_adm/default/app.conf"] = (
+            b"[DEFAULT]\nversion = 1.2.3\n[install]\nbuild = 123\n"
+            b"[id]\n[launcher]\n[package]\nid = splunk_adm\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "DEFAULT"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_nested_case_insensitive_env_file(self):
+        install = self._files()
+        install["splunk_adm/appserver/.ENV.production"] = b"secret"
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "secret-like path"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_path_traversal(self):
+        install = self._files()
+        install["splunk_adm/../local/password"] = b"secret"
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "archive member path"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_symlink(self):
+        install = self._files()
+        link = tarfile.TarInfo("splunk_adm/default/link")
+        link.type = tarfile.SYMTYPE
+        link.linkname = "app.conf"
+        self._write_archive("splunk_adm-1.2.3.tar.gz", install, [link])
+        self._write_archive(
+            "splunk_adm-1.2.3-upgrade.tar.gz",
+            {key: value for key, value in install.items() if key != DEPLOYMENT_OWNED},
+        )
+        with self.assertRaisesRegex(ValueError, "links or special files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_duplicate_member(self):
+        install = self._files()
+        duplicate = tarfile.TarInfo("splunk_adm/LICENSE")
+        duplicate.size = 0
+        self._write_archive("splunk_adm-1.2.3.tar.gz", install, [duplicate])
+        self._write_archive(
+            "splunk_adm-1.2.3-upgrade.tar.gz",
+            {key: value for key, value in install.items() if key != DEPLOYMENT_OWNED},
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate archive member"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+
+if __name__ == "__main__":
+    unittest.main()

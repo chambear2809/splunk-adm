@@ -1,0 +1,142 @@
+{
+  "status": "complete",
+  "parameters": {
+    "reset_lab": true,
+    "pods": 20,
+    "flow_copies": 500,
+    "timeout": 180
+  },
+  "environment": {
+    "installed_default_sha256": {
+      "splunk_app/splunk_adm/default/app.conf": "662a9586a1d142d4710acb6707a2b13f71eebabbdebb7b8e7e364ae904150a2f",
+      "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
+      "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
+      "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "8def54d5bce51da8e1ce15e9f030232fb9ea35a852ee32eb6ef48bf2c92b8315",
+      "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
+    },
+    "host_architecture": "arm64",
+    "python": "3.14.7",
+    "docker_architecture": "aarch64",
+    "docker_cpus": 12,
+    "docker_memory_bytes": 8214585344,
+    "image": "splunk/splunk:10.6.0.5",
+    "image_id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+    "container_memory_limit_bytes": 0,
+    "container_nano_cpus": 0,
+    "container_platform": "linux/amd64 (lab.sh)",
+    "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS"
+  },
+  "submitted": 10081,
+  "searchable_before_fault": 10081,
+  "source_digest": "7c870b33ed32a29ee38e0e167f8271636e3b4363cc26182d264f5f2064e8a565",
+  "rollup_job": {
+    "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791915359_1",
+    "dispatch_state": "RUNNING",
+    "is_done": false,
+    "pre_kill": {
+      "dispatch_state": "RUNNING",
+      "is_done": false
+    }
+  },
+  "fault": {
+    "before": "running",
+    "after_kill": "exited",
+    "signal": "SIGKILL (docker kill)"
+  },
+  "summary_records_after_rebuild": 10000,
+  "raw_records_after_rebuild": 10081,
+  "raw_identity_digest_before": "f674bab158f25c327c8868208be992fe6d0fb40e25e89a72c5dfd383b989d6ea",
+  "raw_identity_digest_after": "f674bab158f25c327c8868208be992fe6d0fb40e25e89a72c5dfd383b989d6ea",
+  "recovery_seconds": 165.357,
+  "verification_jobs": [
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791915356.3",
+      "warnings": [],
+      "run_seconds": 0.353,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.5725
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791915357.4",
+      "warnings": [],
+      "run_seconds": 0.14100000000000001,
+      "result_count": 1,
+      "scan_count": 10081,
+      "event_count": 10081,
+      "wall_seconds": 0.3326
+    },
+    {
+      "name": "raw-identities",
+      "status": "complete",
+      "sid": "1791915358.5",
+      "warnings": [],
+      "run_seconds": 0.252,
+      "result_count": 10081,
+      "scan_count": 10081,
+      "event_count": 10081,
+      "wall_seconds": 0.4324
+    },
+    {
+      "name": "recovery-rollup",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791915488_0",
+      "warnings": [],
+      "run_seconds": 34.675000000000004,
+      "result_count": 20,
+      "scan_count": 10000,
+      "event_count": 10000,
+      "wall_seconds": 35.2466
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791915523.2",
+      "warnings": [],
+      "run_seconds": 0.23900000000000002,
+      "result_count": 1,
+      "scan_count": 20,
+      "event_count": 20,
+      "wall_seconds": 0.3087
+    },
+    {
+      "name": "recovery-summary-count",
+      "status": "complete",
+      "sid": "1791915523.3",
+      "warnings": [],
+      "run_seconds": 0.10400000000000001,
+      "result_count": 1,
+      "scan_count": 20,
+      "event_count": 20,
+      "wall_seconds": 0.3038
+    },
+    {
+      "name": "recovery-raw-count",
+      "status": "complete",
+      "sid": "1791915524.4",
+      "warnings": [],
+      "run_seconds": 0.14,
+      "result_count": 1,
+      "scan_count": 10081,
+      "event_count": 10081,
+      "wall_seconds": 0.3037
+    },
+    {
+      "name": "raw-identities",
+      "status": "complete",
+      "sid": "1791915524.5",
+      "warnings": [],
+      "run_seconds": 0.221,
+      "result_count": 10081,
+      "scan_count": 10081,
+      "event_count": 10081,
+      "wall_seconds": 0.4253
+    }
+  ]
+}

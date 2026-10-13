@@ -106,29 +106,36 @@ async function normalizeModes(dir) {
 }
 await normalizeModes(stage);
 
-const filename = `splunk_adm-${version}.tar.gz`;
-const archive = `dist/${filename}`;
+// A full install includes the empty observer-scope template. Splunk replaces
+// packaged lookup CSVs during updates, so the upgrade archive must omit it.
 const bsd = execFileSync("tar", ["--version"]).toString().includes("bsdtar");
 const ownership = bsd
   ? ["--uid", "0", "--gid", "0", "--uname", "splunk", "--gname", "splunk"]
   : ["--owner=0", "--group=0", "--numeric-owner"];
-execFileSync(
-  "tar",
-  [
-    "-czf",
-    archive,
-    "--no-xattrs",
-    ...ownership,
-    "--exclude",
-    ".DS_Store",
-    "-C",
-    stageRoot,
-    "splunk_adm",
-  ],
-  { stdio: "inherit", env: { ...process.env, COPYFILE_DISABLE: "1" } },
-);
-const sha = createHash("sha256")
-  .update(await readFile(archive))
-  .digest("hex");
-await writeFile(`${archive}.sha256`, `${sha}  ${filename}\n`);
-console.log(`Created ${archive} (build ${build})\nSHA256 ${sha}`);
+for (const upgrade of [false, true]) {
+  const filename = `splunk_adm-${version}${upgrade ? "-upgrade" : ""}.tar.gz`;
+  const archive = `dist/${filename}`;
+  execFileSync(
+    "tar",
+    [
+      "-czf",
+      archive,
+      "--no-xattrs",
+      ...ownership,
+      "--exclude",
+      ".DS_Store",
+      ...(upgrade
+        ? ["--exclude", "splunk_adm/lookups/adm_observer_scope.csv"]
+        : []),
+      "-C",
+      stageRoot,
+      "splunk_adm",
+    ],
+    { stdio: "inherit", env: { ...process.env, COPYFILE_DISABLE: "1" } },
+  );
+  const sha = createHash("sha256")
+    .update(await readFile(archive))
+    .digest("hex");
+  await writeFile(`${archive}.sha256`, `${sha}  ${filename}\n`);
+  console.log(`Created ${archive} (build ${build})\nSHA256 ${sha}`);
+}

@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import {
+  Activity,
   ArrowRight,
   Ban,
   BookOpen,
@@ -42,6 +43,7 @@ import {
 import { computeLayout, type View } from "./layout";
 import { FIT_MIN, MapView, type Selection } from "./MapView";
 import { IdentityBadge, Inspector } from "./Inspector";
+import { HealthPanel } from "./HealthPanel";
 import { PathStrip } from "./PathStrip";
 import { DevicesView } from "./DevicesView";
 import { requiredFlowsCsv } from "./csv";
@@ -77,7 +79,7 @@ const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["namespace", "Namespace", "Kubernetes namespace"],
 ];
 type Tab = View | "devices" | "table";
-type Panel = "settings" | "help" | "warnings" | "export";
+type Panel = "settings" | "help" | "warnings" | "export" | "health";
 const TABS: [Tab, string][] = [
   ["network", "Network"],
   ["services", "Services"],
@@ -214,7 +216,13 @@ export function App({
           earliest,
           controller.signal,
           releaseManager,
-        ).catch(() => emptyTopology()),
+        ).catch((e: unknown) => {
+          const unavailable = emptyTopology();
+          unavailable.warnings.push(
+            `Network inventory unavailable. ${e instanceof Error ? e.message : "Search failed."}`,
+          );
+          return unavailable;
+        }),
       ]);
       if (!controller.signal.aborted) {
         setGraph(result);
@@ -235,6 +243,7 @@ export function App({
   };
   const switchLive = () => {
     request.current?.abort();
+    clearSelection();
     setBusy(false);
     setMode("live");
     setHasLiveGraph(false);
@@ -320,7 +329,9 @@ export function App({
     () => summarize(graph.nodes, graph.edges, node),
     [graph, node],
   );
-  const warnings = graph.coverage.warnings;
+  const warnings = [
+    ...new Set([...graph.coverage.warnings, ...topology.warnings]),
+  ];
   const selectedEdge =
     selection?.kind === "edge" ? index.edge.get(selection.id) : undefined;
   const path = useMemo(
@@ -535,6 +546,13 @@ export function App({
           </div>
         )}
         <div className="actions">
+          <button
+            className="secondary-button"
+            aria-expanded={panel === "health"}
+            onClick={() => togglePanel("health")}
+          >
+            <Activity size={16} aria-hidden /> Pipeline health
+          </button>
           <div className="segmented" role="group" aria-label="Data source">
             <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
               Demo
@@ -578,6 +596,14 @@ export function App({
             <Settings2 size={17} />
           </button>
         </div>
+        {panel === "health" && (
+          <HealthPanel
+            SearchManager={SearchManager}
+            release={releaseManager}
+            live={mode === "live"}
+            close={() => setPanel(null)}
+          />
+        )}
         {panel === "export" && (
           <section className="popover export" aria-label="Export">
             <div className="popover-head">
@@ -978,7 +1004,7 @@ export function App({
               blocked={totals.blocked > 0}
             />
           )}
-          {path && selectedEdge && !pathHidden && (
+          {visible && path && selectedEdge && !pathHidden && (
             <PathStrip
               path={path}
               title={`${label(selectedEdge.source)} → ${label(selectedEdge.target)} · ${portLabel(selectedEdge)}`}
@@ -988,16 +1014,22 @@ export function App({
           )}
         </section>
         <aside className="inspector" aria-label="Details">
-          <Inspector
-            selection={selection}
-            index={index}
-            topo={topo}
-            onSelect={(s) => (s ? select(s) : clearSelection())}
-            onClose={clearSelection}
-            onShowPath={() => setPathHidden(false)}
-            pathOpen={!!path && !pathHidden}
-            summary={summary}
-          />
+          {visible ? (
+            <Inspector
+              selection={selection}
+              index={index}
+              topo={topo}
+              onSelect={(s) => (s ? select(s) : clearSelection())}
+              onClose={clearSelection}
+              onShowPath={() => setPathHidden(false)}
+              pathOpen={!!path && !pathHidden}
+              summary={summary}
+            />
+          ) : (
+            <p className="callout neutral">
+              Load Splunk data to inspect the map.
+            </p>
+          )}
         </aside>
       </div>
     </div>

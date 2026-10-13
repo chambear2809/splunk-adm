@@ -24,7 +24,9 @@ npm ci --registry=https://registry.npmjs.org --ignore-scripts
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It replays the app's own search output from TA-shaped synthetic data: the ACI pilot scenario by default, or the NX-OS fabric scenario (switch in **Settings**). Build a Splunk app archive with `npm run package`.
+Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It replays the app's own search output from TA-shaped synthetic data: the ACI pilot scenario by default, or the NX-OS fabric scenario (switch in **Settings**). Build Splunk app archives with `npm run package`.
+
+For existing installations, use the `-upgrade.tar.gz` artifact created by `npm run package`; the full-install archive replaces the scope-mapping CSV. See [upgrade preservation checks](docs/UPGRADES.md).
 
 **Target:** Splunk Enterprise 10.6 for the pilot (a single ACI fabric with Kubernetes on Cilium), then Splunk Cloud. Validated in a local Splunk 10.6 container against synthetic data; not yet run against a live environment.
 
@@ -58,6 +60,10 @@ Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It
 
 Python 3.10+ is needed only for the fixture generator and the lab tests. The lab needs Docker. It pulls a Splunk image of about 2 GB and accepts the Splunk General Terms for a local development instance.
 
+## Pipeline health
+
+In the installed app, choose **Splunk → Pipeline health** to inspect source freshness, ingestion delay, and scheduled-search outcomes. Health is app-wide and available even before a map loads. Missing data or restricted permissions are shown as unconfirmed; synthetic demo data is never presented as live health. See [the health contract](docs/DATA_LAYER.md#pipeline-health-and-search-completeness).
+
 ## Operator setup skills
 
 What each team must configure to get data into Splunk ([docs/operators/](docs/operators/README.md)) can be automated with [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills), vendored here as a submodule pinned to a reviewed commit so a pilot always uses the version we validated. Each skill renders a plan for review, applies only the requested change, and validates it.
@@ -83,11 +89,23 @@ Mutating execution stays disabled in every committed registration (`SPLUNK_SKILL
 - [Pilot setup and prerequisites](docs/PILOT.md)
 - [What each team must provide](docs/operators/README.md), including the [Splunk setup guide](docs/operators/splunk-setup-guide.md)
 - [Data layer contract](docs/DATA_LAYER.md)
+- [Recovery, replay and maintenance](docs/RECOVERY.md)
+- [Synthetic pipeline benchmarks](docs/BENCHMARKS.md)
+- [Continuous-load correctness soak](docs/CONTINUOUS_LOAD.md)
+- [Actual scheduler and downtime testing](docs/SCHEDULER_TESTS.md)
+- [Mixed-source load and attribution](docs/MIXED_LOAD.md)
+- [Data quality and pipeline health](docs/DATA_QUALITY.md)
+- [Browser regression tests](docs/BROWSER_TESTS.md)
+- [Upgrade preservation checks](docs/UPGRADES.md)
+- [Backup and restore rehearsal](docs/BACKUP_RESTORE.md)
+- [Process interruption rehearsal](docs/FAILURE_TESTS.md)
+- [Read-only pilot readiness](docs/PILOT_READINESS.md)
 - [Network path evidence](docs/NETWORK_PATH_DESIGN.md)
 - [TA package analysis](docs/TA_PACKAGE_ANALYSIS.md)
 - [Telemetry correlation design](docs/TELEMETRY_CORRELATION_DESIGN.md)
 - [Stream and NetFlow research](docs/NETFLOW_DEPENDENCY_MAP_RESEARCH.md)
 - [Research package inventory](research/README.md)
+- [Continuous integration](docs/CI.md)
 - [Contributor guidelines](AGENTS.md), [Operating model](docs/OPERATING_MODEL.md), [Security](docs/SECURITY.md)
 
 ## License

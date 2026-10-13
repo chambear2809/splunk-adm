@@ -513,7 +513,7 @@ class DataLayerTest(unittest.TestCase):
     # ---- C1: pruning only after a complete paged read (runs last) ----
 
     def prune(self) -> dict:
-        # The emulated lab KV store intermittently fails single reads; a failed prune never writes.
+        # These maintenance tests explicitly enable the gate while builders are idle.
         for attempt in range(3):
             try:
                 return self.dispatch("ADM - Identity prune")[0]
@@ -540,6 +540,7 @@ class DataLayerTest(unittest.TestCase):
         try:
             self.set_macros(
                 {
+                    "adm_prune_maintenance": "1",
                     "adm_kv_page_size": "100",
                     "adm_kv_read_all(1)": self.paged_reader(100, cap=5),
                 }
@@ -553,11 +554,48 @@ class DataLayerTest(unittest.TestCase):
         finally:
             self.restore_macros()
 
+    def test_zz_prune_reports_retained_all_expired_rows(self):
+        self.set_macros({"adm_prune_maintenance": "1"})
+        try:
+            # Isolate this test from the scenario collections, then restore the rows.
+            collections = {
+                "adm_ip_identity": "adm_identity_prune",
+                "adm_service_workload": "adm_service_binding_prune",
+                "adm_service_backends": "adm_service_backends_prune",
+                "adm_service_routes": "adm_service_routes_prune",
+                "adm_aci_policy": "adm_aci_policy_prune",
+            }
+            for collection, macro in collections.items():
+                with self.subTest(collection=collection):
+                    backup = f"{collection}_prune_test_backup.csv"
+                    self.lab.search(
+                        f"| inputlookup {collection} | outputlookup {backup}"
+                    )
+                    try:
+                        self.lab.search(
+                            '| makeresults | eval _key="expired", valid_end=1, valid_to=1, last_seen=1 '
+                            f"| fields _key valid_end valid_to last_seen | outputlookup {collection}"
+                        )
+                        result = self.lab.search(f"| `{macro}`")[0]
+                        self.assertEqual(result["complete"], "1", result)
+                        self.assertEqual(result["rows_expired"], "1", result)
+                        self.assertEqual(result["rows_pruned"], "0", result)
+                        self.assertIn("Administrator cleanup", result["warnings"])
+                        self.assertEqual(self.count(f"| inputlookup {collection}"), 1)
+                    finally:
+                        self.lab.search(
+                            f"| inputlookup {backup} | outputlookup {collection}"
+                        )
+
+        finally:
+            self.restore_macros()
+
     def test_zz_prune_removes_only_expired_rows_after_complete_paged_read(self):
         cutoff = 1791373800  # 11:50Z: rows that ended before this expire
         try:
             self.set_macros(
                 {
+                    "adm_prune_maintenance": "1",
                     "adm_kv_page_size": "4",
                     "adm_kv_read_all(1)": self.paged_reader(4),
                     "adm_identity_retention": str(int(time.time()) - cutoff),

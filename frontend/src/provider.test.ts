@@ -6,6 +6,7 @@ import {
   loadLive,
   resultRows,
   splunkMessage,
+  splunkWarnings,
   type LiveRequest,
   type SearchConstructor,
 } from "./provider";
@@ -95,6 +96,21 @@ describe("splunkMessage", () => {
   });
 });
 
+describe("splunkWarnings", () => {
+  it("reads typed job messages and filters informational entries", () => {
+    expect(
+      splunkWarnings({
+        content: {
+          messages: [
+            { type: "INFO", text: "dispatch complete" },
+            { type: "WARN", text: "results were truncated" },
+          ],
+        },
+      }),
+    ).toEqual(["results were truncated"]);
+  });
+});
+
 /** Converts row objects into SplunkJS json_rows. */
 function jsonRows(rows: Record<string, unknown>[]) {
   const fields = [...new Set(rows.flatMap((r) => Object.keys(r)))];
@@ -127,7 +143,12 @@ describe("demoGraph", () => {
 type Handler = (payload?: unknown) => void;
 function fakeManager(
   script: (fire: (event: string, p?: unknown) => void) => void,
-  seen: { options?: Record<string, unknown>; count?: number } = {},
+  seen: {
+    options?: Record<string, unknown>;
+    count?: number;
+    condition?: (source: { get?: (key: string) => unknown }) => boolean;
+  } = {},
+  autoDone = true,
 ) {
   const handlers = new Map<string, Handler[]>();
   let dataHandler: (() => void) | undefined;
@@ -136,8 +157,15 @@ function fakeManager(
     constructor(options: Record<string, unknown>) {
       seen.options = options;
     }
-    data(_kind: string, options: { count: number }) {
+    data(
+      _kind: string,
+      options: {
+        count: number;
+        condition?: (source: { get?: (key: string) => unknown }) => boolean;
+      },
+    ) {
       seen.count = options.count;
+      seen.condition = options.condition;
       return {
         on: (_: string, cb: () => void) => (dataHandler = cb),
         off: () => {},
@@ -151,12 +179,22 @@ function fakeManager(
     off() {}
     cancel() {}
     startSearch() {
+      let done = false;
       script((event, p) => {
         if (event === "data") {
           data = jsonRows(p as Record<string, unknown>[]);
           dataHandler?.();
-        } else for (const h of handlers.get(event) ?? []) h(p);
+        } else {
+          if (event === "search:done") done = true;
+          for (const h of handlers.get(event) ?? []) h(p);
+        }
       });
+      // Most existing tests model only the result stream. Real SplunkJS emits
+      // search:done after it, so complete that shorthand fixture here.
+      if (autoDone && data && !done)
+        for (const h of handlers.get("search:done") ?? [])
+          h({ content: { resultCount: data.rows.length } });
+      if (autoDone && data) queueMicrotask(() => dataHandler?.());
     }
   };
   return Manager as unknown as SearchConstructor;
@@ -177,6 +215,98 @@ describe("loadLive", () => {
       search: '`adm_graph("frontend","demo","demo-cluster","shop")`',
     });
     expect(seen.count).toBe(MAX_ROWS + 1);
+  });
+  it("waits for search:done before resolving and surfaces job warnings", async () => {
+    let releaseResults: (() => void) | undefined;
+    const M = fakeManager(
+      (fire) => {
+        fire("data", demo.rows);
+        releaseResults = () =>
+          (() => {
+            fire("search:done", {
+              content: {
+                resultCount: demo.rows.length,
+                messages: [
+                  { type: "INFO", text: "dispatch complete" },
+                  { type: "WARN", text: "results were truncated" },
+                ],
+              },
+            });
+            fire("data", demo.rows);
+          })();
+      },
+      {},
+      false,
+    );
+    const pending = run(M);
+    await Promise.resolve();
+    let settled = false;
+    void pending.then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    releaseResults!();
+    const graph = await pending;
+    expect(graph.coverage.warnings).toContain("results were truncated");
+    expect(graph.coverage.warnings).not.toContain("dispatch complete");
+  });
+  it("marks finalized jobs as potentially incomplete", async () => {
+    const graph = await run(
+      fakeManager((fire) => {
+        fire("data", demo.rows);
+        fire("search:done", {
+          content: { resultCount: demo.rows.length, isFinalized: "1" },
+        });
+      }),
+    );
+    expect(graph.coverage.warnings).toContain(
+      "Splunk finalized this job before all results were available; the graph may be incomplete.",
+    );
+  });
+  it("accepts results that arrive after search:done", async () => {
+    let emit: ((event: string, payload?: unknown) => void) | undefined;
+    const M = fakeManager((fire) => {
+      emit = fire;
+      fire("search:done", { content: { resultCount: demo.rows.length } });
+    });
+    const pending = run(M);
+    await Promise.resolve();
+    emit!("data", demo.rows);
+    await expect(pending).resolves.toMatchObject({
+      boundary: { service: ok.service },
+    });
+  });
+  it("waits for the completed result count after an intermediate fetch", async () => {
+    const meta = demo.rows.find((r) => r.row_type === "meta")!;
+    let current = [meta];
+    const M = fakeManager(
+      (fire) => {
+        fire("data", current);
+        fire("search:done", { content: { resultCount: demo.rows.length } });
+        current = demo.rows;
+        fire("data", current);
+      },
+      {},
+      false,
+    );
+    await expect(run(M)).resolves.toMatchObject({
+      boundary: { service: ok.service },
+    });
+  });
+  it("configures Splunk results to fetch only completed job data", async () => {
+    const seen: {
+      condition?: (source: { get?: (key: string) => unknown }) => boolean;
+    } = {};
+    await run(fakeManager((fire) => fire("data", demo.rows), seen));
+    expect(seen.condition?.({ get: () => ({ isDone: false }) })).toBe(false);
+    expect(seen.condition?.({ get: () => ({ isDone: true }) })).toBe(true);
+    expect(seen.condition?.({ get: () => ({ isDone: "1" }) })).toBe(true);
+    expect(seen.condition?.({ get: () => ({ isFinalized: 1 }) })).toBe(true);
+    expect(seen.condition?.({ get: () => ({ isDone: "false" }) })).toBe(false);
+  });
+  it("rejects completion without a verifiable result count", async () => {
+    await expect(
+      run(fakeManager((fire) => fire("search:done", { content: {} }))),
+    ).rejects.toThrow("valid final result count");
   });
   it("rejects results larger than the limit", async () => {
     const meta = demo.rows.find((r) => r.row_type === "meta")!;

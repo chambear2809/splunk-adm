@@ -21,7 +21,7 @@ npm test
 npm run package
 ```
 
-`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates `dist/splunk_adm-<version>.tar.gz` plus its SHA256 file. Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
+`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates full-install `dist/splunk_adm-<version>.tar.gz` and `dist/splunk_adm-<version>-upgrade.tar.gz` archives, each with a SHA256 file. Use the upgrade archive for an existing installation so its scope CSV is preserved; see [upgrade checks](UPGRADES.md). Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
 
 Python lint: `ruff check tools tests` and `ruff format --check tools tests` (install Ruff separately).
 
@@ -63,7 +63,7 @@ Starting the lab accepts the Splunk General Terms for a local development instan
 2. Create a summary index (default name `adm_summary`; on Cloud through ACS). Grant app users read access to it and to the source indexes.
 3. Edit the app's index macros (`adm_index_netflow`, `adm_index_dcn`, `adm_index_ftd`, `adm_index_isovalent`, `adm_index_k8s`, `adm_index_traces`, `adm_index_summary`, `adm_summary_index_name`) and `adm_traces_sourcetype` to match your environment.
 4. Fill the `adm_observer_scope.csv` lookup (`observer_kind,observer,scope,cluster`) so each exporter, fabric, firewall and cluster maps to its routing scope. Unmapped observers fall into scope `default`; identities only join within one scope.
-5. Enable the saved searches: **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**, **ADM - Identity prune**, **ADM - Service binding prune**, **ADM - Service backends prune**, **ADM - Service routes prune** and **ADM - ACI policy prune**. They ship disabled. Don't run a manual identity backfill while the scheduled builder is running.
+5. Enable the saved searches: **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**. They ship disabled. Do not run a manual identity backfill while the scheduled builder is running. Keep all prune schedules disabled; pruning requires the paused-writer maintenance procedure in [Recovery and replay](RECOVERY.md).
 6. Open **Application Atlas**, choose **Splunk data**, and enter the entry service, environment, cluster and namespace. The map covers the selected time range.
 
 Coverage is limited to what the sources observe. Sampled flows, uninstrumented services, NAT without translated tuples and unmonitored segments stay visible as unknown endpoints or gaps; they are not filled in.

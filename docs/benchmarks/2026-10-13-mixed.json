@@ -1,0 +1,875 @@
+{
+  "status": "complete",
+  "case": "baseline",
+  "parameters": {
+    "pods": 20,
+    "records_per_pair": 100,
+    "connections_per_pair": 5,
+    "observers_per_source": 2
+  },
+  "environment": {
+    "installed_default_sha256": {
+      "splunk_app/splunk_adm/default/app.conf": "662a9586a1d142d4710acb6707a2b13f71eebabbdebb7b8e7e364ae904150a2f",
+      "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
+      "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
+      "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "8def54d5bce51da8e1ce15e9f030232fb9ea35a852ee32eb6ef48bf2c92b8315",
+      "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
+    },
+    "host_architecture": "arm64",
+    "python": "3.14.7",
+    "docker_architecture": "aarch64",
+    "docker_cpus": 12,
+    "docker_memory_bytes": 8214585344,
+    "image": "splunk/splunk:10.6.0.5",
+    "image_id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+    "container_memory_limit_bytes": 0,
+    "container_nano_cpus": 0,
+    "container_platform": "linux/amd64 (lab.sh)",
+    "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS"
+  },
+  "fixture_sha256": "4b1e5b4205a70a0e6b6e3ef4c958302d980b902911f87fddf6b65f433f0f9241",
+  "submitted": 16081,
+  "normalization": [
+    {
+      "flow_source": "ftd",
+      "observer": "192.0.2.71",
+      "records": "2000",
+      "bytes_fwd": "240000",
+      "bytes_rev": "160000",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "ftd",
+      "observer": "192.0.2.72",
+      "records": "2000",
+      "bytes_fwd": "240000",
+      "bytes_rev": "160000",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "hubble",
+      "observer": "mixed-node-0",
+      "records": "2000",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "hubble",
+      "observer": "mixed-node-1",
+      "records": "2000",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "nd",
+      "observer": "mixed-fabric-0",
+      "records": "2000",
+      "bytes_fwd": "500000",
+      "bytes_rev": "0",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "nd",
+      "observer": "mixed-fabric-1",
+      "records": "2000",
+      "bytes_fwd": "500000",
+      "bytes_rev": "0",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "netflow",
+      "observer": "192.0.2.11",
+      "records": "2000",
+      "bytes_fwd": "600000",
+      "bytes_rev": "0",
+      "scope": "benchmark",
+      "excluded": "0"
+    },
+    {
+      "flow_source": "netflow",
+      "observer": "192.0.2.12",
+      "records": "2000",
+      "bytes_fwd": "600000",
+      "bytes_rev": "0",
+      "scope": "benchmark",
+      "excluded": "0"
+    }
+  ],
+  "summary": [
+    {
+      "flow_source": "ftd",
+      "observer": "192.0.2.71",
+      "records": "2000",
+      "bytes_fwd": "240000",
+      "bytes_rev": "160000",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "ftd",
+      "observer": "192.0.2.72",
+      "records": "2000",
+      "bytes_fwd": "240000",
+      "bytes_rev": "160000",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "hubble",
+      "observer": "mixed-node-0",
+      "records": "2000",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "hubble",
+      "observer": "mixed-node-1",
+      "records": "2000",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "nd",
+      "observer": "mixed-fabric-0",
+      "records": "2000",
+      "bytes_fwd": "500000",
+      "bytes_rev": "0",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "nd",
+      "observer": "mixed-fabric-1",
+      "records": "2000",
+      "bytes_fwd": "500000",
+      "bytes_rev": "0",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "netflow",
+      "observer": "192.0.2.11",
+      "records": "2000",
+      "bytes_fwd": "600000",
+      "bytes_rev": "0",
+      "scope": "benchmark"
+    },
+    {
+      "flow_source": "netflow",
+      "observer": "192.0.2.12",
+      "records": "2000",
+      "bytes_fwd": "600000",
+      "bytes_rev": "0",
+      "scope": "benchmark"
+    }
+  ],
+  "graph": [
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/0166d7e1-8368-543a-b2ba-cde651b62d8a:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/0166d7e1-8368-543a-b2ba-cde651b62d8a",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/0a2af2c4-a255-5445-947b-ae90e1d9d050:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/0a2af2c4-a255-5445-947b-ae90e1d9d050",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/0de42838-0583-5b6c-a3d2-a300d0378469:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/0de42838-0583-5b6c-a3d2-a300d0378469",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/0decf05c-2ad4-5432-840a-d147a8f7c050:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/0decf05c-2ad4-5432-840a-d147a8f7c050",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/136b312a-f789-5276-8516-8206af422193:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/136b312a-f789-5276-8516-8206af422193",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/13810fc3-e814-57e2-9acc-55782438f704:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/13810fc3-e814-57e2-9acc-55782438f704",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/1adc9210-b190-502a-b9f4-900286e7b37d:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/1adc9210-b190-502a-b9f4-900286e7b37d",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/1cda099f-3a2c-56d0-a909-86e8d8430203:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/1cda099f-3a2c-56d0-a909-86e8d8430203",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/1fd67109-f2e3-5ea0-a3e4-64c4d74a270d:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/1fd67109-f2e3-5ea0-a3e4-64c4d74a270d",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/29c6bc99-f400-5f11-9ea0-9f842eb120c6:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/29c6bc99-f400-5f11-9ea0-9f842eb120c6",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/2acf7461-bc8f-500c-b176-9362f2a4b7f2:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/2acf7461-bc8f-500c-b176-9362f2a4b7f2",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/60e0fb53-fb99-5080-9b9d-c214f41f9067:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/60e0fb53-fb99-5080-9b9d-c214f41f9067",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/65cf85ee-96b8-5775-9bdb-e4ba4d2f1643:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/65cf85ee-96b8-5775-9bdb-e4ba4d2f1643",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/74aa2ef1-e6eb-545d-9047-7b26dbb66d32:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/74aa2ef1-e6eb-545d-9047-7b26dbb66d32",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/85a3cee7-84dd-500e-9821-6ce972e56e88:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/85a3cee7-84dd-500e-9821-6ce972e56e88",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/8b02c903-3053-509f-a1b9-a8a4f98ddc64:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/8b02c903-3053-509f-a1b9-a8a4f98ddc64",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/947b7230-a238-56d1-b760-11a86f16cfbf:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/947b7230-a238-56d1-b760-11a86f16cfbf",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/b42a4d68-5972-56ad-876f-af5de9cef053:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/b42a4d68-5972-56ad-876f-af5de9cef053",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/de28247f-dfd5-5cec-943c-83b4343c1419:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/de28247f-dfd5-5cec-943c-83b4343c1419",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    },
+    {
+      "row_type": "edge",
+      "id": "communicates:pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37>pod:benchmark-cluster/f418f01b-33b1-5a8e-a537-0aa0b2774f61:8080/tcp",
+      "source": "pod:benchmark-cluster/93e25bf6-88a8-5069-b618-b4842676df37",
+      "target": "pod:benchmark-cluster/f418f01b-33b1-5a8e-a537-0aa0b2774f61",
+      "relationship": "communicates_with",
+      "confidence": "correlated",
+      "count": "5",
+      "bytes": "30000",
+      "evidence": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "observers": [
+        "ftd:192.0.2.71:outside>inside",
+        "ftd:192.0.2.72:outside>inside",
+        "hubble:mixed-node-0",
+        "hubble:mixed-node-1",
+        "nd:mixed-fabric-0:leaf-101:eth1/11>leaf-102:eth1/12",
+        "nd:mixed-fabric-1:leaf-101:eth1/11>leaf-102:eth1/12",
+        "netflow:192.0.2.11:ifIndex 436212736>ifIndex 436232192",
+        "netflow:192.0.2.12:ifIndex 436212736>ifIndex 436232192"
+      ],
+      "sources": [
+        "ftd",
+        "hubble",
+        "nd",
+        "netflow"
+      ],
+      "server_port": "8080",
+      "transport": "tcp",
+      "direction_basis": "initiator"
+    }
+  ],
+  "flow_observations": 16000,
+  "graph_connections": 100,
+  "graph_bytes": 600000,
+  "verification_jobs": {
+    "count": 17,
+    "all_complete": true,
+    "warnings": 0
+  }
+}

@@ -55,10 +55,23 @@ interface ResultModel {
   hasData(): boolean;
   data(): Results;
 }
+const trueFlag = (value: unknown) =>
+  value === true ||
+  value === 1 ||
+  value === "1" ||
+  (typeof value === "string" && value.toLowerCase() === "true");
+interface SearchDataState {
+  isDone?: unknown;
+  isFinalized?: unknown;
+}
 interface Manager {
   data(
     kind: string,
-    options: { count: number; output_mode?: string },
+    options: {
+      count: number;
+      output_mode?: string;
+      condition?: (source: { get?: (key: string) => unknown }) => boolean;
+    },
   ): ResultModel;
   on(event: string, callback: (state?: unknown) => void): void;
   off(): void;
@@ -128,15 +141,18 @@ export function splunkMessage(payload: unknown): string | undefined {
   else if (payload && typeof payload === "object") {
     const p = payload as {
       message?: unknown;
+      text?: unknown;
       content?: { messages?: { text?: unknown }[] };
     };
     text =
       typeof p.message === "string"
         ? p.message
-        : p.content?.messages
-            ?.map((m) => m?.text)
-            .filter((t) => typeof t === "string" && t.trim())
-            .join(" ");
+        : typeof p.text === "string"
+          ? p.text
+          : p.content?.messages
+              ?.map((m) => m?.text)
+              .filter((t) => typeof t === "string" && t.trim())
+              .join(" ");
   }
   if (typeof text !== "string") return undefined;
   const clean = text.replace(/\s+/g, " ").trim();
@@ -144,6 +160,41 @@ export function splunkMessage(payload: unknown): string | undefined {
   return clean.length > MAX_MESSAGE_CHARS
     ? `${clean.slice(0, MAX_MESSAGE_CHARS - 1)}…`
     : clean;
+}
+const MAX_MESSAGES = 20;
+const FINALIZED_WARNING =
+  "Splunk finalized this job before all results were available; the graph may be incomplete.";
+/** Extracts non-informational job messages, keeping UI payloads bounded. */
+export function splunkWarnings(payload: unknown): string[] {
+  if (!payload || typeof payload !== "object") {
+    const message = splunkMessage(payload);
+    return message ? [message] : [];
+  }
+  const p = payload as {
+    message?: unknown;
+    content?: { messages?: unknown };
+  };
+  const messages = Array.isArray(p.content?.messages)
+    ? p.content.messages
+    : undefined;
+  const values = messages?.length
+    ? messages
+    : p.message === undefined
+      ? []
+      : [p.message];
+  return values
+    .filter((value) => {
+      if (!value || typeof value !== "object") return true;
+      const type = (value as { type?: unknown }).type;
+      return !(
+        typeof type === "string" &&
+        /^(?:info|information|notice)$/i.test(type.trim())
+      );
+    })
+    .map((value) => splunkMessage(value))
+    .filter((value): value is string => !!value)
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .slice(0, MAX_MESSAGES);
 }
 /** Converts SplunkJS json_rows results into row objects. */
 export function resultRows(data: Results): Row[] {
@@ -188,7 +239,13 @@ export function loadLive(
     tooLarge,
     empty:
       "The graph search returned no rows. Check that the Application Atlas macros are installed and shared with your role.",
-  }).then((rows) => rowsToGraph(rows, request));
+  }).then(({ rows, warnings }) => {
+    const graph = rowsToGraph(rows, request);
+    graph.coverage.warnings = [
+      ...new Set([...graph.coverage.warnings, ...warnings]),
+    ];
+    return graph;
+  });
 }
 /** Loads network inventory for candidate paths; callers treat failure as "no topology". */
 export function loadTopology(
@@ -207,9 +264,13 @@ export function loadTopology(
     release,
     tooLarge: () => new Error("Topology exceeds the pilot limit."),
     empty: "The topology search returned no rows.",
-  }).then(rowsToTopology);
+  }).then(({ rows, warnings }) => {
+    const topology = rowsToTopology(rows);
+    topology.warnings = [...new Set([...topology.warnings, ...warnings])];
+    return topology;
+  });
 }
-interface RunOptions {
+export interface RunOptions {
   search: string;
   earliest: string;
   maxRows: number;
@@ -218,10 +279,14 @@ interface RunOptions {
   tooLarge: () => Error;
   empty: string;
 }
-function runRows(
+export interface RunResult {
+  rows: Row[];
+  warnings: string[];
+}
+export function runRows(
   SearchManager: SearchConstructor,
   { search, earliest, maxRows, signal, release, tooLarge, empty }: RunOptions,
-): Promise<Row[]> {
+): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new Error("Search cancelled."));
@@ -242,8 +307,26 @@ function runRows(
     const results = manager.data("results", {
       count: maxRows + 1,
       output_mode: "json_rows",
+      // SplunkResultsModel otherwise autofetches on intermediate job data.
+      // Only fetch after the job advertises a completed state.
+      condition: (source: { get?: (key: string) => unknown }) => {
+        const data = source.get?.("data");
+        if (!data || typeof data !== "object") return false;
+        const state = data as SearchDataState;
+        return trueFlag(state.isDone) || trueFlag(state.isFinalized);
+      },
     });
     let finished = false;
+    let rows: Row[] | undefined;
+    let done = false;
+    let resultEventAfterDone = false;
+    let expectedCount: number | undefined;
+    const warnings: string[] = [];
+    const addWarnings = (payload: unknown) => {
+      for (const warning of splunkWarnings(payload))
+        if (!warnings.includes(warning)) warnings.push(warning);
+      if (warnings.length > MAX_MESSAGES) warnings.length = MAX_MESSAGES;
+    };
     const cleanup = () => {
       clearTimeout(timer);
       signal.removeEventListener("abort", abort);
@@ -266,8 +349,35 @@ function runRows(
       if (finished) return;
       finished = true;
       cleanup();
-      if (rows) resolve(rows);
+      if (rows) resolve({ rows, warnings });
       else reject(error ?? new Error(empty));
+    };
+    const readRows = () => {
+      if (!results.hasData()) return false;
+      try {
+        const found = resultRows(results.data());
+        if (found.length > maxRows) throw tooLarge();
+        rows = found;
+        return true;
+      } catch (e) {
+        finish(
+          undefined,
+          e instanceof Error ? e : new Error("Invalid search result."),
+        );
+        return false;
+      }
+    };
+    const maybeFinish = () => {
+      if (
+        !done ||
+        !resultEventAfterDone ||
+        expectedCount === undefined ||
+        !readRows() ||
+        finished
+      )
+        return;
+      if (rows?.length !== expectedCount) return;
+      finish(rows);
     };
     const abort = () => finish(undefined, new Error("Search cancelled."));
     const timer = setTimeout(
@@ -282,23 +392,31 @@ function runRows(
     );
     signal.addEventListener("abort", abort);
     results.on("data", () => {
-      if (!results.hasData()) return;
-      try {
-        const rows = resultRows(results.data());
-        if (rows.length > maxRows) throw tooLarge();
-        finish(rows);
-      } catch (e) {
-        finish(
-          undefined,
-          e instanceof Error ? e : new Error("Invalid search result."),
-        );
-      }
+      if (done) resultEventAfterDone = true;
+      maybeFinish();
     });
     manager.on("search:done", (state) => {
-      const count = Number(
-        (state as { content?: { resultCount?: unknown } })?.content
-          ?.resultCount,
-      );
+      done = true;
+      addWarnings(state);
+      const content = (state as { content?: Record<string, unknown> })?.content;
+      const finalized = content?.isFinalized;
+      if (trueFlag(finalized)) addWarnings(FINALIZED_WARNING);
+      const rawCount = content?.resultCount;
+      const count =
+        typeof rawCount === "number" ||
+        (typeof rawCount === "string" && rawCount.trim())
+          ? Number(rawCount)
+          : NaN;
+      if (!Number.isSafeInteger(count) || count < 0) {
+        finish(
+          undefined,
+          new Error(
+            "Splunk did not report a valid final result count; results could not be verified.",
+          ),
+        );
+        return;
+      }
+      expectedCount = count;
       if (count === 0) finish(undefined, new Error(empty));
       else if (count > maxRows) finish(undefined, tooLarge());
     });

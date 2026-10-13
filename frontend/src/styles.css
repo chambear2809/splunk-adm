@@ -1540,3 +1540,31 @@
     z-index: 4;
   }
 }
+
+.adm .popover.health {
+  width: min(850px, calc(100% - 32px));
+}
+.adm .health-table {
+  overflow-x: auto;
+}
+.adm .health-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.adm .health-table th,
+.adm .health-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px;
+  border-bottom: 1px solid var(--adm-card-border);
+}
+.adm .health [role="alert"] {
+  padding: 10px;
+  background: var(--adm-warn-bg);
+  color: var(--adm-warn-ink);
+}
+
+.adm .health > .secondary-button {
+  justify-self: start;
+}

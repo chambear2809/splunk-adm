@@ -1,0 +1,193 @@
+{
+  "selected_sources": [
+    "k8s",
+    "netflow",
+    "summary",
+    "traces"
+  ],
+  "findings": [
+    {
+      "check": "macro",
+      "status": "pass",
+      "message": "index macro is configured",
+      "source": "netflow"
+    },
+    {
+      "check": "visibility",
+      "status": "pass",
+      "message": "source records are visible",
+      "source": "netflow"
+    },
+    {
+      "check": "quality",
+      "status": "warning",
+      "message": "quality evidence: 0 excluded, 10000 accepted with warnings",
+      "source": "netflow",
+      "evidence": {
+        "excluded": 0,
+        "warnings": 10000
+      }
+    },
+    {
+      "check": "required_fields",
+      "status": "pass",
+      "message": "required flow fields passed",
+      "source": "netflow",
+      "evidence": []
+    },
+    {
+      "check": "observer_mapping",
+      "status": "warning",
+      "message": "10000 visible record(s) have an unmapped observer scope",
+      "source": "netflow"
+    },
+    {
+      "check": "source_selection",
+      "status": "not_selected",
+      "message": "source was not selected",
+      "source": "dcn"
+    },
+    {
+      "check": "source_selection",
+      "status": "not_selected",
+      "message": "source was not selected",
+      "source": "ftd"
+    },
+    {
+      "check": "source_selection",
+      "status": "not_selected",
+      "message": "source was not selected",
+      "source": "isovalent"
+    },
+    {
+      "check": "macro",
+      "status": "pass",
+      "message": "index macro is configured",
+      "source": "k8s"
+    },
+    {
+      "check": "visibility",
+      "status": "pass",
+      "message": "source records are visible",
+      "source": "k8s"
+    },
+    {
+      "check": "required_fields",
+      "status": "pass",
+      "message": "all probed records have required fields",
+      "source": "k8s"
+    },
+    {
+      "check": "macro",
+      "status": "pass",
+      "message": "index macro is configured",
+      "source": "traces"
+    },
+    {
+      "check": "visibility",
+      "status": "pass",
+      "message": "source records are visible",
+      "source": "traces"
+    },
+    {
+      "check": "required_fields",
+      "status": "pass",
+      "message": "all probed records have required fields",
+      "source": "traces"
+    },
+    {
+      "check": "source_selection",
+      "status": "not_selected",
+      "message": "source was not selected",
+      "source": "hubble"
+    },
+    {
+      "check": "macro",
+      "status": "pass",
+      "message": "index macro is configured",
+      "source": "summary"
+    },
+    {
+      "check": "visibility",
+      "status": "pass",
+      "message": "source records are visible",
+      "source": "summary"
+    },
+    {
+      "check": "required_fields",
+      "status": "pass",
+      "message": "all probed records have required fields",
+      "source": "summary"
+    },
+    {
+      "check": "replay_identity",
+      "status": "pass",
+      "message": "summary replay identity coverage",
+      "source": "summary",
+      "evidence": {
+        "records": 20,
+        "replay": 20
+      }
+    },
+    {
+      "check": "schedule",
+      "status": "blocked",
+      "message": "builder enabled/scheduled state",
+      "evidence": "ADM - Identity builder"
+    },
+    {
+      "check": "schedule",
+      "status": "blocked",
+      "message": "builder enabled/scheduled state",
+      "evidence": "ADM - Service binding"
+    },
+    {
+      "check": "schedule",
+      "status": "blocked",
+      "message": "builder enabled/scheduled state",
+      "evidence": "ADM - Service backends"
+    },
+    {
+      "check": "schedule",
+      "status": "warning",
+      "message": "builder enabled/scheduled state (optional enrichment)",
+      "evidence": "ADM - Interface inventory"
+    },
+    {
+      "check": "schedule",
+      "status": "blocked",
+      "message": "builder enabled/scheduled state",
+      "evidence": "ADM - Conversation rollup"
+    },
+    {
+      "check": "prune_schedule",
+      "status": "warning",
+      "message": "maintenance prunes are enabled"
+    },
+    {
+      "check": "permissions",
+      "status": "pass",
+      "message": "effective app/search permission contract",
+      "evidence": {
+        "missing": []
+      }
+    },
+    {
+      "check": "app",
+      "status": "pass",
+      "message": "app version evidence",
+      "evidence": {
+        "expected": "0.2.0",
+        "version": "0.2.0"
+      }
+    }
+  ],
+  "summary": {
+    "status": "blocked",
+    "blocked": 4,
+    "warnings": 4,
+    "unknown": 0,
+    "not_selected": 4
+  },
+  "app_state_unchanged": true
+}

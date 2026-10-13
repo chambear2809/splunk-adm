@@ -57,7 +57,7 @@ Expect at least `stream:netflow`, `cisco:dc:aci:class`, `cisco:dc:aci:stats`, `c
 
 ## Phase 5. Install Application Atlas
 
-Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum alongside) on the search head: **Manage Apps → Install app from file**, or [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install) with a local package. On Splunk Cloud, submit it for private-app vetting.
+Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum alongside) on the search head: **Manage Apps → Install app from file**, or [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install) with a local package. On Splunk Cloud, submit it for private-app vetting. For an existing installation, use the separate `-upgrade.tar.gz` archive to preserve the operator scope CSV; see [upgrade preservation checks](../UPGRADES.md).
 
 **Check:** the **Application Atlas** app opens and shows the synthetic demo.
 

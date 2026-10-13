@@ -464,11 +464,7 @@ function NodeDetails({
     ...(node.endpoint_kind === "k8s_node" ? ["node"] : []),
   ]);
   const frontDoor = node.endpoint_kind === "k8s_service";
-  const forwards = frontDoor
-    ? (index.outgoing.get(node.id) ?? []).filter(
-        (e) => e.relationship === "forwards_to",
-      )
-    : [];
+  const forwards = frontDoor ? backendChoices(index, node.id) : [];
   return (
     <div className="inspector-body">
       <div className="inspector-head">

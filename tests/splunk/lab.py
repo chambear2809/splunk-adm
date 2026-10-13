@@ -56,7 +56,8 @@ def _open(req: urllib.request.Request, timeout: float = 120):
     try:
         return urllib.request.urlopen(req, context=_CTX, timeout=timeout)
     except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", "replace")[:2000]
+        with e:
+            body = e.read().decode("utf-8", "replace")[:2000]
         raise LabError(f"HTTP {e.code} {req.full_url}: {body}") from e
 
 

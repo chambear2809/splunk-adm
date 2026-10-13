@@ -1,3 +1,8 @@
 []
 access = read : [ * ], write : [ admin, sc_admin ]
 export = none
+
+# All saved searches in this app write derived state or perform maintenance.
+# Read access permits dispatchAs=owner, so these are administrator-only.
+[savedsearches]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]

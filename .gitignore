@@ -15,3 +15,5 @@ dist/
 splunk_app/splunk_adm/appserver/static/
 __pycache__/
 *.pyc
+test-results/
+playwright-report/

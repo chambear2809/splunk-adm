@@ -8,8 +8,10 @@ several tests also read the scenario's per-conversation expectations directly.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -763,6 +765,63 @@ class AciDataLayerTest(unittest.TestCase):
         self.dispatch("ADM - Service backends", index_window=self.all_slices)
         self.assertEqual(self.count("| inputlookup adm_service_backends"), before)
         self.test_c1_not_ready_endpoint_closes_and_reopens()
+
+    def test_late_identity_snapshot_does_not_regress_attributes(self):
+        """An older indexed-late pod snapshot must not replace its newer attributes."""
+        event = next(e for e in self.kube if e["sourcetype"] == "kube:object:pods")
+        uid = event["event"]["object"]["metadata"]["uid"]
+        query = (
+            f'| inputlookup adm_ip_identity where entity_id="{uid}" | table entity_name'
+        )
+        baseline = self.lab.search(query)
+        late = copy.deepcopy(event)
+        late["time"] = float(event["time"]) - 3600
+        late["event"]["object"]["metadata"]["name"] = "stale-pod-name"
+        before = self.count("index=k8s")
+        start = int(time.time()) - 1
+        try:
+            self.load([late])
+            self.wait_for_count("index=k8s", before + 1)
+            self.dispatch(
+                "ADM - Identity builder", index_window=(start, int(time.time()) + 1)
+            )
+            rows = self.lab.search(query)
+            self.assertTrue(rows)
+            self.assertEqual(
+                sorted(r.get("entity_name") for r in rows),
+                sorted(r.get("entity_name") for r in baseline),
+            )
+        finally:
+            self.dispatch("ADM - Identity builder", index_window=self.slice)
+
+    def test_late_aci_policy_event_does_not_regress_object(self):
+        """An older indexed-late policy event must not overwrite the current object."""
+        event = next(
+            e
+            for p in sorted(RAW.glob("*.ndjson"))
+            for e in envelopes(p)
+            if e["sourcetype"] == "cisco:dc:aci:class"
+            and 'component="vzBrCP"' in e.get("event", "")
+        )
+        dn = re.search(r'\bdn="([^"]+)"', event["event"]).group(1)
+        query = f'| inputlookup adm_aci_policy where dn="{dn}" | table name last_seen'
+        baseline = self.lab.search(query)
+        late = copy.deepcopy(event)
+        late["time"] = float(event["time"]) - 3600
+        late["event"] = re.sub(
+            r'\bname="[^"]+"', 'name="stale-contract-name"', late["event"], count=1
+        )
+        before = self.count("index=cisco_dc")
+        start = int(time.time()) - 1
+        try:
+            self.load([late])
+            self.wait_for_count("index=cisco_dc", before + 1)
+            self.dispatch(
+                "ADM - ACI policy", index_window=(start, int(time.time()) + 1)
+            )
+            self.assertEqual(self.lab.search(query), baseline)
+        finally:
+            self.dispatch("ADM - ACI policy", index_window=self.slice)
 
     # ---- edge-case hand-offs (connection-level decisions) ----
 

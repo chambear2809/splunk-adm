@@ -1,0 +1,43 @@
+{
+  "status": "complete",
+  "environment": {
+    "installed_default_sha256": {
+      "splunk_app/splunk_adm/default/app.conf": "662a9586a1d142d4710acb6707a2b13f71eebabbdebb7b8e7e364ae904150a2f",
+      "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
+      "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
+      "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "8def54d5bce51da8e1ce15e9f030232fb9ea35a852ee32eb6ef48bf2c92b8315",
+      "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
+    },
+    "host_architecture": "arm64",
+    "python": "3.14.7",
+    "docker_architecture": "aarch64",
+    "docker_cpus": 12,
+    "docker_memory_bytes": 8214585344,
+    "image": "splunk/splunk:10.6.0.5",
+    "image_id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+    "container_memory_limit_bytes": 0,
+    "container_nano_cpus": 0,
+    "container_platform": "linux/amd64 (lab.sh)",
+    "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS"
+  },
+  "backup_sha256": "5f340602f6d984009865906b9221478ad7fb26a300cc38374d761be7a73a22f8",
+  "collection_rows": {
+    "adm_ip_identity": 8,
+    "adm_service_workload": 4,
+    "adm_interfaces": 2,
+    "adm_service_backends": 2,
+    "adm_service_routes": 2,
+    "adm_aci_policy": 2
+  },
+  "fixture_sha256": "8f5bfdc61f71387039c34a521362c835af09b2e7a0b8c8acc5135c929b1ebc48",
+  "graph_sha256_before": "89f6263c14f43d33955d38be5a905039e59637f3c55ae9c91cc24373977a8617",
+  "graph_sha256_after": "89f6263c14f43d33955d38be5a905039e59637f3c55ae9c91cc24373977a8617",
+  "summary_flow_records": 6,
+  "raw_events": 22,
+  "search_jobs": {
+    "count": 44,
+    "all_complete": true,
+    "warnings": 0
+  }
+}

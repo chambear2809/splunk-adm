@@ -4,6 +4,7 @@ import { indexGraph, type GraphEdge } from "./graph";
 import { demoGraph, demoTopology } from "./provider";
 import {
   buildPath,
+  choiceExplanation,
   emptyTopology,
   indexTopology,
   interfaceKey,
@@ -79,6 +80,69 @@ describe("rowsToTopology", () => {
 });
 
 describe("interface names", () => {
+  it("does not choose an arbitrary LLDP attachment or parallel link port", () => {
+    const links = [
+      {
+        a_device: "leaf-a",
+        a_interface: "Eth1/1",
+        b_device: "worker-1",
+        source: "lldp" as const,
+      },
+      {
+        a_device: "leaf-b",
+        a_interface: "Eth1/2",
+        b_device: "worker-1",
+        source: "lldp" as const,
+      },
+      {
+        a_device: "leaf-a",
+        a_interface: "Eth1/3",
+        b_device: "leaf-b",
+        b_interface: "Eth1/4",
+        source: "cdp" as const,
+      },
+      {
+        a_device: "leaf-a",
+        a_interface: "Eth1/5",
+        b_device: "leaf-b",
+        b_interface: "Eth1/6",
+        source: "cdp" as const,
+      },
+    ];
+    for (const ordered of [links, [...links].reverse()]) {
+      const result = indexTopology({ ...emptyTopology(), links: ordered });
+      expect(result.lldpHost.has("worker-1")).toBe(false);
+      expect(result.adjacency.get("leaf-a")).toEqual([
+        { to: "leaf-b", out: undefined, in: undefined },
+      ]);
+    }
+  });
+  it("counts connections within aggregated inferred evidence", () => {
+    const base = conv("frontend-7d9c6b5f4-x2k8p", "checkout-5f8b9c7d6-m4n7q");
+    const text = choiceExplanation(
+      {
+        id: base.target,
+        label: "backend",
+        state: "observed",
+        edges: [
+          {
+            ...base,
+            confidence: "observed",
+            handoff_basis: "hubble_client_tuple",
+            count: 2,
+          },
+          {
+            ...base,
+            confidence: "inferred",
+            handoff_basis: "time_inferred",
+            count: 37,
+          },
+        ],
+      },
+      { clients: [] },
+    );
+    expect(text).toContain("37 more connections inferred from timing");
+  });
   it("normalizes ethX/Y, EthX/Y and EthernetX/Y to one key", () => {
     expect(interfaceKey("eth1/11")).toBe(interfaceKey("Ethernet1/11"));
     expect(interfaceKey("Eth1/11")).toBe(interfaceKey("ethernet1/11"));
@@ -182,6 +246,69 @@ describe("buildPath", () => {
       "node-a",
       "checkout-5f8b9c7d6-m4n7q",
     ]);
+  });
+  it.each([true, false])(
+    "keeps identical hostnames in separate clusters distinct (both hosts present: %s)",
+    (bothHosts) => {
+      const cross = structuredClone(graph);
+      cross.nodes = [
+        ...["a", "b"].map((cluster) => ({
+          id: `pod:${cluster}/shop/client`,
+          label: `client-${cluster}`,
+          kind: "workload" as const,
+          attributes: { node: "worker-1" },
+        })),
+        ...["a", ...(bothHosts ? ["b"] : [])].map((cluster) => ({
+          id: `node:${cluster}/worker-1`,
+          label: "worker-1",
+          kind: "endpoint" as const,
+          endpoint_kind: "k8s_node" as const,
+          cluster,
+          attributes: {
+            attach_device: cluster === "a" ? "leaf-101" : "leaf-102",
+          },
+        })),
+      ];
+      const edge = {
+        ...conv("frontend-7d9c6b5f4-x2k8p", "checkout-5f8b9c7d6-m4n7q"),
+        source: "pod:a/shop/client",
+        target: "pod:b/shop/client",
+        observers: [],
+      };
+      cross.edges = [edge];
+      const path = buildPath(edge, cross, indexGraph(cross), topo);
+      expect(path.sameHost).toBe(false);
+      const hosts = path.stages.filter((s) => s.kind === "host");
+      expect(hosts.map((s) => s.nodeId)).toEqual([
+        "node:a/worker-1",
+        bothHosts ? "node:b/worker-1" : undefined,
+      ]);
+      expect(path.stages.some((s) => s.title === "leaf-101")).toBe(true);
+      expect(path.stages.some((s) => s.title === "leaf-102")).toBe(bothHosts);
+    },
+  );
+  it("does not assert a shared host for pods with an unknown cluster", () => {
+    const g = structuredClone(graph);
+    g.nodes = ["client", "server"].map((label) => ({
+      id: `pod:unknown/shop/${label}`,
+      label,
+      kind: "workload",
+      attributes: { node: "worker-1" },
+    }));
+    const edge = {
+      ...graph.edges[0],
+      source: g.nodes[0].id,
+      target: g.nodes[1].id,
+    };
+    g.edges = [edge];
+    const path = buildPath(
+      edge,
+      g,
+      indexGraph(g),
+      indexTopology(emptyTopology()),
+    );
+    expect(path.sameHost).toBe(false);
+    expect(path.stages.some((s) => s.kind === "gap")).toBe(true);
   });
   it("shows a gap where no link joins the NX-OS fabric to ACI", () => {
     expect(titles(conv("checkout-5f8b9c7d6-m4n7q", "orders-db-01"))).toEqual([
