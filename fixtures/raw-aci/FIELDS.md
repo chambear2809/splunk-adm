@@ -78,6 +78,14 @@ Line format: Hubble static exporter writes one `ExportEvent` per line, `{"flow":
 
 Same shapes and citations as the NX-OS fixtures. Isovalent records cover pod-initiated connects only (frontend → checkout ×2, checkout → orders-db, payment → external, which shows the pod IP while the fabric sees node-a after masquerade). Spans name their pod explicitly. Server spans use OTel HTTP semantic conventions: `client.address` (original client, from X-Forwarded-For behind Envoy) and `network.peer.address` (immediate peer: Envoy's ingress IP, the SNAT node, or the VM).
 
+## Hubble findings resolved with a real Enterprise sample
+
+`fixtures/samples/hubble-enterprise/` contains 1,589 redacted Hubble `1.19.5-cee.1` exporter lines; `tests/splunk/test_hubble_enterprise.py` validates them in Splunk. The Enterprise JSON-lines envelope and Cilium `flow.proto` fields match the open-source exporter and are handled by `adm_flows_hubble`.
+
+- **Event types:** traces have `event_type.type=4`; `sub_type` is the observation point: TO_NETWORK 11, TO_STACK 3, TO_PROXY 1. TO_ENDPOINT has subtype 0, omitted from the JSON, so use `trace_observation_point`. L7 has type 129 with no subtype; policy drops are type 1/subtype 133 (`POLICY_DENIED`), policy verdicts type 5, and SOCK events type 7.
+- **L7 direction:** all 15 REQUESTs and 15 RESPONSEs are `INGRESS`; `is_reply=false`/`true` separates them. These pod-to-pod requests have no X-Forwarded-For or trace context and are dropped by design. This does not establish Envoy behavior.
+- **Normalization:** 600 forwarded TO_ENDPOINT flows minus 43 replies yield 557 conversations. None of the 453 TO_NETWORK traces has `IP.source_xlated`. Observer is `k8s-01-wkr-02`, cluster scope observer `k8s-01`; nanosecond flow timestamps parse within 1 ms.
+
 ## Not grounded; omitted or flagged
 
 - **fabricNode** (switch model) is collected only by the health writer (`bin/cisco_nexus_aci.py:756-830`), which merges `healthInst` attributes not inspected here; omitted. topSystem supplies name, role, serial and addresses.
@@ -86,7 +94,7 @@ Same shapes and citations as the NX-OS fixtures. Isovalent records cover pod-ini
 - **acllog value formats**: `srcIntf` (`eth1/5`), `srcEpgName`/`dstEpgName` (EPG/ExtEPG DN) and `vrfEncap` (`vxlan-<vnid>`) formats are unverified; attribute names are from the MIM.
 - **fabricLink DN `lnkcnt-{n}`**: uses the spine node ID; one object per physical link (whether APIC also stores the reverse direction is unverified).
 - **Host LLDP values** (`sysDesc`, `capability`, `portDesc` = NIC name, `monPolDn=uni/infra/moninfra-default` on access ports) follow LLDP semantics but are not from a real host adjacency sample.
-- **Hubble**: L7 flow `traffic_direction` and the IPs Cilium reports for Envoy L7 access-log flows, `event_type` numbers (4 trace / 129 access log, sub_type equal to the observation point), whether SNAT `TO_NETWORK` traces survive default monitor aggregation, and Isovalent Enterprise's export format all need real samples.
+- **Hubble (remaining gaps)**: whether SNAT `TO_NETWORK` traces with `IP.source_xlated` survive Enterprise export/default monitor aggregation, and the IPs and X-Forwarded-For Cilium reports for Envoy L7 access-log flows, still need real samples. The Enterprise sample above contains no NodePort, SNAT, Gateway or Ingress traffic.
 - **ND flows on ACI**: whether `nodeNames` includes spines, and the `srcEpg` value format, need samples.
 - **Gateway/HTTPRoute status conditions** and HTTPRoute `status.parents` are omitted.
 
