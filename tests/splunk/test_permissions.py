@@ -550,7 +550,8 @@ class RestrictedViewerTest(unittest.TestCase):
                     str(effective).lower(), {value, "1" if value == "true" else "0"}
                 )
                 with self.assertRaisesRegex(
-                    SearchRejected, r"(?i)permission|denied|not allowed|invalid"
+                    SearchRejected,
+                    r"cannot write: /nobody/splunk_adm/collections/adm_observer_scope",
                 ):
                     self._viewer_search(
                         "| inputlookup adm_observer_scope | outputlookup adm_observer_scope",
@@ -688,7 +689,8 @@ class RestrictedViewerTest(unittest.TestCase):
         )
         self.addCleanup(self.lab._json, "POST", role_path, {"capabilities": "search"})
         with self.assertRaisesRegex(
-            SearchRejected, r"(?i)permission|denied|not allowed|invalid"
+            SearchRejected,
+            r"cannot write: /nobody/splunk_adm/collections/adm_observer_scope",
         ):
             self._viewer_search(migration, 0, int(time.time()))
         # With CSV checks false/warn, the old CSV ACL assertion fails: a viewer
