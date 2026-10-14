@@ -36,3 +36,34 @@ describe("graph query coordination", () => {
     );
   });
 });
+
+it("sends the signed-in timezone and latest bound to both searches", async () => {
+  const requests: Array<{ latest?: string; timezone?: string }> = [];
+  const client: SearchClient = {
+    search: async (request) => {
+      requests.push(request);
+      return {
+        rows: request.search.includes("adm_topology") ? [] : rows.rows,
+        warnings: [],
+      };
+    },
+  };
+  await queryGraph(
+    client,
+    {
+      ...rows.args,
+      earliest: "1791373500",
+      latest: "1791374400",
+      timezone: "Pacific/Honolulu",
+    },
+    new AbortController(),
+  );
+  expect(requests).toHaveLength(2);
+  expect(
+    requests.every(
+      (request) =>
+        request.latest === "1791374400" &&
+        request.timezone === "Pacific/Honolulu",
+    ),
+  ).toBe(true);
+});

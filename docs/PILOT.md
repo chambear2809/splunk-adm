@@ -21,7 +21,7 @@ npm test
 npm run package
 ```
 
-`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates full-install `dist/splunk_adm-<version>.tar.gz` and `dist/splunk_adm-<version>-upgrade.tar.gz` archives, each with a SHA256 file. Use the upgrade archive for an existing installation so its legacy CSV migration source is preserved (live scope data is in KV); see [upgrade checks](UPGRADES.md). Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
+`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates one `dist/splunk_adm-<version>.tar.gz` archive and its SHA256 file for installs and updates. The archive contains neither scope KV rows nor the legacy CSV migration source, so existing state is preserved; see [upgrade checks](UPGRADES.md). Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
 
 Python lint: `ruff check tools tests` and `ruff format --check tools tests` (install Ruff separately).
 

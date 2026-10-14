@@ -1,17 +1,41 @@
 import { useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
-import TextExport from "@splunk/react-ui/Text";
+import { ScopeBar } from "../map/ScopeBar";
+import { TimePicker } from "../map/TimePicker";
+import type { SearchClient } from "../data/searchClient";
+import { demoArgs, DEMO_WINDOW } from "../data/demoClient";
 import { toolkitDefault } from "../app/interop";
 import { pageURL, stateParams, type UrlState } from "../app/urlState";
 import { argError } from "../provider";
+import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 const Button = toolkitDefault(ButtonExport);
-const Text = toolkitDefault(TextExport);
 
-export function ApplicationsPage({ state }: { state: UrlState }) {
-  const [args, setArgs] = useState(state.args);
+export function ApplicationsPage({
+  state,
+  client,
+  timezone,
+  inSplunk = false,
+}: {
+  state: UrlState;
+  client?: SearchClient;
+  timezone?: string;
+  inSplunk?: boolean;
+}) {
+  const [args, setArgs] = useState(
+    state.mode === "demo" ? demoArgs : state.args,
+  );
+  const [earliest, setEarliest] = useState(
+    state.mode === "demo" ? DEMO_WINDOW.earliest : state.earliest,
+  );
+  const [latest, setLatest] = useState(
+    state.mode === "demo" ? DEMO_WINDOW.latest : state.latest,
+  );
   const keys = Object.keys(args) as (keyof GraphArgs)[];
-  const errors = keys.map((key) => argError(key, args[key])).filter(Boolean);
+  const errors = [
+    ...keys.map((key) => argError(key, args[key])),
+    timeError(earliest, latest, timezone),
+  ].filter(Boolean);
   return (
     <main className="atlas-page">
       <h1>Applications</h1>
@@ -23,22 +47,29 @@ export function ApplicationsPage({ state }: { state: UrlState }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (!errors.length)
-            location.assign(pageURL("map", stateParams({ ...state, args })));
+            location.assign(
+              pageURL("map", stateParams({ ...state, args, earliest, latest })),
+            );
         }}
       >
-        {keys.map((key) => (
-          <label className="atlas-field" key={key}>
-            <span>{key[0].toUpperCase() + key.slice(1)}</span>
-            <Text
-              value={args[key]}
-              onChange={(_e, { value }) =>
-                setArgs((current) => ({ ...current, [key]: value }))
-              }
-              error={!!argError(key, args[key])}
-            />
-            <small>{argError(key, args[key])}</small>
-          </label>
-        ))}
+        <ScopeBar
+          args={args}
+          onChange={setArgs}
+          live={state.mode === "live"}
+          client={client}
+          demoArgs={state.mode === "demo" ? demoArgs : undefined}
+        />
+        <TimePicker
+          earliest={earliest}
+          latest={latest}
+          timezone={timezone}
+          live={inSplunk}
+          disabled={state.mode === "demo"}
+          onChange={(start, end) => {
+            setEarliest(start);
+            setLatest(end);
+          }}
+        />
         <Button
           type="submit"
           appearance="primary"

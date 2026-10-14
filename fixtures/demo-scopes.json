@@ -1,0 +1,79 @@
+{
+  "search": "| `adm_scope_options`",
+  "earliest": "0",
+  "latest": "now",
+  "provenance": {
+    "source": "splunk_app/splunk_adm/default/macros.conf:adm_scope_options",
+    "lookup": "adm_service_workload",
+    "input_source": "fixtures/raw/scenario.json and initialized adm_service_workload lookup",
+    "schema": [
+      "environment",
+      "cluster",
+      "namespace",
+      "service",
+      "last_seen",
+      "pods"
+    ],
+    "input_fields": [
+      "service",
+      "environment",
+      "cluster",
+      "namespace",
+      "pod_uid",
+      "last_seen"
+    ],
+    "macro_sha256": "94245def3a0a0418971f346e1f3d2db5b13882cc1e55ad4f6deae7477ca50151",
+    "captured_at": 1792015476,
+    "method": "tests/splunk/lab.py search against initialized lab"
+  },
+  "rows": [
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "batch",
+      "service": "batch-worker",
+      "last_seen": "1791373920",
+      "pods": "1"
+    },
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "shop",
+      "service": "cart",
+      "last_seen": "1791373808.365",
+      "pods": "1"
+    },
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "shop",
+      "service": "catalog",
+      "last_seen": "1791373808.355",
+      "pods": "1"
+    },
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "shop",
+      "service": "checkout",
+      "last_seen": "1791373808.4",
+      "pods": "1"
+    },
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "shop",
+      "service": "frontend",
+      "last_seen": "1791373808.3",
+      "pods": "1"
+    },
+    {
+      "environment": "demo",
+      "cluster": "demo-cluster",
+      "namespace": "shop",
+      "service": "payment",
+      "last_seen": "1791373808.45",
+      "pods": "1"
+    }
+  ]
+}

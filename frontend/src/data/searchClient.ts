@@ -4,11 +4,14 @@ import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
 import { toolkitDefault } from "../app/interop";
 import { splunkWarnings } from "../provider";
 import type { Row } from "../rows";
+import { timeError } from "./timeBounds";
+export { timeError } from "./timeBounds";
 
 export interface SearchRequest {
   search: string;
   earliest: string;
   latest?: string;
+  timezone?: string;
   maxRows: number;
   signal: AbortSignal;
 }
@@ -18,22 +21,6 @@ export interface RunResult {
 }
 export interface SearchClient {
   search(request: SearchRequest): Promise<RunResult>;
-}
-
-export function timeError(
-  earliest: string,
-  latest = "now",
-): string | undefined {
-  const safe = /^(?:now|[+-]\d{1,12}(?:s|m|h|d|w)(?:@[smhdw])?|\d{1,12})$/;
-  if (!safe.test(earliest) || !safe.test(latest))
-    return "Unsupported time window.";
-  if (
-    /^\d+$/.test(earliest) &&
-    /^\d+$/.test(latest) &&
-    Number(earliest) >= Number(latest)
-  )
-    return "Earliest must precede latest.";
-  return undefined;
 }
 
 const errorDetail = (base: string, payload: unknown) => {
@@ -48,7 +35,11 @@ const trueFlag = (value: unknown) =>
 
 export class ToolkitSearchClient implements SearchClient {
   search(request: SearchRequest): Promise<RunResult> {
-    const invalid = timeError(request.earliest, request.latest);
+    const invalid = timeError(
+      request.earliest,
+      request.latest,
+      request.timezone,
+    );
     if (invalid) return Promise.reject(new Error(invalid));
     if (request.signal.aborted)
       return Promise.reject(new Error("Search cancelled."));

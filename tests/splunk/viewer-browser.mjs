@@ -25,6 +25,7 @@ try {
   const consoleErrors = [];
   const failures = [];
   const searchRequests = [];
+  const searchPayloads = [];
   const atlasScripts = [];
   page.on("console", (message) => {
     if (message.type() === "error")
@@ -38,12 +39,19 @@ try {
     if (response.status() >= 400)
       failures.push({ status: response.status(), path: safePath(url) });
     if (
-      /\/search\/(v2\/)?jobs/.test(url) &&
+      /\/search\/(v2\/)?jobs\/?$/.test(new URL(url).pathname) &&
       response.request().method() === "POST"
     ) {
       searchRequests.push({
         status: response.status(),
         path: safePath(url),
+      });
+      const body = response.request().postData() || "";
+      const params = new URLSearchParams(body);
+      searchPayloads.push({
+        earliest: params.get("earliest_time"),
+        latest: params.get("latest_time"),
+        scopeOptions: body.includes("adm_scope_options"),
       });
     }
     if (
@@ -99,6 +107,35 @@ try {
     };
   }
 
+  async function chooseScope(label, value) {
+    const control = page.getByRole("combobox", { name: label }).first();
+    await control.waitFor({ state: "visible", timeout: 60000 });
+    const tag = await control.evaluate((element) => element.tagName);
+    if (tag === "SELECT") {
+      await control
+        .selectOption({ label: value })
+        .catch(() => control.selectOption(value));
+      return;
+    }
+    await control.click();
+    await control.fill("");
+    const option = page.getByRole("option", { name: value, exact: true }).last();
+    if (await option.count()) {
+      await option.click();
+      return;
+    }
+    await control.fill(value);
+    await control.press("Enter");
+  }
+
+  async function waitForSearch(after, timeout = 60000) {
+    const deadline = Date.now() + timeout;
+    while (searchPayloads.length <= after && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return searchPayloads.at(-1);
+  }
+
   const rl = createInterface({ input: process.stdin });
   for await (const line of rl) {
     const [command, theme] = line.trim().split(/\s+/);
@@ -139,9 +176,14 @@ try {
       evidence.themeOk = evidence.theme === theme;
       evidence.timezone = await adm.getAttribute("data-timezone");
       evidence.timezoneOk = evidence.timezone === timezone;
+      evidence.scopeFieldStyle = await page.getByRole("combobox", { name: "Environment", exact: true }).evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, color: style.color, border: style.borderTopWidth, shadow: style.boxShadow };
+      });
       evidence.scopeService = await adm.locator(".scope-service").innerText();
       evidence.scopeDims = await adm.locator(".scope-dims").innerText();
       evidence.notLoaded = text.includes("Splunk · not loaded");
+      evidence.incompleteWindow = text.includes("Incomplete window");
       evidence.cards = await adm.locator("[data-hit]").count();
       evidence.expectedNodes = Number(expectedNodes);
       evidence.nodeCount = Number(await adm.getAttribute("data-node-count"));
@@ -150,6 +192,47 @@ try {
       await root.screenshot({ path: `dist/atlas-live-${theme}.png` });
       evidence.nodesOk = evidence.nodeCount === Number(expectedNodes);
       evidence.demoRequests = demoRequests;
+
+      stage = "scope controls";
+      const beforeBuild = searchPayloads.length;
+      const previousWindow = (await adm.locator(".scope-time").textContent()) ?? "";
+      await chooseScope("Environment", "demo");
+      await chooseScope("Cluster", "demo-cluster");
+      await chooseScope("Namespace", "shop");
+      await chooseScope("Service", "frontend");
+      const timeRange = page.getByLabel("Time range").first();
+      await timeRange.waitFor({ state: "visible", timeout: 60000 });
+      evidence.timezonePicker = {
+        name:
+          (await timeRange.getAttribute("data-zone-name")) ??
+          (await timeRange.getAttribute("data-atlas-timezone-name")),
+        offset: Number(
+          (await timeRange.getAttribute("data-atlas-timezone-offset")) ??
+            "NaN",
+        ),
+      };
+      const timeTag = await timeRange.evaluate((element) => element.tagName);
+      if (timeTag === "SELECT") {
+        await timeRange.selectOption("-1h");
+      } else {
+        await timeRange.getByRole("button").click();
+        await page.locator('[data-test="time-range-dialog"]').screenshot({ path: `dist/atlas-picker-${theme}.png` });
+        await page.getByRole("button", { name: "Presets", exact: true }).click();
+        await page.getByText(/Last (60 minutes|hour)/i).last().click();
+      }
+      await page.getByRole("button", { name: "Build map", exact: true }).click();
+      const buildSearch = await waitForSearch(beforeBuild);
+      await page.waitForFunction((previous) => {
+        const current = document.querySelector(".scope-time")?.textContent?.trim();
+        return current && current !== previous.trim();
+      }, previousWindow, { timeout: 150000 });
+      await page.getByText(/Incomplete window/i).waitFor({ state: "visible", timeout: 60000 });
+      evidence.scopeControls = {
+        buildEarliest: buildSearch?.earliest,
+        buildLatest: buildSearch?.latest,
+        incompleteWindow: true,
+        optionSearch: searchPayloads.some((request) => request.scopeOptions),
+      };
 
       stage = "live map reload";
       const liveReload = `${BASE}/en-US/app/splunk_adm/map?mode=live&tab=services&earliest=${encodeURIComponent(earliest)}&latest=${encodeURIComponent(latest)}&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop`;

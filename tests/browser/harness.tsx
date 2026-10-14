@@ -8,6 +8,7 @@ import type {
   SearchRequest,
 } from "../../frontend/src/data/searchClient";
 import { FINALIZED_SEARCH_WARNING } from "../../frontend/src/provider";
+import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
 import "../../frontend/src/styles.css";
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
@@ -20,6 +21,8 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (request.search === "| `adm_scope_options`")
+      return { rows: scopes.rows, warnings: [] };
     if (request.search === "`adm_topology`") return { rows: [], warnings: [] };
     window.__ADM_LAST_EARLIEST__ = request.earliest;
     window.__ADM_LAST_GRAPH_SEARCH__ = request.search;

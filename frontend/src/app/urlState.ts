@@ -1,4 +1,5 @@
-import { argError, timeError } from "../provider";
+import { argError } from "../provider";
+import { isSafeTime } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 
 export const PAGES = [
@@ -48,8 +49,14 @@ export function parseUrlState(
   }
   const earliest = params.get("earliest") ?? "-1h";
   const latest = params.get("latest") ?? "now";
-  const error = timeError(earliest, latest);
-  if (error) throw new Error(error);
+  if (!isSafeTime(earliest) || !isSafeTime(latest))
+    throw new Error("Unsupported time window.");
+  if (
+    /^\d+(?:\.\d+)?$/.test(earliest) &&
+    /^\d+(?:\.\d+)?$/.test(latest) &&
+    Number(earliest) >= Number(latest)
+  )
+    throw new Error("Earliest must precede latest.");
   const mode = params.get("mode") ?? (inSplunk ? "live" : "demo");
   const scenario = params.get("scenario") ?? "aci";
   const tab = params.get("tab") ?? "network";

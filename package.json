@@ -15,6 +15,7 @@
     "typecheck:browser": "tsc -p tsconfig.browser.json --noEmit"
   },
   "dependencies": {
+    "@splunk/react-time-range": "12.1.1",
     "@splunk/react-ui": "5.17.0",
     "@splunk/search-job": "3.1.0",
     "@splunk/splunk-utils": "4.1.0",

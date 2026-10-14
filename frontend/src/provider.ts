@@ -7,6 +7,7 @@ import type {
   RunResult,
 } from "./data/searchClient";
 export { timeError } from "./data/searchClient";
+export { isIncompleteWindow, resolveTime } from "./data/timeBounds";
 export {
   demoArgs,
   demoArgsFor,
@@ -15,15 +16,10 @@ export {
   DEMO_SCENARIOS,
 } from "./data/demoClient";
 export type { DemoScenario } from "./data/demoClient";
-export const TIME_RANGES = [
-  { value: "-15m", label: "Last 15 minutes" },
-  { value: "-1h", label: "Last hour" },
-  { value: "-4h", label: "Last 4 hours" },
-  { value: "-24h", label: "Last 24 hours" },
-] as const;
 export interface LiveRequest extends GraphArgs {
   earliest: string;
   latest?: string;
+  timezone?: string;
 }
 const MAX_MESSAGE_CHARS = 300;
 const MAX_MESSAGES = 20;
@@ -138,10 +134,12 @@ const request = (
   maxRows: number,
   signal: AbortSignal,
   latest?: string,
+  timezone?: string,
 ): SearchRequest => ({
   search,
   earliest,
   latest: latest ?? "now",
+  timezone,
   maxRows,
   signal,
 });
@@ -157,7 +155,16 @@ export function loadLive(
     return Promise.reject(e);
   }
   return client
-    .search(request(search, input.earliest, MAX_ROWS, signal, input.latest))
+    .search(
+      request(
+        search,
+        input.earliest,
+        MAX_ROWS,
+        signal,
+        input.latest,
+        input.timezone,
+      ),
+    )
     .then(({ rows, warnings }) => {
       const graph = rowsToGraph(rows, input);
       graph.coverage.warnings = [
@@ -171,10 +178,18 @@ export function loadTopology(
   earliest: string,
   signal: AbortSignal,
   latest?: string,
+  timezone?: string,
 ): Promise<Topology> {
   return client
     .search(
-      request("`adm_topology`", earliest, MAX_TOPOLOGY_ROWS, signal, latest),
+      request(
+        "`adm_topology`",
+        earliest,
+        MAX_TOPOLOGY_ROWS,
+        signal,
+        latest,
+        timezone,
+      ),
     )
     .then(({ rows, warnings }) => {
       const topology = rowsToTopology(rows);

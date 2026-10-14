@@ -33,7 +33,12 @@ export function AtlasApp({
           inSplunk={inSplunk}
         />
       ) : page === "applications" ? (
-        <ApplicationsPage state={state} />
+        <ApplicationsPage
+          state={state}
+          client={client}
+          timezone={timezone}
+          inSplunk={inSplunk}
+        />
       ) : page === "data_health" ? (
         <HealthPage client={client} live={inSplunk && state.mode === "live"} />
       ) : page === "setup" ? (

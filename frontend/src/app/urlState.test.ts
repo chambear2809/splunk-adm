@@ -13,6 +13,8 @@ describe("Atlas deep links", () => {
     "service=foo%22%29%7Cdelete",
     "namespace=bad%0Aname",
     "earliest=-1h%7Cdelete",
+    "earliest=-xx%2B1h",
+    "earliest=-%7C%7C%2B1h",
     "latest=now%60",
     "earliest=20&latest=10",
     "mode=other",
@@ -21,6 +23,12 @@ describe("Atlas deep links", () => {
     "scenario=other",
   ])("rejects unsafe or invalid state %s", (query) => {
     expect(() => parseUrlState(new URLSearchParams(query))).toThrow();
+  });
+  it("retains safe relative bounds until the signed-in timezone is known", () => {
+    const state = parseUrlState(
+      new URLSearchParams("earliest=1791943200&latest=@d&mode=live"),
+    );
+    expect(parseUrlState(stateParams(state))).toEqual(state);
   });
   it("defaults to live inside Splunk and demo outside", () => {
     expect(parseUrlState(new URLSearchParams(), true).mode).toBe("live");

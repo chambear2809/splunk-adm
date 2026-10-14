@@ -45,6 +45,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             **{
                 f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
                 for name in (
+                    "demo-scopes",
                     "demo-rows",
                     "demo-rows-aci",
                     "demo-topology",

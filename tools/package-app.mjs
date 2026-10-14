@@ -24,6 +24,7 @@ await access(`${app}/default/data/ui/views/map.xml`);
 // Keep captured rows outside the executable bundle. They remain grounded lab data.
 await mkdir(`${app}/appserver/static/demo`, { recursive: true });
 for (const file of [
+  "demo-scopes.json",
   "demo-rows.json",
   "demo-rows-aci.json",
   "demo-topology.json",

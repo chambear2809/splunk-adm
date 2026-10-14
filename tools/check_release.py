@@ -160,6 +160,7 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         *{
             f"splunk_adm/appserver/static/demo/{name}.json"
             for name in (
+                "demo-scopes",
                 "demo-rows",
                 "demo-rows-aci",
                 "demo-topology",

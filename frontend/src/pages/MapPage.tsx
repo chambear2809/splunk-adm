@@ -37,7 +37,10 @@ import { PathStrip } from "../PathStrip";
 import { DevicesView } from "../DevicesView";
 import { requiredFlowsCsv } from "../csv";
 import { formatUtc, formatInZone } from "../time";
-import { argError, TIME_RANGES } from "../provider";
+import { argError } from "../provider";
+import { ScopeBar } from "../map/ScopeBar";
+import { TimePicker, pickerBound } from "../map/TimePicker";
+import { timeError, isIncompleteWindow } from "../data/timeBounds";
 import {
   DEMO_SCENARIOS,
   demoArgsFor,
@@ -164,10 +167,20 @@ export function MapPage({
     nonce: number;
   }>();
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [args, setArgs] = useState<GraphArgs>(initialState.args);
+  const [args, setArgs] = useState<GraphArgs>(
+    initialState.mode === "demo" ? loadDemo().boundary : initialState.args,
+  );
   const [backend, setBackend] = useState<string>();
-  const [earliest, setEarliest] = useState(initialState.earliest);
-  const [latest, setLatest] = useState(initialState.latest);
+  const [earliest, setEarliest] = useState(
+    initialState.mode === "demo"
+      ? pickerBound(loadDemo().window.start)
+      : initialState.earliest,
+  );
+  const [latest, setLatest] = useState(
+    initialState.mode === "demo"
+      ? pickerBound(loadDemo().window.end)
+      : initialState.latest,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [hasLiveGraph, setHasLiveGraph] = useState(false);
@@ -212,7 +225,10 @@ export function MapPage({
       await prepareDemo();
       if (requestRevision.current !== revision) return;
       setScenario(sc);
-      setGraph(loadDemo(sc));
+      const captured = loadDemo(sc);
+      setGraph(captured);
+      setEarliest(pickerBound(captured.window.start));
+      setLatest(pickerBound(captured.window.end));
       setTopology(loadDemoTopology(sc));
       setMode("demo");
       setArgs(demoArgsFor(sc));
@@ -247,6 +263,7 @@ export function MapPage({
         ...args,
         earliest,
         latest,
+        timezone,
       });
       if (requestRevision.current === revision) {
         setGraph(result);
@@ -279,12 +296,7 @@ export function MapPage({
     setMode("live");
     setHasLiveGraph(false);
     setError("");
-    setPanel("settings");
-  };
-  const changeArg = (key: keyof GraphArgs, value: string) => {
-    cancelQuery();
-    setBusy(false);
-    setArgs((a) => ({ ...a, [key]: value }));
+    setPanel(null);
   };
   const argErrors = ARG_FIELDS.map(([key]) => argError(key, args[key])).filter(
     Boolean,
@@ -476,6 +488,58 @@ export function MapPage({
         else if (selection) clearSelection();
       }}
     >
+      <div className="atlas-query-bar">
+        <ScopeBar
+          args={args}
+          live={mode === "live"}
+          client={client}
+          demoArgs={mode === "demo" ? demoArgsFor(scenario) : undefined}
+          onChange={(next) => {
+            cancelQuery();
+            setBusy(false);
+            setArgs(next);
+          }}
+        />
+        <TimePicker
+          earliest={earliest}
+          latest={latest}
+          timezone={timezone}
+          live={inSplunk}
+          disabled={mode === "demo"}
+          onChange={(start, end) => {
+            cancelQuery();
+            setBusy(false);
+            setEarliest(start);
+            setLatest(end);
+          }}
+        />
+        <button
+          className="primary-button"
+          onClick={refresh}
+          disabled={
+            busy ||
+            mode === "demo" ||
+            argErrors.length > 0 ||
+            !!timeError(earliest, latest, timezone)
+          }
+        >
+          {busy ? "Building…" : "Build map"}
+        </button>
+        {mode === "demo" && (
+          <p className="atlas-query-note">
+            Demo shows a captured scope and time window. Switch to Splunk to
+            build another map.
+          </p>
+        )}
+        {mode === "live" && isIncompleteWindow(latest, timezone) && (
+          <p className="atlas-query-note">
+            {" "}
+            <strong>Incomplete window</strong> — conversations use 5-minute
+            buckets. The latest 10 minutes may still be filling while rollups
+            catch up.
+          </p>
+        )}
+      </div>
       <header className="bar">
         <div className="scope">
           {visible ? (
@@ -650,57 +714,6 @@ export function MapPage({
                 an application.
               </p>
             )}
-            <div className="fields">
-              {ARG_FIELDS.map(([key, title, hint]) => {
-                const err =
-                  mode === "live" ? argError(key, args[key]) : undefined;
-                return (
-                  <label key={key}>
-                    <span>
-                      {title} <small>{hint}</small>
-                    </span>
-                    <input
-                      value={args[key]}
-                      onChange={(e) => changeArg(key, e.target.value)}
-                      disabled={mode === "demo"}
-                      aria-invalid={!!err}
-                    />
-                    {err && <small className="field-error">{err}</small>}
-                  </label>
-                );
-              })}
-              <label>
-                <span>Time range</span>
-                <select
-                  value={earliest}
-                  onChange={(e) => {
-                    cancelQuery();
-                    setBusy(false);
-                    setEarliest(e.target.value);
-                    setLatest("now");
-                  }}
-                  disabled={mode === "demo"}
-                >
-                  {!TIME_RANGES.some((r) => r.value === earliest) && (
-                    <option value={earliest}>
-                      {earliest} → {latest}
-                    </option>
-                  )}
-                  {TIME_RANGES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <button
-              className="primary-button"
-              onClick={refresh}
-              disabled={busy || mode === "demo" || argErrors.length > 0}
-            >
-              <RefreshCw size={15} /> {busy ? "Building…" : "Build map"}
-            </button>
             <p className="muted small">
               Uses the Application Atlas saved searches; an administrator
               enables them after setting the index macros.
@@ -894,14 +907,18 @@ export function MapPage({
                 <div className="state">
                   <h2>Choose an application to map</h2>
                   <p>
-                    Open <b>Settings</b>, enter the entry service and its
-                    namespace, then build the map.
+                    Choose the environment, cluster, namespace and service
+                    above, then build the map.
                   </p>
                   <button
                     className="primary-button"
-                    onClick={() => setPanel("settings")}
+                    onClick={() =>
+                      root.current
+                        ?.querySelector<HTMLInputElement>('[role="combobox"]')
+                        ?.focus()
+                    }
                   >
-                    <Settings2 size={15} /> Open settings
+                    Choose scope
                   </button>
                 </div>
               )

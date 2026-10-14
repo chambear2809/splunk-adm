@@ -44,9 +44,8 @@ FILES = (
     "local/limits.conf",
     "local/savedsearches.conf",
     "metadata/local.meta",
+    "lookups/adm_observer_scope.csv",
 )
-# Derived collections plus operator-owned configuration held in KV store.
-BACKUP_COLLECTIONS = (*COLLECTIONS, "adm_observer_scope")
 MAX_BYTES = 64 * 1024 * 1024
 MAX_ROWS = 100_000
 
@@ -75,7 +74,7 @@ def validate_backup(backup):
     )
     require(set(payload["files"]) == set(FILES), "backup file allowlist mismatch")
     require(
-        set(payload["collections"]) == set(BACKUP_COLLECTIONS),
+        set(payload["collections"]) == set(COLLECTIONS),
         "backup collection allowlist mismatch",
     )
     for content in payload["files"].values():
@@ -156,7 +155,7 @@ def write_file(relative, content):
 
 
 def kv(method, collection, *, query=None, rows=None):
-    require(collection in BACKUP_COLLECTIONS, "collection not allowed")
+    require(collection in COLLECTIONS, "collection not allowed")
     path = f"/servicesNS/nobody/splunk_adm/storage/collections/data/{collection}"
     if rows is None:
         with lab._mgmt(
@@ -253,9 +252,9 @@ def pause_writers():
 
 def capture(defaults):
     assert_idle()
-    first = {name: read_collection(name) for name in BACKUP_COLLECTIONS}
+    first = {name: read_collection(name) for name in COLLECTIONS}
     files = {name: read_file(name) for name in FILES}
-    second = {name: read_collection(name) for name in BACKUP_COLLECTIONS}
+    second = {name: read_collection(name) for name in COLLECTIONS}
     require(
         first == second and files == {name: read_file(name) for name in FILES},
         "state changed during backup",
@@ -277,7 +276,7 @@ def restore(backup):
     wait_kv()
     pause_writers()
     require(
-        all(not read_collection(name) for name in BACKUP_COLLECTIONS),
+        all(not read_collection(name) for name in COLLECTIONS),
         "restore requires empty target collections",
     )
     for name, content in payload["files"].items():
@@ -433,7 +432,7 @@ def main(argv=None):
         after_graph = graph_snapshot(runner, config)
         require(before_graph == after_graph, "map changed after restore/rebuild")
         require(
-            {name: read_collection(name) for name in BACKUP_COLLECTIONS}
+            {name: read_collection(name) for name in COLLECTIONS}
             == loaded["payload"]["collections"],
             "restored collections drifted after map verification",
         )

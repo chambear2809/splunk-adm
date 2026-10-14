@@ -29,27 +29,35 @@ test.describe("Application Atlas browser regressions", () => {
   }) => {
     await page.goto("/tests/browser/browser.html");
     await page.getByRole("button", { name: "Splunk" }).click();
-    const settings = page.getByRole("region", { name: "Map settings" });
-    const inputs = settings.locator("input");
-    await inputs.nth(0).fill("payments");
-    await inputs.nth(1).fill("prod");
-    await inputs.nth(2).fill("cluster-a");
-    await inputs.nth(3).fill("payments");
-    const range = page.getByLabel("Time range");
-    await expect(range).toBeEnabled();
-    await range.selectOption("-24h");
-    await expect(range).toHaveValue("-24h");
+    for (const [label, value] of [
+      ["Environment", "demo"],
+      ["Cluster", "demo-cluster"],
+      ["Namespace", "shop"],
+      ["Service", "frontend"],
+    ]) {
+      const control = page.getByRole("combobox", { name: label, exact: true });
+      await expect(control).toBeEnabled();
+      await control.fill("");
+      await control.click();
+      await page.getByRole("option", { name: value, exact: true }).click();
+    }
+    await page
+      .getByLabel("Time range", { exact: true })
+      .getByRole("button")
+      .click();
+    await page.getByRole("button", { name: "Presets", exact: true }).click();
+    await page.getByText("Last 24 hours", { exact: true }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByText("Synthetic demo")).toBeHidden();
     await expect
       .poll(() => page.evaluate(() => window.__ADM_LAST_EARLIEST__))
-      .toBe("-24h");
+      .toBe("-24h@h");
     await expect
       .poll(() => page.evaluate(() => window.__ADM_LAST_GRAPH_SEARCH__))
-      .toBe('`adm_graph("payments","prod","cluster-a","payments")`');
-    await expect(page.locator(".scope-service")).toHaveText("payments");
+      .toBe('`adm_graph("frontend","demo","demo-cluster","shop")`');
+    await expect(page.locator(".scope-service")).toHaveText("frontend");
     await expect(page.locator(".scope-dims")).toHaveText(
-      "prod · cluster-a · payments",
+      "demo · demo-cluster · shop",
     );
   });
 
@@ -183,4 +191,85 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   ).toBeVisible();
   await page.getByRole("button", { name: "Open map", exact: true }).click();
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+});
+
+test("clears dependent scope fields and rejects invalid manual input", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=live");
+  await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+  const environment = page.getByRole("combobox", {
+    name: "Environment",
+    exact: true,
+  });
+  await expect(environment).toBeEnabled();
+  await environment.fill("prod");
+  await expect(
+    page.getByRole("combobox", { name: "Cluster", exact: true }),
+  ).toHaveValue("");
+  await expect(
+    page.getByRole("combobox", { name: "Namespace", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("combobox", { name: "Service", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Build map", exact: true }),
+  ).toBeDisabled();
+  const count = await page.evaluate(
+    () =>
+      window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_graph"))
+        .length,
+  );
+  await environment.fill('prod"|delete');
+  await expect(
+    page.getByRole("button", { name: "Build map", exact: true }),
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_graph"))
+          .length,
+    ),
+  ).toBe(count);
+});
+
+test("demo controls retain the captured scope and time", async ({ page }) => {
+  await page.goto("/tests/browser/browser.html");
+  const service = page.getByRole("combobox", { name: "Service", exact: true });
+  await expect(service).toBeEnabled();
+  await service.fill("uncaptured");
+  await expect(service).toHaveValue("frontend");
+  await expect(page.locator(".scope-service")).toHaveText("frontend");
+  await expect(
+    page.getByLabel("Time range", { exact: true }).getByRole("button"),
+  ).toBeDisabled();
+  expect(new URL(page.url()).searchParams.get("earliest")).toMatch(/^\d/);
+  expect(new URL(page.url()).searchParams.get("latest")).toMatch(/^\d/);
+});
+
+test("scope fields retain dark Toolkit surfaces under classic dashboard CSS", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?theme=dark");
+  await page.addStyleTag({
+    content:
+      'input[type="text"] { background-color: white; border: 1px solid #ccc; box-shadow: inset 0 1px 1px #ddd; margin-bottom: 9px; }',
+  });
+  const field = page.getByRole("combobox", {
+    name: "Environment",
+    exact: true,
+  });
+  await expect(field).toBeEnabled();
+  expect(
+    await field.evaluate(
+      (element) => getComputedStyle(element).backgroundColor,
+    ),
+  ).toBe("rgba(0, 0, 0, 0)");
+  expect(
+    await field.evaluate((element) => getComputedStyle(element).borderTopWidth),
+  ).toBe("0px");
+  expect(
+    await field.evaluate((element) => getComputedStyle(element).boxShadow),
+  ).toBe("none");
 });

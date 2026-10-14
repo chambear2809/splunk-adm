@@ -98,12 +98,41 @@ class ViewerBrowserTest(unittest.TestCase):
                 self.assertEqual(evidence.get("mounted"), "true", evidence)
                 self.assertTrue(evidence.get("themeOk"), evidence)
                 self.assertTrue(evidence.get("timezoneOk"), evidence)
+                field_style = evidence.get("scopeFieldStyle", {})
+                self.assertEqual(
+                    field_style.get("background"), "rgba(0, 0, 0, 0)", evidence
+                )
+                self.assertEqual(field_style.get("border"), "0px", evidence)
+                self.assertEqual(field_style.get("shadow"), "none", evidence)
+                timezone_picker = evidence.get("timezonePicker", {})
+                self.assertEqual(
+                    timezone_picker.get("name"), "Pacific/Honolulu", evidence
+                )
+                self.assertEqual(timezone_picker.get("offset"), 600, evidence)
                 self.assertEqual(evidence.get("scopeService"), "frontend", evidence)
                 self.assertIn("demo", evidence.get("scopeDims", ""), evidence)
                 self.assertFalse(evidence.get("notLoaded"), evidence)
+                self.assertFalse(evidence.get("incompleteWindow"), evidence)
                 self.assertTrue(evidence.get("nodesOk"), evidence)
                 self.assertTrue(evidence.get("cardsPresent"), evidence)
                 self.assertEqual(evidence.get("demoRequests"), 0, evidence)
+                self.assertIn(
+                    evidence.get("scopeControls", {}).get("buildEarliest"),
+                    {"-1h", "-60m@m"},
+                    evidence,
+                )
+                self.assertEqual(
+                    evidence.get("scopeControls", {}).get("buildLatest"),
+                    "now",
+                    evidence,
+                )
+                self.assertTrue(
+                    evidence.get("scopeControls", {}).get("incompleteWindow"),
+                    evidence,
+                )
+                self.assertTrue(
+                    evidence.get("scopeControls", {}).get("optionSearch"), evidence
+                )
                 self.assertEqual(
                     evidence.get("reload", {}).get("scopeService"), "frontend", evidence
                 )

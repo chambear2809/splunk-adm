@@ -1,6 +1,13 @@
 import nxosRows from "../../../fixtures/demo-rows.json";
 import nxosTopology from "../../../fixtures/demo-topology.json";
-import aciRows from "../../../fixtures/demo-rows-aci.json";
+import aciRows, {
+  earliest as capturedEarliest,
+  latest as capturedLatest,
+} from "../../../fixtures/demo-rows-aci.json";
+export const DEMO_WINDOW = {
+  earliest: capturedEarliest,
+  latest: capturedLatest,
+};
 import aciTopology from "../../../fixtures/demo-topology-aci.json";
 import { type Graph } from "../graph";
 import { rowsToGraph, type GraphArgs } from "../rows";

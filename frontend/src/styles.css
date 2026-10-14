@@ -1610,3 +1610,51 @@
 .atlas-page {
   line-height: 1.5;
 }
+
+.atlas-query-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--adm-line);
+  flex: none;
+}
+.atlas-scope-fields {
+  display: flex;
+  flex: 1 1 600px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.atlas-scope-field {
+  flex: 1 1 140px;
+  min-width: 120px;
+}
+.atlas-scope-field > label,
+.atlas-time-picker > span {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.atlas-scope-field > small,
+.atlas-time-picker > small {
+  display: block;
+  margin-top: 4px;
+}
+.atlas-query-note,
+.atlas-scope-message {
+  flex-basis: 100%;
+}
+.atlas-query-bar > .primary-button {
+  margin-top: 23px;
+}
+
+/* Classic dashboard form rules otherwise paint a white field inside Toolkit's
+   themed ComboBox. The surrounding Toolkit control owns its surface/border. */
+.atlas.atlas.atlas .atlas-scope-field input[type="text"] {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  box-shadow: none;
+  margin: 0;
+}

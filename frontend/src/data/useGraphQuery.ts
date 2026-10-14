@@ -17,6 +17,7 @@ export async function queryGraph(
         request.earliest,
         controller.signal,
         request.latest,
+        request.timezone,
       ).catch((error: unknown) => {
         const unavailable = emptyTopology();
         unavailable.warnings.push(
