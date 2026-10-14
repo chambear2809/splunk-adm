@@ -80,10 +80,19 @@ class BenchmarkPipelineTest(unittest.TestCase):
         self.assertEqual(runner.jobs[0]["status"], "failed")
 
     def test_reset_opt_in_is_required_before_preflight(self):
-        with patch.object(bench, "preflight") as probe:
-            with self.assertRaises(SystemExit):
-                bench.main([])
-            probe.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            lock_path = Path(directory) / "lab.lock"
+            # The decorator imports top-level lab_lock; ENV_PATH only carries
+            # inherited ownership, so patch its actual default-path resolver.
+            with (
+                patch("lab_lock.default_lock_path", return_value=lock_path),
+                patch.object(bench, "preflight") as probe,
+            ):
+                with self.assertRaises(SystemExit):
+                    bench.main([])
+                probe.assert_not_called()
+            self.assertTrue(lock_path.is_file())
+            self.assertEqual(lock_path.read_text(), "")
 
     def test_graph_checks_catch_truncation_and_double_counted_observers(self):
         expected = {
@@ -218,3 +227,27 @@ class ScopeSeedRegressionTest(unittest.TestCase):
             bench.seed_scope(rows)
         self.assertIn("format=json", search.call_args_list[0].args[1])
         self.assertIn("inputlookup", search.call_args_list[1].args[1])
+        self.assertIn(
+            "outputlookup adm_observer_scope", search.call_args_list[0].args[1]
+        )
+        self.assertNotIn("adm_observer_scope.csv", search.call_args_list[0].args[1])
+
+    def test_scope_matching_keys_normalize_without_lowercasing_outputs(self):
+        source = [
+            {
+                "observer_kind": "Cluster",
+                "observer": "MixedCase",
+                "scope": "Prod",
+                "cluster": "MixedCase",
+            }
+        ]
+        stored = [{**source[0], "observer_kind": "cluster", "observer": "mixedcase"}]
+        with patch.object(
+            bench.Runner,
+            "search",
+            side_effect=[
+                ([], {"status": "complete"}),
+                (stored, {"status": "complete"}),
+            ],
+        ):
+            bench.seed_scope(source)

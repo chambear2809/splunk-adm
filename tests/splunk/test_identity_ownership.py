@@ -48,7 +48,10 @@ class IdentityOwnershipTest(unittest.TestCase):
         cls.addClassCleanup(cls.cleanup)
         lab.search(
             f"| makeresults format=json data={json.dumps(json.dumps(rows))} "
-            "| fields - _time | outputlookup append=true adm_observer_scope.csv"
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+            "_key=sha256(json_array(observer_kind, observer)) "
+            "| fields _key observer_kind observer scope cluster "
+            "| outputlookup append=true key_field=_key adm_observer_scope"
         )
 
     @classmethod
@@ -61,11 +64,10 @@ class IdentityOwnershipTest(unittest.TestCase):
             "DELETE",
             f"/servicesNS/nobody/{lab.APP}/storage/collections/data/adm_ip_identity?{query}",
         )
-        lab.search(
-            "| inputlookup adm_observer_scope.csv "
-            f'| where observer!="{cls.cluster}" AND observer!="{cls.other_cluster}" '
-            "| outputlookup adm_observer_scope.csv"
-        )
+        lab._mgmt(
+            "DELETE",
+            f"/servicesNS/nobody/{lab.APP}/storage/collections/data/adm_observer_scope?{query}",
+        ).close()
 
     def pod(self, uid, ip, at, *, born=None, deleted=False, cluster=None):
         event = copy.deepcopy(self.template)

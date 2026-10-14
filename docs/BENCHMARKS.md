@@ -2,6 +2,8 @@
 
 Use this harness before a live environment is available to measure the searches that build and read the application map. It exercises the shipped NetFlow normalizer, identity builder, service binding, conversation rollup and graph searches in the disposable Splunk lab. It does not require or contact AWS, Kubernetes, APIC, switches or production Splunk.
 
+Current seeding uses the ACL-protected `adm_observer_scope` KV lookup. Historical reports retain fingerprints of the former `default/limits.conf` and CSV-era setup; those archived fingerprints are not a requirement to restore either runtime control.
+
 The first measured baseline is recorded in [local results, 2026-10-13](benchmarks/2026-10-13-local.md), with raw per-query evidence.
 
 ## Run

@@ -69,8 +69,8 @@ def validate_backup(backup):
     require(digest(payload) == backup["sha256"], "backup checksum mismatch")
     require(
         set(payload) == {"schema", "defaults", "files", "collections"}
-        and payload["schema"] == 1,
-        "unsupported backup schema",
+        and payload["schema"] == 2,
+        "unsupported backup schema: restore CSV-era backups with matching older tooling, then migrate observer scope to KV",
     )
     require(set(payload["files"]) == set(FILES), "backup file allowlist mismatch")
     require(
@@ -260,7 +260,7 @@ def capture(defaults):
         "state changed during backup",
     )
     assert_idle()
-    payload = {"schema": 1, "defaults": defaults, "files": files, "collections": first}
+    payload = {"schema": 2, "defaults": defaults, "files": files, "collections": first}
     backup = {"payload": payload, "sha256": digest(payload)}
     validate_backup(backup)
     return backup

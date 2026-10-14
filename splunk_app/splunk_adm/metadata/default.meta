@@ -2,6 +2,12 @@
 access = read : [ * ], write : [ admin, sc_admin ]
 export = none
 
+[collections/adm_observer_scope]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[transforms/adm_observer_scope]
+access = read : [ * ], write : [ admin, sc_admin ]
+
 # All saved searches in this app write derived state or perform maintenance.
 # Read access permits dispatchAs=owner, so these are administrator-only.
 [savedsearches]

@@ -57,17 +57,17 @@ Expect at least `stream:netflow`, `cisco:dc:aci:class`, `cisco:dc:aci:stats`, `c
 
 ## Phase 5. Install Application Atlas
 
-Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum alongside) on the search head: **Manage Apps → Install app from file**, or [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install) with a local package. On Splunk Cloud, submit it for private-app vetting. For an existing installation, use the separate `-upgrade.tar.gz` archive to preserve the operator scope CSV; see [upgrade preservation checks](../UPGRADES.md).
+Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum alongside) on the search head: **Manage Apps → Install app from file**, or [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-app-install) with a local package. On Splunk Cloud, submit it for private-app vetting. For an existing installation, use the separate `-upgrade.tar.gz` archive to preserve the legacy CSV for migration and the live scope KV data; see [upgrade preservation checks](../UPGRADES.md).
 
 **Check:** the **Application Atlas** app opens and shows the synthetic demo.
 
 ## Phase 6. Configure the app
 
 1. Set the index macros (list in [splunk-platform.md](splunk-platform.md#application-atlas-configuration)). Skill: [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup).
-2. Fill `adm_observer_scope.csv` with one row per exporter, APIC, Nexus Dashboard, fabric, firewall, cluster and Isovalent HEC source. Skill: [splunk-lookup-file-editing-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-lookup-file-editing-setup).
+2. As an administrator, populate the `adm_observer_scope` KV lookup with one row per exporter, APIC, Nexus Dashboard, fabric, firewall, cluster and Isovalent HEC source; use the [KV upsert search](splunk-platform.md#application-atlas-configuration). Keep matching keys lowercase and verify collection/lookup ACLs: read `*`, write `admin`/`sc_admin`. Existing installations must first complete the [one-time CSV migration](../UPGRADES.md#one-time-csv-to-kv-scope-migration). The old CSV is not live configuration and no `limits.conf` override is needed.
 3. Grant pilot users read on the source indexes and the app; give the saved-search owner write to `adm_summary`.
 
-**Check:** `` `adm_index_netflow` | head 1 `` and the other index macros return events; `| inputlookup adm_observer_scope.csv` lists every observer.
+**Check:** `` `adm_index_netflow` | head 1 `` and the other index macros return events; `| inputlookup adm_observer_scope` lists every observer.
 
 ## Phase 7. Enable the saved searches
 

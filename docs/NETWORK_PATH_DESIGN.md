@@ -22,4 +22,4 @@ A load balancer or proxy can terminate the client connection and open another. T
 
 ## Matching rules
 
-Identities join only within one routing scope (`adm_observer_scope.csv`); observation domain IDs are not VRFs. An IP resolves only when exactly one identity covers the interval. Conversations without that stay visible as unknown or multiple-owner endpoints. Unobserved hops stay marked as not observed, and missing links stay gaps; nothing is filled in by guesswork.
+Identities join only within one routing scope (`adm_observer_scope` KV lookup); observation domain IDs are not VRFs. An IP resolves only when exactly one identity covers the interval. Conversations without that stay visible as unknown or multiple-owner endpoints. Unobserved hops stay marked as not observed, and missing links stay gaps; nothing is filled in by guesswork.

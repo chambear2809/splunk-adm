@@ -268,7 +268,7 @@ class BuilderRegressions(unittest.TestCase):
         ]
         data = json.dumps(json.dumps(scope_rows))
         lab.search(
-            f"| inputlookup adm_observer_scope.csv | append [| makeresults format=json data={data}] | dedup observer_kind observer | fields - _time | outputlookup adm_observer_scope.csv"
+            f"| inputlookup adm_observer_scope | append [| makeresults format=json data={data}] | eval observer_kind=lower(observer_kind), observer=lower(observer), _key=sha256(json_array(observer_kind, observer)) | dedup observer_kind observer | fields _key observer_kind observer scope cluster | outputlookup adm_observer_scope"
         )
         dn = f"uni/tn-{self.token}/ap-app/epg-app/cep-AA:BB:CC:DD:EE:FF"
         self.upload(

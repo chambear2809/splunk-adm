@@ -50,6 +50,7 @@ await cp(app, stage, {
 await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
+await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
 await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 
@@ -108,8 +109,8 @@ async function normalizeModes(dir) {
 }
 await normalizeModes(stage);
 
-// A full install includes the empty observer-scope template. Splunk replaces
-// packaged lookup CSVs during updates, so the upgrade archive must omit it.
+// A full install includes the legacy CSV template. Keep it out of upgrades
+// to preserve existing rows for the one-time admin migration to scope KV.
 const bsd = execFileSync("tar", ["--version"]).toString().includes("bsdtar");
 const ownership = bsd
   ? ["--uid", "0", "--gid", "0", "--uname", "splunk", "--gname", "splunk"]

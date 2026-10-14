@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 import configparser
+import csv
 import hashlib
+import io
 import json
 import os
 import re
@@ -220,11 +222,42 @@ class UpgradeIntegrationTest(unittest.TestCase):
             )
         cls.token = uuid.uuid4().hex[:12]
         cls.scope = "upgrade-" + cls.token
+        # Keep a populated CSV-era migration source alongside the independent
+        # KV-to-KV fixture. Mixed-case match keys and outputs must survive bytes
+        # for bytes until an administrator explicitly runs the shipped migration.
+        cls.legacy_scope_rows = [
+            {
+                "observer_kind": "ClUsTeR",
+                "observer": "CSV-Upgrade-" + cls.token,
+                "scope": cls.scope + "-CSV-A",
+                "cluster": "LegacyCluster-A",
+            },
+            {
+                "observer_kind": "HeC_SoUrCe",
+                "observer": "HTTP:Upgrade-" + cls.token,
+                "scope": cls.scope + "-CSV-B",
+                "cluster": "LegacyCluster-B",
+            },
+        ]
+        cls.legacy_scope_keys = [
+            hashlib.sha256(
+                json.dumps(
+                    [row["observer_kind"].lower(), row["observer"].lower()],
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()
+            for row in cls.legacy_scope_rows
+        ]
+        legacy_csv = io.StringIO()
+        writer = csv.DictWriter(legacy_csv, fieldnames=list(cls.legacy_scope_rows[0]))
+        writer.writeheader()
+        writer.writerows(cls.legacy_scope_rows)
+        cls.legacy_scope_csv = legacy_csv.getvalue().encode()
         cls.identity_keys = [f"upgrade-{cls.token}-old", f"upgrade-{cls.token}-new"]
         cls.original_macro = cls.lab._json(
             "GET", f"/servicesNS/nobody/{APP}/configs/conf-macros/adm_index_netflow"
         )["entry"][0]["content"].get("definition", "")
-        cls.original_scope = cls.lab.search("| inputlookup adm_observer_scope.csv")
+        cls.original_scope = cls.lab.search("| inputlookup adm_observer_scope")
         cls._docker_preflight()
         cls.original_metadata = cls._local_metadata()
         cls.original_macro_file = cls._docker_file(
@@ -259,6 +292,12 @@ class UpgradeIntegrationTest(unittest.TestCase):
             _request(
                 "DELETE",
                 f"/servicesNS/nobody/{APP}/storage/collections/data/adm_ip_identity/{urllib.parse.quote(key, safe='')}",
+                cls.password,
+            )
+        for key in [f"upgrade-scope-{cls.token}", *cls.legacy_scope_keys]:
+            _request(
+                "DELETE",
+                f"/servicesNS/nobody/{APP}/storage/collections/data/adm_observer_scope/{key}",
                 cls.password,
             )
         cls._restore_docker_file(
@@ -357,7 +396,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         cls._restore_docker_file(
             "/opt/splunk/etc/apps/splunk_adm/lookups/adm_observer_scope.csv",
             True,
-            b"observer_kind,observer,scope,cluster\n",
+            cls.legacy_scope_csv,
         )
         cls.lab._json(
             "POST",
@@ -377,7 +416,11 @@ class UpgradeIntegrationTest(unittest.TestCase):
             )
         )
         cls.lab.search(
-            f"| makeresults format=json data={scope_data} | fields - _time | outputlookup append=true adm_observer_scope.csv"
+            f"| makeresults format=json data={scope_data} "
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+            f'_key="upgrade-scope-{cls.token}" '
+            "| fields _key observer_kind observer scope cluster "
+            "| outputlookup append=true key_field=_key adm_observer_scope"
         )
         for key, valid_from, valid_to in zip(cls.identity_keys, (100, 200), (200, "")):
             payload = {
@@ -425,7 +468,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "GET", f"/servicesNS/nobody/{APP}/configs/conf-macros/adm_index_netflow"
         )
         scope_rows = cls.lab.search(
-            f'| inputlookup adm_observer_scope.csv | search scope="{cls.scope}"'
+            f'| inputlookup adm_observer_scope | search scope="{cls.scope}"'
         )
         query = urllib.parse.urlencode(
             {"query": json.dumps({"_key": {"$in": cls.identity_keys}})}
@@ -464,6 +507,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "metadata_risk": risks,
             "acl": acl,
             "protected_acl": protected_acl,
+            "scope_acl": cls._scope_acl(),
             "macro_file": macro_file,
             "scope_file": scope_file,
         }
@@ -513,6 +557,30 @@ class UpgradeIntegrationTest(unittest.TestCase):
             if line.startswith("[") and line.endswith("]"):
                 names.add(line[1:-1])
         return names
+
+    @classmethod
+    def _scope_acl(cls) -> dict:
+        out = {}
+        for kind in ("collections", "transforms"):
+            result = cls.lab._json(
+                "GET",
+                f"/servicesNS/nobody/{APP}/configs/conf-{kind}/adm_observer_scope",
+            )["entry"][0]
+            if kind == "transforms":
+                content = result["content"]
+                if (
+                    content.get("external_type") != "kvstore"
+                    or content.get("collection") != "adm_observer_scope"
+                ):
+                    raise AssertionError(
+                        "effective scope lookup is not the protected KV collection"
+                    )
+            perms = result["acl"]["perms"]
+            read, write = set(perms["read"]), set(perms["write"])
+            if read != {"*"} or write != {"admin", "sc_admin"}:
+                raise AssertionError(f"unsafe scope ACL: read={read}, write={write}")
+            out[kind] = {"read": sorted(read), "write": sorted(write)}
+        return out
 
     @classmethod
     def _protected_config_acl(cls) -> dict:
@@ -609,8 +677,65 @@ class UpgradeIntegrationTest(unittest.TestCase):
         self.assertEqual(self.after["metadata_risk"], [])
         self.assertEqual(self.before["acl"], self.after["acl"])
         self.assertEqual(self.before["protected_acl"], self.after["protected_acl"])
+        self.assertEqual(self.before["scope_acl"], self.after["scope_acl"])
         self.assertEqual(self.before["macro_file"], self.after["macro_file"])
         self.assertEqual(self.before["scope_file"], self.after["scope_file"])
+
+    def test_populated_csv_survives_update_and_migrates_to_kv(self):
+        self.assertEqual(self.before["scope_file"], (True, self.legacy_scope_csv))
+        self.assertEqual(self.after["scope_file"], (True, self.legacy_scope_csv))
+        # Prove the retained CSV is readable by filename after the named lookup
+        # switches to KV, including its original match-key and output casing.
+        self.assertCountEqual(
+            self.lab.search(
+                "| inputlookup adm_observer_scope.csv "
+                "| table observer_kind observer scope cluster"
+            ),
+            self.legacy_scope_rows,
+        )
+        kv_query = (
+            "| inputlookup adm_observer_scope | search "
+            + " OR ".join(f'_key="{key}"' for key in self.legacy_scope_keys)
+            + " | table _key observer_kind observer scope cluster"
+        )
+        self.assertEqual(self.lab.search(kv_query), [], "no unattended CSV import")
+
+        # Execute the installed saved search's SPL as admin, keeping the shipped
+        # disabled/unscheduled search disabled rather than creating local overrides.
+        name = urllib.parse.quote("ADM - Migrate observer scope", safe="")
+        migration = self.lab._json(
+            "GET", f"/servicesNS/nobody/{APP}/saved/searches/{name}"
+        )["entry"][0]["content"]["search"]
+        result = self.lab.search(migration)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["blocked"], "0")
+        self.assertEqual(result[0]["source_rows"], str(len(self.legacy_scope_rows)))
+        self.assertEqual(result[0]["rows_written"], str(len(self.legacy_scope_rows)))
+        self.assertCountEqual(
+            self.lab.search(kv_query),
+            [
+                {
+                    **row,
+                    "_key": key,
+                    "observer_kind": row["observer_kind"].lower(),
+                    "observer": row["observer"].lower(),
+                }
+                for row, key in zip(self.legacy_scope_rows, self.legacy_scope_keys)
+            ],
+        )
+        self.assertEqual(
+            self._docker_file(
+                "/opt/splunk/etc/apps/splunk_adm/lookups/adm_observer_scope.csv"
+            ),
+            (True, self.legacy_scope_csv),
+        )
+        self.assertEqual(
+            self.lab.search(
+                f'| inputlookup adm_observer_scope | search scope="{self.scope}"'
+            ),
+            self.after["scope"],
+            "migration must preserve the existing KV-to-KV mapping",
+        )
 
 
 if __name__ == "__main__":
