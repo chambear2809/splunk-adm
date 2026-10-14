@@ -224,7 +224,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         cls.original_macro = cls.lab._json(
             "GET", f"/servicesNS/nobody/{APP}/configs/conf-macros/adm_index_netflow"
         )["entry"][0]["content"].get("definition", "")
-        cls.original_scope = cls.lab.search("| inputlookup adm_observer_scope.csv")
+        cls.original_scope = cls.lab.search("| inputlookup adm_observer_scope")
         cls._docker_preflight()
         cls.original_metadata = cls._local_metadata()
         cls.original_macro_file = cls._docker_file(
@@ -261,6 +261,11 @@ class UpgradeIntegrationTest(unittest.TestCase):
                 f"/servicesNS/nobody/{APP}/storage/collections/data/adm_ip_identity/{urllib.parse.quote(key, safe='')}",
                 cls.password,
             )
+        _request(
+            "DELETE",
+            f"/servicesNS/nobody/{APP}/storage/collections/data/adm_observer_scope/upgrade-scope-{cls.token}",
+            cls.password,
+        )
         cls._restore_docker_file(
             "/opt/splunk/etc/apps/splunk_adm/local/macros.conf",
             *cls.original_macro_file,
@@ -377,7 +382,11 @@ class UpgradeIntegrationTest(unittest.TestCase):
             )
         )
         cls.lab.search(
-            f"| makeresults format=json data={scope_data} | fields - _time | outputlookup append=true adm_observer_scope.csv"
+            f"| makeresults format=json data={scope_data} "
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+            f'_key="upgrade-scope-{cls.token}" '
+            "| fields _key observer_kind observer scope cluster "
+            "| outputlookup append=true key_field=_key adm_observer_scope"
         )
         for key, valid_from, valid_to in zip(cls.identity_keys, (100, 200), (200, "")):
             payload = {
@@ -425,7 +434,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "GET", f"/servicesNS/nobody/{APP}/configs/conf-macros/adm_index_netflow"
         )
         scope_rows = cls.lab.search(
-            f'| inputlookup adm_observer_scope.csv | search scope="{cls.scope}"'
+            f'| inputlookup adm_observer_scope | search scope="{cls.scope}"'
         )
         query = urllib.parse.urlencode(
             {"query": json.dumps({"_key": {"$in": cls.identity_keys}})}
@@ -464,6 +473,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "metadata_risk": risks,
             "acl": acl,
             "protected_acl": protected_acl,
+            "scope_acl": cls._scope_acl(),
             "macro_file": macro_file,
             "scope_file": scope_file,
         }
@@ -513,6 +523,30 @@ class UpgradeIntegrationTest(unittest.TestCase):
             if line.startswith("[") and line.endswith("]"):
                 names.add(line[1:-1])
         return names
+
+    @classmethod
+    def _scope_acl(cls) -> dict:
+        out = {}
+        for kind in ("collections", "transforms"):
+            result = cls.lab._json(
+                "GET",
+                f"/servicesNS/nobody/{APP}/configs/conf-{kind}/adm_observer_scope",
+            )["entry"][0]
+            if kind == "transforms":
+                content = result["content"]
+                if (
+                    content.get("external_type") != "kvstore"
+                    or content.get("collection") != "adm_observer_scope"
+                ):
+                    raise AssertionError(
+                        "effective scope lookup is not the protected KV collection"
+                    )
+            perms = result["acl"]["perms"]
+            read, write = set(perms["read"]), set(perms["write"])
+            if read != {"*"} or write != {"admin", "sc_admin"}:
+                raise AssertionError(f"unsafe scope ACL: read={read}, write={write}")
+            out[kind] = {"read": sorted(read), "write": sorted(write)}
+        return out
 
     @classmethod
     def _protected_config_acl(cls) -> dict:
@@ -609,6 +643,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         self.assertEqual(self.after["metadata_risk"], [])
         self.assertEqual(self.before["acl"], self.after["acl"])
         self.assertEqual(self.before["protected_acl"], self.after["protected_acl"])
+        self.assertEqual(self.before["scope_acl"], self.after["scope_acl"])
         self.assertEqual(self.before["macro_file"], self.after["macro_file"])
         self.assertEqual(self.before["scope_file"], self.after["scope_file"])
 

@@ -33,6 +33,7 @@ from benchmark_fixtures import Workload, iter_events, manifest  # noqa: E402
 
 CONTAINER = "adm-splunk-lab"
 COLLECTIONS = (
+    "adm_observer_scope",
     "adm_ip_identity",
     "adm_service_workload",
     "adm_interfaces",
@@ -455,13 +456,24 @@ def seed_scope(scope_rows):
         "scope-seed",
         "| makeresults format=json data="
         + json.dumps(json.dumps(scope_rows))
-        + " | fields - _raw _time | outputlookup adm_observer_scope.csv",
+        + " | eval observer_kind=lower(observer_kind), observer=lower(observer), "
+        + "_key=sha256(json_array(observer_kind, observer)) "
+        + "| fields _key observer_kind observer scope cluster "
+        + "| outputlookup adm_observer_scope",
     )
     require(job["status"] == "complete", "scope lookup write incomplete")
-    actual, job = runner.search("scope-verify", "| inputlookup adm_observer_scope.csv")
+    actual, job = runner.search("scope-verify", "| inputlookup adm_observer_scope")
     require(job["status"] == "complete", "scope lookup read incomplete")
     keys = ("observer_kind", "observer", "scope", "cluster")
-    expected = sorted(tuple(row.get(k, "") for k in keys) for row in scope_rows)
+    expected = sorted(
+        tuple(
+            row.get(k, "").lower()
+            if k in ("observer_kind", "observer")
+            else row.get(k, "")
+            for k in keys
+        )
+        for row in scope_rows
+    )
     observed = sorted(tuple(row.get(k, "") for k in keys) for row in actual)
     require(observed == expected, "scope lookup did not retain all configured mappings")
 

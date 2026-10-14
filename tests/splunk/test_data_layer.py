@@ -31,6 +31,7 @@ SAVED = [
     "ADM - Service binding prune",
 ]
 COLLECTIONS = [
+    "adm_observer_scope",
     "adm_ip_identity",
     "adm_service_workload",
     "adm_interfaces",
@@ -87,7 +88,7 @@ class DataLayerTest(unittest.TestCase):
             ",".join(r) for r in SCOPE_ROWS
         )
         lab.search(
-            f'| makeresults format=csv data="{csv}" | fields - _time | outputlookup adm_observer_scope.csv'
+            f'| makeresults format=csv data="{csv}" | eval observer_kind=lower(observer_kind), observer=lower(observer), _key=sha256(json_array(observer_kind, observer)) | fields _key observer_kind observer scope cluster | outputlookup adm_observer_scope'
         )
         for name in SAVED:
             lab._mgmt(

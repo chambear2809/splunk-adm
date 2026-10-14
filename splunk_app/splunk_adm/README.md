@@ -8,7 +8,7 @@ To set it up:
 
 1. Create a summary index (default `adm_summary`).
 2. Set the `adm_index_*` macros to your indexes.
-3. Fill the `adm_observer_scope.csv` lookup.
+3. Populate the `adm_observer_scope` KV lookup as admin/sc_admin (lowercase observer_kind/observer keys; scope/cluster values unchanged). For an upgrade, migrate the retained CSV once before enabling searches; see packaged docs/DATA_LAYER.md and the repository docs/UPGRADES.md.
 4. Enable the `ADM - …` saved searches, which ship disabled.
 
 See `docs/DATA_LAYER.md` for the searches, lookups, field contracts and source prerequisites.

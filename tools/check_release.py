@@ -84,13 +84,42 @@ def _read_archive(path: Path) -> Archive:
     return Archive(path, files, frozenset(directories))
 
 
+def _check_scope_transform(data: bytes, source: str, *, require_kv=False) -> None:
+    config = configparser.RawConfigParser()
+    try:
+        config.read_string(data.decode("utf-8"))
+    except (configparser.Error, UnicodeDecodeError):
+        raise ValueError(f"invalid transforms.conf: {source}") from None
+    if not config.has_section("adm_observer_scope"):
+        if require_kv:
+            raise ValueError(f"missing scope KV lookup: {source}")
+        return
+    scope = config["adm_observer_scope"]
+    if scope.get("filename", "").strip():
+        raise ValueError(
+            f"legacy CSV scope lookup in {source}; migrate and remove the stale override"
+        )
+    for key, expected in (
+        ("external_type", "kvstore"),
+        ("collection", "adm_observer_scope"),
+    ):
+        if (require_kv or key in scope) and scope.get(key) != expected:
+            raise ValueError(
+                f"scope lookup must target adm_observer_scope KV: {source}"
+            )
+
+
 def _assert_safe_files(files: dict[str, bytes]) -> None:
     for name in files:
+        if name.casefold() == "splunk_adm/local/transforms.conf":
+            _check_scope_transform(files[name], name)
         relative = name.removeprefix("splunk_adm/")
         components = {component.casefold() for component in relative.split("/")}
         if components & FORBIDDEN_COMPONENTS:
             raise ValueError(f"deployment-local path in archive: {name}")
         basename = relative.rsplit("/", 1)[-1].casefold()
+        if basename == "limits.conf":
+            raise ValueError(f"packaged limits.conf is disallowed for Cloud: {name}")
         if (
             basename in FORBIDDEN_NAMES
             or basename.startswith(".env")
@@ -128,8 +157,9 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/NOTICE",
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
+        "splunk_adm/docs/UPGRADES.md",
         "splunk_adm/default/collections.conf",
-        "splunk_adm/default/limits.conf",
+        "splunk_adm/default/adm_recovery.conf",
         "splunk_adm/default/macros.conf",
         "splunk_adm/default/savedsearches.conf",
         "splunk_adm/default/transforms.conf",
@@ -140,6 +170,11 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
     missing = sorted(required - files.keys())
     if missing:
         raise ValueError(f"archive missing required files: {', '.join(missing)}")
+    _check_scope_transform(
+        files["splunk_adm/default/transforms.conf"],
+        "packaged default/transforms.conf",
+        require_kv=True,
+    )
     config = configparser.RawConfigParser(strict=True)
     try:
         config.read_string(files["splunk_adm/default/app.conf"].decode("utf-8"))
@@ -152,6 +187,8 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
             raise ValueError(f"app.conf [{stanza}] version does not match {version}")
     if config.get("package", "id", fallback=None) != "splunk_adm":
         raise ValueError("app.conf [package] id does not match splunk_adm")
+    if config.get("triggers", "reload.adm_recovery", fallback=None) != "simple":
+        raise ValueError("app.conf [triggers] reload.adm_recovery must be simple")
     if not config.has_section("install"):
         raise ValueError("packaged app.conf is missing [install]")
     build = config.get("install", "build", fallback=None)
@@ -159,7 +196,15 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         raise ValueError("app.conf [install] build must be a positive integer")
 
 
-def check_release(dist: Path, package_json: Path | None = None) -> None:
+def check_release(
+    dist: Path, package_json: Path | None = None, *, installed_app: Path | None = None
+) -> None:
+    if installed_app is not None:
+        if not installed_app.is_dir():
+            raise ValueError(f"installed app directory does not exist: {installed_app}")
+        local_transforms = installed_app / "local/transforms.conf"
+        if local_transforms.is_file():
+            _check_scope_transform(local_transforms.read_bytes(), str(local_transforms))
     package_json = package_json or Path("package.json")
     version = json.loads(package_json.read_text(encoding="utf-8"))["version"]
     install_path = dist / f"splunk_adm-{version}.tar.gz"
@@ -190,8 +235,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dist", type=Path, default=Path("dist"))
     parser.add_argument("--package-json", type=Path, default=Path("package.json"))
+    parser.add_argument(
+        "--installed-app",
+        type=Path,
+        help="also reject stale local scope lookup overrides in an installed app directory",
+    )
     args = parser.parse_args()
-    check_release(args.dist, args.package_json)
+    check_release(args.dist, args.package_json, installed_app=args.installed_app)
     print(f"Release archives verified in {args.dist}")
 
 

@@ -1,6 +1,8 @@
 """Backup integrity and complete pagination guards, without a Splunk server."""
 
 import copy
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -10,7 +12,7 @@ from tools import rehearse_restore as restore
 class RestoreTest(unittest.TestCase):
     def backup(self):
         payload = {
-            "schema": 1,
+            "schema": 2,
             "defaults": {"macros.conf": "abc"},
             "files": dict.fromkeys(restore.FILES),
             "collections": {
@@ -22,6 +24,13 @@ class RestoreTest(unittest.TestCase):
             },
         }
         return {"payload": payload, "sha256": restore.digest(payload)}
+
+    def test_csv_only_old_backup_is_rejected_before_any_restore_write(self):
+        backup = self.backup()
+        backup["payload"]["schema"] = 1
+        backup["sha256"] = restore.digest(backup["payload"])
+        with self.assertRaisesRegex(ValueError, "unsupported backup schema"):
+            restore.validate_backup(backup)
 
     def test_damaged_backup_refuses_restore_before_preflight_or_write(self):
         backup = self.backup()
@@ -90,10 +99,18 @@ class RestoreTest(unittest.TestCase):
             restore.read_collection("adm_ip_identity", fetch=fetch)
 
     def test_missing_reset_authorization_prevents_preflight(self):
-        with patch.object(restore, "preflight") as preflight:
-            with self.assertRaises(SystemExit):
-                restore.main([])
-            preflight.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            lock_path = Path(directory) / "lab.lock"
+            # Keep the real decorator while isolating its default lock path.
+            with (
+                patch("lab_lock.default_lock_path", return_value=lock_path),
+                patch.object(restore, "preflight") as preflight,
+            ):
+                with self.assertRaises(SystemExit):
+                    restore.main([])
+                preflight.assert_not_called()
+            self.assertTrue(lock_path.is_file())
+            self.assertEqual(lock_path.read_text(), "")
 
 
 if __name__ == "__main__":

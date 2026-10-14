@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import base64
 import configparser
+import hashlib
 import json
 import os
 import secrets
 import ssl
+import subprocess
 import time
 import unittest
 import urllib.error
@@ -213,7 +215,9 @@ class RestrictedViewerTest(unittest.TestCase):
         except json.JSONDecodeError:
             return status, {}
 
-    def _viewer_search(self, search: str, earliest: int, latest: int) -> list[dict]:
+    def _viewer_search(
+        self, search: str, earliest: int, latest: int, *, allow_warnings=False
+    ) -> list[dict]:
         status, body = _response(
             "POST",
             f"/servicesNS/{urllib.parse.quote(self.username, safe='')}/"
@@ -253,14 +257,15 @@ class RestrictedViewerTest(unittest.TestCase):
             if problems:
                 raise SearchRejected(" | ".join(problems))
             # A warning can accompany a successful write; it is not a denial.
-            self.assertFalse(
-                [
-                    m
-                    for m in messages
-                    if m.get("type", "").upper() in {"WARN", "WARNING"}
-                ],
-                "viewer search returned a warning rather than a rejection",
-            )
+            if not allow_warnings:
+                self.assertFalse(
+                    [
+                        m
+                        for m in messages
+                        if m.get("type", "").upper() in {"WARN", "WARNING"}
+                    ],
+                    "viewer search returned a warning rather than a rejection",
+                )
             if content.get("dispatchState") == "FAILED":
                 self.fail("viewer graph search failed")
             if content.get("isFinalized") in (1, "1", True):
@@ -416,9 +421,302 @@ class RestrictedViewerTest(unittest.TestCase):
             urllib.parse.urlencode({"definition": original_definition}).encode(),
         )
 
-    def test_shared_lookups_reject_search_writes_even_with_output_file(self):
+    def test_real_ta_observer_case_matches_the_same_scope(self):
+        # FIELDS.md identifies the Isovalent HEC source; use the real fixture
+        # events and normalizer rather than an invented observer name.
+        fixture = HERE.parents[1] / "fixtures/raw/isovalent.ndjson"
+        observer = json.loads(fixture.read_text().splitlines()[0])["source"]
+        provenance = fixture.parent / "FIELDS.md"
+        self.assertEqual(observer, "http:isovalent")
+        self.assertIn(f"Isovalent HEC source `{observer}`", provenance.read_text())
+        columns = (
+            "adm_src_ip adm_src_port adm_dest_ip adm_dest_port adm_scope adm_cluster"
+        )
+        ordinary = self.lab.search(
+            f"`adm_flows_isovalent` | `adm_flow_enrich` | table {columns}",
+            0,
+            "now",
+        )
+        self.assertTrue(ordinary)
+        self.assertTrue(all(row.get("adm_scope") == "prod" for row in ordinary))
+        self.assertTrue(
+            all(row.get("adm_cluster") == "demo-cluster" for row in ordinary)
+        )
+        mixed_case = self.lab.search(
+            "`adm_flows_isovalent` "
+            '| eval adm_scope_kind="HeC_SoUrCe", adm_scope_observer="HtTp:IsOvAlEnT" '
+            f"| `adm_flow_enrich` | table {columns}",
+            0,
+            "now",
+        )
+        self.assertEqual(
+            sorted(json.dumps(row, sort_keys=True) for row in ordinary),
+            sorted(json.dumps(row, sort_keys=True) for row in mixed_case),
+        )
+
+    def test_scope_write_denial_with_false_and_true_csv_switch(self):
+        # Runtime-only override in this disposable lab; never package limits.conf.
+        # Restore both effective value and exact pre-test local-file contents.
+        endpoint = "/servicesNS/nobody/splunk_adm/configs/conf-limits/outputlookup"
+        local_path = "/opt/splunk/etc/apps/splunk_adm/local/limits.conf"
+        original_value = self.lab._json("GET", endpoint)["entry"][0]["content"][
+            "outputlookup_check_permission"
+        ]
+        exists = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "-u",
+                "root",
+                "adm-splunk-lab",
+                "test",
+                "-e",
+                local_path,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        self.assertIn(exists.returncode, (0, 1))
+        original_file = None
+        if exists.returncode == 0:
+            original_file = subprocess.check_output(
+                ["docker", "exec", "-u", "root", "adm-splunk-lab", "cat", local_path],
+                timeout=30,
+            )
+
+        def restore_limits():
+            self.lab._json(
+                "POST", endpoint, {"outputlookup_check_permission": original_value}
+            )
+            if original_file is None:
+                subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "-u",
+                        "root",
+                        "adm-splunk-lab",
+                        "rm",
+                        "-f",
+                        local_path,
+                    ],
+                    check=True,
+                    capture_output=True,
+                    timeout=30,
+                )
+            else:
+                subprocess.run(
+                    [
+                        "docker",
+                        "exec",
+                        "-i",
+                        "-u",
+                        "root",
+                        "adm-splunk-lab",
+                        "sh",
+                        "-c",
+                        'cat > "$1"',
+                        "sh",
+                        local_path,
+                    ],
+                    input=original_file,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    timeout=30,
+                )
+
+        self.addCleanup(restore_limits)
+        role_path = f"/services/authorization/roles/{self.role}"
+        self.lab._json(
+            "POST",
+            role_path,
+            {"capabilities": ["search", "output_file", "edit_own_objects"]},
+        )
+        self.addCleanup(self.lab._json, "POST", role_path, {"capabilities": "search"})
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        before = self.lab._json("GET", collection)
+        for value in ("false", "true"):
+            with self.subTest(outputlookup_check_permission=value):
+                self.lab._json(
+                    "POST", endpoint, {"outputlookup_check_permission": value}
+                )
+                effective = self.lab._json("GET", endpoint)["entry"][0]["content"][
+                    "outputlookup_check_permission"
+                ]
+                self.assertIn(
+                    str(effective).lower(), {value, "1" if value == "true" else "0"}
+                )
+                with self.assertRaisesRegex(
+                    SearchRejected, r"(?i)permission|denied|not allowed|invalid"
+                ):
+                    self._viewer_search(
+                        "| inputlookup adm_observer_scope | outputlookup adm_observer_scope",
+                        0,
+                        int(time.time()),
+                    )
+                key = "scope-switch-probe-" + secrets.token_hex(8)
+                self.addCleanup(
+                    self._delete_probe,
+                    collection,
+                    key,
+                    self.lab.read_secrets()["SPLUNK_PASSWORD"],
+                )
+                self.assertDenied(
+                    "POST",
+                    collection,
+                    json.dumps({"_key": key, "scope": "forged"}).encode(),
+                    "application/json",
+                )
+                self.assertEqual(self.lab._json("GET", collection), before)
+
+    def test_scope_collection_read_and_write_acl_without_csv_guard(self):
+        limits = self.lab._json(
+            "GET", "/servicesNS/nobody/splunk_adm/configs/conf-limits/outputlookup"
+        )["entry"][0]["content"]
+        self.assertIn(
+            str(limits["outputlookup_check_permission"]).lower(), {"0", "false"}
+        )
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        before = self.lab._json("GET", collection)
+        self.assertTrue(before)
+        status, visible = self._viewer_json("GET", collection)
+        self.assertEqual(status, 200)
+        self.assertEqual(visible, before)
+        self.assertEqual(
+            self._viewer_search(
+                "| inputlookup adm_observer_scope | stats count", 0, "now"
+            ),
+            [{"count": str(len(before))}],
+        )
+        key = "scope-permission-probe-" + secrets.token_hex(8)
+        self.addCleanup(
+            self._delete_probe,
+            collection,
+            key,
+            self.lab.read_secrets()["SPLUNK_PASSWORD"],
+        )
+        self.assertDenied(
+            "POST",
+            collection,
+            json.dumps({"_key": key, "scope": "forged"}).encode(),
+            "application/json",
+        )
+        self.assertEqual(self.lab._json("GET", collection), before)
+
+    def test_legacy_csv_import_and_false_guard_negative_control(self):
+        # Isolated legacy import file, never the deployment's retained scope CSV.
+        limits = self.lab._json(
+            "GET", "/servicesNS/nobody/splunk_adm/configs/conf-limits/outputlookup"
+        )["entry"][0]["content"]
+        self.assertIn(
+            str(limits["outputlookup_check_permission"]).lower(), {"0", "false"}
+        )
+        self.assertEqual(
+            limits["enforce_permissions_for_modifying_existing_csv_lookup"], "warn"
+        )
+        token = secrets.token_hex(8)
+        filename = f"adm_scope_migration_probe_{token}.csv"
+        observer = "MixedCase-" + token
+        source = [
+            {
+                "observer_kind": "Cluster",
+                "observer": observer,
+                "scope": "MigrationScope",
+                "cluster": "MixedCaseCluster",
+            }
+        ]
+        key = hashlib.sha256(
+            json.dumps(["cluster", observer.lower()], separators=(",", ":")).encode()
+        ).hexdigest()
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        admin_password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
+        self.addCleanup(self._delete_probe, collection, key, admin_password)
+
+        def remove_csv():
+            status, _ = _response(
+                "DELETE",
+                f"/servicesNS/nobody/{APP}/data/lookup-table-files/{filename}",
+                "admin",
+                admin_password,
+            )
+            self.assertIn(status, (200, 204, 404))
+
+        self.addCleanup(remove_csv)
+        self.lab.search(
+            f"| makeresults format=json data={json.dumps(json.dumps(source))} "
+            f"| fields observer_kind observer scope cluster | outputlookup {filename}"
+        )
+        saved = configparser.RawConfigParser()
+        saved.read(HERE.parents[1] / "splunk_app/splunk_adm/default/savedsearches.conf")
+        migration = (
+            saved["ADM - Migrate observer scope"]["search"]
+            .replace("adm_observer_scope.csv", filename)
+            .replace("\\\n", " ")
+        )
+        # Import reruns update the same key; they do not add duplicate mappings.
+        for _ in range(2):
+            result = self.lab.search(migration)
+            self.assertEqual(result[0]["rows_written"], "1")
+            self.assertEqual(result[0]["blocked"], "0")
+        stored = self.lab.search(
+            f'| inputlookup adm_observer_scope where _key="{key}" '
+            "| table observer_kind observer scope cluster"
+        )
+        self.assertEqual(
+            stored,
+            [{**source[0], "observer_kind": "cluster", "observer": observer.lower()}],
+        )
+        routed = self.lab.search(
+            f'| makeresults | eval adm_scope_kind="CLUSTER", adm_scope_observer="{observer}" '
+            "| `adm_flow_enrich` | table adm_scope adm_cluster"
+        )
+        self.assertEqual(
+            routed, [{"adm_scope": "MigrationScope", "adm_cluster": "MixedCaseCluster"}]
+        )
+        role_path = f"/services/authorization/roles/{self.role}"
+        self.lab._json(
+            "POST",
+            role_path,
+            {"capabilities": ["search", "output_file", "edit_own_objects"]},
+        )
+        self.addCleanup(self.lab._json, "POST", role_path, {"capabilities": "search"})
+        with self.assertRaisesRegex(
+            SearchRejected, r"(?i)permission|denied|not allowed|invalid"
+        ):
+            self._viewer_search(migration, 0, int(time.time()))
+        # With CSV checks false/warn, the old CSV ACL assertion fails: a viewer
+        # can actually change an isolated legacy file. A warning is not denial.
+        self._viewer_search(
+            f'| inputlookup {filename} | eval scope="forged" | outputlookup {filename}',
+            0,
+            int(time.time()),
+            allow_warnings=True,
+        )
+        self.assertEqual(
+            self.lab.search(f"| inputlookup {filename} | table scope"),
+            [{"scope": "forged"}],
+        )
+        refused = self.lab.search(migration)
+        self.assertEqual(refused[0]["blocked"], "1")
+        self.assertEqual(refused[0]["rows_written"], "0")
+        self.assertIn("refused", refused[0]["warnings"])
+        self.assertEqual(
+            self.lab.search(
+                f'| inputlookup adm_observer_scope where _key="{key}" | table observer_kind observer scope cluster'
+            ),
+            stored,
+        )
+
+    def test_shared_kv_lookups_reject_search_writes_even_with_output_file(self):
         # Many ordinary Splunk roles have output_file for personal lookups.
-        # Test object ACLs independently of that command capability.
+        # Test collection ACLs independently of that command capability.
         role_path = f"/services/authorization/roles/{self.role}"
         self.lab._json(
             "POST",
@@ -436,7 +734,6 @@ class RestrictedViewerTest(unittest.TestCase):
         )
         for lookup in (
             "adm_observer_scope",
-            "adm_observer_scope.csv",
             "adm_ip_identity",
         ):
             with self.subTest(lookup=lookup):

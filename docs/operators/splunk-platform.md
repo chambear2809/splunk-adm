@@ -68,7 +68,7 @@ adm_hubble_sourcetypes  sourcetype="cilium:hubble:flow"
 
 ### Routing scope lookup
 
-Fill `adm_observer_scope.csv` (columns `observer_kind,observer,scope,cluster`). IP identities only join within one scope, so every observer of the same routing domain needs the same `scope` value. Example for one ACI VRF:
+Populate the `adm_observer_scope` KV lookup (fields `observer_kind,observer,scope,cluster`) as an administrator. Its collection and lookup allow all roles to read and only `admin`/`sc_admin` to write, including REST and `outputlookup`. Normalize `observer_kind` and `observer` to lowercase; retain the scope/cluster values. For an existing installation, manually run the disabled administrator migration search as described in the [one-time CSV migration](../UPGRADES.md#one-time-csv-to-kv-scope-migration) before enabling searches. The old CSV is no longer live configuration. IP identities only join within one scope, so every observer of the same routing domain needs the same `scope` value. Example for one ACI VRF:
 
 ```csv
 observer_kind,observer,scope,cluster
@@ -81,6 +81,18 @@ firewall,<FTD device IP>,shop-prod,
 cluster,<Kubernetes cluster name>,shop-prod,<Kubernetes cluster name>
 hec_source,http:isovalent,shop-prod,<Kubernetes cluster name>
 ```
+
+
+To import administrator-reviewed rows, create them as search results (for example with `makeresults format=csv` using the header above), then finish the search with:
+
+```spl
+| eval observer_kind=lower(observer_kind), observer=lower(observer),
+       _key=sha256(json_array(observer_kind, observer))
+| fields _key observer_kind observer scope cluster
+| outputlookup append=true key_field=_key override_if_empty=false adm_observer_scope
+```
+
+Verify `| inputlookup adm_observer_scope | table observer_kind observer scope cluster`, and check the collection and lookup ACLs before granting viewer access. No system `limits.conf` override is needed.
 
 Unmapped observers fall into scope `default`. The `cluster` row is required: it also scopes Hubble flows and Service frontends (LoadBalancer IPs, NodePorts). The `apic` row also scopes ACI ACL-log records. The cluster, the ACI NetFlow exporters, Nexus Dashboard and the APIC must share one scope, or the map can't link a client's fabric conversation to the backend pod Hubble saw.
 
