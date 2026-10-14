@@ -18,6 +18,12 @@ LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent k8s otel_traces ci
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
+# Re-exec under the cooperative lock. The token is inherited by nested lab
+# subprocesses; the lock itself remains held by the wrapper process.
+if ! python3 "$ROOT/tools/lab_lock.py" --root "$ROOT" --check-owned; then
+  exec python3 "$ROOT/tools/lab_lock.py" --root "$ROOT" -- "$0" "$@"
+fi
+
 wait_healthy() {
   local deadline=$((SECONDS + 1200)) status
   while ((SECONDS < deadline)); do

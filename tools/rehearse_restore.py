@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests/splunk"))
 sys.path.insert(0, str(ROOT / "tools"))
 import lab  # noqa: E402
+from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import Workload, manifest  # noqa: E402
 from benchmark_pipeline import (  # noqa: E402
     COLLECTIONS,
@@ -313,6 +314,7 @@ def graph_snapshot(runner, config):
     )
 
 
+@with_lab_lock(root=ROOT)
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -450,4 +452,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main, root=ROOT))

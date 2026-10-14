@@ -1,0 +1,1304 @@
+{
+  "status": "failed",
+  "mode": "shipped-cron",
+  "recovery_mode": "replay",
+  "targets": [
+    "ADM - Identity builder",
+    "ADM - Service binding",
+    "ADM - Service backends",
+    "ADM - Conversation rollup"
+  ],
+  "downtime_seconds": 330,
+  "environment": {
+    "installed_default_sha256": {
+      "splunk_app/splunk_adm/default/app.conf": "662a9586a1d142d4710acb6707a2b13f71eebabbdebb7b8e7e364ae904150a2f",
+      "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
+      "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
+      "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "cea94eccb2c972bc5ae0b03bd8dd51602190245dc17ffeb4f07a149cc1312750",
+      "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
+    },
+    "host_architecture": "arm64",
+    "python": "3.14.7",
+    "docker_architecture": "aarch64",
+    "docker_cpus": 12,
+    "docker_memory_bytes": 8214585344,
+    "image": "splunk/splunk:10.6.0.5",
+    "image_id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+    "container_memory_limit_bytes": 0,
+    "container_nano_cpus": 0,
+    "container_platform": "linux/amd64 (lab.sh)",
+    "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS"
+  },
+  "fixture_sha256": "63b351367c431e1f334e23927b2181f09c043afd45bbad6c161820d2f8a8f56a",
+  "settings": {
+    "ADM - Identity builder": {
+      "cron_schedule": "1-56/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Service binding": {
+      "cron_schedule": "2-57/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Service backends": {
+      "cron_schedule": "3-58/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    },
+    "ADM - Conversation rollup": {
+      "cron_schedule": "*/5 * * * *",
+      "realtime_schedule": false,
+      "dispatch.index_earliest": "-10m@m",
+      "dispatch.index_latest": "-5m@m",
+      "dispatch.earliest_time": "-24h",
+      "dispatch.latest_time": "+15m"
+    }
+  },
+  "expected_flow_records": 6,
+  "scheduler_rows": [
+    {
+      "_time": "2026-10-14T00:17:40.695+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "0",
+      "status": "continued",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-14T00:17:40.695+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "0",
+      "status": "continued",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-14T00:17:40.695+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "0",
+      "status": "continued",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-14T00:17:40.693+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "0",
+      "status": "continued",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-14T00:10:00.749+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936600",
+      "dispatch_time": "1791936600",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936600_9",
+      "run_time": "0.602"
+    },
+    {
+      "_time": "2026-10-14T00:08:00.280+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791936480",
+      "dispatch_time": "1791936480",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791936480_8",
+      "run_time": "0.159"
+    },
+    {
+      "_time": "2026-10-14T00:07:00.298+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791936420",
+      "dispatch_time": "1791936420",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791936420_7",
+      "run_time": "0.187"
+    },
+    {
+      "_time": "2026-10-14T00:06:00.267+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "1791936360",
+      "dispatch_time": "1791936360",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791936360_6",
+      "run_time": "0.175"
+    },
+    {
+      "_time": "2026-10-14T00:05:00.797+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936300",
+      "dispatch_time": "1791936300",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936300_5",
+      "run_time": "0.714"
+    },
+    {
+      "_time": "2026-10-14T00:03:01.241+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791936180",
+      "dispatch_time": "1791936181",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791936180_4",
+      "run_time": "0.169"
+    },
+    {
+      "_time": "2026-10-14T00:02:01.291+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791936120",
+      "dispatch_time": "1791936121",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791936120_3",
+      "run_time": "0.222"
+    },
+    {
+      "_time": "2026-10-14T00:01:01.335+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "1791936060",
+      "dispatch_time": "1791936060",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791936060_2",
+      "run_time": "0.309"
+    },
+    {
+      "_time": "2026-10-14T00:00:02.266+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936000",
+      "dispatch_time": "1791936000",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936000_1",
+      "run_time": "1.004"
+    }
+  ],
+  "observed_flow_records": 6,
+  "baseline_flow_records": 6,
+  "second_batch_index_times": {
+    "first": 1791936314,
+    "last": 1791936314
+  },
+  "second_batch_rollup_slot": 1791936900,
+  "history_before_outage": [
+    {
+      "_key": "nobody;splunk_adm;ADM - Conversation rollup",
+      "sched_time": 1791936600,
+      "durable_cursor": 0,
+      "runtimes": [
+        1.004,
+        0.714,
+        0.602
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Identity builder",
+      "sched_time": 1791936360,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.309,
+        0.17500000000000002
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Service backends",
+      "sched_time": 1791936480,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.169,
+        0.159
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Service binding",
+      "sched_time": 1791936420,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.222,
+        0.187
+      ]
+    }
+  ],
+  "pre_outage_scheduler_rows": [
+    {
+      "_time": "2026-10-14T00:10:00.749+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936600",
+      "dispatch_time": "1791936600",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936600_9",
+      "run_time": "0.602"
+    },
+    {
+      "_time": "2026-10-14T00:08:00.280+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791936480",
+      "dispatch_time": "1791936480",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791936480_8",
+      "run_time": "0.159"
+    },
+    {
+      "_time": "2026-10-14T00:07:00.298+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791936420",
+      "dispatch_time": "1791936420",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791936420_7",
+      "run_time": "0.187"
+    },
+    {
+      "_time": "2026-10-14T00:06:00.267+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "1791936360",
+      "dispatch_time": "1791936360",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791936360_6",
+      "run_time": "0.175"
+    },
+    {
+      "_time": "2026-10-14T00:05:00.797+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936300",
+      "dispatch_time": "1791936300",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936300_5",
+      "run_time": "0.714"
+    },
+    {
+      "_time": "2026-10-14T00:03:01.241+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "scheduled_time": "1791936180",
+      "dispatch_time": "1791936181",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791936180_4",
+      "run_time": "0.169"
+    },
+    {
+      "_time": "2026-10-14T00:02:01.291+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "scheduled_time": "1791936120",
+      "dispatch_time": "1791936121",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791936120_3",
+      "run_time": "0.222"
+    },
+    {
+      "_time": "2026-10-14T00:01:01.335+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "scheduled_time": "1791936060",
+      "dispatch_time": "1791936060",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791936060_2",
+      "run_time": "0.309"
+    },
+    {
+      "_time": "2026-10-14T00:00:02.266+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "scheduled_time": "1791936000",
+      "dispatch_time": "1791936000",
+      "status": "success",
+      "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791936000_1",
+      "run_time": "1.004"
+    }
+  ],
+  "outage_started": 1791936611.266089,
+  "restart_requested": 1791936955.415242,
+  "ready_after_restart": 1791937078.829264,
+  "history_after_restart": [
+    {
+      "_key": "nobody;splunk_adm;ADM - Conversation rollup",
+      "sched_time": 1791936600,
+      "durable_cursor": 0,
+      "runtimes": [
+        1.004,
+        0.714,
+        0.602
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Identity builder",
+      "sched_time": 1791936360,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.309,
+        0.17500000000000002
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Service backends",
+      "sched_time": 1791936480,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.169,
+        0.159
+      ]
+    },
+    {
+      "_key": "nobody;splunk_adm;ADM - Service binding",
+      "sched_time": 1791936420,
+      "durable_cursor": 0,
+      "runtimes": [
+        0.222,
+        0.187
+      ]
+    }
+  ],
+  "recovery": {
+    "mode": "absolute-slice-replay",
+    "status": "incomplete",
+    "jobs": [
+      {
+        "name": "ADM - Identity builder",
+        "scheduled_time": 1791936660,
+        "earliest": 1791850260,
+        "latest": 1791937560,
+        "index_earliest": 1791936060,
+        "index_latest": 1791936660,
+        "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791937080_1"
+      },
+      {
+        "name": "ADM - Service binding",
+        "scheduled_time": 1791936720,
+        "earliest": 1791850320,
+        "latest": 1791937620,
+        "index_earliest": 1791936120,
+        "index_latest": 1791936720,
+        "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791937081_3"
+      },
+      {
+        "name": "ADM - Service backends",
+        "scheduled_time": 1791936780,
+        "earliest": 1791850380,
+        "latest": 1791937680,
+        "index_earliest": 1791936180,
+        "index_latest": 1791936780,
+        "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791937081_4"
+      },
+      {
+        "name": "ADM - Conversation rollup",
+        "scheduled_time": 1791936900,
+        "earliest": 1791850500,
+        "latest": 1791937800,
+        "index_earliest": 1791936300,
+        "index_latest": 1791936600,
+        "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791937081_5"
+      },
+      {
+        "name": "ADM - Identity builder",
+        "scheduled_time": 1791936960,
+        "earliest": 1791850560,
+        "latest": 1791937860,
+        "index_earliest": 1791936360,
+        "index_latest": 1791936960,
+        "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791937082_6"
+      }
+    ],
+    "pending": [
+      {
+        "name": "ADM - Identity builder",
+        "scheduled_time": 1791936660,
+        "earliest": 1791850260,
+        "latest": 1791937560,
+        "index_earliest": 1791936060,
+        "index_latest": 1791936660
+      },
+      {
+        "name": "ADM - Service binding",
+        "scheduled_time": 1791936720,
+        "earliest": 1791850320,
+        "latest": 1791937620,
+        "index_earliest": 1791936120,
+        "index_latest": 1791936720
+      },
+      {
+        "name": "ADM - Service backends",
+        "scheduled_time": 1791936780,
+        "earliest": 1791850380,
+        "latest": 1791937680,
+        "index_earliest": 1791936180,
+        "index_latest": 1791936780
+      },
+      {
+        "name": "ADM - Conversation rollup",
+        "scheduled_time": 1791936900,
+        "earliest": 1791850500,
+        "latest": 1791937800,
+        "index_earliest": 1791936300,
+        "index_latest": 1791936600
+      },
+      {
+        "name": "ADM - Identity builder",
+        "scheduled_time": 1791936960,
+        "earliest": 1791850560,
+        "latest": 1791937860,
+        "index_earliest": 1791936360,
+        "index_latest": 1791936960
+      },
+      {
+        "name": "ADM - Service binding",
+        "scheduled_time": 1791937020,
+        "earliest": 1791850620,
+        "latest": 1791937920,
+        "index_earliest": 1791936420,
+        "index_latest": 1791937020
+      }
+    ]
+  },
+  "error": "recovery: ADM - Service binding: incomplete search",
+  "jobs": [
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791935826.4",
+      "warnings": [],
+      "run_seconds": 0.504,
+      "result_count": 1,
+      "scan_count": 19,
+      "event_count": 19,
+      "wall_seconds": 1.0505
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935827.5",
+      "warnings": [],
+      "run_seconds": 0.438,
+      "result_count": 0,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.8495
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935828.6",
+      "warnings": [],
+      "run_seconds": 0.121,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3231
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935844.7",
+      "warnings": [],
+      "run_seconds": 0.12,
+      "result_count": 0,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3192
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935844.8",
+      "warnings": [],
+      "run_seconds": 0.111,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3137
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935859.9",
+      "warnings": [],
+      "run_seconds": 0.129,
+      "result_count": 0,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3174
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935860.10",
+      "warnings": [],
+      "run_seconds": 0.10300000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3114
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935875.11",
+      "warnings": [],
+      "run_seconds": 0.135,
+      "result_count": 0,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3298
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935875.12",
+      "warnings": [],
+      "run_seconds": 0.10400000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3233
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935891.13",
+      "warnings": [],
+      "run_seconds": 0.186,
+      "result_count": 0,
+      "scan_count": 3,
+      "event_count": 0,
+      "wall_seconds": 0.3606
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935891.14",
+      "warnings": [],
+      "run_seconds": 0.1,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3215
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935906.15",
+      "warnings": [],
+      "run_seconds": 0.123,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.327
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935907.16",
+      "warnings": [],
+      "run_seconds": 0.101,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3108
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935922.17",
+      "warnings": [],
+      "run_seconds": 0.132,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.3097
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935922.18",
+      "warnings": [],
+      "run_seconds": 0.11,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3072
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935937.19",
+      "warnings": [],
+      "run_seconds": 0.14200000000000002,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.3229
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935938.20",
+      "warnings": [],
+      "run_seconds": 0.1,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3019
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935953.21",
+      "warnings": [],
+      "run_seconds": 0.134,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.3314
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935953.22",
+      "warnings": [],
+      "run_seconds": 0.10200000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3139
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935969.23",
+      "warnings": [],
+      "run_seconds": 0.121,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.325
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935969.24",
+      "warnings": [],
+      "run_seconds": 0.109,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3137
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791935984.25",
+      "warnings": [],
+      "run_seconds": 0.14,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.3503
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791935985.26",
+      "warnings": [],
+      "run_seconds": 0.10300000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.328
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936000.27",
+      "warnings": [],
+      "run_seconds": 0.15,
+      "result_count": 0,
+      "scan_count": 1,
+      "event_count": 0,
+      "wall_seconds": 0.3216
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936000.28",
+      "warnings": [],
+      "run_seconds": 0.116,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3156
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936016.29",
+      "warnings": [],
+      "run_seconds": 0.128,
+      "result_count": 1,
+      "scan_count": 2,
+      "event_count": 1,
+      "wall_seconds": 0.3286
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936016.30",
+      "warnings": [],
+      "run_seconds": 0.10300000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3171
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936031.31",
+      "warnings": [],
+      "run_seconds": 0.132,
+      "result_count": 1,
+      "scan_count": 2,
+      "event_count": 1,
+      "wall_seconds": 0.3288
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936032.32",
+      "warnings": [],
+      "run_seconds": 0.10300000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.315
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936047.33",
+      "warnings": [],
+      "run_seconds": 0.14400000000000002,
+      "result_count": 1,
+      "scan_count": 2,
+      "event_count": 1,
+      "wall_seconds": 0.3187
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936047.34",
+      "warnings": [],
+      "run_seconds": 0.10400000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.301
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936063.35",
+      "warnings": [],
+      "run_seconds": 0.138,
+      "result_count": 1,
+      "scan_count": 2,
+      "event_count": 1,
+      "wall_seconds": 0.3197
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936063.36",
+      "warnings": [],
+      "run_seconds": 0.116,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3091
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936078.37",
+      "warnings": [],
+      "run_seconds": 0.146,
+      "result_count": 2,
+      "scan_count": 3,
+      "event_count": 2,
+      "wall_seconds": 0.3351
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936079.38",
+      "warnings": [],
+      "run_seconds": 0.1,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3125
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936094.39",
+      "warnings": [],
+      "run_seconds": 0.148,
+      "result_count": 2,
+      "scan_count": 3,
+      "event_count": 2,
+      "wall_seconds": 0.3447
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936094.40",
+      "warnings": [],
+      "run_seconds": 0.109,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3092
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936110.41",
+      "warnings": [],
+      "run_seconds": 0.14400000000000002,
+      "result_count": 2,
+      "scan_count": 3,
+      "event_count": 2,
+      "wall_seconds": 0.3363
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936110.42",
+      "warnings": [],
+      "run_seconds": 0.115,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3129
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936125.43",
+      "warnings": [],
+      "run_seconds": 0.20500000000000002,
+      "result_count": 3,
+      "scan_count": 5,
+      "event_count": 3,
+      "wall_seconds": 0.3872
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936126.44",
+      "warnings": [],
+      "run_seconds": 0.11900000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3167
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936141.45",
+      "warnings": [],
+      "run_seconds": 0.146,
+      "result_count": 3,
+      "scan_count": 4,
+      "event_count": 3,
+      "wall_seconds": 0.3491
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936141.46",
+      "warnings": [],
+      "run_seconds": 0.106,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3126
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936157.47",
+      "warnings": [],
+      "run_seconds": 0.135,
+      "result_count": 3,
+      "scan_count": 4,
+      "event_count": 3,
+      "wall_seconds": 0.3205
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936157.48",
+      "warnings": [],
+      "run_seconds": 0.107,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3064
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936172.49",
+      "warnings": [],
+      "run_seconds": 0.17300000000000001,
+      "result_count": 3,
+      "scan_count": 4,
+      "event_count": 3,
+      "wall_seconds": 0.3425
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936173.50",
+      "warnings": [],
+      "run_seconds": 0.114,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3172
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936188.51",
+      "warnings": [],
+      "run_seconds": 0.149,
+      "result_count": 4,
+      "scan_count": 6,
+      "event_count": 4,
+      "wall_seconds": 0.346
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936188.52",
+      "warnings": [],
+      "run_seconds": 0.10400000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3134
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936204.53",
+      "warnings": [],
+      "run_seconds": 0.123,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.325
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936204.54",
+      "warnings": [],
+      "run_seconds": 0.101,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3164
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936219.55",
+      "warnings": [],
+      "run_seconds": 0.13,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.3522
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936220.56",
+      "warnings": [],
+      "run_seconds": 0.123,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3328
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936235.57",
+      "warnings": [],
+      "run_seconds": 0.14100000000000001,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.321
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936235.58",
+      "warnings": [],
+      "run_seconds": 0.156,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3214
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936251.59",
+      "warnings": [],
+      "run_seconds": 0.133,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.3297
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936251.60",
+      "warnings": [],
+      "run_seconds": 0.114,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3151
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936266.61",
+      "warnings": [],
+      "run_seconds": 0.145,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.3337
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936267.62",
+      "warnings": [],
+      "run_seconds": 0.10400000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3132
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936282.63",
+      "warnings": [],
+      "run_seconds": 0.146,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.3478
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936282.64",
+      "warnings": [],
+      "run_seconds": 0.107,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3262
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936298.65",
+      "warnings": [],
+      "run_seconds": 0.13,
+      "result_count": 4,
+      "scan_count": 5,
+      "event_count": 4,
+      "wall_seconds": 0.3314
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936298.66",
+      "warnings": [],
+      "run_seconds": 0.108,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3093
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936313.67",
+      "warnings": [],
+      "run_seconds": 0.158,
+      "result_count": 5,
+      "scan_count": 6,
+      "event_count": 5,
+      "wall_seconds": 0.3397
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936314.68",
+      "warnings": [],
+      "run_seconds": 0.14200000000000002,
+      "result_count": 1,
+      "scan_count": 3,
+      "event_count": 3,
+      "wall_seconds": 0.3182
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791936314.69",
+      "warnings": [],
+      "run_seconds": 0.136,
+      "result_count": 1,
+      "scan_count": 19,
+      "event_count": 19,
+      "wall_seconds": 0.3098
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791936315.70",
+      "warnings": [],
+      "run_seconds": 0.147,
+      "result_count": 1,
+      "scan_count": 38,
+      "event_count": 38,
+      "wall_seconds": 0.3341
+    },
+    {
+      "name": "second-batch-index-times",
+      "status": "complete",
+      "sid": "1791936315.71",
+      "warnings": [],
+      "run_seconds": 0.301,
+      "result_count": 1,
+      "scan_count": 19,
+      "event_count": 19,
+      "wall_seconds": 0.5789
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791936610.72",
+      "warnings": [],
+      "run_seconds": 0.534,
+      "result_count": 1,
+      "scan_count": 3,
+      "event_count": 3,
+      "wall_seconds": 0.9412
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791936610.73",
+      "warnings": [],
+      "run_seconds": 0.185,
+      "result_count": 9,
+      "scan_count": 10,
+      "event_count": 9,
+      "wall_seconds": 0.3071
+    },
+    {
+      "name": "scheduler-log",
+      "status": "complete",
+      "sid": "1791937079.2",
+      "warnings": [],
+      "run_seconds": 0.5640000000000001,
+      "result_count": 13,
+      "scan_count": 14,
+      "event_count": 13,
+      "wall_seconds": 0.8924
+    },
+    {
+      "name": "recovery: ADM - Identity builder",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791937080_1",
+      "warnings": [],
+      "run_seconds": 0.6990000000000001,
+      "result_count": 1,
+      "scan_count": 4,
+      "event_count": 4,
+      "wall_seconds": 1.1136
+    },
+    {
+      "name": "recovery: ADM - Service binding",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791937081_3",
+      "warnings": [],
+      "run_seconds": 0.176,
+      "result_count": 1,
+      "scan_count": 9,
+      "event_count": 9,
+      "wall_seconds": 0.3151
+    },
+    {
+      "name": "recovery: ADM - Service backends",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791937081_4",
+      "warnings": [],
+      "run_seconds": 0.137,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3103
+    },
+    {
+      "name": "recovery: ADM - Conversation rollup",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791937081_5",
+      "warnings": [],
+      "run_seconds": 0.644,
+      "result_count": 3,
+      "scan_count": 6,
+      "event_count": 6,
+      "wall_seconds": 0.8454
+    },
+    {
+      "name": "recovery: ADM - Identity builder",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791937082_6",
+      "warnings": [],
+      "run_seconds": 0.14,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3146
+    },
+    {
+      "name": "recovery: ADM - Service binding",
+      "status": "incomplete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791937082_7",
+      "warnings": [
+        "WARN: Found no results to write to collection 's_splunkeHZIxIWLPnRNUuZlGNZqA4Et_adm_sed@EaXf9SaLBrvL6DjIc@hhQx'."
+      ],
+      "run_seconds": 0.137,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3131
+    }
+  ]
+}

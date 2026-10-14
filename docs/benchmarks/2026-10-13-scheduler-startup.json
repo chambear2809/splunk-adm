@@ -1,0 +1,18 @@
+{
+  "environment": "Disposable standalone Splunk 10.6.0.5 lab",
+  "probe": "Every-minute continuous saved search with persisted pre-outage history",
+  "observed_behavior": "Scheduler advances next_runtime before KV history loads, then retains the later runtime. This explains the missed slots in this probe, not all Splunk deployments.",
+  "scheduler_log": [
+    "10-13-2026 23:38:04.589 +0000 DEBUG SavedSplunker - DCSS: KV Store status= starting, _defer_css_state= waiting-for-KV-Store, elapsed= 0, timeout= 120",
+    "10-13-2026 23:39:00.757 +0000 DEBUG SavedSplunker - DCSS: KV Store status= ready, _defer_css_state= waiting-for-KV-Store, elapsed= 56, timeout= 120",
+    "10-13-2026 23:39:00.776 +0000 DEBUG SavedSplunker - DCSS: read sched_time=1791934440 for nobody;splunk_adm;ADM - Continuous probe",
+    "10-13-2026 23:39:00.776 +0000 DEBUG SavedSplunker - DCSS: next_runtime (1791934740) >= sched_time (1791934440) for nobody;splunk_adm;ADM - Continuous probe -- NOT overwriting later time",
+    "10-13-2026 23:39:00.777 +0000 DEBUG SavedSplunker - DCSS: read sched_time=1791934680 for nobody;splunk_adm;ADM - Durable probe",
+    "10-13-2026 23:39:00.777 +0000 DEBUG SavedSplunker - DCSS: next_runtime (1791934740) >= sched_time (1791934680) for nobody;splunk_adm;ADM - Durable probe -- NOT overwriting later time",
+    "10-13-2026 23:39:00.780 +0000 INFO  SavedSplunker - DCSS: completed reading history for continuous scheduled searches"
+  ],
+  "experiments": {
+    "dispatch_only_when_kvstore_ready": "A lab-only true override did not recover this standalone probe; removed after testing. No global override shipped.",
+    "past_reschedule": "REST reschedule rejected historical schedule_time: Invalid schedule_time value: value is in the past."
+  }
+}

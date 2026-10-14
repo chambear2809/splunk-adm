@@ -1,0 +1,279 @@
+{
+  "captured_at": "2026-10-13T23:09:36.895408+00:00",
+  "scheduler_limits": [
+    "max_continuous_scheduled_search_lookback = 24h",
+    "search_history_load_timeout = 2m"
+  ],
+  "saved_search_history": [
+    {
+      "runtimes": [
+        0.494,
+        0.505,
+        0.52,
+        0.561
+      ],
+      "sched_time": 1791932700,
+      "durable_cursor": 0,
+      "_user": "nobody",
+      "_key": "nobody;splunk_adm;ADM - Conversation rollup"
+    },
+    {
+      "runtimes": [
+        0.164,
+        0.165,
+        0.128
+      ],
+      "sched_time": 1791932760,
+      "durable_cursor": 0,
+      "_user": "nobody",
+      "_key": "nobody;splunk_adm;ADM - Identity builder"
+    },
+    {
+      "runtimes": [
+        0.129,
+        0.124,
+        0.114,
+        0.164,
+        0.158
+      ],
+      "sched_time": 1791932880,
+      "durable_cursor": 0,
+      "_user": "nobody",
+      "_key": "nobody;splunk_adm;ADM - Service backends"
+    },
+    {
+      "runtimes": [
+        0.199,
+        0.138,
+        0.14400000000000002,
+        0.136
+      ],
+      "sched_time": 1791932820,
+      "durable_cursor": 0,
+      "_user": "nobody",
+      "_key": "nobody;splunk_adm;ADM - Service binding"
+    }
+  ],
+  "settings": {
+    "ADM - Identity builder": {
+      "disabled": false,
+      "is_scheduled": true,
+      "realtime_schedule": false,
+      "cron_schedule": "1-56/5 * * * *"
+    },
+    "ADM - Service binding": {
+      "disabled": false,
+      "is_scheduled": true,
+      "realtime_schedule": false,
+      "cron_schedule": "2-57/5 * * * *"
+    },
+    "ADM - Service backends": {
+      "disabled": false,
+      "is_scheduled": true,
+      "realtime_schedule": false,
+      "cron_schedule": "3-58/5 * * * *"
+    },
+    "ADM - Conversation rollup": {
+      "disabled": false,
+      "is_scheduled": true,
+      "realtime_schedule": false,
+      "cron_schedule": "*/5 * * * *"
+    }
+  },
+  "summary": [
+    {
+      "records": "6",
+      "unprotected": "0"
+    }
+  ],
+  "raw": [
+    {
+      "source": "adm-scheduler-wave-2",
+      "count": "19"
+    },
+    {
+      "source": "kubernetes",
+      "count": "13"
+    },
+    {
+      "source": "stream:netflow",
+      "count": "6"
+    }
+  ],
+  "scheduler_rows": [
+    {
+      "_time": "2026-10-13T22:42:01.145+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "status": "success",
+      "scheduled_time": "1791931320",
+      "dispatch_time": "1791931320"
+    },
+    {
+      "_time": "2026-10-13T22:43:01.080+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "success",
+      "scheduled_time": "1791931380",
+      "dispatch_time": "1791931380"
+    },
+    {
+      "_time": "2026-10-13T22:45:01.457+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "status": "success",
+      "scheduled_time": "1791931500",
+      "dispatch_time": "1791931500"
+    },
+    {
+      "_time": "2026-10-13T22:46:01.145+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "status": "success",
+      "scheduled_time": "1791931560",
+      "dispatch_time": "1791931560"
+    },
+    {
+      "_time": "2026-10-13T22:47:01.153+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "status": "success",
+      "scheduled_time": "1791931620",
+      "dispatch_time": "1791931620"
+    },
+    {
+      "_time": "2026-10-13T22:48:01.150+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "success",
+      "scheduled_time": "1791931680",
+      "dispatch_time": "1791931681"
+    },
+    {
+      "_time": "2026-10-13T22:50:00.545+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "status": "success",
+      "scheduled_time": "1791931800",
+      "dispatch_time": "1791931800"
+    },
+    {
+      "_time": "2026-10-13T22:51:00.231+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "status": "success",
+      "scheduled_time": "1791931860",
+      "dispatch_time": "1791931860"
+    },
+    {
+      "_time": "2026-10-13T22:52:00.218+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "status": "success",
+      "scheduled_time": "1791931920",
+      "dispatch_time": "1791931920"
+    },
+    {
+      "_time": "2026-10-13T22:53:00.215+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "success",
+      "scheduled_time": "1791931980",
+      "dispatch_time": "1791931980"
+    },
+    {
+      "_time": "2026-10-13T22:55:00.629+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "status": "success",
+      "scheduled_time": "1791932100",
+      "dispatch_time": "1791932100"
+    },
+    {
+      "_time": "2026-10-13T23:02:22.466+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "continued",
+      "scheduled_time": "0",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-13T23:02:22.469+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "status": "continued",
+      "scheduled_time": "0",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-13T23:02:22.469+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "status": "continued",
+      "scheduled_time": "0",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-13T23:02:22.469+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "status": "continued",
+      "scheduled_time": "0",
+      "reason": "Could not get next runtime"
+    },
+    {
+      "_time": "2026-10-13T23:03:00.758+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "success",
+      "scheduled_time": "1791932580",
+      "dispatch_time": "1791932580"
+    },
+    {
+      "_time": "2026-10-13T23:05:01.173+00:00",
+      "savedsearch_name": "ADM - Conversation rollup",
+      "status": "success",
+      "scheduled_time": "1791932700",
+      "dispatch_time": "1791932700"
+    },
+    {
+      "_time": "2026-10-13T23:06:00.741+00:00",
+      "savedsearch_name": "ADM - Identity builder",
+      "status": "success",
+      "scheduled_time": "1791932760",
+      "dispatch_time": "1791932760"
+    },
+    {
+      "_time": "2026-10-13T23:07:00.783+00:00",
+      "savedsearch_name": "ADM - Service binding",
+      "status": "success",
+      "scheduled_time": "1791932820",
+      "dispatch_time": "1791932820"
+    },
+    {
+      "_time": "2026-10-13T23:08:00.828+00:00",
+      "savedsearch_name": "ADM - Service backends",
+      "status": "success",
+      "scheduled_time": "1791932880",
+      "dispatch_time": "1791932880"
+    }
+  ],
+  "summary_query": "index=adm_summary source=\"adm:conversation\" | `adm_summary_dedup` | stats sum(records) AS records count(eval(isnull(rollup_id))) AS unprotected",
+  "missed_slot_successes": [],
+  "execution_cycles": [
+    {
+      "cycle": 1791931500,
+      "dispatch_order": [
+        "ADM - Conversation rollup",
+        "ADM - Identity builder",
+        "ADM - Service binding",
+        "ADM - Service backends"
+      ],
+      "before_outage": true
+    },
+    {
+      "cycle": 1791931800,
+      "dispatch_order": [
+        "ADM - Conversation rollup",
+        "ADM - Identity builder",
+        "ADM - Service binding",
+        "ADM - Service backends"
+      ],
+      "before_outage": true
+    },
+    {
+      "cycle": 1791932700,
+      "dispatch_order": [
+        "ADM - Conversation rollup",
+        "ADM - Identity builder",
+        "ADM - Service binding",
+        "ADM - Service backends"
+      ],
+      "before_outage": false
+    }
+  ]
+}

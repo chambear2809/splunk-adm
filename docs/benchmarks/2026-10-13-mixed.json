@@ -13,7 +13,7 @@
       "splunk_app/splunk_adm/default/collections.conf": "793cbb3957d8d8aad58acb97cc1d14b04926ee2b65af6ba277d8222946355251",
       "splunk_app/splunk_adm/default/limits.conf": "2612a5bc562045bdaf3a46e8f18d58f94c5568a9e6442c2ba8423549e9afaabd",
       "splunk_app/splunk_adm/default/macros.conf": "fdb76360a5353a65b39624c53b760b45885788fc60b5999b7c7aa697e71b7a27",
-      "splunk_app/splunk_adm/default/savedsearches.conf": "8def54d5bce51da8e1ce15e9f030232fb9ea35a852ee32eb6ef48bf2c92b8315",
+      "splunk_app/splunk_adm/default/savedsearches.conf": "cea94eccb2c972bc5ae0b03bd8dd51602190245dc17ffeb4f07a149cc1312750",
       "splunk_app/splunk_adm/default/transforms.conf": "e2bb1680dec56d3794c728b7a66fb4873d09ddb00c84ac3da8c3222003063991"
     },
     "host_architecture": "arm64",
@@ -867,9 +867,182 @@
   "flow_observations": 16000,
   "graph_connections": 100,
   "graph_bytes": 600000,
-  "verification_jobs": {
-    "count": 17,
-    "all_complete": true,
-    "warnings": 0
-  }
+  "jobs": [
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791933116.4",
+      "warnings": [],
+      "run_seconds": 0.438,
+      "result_count": 1,
+      "scan_count": 16081,
+      "event_count": 16081,
+      "wall_seconds": 0.5751
+    },
+    {
+      "name": "mixed-normalization",
+      "status": "complete",
+      "sid": "1791933118.5",
+      "warnings": [],
+      "run_seconds": 1.056,
+      "result_count": 8,
+      "scan_count": 16000,
+      "event_count": 16000,
+      "wall_seconds": 1.1664
+    },
+    {
+      "name": "ADM - Identity builder",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1791933119_1",
+      "warnings": [],
+      "run_seconds": 0.193,
+      "result_count": 1,
+      "scan_count": 21,
+      "event_count": 21,
+      "wall_seconds": 0.3122
+    },
+    {
+      "name": "ADM - Service binding",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1791933119_2",
+      "warnings": [],
+      "run_seconds": 0.11900000000000001,
+      "result_count": 1,
+      "scan_count": 60,
+      "event_count": 60,
+      "wall_seconds": 0.3216
+    },
+    {
+      "name": "ADM - Service backends",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1791933119_3",
+      "warnings": [],
+      "run_seconds": 0.128,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3188
+    },
+    {
+      "name": "raw-summary-count",
+      "status": "complete",
+      "sid": "1791933120.6",
+      "warnings": [],
+      "run_seconds": 0.11800000000000001,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3141
+    },
+    {
+      "name": "rollup",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791933120_4",
+      "warnings": [],
+      "run_seconds": 1.179,
+      "result_count": 160,
+      "scan_count": 16000,
+      "event_count": 16000,
+      "wall_seconds": 1.4149
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791933121.7",
+      "warnings": [],
+      "run_seconds": 0.125,
+      "result_count": 1,
+      "scan_count": 0,
+      "event_count": 0,
+      "wall_seconds": 0.3144
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791933123.8",
+      "warnings": [],
+      "run_seconds": 0.133,
+      "result_count": 1,
+      "scan_count": 160,
+      "event_count": 160,
+      "wall_seconds": 0.3426
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791933123.9",
+      "warnings": [],
+      "run_seconds": 0.107,
+      "result_count": 1,
+      "scan_count": 160,
+      "event_count": 160,
+      "wall_seconds": 0.323
+    },
+    {
+      "name": "replay",
+      "status": "complete",
+      "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1791933123_5",
+      "warnings": [],
+      "run_seconds": 1.1280000000000001,
+      "result_count": 160,
+      "scan_count": 16000,
+      "event_count": 16000,
+      "wall_seconds": 1.4123
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791933125.10",
+      "warnings": [],
+      "run_seconds": 0.138,
+      "result_count": 1,
+      "scan_count": 160,
+      "event_count": 160,
+      "wall_seconds": 0.3076
+    },
+    {
+      "name": "index-visibility",
+      "status": "complete",
+      "sid": "1791933126.11",
+      "warnings": [],
+      "run_seconds": 0.117,
+      "result_count": 1,
+      "scan_count": 320,
+      "event_count": 320,
+      "wall_seconds": 0.2971
+    },
+    {
+      "name": "summary-count",
+      "status": "complete",
+      "sid": "1791933126.12",
+      "warnings": [],
+      "run_seconds": 0.098,
+      "result_count": 1,
+      "scan_count": 320,
+      "event_count": 160,
+      "wall_seconds": 0.3053
+    },
+    {
+      "name": "mixed-summary",
+      "status": "complete",
+      "sid": "1791933127.13",
+      "warnings": [],
+      "run_seconds": 0.092,
+      "result_count": 8,
+      "scan_count": 320,
+      "event_count": 160,
+      "wall_seconds": 0.3062
+    },
+    {
+      "name": "mixed-graph",
+      "status": "complete",
+      "sid": "1791933127.14",
+      "warnings": [],
+      "run_seconds": 0.931,
+      "result_count": 104,
+      "scan_count": 380,
+      "event_count": 220,
+      "wall_seconds": 1.1294
+    }
+  ]
 }

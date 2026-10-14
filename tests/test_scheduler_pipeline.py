@@ -2,12 +2,65 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from tools import scheduler_pipeline as scheduler
 
 
 class SchedulerPipelineTest(unittest.TestCase):
+    def test_scheduler_evidence_excludes_manual_saved_search_dispatches(self):
+        scheduled = {"status": "success", "sid": "scheduler__nobody_job"}
+        manual = {"status": "success", "sid": "admin__nobody_job"}
+        deferred = {"status": "continued", "reason": "KV starting"}
+        skipped = {"status": "skipped", "reason": "concurrency limit"}
+        with patch.object(
+            scheduler,
+            "checked_search",
+            return_value=[scheduled, manual, {"status": "success"}, deferred, skipped],
+        ):
+            self.assertEqual(
+                scheduler.scheduler_rows(Mock(), 0), [scheduled, deferred, skipped]
+            )
+
+    def test_history_snapshot_excludes_other_searches_and_content(self):
+        key = f"nobody;splunk_adm;{scheduler.TARGETS[0]}"
+        with patch.object(
+            scheduler.lab,
+            "_json",
+            return_value=[
+                {"_key": key, "sched_time": 600, "runtimes": [1], "search": "private"},
+                {"_key": "nobody;other_app;other_search", "sched_time": 601},
+            ],
+        ):
+            self.assertEqual(
+                scheduler.scheduler_history(),
+                [{"_key": key, "sched_time": 600, "runtimes": [1]}],
+            )
+
+    def test_outage_requires_container_to_remain_stopped(self):
+        with patch.object(
+            scheduler.subprocess, "check_output", return_value="exited\n"
+        ):
+            scheduler.verify_stopped()
+        for state in ("running", "restarting", "paused"):
+            with (
+                self.subTest(state=state),
+                patch.object(scheduler.subprocess, "check_output", return_value=state),
+                self.assertRaises(scheduler.LabInterferenceError),
+            ):
+                scheduler.verify_stopped()
+
+    def test_unavailable_container_signals_lost_ownership(self):
+        with (
+            patch.object(
+                scheduler.subprocess,
+                "check_output",
+                side_effect=scheduler.subprocess.CalledProcessError(1, "docker"),
+            ),
+            self.assertRaises(scheduler.LabInterferenceError),
+        ):
+            scheduler.verify_stopped()
+
     def test_fixture_clocks_shift_together_without_changing_counts(self):
         config = scheduler.Workload(pods=2, flow_copies=2)
         old = list(scheduler.fresh_events(config, scheduler.BASE))
@@ -71,6 +124,10 @@ class SchedulerPipelineTest(unittest.TestCase):
                 "realtime_schedule": 0,
                 "disabled": 0,
                 "is_scheduled": 1,
+                "dispatch.index_earliest": "-10m@m",
+                "dispatch.index_latest": "@m",
+                "dispatch.earliest_time": "-24h",
+                "dispatch.latest_time": "+15m",
             }
             for n in scheduler.TARGETS
         }
@@ -103,6 +160,17 @@ class SchedulerPipelineTest(unittest.TestCase):
 
 
 class SchedulerFinalEvidenceTest(unittest.TestCase):
+    def test_expired_catchup_deadline_records_new_target(self):
+        report = {"observed_flow_records": 6, "expected_flow_records": 6}
+        with (
+            patch.object(scheduler.time, "monotonic", return_value=2),
+            self.assertRaises(TimeoutError),
+        ):
+            scheduler.wait_converged(None, 0, 12, 1, report, catchup=(100, 200))
+        self.assertEqual(report["expected_flow_records"], 12)
+        self.assertEqual(report["observed_flow_records"], 6)
+        self.assertEqual(report["catchup_rows"], [])
+
     def test_empty_graph_cannot_complete(self):
         with self.assertRaisesRegex(ValueError, "meta row"):
             scheduler.verify_graph([], {})
@@ -114,6 +182,7 @@ class SchedulerFinalEvidenceTest(unittest.TestCase):
             "scheduled_time": 150,
             "dispatch_time": 210,
         }
+        report = {}
         with (
             patch.object(scheduler, "scheduler_rows", return_value=[row]),
             patch.object(scheduler, "summary_count", return_value=12),
@@ -121,7 +190,135 @@ class SchedulerFinalEvidenceTest(unittest.TestCase):
             patch.object(scheduler.time, "sleep"),
             self.assertRaises(TimeoutError),
         ):
-            scheduler.wait_converged(None, 0, 12, 1, {}, catchup=(100, 200))
+            scheduler.wait_converged(None, 0, 12, 1, report, catchup=(100, 200))
+        self.assertEqual(report["observed_flow_records"], 12)
+        self.assertEqual(report["expected_flow_records"], 12)
+        self.assertEqual(report["catchup_rows"], [row])
+
+
+class RecoveryExecutionTest(unittest.TestCase):
+    def test_only_verified_empty_binding_warning_is_accepted(self):
+        note = "WARN: Found no results to write to collection 'internal_collection'."
+        record = {
+            "status": "incomplete",
+            "scan_count": 0,
+            "event_count": 0,
+            "warnings": [note],
+        }
+        runner = Mock()
+        runner.search.return_value = ([{"rows_written": "0"}], record)
+        scheduler.checked_replay_search(runner, "replay", "ADM - Service binding")
+        self.assertTrue(record["accepted_empty_window"])
+        for query, rows, changes in (
+            ("ADM - Identity builder", [{"rows_written": "0"}], {}),
+            ("ADM - Service binding", [{"rows_written": "1"}], {}),
+            ("ADM - Service binding", [{"rows_written": "0"}], {"scan_count": 1}),
+            ("ADM - Service binding", [{"rows_written": "0"}], {"status": "failed"}),
+            (
+                "ADM - Service binding",
+                [{"rows_written": "0"}],
+                {"warnings": [note, "Search was finalized early"]},
+            ),
+            (
+                "ADM - Service binding",
+                [{"rows_written": "0"}],
+                {"warnings": ["WARN: KV Store unavailable"]},
+            ),
+        ):
+            with self.subTest(query=query, changes=changes):
+                runner.search.return_value = (rows, {**record, **changes})
+                with self.assertRaisesRegex(ValueError, "incomplete search"):
+                    scheduler.checked_replay_search(runner, "replay", query)
+
+    def test_empty_rollup_warning_requires_no_scanned_events_or_results(self):
+        runner = Mock()
+        for rows, scanned, warnings, accepted in (
+            ([], 0, ["WARN: No results to summary index."], True),
+            ([], 1, ["WARN: No results to summary index."], False),
+            ([{"records": "1"}], 0, ["WARN: No results to summary index."], False),
+            (
+                [],
+                0,
+                ["WARN: No results to summary index.", "Preview results returned"],
+                False,
+            ),
+        ):
+            record = {
+                "status": "incomplete",
+                "scan_count": scanned,
+                "event_count": 0,
+                "warnings": warnings,
+            }
+            runner.search.return_value = (rows, record)
+            if accepted:
+                scheduler.checked_replay_search(
+                    runner, "replay", "ADM - Conversation rollup"
+                )
+                self.assertTrue(record["accepted_empty_window"])
+            else:
+                with self.assertRaisesRegex(ValueError, "incomplete search"):
+                    scheduler.checked_replay_search(
+                        runner, "replay", "ADM - Conversation rollup"
+                    )
+
+    def job(self):
+        return {
+            "name": scheduler.TARGETS[-1],
+            "scheduled_time": 900,
+            "earliest": -85500,
+            "latest": 1800,
+            "index_earliest": 300,
+            "index_latest": 600,
+        }
+
+    def test_replays_absolute_bounds_while_paused_and_retains_evidence(self):
+        runner = Mock(jobs=[{"sid": "replay-job"}])
+        report = {"pre_outage_scheduler_rows": []}
+        with (
+            patch.object(scheduler, "set_schedules") as schedules,
+            patch.object(scheduler, "drain_jobs"),
+            patch.object(scheduler, "scheduler_rows", return_value=[]),
+            patch.object(
+                scheduler, "build_recovery_plan", side_effect=[[self.job()], []]
+            ) as plan,
+            patch.object(scheduler, "checked_replay_search") as search,
+            patch.object(scheduler.time, "monotonic", return_value=0),
+        ):
+            scheduler.replay_missed_slots(runner, 0, 601, 1, report)
+        schedules.assert_called_once_with(False, dispatchable=True)
+        self.assertEqual(
+            search.call_args.kwargs,
+            {
+                "saved": True,
+                "earliest": "-85500",
+                "latest": "1800",
+                "index_window": ("300", "600"),
+            },
+        )
+        self.assertEqual(report["recovery"]["status"], "complete")
+        self.assertEqual(report["recovery"]["jobs"][0]["sid"], "replay-job")
+        self.assertEqual(plan.call_args.args[0][0]["scheduled_time"], 900)
+
+    def test_failed_replay_retains_pending_plan_and_does_not_resume(self):
+        report = {"pre_outage_scheduler_rows": []}
+        with (
+            patch.object(scheduler, "set_schedules") as schedules,
+            patch.object(scheduler, "drain_jobs"),
+            patch.object(scheduler, "scheduler_rows", return_value=[]),
+            patch.object(scheduler, "build_recovery_plan", return_value=[self.job()]),
+            patch.object(
+                scheduler,
+                "checked_replay_search",
+                side_effect=RuntimeError("search failed"),
+            ),
+            patch.object(scheduler.time, "monotonic", return_value=0),
+            self.assertRaisesRegex(RuntimeError, "search failed"),
+        ):
+            scheduler.replay_missed_slots(Mock(), 0, 601, 1, report)
+        schedules.assert_called_once_with(False, dispatchable=True)
+        self.assertEqual(report["recovery"]["status"], "incomplete")
+        self.assertEqual(report["recovery"]["pending"], [self.job()])
+        self.assertEqual(report["recovery"]["jobs"], [])
 
 
 class ExecutionOrderTest(unittest.TestCase):

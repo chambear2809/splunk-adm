@@ -55,7 +55,7 @@ For existing installations, use the `-upgrade.tar.gz` artifact created by `npm r
 | `npm run package`                                        | Build, stage in `dist/stage/` and archive the Splunk app                                                 |
 | `python3 tools/gen_raw_fixtures.py [--scenario aci]`     | Regenerate the NX-OS (default) or ACI synthetic events                                                   |
 | `tests/splunk/lab.sh up` / `install` / `purge`           | Local Splunk lab lifecycle (Docker; see [PILOT.md](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab)) |
-| `ADM_LAB=1 python3 -m unittest discover -s tests/splunk` | Data-layer tests against the lab                                                                         |
+| `ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk` | Data-layer tests against the lab                                                                         |
 | `ruff check tools tests`                                 | Python lint (install Ruff separately)                                                                    |
 
 Python 3.10+ is needed only for the fixture generator and the lab tests. The lab needs Docker. It pulls a Splunk image of about 2 GB and accepts the Splunk General Terms for a local development instance.

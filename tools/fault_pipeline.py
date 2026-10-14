@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests" / "splunk"))
 sys.path.insert(0, str(ROOT / "tools"))
 import lab  # noqa: E402
+from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import Workload, manifest  # noqa: E402
 from benchmark_pipeline import (  # noqa: E402
     CONTAINER,
@@ -102,17 +103,20 @@ def restore_container(timeout: float = 180) -> None:
 
 
 def wait_kv_ready(timeout: float = 180) -> None:
-    """Wait for the KV REST surface after splunkd readiness."""
+    """Require a ready KV engine and a successful data read, not just its config."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            lab._json(
-                "GET",
-                "/servicesNS/nobody/splunk_adm/storage/collections/config?count=0",
-            )
-            return
+            status = lab._json("GET", "/services/kvstore/status")["entry"][0]["content"]
+            if status.get("current", {}).get("status") == "ready":
+                lab._json(
+                    "GET",
+                    "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_ip_identity?limit=1",
+                )
+                return
         except Exception:
-            time.sleep(1)
+            pass
+        time.sleep(1)
     raise TimeoutError("KV store was not ready after Splunk restart")
 
 
@@ -212,6 +216,7 @@ def raw_identity_digest(runner: Runner, query: str, expected: int) -> str:
     return digest.hexdigest()
 
 
+@with_lab_lock(root=ROOT)
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--reset-lab", action="store_true", required=True)
@@ -322,4 +327,4 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main, root=ROOT))

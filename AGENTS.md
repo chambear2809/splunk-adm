@@ -6,7 +6,7 @@ This repository currently contains research and project guidance. Dependency map
 
 ## Development and Validation
 
-Frontend: `npm run lint` (ESLint, `tsc`, Prettier), `npm test` (Vitest), `npm run build`, `npm run package`. Python tooling: `ruff check tools tests` and `ruff format --check tools tests`. Data layer: `tests/splunk/lab.sh up && tests/splunk/lab.sh install`, then `ADM_LAB=1 python3 -m unittest discover -s tests/splunk`; run `tests/splunk/lab.sh purge` afterwards. Synthetic events come from `python3 tools/gen_raw_fixtures.py` and must stay grounded in the TA definitions (`fixtures/raw/FIELDS.md`). Before proposing a change, run the narrowest relevant checks and report commands and outcomes accurately.
+Frontend: `npm run lint` (ESLint, `tsc`, Prettier), `npm test` (Vitest), `npm run build`, `npm run package`. Python tooling: `ruff check tools tests` and `ruff format --check tools tests`. Data layer: `tests/splunk/lab.sh up && tests/splunk/lab.sh install`, then `ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk`; run `tests/splunk/lab.sh purge` afterwards. Synthetic events come from `python3 tools/gen_raw_fixtures.py` and must stay grounded in the TA definitions (`fixtures/raw/FIELDS.md`). Before proposing a change, run the narrowest relevant checks and report commands and outcomes accurately.
 
 ## Coding and Testing
 

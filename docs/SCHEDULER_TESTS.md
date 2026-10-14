@@ -1,8 +1,8 @@
 # Actual scheduler and downtime rehearsal
 
 `tools/scheduler_pipeline.py` runs the shipped five-minute schedules in the
-isolated localhost Splunk lab. It does not manually dispatch the target saved
-searches or shorten their cron expressions.
+isolated localhost Splunk lab. Its default `native` mode does not manually
+dispatch target saved searches or shorten their cron expressions.
 
 ```sh
 python3 tools/scheduler_pipeline.py --reset-lab
@@ -39,6 +39,34 @@ runs. This does not intentionally force resource contention or prove that
 an overloaded scheduler never skips; synthetic health regressions separately
 cover how skipped/failed outcomes are displayed.
 
+## Assisted recovery rehearsal
+
+```sh
+python3 tools/scheduler_pipeline.py --reset-lab --recovery replay --timeout 2400
+```
+
+This explicit mode keeps the real baseline schedules and outage, then pauses
+schedules, drains active jobs, and replays missing slots in chronological order.
+Every dispatch uses the original absolute event-time and index-time bounds.
+The planner requires a recent successful checkpoint for all four targets and
+rejects gaps before the outage, misaligned slots, and recovery ranges over
+24 hours. Already successful slots are excluded. It repeats planning for slots
+that elapse during recovery before resuming schedules.
+
+A passing result requires all 12 flow records before resumption, fresh real
+scheduled successes from all four targets afterward, and exact final graph
+and summary totals. `recovery.jobs` records manual replay SIDs and bounds;
+`catchup_rows` contains only actual native scheduler successes. Manual jobs also
+appear in `scheduler.log`, so successes require a `scheduler__` job ID;
+sid-less deferrals and skips remain diagnostic evidence. Empty binding or rollup
+windows may emit a known no-results warning. The harness accepts only the exact
+no-op output with zero scanned/matched events and no other warning, retaining
+`accepted_empty_window` on the original job record. Other warnings still fail.
+Assisted success
+does **not** qualify native catch-up or install an automatic production recovery
+service. This command only supports the disposable lab. Production recovery
+remains the administrator procedure in [Recovery and replay](RECOVERY.md).
+
 ## Ordering and limits
 
 The shipped rollup runs at minute 0 modulo 5, identity at 1, service binding at
@@ -55,7 +83,12 @@ complete cycle before the outage. Scheduled, dispatched and completion times
 distinguish that baseline from delayed catch-up. It records catch-up order
 without assuming those queued jobs run in cron order.
 
-Continuous scheduling (`realtime_schedule=0`) can catch up missed periods;
+The exclusive October 13 rehearsal failed downtime recovery: future jobs resumed,
+but the second batch remained absent and no missed-slot successes appeared.
+See [the evidence](benchmarks/2026-10-13-pipeline.md). Automatic catch-up is
+not qualified by the current test results.
+
+Continuous scheduling (`realtime_schedule=0`) requests catch-up of missed periods;
 recovery also depends on the platform's continuous-search lookback setting and
 retained raw history. See Splunk's [saved-search configuration reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.2/configuration-file-reference/10.2.8-configuration-file-reference/savedsearches.conf)
 and [scheduler limits](https://help.splunk.com/en/data-management/splunk-enterprise-admin-manual/10.2/configuration-file-reference/10.2.4-configuration-file-reference/limits.conf).
@@ -69,3 +102,16 @@ with `tests/splunk/lab.sh purge` when finished. Do not run another lab test at
 the same time: reset and downtime deliberately affect the entire container.
 Separate Git worktrees do not isolate Docker containers or localhost ports.
 Reserve exclusive use of `adm-splunk-lab` for the entire rehearsal.
+The rehearsal entry points and `lab.sh` now share a cooperative ownership lock
+across checkouts run by the same OS user. A second independent invocation
+fails before it can mutate the lab; child setup/reset calls inherit their parent's ownership. Direct
+Docker commands and older checkouts without the lock can still interfere.
+During downtime the scheduler rehearsal checks that the container remains
+stopped, and reports unexpected state changes without cleaning up another
+process's lab state.
+
+Wrap direct integration-test runs in the same lock:
+
+```sh
+ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk -v
+```

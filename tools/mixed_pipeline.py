@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests/splunk"))
 # ruff: noqa: E402
+from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import (
     BASE,
     CLUSTER,
@@ -272,6 +273,7 @@ def check_graph(rows, config):
         )
 
 
+@with_lab_lock(root=ROOT)
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset-lab", action="store_true", required=True)
@@ -345,4 +347,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main, root=ROOT))

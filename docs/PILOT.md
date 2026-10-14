@@ -41,7 +41,7 @@ Expected result: no failures or errors; informational warnings for SplunkJS usag
 
 ```sh
 tests/splunk/lab.sh up && tests/splunk/lab.sh install
-ADM_LAB=1 python3 -m unittest discover -s tests/splunk
+ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk
 tests/splunk/lab.sh purge   # removes the container, volumes, image and generated secrets
 ```
 

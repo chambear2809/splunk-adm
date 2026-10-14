@@ -10,6 +10,28 @@ from tools import fault_pipeline as fault
 
 
 class FaultPipelineTest(unittest.TestCase):
+    def test_kv_readiness_waits_for_engine_and_data(self):
+        def state(value):
+            return {"entry": [{"content": {"current": {"status": value}}}]}
+
+        with (
+            patch.object(
+                fault.lab,
+                "_json",
+                side_effect=[
+                    state("starting"),
+                    state("ready"),
+                    fault.lab.LabError("initializing"),
+                    state("ready"),
+                    [],
+                ],
+            ) as request,
+            patch.object(fault.time, "sleep") as sleep,
+        ):
+            fault.wait_kv_ready(timeout=1)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertIn("/storage/collections/data/", request.call_args.args[1])
+
     def test_wait_bootstrap_requires_completion_marker(self):
         with patch.object(
             fault,

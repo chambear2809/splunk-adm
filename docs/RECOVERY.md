@@ -2,6 +2,25 @@
 
 Recovery runs are administrator operations. Keep the original raw data and record the saved-search job ID, absolute event-time bounds, absolute index-time bounds, app version, and observer-scope configuration before making changes. Do not use relative times such as `-10m` when retrying a historical job: those select different data on every retry.
 
+## Missed runs during an outage
+
+Do not assume that continuous scheduling automatically replays an outage. The
+[exclusive local scheduler rehearsal](benchmarks/2026-10-13-pipeline.md) resumed
+future jobs but did not recover a missed slice, despite a 24-hour lookback.
+Compare expected scheduled slots with successful executions after restart and
+verify raw-versus-summary counts. Recover each affected closed slice using the
+absolute-bound procedure below; do not merge multiple slices into one replay.
+Follow-up probes on this Splunk 10.6.0.5 standalone lab observed the scheduler
+advance its next runtime while KV Store was starting, then decline to replace
+that later runtime when persisted history loaded. This is observed startup
+behavior in the tested environment, not a qualification of other deployments.
+The lab now waits for both KV Store readiness and a successful collection data
+read after restart; that readiness check alone does not restore missed slots.
+
+The [assisted lab rehearsal](SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
+exercises the absolute-slice procedure and records replay jobs separately from
+native scheduler activity. It is not an unattended production recovery tool.
+
 ## Interrupted conversation rollups
 
 New summary rows include `rollup_id`, a SHA-256 identity of the sorted set of original indexed-event identities contributing to that row. The graph removes duplicate `rollup_id` values before adding counters. Each source event is identified by its index, bucket ID and within-bucket event address; ACI ACL records use their APIC-qualified object identity and timestamp. The summary remains compact, with one row per conversation, five-minute event-time bucket and observer.

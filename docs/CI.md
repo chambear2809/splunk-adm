@@ -33,16 +33,20 @@ does not trust pre-extracted files from the runner.
 It never stores these artifacts in GitHub or includes them in a build artifact.
 
 The runner should be disposable between runs, have Python 3.12+ and Docker available to the
-runner account, and keep its TA directory outside the checkout. Cleanup runs
-with `if: always()` and removes the lab container, image, volumes, and generated
-credentials. The workflow does not run this job for pull requests or untrusted
+runner account, and keep its TA directory outside the checkout. One cooperative
+lock covers setup, tests, optional rehearsals, and cleanup. Cleanup runs in the
+owned lifecycle's exit trap and removes the lab container, image, volumes, and
+generated credentials. A workflow that cannot acquire ownership does not purge
+the lab. The workflow does not run this job for pull requests or untrusted
 branches.
 
 The manual `run_pipeline_rehearsals` option also starts the trusted lab job and
 runs the mixed-source baseline followed by the real scheduler/downtime
-rehearsal. They run sequentially after the integration suite, with a fresh app
+rehearsal with explicit assisted replay (`--recovery replay --timeout 2400`).
+This validates absolute-slice recovery and resumed scheduling; it does not
+certify native catch-up, which remains a separate failing qualification. They run sequentially after the integration suite, with a fresh app
 install to remove test overrides. The lab job has a 70-minute overall budget
-and always purges the container afterward. Available JSON reports are retained
+and purges the container on exit while it owns the lab lock. Available JSON reports are retained
 as the `pipeline-rehearsal-evidence` artifact for 14 days, including failed runs.
 These slower rehearsals are opt-in;
 they do not run on pull requests. See [mixed-source load](MIXED_LOAD.md) and

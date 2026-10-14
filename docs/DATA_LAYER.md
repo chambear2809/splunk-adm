@@ -73,7 +73,7 @@ No inspected TA extracts a translated (NAT) tuple, so no NAT fields are produced
 
 ## Conversations
 
-Saved search **ADM - Conversation rollup** (`` | `adm_conversation_rollup` | collect ``) runs every 5 minutes and selects flow records **by index time**: `dispatch.index_earliest = -10m@m`, `dispatch.index_latest = -5m@m`, with event-time bounds `-24h` to `+15m` (records older than 24 hours when indexed, or more than 15 minutes in the future, are not counted). Normal consecutive runs read disjoint index-time slices within those event-time limits. New summaries carry replay identities, so the graph deduplicates retries of an identical closed, immutable slice with unchanged configuration. Differently bounded overlapping slices and legacy summaries require a separate-index rebuild; see [Recovery and replay](RECOVERY.md). Continuous scheduling (`realtime_schedule = 0`) makes delayed runs catch up instead of skipping slices.
+Saved search **ADM - Conversation rollup** (`` | `adm_conversation_rollup` | collect ``) runs every 5 minutes and selects flow records **by index time**: `dispatch.index_earliest = -10m@m`, `dispatch.index_latest = -5m@m`, with event-time bounds `-24h` to `+15m` (records older than 24 hours when indexed, or more than 15 minutes in the future, are not counted). Normal consecutive runs read disjoint index-time slices within those event-time limits. New summaries carry replay identities, so the graph deduplicates retries of an identical closed, immutable slice with unchanged configuration. Differently bounded overlapping slices and legacy summaries require a separate-index rebuild; see [Recovery and replay](RECOVERY.md). Continuous scheduling (`realtime_schedule = 0`) requests catch-up for delayed runs. Automatic recovery after a container outage is **not qualified**: the exclusive local rehearsal resumed future jobs but left a missed slice unprocessed. See [scheduler evidence](benchmarks/2026-10-13-pipeline.md) and use the recorded absolute-slice recovery procedure until this gap is resolved.
 
 Records are bucketed by `adm_end` into 5-minute buckets. Each run writes `source="adm:conversation"`, `sourcetype=stash`, `adm_record=conversation`, `_time` = bucket start, one event per (`scope`, `client_ip`, `server_ip`, `server_port`, `transport`, bucket, `observer`):
 
@@ -257,7 +257,7 @@ All ship `disabled = 1` and `dispatchAs = owner`. Builders and the rollup have `
 
 ```sh
 tests/splunk/lab.sh up && tests/splunk/lab.sh install
-ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v
+ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk -v
 ```
 
 The test resets the lab indexes and collections, ingests `fixtures/raw/*.ndjson`, writes a scope mapping, runs the builders, runs the rollup over one index-time slice, ingests `fixtures/raw/late/` and rolls up a second slice, runs `adm_graph`, and compares the result with `tests/splunk/expected/graph.json`, which is derived from `fixtures/raw/scenario.json` (edge cases are labelled `ec-` or `edge_case`). It also checks argument validation, per-bucket resolution, hostNetwork exclusion, ACI/ND endpoint merging, node replacement, orientation reconciliation, the boundary prefilters, ICMP, IPv4-mapped addresses, exact-once counting, and the prune's complete and incomplete paged reads (with lab-only macro overrides of the page size).
@@ -287,8 +287,8 @@ The scope mapping CSV opts into write-permission checking in `transforms.conf`, 
 Focused regressions, after installing the app in the disposable lab:
 
 ```sh
-ADM_LAB=1 python3 -m unittest discover -s tests/splunk -p 'test_identity_ownership.py' -v
-ADM_LAB=1 python3 -m unittest discover -s tests/splunk -p 'test_permissions.py' -v
+ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk -p 'test_identity_ownership.py' -v
+ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk -p 'test_permissions.py' -v
 ```
 
 The identity tests ingest pod observations and assert exact client and server UIDs, validity intervals, deletion gaps, delayed older ownership and replay, and overlapping IPs in separate scopes. The permission suite resets and seeds the lab itself, enables saved searches without scheduling them so a disabled search cannot masquerade as an authorization denial, and removes its generated user and role afterwards. Run these suites serially with other lab tests; purge the lab when finished. These checks validate server-side authorization, not browser login/SSO or a deployment's customized roles.

@@ -12,7 +12,7 @@ on:
         default: false
         type: boolean
       run_pipeline_rehearsals:
-        description: Also run mixed-source baseline and real scheduler downtime tests (starts the lab suite)
+        description: Also run mixed-source baseline and scheduler assisted-recovery tests (starts the lab suite)
         required: false
         default: false
         type: boolean
@@ -101,19 +101,22 @@ jobs:
             --manifest research/package-manifest.json \
             --package-root "$ADM_TA_ROOT/packages" \
             --output-root research/extracted
-      - name: Start Docker-backed Splunk lab
-        run: tests/splunk/lab.sh up
-      - name: Install app and run tests
+      - name: Run exclusive lab lifecycle
+        env:
+          ADM_RUN_PIPELINE_REHEARSALS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals }}
         run: |
-          tests/splunk/lab.sh install
-          tests/splunk/lab.sh btool
-          ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v
-      - name: Mixed-source and scheduler rehearsals
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals }}
-        run: |
-          tests/splunk/lab.sh install
-          python3 tools/mixed_pipeline.py --reset-lab --case baseline
-          python3 tools/scheduler_pipeline.py --reset-lab
+          python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
+            trap "tests/splunk/lab.sh purge" EXIT
+            tests/splunk/lab.sh up
+            tests/splunk/lab.sh install
+            tests/splunk/lab.sh btool
+            ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v
+            if [[ "$ADM_RUN_PIPELINE_REHEARSALS" == "true" ]]; then
+              tests/splunk/lab.sh install
+              python3 tools/mixed_pipeline.py --reset-lab --case baseline
+              python3 tools/scheduler_pipeline.py --reset-lab --recovery replay --timeout 2400
+            fi
+          '
       - name: Preserve rehearsal evidence
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals }}
         uses: actions/upload-artifact@v4
@@ -124,6 +127,3 @@ jobs:
             dist/scheduler/latest.json
           if-no-files-found: ignore
           retention-days: 14
-      - name: Remove Splunk lab
-        if: always()
-        run: tests/splunk/lab.sh purge

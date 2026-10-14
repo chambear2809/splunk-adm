@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tests/splunk"))
 import lab  # noqa: E402
+from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import BASE, Workload, iter_events, manifest  # noqa: E402
 from benchmark_pipeline import (  # noqa: E402
     CONTAINER,
@@ -30,7 +31,14 @@ from benchmark_pipeline import (  # noqa: E402
     truth,
 )  # noqa: E402
 from fault_pipeline import restore_container  # noqa: E402
-from soak_pipeline import checked_search, graph_query, post_batches, summary_count  # noqa: E402
+from scheduler_recovery import build_recovery_plan  # noqa: E402
+from soak_pipeline import (  # noqa: E402
+    checked_search,
+    graph_query,
+    post_batches,
+    summary_count,
+    wait_summary,
+)
 
 TARGETS = (
     "ADM - Identity builder",
@@ -42,6 +50,27 @@ CRONS = dict(
     zip(TARGETS, ("1-56/5 * * * *", "2-57/5 * * * *", "3-58/5 * * * *", "*/5 * * * *"))
 )
 ISO_KEYS = {"timestamp", "endtime", "creationTimestamp", "startTime"}
+
+
+class LabInterferenceError(RuntimeError):
+    """Another process changed the lab during the deliberate outage."""
+
+
+def verify_stopped():
+    try:
+        state = subprocess.check_output(
+            ["docker", "inspect", "--format", "{{.State.Status}}", CONTAINER],
+            text=True,
+            timeout=30,
+        ).strip()
+    except subprocess.SubprocessError as exc:
+        raise LabInterferenceError(
+            "Cannot verify stopped lab; ownership is uncertain"
+        ) from exc
+    if state != "exited":
+        raise LabInterferenceError(
+            f"Lab changed during planned outage (state={state}); reserve exclusive lab access"
+        )
 
 
 def fresh_events(config, epoch):
@@ -82,7 +111,24 @@ def settings():
     }
 
 
-def set_schedules(enabled):
+def scheduler_history():
+    """Keep only this rehearsal's scheduling metadata, never other search content."""
+    rows = lab._json(
+        "GET", "/servicesNS/nobody/system/storage/collections/data/SavedSearchHistory"
+    )
+    keys = {f"nobody;splunk_adm;{name}" for name in TARGETS}
+    return [
+        {
+            key: row[key]
+            for key in ("_key", "sched_time", "durable_cursor", "runtimes")
+            if key in row
+        }
+        for row in rows
+        if row.get("_key") in keys
+    ]
+
+
+def set_schedules(enabled, *, dispatchable=False):
     for name in settings():
         if name.startswith("ADM - "):
             active = enabled and name in TARGETS
@@ -90,7 +136,9 @@ def set_schedules(enabled):
                 "POST",
                 "/servicesNS/nobody/splunk_adm/saved/searches/" + quote(name, safe=""),
                 {
-                    "disabled": "0" if active else "1",
+                    "disabled": "0"
+                    if active or (dispatchable and name in TARGETS)
+                    else "1",
                     "is_scheduled": "1" if active else "0",
                 },
             )
@@ -110,22 +158,33 @@ def verify_settings(config):
             not truth(row.get("disabled")) and truth(row.get("is_scheduled")),
             f"{name}: not scheduled",
         )
-    rollup = config[TARGETS[-1]]
-    require(
-        rollup.get("dispatch.index_earliest") == "-10m@m"
-        and rollup.get("dispatch.index_latest") == "-5m@m",
-        "rollup index slice changed",
-    )
+        require(
+            row.get("dispatch.index_earliest") == "-10m@m"
+            and row.get("dispatch.index_latest")
+            == ("-5m@m" if name == TARGETS[-1] else "@m")
+            and row.get("dispatch.earliest_time") == "-24h"
+            and row.get("dispatch.latest_time") == "+15m",
+            f"{name}: recovery window changed",
+        )
 
 
 def scheduler_rows(runner, started):
-    return checked_search(
+    rows = checked_search(
         runner,
         "scheduler-log",
-        'index=_internal source=*scheduler.log* app="splunk_adm" savedsearch_name="ADM -*" '
+        'index=_internal source=*scheduler.log* app="splunk_adm" savedsearch_name="ADM -*" status=* '
         f"| where _time>={int(started)} | table _time savedsearch_name scheduled_time dispatch_time status reason sid run_time",
         earliest=str(int(started) - 60),
     )
+
+    # Manual saved-search dispatches also appear in scheduler.log. Retain
+    # sid-less deferrals/skips, but never count manual jobs as real schedules.
+    return [
+        r
+        for r in rows
+        if str(r.get("sid") or "").startswith("scheduler__")
+        or (not r.get("sid") and r.get("status") != "success")
+    ]
 
 
 def validate_rows(rows):
@@ -157,16 +216,22 @@ def catchup_rows(rows, outage_start, restarted):
 
 
 def wait_converged(runner, started, expected, deadline, report, catchup=None):
+    report["expected_flow_records"] = expected
+    if catchup:
+        report["catchup_rows"] = []
     while time.monotonic() < deadline:
         rows = scheduler_rows(runner, started)
         report["scheduler_rows"] = rows
         validate_rows(rows)
         total = summary_count(runner)
+        report["observed_flow_records"] = total
         require(total <= expected, f"scheduled rollup overcount {total}/{expected}")
         names = {
             r.get("savedsearch_name") for r in rows if r.get("status") == "success"
         }
         replayed = catchup_rows(rows, *catchup) if catchup else []
+        if catchup:
+            report["catchup_rows"] = replayed
         if (
             total == expected
             and set(TARGETS) <= names
@@ -182,6 +247,122 @@ def wait_converged(runner, started, expected, deadline, report, catchup=None):
         )
         time.sleep(15)
     raise TimeoutError("scheduled convergence/catch-up evidence deadline exceeded")
+
+
+def drain_jobs(timeout=120):
+    deadline = time.monotonic() + timeout
+    while True:
+        active = [
+            e
+            for e in lab._json("GET", "/services/search/v2/jobs?count=0")["entry"]
+            if e.get("acl", {}).get("app") == "splunk_adm"
+            and not truth(e["content"].get("isDone"))
+        ]
+        if not active:
+            return
+        require(time.monotonic() < deadline, "scheduled jobs did not drain")
+        time.sleep(1)
+
+
+def checkpoint_rows(runner, started, stop_before):
+    """Wait for the current pre-outage completions to reach the internal index."""
+    offsets = dict(zip(TARGETS, (60, 120, 180, 0)))
+    while time.time() < stop_before:
+        rows = scheduler_rows(runner, started)
+        validate_rows(rows)
+        now = int(time.time())
+        latest = {
+            name: (now - offset) // 300 * 300 + offset
+            for name, offset in offsets.items()
+        }
+        done = {
+            (r.get("savedsearch_name"), int(float(r["scheduled_time"])))
+            for r in rows
+            if r.get("status") == "success"
+        }
+        if all((name, slot) in done for name, slot in latest.items()):
+            return rows
+        time.sleep(2)
+    raise TimeoutError(
+        "current scheduler checkpoint was not indexed before safe outage boundary"
+    )
+
+
+def checked_replay_search(runner, name, query, **kwargs):
+    rows, record = runner.search(name, query, **kwargs)
+    if record["status"] == "complete":
+        return
+    # An empty binding slice reaches outputlookup append=true with
+    # override_if_empty=false. Splunk warns despite this being a safe no-op.
+    # An empty rollup similarly warns when collect has no rows. Accept only
+    # these exact outputs with zero scanned/matched events and the sole known
+    # warning. Truncation, preview and all other warnings still fail.
+    notes = record.get("warnings", [])
+    empty_binding = (
+        query == "ADM - Service binding"
+        and rows == [{"rows_written": "0"}]
+        and len(notes) == 1
+        and notes[0].startswith("WARN: Found no results to write to collection '")
+        and notes[0].endswith("'.")
+    )
+    empty_rollup = (
+        query == "ADM - Conversation rollup"
+        and rows == []
+        and notes == ["WARN: No results to summary index."]
+    )
+    require(
+        record["status"] == "incomplete"
+        and record.get("scan_count") == 0
+        and record.get("event_count") == 0
+        and (empty_binding or empty_rollup),
+        f"{name}: incomplete search",
+    )
+    record["accepted_empty_window"] = True
+
+
+def replay_missed_slots(runner, started, outage_started, deadline, report):
+    """Assist recovery explicitly; never count manual replay as scheduler catch-up."""
+    recovery = report["recovery"] = {
+        "mode": "absolute-slice-replay",
+        "status": "incomplete",
+        "jobs": [],
+    }
+    set_schedules(False, dispatchable=True)
+    drain_jobs()
+    replayed = []
+    while time.monotonic() < deadline:
+        rows = scheduler_rows(runner, started)
+        report["scheduler_rows"] = rows
+        validate_rows(rows)
+        plan = build_recovery_plan(
+            report["pre_outage_scheduler_rows"] + rows + replayed,
+            outage_started,
+            time.time() - 1,
+        )
+        recovery["pending"] = plan
+        if not plan:
+            recovery["status"] = "complete"
+            return
+        for job in plan:
+            require(time.monotonic() < deadline, "recovery replay deadline exceeded")
+            checked_replay_search(
+                runner,
+                "recovery: " + job["name"],
+                job["name"],
+                saved=True,
+                earliest=str(job["earliest"]),
+                latest=str(job["latest"]),
+                index_window=(str(job["index_earliest"]), str(job["index_latest"])),
+            )
+            recovery["jobs"].append({**job, "sid": runner.jobs[-1]["sid"]})
+            replayed.append(
+                {
+                    "savedsearch_name": job["name"],
+                    "scheduled_time": job["scheduled_time"],
+                    "status": "success",
+                }
+            )
+    raise TimeoutError("recovery replay deadline exceeded")
 
 
 def event_epoch(value):
@@ -240,9 +421,11 @@ def verify_graph(rows, expected):
     require(not notes, "; ".join(notes))
 
 
+@with_lab_lock(root=ROOT)
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset-lab", action="store_true", required=True)
+    parser.add_argument("--recovery", choices=("native", "replay"), default="native")
     parser.add_argument("--timeout", type=int, default=1800)
     parser.add_argument("--downtime", type=int, default=330)
     parser.add_argument(
@@ -259,6 +442,7 @@ def main(argv=None):
     report = {
         "status": "failed",
         "mode": "shipped-cron",
+        "recovery_mode": args.recovery,
         "targets": TARGETS,
         "downtime_seconds": args.downtime,
     }
@@ -330,12 +514,16 @@ def main(argv=None):
         while time.time() < close_at + 10:
             time.sleep(min(15, close_at + 10 - time.time()))
         require(
-            time.time() < report["second_batch_rollup_slot"] - 90,
-            "missed safe outage boundary; rerun",
-        )
-        require(
             summary_count(runner) == expected,
             "second batch already processed before outage",
+        )
+        report["history_before_outage"] = scheduler_history()
+        report["pre_outage_scheduler_rows"] = checkpoint_rows(
+            runner, started, report["second_batch_rollup_slot"] - 90
+        )
+        require(
+            time.time() < report["second_batch_rollup_slot"] - 90,
+            "missed safe outage boundary; rerun",
         )
         report["outage_started"] = time.time()
         subprocess.run(
@@ -347,45 +535,64 @@ def main(argv=None):
         print(f"Container stopped; holding downtime for {args.downtime}s", flush=True)
         outage_deadline = time.monotonic() + args.downtime
         while time.monotonic() < outage_deadline:
-            time.sleep(min(15, outage_deadline - time.monotonic()))
+            verify_stopped()
+            time.sleep(max(0, min(15, outage_deadline - time.monotonic())))
+        verify_stopped()
         report["restart_requested"] = time.time()
         restore_container(240)
         report["ready_after_restart"] = time.time()
+        report["history_after_restart"] = scheduler_history()
         verify_settings(settings())
-        print(
-            "Waiting for continuous scheduler catch-up and complete summary", flush=True
-        )
-        report["catchup_rows"] = wait_converged(
-            runner,
-            started,
-            2 * expected,
-            deadline,
-            report,
-            catchup=(report["outage_started"], report["restart_requested"]),
-        )
+        if args.recovery == "native":
+            print(
+                "Waiting for continuous scheduler catch-up and complete summary",
+                flush=True,
+            )
+            report["catchup_rows"] = wait_converged(
+                runner,
+                started,
+                2 * expected,
+                deadline,
+                report,
+                catchup=(report["outage_started"], report["restart_requested"]),
+            )
+        else:
+            print("Pausing schedules and replaying missing absolute slices", flush=True)
+            replay_missed_slots(
+                runner, started, report["outage_started"], deadline, report
+            )
+            report["catchup_rows"] = catchup_rows(
+                report["scheduler_rows"],
+                report["outage_started"],
+                report["restart_requested"],
+            )
+            wait_summary(
+                runner, 2 * expected, min(120, max(0, deadline - time.monotonic()))
+            )
+            report["resumed_at"] = time.time()
+            set_schedules(True)
+            report["resume_evidence"] = {}
+            print("Checking fresh scheduled runs after assisted recovery", flush=True)
+            wait_converged(
+                runner,
+                report["resumed_at"],
+                2 * expected,
+                deadline,
+                report["resume_evidence"],
+            )
+        recovered_slots = [
+            (r.get("savedsearch_name"), int(float(r["scheduled_time"])))
+            for r in report["catchup_rows"]
+        ] + [
+            (r["name"], r["scheduled_time"])
+            for r in report.get("recovery", {}).get("jobs", [])
+        ]
         require(
-            any(
-                r.get("savedsearch_name") == TARGETS[-1]
-                and int(float(r["scheduled_time"]))
-                == report["second_batch_rollup_slot"]
-                for r in report["catchup_rows"]
-            ),
+            (TARGETS[-1], report["second_batch_rollup_slot"]) in recovered_slots,
             "second batch missed rollup slot was not recovered",
         )
         set_schedules(False)
-        # Wait for scheduler-owned searches to drain before final checks.
-        drain_deadline = time.monotonic() + 120
-        while True:
-            active = [
-                e
-                for e in lab._json("GET", "/services/search/v2/jobs?count=0")["entry"]
-                if e.get("acl", {}).get("app") == "splunk_adm"
-                and not truth(e["content"].get("isDone"))
-            ]
-            if not active:
-                break
-            require(time.monotonic() < drain_deadline, "scheduled jobs did not drain")
-            time.sleep(1)
+        drain_jobs()
         wait_count(runner, raw_query, 2 * len(lines), 120)
         report["final_flow_records"] = summary_count(runner)
         require(
@@ -430,6 +637,11 @@ def main(argv=None):
         report["status"] = "complete"
     except Exception as exc:
         report["error"] = str(exc)[:2000]
+        if isinstance(exc, LabInterferenceError):
+            owned = False
+            report["cleanup_skipped"] = (
+                "Lab ownership lost; leaving other process's state intact"
+            )
     finally:
         if owned:
             try:
@@ -445,4 +657,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_main(main, root=ROOT))
