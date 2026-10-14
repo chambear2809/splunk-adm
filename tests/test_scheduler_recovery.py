@@ -3,7 +3,11 @@ import math
 from pathlib import Path
 import unittest
 
-from tools.scheduler_recovery import TARGET_WINDOWS, build_recovery_plan
+from tools.scheduler_recovery import (
+    TARGET_WINDOWS,
+    build_recovery_plan,
+    validate_recovery_plan,
+)
 
 
 TARGETS = tuple(TARGET_WINDOWS)
@@ -24,6 +28,75 @@ def success_rows(checkpoint=900, **extra):
 
 
 class RecoveryPlannerTest(unittest.TestCase):
+    def test_target_subset_does_not_require_excluded_checkpoints(self):
+        target = TARGETS[0]
+        rows = [
+            {
+                "savedsearch_name": target,
+                "status": "success",
+                "scheduled_time": 660,
+            }
+        ]
+        plan = build_recovery_plan(rows, 901, 1500, targets=[target])
+        self.assertEqual([item["name"] for item in plan], [target] * 2)
+
+    def test_rollup_overlap_is_rejected(self):
+        target = "ADM - Conversation rollup"
+        first = {
+            "name": target,
+            "scheduled_time": 900,
+            "earliest": 900 - 86400,
+            "latest": 900 + 900,
+            "index_earliest": 300,
+            "index_latest": 600,
+        }
+        second = dict(first, scheduled_time=1200, index_earliest=599, index_latest=900)
+        with self.assertRaises(ValueError):
+            validate_recovery_plan([first, second], 1200)
+
+    def test_rollup_must_be_closed_through_boundary(self):
+        target = "ADM - Conversation rollup"
+        item = {
+            "name": target,
+            "scheduled_time": 900,
+            "earliest": 900 - 86400,
+            "latest": 900 + 900,
+            "index_earliest": 300,
+            "index_latest": 600,
+        }
+        with self.assertRaisesRegex(ValueError, "closed"):
+            validate_recovery_plan([item], 599)
+
+    def test_altered_rollup_bounds_are_rejected(self):
+        target = "ADM - Conversation rollup"
+        item = {
+            "name": target,
+            "scheduled_time": 900,
+            "earliest": 900 - 86400,
+            "latest": 900 + 900,
+            "index_earliest": 301,
+            "index_latest": 600,
+        }
+        with self.assertRaisesRegex(ValueError, "do not match"):
+            validate_recovery_plan([item], 900)
+
+    def test_builder_overlap_is_allowed_but_order_is_required(self):
+        target = "ADM - Identity builder"
+
+        def item(slot):
+            return {
+                "name": target,
+                "scheduled_time": slot,
+                "earliest": slot - 86400,
+                "latest": slot + 900,
+                "index_earliest": slot - 600,
+                "index_latest": slot,
+            }
+
+        validate_recovery_plan([item(960), item(1260)], 1260)
+        with self.assertRaisesRegex(ValueError, "chronological"):
+            validate_recovery_plan([item(1260), item(960)], 1260)
+
     def test_windows_match_shipped_scheduler_configuration(self):
         config = configparser.RawConfigParser()
         config.read(

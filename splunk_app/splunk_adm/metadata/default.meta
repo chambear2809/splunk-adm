@@ -6,3 +6,21 @@ export = none
 # Read access permits dispatchAs=owner, so these are administrator-only.
 [savedsearches]
 access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[alert_actions/adm_recovery]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[adm_recovery]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_recovery_state]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_recovery_audit]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_recovery_state]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_recovery_audit]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]

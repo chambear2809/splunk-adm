@@ -1,0 +1,1661 @@
+{
+  "started_at": "2026-10-14T04:20:15.502343+00:00",
+  "scope": "standalone only; not SHC or failover",
+  "planned_trials": 25,
+  "contenders": 8,
+  "status": "qualified",
+  "trials": [
+    {
+      "trial": 1,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "1_0_af22b7ff1123476e93ec09dd096becea",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_1_df3f807ca04848acbe8e132a2ff4b969",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_2_87c0660323ac40a0911a38ef2f9d947b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_3_46e5409f08404afb875e661b3cfc1506",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_4_dfcf3a23751248aaba00c85396fe6c7c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_5_02f437506c3445dda8a2c8cc447a6dec",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_6_9a1fb45269914a0081681beb1074e5bb",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "1_7_996fc616bac64e32915d2ffe483a1081",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_1",
+            "owner": "1_7_996fc616bac64e32915d2ffe483a1081",
+            "expires_at": 1791953462,
+            "state": "claimed"
+          },
+          "sid": "1791951662.2"
+        }
+      ]
+    },
+    {
+      "trial": 2,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "2_0_87a793814f674602a49b7faa0797c156",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_1_791f92fb799a42d58bced6be966dbf6d",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_2",
+            "owner": "2_1_791f92fb799a42d58bced6be966dbf6d",
+            "expires_at": 1791953463,
+            "state": "claimed"
+          },
+          "sid": "1791951663.3"
+        },
+        {
+          "owner": "2_2_9bf5ffff69114c91aceff8c068468a26",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_3_16ceb5d215a34b88b70baece2061a981",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_4_983c43c3ab6a4ab089241279cee70d2f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_5_b4e202a434534d1e86c39484faa11197",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_6_7dc884005e55424792f037f45ceccc80",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "2_7_e6e2622f01ee45bbbcf11968e21fa1c8",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 3,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "3_0_5a518273958a436eb1eb38e21e348a02",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_1_c45ea58643784aef916d36d522aaf477",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_2_cd999b406de54960b8e203d745132273",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_3_1385e9a5899540a28c8b04042fd287d0",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_4_4330a5f151104b77977655d90ec47ab2",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_5_0cc9a5d0f4e149e4bcc13fa77c1d454a",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_6_46665cd4368b4feba3c355d12563c6b9",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "3_7_17fc4fd3b326483097e201b3f4bd8d69",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_3",
+            "owner": "3_7_17fc4fd3b326483097e201b3f4bd8d69",
+            "expires_at": 1791953464,
+            "state": "claimed"
+          },
+          "sid": "1791951664.4"
+        }
+      ]
+    },
+    {
+      "trial": 4,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "4_0_bda91b5157314dff867b0ff7ba420f4d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_1_c2a6dffdaa9d4b8cb44f0f01cde7fe78",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_2_18643a7a7aca422e83994b2c90427ab4",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_3_f7b29a194c6e49d28b1bb9ff0bd8ff28",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_4_677874e90b2a4676b62ffdb5bceeb322",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_5_d28539b3666947d7b045829c2ae9377b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "4_6_71d991fa99974597a9344b6c0ad62548",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_4",
+            "owner": "4_6_71d991fa99974597a9344b6c0ad62548",
+            "expires_at": 1791953466,
+            "state": "claimed"
+          },
+          "sid": "1791951666.5"
+        },
+        {
+          "owner": "4_7_5d7f244fac90418aab0254fa274fde74",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 5,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "5_0_a61bad4fae024ebab238af599240940d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_1_5958d5e8364b410aaf596e02efbad503",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_2_60d6eb4a0d344013ac3a5408b9a48bbb",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_3_da6d6c32f37a4749b912debfad95490d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_4_b649a88089fd44edbb3a5ff3de29e260",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_5_876c1450784c4bebaecbe23ca688090e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "5_6_6d304f6dd5ee493482dafefaed5044bd",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_5",
+            "owner": "5_6_6d304f6dd5ee493482dafefaed5044bd",
+            "expires_at": 1791953467,
+            "state": "claimed"
+          },
+          "sid": "1791951667.6"
+        },
+        {
+          "owner": "5_7_1b0568f8e927447ebe9ae36dfb87519d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 6,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "6_0_ec373df4fb284e7da50c9710e673ad22",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_1_35d1d2aa225c4d4b9cbb672040b330a0",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_2_a07141b8bb9b49a29986084bc32df6c9",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_3_c5f640b392154e39817d38b66167970c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_4_1f45e56fa211445f9960c57f55d8002a",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_6",
+            "owner": "6_4_1f45e56fa211445f9960c57f55d8002a",
+            "expires_at": 1791953468,
+            "state": "claimed"
+          },
+          "sid": "1791951668.7"
+        },
+        {
+          "owner": "6_5_f490bcaf4dd446c6b44901ccde90f6f1",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_6_1765dd2e54ba4f29a64889a775791007",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "6_7_d3839f2a09c64e55b967200fdd988f1e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 7,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "7_0_b99f93cde1f0401abd12167433f1f0dc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_1_f20b0f399bcf4a4e956efce989463680",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_2_da27d2092d53421dbfecbfb9dbb1aa32",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_3_86597c49ba8148399ab6002f949d7760",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_7",
+            "owner": "7_3_86597c49ba8148399ab6002f949d7760",
+            "expires_at": 1791953469,
+            "state": "claimed"
+          },
+          "sid": "1791951669.8"
+        },
+        {
+          "owner": "7_4_19db34e8af4a48a5b8afd7f8f249ef95",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_5_cdd04eea7ace481f8b1c3504d11585b2",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_6_7061e5cd48594fcf9bedae37f58fba0c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "7_7_06a4aaa612eb456e851f6474d4245f01",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 8,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "8_0_1495239f016140a9bbfba370f556d38e",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_8",
+            "owner": "8_0_1495239f016140a9bbfba370f556d38e",
+            "expires_at": 1791953470,
+            "state": "claimed"
+          },
+          "sid": "1791951670.9"
+        },
+        {
+          "owner": "8_1_b1320bbea4854c45be611e058a9bf391",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_2_027064f4af564de3b0dddc1ef68bb41e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_3_525f85dbd5d347a59ac739dc40242c25",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_4_10f5d4778d674d19b9fe8b14d17e73dc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_5_26c4b79e575a46e7902c98a9320c45f8",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_6_5a8b9faa67924616af5767d1c38e0bfe",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "8_7_11261cc93f024c85b79634b6008e04cd",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 9,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "9_0_70434ea44fd24ec598e24aafabc4a8e3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_1_9523c538ae1240ce88e9e8fff4e4bea7",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_2_9594d411abb8438a836da03ae4018768",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_3_12f9ec969b8546e895666d382c1542d1",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_9",
+            "owner": "9_3_12f9ec969b8546e895666d382c1542d1",
+            "expires_at": 1791953471,
+            "state": "claimed"
+          },
+          "sid": "1791951671.10"
+        },
+        {
+          "owner": "9_4_9c83b6037a3a4298ba0a3eb91e694ecf",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_5_2dbb60bb4cf3499f8f187d30275f3d07",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_6_2c9f00ece40e4070b131d4d82abceed3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "9_7_c6c23c0a87e849dbacac1f200adfe81d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 10,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "10_0_ef4e019232a74b6aac68a04bc0ebd381",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_1_24fea42e52fd475c893c7d4fcf683561",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_2_cb986c148e674cc3bd8552913b26da1b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_3_18c109e6980e4845baf65adfc7297774",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_4_de101173fb3241b687f2a7c7cd83c943",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_5_6e76da93f4e04d57926a7c59aa51c6e5",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_6_73134287feca49028463d43764540e17",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "10_7_362afa4a7b3c4e14a4a74d2fb17aaa08",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_10",
+            "owner": "10_7_362afa4a7b3c4e14a4a74d2fb17aaa08",
+            "expires_at": 1791953472,
+            "state": "claimed"
+          },
+          "sid": "1791951672.11"
+        }
+      ]
+    },
+    {
+      "trial": 11,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "11_0_32aaf66189674ae687cf20bd009198e3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_1_62e4f9985b304556a07597638e7f90e0",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_2_1d40592792e549c0ab06f843a7fc0239",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_3_8662aca9746a4113ab7d524dc0e790db",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_4_64ab653a1bfb4175b443f82103d2a67e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_5_8a26c267d16a4b639ccbe9bcdcc0420c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "11_6_3f02d54c74284a07a32ee6892de8de3a",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_11",
+            "owner": "11_6_3f02d54c74284a07a32ee6892de8de3a",
+            "expires_at": 1791953473,
+            "state": "claimed"
+          },
+          "sid": "1791951674.12"
+        },
+        {
+          "owner": "11_7_047aa7581ce44a36ae0bbb42fe993f9c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 12,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "12_0_8131ec5e7b4342b8b3b909bbc6323465",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_12",
+            "owner": "12_0_8131ec5e7b4342b8b3b909bbc6323465",
+            "expires_at": 1791953475,
+            "state": "claimed"
+          },
+          "sid": "1791951675.13"
+        },
+        {
+          "owner": "12_1_4e931a166014485d941553928be360b7",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_2_2b5d8c4b9280498389039d58cf803ee1",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_3_421c3268c5c14b8685509f569cdfd310",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_4_d7163566687145689d8430def4d207d7",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_5_a17dda1c74ec42b4a4094362de76ebe9",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_6_b22c07e0002c4141801b1d8e1a0fc6f3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "12_7_323ad3a8d984443881babc5fd1932baa",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 13,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "13_0_1011303a64284e5a94dca6f87fa23c44",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_1_226e4d991a57491dab9d5e13e63742ee",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_2_1c5b45a2cb2941c5af9fabc140e04c38",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_3_e532b5e623a0402db3989de2a5ec0b03",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_4_e2853e2106074e12b605ce6e535208b6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_5_0f02d925f1cb4687ba86bca5107ea112",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "13_6_d4192048c52b4e5da3a7ffc9542788ac",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_13",
+            "owner": "13_6_d4192048c52b4e5da3a7ffc9542788ac",
+            "expires_at": 1791953476,
+            "state": "claimed"
+          },
+          "sid": "1791951676.14"
+        },
+        {
+          "owner": "13_7_fc8fe624be9c4e37b5ec8305ff097e6e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 14,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "14_0_e536f202b15344c99894ffa80965a01e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_1_42c6d7dc4e20417d880a44652c630581",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_2_e002438611864e63a2e64d155ad29b19",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_3_ea84c57ffb5043f69e65b816ee2272b5",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_4_d5c3f6fd1a5e4e4fa475ec56159b4c80",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_5_1f6f0b47414e4a9cbeb29f6dc79cee36",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_14",
+            "owner": "14_5_1f6f0b47414e4a9cbeb29f6dc79cee36",
+            "expires_at": 1791953477,
+            "state": "claimed"
+          },
+          "sid": "1791951677.15"
+        },
+        {
+          "owner": "14_6_2726b800a83747f8b3e2b34a85cb8660",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "14_7_516a4c255f744d3ea68bd08ae85830c0",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 15,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "15_0_fbe29135d2ea4061bee2a77ddb8eb0bc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_1_299c21e1e73f494894f43e21df0e5ec3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_2_ae5a10c93e3e4d69b83ec10aca00e5a8",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_3_962eb513773b412fa802dabcaf9c06b6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_4_75662aefcee14ee8bfdfad2dcc706e48",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_5_c85567bc9ff34d5295e4ec058a74a13f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "15_6_97af54019a4f4465bfecb9f6e719f7af",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_15",
+            "owner": "15_6_97af54019a4f4465bfecb9f6e719f7af",
+            "expires_at": 1791953478,
+            "state": "claimed"
+          },
+          "sid": "1791951678.16"
+        },
+        {
+          "owner": "15_7_e4d34cbbac154e2ebe965c20c90410c4",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 16,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "16_0_6dcf31c6ade34d458cc8f7594fc8bbcc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_1_687c71ab7e0b4a3aa5de1f3cfba40388",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_2_179a445056e44aa1bee600cbbfdc89fc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_3_a0e71ac30fce4c67a47191f6d1f2ae9e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_4_e7dcc9674fe54952809cf1b719dfb0d2",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_16",
+            "owner": "16_4_e7dcc9674fe54952809cf1b719dfb0d2",
+            "expires_at": 1791953479,
+            "state": "claimed"
+          },
+          "sid": "1791951679.17"
+        },
+        {
+          "owner": "16_5_5ed435a730eb49ea877eec02dff795d6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_6_fdac5ee363e94ffcb41c68ead545b018",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "16_7_8df4265ed3b549b38e1b71260d14cf92",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 17,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "17_0_49fcd3c8f9f14075a4314bf7a50e1bab",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_1_512d53eef4f746fcae55836ce43abcbc",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_2_1b774c3310c64965a48e6fdd0612ac22",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_3_a75c29d4b8974a0cb38e91dfe67f42d1",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_4_5beb63289f464d17affd8f43369c33e9",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_5_503aa7db8f564a87b52a0da97d7a5b41",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "17_6_0267a66e7729425589b06d21e2961df5",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_17",
+            "owner": "17_6_0267a66e7729425589b06d21e2961df5",
+            "expires_at": 1791953480,
+            "state": "claimed"
+          },
+          "sid": "1791951680.18"
+        },
+        {
+          "owner": "17_7_30448b457ee048568a47202503cd43d8",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 18,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "18_0_183c06bf61e14b8eb3c4aa3e35099092",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_1_a0357f0b9fd344c5adf10ac3a7be057f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_2_998ded76a36a4fed812f66e33de956cf",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_3_f9d69c20b9bd43a1a1bf3fdbc3dd0f28",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_4_ee70c58802524d148c1e5f575bf20dd7",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_18",
+            "owner": "18_4_ee70c58802524d148c1e5f575bf20dd7",
+            "expires_at": 1791953482,
+            "state": "claimed"
+          },
+          "sid": "1791951682.19"
+        },
+        {
+          "owner": "18_5_e6e689ae6dda42bcaac06f002e3212d6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_6_92053cfd99e9430999801d7c72a8a407",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "18_7_d5104b93827e4666a990868e995146b2",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 19,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "19_0_c21d2ad2ea764235ac0121dff0375b64",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_1_0460e52890644c46b82016ded9e69ef6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_2_3b9f8eded24b4d6d8e737c06f8ee4bb9",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_3_090a0f37f52640188719f226febf5ef3",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_19",
+            "owner": "19_3_090a0f37f52640188719f226febf5ef3",
+            "expires_at": 1791953483,
+            "state": "claimed"
+          },
+          "sid": "1791951683.20"
+        },
+        {
+          "owner": "19_4_cf9f44040ecd4a83a558586d472f73f3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_5_6cf656011a1440a2bbe021911319cc2f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_6_dc6c78c5a23d465692454b9c833ac88c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "19_7_54c189cbae9f4e80993863a62007892b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 20,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "20_0_f619ab2ec9f94f8ca2addef06d5b7c84",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_20",
+            "owner": "20_0_f619ab2ec9f94f8ca2addef06d5b7c84",
+            "expires_at": 1791953484,
+            "state": "claimed"
+          },
+          "sid": "1791951684.21"
+        },
+        {
+          "owner": "20_1_238681fbd69840ebae491d6512298421",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_2_573ba896d3174002a5d4f0906769e951",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_3_498248e3df13437ebe934ca653001b41",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_4_2a8a81e8bee14ce8b029bb6e7c7e1dac",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_5_424efe94a8584f76afc1b2c03ea52188",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_6_6b52eaddf8d9485a8b401caf3d9b95de",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "20_7_5045c7b060804734a15ee1e24170cdb2",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 21,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "21_0_04b575adc27b42c1a2cc824eb35693ab",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_1_50c29d6f42fc4f949dce0dbe2c08e46f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_2_21b90ffd1df747cbb091dee48d1a4ee2",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_3_3ccc3db82a904c56a8a3d9207d3fef59",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_4_380752ca535a49ddb5fe4a879688687e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_5_2fa0c6997a254d2da1829bc116d94524",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_6_50f1ea59da56493785bfd2433a207b14",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "21_7_39b4511a65a342b2acc7994ce9c947bc",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_21",
+            "owner": "21_7_39b4511a65a342b2acc7994ce9c947bc",
+            "expires_at": 1791953485,
+            "state": "claimed"
+          },
+          "sid": "1791951685.22"
+        }
+      ]
+    },
+    {
+      "trial": 22,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "22_0_b47d872316bc4e419128331ee0fb637a",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_1_069a4d315c3541a18e057a24b6df7f65",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_2_32884cdf114a424f88caa890b0472489",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_3_c6517eb36ec4481fb5bff50a552b0941",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_4_ad7d5c65ab6149ed9cdedd90280207f3",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_22",
+            "owner": "22_4_ad7d5c65ab6149ed9cdedd90280207f3",
+            "expires_at": 1791953486,
+            "state": "claimed"
+          },
+          "sid": "1791951686.23"
+        },
+        {
+          "owner": "22_5_4c32c9498e4c4c5ab1c524e16be1e48c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_6_60db882789bf4430bf566e2515defc6c",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "22_7_a181659d7ab14904b70051b2d8efb810",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 23,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "23_0_cc371948c4e3486d963261db07ead089",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_23",
+            "owner": "23_0_cc371948c4e3486d963261db07ead089",
+            "expires_at": 1791953487,
+            "state": "claimed"
+          },
+          "sid": "1791951687.24"
+        },
+        {
+          "owner": "23_1_09138f5fa78d40b58d1eff592ffdbde3",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_2_494a8c16b61a499d8f6ef94f50988b9e",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_3_f1f428e1ba404bd59571a83f0ae6a4c5",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_4_2f148833856d48b69d90b5fd472aab78",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_5_5c81e3214ef34ba19630329d19de0084",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_6_5933711741b44a6ca5b0900a9b5d7632",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "23_7_3944ebda3f76487a8f543b7267af1600",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 24,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "24_0_f022369287b144ad8b0f864d4ea35b5e",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_24",
+            "owner": "24_0_f022369287b144ad8b0f864d4ea35b5e",
+            "expires_at": 1791953488,
+            "state": "claimed"
+          },
+          "sid": "1791951688.25"
+        },
+        {
+          "owner": "24_1_2487cfbac2334a4f85a222a148938a05",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_2_b07c69b7fb5f4c28ba018baa79c83ccb",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_3_ec83f5f5a00840feb807ab51a35596f6",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_4_abfb544f3a4d49e2ad88d6815a6f5c67",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_5_4e23abf2784e4ab7900aada9b610302f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_6_640fa19220544d40aac7236bbbf31815",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "24_7_50a61db054f74e99b1f11f736e774455",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    },
+    {
+      "trial": 25,
+      "winners": 1,
+      "rejected_409": 7,
+      "dispatches": 1,
+      "confirmed_dispatches": 1,
+      "losing_dispatches": 0,
+      "errors": 0,
+      "status": "passed",
+      "outcomes": [
+        {
+          "owner": "25_0_9d22f77ef4594ab3b77d95e196ec797b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_1_1a7bbcd9d82a4588b54edc06e46fdd6b",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_2_feabc487bee4466aa3d79eb7ca98e833",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_3_95f417843eb44d43a4e844c589c74255",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_4_79e1562011584d218af08b8982694626",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_5_e25ace4c9e7d4333a0f737868e9d9693",
+          "claim": "won",
+          "dispatch_attempted": true,
+          "record": {
+            "_key": "slot_identity_25",
+            "owner": "25_5_e25ace4c9e7d4333a0f737868e9d9693",
+            "expires_at": 1791953489,
+            "state": "claimed"
+          },
+          "sid": "1791951690.26"
+        },
+        {
+          "owner": "25_6_a2a04cd54b7148e88853bd4f3a9c002d",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        },
+        {
+          "owner": "25_7_55c116ba76e949bf9bc3b3a0e8b2217f",
+          "claim": "rejected",
+          "dispatch_attempted": false,
+          "http_status": 409
+        }
+      ]
+    }
+  ],
+  "splunk_version": "10.6.0.5",
+  "finished_at": "2026-10-14T04:21:31.117664+00:00"
+}

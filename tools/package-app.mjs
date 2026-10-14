@@ -44,10 +44,12 @@ await rm(stageRoot, { recursive: true, force: true });
 await mkdir(stageRoot, { recursive: true });
 await cp(app, stage, {
   recursive: true,
-  filter: (source) => !/(^|\/)(\.DS_Store|\._.*|docs)$/.test(source),
+  filter: (source) =>
+    !/(^|\/)(\.DS_Store|\._.*|docs|__pycache__|.*\.py[co])$/.test(source),
 });
 await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
+await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
 await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 

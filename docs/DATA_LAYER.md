@@ -2,7 +2,7 @@
 
 The app builds the dependency map inside Splunk from the installed TAs' events. Scheduled searches normalize flow records, roll them up into conversations, and maintain time-bounded identity in KV store. An on-demand graph macro joins them for the UI. No external projector, HEC token or hand-normalized input is required.
 
-Everything is SPL in `macros.conf`, `savedsearches.conf`, `collections.conf` and `transforms.conf`; there are no custom commands or scripts. Supported on Splunk Enterprise 10.x (pilot) and Splunk Cloud. The app ships no `indexes.conf`; create the summary index through your normal process (ACS on Cloud). Summary events use the `stash` sourcetype and do not count against license.
+Everything in the data layer is SPL in `macros.conf`, `savedsearches.conf`, `collections.conf` and `transforms.conf`; the separately opt-in recovery action is the app's administrator-only Python alert action. The data layer is supported on Splunk Enterprise 10.x (pilot) and Splunk Cloud, while automated assisted recovery has passed its [core milestone live tests](benchmarks/2026-10-14-recovery-core.md) on standalone Splunk Enterprise 10.6.0.5; a separate disabled supervisor detects abandoned claims without taking over recovery. The accepted KV claim gate covers standalone KV Store only. SHC and failover recovery are not qualified. The app ships no `indexes.conf`; create the summary index through your normal process (ACS on Cloud). Summary events use the `stash` sourcetype and do not count against license.
 
 ## Sources
 
@@ -73,7 +73,7 @@ No inspected TA extracts a translated (NAT) tuple, so no NAT fields are produced
 
 ## Conversations
 
-Saved search **ADM - Conversation rollup** (`` | `adm_conversation_rollup` | collect ``) runs every 5 minutes and selects flow records **by index time**: `dispatch.index_earliest = -10m@m`, `dispatch.index_latest = -5m@m`, with event-time bounds `-24h` to `+15m` (records older than 24 hours when indexed, or more than 15 minutes in the future, are not counted). Normal consecutive runs read disjoint index-time slices within those event-time limits. New summaries carry replay identities, so the graph deduplicates retries of an identical closed, immutable slice with unchanged configuration. Differently bounded overlapping slices and legacy summaries require a separate-index rebuild; see [Recovery and replay](RECOVERY.md). Continuous scheduling (`realtime_schedule = 0`) requests catch-up for delayed runs. Automatic recovery after a container outage is **not qualified**: the exclusive local rehearsal resumed future jobs but left a missed slice unprocessed. See [scheduler evidence](benchmarks/2026-10-13-pipeline.md) and use the recorded absolute-slice recovery procedure until this gap is resolved.
+Saved search **ADM - Conversation rollup** (`` | `adm_conversation_rollup` | collect ``) runs every 5 minutes and selects flow records **by index time**: `dispatch.index_earliest = -10m@m`, `dispatch.index_latest = -5m@m`, with event-time bounds `-24h` to `+15m` (records older than 24 hours when indexed, or more than 15 minutes in the future, are not counted). Normal consecutive runs read disjoint index-time slices within those event-time limits. New summaries carry replay identities, so the graph deduplicates retries of an identical closed, immutable slice with unchanged configuration. Differently bounded overlapping slices and legacy summaries require a separate-index rebuild; see [Recovery and replay](RECOVERY.md). Continuous scheduling (`realtime_schedule = 0`) requests catch-up for delayed runs. Automatic native recovery after a container outage is **not qualified**: the exclusive local rehearsal resumed future jobs but left a missed slice unprocessed. The separately opt-in automated assisted recovery action can replay one verified closed, disjoint slice at a time on its qualified standalone deployment; see [scheduler evidence](benchmarks/2026-10-13-pipeline.md) and [Recovery and replay](RECOVERY.md).
 
 Records are bucketed by `adm_end` into 5-minute buckets. Each run writes `source="adm:conversation"`, `sourcetype=stash`, `adm_record=conversation`, `_time` = bucket start, one event per (`scope`, `client_ip`, `server_ip`, `server_port`, `transport`, bucket, `observer`):
 
@@ -104,7 +104,7 @@ Collection `adm_ip_identity` (lookup `adm_ip_identity`, `max_matches = 1000`), o
 - **ACI endpoints** (`source=aci`, priority 3): `fvCEp` IPs (`ip` and child `fvIp addr`). Tenant, application profile and EPG come from the DN; `attach_device`/`attach_interface` from `fvRsCEpToPathEp tDn` (`pod-<n>/node-<id>`, `eth1/5`); `vm_name` through `fvRsVm`→`compVm`. Switch names are not resolved because the default inputs do not relate `topSystem` to paths. `valid_end` is the last report plus two polling intervals, so an endpoint that stops being reported expires.
 - **Nexus Dashboard endpoints** (`source=nd_endpoints`, priority 3): the input collects endpoint changes incrementally from a checkpoint (`bin/cisco_dc_nd_collector.py:757-800`), so stable endpoints are not re-reported and no staleness applies. `valid_from` is `createTime`; `valid_to` is a `modType=deletion` record or the start of another endpoint with the same IP and scope.
 
-The builder never reads the whole collection. For each new observation it reads the stored rows of the same IP and scope through the lookup (at most `max_matches`), merges first/last seen and validity, keeps the newest non-empty attribute values, and closes an open pod, node, Envoy address, Service frontend (same port and transport) or ND endpoint interval at the `valid_from` of the next different entity with that IP. Changed rows are written with `outputlookup append=true key_field=_key override_if_empty=false`. When an IP returns `adm_identity_max_matches` stored rows, closing is skipped for it and the builder's summary row carries a warning. The builder returns one row: `rows_written`, `rows_observed`, `rows_closed`, `truncated_ips`, `rows_missing_cluster`, `warnings`. Overlapping index-time windows are harmless (merges are idempotent). Backfill by dispatching it once with `dispatch.index_earliest=-7d`.
+The builder never reads the whole collection. For each new observation it reads the stored rows of the same IP and scope through the lookup (at most `max_matches`), merges first/last seen and validity, keeps the newest non-empty attribute values, and closes an open pod, node, Envoy address, Service frontend (same port and transport) or ND endpoint interval at the `valid_from` of the next different entity with that IP. Changed rows are written with `outputlookup append=true key_field=_key override_if_empty=false`. When an IP returns `adm_identity_max_matches` stored rows, closing is skipped for it and the builder's summary row carries a warning. The builder returns one row: `rows_written`, `rows_observed`, `rows_closed`, `truncated_ips`, `rows_missing_cluster`, `warnings`. Overlapping index-time windows are harmless (merges are idempotent); automated assisted recovery still replays builder slots chronologically and one at a time. A paused builder can leave indexed data about 18 minutes stale during the bounded recovery invocation. Backfill by dispatching it once with `dispatch.index_earliest=-7d`.
 
 **ADM - Identity prune** (manual maintenance only) reads the collection with `adm_kv_read_all`: 20 pages of 10,000 rows plus a probe at offset 1. It rewrites the collection without rows whose `valid_end` is older than `adm_identity_retention` only when the read is provably complete: pages contiguous, every page before the last full, the page after the last read and empty, and a short first page whose probe returned exactly one row fewer (otherwise the store capped the read). Otherwise it writes nothing and returns a warning. It never empties the collection (`override_if_empty=false`). **ADM - Service binding prune** (manual maintenance only) does the same for `adm_service_workload` by `last_seen`.
 
@@ -251,6 +251,61 @@ All ship `disabled = 1` and `dispatchAs = owner`. Builders and the rollup have `
 | ADM - Service backends prune | `14 3 * * *` | — | — | — |
 | ADM - Service routes prune | `19 3 * * *` | — | — | — |
 | ADM - ACI policy prune | `24 3 * * *` | — | — | — |
+
+### Automated assisted recovery
+
+The `adm_recovery` custom administrator-only alert action is shipped
+disabled through both `action.adm_recovery=0` and `[recovery] enabled=0` in
+`default/adm_recovery.conf`; enable it only through local overrides. Enabling
+the detector's notification does not enable recovery. The action is intended
+for standalone Splunk Enterprise 10.6.0.5, where the [core milestone live tests](benchmarks/2026-10-14-recovery-core.md)
+passed. Supervisor and crash handling remain deferred to Milestone 2; SHC and
+failover are outside the qualification. It requires the
+target saved search to retain its shipped absolute windows and
+`dispatchAs=owner`, and it refuses an enabled SHC, non-administrator owner,
+configuration drift, or a backlog over four initial slots before pausing.
+
+The action admits at most eight total slots, uses a 25-minute alert-action
+`maxtime`, and budgets normal paused recovery work to 18 minutes. A crash or
+uncertain writer can leave the schedule paused indefinitely for manual reconciliation. It records target and slot claims in the administrator-
+only `adm_recovery_state` collection and audit events in
+`adm_recovery_audit`. Recovered slots are omitted from missed-slot detection;
+in-progress and uncertain claims remain visible and are never taken over or
+re-dispatched. The action records durable pause state before changing
+`is_scheduled`; restoration currently leaves a local `savedsearches.conf`
+override. The separate `ADM - Recovery abandoned-lease alert` ships disabled
+and creates tracked Splunk alerts for every expired target claim and every
+expired slot claim except `recovered`. Even a target with state `restored`
+blocks future recovery until its claim is deleted; normal success deletes it.
+The supervisor reads claims in pages and raises an incident when the read is
+incomplete. It never changes a claim or schedule, and it has no shipped paging
+integration. See [Abandoned recovery claims](RECOVERY.md#abandoned-recovery-claims).
+
+The explicit local opt-in is:
+
+```ini
+# local/savedsearches.conf
+[ADM - Scheduler missed-slot alert]
+action.adm_recovery = 1
+disabled = 0
+
+# local/adm_recovery.conf
+[recovery]
+enabled = 1
+management_uri = https://localhost:8089
+ca_file = /path/to/trusted/splunk-ca.pem
+```
+
+Use a trusted CA path appropriate to the deployment. TLS certificate and
+hostname verification remain enabled; no verification bypass is supported.
+
+For builder targets, replay is chronological and single-instance with
+overlapping ten-minute bounds allowed. For the rollup, replay requires closed,
+disjoint five-minute slices. The rollup's pre-replay manifest is a slice-
+stability check. The post-replay summary-index comparison of every expected
+`rollup_id` and its `records` count is the actual verification. See [Recovery
+and replay](RECOVERY.md#automated-assisted-recovery-core-action) for the
+manual fallback, claim behavior, and native catch-up qualification result.
 
 ## Validation
 

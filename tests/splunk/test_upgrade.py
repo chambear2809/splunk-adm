@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import configparser
 import hashlib
 import json
 import os
@@ -126,6 +127,48 @@ class UpgradeUnitTest(unittest.TestCase):
             UpgradeIntegrationTest._safe_acl(
                 {"perms": {"read": ["*"], "write": ["admin"]}}
             )
+
+    def test_supervisor_is_disabled_admin_only_and_cannot_trigger_recovery(self):
+        root = HERE.parents[1] / "splunk_app" / APP
+        searches = configparser.RawConfigParser()
+        searches.read(root / "default/savedsearches.conf")
+        supervisor = searches["ADM - Recovery abandoned-lease alert"]
+        self.assertEqual(supervisor["disabled"], "1")
+        self.assertEqual(supervisor["action.adm_recovery"], "0")
+        self.assertEqual(supervisor["alert.track"], "1")
+        metadata = configparser.RawConfigParser()
+        metadata.read_string(
+            (root / "metadata/default.meta").read_text().replace("[]", "[root]", 1)
+        )
+        self.assertEqual(
+            metadata["savedsearches"]["access"],
+            "read : [ admin, sc_admin ], write : [ admin, sc_admin ]",
+        )
+        # A specific stanza must not accidentally broaden the inherited grant.
+        self.assertFalse(
+            metadata.has_section("savedsearches/ADM - Recovery abandoned-lease alert")
+        )
+
+    def test_recovery_metadata_protects_action_config_collections_and_lookup(self):
+        path = HERE.parents[1] / "splunk_app" / APP / "metadata" / "default.meta"
+        text = path.read_text(encoding="utf-8")
+        for stanza in (
+            "alert_actions/adm_recovery",
+            "adm_recovery",
+            "collections/adm_recovery_state",
+            "collections/adm_recovery_audit",
+            "transforms/adm_recovery_state",
+            "transforms/adm_recovery_audit",
+        ):
+            self.assertRegex(text, rf"(?ms)^\[{re.escape(stanza)}\]$")
+        protected = re.findall(
+            r"(?ms)^\[(?:alert_actions/adm_recovery|adm_recovery|collections/adm_recovery_state|collections/adm_recovery_audit|transforms/adm_recovery_state|transforms/adm_recovery_audit)\]\naccess\s*=\s*([^\n]+)",
+            text,
+        )
+        self.assertEqual(len(protected), 6)
+        self.assertTrue(
+            all("admin" in value and "sc_admin" in value for value in protected)
+        )
 
 
 def _request(
@@ -397,6 +440,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         metadata = cls._local_metadata()
         risks = metadata_risk(metadata)
         acl = cls._savedsearch_acl()
+        protected_acl = cls._protected_config_acl()
         macro_file = cls._docker_file(
             "/opt/splunk/etc/apps/splunk_adm/local/macros.conf"
         )
@@ -419,6 +463,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "metadata": metadata,
             "metadata_risk": risks,
             "acl": acl,
+            "protected_acl": protected_acl,
             "macro_file": macro_file,
             "scope_file": scope_file,
         }
@@ -442,9 +487,11 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "GET", f"/servicesNS/nobody/{APP}/saved/searches?count=0"
         )
         entries = result.get("entry", [])
-        if len(entries) != 11:
+        expected = cls._packaged_savedsearch_names()
+        actual = {entry.get("name", "") for entry in entries}
+        if actual != expected:
             raise AssertionError(
-                f"expected all 11 saved-search ACLs, got {len(entries)}"
+                f"expected shipped saved-search ACLs {sorted(expected)!r}, got {sorted(actual)!r}"
             )
         out = {}
         for entry in entries:
@@ -454,6 +501,40 @@ class UpgradeIntegrationTest(unittest.TestCase):
                 "owner": acl.get("owner"),
                 "sharing": acl.get("sharing"),
             }
+        return out
+
+    @classmethod
+    def _packaged_savedsearch_names(cls) -> set[str]:
+        """Read the manifest from the checked-in package, not a count literal."""
+        path = HERE.parents[1] / "splunk_app" / APP / "default" / "savedsearches.conf"
+        names = set()
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("[") and line.endswith("]"):
+                names.add(line[1:-1])
+        return names
+
+    @classmethod
+    def _protected_config_acl(cls) -> dict:
+        """Capture ACLs for recovery configuration and KV collections."""
+        endpoints = {
+            "alert_actions/adm_recovery": "configs/conf-alert_actions/adm_recovery",
+            "adm_recovery/recovery": "configs/conf-adm_recovery/recovery",
+            "collections/adm_recovery_state": "configs/conf-collections/adm_recovery_state",
+            "collections/adm_recovery_audit": "configs/conf-collections/adm_recovery_audit",
+            "transforms/adm_recovery_state": "configs/conf-transforms/adm_recovery_state",
+            "transforms/adm_recovery_audit": "configs/conf-transforms/adm_recovery_audit",
+        }
+        out = {}
+        for name, path in endpoints.items():
+            result = cls.lab._json("GET", f"/servicesNS/nobody/{APP}/{path}")
+            entries = result.get("entry", [])
+            if len(entries) != 1:
+                raise AssertionError(
+                    f"expected one ACL entry for {name}, got {entries!r}"
+                )
+            acl = entries[0].get("acl", {})
+            out[name] = cls._safe_acl(acl)
         return out
 
     @classmethod
@@ -527,6 +608,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         self.assertEqual(self.before["metadata_risk"], [])
         self.assertEqual(self.after["metadata_risk"], [])
         self.assertEqual(self.before["acl"], self.after["acl"])
+        self.assertEqual(self.before["protected_acl"], self.after["protected_acl"])
         self.assertEqual(self.before["macro_file"], self.after["macro_file"])
         self.assertEqual(self.before["scope_file"], self.after["scope_file"])
 

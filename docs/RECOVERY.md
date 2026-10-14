@@ -19,7 +19,16 @@ read after restart; that readiness check alone does not restore missed slots.
 
 The [assisted lab rehearsal](SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
 exercises the absolute-slice procedure and records replay jobs separately from
-native scheduler activity. It is not an unattended production recovery tool.
+native scheduler activity. The shipped action is **automated assisted
+recovery**: it is administrator-only and separately opt-in. The accepted KV
+claim gate covers standalone Splunk only. The [core milestone live tests](benchmarks/2026-10-14-recovery-core.md)
+passed on standalone Splunk 10.6.0.5. The separate abandoned-lease supervisor
+adds detection; it never takes over a recovery. SHC and failover behavior are not qualified. The action
+refuses other versions or an enabled SHC, and remains disabled until local
+overrides explicitly enable both the saved-search action and
+`local/adm_recovery.conf`. Native scheduler catch-up remains a failed
+qualification; the manual absolute-slice fallback remains required when the
+action refuses or becomes uncertain.
 
 `adm_health_jobs` cannot surface the exact failure above: it reports the
 *latest* scheduler.log status per saved search, so a missed slot followed by
@@ -42,13 +51,134 @@ the alert's `dispatch.earliest_time` accordingly. It ships
 three separate steps: (1) enable the saved search itself; (2) configure
 `alert_actions.conf` or the Alerts UI with an actual notification (email,
 webhook, etc.) — this repo ships no paging integration, since that is
-site-specific; and (3) treat a firing alert purely as a trigger to run the
-absolute-slice recovery procedure above, not as something that resolves on
-its own. The alert does not replay anything and does not clear itself; the
-missed slot remains unrecovered until an administrator replays it. A manual
-replay does not supply scheduler success evidence, so the detector continues
-to report that slot until it leaves the lookback window. Durable recovery
-acknowledgments are not part of this detector-only implementation.
+site-specific; and (3) treat a firing alert as notification only unless the
+separate recovery action is explicitly enabled. The notification action does
+not replay anything or clear a slot. With recovery disabled, the missed slot
+remains unrecovered until an administrator replays it. A manual
+replay does not supply scheduler success evidence, so it does not clear a slot
+unless the recovery action verifies it. Verified records in the
+administrator-only `adm_recovery_state` collection suppress only the matching
+recovered slots. Claims in progress remain visible as `in_progress`; failed or
+expired nonterminal claims remain visible as `uncertain` and are never
+automatically re-dispatched or taken over.
+
+A recovered record is evidence that its original slice completed under the
+recorded configuration. Changing normalization or index macros does not reopen
+historical scheduler successes or recovered slots. The action refuses further
+recovery for a target when its recorded recovery configuration differs from the
+current macro configuration; reconcile that change manually using the rebuild
+guidance below. Do not delete claims simply to bypass this refusal.
+
+The opt-in configuration is local and must be reviewed by an administrator:
+
+```ini
+# local/savedsearches.conf
+[ADM - Scheduler missed-slot alert]
+action.adm_recovery = 1
+disabled = 0
+
+# local/adm_recovery.conf
+[recovery]
+enabled = 1
+management_uri = https://localhost:8089
+ca_file = /path/to/trusted/splunk-ca.pem
+```
+
+Keep notification configuration separate from `action.adm_recovery`.
+`ca_file` must identify a trusted certificate chain and hostname verification
+remains enabled; do not disable TLS verification or use a bypass value.
+
+This adds Python under `bin/`, a custom alert action, a pinned bundled Splunk
+SDK, and administrator-only KV state/audit collections. The action uses the
+alert owner's session and local HTTPS management API. It does not install
+dependencies at runtime. These additions require renewed AppInspect and
+Splunk Cloud review; this milestone does not qualify recovery for Cloud.
+
+## Automated assisted recovery core action
+
+The core action handles one target at a time. Before pausing, it reads and
+durably records the target's saved-search state, configuration fingerprint and
+owner claim. The record is written before the REST pause, so a process failure
+does not leave the original state only in memory. It changes only
+`is_scheduled`, drains active jobs, and restores that field from the recorded
+value after verification. Restoration currently leaves a local
+`savedsearches.conf` `is_scheduled` override; retain that override in the
+recovery audit and remove it only through the normal configuration workflow.
+
+The qualified invocation admits at most four initial missing slots and eight
+total slots, with a 120-second per-slot budget, an 18-minute pause cap and a
+25-minute alert-action `maxtime` (the internal action deadline is 21 minutes).
+Larger backlogs are refused before pausing. Builders replay chronological
+closed slices one at a time; their intentional overlapping ten-minute index
+windows are allowed because deterministic KV merges are idempotent. The
+conversation rollup accepts only closed, disjoint five-minute slices and
+rejects overlap or altered bounds. Recovery history retains all scheduler
+outcomes: a candidate rollup slot with a prior job SID, failure or unknown
+outcome is refused before pausing, and checked again before replay. Only an
+absent execution or an explicit skip without a SID is eligible automatically.
+A failed native aggregate might already have written partial rows with
+different identities; a new full-slice manifest cannot prove those rows absent.
+Use manual reconciliation or the separate-index rebuild for that case.
+While a builder is paused, its indexed data
+can therefore be about 18 minutes stale until recovery completes.
+
+Each target and slot claim uses an insert-only deterministic KV key. A duplicate
+claim refuses the run. A lease expiry never permits takeover: the claim stays
+uncertain and requires manual reconciliation. `dispatch_pending` is persisted
+before dispatch; an unknown dispatch response is uncertain and is not retried.
+The core action records audit events and performs ordinary known-failure
+cleanup, and the separate supervisor reports expired claims for manual reconciliation.
+Neither component reclaims a paused target.
+
+For rollups, the pre-replay manifest compares the raw accepted count with the
+expected rollup identities and counts for the exact slice. This is a
+**slice-stability check**, not proof that the replay wrote its summary. After
+dispatch, the action compares the replay output and queries the summary index
+for every expected `rollup_id`; that post-replay summary check is the actual
+verification. Empty slices are verified as no-ops. If either check is
+inconclusive, the slot remains uncertain and the manual fallback applies.
+
+## Abandoned recovery claims
+
+`ADM - Recovery abandoned-lease alert` ships disabled. On qualified standalone
+Splunk 10.6.0.5, an administrator can enable it independently of the recovery
+action. It pages through the recovery-state lookup every five minutes,
+including targets that are paused and claims older than the missed-slot
+history window. It reuses `adm_kv_read_all` (20 pages of 10,000 rows) and
+raises `incomplete_recovery_state_read` if completeness cannot be proved,
+including at its page ceiling. Investigate that alert even if no specific
+abandoned claim was returned. It creates a tracked Splunk Triggered Alert when expired
+claims remain. Results include the claim key, target, state, owner, expiry,
+slot time and SID when available. No email, webhook or paging integration is
+shipped; configure notifications separately in the Alerts UI. Without that
+configuration, an administrator must inspect Triggered Alerts. Unresolved
+claims can produce another alert on each run; alert tracking has finite
+retention, while claims remain available until manually reconciled.
+
+Every existing target claim whose `expires_at <= now()` is reported, regardless
+of its state. In particular, `restored` only means the schedule was restored;
+normal completion must also delete the target claim. A crash between those
+steps leaves a record that blocks future recovery. For slot records, only
+`recovered` is terminal. An expired `verified` slot remains unresolved because
+it has not completed the invocation's handback. Unknown states and record
+types with a valid expired lease are reported conservatively.
+
+The supervisor reads claims and writes only Splunk's ordinary search/alert
+artifacts. It never extends or deletes a claim, changes a schedule, cancels a
+job, or dispatches a replay. The recovery action remains separately disabled.
+An interrupted recovery normally leaves its schedule paused; a process killed
+after restoration leaves the schedule restored. Neither fact resolves an
+orphaned target claim. A replay deadline with an active SID leaves the schedule
+paused because the writer may still be running. An administrator's concurrent
+saved-search or macro change prevents automatic restoration over that change.
+
+For an alert, inspect the original target snapshot, slot bounds, audit events,
+SID and live job status. Establish whether any writer remains and reconcile
+its actual outputs before considering a manual replay or restoring a schedule.
+Preserve the evidence. Claim removal is an explicit administrator operation
+after reconciliation, never a way to bypass a refusal. Recovered slot records
+remain recovery evidence and must not be deleted merely to clear an alert.
+There is no automatic retry, lease takeover, or new SHC qualification.
 
 ## Interrupted conversation rollups
 
@@ -73,7 +203,7 @@ Two independently indexed NetFlow records can have identical payloads and timest
 
 ## Builder recovery
 
-Builders upsert deterministic KV keys. Replay their original closed slices in chronological order while their schedules are paused, then verify interval boundaries and the latest attributes before resuming. Do not run two manual instances of the same builder concurrently. A saved search's single-instance limit does not serialize different saved searches or manual macro calls. The existing interval regressions cover same-batch gaps and out-of-order replays; arbitrary overlapping concurrent updates are not transactional.
+Builders upsert deterministic KV keys. Replay their original closed slices in chronological order while their schedules are paused, then verify interval boundaries and the latest attributes before resuming. Do not run two manual instances of the same builder concurrently. A saved search's single-instance limit does not serialize different saved searches or manual macro calls. The existing interval regressions cover same-batch gaps and out-of-order replays; arbitrary overlapping concurrent updates are not transactional. The automated assisted recovery action enforces this one-at-a-time rule and permits the builders' intentional overlapping ten-minute windows. It refuses rollup slices that overlap or are not closed.
 
 ## Pruning and maintenance
 
