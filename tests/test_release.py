@@ -42,6 +42,8 @@ class ReleaseArchiveTests(unittest.TestCase):
         )
         return {
             "splunk_adm/appserver/static/adm.bundle.js": b"bundle",
+            "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle",
+            "splunk_adm/default/data/ui/views/map.xml": b"view",
             "splunk_adm/appserver/static/adm.css": b"css",
             "splunk_adm/default/app.conf": config,
             "splunk_adm/LICENSE": b"license",
@@ -167,6 +169,18 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "secret-like path"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_custom_mako_template(self):
+        for path in (
+            "splunk_adm/appserver/templates/atlas.html",
+            "splunk_adm/appserver/Modules/legacy/legacy.html",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"<%! import os %>"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "custom Mako template"):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_path_traversal(self):
         install = self._files()

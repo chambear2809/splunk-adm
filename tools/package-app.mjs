@@ -19,6 +19,8 @@ process.chdir(fileURLToPath(root));
 const app = "splunk_app/splunk_adm";
 await access(`${app}/appserver/static/adm.bundle.js`);
 await access(`${app}/appserver/static/adm.css`);
+await access(`${app}/appserver/static/pages/atlas.js`);
+await access(`${app}/default/data/ui/views/map.xml`);
 
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 const appConf = await readFile(`${app}/default/app.conf`, "utf8");
@@ -55,7 +57,8 @@ await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 
 // The bundle embeds production dependencies; ship their license texts with it.
-// Type-only packages (no runtime entry point) never reach the bundle.
+// Include packages with deep JS entry points even when there is no root main.
+// Type-only packages never reach the bundle.
 const depDirs = execFileSync("npm", [
   "ls",
   "--omit=dev",
@@ -67,24 +70,44 @@ const depDirs = execFileSync("npm", [
   .split("\n")
   .slice(1);
 const notices = new Map();
+// These npm distributions omit their upstream MIT license text. Keep the
+// verified text locally rather than dropping a dependency's required notice.
+const licenseFallbacks = JSON.parse(
+  await readFile("tools/licenses/provenance.json", "utf8"),
+);
 for (const dir of depDirs) {
   const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
   const files = await readdir(dir);
   const runtime =
-    pkg.main || pkg.module || pkg.exports || files.includes("index.js");
-  if (notices.has(pkg.name) || !runtime) continue;
-  const licenseFile = files.find((f) => /^(licen[cs]e|copying)(\.|$)/i.test(f));
-  if (!licenseFile)
-    throw new Error(`${pkg.name} has no license file to include in notices`);
-  const text = await readFile(join(dir, licenseFile), "utf8");
+    pkg.main ||
+    pkg.module ||
+    pkg.exports ||
+    files.some((file) => /\.[cm]?js$/.test(file));
+  const key = `${pkg.name}@${pkg.version}`;
+  if (notices.has(key) || !runtime) continue;
+  const licenseFile = files.find((f) =>
+    /^(licen[cs]e|copying)([.-]|$)/i.test(f),
+  );
+  const fallback = licenseFallbacks[key];
+  if (!licenseFile && !fallback)
+    throw new Error(`${key} has no license file to include in notices`);
+  const licensePath = licenseFile
+    ? join(dir, licenseFile)
+    : join("tools/licenses", fallback.file);
+  const text = await readFile(licensePath, "utf8");
+  if (!licenseFile) {
+    const sha = createHash("sha256").update(text).digest("hex");
+    if (sha !== fallback.sha256 || pkg.license !== "MIT")
+      throw new Error(`License provenance mismatch for ${key}`);
+  }
   notices.set(
-    pkg.name,
+    key,
     `${pkg.name} ${pkg.version} (${pkg.license})\n\n${text.trim()}\n`,
   );
 }
 await writeFile(
   `${stage}/THIRD_PARTY_NOTICES.txt`,
-  "Third-party software bundled in appserver/static/adm.bundle.js\n\n" +
+  "Third-party software bundled in appserver/static/adm.bundle.js and pages/atlas.js\n\n" +
     [...notices.keys()]
       .sort()
       .map((name) => notices.get(name))
