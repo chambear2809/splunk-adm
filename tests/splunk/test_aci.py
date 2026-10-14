@@ -1134,7 +1134,8 @@ class AciDataLayerTest(unittest.TestCase):
         c5_hubble = next(
             e
             for e in hubble
-            if "payment-2b4d6f8a1-k3j6h" in e["event"] and '"source_port":51006' in e["event"]
+            if "payment-2b4d6f8a1-k3j6h" in e["event"]
+            and '"source_port":51006' in e["event"]
         )
         bad_hubble = json.loads(json.dumps(c5_hubble))
         flow = json.loads(bad_hubble["event"])
