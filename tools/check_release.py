@@ -17,7 +17,6 @@ from pathlib import Path
 MAX_MEMBERS = 10_000
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
-DEPLOYMENT_OWNED = "splunk_adm/lookups/adm_observer_scope.csv"
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
 FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
 # Custom Mako templates are deprecated as of Splunk Enterprise 10.4.
@@ -115,6 +114,8 @@ def _assert_safe_files(files: dict[str, bytes]) -> None:
     for name in files:
         if name.casefold() == "splunk_adm/local/transforms.conf":
             _check_scope_transform(files[name], name)
+        if name.casefold() == "splunk_adm/lookups/adm_observer_scope.csv":
+            raise ValueError(f"deployment-owned scope CSV must not ship: {name}")
         relative = name.removeprefix("splunk_adm/")
         if relative.casefold().startswith(MAKO_DIRS):
             raise ValueError(f"custom Mako template path in archive: {name}")
@@ -154,10 +155,21 @@ def _verify_checksum(archive: Path) -> None:
 
 def _required_files(files: dict[str, bytes], version: str) -> None:
     required = {
-        "splunk_adm/appserver/static/adm.bundle.js",
         "splunk_adm/appserver/static/adm.css",
         "splunk_adm/appserver/static/pages/atlas.js",
-        "splunk_adm/default/data/ui/views/map.xml",
+        *{
+            f"splunk_adm/appserver/static/demo/{name}.json"
+            for name in (
+                "demo-rows",
+                "demo-rows-aci",
+                "demo-topology",
+                "demo-topology-aci",
+            )
+        },
+        *{
+            f"splunk_adm/default/data/ui/views/{page}.xml"
+            for page in ("applications", "map", "data_health", "setup", "help")
+        },
         "splunk_adm/default/app.conf",
         "splunk_adm/LICENSE",
         "splunk_adm/NOTICE",
@@ -213,28 +225,13 @@ def check_release(
             _check_scope_transform(local_transforms.read_bytes(), str(local_transforms))
     package_json = package_json or Path("package.json")
     version = json.loads(package_json.read_text(encoding="utf-8"))["version"]
-    install_path = dist / f"splunk_adm-{version}.tar.gz"
-    upgrade_path = dist / f"splunk_adm-{version}-upgrade.tar.gz"
-    for archive in (install_path, upgrade_path):
-        if not archive.is_file():
-            raise FileNotFoundError(archive)
-        _verify_checksum(archive)
-    install = _read_archive(install_path)
-    upgrade = _read_archive(upgrade_path)
-    for archive in (install, upgrade):
-        _assert_safe_files(archive.files)
-        _required_files(archive.files, version)
-    if DEPLOYMENT_OWNED not in install.files or DEPLOYMENT_OWNED in upgrade.files:
-        raise ValueError(
-            "scope CSV must be present in install and omitted from upgrade"
-        )
-    if set(install.files) - {DEPLOYMENT_OWNED} != set(upgrade.files):
-        raise ValueError(
-            "install and upgrade archives differ beyond the deployment-owned scope CSV"
-        )
-    for name in upgrade.files:
-        if install.files[name] != upgrade.files[name]:
-            raise ValueError(f"install and upgrade bytes differ: {name}")
+    archive_path = dist / f"splunk_adm-{version}.tar.gz"
+    if not archive_path.is_file():
+        raise FileNotFoundError(archive_path)
+    _verify_checksum(archive_path)
+    archive = _read_archive(archive_path)
+    _assert_safe_files(archive.files)
+    _required_files(archive.files, version)
 
 
 def main() -> None:
@@ -248,7 +245,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     check_release(args.dist, args.package_json, installed_app=args.installed_app)
-    print(f"Release archives verified in {args.dist}")
+    print(f"Release archive verified in {args.dist}")
 
 
 if __name__ == "__main__":

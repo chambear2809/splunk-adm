@@ -6,7 +6,7 @@ import {
   sourceStatus,
   type HealthReport,
 } from "./health";
-import type { SearchConstructor } from "./provider";
+import type { SearchClient } from "./data/searchClient";
 import { formatUtc } from "./time";
 const time = (value?: number) =>
   value
@@ -146,13 +146,11 @@ export function HealthResults({ report }: { report: HealthReport }) {
   );
 }
 export function HealthPanel({
-  SearchManager,
-  release,
+  client,
   live,
   close,
 }: {
-  SearchManager?: SearchConstructor;
-  release?: (id: string) => void;
+  client?: SearchClient;
   live: boolean;
   close: () => void;
 }) {
@@ -161,12 +159,12 @@ export function HealthPanel({
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (!live || !SearchManager) return;
+    if (!live || !client) return;
     const controller = new AbortController();
     setBusy(true);
     setError("");
     setReport(undefined);
-    loadHealth(SearchManager, controller.signal, release)
+    loadHealth(client, controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) setReport(result);
       })
@@ -178,7 +176,7 @@ export function HealthPanel({
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [SearchManager, release, live, revision]);
+  }, [client, live, revision]);
   return (
     <section className="popover health" aria-label="Pipeline health">
       <div className="popover-head">
@@ -201,7 +199,7 @@ export function HealthPanel({
           <button
             className="secondary-button"
             onClick={() => setRevision((n) => n + 1)}
-            disabled={busy || !SearchManager}
+            disabled={busy || !client}
           >
             <RefreshCw size={15} /> {busy ? "Checking…" : "Check again"}
           </button>

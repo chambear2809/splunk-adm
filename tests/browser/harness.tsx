@@ -1,98 +1,63 @@
 import { createRoot } from "react-dom/client";
-import { App } from "../../frontend/src/App";
+import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
+import { toolkitDefault } from "../../frontend/src/app/interop";
+import { AtlasApp } from "../../frontend/src/app/AtlasApp";
+import { parseUrlState, type Page } from "../../frontend/src/app/urlState";
+import type {
+  SearchClient,
+  SearchRequest,
+} from "../../frontend/src/data/searchClient";
+import { FINALIZED_SEARCH_WARNING } from "../../frontend/src/provider";
 import aciRows from "../../fixtures/demo-rows-aci.json";
-import { rowsToGraph } from "../../frontend/src/rows";
-import { rowsToTopology } from "../../frontend/src/topology";
 import "../../frontend/src/styles.css";
-
-type Listener = (payload?: unknown) => void;
-type Results = { fields: string[]; rows: unknown[][] };
-
-const fields = Object.keys(
-  aciRows.rows.reduce<Record<string, unknown>>(
-    (all, row) => Object.assign(all, row),
-    {},
-  ),
-);
-const rows = aciRows.rows.map((row) =>
-  fields.map((field) => row[field as keyof typeof row]),
-);
-
-class ResultModel {
-  private listeners: Listener[] = [];
-  private result: Results = { fields, rows: [] };
-  on(_event: string, callback: Listener) {
-    this.listeners.push(callback);
-  }
-  off() {
-    this.listeners = [];
-  }
-  hasData() {
-    return this.result.rows.length > 0;
-  }
-  data() {
-    return this.result;
-  }
-  publish(result: Results) {
-    this.result = result;
-    for (const callback of this.listeners) callback();
+const ThemeProvider = toolkitDefault(ThemeProviderExport);
+const faultScenario = new URLSearchParams(location.search).get("scenario");
+class FakeSearchClient implements SearchClient {
+  async search(request: SearchRequest) {
+    window.__ADM_REQUESTS__ ??= [];
+    window.__ADM_REQUESTS__.push({
+      spl: request.search,
+      earliest: request.earliest,
+      latest: request.latest ?? "now",
+    });
+    if (request.search === "`adm_topology`") return { rows: [], warnings: [] };
+    window.__ADM_LAST_EARLIEST__ = request.earliest;
+    window.__ADM_LAST_GRAPH_SEARCH__ = request.search;
+    const scenario = faultScenario;
+    if (scenario === "permission")
+      throw new Error(
+        "The Splunk search failed. Splunk reported: index=otel permission denied",
+      );
+    return {
+      rows: aciRows.rows,
+      warnings: scenario === "incomplete" ? [FINALIZED_SEARCH_WARNING] : [],
+    };
   }
 }
-
-class FakeSearchManager {
-  private listeners = new Map<string, Listener[]>();
-  private result = new ResultModel();
-  private readonly options: Record<string, unknown>;
-  constructor(options: Record<string, unknown>) {
-    this.options = options;
-  }
-  data() {
-    return this.result;
-  }
-  on(event: string, callback: Listener) {
-    this.listeners.set(event, [...(this.listeners.get(event) ?? []), callback]);
-  }
-  off() {
-    this.listeners.clear();
-  }
-  cancel() {}
-  dispose() {}
-  private emit(event: string, payload?: unknown) {
-    for (const callback of this.listeners.get(event) ?? []) callback(payload);
-  }
-  startSearch() {
-    const scenario = new URLSearchParams(location.search).get("scenario");
-    const topology = String(this.options.search) === "`adm_topology`";
-    if (!topology) {
-      window.__ADM_LAST_EARLIEST__ = this.options.earliest_time;
-      window.__ADM_LAST_GRAPH_SEARCH__ = this.options.search;
-    }
-    setTimeout(() => {
-      if (scenario === "permission") {
-        this.emit("search:error", { message: "index=otel permission denied" });
-        return;
-      }
-      if (topology) {
-        this.emit("search:done", { content: { resultCount: 0 } });
-        return;
-      }
-      const incomplete = scenario === "incomplete";
-      this.emit("search:done", {
-        content: { resultCount: rows.length, isFinalized: incomplete },
-      });
-      this.result.publish({ fields, rows });
-    }, 10);
-  }
-}
-
+const params = new URLSearchParams(location.search);
+const page = params.get("page") ?? "map";
+const stateParams = new URLSearchParams(params);
+// Fault scenarios are harness configuration, not demo scenario state.
+if (
+  params.get("scenario") === "permission" ||
+  params.get("scenario") === "incomplete"
+)
+  stateParams.delete("scenario");
 const root = document.getElementById("adm-root");
 if (!root) throw new Error("Missing browser test root");
-createRoot(root).render(
-  <App
-    SearchManager={FakeSearchManager}
-    demoData={{
-      graph: () => rowsToGraph(aciRows.rows, aciRows.args, { demo: true }),
-      topology: () => rowsToTopology([]),
-    }}
-  />,
-);
+try {
+  const state = parseUrlState(stateParams);
+  const dark = params.get("theme") === "dark";
+  createRoot(root).render(
+    <ThemeProvider family="enterprise" colorScheme={dark ? "dark" : "light"}>
+      <AtlasApp
+        page={page as Page}
+        state={state}
+        client={new FakeSearchClient()}
+        theme={dark ? "dark" : "light"}
+      />
+    </ThemeProvider>,
+  );
+} catch (error) {
+  root.textContent = error instanceof Error ? error.message : "Invalid state";
+}

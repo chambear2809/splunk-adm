@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { formatUtc, formatUtcRange, isoTime } from "./time";
+import { formatUtc, formatUtcRange, isoTime, formatInZone } from "./time";
 
 describe("time", () => {
+  it("formats the signed-in user's timezone and falls back on an invalid zone", () => {
+    expect(formatInZone("2026-10-07T12:00:00Z", "Pacific/Honolulu")).toContain(
+      "02:00:00",
+    );
+    expect(formatInZone("2026-10-07T12:00:00Z", "invalid")).toBe(
+      formatInZone("2026-10-07T12:00:00Z"),
+    );
+    expect(() => formatInZone("2026-10-07T12:00:00")).toThrow();
+  });
   it("requires an explicit offset", () => {
     expect(isoTime("2026-10-07T12:00:00Z")).toBe(true);
     expect(isoTime("2026-10-07T12:00:00.5-05:00")).toBe(true);

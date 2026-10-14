@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
+
 export default defineConfig({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
@@ -10,12 +11,18 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: resolve("frontend/src/main.tsx"),
-      name: "SplunkADM",
+      name: "ApplicationAtlas",
       formats: ["iife"],
-      fileName: () => "adm.bundle.js",
+      fileName: () => "pages/atlas.js",
       cssFileName: "adm",
     },
     sourcemap: false,
     target: "es2022",
+    rolldownOptions: {
+      // Simple XML pages expose RequireJS's global define. Shadow it inside the
+      // IIFE so UMD dependencies (lodash) take their CommonJS path instead of
+      // emitting an anonymous define() and overwriting the page's window._.
+      output: { intro: "var define;" },
+    },
   },
 });

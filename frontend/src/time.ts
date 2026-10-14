@@ -18,3 +18,27 @@ export function formatUtcRange(start: string, end: string): string {
     b = utc(end);
   return `${a.day} ${a.time} → ${a.day === b.day ? "" : `${b.day} `}${b.time}`;
 }
+
+/** Display an instant in the user's zone; invalid zones fall back to the browser. */
+export function formatInZone(value: string, tz?: string): string {
+  if (!isoTime(value))
+    throw new Error("Expected an ISO timestamp with an explicit offset.");
+  const options: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "short",
+  };
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      ...options,
+      timeZone: tz,
+    }).format(new Date(value));
+  } catch {
+    return new Intl.DateTimeFormat(undefined, options).format(new Date(value));
+  }
+}

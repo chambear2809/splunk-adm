@@ -26,7 +26,7 @@ npm run dev
 
 Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It replays the app's own search output from TA-shaped synthetic data: the ACI pilot scenario by default, or the NX-OS fabric scenario (switch in **Settings**). Build Splunk app archives with `npm run package`.
 
-For existing installations, use the `-upgrade.tar.gz` artifact created by `npm run package`; the full-install archive replaces the scope-mapping CSV. See [upgrade preservation checks](docs/UPGRADES.md).
+The same `npm run package` archive installs and updates the app; deployment-owned state lives in KV store and `local/`. See [upgrade preservation checks](docs/UPGRADES.md).
 
 **Target:** Splunk Enterprise 10.6 for the pilot (a single ACI fabric with Kubernetes on Cilium), then Splunk Cloud. Validated in a local Splunk 10.6 container against synthetic data; not yet run against a live environment.
 

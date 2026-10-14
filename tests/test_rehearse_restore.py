@@ -20,7 +20,7 @@ class RestoreTest(unittest.TestCase):
                     {"_key": "old", "valid_to": 100},
                     {"_key": "new", "valid_from": 100},
                 ]
-                for name in restore.COLLECTIONS
+                for name in restore.BACKUP_COLLECTIONS
             },
         }
         return {"payload": payload, "sha256": restore.digest(payload)}

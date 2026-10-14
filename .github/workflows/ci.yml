@@ -43,6 +43,24 @@ jobs:
       - run: npm test -- --run
       - run: npm run package
       - run: python3 tools/check_release.py --dist dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify Atlas bundle
+        run: python3 -m unittest tests.test_atlas_build
+      - name: AppInspect Cloud precert gate
+        run: |
+          python3 -m pip install --disable-pip-version-check splunk-appinspect
+          archives=(dist/splunk_adm-*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          report=dist/appinspect-cloud.json
+          set +e
+          splunk-appinspect inspect "${archives[0]}" \
+            --mode precert --included-tags cloud --output-file "$report"
+          appinspect_status=$?
+          set -e
+          python3 tools/check_appinspect.py "$report"
+          test "$appinspect_status" -eq 0
 
   browser:
     name: Browser regression checks
@@ -57,6 +75,7 @@ jobs:
       - run: npm ci --registry=https://registry.npmjs.org --ignore-scripts
       - run: npx playwright install --with-deps chromium
       - run: npm run typecheck:browser
+      - run: npm run build
       - run: npm run test:browser
 
   python:

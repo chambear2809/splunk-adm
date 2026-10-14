@@ -73,3 +73,114 @@ test.describe("Application Atlas browser regressions", () => {
     ).toContainText("incomplete");
   });
 });
+
+test("reload reproduces a validated live deep link", async ({ page }) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&earliest=1770000000&latest=1770003600&tab=services&q=checkout",
+  );
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  await expect(
+    page.getByRole("button", { name: "Services", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByLabel("Highlight by name, IP, EPG, port or device"),
+  ).toHaveValue("checkout");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.__ADM_REQUESTS__?.find((r) => r.spl.includes("adm_graph")),
+      ),
+    )
+    .toMatchObject({ earliest: "1770000000", latest: "1770003600" });
+  const count = await page.locator(".adm").getAttribute("data-node-count");
+  await page.reload();
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  await expect(page.locator(".adm")).toHaveAttribute("data-node-count", count!);
+});
+
+test("loads each foundation page", async ({ page }) => {
+  for (const [route, title] of [
+    ["applications", "Applications"],
+    ["data_health", "Data health"],
+    ["help", "Help"],
+    ["setup", "Setup"],
+  ]) {
+    await page.goto(`/tests/browser/browser.html?page=${route}`);
+    await expect(
+      page.getByRole("heading", { name: title, exact: true }),
+    ).toBeVisible();
+  }
+});
+
+test("rejects injected state before dispatching a search", async ({ page }) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=bad%22%29%7Cdelete",
+  );
+  await expect(page.locator("#adm-root")).toContainText("Service may contain");
+  expect(await page.evaluate(() => window.__ADM_REQUESTS__)).toBeUndefined();
+});
+
+test("built bundle isolates dependencies from the dashboard AMD globals", async ({
+  page,
+}) => {
+  const { readFile, access } = await import("node:fs/promises");
+  const bundlePath = "splunk_app/splunk_adm/appserver/static/pages/atlas.js";
+  try {
+    await access(bundlePath);
+  } catch {
+    test.skip(true, "Run npm run build before bundle qualification");
+    return;
+  }
+  const bundle = await readFile(bundlePath, "utf8");
+  await page.goto("about:blank");
+  await page.evaluate(() => {
+    const state = window as unknown as {
+      define: ((...args: unknown[]) => never) & { amd?: object };
+      _: object;
+      __atlasSentinel: object;
+    };
+    state.define = Object.assign(
+      () => {
+        throw new Error("Anonymous AMD definition escaped the Atlas IIFE");
+      },
+      { amd: {} },
+    );
+    state._ = state.__atlasSentinel = {};
+  });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addScriptTag({ content: bundle });
+  expect(errors).toEqual([]);
+  expect(
+    await page.evaluate(() => {
+      const state = window as unknown as { _: object; __atlasSentinel: object };
+      return state._ === state.__atlasSentinel;
+    }),
+  ).toBe(true);
+});
+
+test("the real demo bootstrap renders with Toolkit fonts and both themes", async ({
+  page,
+}) => {
+  for (const theme of ["dark", "light"]) {
+    await page.goto(`/map?mode=demo&theme=${theme}`);
+    await expect(page.locator(".atlas")).toHaveAttribute(
+      "data-atlas-theme",
+      theme,
+    );
+    await expect(
+      page.getByText("Synthetic demo", { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page
+        .locator(".atlas")
+        .evaluate((element) => getComputedStyle(element).fontFamily),
+    ).not.toContain("Times");
+  }
+  await page.goto("/applications");
+  await expect(
+    page.getByRole("heading", { name: "Applications", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Open map", exact: true }).click();
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+});

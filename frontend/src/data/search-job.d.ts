@@ -1,4 +1,4 @@
-// search-job 3.1.0 ships JavaScript only. This declares just the spike's API.
+// search-job 3.1.0 ships JavaScript only.
 declare module "@splunk/search-job/SearchJob" {
   interface Subscription {
     unsubscribe(): void;
@@ -7,6 +7,7 @@ declare module "@splunk/search-job/SearchJob" {
     subscribe(observer: {
       next?: (value: T) => void;
       error?: (error: Error) => void;
+      complete?: () => void;
     }): Subscription;
   }
   export default class SearchJob {
@@ -15,6 +16,7 @@ declare module "@splunk/search-job/SearchJob" {
       params: Record<string, string>,
       options: { app: string; owner: string; cancelOnUnload: boolean },
     ): SearchJob;
+    getProgress(): Observable<unknown>;
     getResults(params: {
       count: number;
       output_mode: string;

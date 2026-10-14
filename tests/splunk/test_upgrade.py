@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import base64
 import configparser
 import csv
@@ -14,6 +15,7 @@ import ssl
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 import urllib.error
 import urllib.parse
@@ -173,6 +175,22 @@ class UpgradeUnitTest(unittest.TestCase):
         )
 
 
+def retry_kv_initialization(
+    operation: Callable[[], tuple[int, bytes]], timeout: float = 180
+) -> tuple[int, bytes]:
+    """Retry only a rejected operation while the local KV store initializes."""
+    deadline = time.monotonic() + timeout
+    while True:
+        status, body = operation()
+        if (
+            status != 503
+            or b"kv store is initializing" not in body.lower()
+            or time.monotonic() >= deadline
+        ):
+            return status, body
+        time.sleep(2)
+
+
 def _request(
     method: str,
     path: str,
@@ -187,12 +205,18 @@ def _request(
         method=method,
         headers={"Authorization": f"Basic {auth}", "Content-Type": content_type},
     )
-    try:
-        with urllib.request.urlopen(request, context=CTX, timeout=300) as response:
-            return response.status, response.read()
-    except urllib.error.HTTPError as error:
-        with error:
-            return error.code, error.read(4000)
+
+    def once() -> tuple[int, bytes]:
+        try:
+            with urllib.request.urlopen(request, context=CTX, timeout=300) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as error:
+            with error:
+                return error.code, error.read(4000)
+
+    if "/storage/collections/data/" in path:
+        return retry_kv_initialization(once)
+    return once()
 
 
 @unittest.skipUnless(
