@@ -32,6 +32,9 @@ import {
 import { computeLayout, type View } from "../layout";
 import { FIT_MIN, MapView, type Selection } from "../MapView";
 import { Inspector } from "../Inspector";
+import { deriveFindings } from "../findings";
+import { FindingsList, EvidenceActions } from "../FindingsList";
+import type { HealthReport } from "../health";
 import { HealthPanel } from "../HealthPanel";
 import { PathStrip } from "../PathStrip";
 import { DevicesView } from "../DevicesView";
@@ -155,6 +158,7 @@ export function MapPage({
   const [tab, setTab] = useState<Tab>(initialState.tab);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pathHidden, setPathHidden] = useState(false);
+  const [healthReport, setHealthReport] = useState<HealthReport>();
   const [query, setQuery] = useState(initialState.query);
   const [matchIdx, setMatchIdx] = useState(-1);
   const [focusTarget, setFocusTarget] = useState<{
@@ -428,38 +432,33 @@ export function MapPage({
   const togglePanel = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
   const [errorHint, errorDetail] = error.split(" Splunk reported: ");
 
+  const findings = useMemo(
+    () =>
+      deriveFindings(graph, index, mode === "live" ? healthReport : undefined),
+    [graph, index, mode, healthReport],
+  );
+  const showFindingPath = (edge: GraphEdge) => {
+    if (edge.relationship === "forwards_to") {
+      const conversation = (index.incident.get(edge.source) ?? []).find(
+        (e) =>
+          e.relationship === "communicates_with" && e.target === edge.source,
+      );
+      if (conversation) {
+        select({ kind: "edge", id: conversation.id });
+        setBackend(edge.target);
+      } else select({ kind: "edge", id: edge.id });
+    } else select({ kind: "edge", id: edge.id });
+    setTab("network");
+    setPathHidden(false);
+  };
   const summary = (
-    <>
-      <h2 className="summary-title">Select something on the map</h2>
-      <p className="muted">
-        Choose a service, pod, endpoint or line to see who it talks to, on which
-        port, and where the traffic was seen.
-      </p>
-      <dl className="facts">
-        <dt>Conversations</dt>
-        <dd>{totals.conversations}</dd>
-        <dt>Identified</dt>
-        <dd>{totals.identified}</dd>
-        <dt>External</dt>
-        <dd>{totals.external}</dd>
-        <dt>Unknown IP</dt>
-        <dd>{totals.unknown}</dd>
-        {totals.blocked > 0 && (
-          <>
-            <dt>Blocked</dt>
-            <dd>{totals.blocked}</dd>
-          </>
-        )}
-        {totals.multiple > 0 && (
-          <>
-            <dt>Multiple owners</dt>
-            <dd>{totals.multiple}</dd>
-          </>
-        )}
-        <dt>Traced spans</dt>
-        <dd>{graph.coverage.spans.toLocaleString()}</dd>
-      </dl>
-    </>
+    <FindingsList
+      findings={findings}
+      graph={graph}
+      index={index}
+      live={mode === "live"}
+      onShowPath={showFindingPath}
+    />
   );
 
   const unknownChips = [
@@ -668,6 +667,7 @@ export function MapPage({
           <HealthPanel
             client={client}
             live={mode === "live"}
+            onReport={setHealthReport}
             close={() => setPanel(null)}
           />
         )}
@@ -843,7 +843,7 @@ export function MapPage({
           </button>
         </div>
       )}
-      <div className={`body ${selection ? "has-selection" : ""}`}>
+      <div className={`body has-findings ${selection ? "has-selection" : ""}`}>
         <section className="map-panel">
           <div className="toolbar">
             <div className="segmented" role="group" aria-label="View">
@@ -1016,16 +1016,30 @@ export function MapPage({
         </section>
         <aside className="inspector" aria-label="Details">
           {visible ? (
-            <Inspector
-              selection={selection}
-              index={index}
-              topo={topo}
-              onSelect={(s) => (s ? select(s) : clearSelection())}
-              onClose={clearSelection}
-              onShowPath={() => setPathHidden(false)}
-              pathOpen={!!path && !pathHidden}
-              summary={summary}
-            />
+            <>
+              <Inspector
+                selection={selection}
+                index={index}
+                topo={topo}
+                onSelect={(s) => (s ? select(s) : clearSelection())}
+                onClose={clearSelection}
+                onShowPath={() => setPathHidden(false)}
+                pathOpen={!!path && !pathHidden}
+                summary={summary}
+              />
+              {selectedEdge && (
+                <div className="inspector-body">
+                  <EvidenceActions
+                    key={`${graph.snapshot_id}-${selectedEdge.id}`}
+                    edge={selectedEdge}
+                    graph={graph}
+                    index={index}
+                    live={mode === "live"}
+                    onShowPath={showFindingPath}
+                  />
+                </div>
+              )}
+            </>
           ) : (
             <p className="callout neutral">
               Load Splunk data to inspect the map.

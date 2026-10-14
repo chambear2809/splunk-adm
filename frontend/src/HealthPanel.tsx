@@ -149,10 +149,12 @@ export function HealthPanel({
   client,
   live,
   close,
+  onReport,
 }: {
   client?: SearchClient;
   live: boolean;
   close: () => void;
+  onReport?: (report: HealthReport | undefined) => void;
 }) {
   const [report, setReport] = useState<HealthReport>();
   const [error, setError] = useState("");
@@ -164,9 +166,13 @@ export function HealthPanel({
     setBusy(true);
     setError("");
     setReport(undefined);
+    onReport?.(undefined);
     loadHealth(client, controller.signal)
       .then((result) => {
-        if (!controller.signal.aborted) setReport(result);
+        if (!controller.signal.aborted) {
+          setReport(result);
+          onReport?.(result);
+        }
       })
       .catch((e: unknown) => {
         if (!controller.signal.aborted)
@@ -176,7 +182,7 @@ export function HealthPanel({
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [client, live, revision]);
+  }, [client, live, revision, onReport]);
   return (
     <section className="popover health" aria-label="Pipeline health">
       <div className="popover-head">

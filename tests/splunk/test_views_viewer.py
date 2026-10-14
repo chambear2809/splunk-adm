@@ -145,9 +145,36 @@ class ViewerBrowserTest(unittest.TestCase):
                     evidence.get("reload", {}).get("cards", 0), 0, evidence
                 )
                 self.assertTrue(evidence.get("legacyRedirectOk"), evidence)
+                self.assertTrue(
+                    evidence.get("liveEvidence", {}).get("selected"), evidence
+                )
+                self.assertEqual(
+                    evidence.get("liveEvidence", {}).get("target"), "_blank", evidence
+                )
+                self.assertIn(
+                    "noopener",
+                    evidence.get("liveEvidence", {}).get("rel", ""),
+                    evidence,
+                )
+                self.assertTrue(
+                    evidence.get("liveEvidence", {}).get("safeHref"), evidence
+                )
+                popup = evidence.get("liveEvidence", {}).get("searchPopup", {})
+                self.assertTrue(popup.get("opened"), evidence)
+                self.assertTrue(popup.get("dispatched"), evidence)
+                self.assertTrue(popup.get("macroRequest"), evidence)
+                self.assertTrue(popup.get("completed"), evidence)
+                self.assertTrue(popup.get("nonEmpty"), evidence)
                 self.assertTrue(evidence.get("demo", {}).get("synthetic"), evidence)
                 self.assertGreater(
                     evidence.get("demo", {}).get("cards", 0), 0, evidence
+                )
+                self.assertTrue(
+                    evidence.get("demoFindings", {}).get("copied"), evidence
+                )
+                self.assertTrue(evidence.get("demoFindings", {}).get("csv"), evidence)
+                self.assertTrue(
+                    evidence.get("demoFindings", {}).get("openDisabled"), evidence
                 )
                 for route in evidence.get("routes", {}).values():
                     self.assertFalse(route["loginRedirect"], route)

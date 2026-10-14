@@ -1658,3 +1658,50 @@
   box-shadow: none;
   margin: 0;
 }
+
+/* Findings remain visible beside the map without requiring a selection. */
+.adm .body.has-findings {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+.adm .body.has-findings:not(.has-selection) .inspector {
+  display: block;
+}
+.adm .finding-card {
+  padding: 12px 0;
+  border-top: 1px solid var(--adm-line);
+}
+.adm .finding-card h3 {
+  margin: 0 0 8px;
+}
+.adm .finding-card p {
+  margin: 8px 0;
+}
+.adm .finding-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.adm .finding-buttons .secondary-button {
+  font-size: 12px;
+}
+.adm .evidence-actions {
+  display: grid;
+  gap: 6px;
+}
+.adm .evidence-actions p {
+  margin: 0;
+}
+@media (max-width: 1100px) {
+  .adm .body.has-findings {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+@media (max-width: 900px) {
+  .adm .body.has-findings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .adm .body.has-findings:not(.has-selection) .inspector {
+    max-height: 320px;
+    border-top: 1px solid var(--adm-line);
+  }
+}

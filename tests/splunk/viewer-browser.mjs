@@ -17,6 +17,7 @@ try {
     acceptDownloads: true,
     viewport: { width: 1400, height: 1000 },
   });
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const page = await context.newPage();
   const safePath = (url) =>
     new URL(url).pathname
@@ -274,6 +275,91 @@ try {
         evidence.legacy.scopeService === "frontend" &&
         evidence.legacy.nodeCount === evidence.reload.nodeCount &&
         evidence.legacy.edgeCount === evidence.reload.edgeCount;
+      stage = "live evidence search";
+      const liveFinding = page
+        .getByRole("article")
+        .filter({ hasText: "Unknown endpoint identity" })
+        .first();
+      await liveFinding.waitFor({ state: "visible", timeout: 60000 });
+      await liveFinding
+        .getByRole("button", { name: "Show path", exact: true })
+        .click();
+      const liveSearch = page.getByRole("link", {
+        name: "Open in Search",
+        exact: true,
+      });
+      const liveHref = await liveSearch.getAttribute("href");
+      const popupPromise = page.waitForEvent("popup", { timeout: 30000 });
+      const [searchPopup] = await Promise.all([popupPromise, liveSearch.click()]);
+      let searchSid;
+      let macroRequest = false;
+      searchPopup.on("response", async (response) => {
+        if (
+          response.request().method() !== "POST" ||
+          !/\/search\/(?:v2\/)?jobs\/?$/.test(new URL(response.url()).pathname)
+        )
+          return;
+        const body = response.request().postData() || "";
+        if (!body.includes("adm_flow_evidence")) return;
+        macroRequest = true;
+        try {
+          const payload = await response.json();
+          const sid = payload.sid ?? payload.entry?.[0]?.content?.sid;
+          if (typeof sid === "string" && sid.length > 0) searchSid = sid;
+        } catch {
+          // The UI may return an HTML error; evidence remains false.
+        }
+      });
+      await searchPopup.waitForLoadState("domcontentloaded").catch(() => {});
+      const searchDeadline = Date.now() + 120000;
+      let completed = false;
+      let nonEmpty = false;
+      while (Date.now() < searchDeadline && (!searchSid || !completed)) {
+        if (searchSid) {
+          const state = await searchPopup.request
+            .get(
+              `${BASE}/en-US/splunkd/__raw/servicesNS/${encodeURIComponent(user)}/splunk_adm/search/jobs/${encodeURIComponent(searchSid)}?output_mode=json`,
+            )
+            .catch(() => null);
+          if (state?.ok()) {
+            const payload = await state.json().catch(() => ({}));
+            const content = payload.entry?.[0]?.content ?? {};
+            const failed = content.dispatchState === "FAILED" || content.isFailed === true || content.isFailed === 1 || content.isFailed === "1";
+            if (failed) break;
+            completed = content.dispatchState === "DONE" || content.isDone === true || content.isDone === 1 || content.isDone === "1";
+            if (completed) {
+              const results = await searchPopup.request
+                .get(
+                  `${BASE}/en-US/splunkd/__raw/servicesNS/${encodeURIComponent(user)}/splunk_adm/search/jobs/${encodeURIComponent(searchSid)}/results?count=1&output_mode=json`,
+                )
+                .catch(() => null);
+              if (results?.ok()) {
+                const resultPayload = await results.json().catch(() => ({}));
+                nonEmpty = Array.isArray(resultPayload.results) && resultPayload.results.length > 0;
+              }
+            }
+          }
+        }
+        if (!searchSid || !completed) await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      await searchPopup.close().catch(() => {});
+      evidence.liveEvidence = {
+        selected: (await page.locator("[data-hit].selected").count()) > 0,
+        target: await liveSearch.getAttribute("target"),
+        rel: await liveSearch.getAttribute("rel"),
+        safeHref:
+          !!liveHref &&
+          liveHref.includes("adm_flow_evidence") &&
+          liveHref.includes(earliest) &&
+          liveHref.includes(latest),
+        searchPopup: {
+          opened: true,
+          dispatched: Boolean(searchSid),
+          macroRequest,
+          completed,
+          nonEmpty,
+        },
+      };
       await page.unroute("**/demo/*.json");
 
       stage = "demo map";
@@ -288,6 +374,28 @@ try {
       evidence.demo = {
         synthetic: true,
         cards: await demo.locator("[data-hit]").count(),
+      };
+      const demoFinding = page
+        .getByRole("article")
+        .filter({ hasText: "Blocked conversation" })
+        .first();
+      await demoFinding.waitFor({ state: "visible", timeout: 60000 });
+      const demoCopy = demoFinding.getByRole("button", {
+        name: "Copy request",
+        exact: true,
+      });
+      await demoCopy.click();
+      const copied = await demoFinding
+        .getByRole("status")
+        .innerText()
+        .catch(() => "");
+      const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+      evidence.demoFindings = {
+        copied: /request copied/i.test(copied),
+        csv: /,|\n/.test(clipboard),
+        openDisabled: await demoFinding
+          .getByRole("button", { name: "Open in Search", exact: true })
+          .isDisabled(),
       };
 
       stage = "supporting views";
