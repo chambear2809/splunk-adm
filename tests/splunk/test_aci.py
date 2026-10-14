@@ -1106,6 +1106,98 @@ class AciDataLayerTest(unittest.TestCase):
             any("dsrDispatch opt" in w for w in as_list(meta.get("warnings"))), meta
         )
 
+    def test_zz_etp_local_without_backend_warns(self):
+        """Test-only events (not fixtures): c5-payment-nodeport-local's NodePort connection and
+        Hubble backend flow, replayed landing on node-b instead of node-a. node-b hosts no
+        payment backend, so the Local-policy NodePort connection has no local endpoint there."""
+        netflow = [
+            json.loads(line)
+            for line in (RAW / "stream_netflow.ndjson").read_text().splitlines()
+        ]
+        c5_nf = next(
+            e
+            for e in netflow
+            if e["event"]["src_ip"] == "10.30.40.25"
+            and e["event"].get("src_port") == 51006
+            and e["event"].get("dest_port") == 30080
+        )
+        bad_nf = json.loads(json.dumps(c5_nf))
+        bad_nf["event"].update(
+            dest_ip="10.10.20.12",  # node-b: payment has no backend there
+            src_port=51099,
+            seqnumber=9_500_001,
+        )
+        hubble = [
+            json.loads(line)
+            for line in (RAW / "hubble_flows.ndjson").read_text().splitlines()
+        ]
+        c5_hubble = next(
+            e
+            for e in hubble
+            if "payment-2b4d6f8a1-k3j6h" in e["event"] and '"source_port":51006' in e["event"]
+        )
+        bad_hubble = json.loads(json.dumps(c5_hubble))
+        flow = json.loads(bad_hubble["event"])
+        flow["flow"]["l4"]["TCP"]["source_port"] = 51099
+        flow["flow"]["uuid"] = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        bad_hubble["event"] = json.dumps(flow)
+        self.load([bad_nf, bad_hubble])
+        self.wait_for_count("index=netflow seqnumber=9500001", 1)
+        end = int(time.time()) + 1
+        time.sleep(2)
+        try:
+            self.set_macros(
+                {
+                    "adm_index_summary": "index=adm_alt_x",
+                    "adm_summary_index_name": "adm_alt_x",
+                }
+            )
+            out = self.dispatch(ROLLUP, index_window=(self.all_slices[0], end))
+            self.wait_for_count('index=adm_alt_x source="adm:conversation"', len(out))
+            rows = self.lab.search(f"`adm_graph({CALL})`", *WINDOW)
+        finally:
+            self.restore_macros()
+        # The Service-frontend edge id embeds the destination IP actually dialed for
+        # that conversation (adm_resolve builds adm_s_id from server_ip, not a
+        # canonical cluster/port key), so the node-b-destined connection surfaces
+        # under a distinct source id from the node-a fixture's.
+        payment_np_b = "k8s_service:demo-cluster/shop/payment-np/10.10.20.12:30080"
+        payment_pod = self.pod_id("payment-2b4d6f8a1-k3j6h")
+        found = self.find_in(rows, "forwards_to", payment_np_b, payment_pod)
+        self.assertTrue(
+            any("node-b" in as_list(e.get("via_node")) for e in found), found
+        )
+        (meta,) = [r for r in rows if r["row_type"] == "meta"]
+        self.assertTrue(
+            any(
+                "no local backend pod" in w and "externalTrafficPolicy: Local" in w
+                for w in as_list(meta.get("warnings"))
+            ),
+            meta,
+        )
+
+    def test_zz_l2announcements_enabled_with_local_warns(self):
+        """Cluster default l2announcements.enabled=1 is a static configuration inconsistency
+        with any externalTrafficPolicy: Local Service already in scope (payment-np, checkout-api);
+        no new traffic is needed to flag it."""
+        try:
+            self.set_macros({"adm_l2announcements_enabled": "1"})
+            rows = self.lab.search(f"`adm_graph({CALL})`", *WINDOW)
+        finally:
+            self.restore_macros()
+        (meta,) = [r for r in rows if r["row_type"] == "meta"]
+        self.assertTrue(
+            any(
+                "l2announcements.enabled=1" in w and "externalTrafficPolicy: Local" in w
+                for w in as_list(meta.get("warnings"))
+            ),
+            meta,
+        )
+        # Default (0) in the base window stays warning-free, per test_meta.
+        default_rows = self.lab.search(f"`adm_graph({CALL})`", *WINDOW)
+        (default_meta,) = [r for r in default_rows if r["row_type"] == "meta"]
+        self.assertNotIn("warnings", default_meta)
+
     # ---- topology ----
 
     def test_topology(self):

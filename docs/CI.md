@@ -51,3 +51,14 @@ as the `pipeline-rehearsal-evidence` artifact for 14 days, including failed runs
 These slower rehearsals are opt-in;
 they do not run on pull requests. See [mixed-source load](MIXED_LOAD.md) and
 [scheduler testing](SCHEDULER_TESTS.md).
+
+A weekly `schedule` trigger (Monday 06:17 UTC) also runs the mixed-source
+baseline and assisted-recovery rehearsal unattended, so a regression in the
+replay path is caught without someone remembering to run
+`run_pipeline_rehearsals` by hand. It is gated the same way as the push
+trigger: set repository variable `ADM_PIPELINE_REHEARSALS_SCHEDULE_ENABLED=true`
+on the self-hosted runner's repository to enable it; it stays off by default.
+Like the manual rehearsal, this validates absolute-slice recovery and resumed
+scheduling, not native catch-up. A failing scheduled run does not block any
+push or pull request; check the Actions run history (and the
+`pipeline-rehearsal-evidence` artifact) for it directly.

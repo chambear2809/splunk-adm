@@ -21,6 +21,35 @@ The [assisted lab rehearsal](SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
 exercises the absolute-slice procedure and records replay jobs separately from
 native scheduler activity. It is not an unattended production recovery tool.
 
+`adm_health_jobs` cannot surface the exact failure above: it reports the
+*latest* scheduler.log status per saved search, so a missed slot followed by
+a successful later slot still reads `status="ok"`. `ADM - Scheduler
+missed-slot alert` (search `adm_health_missed_slots`) closes that gap by
+diffing expected five-minute cron slots against `scheduler.log` successes
+whose SID starts with `scheduler__`, with a 10-minute grace period before a
+slot counts as missed. Only slots strictly after a target's earliest visible
+scheduler success are expected: gaps have `reason=missed_slot`, while slots
+before that checkpoint are not reported. An enabled, scheduled target with
+no successful checkpoint produces exactly one `reason=no_successful_checkpoint`
+row without `scheduled_time`; investigate its configuration and scheduler
+history instead of treating the row as a replayable slice. Disabled and
+explicitly unscheduled targets are excluded. A successful run after a pause
+does not reset an earlier checkpoint or clear the intervening gaps.
+The saved alert searches from `-1445m@m` (24 hours plus the preceding
+five-minute checkpoint); if `adm_missed_slot_lookback` is increased, extend
+the alert's `dispatch.earliest_time` accordingly. It ships
+**disabled**, like every other saved search in this app. Enabling it requires
+three separate steps: (1) enable the saved search itself; (2) configure
+`alert_actions.conf` or the Alerts UI with an actual notification (email,
+webhook, etc.) — this repo ships no paging integration, since that is
+site-specific; and (3) treat a firing alert purely as a trigger to run the
+absolute-slice recovery procedure above, not as something that resolves on
+its own. The alert does not replay anything and does not clear itself; the
+missed slot remains unrecovered until an administrator replays it. A manual
+replay does not supply scheduler success evidence, so the detector continues
+to report that slot until it leaves the lookback window. Durable recovery
+acknowledgments are not part of this detector-only implementation.
+
 ## Interrupted conversation rollups
 
 New summary rows include `rollup_id`, a SHA-256 identity of the sorted set of original indexed-event identities contributing to that row. The graph removes duplicate `rollup_id` values before adding counters. Each source event is identified by its index, bucket ID and within-bucket event address; ACI ACL records use their APIC-qualified object identity and timestamp. The summary remains compact, with one row per conversation, five-minute event-time bucket and observer.
@@ -54,6 +83,13 @@ All five prune searches ship with scheduling disabled, and `adm_prune_maintenanc
 2. Back up each affected collection and record row counts. Confirm the backup is complete and recoverable before pruning.
 3. Temporarily set the local `adm_prune_maintenance` macro to `1`. Run one prune at a time and inspect `complete`, `rows_expired`, `rows_pruned`, and `warnings`. Incomplete reads never rewrite the collection. The empty-write safeguard also retains an entirely expired collection for separate administrator cleanup.
 4. Verify surviving rows and counts. Restore `adm_prune_maintenance=0` **before** resuming builders. Keep prune schedules disabled.
+5. After resuming writers, review the missed-slot alert. With a pre-pause successful checkpoint in the window, it reports unsatisfied slots from the paused period as `reason=missed_slot`. Replay those original absolute slices using the recovery procedures above: pause the affected target's schedule, drain its active jobs, and replay builders chronologically, one at a time. Recover any additional slots passed during replay before the final resume. A resumed builder reads only its rolling ten-minute index-time window, and the rollup reads one closed five-minute slice; data indexed during the pause outside those resumed windows otherwise stays unprocessed. Keep maintenance windows shorter than the 24-hour detection lookback and retain the pause times for reconciliation. If the checkpoint has aged out, `no_successful_checkpoint` or a new post-resume checkpoint does not prove that the paused period was processed; reconstruct its slices from retained operational history.
+
+Maintenance gaps are not suppressed. Future Phase 2 recovery-service pauses
+must remain tracked through the durable pause record and included in recovery
+planning even while their schedules are off or their checkpoint has aged out.
+Any future maintenance label must reuse that state and keep the gaps visible;
+it must never silently exclude them.
 
 If a maintenance prune fails or is interrupted, leave writers paused and compare the collection with its backup; restore the verified backup if necessary. Do not assume a partial collection rewrite is safe to retry. Never restore a backup while builders are running, because that can overwrite newer updates.
 

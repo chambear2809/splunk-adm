@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly assisted-recovery rehearsal; gated by ADM_PIPELINE_REHEARSALS_SCHEDULE_ENABLED (see below).
+    - cron: "17 6 * * 1"
   workflow_dispatch:
     inputs:
       run_splunk_lab:
@@ -75,7 +78,7 @@ jobs:
     name: Splunk integration suite
     # This job is default-branch-only because it executes trusted repository code
     # next to licensed TA files on a persistent, dedicated runner.
-    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && ((github.event_name == 'workflow_dispatch' && (inputs.run_splunk_lab || inputs.run_pipeline_rehearsals)) || (github.event_name == 'push' && vars.ADM_SPLUNK_LAB_ENABLED == 'true')) }}
+    if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && ((github.event_name == 'workflow_dispatch' && (inputs.run_splunk_lab || inputs.run_pipeline_rehearsals)) || (github.event_name == 'push' && vars.ADM_SPLUNK_LAB_ENABLED == 'true') || (github.event_name == 'schedule' && vars.ADM_PIPELINE_REHEARSALS_SCHEDULE_ENABLED == 'true')) }}
     runs-on: [self-hosted, linux, x64, splunk-adm-lab]
     timeout-minutes: 70
     env:
@@ -103,7 +106,7 @@ jobs:
             --output-root research/extracted
       - name: Run exclusive lab lifecycle
         env:
-          ADM_RUN_PIPELINE_REHEARSALS: ${{ github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals }}
+          ADM_RUN_PIPELINE_REHEARSALS: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule' }}
         run: |
           python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
             trap "tests/splunk/lab.sh purge" EXIT
@@ -118,7 +121,7 @@ jobs:
             fi
           '
       - name: Preserve rehearsal evidence
-        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals }}
+        if: ${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule') }}
         uses: actions/upload-artifact@v4
         with:
           name: pipeline-rehearsal-evidence

@@ -83,10 +83,11 @@ complete cycle before the outage. Scheduled, dispatched and completion times
 distinguish that baseline from delayed catch-up. It records catch-up order
 without assuming those queued jobs run in cron order.
 
-The exclusive October 13 rehearsal failed downtime recovery: future jobs resumed,
-but the second batch remained absent and no missed-slot successes appeared.
-See [the evidence](benchmarks/2026-10-13-pipeline.md). Automatic catch-up is
-not qualified by the current test results.
+Both the earlier exclusive rehearsal and a [fresh native validation of the
+final harness](benchmarks/2026-10-13-native-validation.md) failed downtime
+recovery: future jobs resumed, but only 6 of 12 records were summarized and no
+missed-slot successes appeared. Native catch-up is a confirmed qualification
+failure in the tested standalone Splunk 10.6.0.5 environment.
 
 Continuous scheduling (`realtime_schedule=0`) requests catch-up of missed periods;
 recovery also depends on the platform's continuous-search lookback setting and
