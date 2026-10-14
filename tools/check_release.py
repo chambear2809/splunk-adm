@@ -20,6 +20,8 @@ MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 DEPLOYMENT_OWNED = "splunk_adm/lookups/adm_observer_scope.csv"
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
 FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
+# Custom Mako templates are deprecated as of Splunk Enterprise 10.4.
+MAKO_DIRS = ("appserver/templates/", "appserver/modules/")
 FORBIDDEN_NAMES = {".env", ".env.local", "credentials", "secrets.json"}
 
 
@@ -87,6 +89,8 @@ def _read_archive(path: Path) -> Archive:
 def _assert_safe_files(files: dict[str, bytes]) -> None:
     for name in files:
         relative = name.removeprefix("splunk_adm/")
+        if relative.casefold().startswith(MAKO_DIRS):
+            raise ValueError(f"custom Mako template path in archive: {name}")
         components = {component.casefold() for component in relative.split("/")}
         if components & FORBIDDEN_COMPONENTS:
             raise ValueError(f"deployment-local path in archive: {name}")
@@ -123,6 +127,8 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
     required = {
         "splunk_adm/appserver/static/adm.bundle.js",
         "splunk_adm/appserver/static/adm.css",
+        "splunk_adm/appserver/static/pages/atlas.js",
+        "splunk_adm/default/data/ui/views/map.xml",
         "splunk_adm/default/app.conf",
         "splunk_adm/LICENSE",
         "splunk_adm/NOTICE",

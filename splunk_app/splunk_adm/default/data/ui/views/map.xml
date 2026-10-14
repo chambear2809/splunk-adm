@@ -1,0 +1,4 @@
+<dashboard version="1.1" script="pages/atlas.js" hideTitle="true" hideEdit="true">
+  <label>Application Atlas — Toolkit spike</label>
+  <row><panel><html><div id="atlas-root" data-splunk="true">Loading Application Atlas…</div></html></panel></row>
+</dashboard>

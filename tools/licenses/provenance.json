@@ -1,0 +1,117 @@
+{
+  "inline-style-parser@0.1.1": {
+    "file": "inline-style-parser-0.1.1.txt",
+    "source": "https://raw.githubusercontent.com/reworkcss/css/v2.2.4/LICENSE",
+    "sha256": "395c95f20598da653ff1eb1cb9d74947c7fac689697147f1d192fd0242a0e635"
+  },
+  "micromark-core-commonmark@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-factory-destination@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-factory-label@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-factory-space@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-factory-title@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-factory-whitespace@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-character@1.2.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-chunked@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-classify-character@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-combine-extensions@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-decode-numeric-character-reference@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-decode-string@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-encode@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-html-tag-name@1.2.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-normalize-identifier@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-resolve-all@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-sanitize-uri@1.2.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-subtokenize@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-symbol@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark-util-types@1.1.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "micromark@3.2.0": {
+    "file": "micromark-3.2.0.txt",
+    "source": "https://raw.githubusercontent.com/micromark/micromark/3.2.0/license",
+    "sha256": "536804b3adbff17dbbb9ed0d2bf9655b78f07640278581e37e3d7475282d5e61"
+  },
+  "styled-components@5.3.11": {
+    "file": "styled-components-5.3.11.txt",
+    "source": "https://raw.githubusercontent.com/styled-components/styled-components/v5.3.11/LICENSE",
+    "sha256": "5b893305a717230e5b0024ff5ca3eec1dc05ba600c9b140730488d97ce56f1e6"
+  }
+}
