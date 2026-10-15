@@ -1,7 +1,7 @@
 # Phase 7 — Panels and language
 
-Phase 6 is committed locally as `b9ba941`. Phase 7 is on
-`codex/atlas-phase-7`; its changes remain local and uncommitted.
+Phase 6 is committed as `b9ba941`. Phase 7 is committed as
+`74d8a4a` (`74d8a4a85c896ab1b647619b6e3856e05ee555ee`).
 
 ## Changes
 

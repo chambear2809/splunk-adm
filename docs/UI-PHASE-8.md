@@ -1,7 +1,7 @@
 # Phase 8 — Changes, exports and saved views
 
-Phase 7 is committed locally as `74d8a4a`. Phase 8 is on
-`codex/atlas-phase-8`; its changes remain local and uncommitted.
+Phase 7 is committed as `74d8a4a`. Phase 8 is committed as
+`bfda974` (`bfda974e4de093b76858a4f63d6b1c3e8df8b7f6`).
 
 ## Behavior
 
