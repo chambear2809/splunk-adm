@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("health polling lifecycle", () => {
-  test("starts hidden, aborts on hide, resumes on show, and skips Help/Setup", async ({
+  test("starts hidden, pauses on hide, resumes on show, and skips Help/Setup", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -65,6 +65,13 @@ test.describe("health polling lifecycle", () => {
     ).toBe(before);
     for (const target of ["help", "setup"]) {
       await page.goto(`/tests/browser/browser.html?page=${target}&mode=live`);
+      await page.evaluate(() =>
+        (
+          window as Window & { __setVisibility?: (next: boolean) => void }
+        ).__setVisibility?.(true),
+      );
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await page.waitForTimeout(300);
       expect(
         await page.evaluate(
           () =>
