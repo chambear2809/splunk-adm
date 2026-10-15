@@ -6,7 +6,7 @@ export function SavedViews({
   state,
   user,
 }: {
-  state: UrlState;
+  state?: UrlState;
   user?: string;
 }) {
   const store = useMemo(() => savedViewsFor(user), [user]);
@@ -29,6 +29,7 @@ export function SavedViews({
     return new URL(pathname, location.origin).toString();
   };
   const copy = async () => {
+    if (!state) return;
     setCopying(true);
     try {
       const href = hrefFor(state);
@@ -57,10 +58,11 @@ export function SavedViews({
         className="secondary-button"
         type="button"
         onClick={copy}
-        disabled={copying}
+        disabled={!state || copying}
       >
         Copy link
       </button>
+      {!state && <p>Build a map before copying its link or saving its view.</p>}
       {copied && <p role="status">Link copied.</p>}
       {!store.enabled && (
         <p role="status">Sign in to save views to this browser.</p>
@@ -68,6 +70,7 @@ export function SavedViews({
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          if (!state) return;
           try {
             store.save(name, state);
             setViews(store.read());
@@ -87,10 +90,10 @@ export function SavedViews({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            disabled={!store.enabled}
+            disabled={!state || !store.enabled}
           />
         </label>
-        <button type="submit" disabled={!store.enabled}>
+        <button type="submit" disabled={!state || !store.enabled}>
           Save view
         </button>
       </form>

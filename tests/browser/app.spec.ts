@@ -1321,3 +1321,49 @@ test("navigation follows map scope edits and browser history", async ({
     page.getByRole("link", { name: "Applications", exact: true }),
   ).toHaveAttribute("href", /namespace=history-scope/);
 });
+
+test("copy and saved views use the built scope after unbuilt edits", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&earliest=1791373500&latest=1791374400",
+  );
+  await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+  await page.evaluate(() =>
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          (window as Window & { copied?: string }).copied = value;
+          return Promise.resolve();
+        },
+      },
+    }),
+  );
+  await page
+    .getByRole("combobox", { name: "Namespace", exact: true })
+    .fill("unbuilt");
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await page.getByRole("button", { name: "Copy link", exact: true }).click();
+  expect(
+    await page.evaluate(() => (window as Window & { copied?: string }).copied),
+  ).toContain("namespace=shop");
+  await page.getByLabel("View name", { exact: true }).fill("Built snapshot");
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Built snapshot", exact: true }),
+  ).toHaveAttribute("href", /namespace=shop/);
+});
+
+test("copy and save require a loaded snapshot but existing views remain accessible", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=live");
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Copy link", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Save view", exact: true }),
+  ).toBeDisabled();
+});

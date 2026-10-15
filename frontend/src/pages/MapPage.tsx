@@ -861,7 +861,24 @@ export function MapPage({
             <SavedViews
               key={user}
               user={user}
-              state={{ args, earliest, latest, mode, scenario, tab, query }}
+              state={
+                visible
+                  ? {
+                      args: {
+                        service: graph.boundary.service,
+                        environment: graph.boundary.environment,
+                        cluster: graph.boundary.cluster,
+                        namespace: graph.boundary.namespace,
+                      },
+                      earliest: pickerBound(graph.window.start),
+                      latest: pickerBound(graph.window.end),
+                      mode,
+                      scenario,
+                      tab,
+                      query,
+                    }
+                  : undefined
+              }
             />
           </section>
         )}
