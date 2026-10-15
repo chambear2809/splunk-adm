@@ -56,6 +56,11 @@ export interface SetupSnapshot {
   savedSearches: SavedSearchStatus[];
   warnings: string[];
 }
+export interface SetupReadiness {
+  ready: boolean;
+  missingRequired: string[];
+  optionalWarnings: string[];
+}
 export interface SetupClient {
   read(signal?: AbortSignal): Promise<SetupSnapshot>;
   setIndexMacro(
@@ -111,14 +116,85 @@ export function validateIndexName(value: string): string | undefined {
     ? undefined
     : "Use a lowercase index name beginning with a letter (up to 80 letters, numbers, underscores or hyphens).";
 }
+const indexTerm = /^index=([a-z][a-z0-9_-]{0,79})$/;
+export function indexNames(macro: SetupMacro): string[] {
+  const definition = macro.definition;
+  if (!definition) return [];
+  if (macro.name === "adm_summary_index_name")
+    return !validateIndexName(definition) ? [definition] : [];
+  const single = indexTerm.exec(definition);
+  if (single && single[0] === definition) return [single[1]];
+  const group =
+    /^\((index=[a-z][a-z0-9_-]*(?:\s+OR\s+index=[a-z][a-z0-9_-]*)+)\)$/.exec(
+      definition,
+    );
+  if (!group || group[0] !== definition) return [];
+  const terms = group[1].split(/\s+OR\s+/);
+  return terms.every((term) => indexTerm.test(term))
+    ? terms.map((term) => term.slice("index=".length))
+    : [];
+}
 export function indexName(macro: SetupMacro): string | undefined {
-  const value =
-    macro.name === "adm_summary_index_name"
-      ? macro.definition
-      : macro.definition?.startsWith("index=")
-        ? macro.definition.slice(6)
-        : undefined;
-  return value && !validateIndexName(value) ? value : undefined;
+  const names = indexNames(macro);
+  return names.length === 1 ? names[0] : undefined;
+}
+const REQUIRED_MACROS: readonly IndexMacro[] = [
+  "adm_index_dcn",
+  "adm_index_netflow",
+  "adm_index_k8s",
+  "adm_index_traces",
+  "adm_index_summary",
+  "adm_summary_index_name",
+];
+const OPTIONAL_MACROS: readonly [IndexMacro, string][] = [
+  ["adm_index_ftd", "FTD"],
+  ["adm_index_isovalent", "Isovalent"],
+  ["adm_index_hubble", "Hubble"],
+];
+export function setupReadiness(snapshot: SetupSnapshot): SetupReadiness {
+  const missingRequired: string[] = REQUIRED_MACROS.filter((name) => {
+    const macro = snapshot.macros.find((row) => row.name === name);
+    return !macro || !!macro.error || indexNames(macro).length === 0;
+  }).map((name) => name);
+  const reader = snapshot.macros.find(
+    (row) => row.name === "adm_index_summary",
+  );
+  const writer = snapshot.macros.find(
+    (row) => row.name === "adm_summary_index_name",
+  );
+  if (
+    !reader ||
+    !writer ||
+    indexNames(reader).length !== 1 ||
+    indexNames(writer).length !== 1 ||
+    indexNames(reader)[0] !== indexNames(writer)[0]
+  )
+    missingRequired.push("summary reader/writer match");
+  if (snapshot.summaryIndex.exists !== true)
+    missingRequired.push("summary index");
+  const scopes = snapshot.observerScopes;
+  if (
+    !scopes.complete ||
+    !scopes.rows.length ||
+    scopes.rows.some(
+      (row) =>
+        !row.observer.trim() ||
+        !row.observer_kind.trim() ||
+        !row.scope.trim() ||
+        row.observer !== row.observer.toLowerCase() ||
+        row.observer_kind !== row.observer_kind.toLowerCase(),
+    )
+  )
+    missingRequired.push("observer mappings");
+  const optionalWarnings = OPTIONAL_MACROS.filter(([name]) => {
+    const macro = snapshot.macros.find((row) => row.name === name);
+    return !macro || !!macro.error || indexNames(macro).length === 0;
+  }).map(([, label]) => `${label} source is optional and not configured.`);
+  return {
+    ready: snapshot.authorized && missingRequired.length === 0,
+    missingRequired,
+    optionalWarnings,
+  };
 }
 class SetupHTTPError extends Error {
   constructor(readonly status: number) {
@@ -184,13 +260,13 @@ export class ToolkitSetupClient implements SetupClient {
       await this.request("authentication/current-context", signal, false),
     ).content;
     if (
-      !Array.isArray(context.roles) ||
-      !context.roles.every((role) => typeof role === "string")
+      !Array.isArray(context.capabilities) ||
+      !context.capabilities.every(
+        (capability) => typeof capability === "string",
+      )
     )
-      throw new Error("Administrator role information is unavailable.");
-    return context.roles.some(
-      (role) => role === "admin" || role === "sc_admin",
-    );
+      throw new Error("Administrator capability information is unavailable.");
+    return context.capabilities.includes("admin_all_objects");
   }
   private async scopes(
     signal?: AbortSignal,

@@ -20,6 +20,8 @@ import {
   ToolkitSetupClient,
   validateIndexName,
   indexName,
+  indexNames,
+  setupReadiness,
 } from "./setupClient";
 
 const response = (body: unknown, status = 200) =>
@@ -39,7 +41,16 @@ function fetcher(role: string[] = ["admin"]): MockedFunction<FetchMock> {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("authentication/current-context"))
-      return response(record({ roles: role }));
+      return response(
+        record({
+          roles: role,
+          capabilities: role.some((name) =>
+            ["admin", "sc_admin"].includes(name),
+          )
+            ? ["admin_all_objects"]
+            : ["search"],
+        }),
+      );
     if (url.includes("configs/conf-macros/"))
       return response(
         record({
@@ -68,6 +79,42 @@ describe("ToolkitSetupClient", () => {
     ).toBeUndefined();
     for (const value of ["", "Index", "a/b", "a b", "a\n", "a".repeat(81)])
       expect(validateIndexName(value)).toBeTruthy();
+  });
+  it("accepts only validated parenthesized index OR expressions", () => {
+    const macro = {
+      name: "adm_index_dcn" as const,
+      definition: "(index=dcn OR index=dcn_archive)",
+      canWrite: true,
+    };
+    expect(indexNames(macro)).toEqual(["dcn", "dcn_archive"]);
+    expect(indexName(macro)).toBeUndefined();
+    for (const definition of [
+      "(index=dcn OR index=Bad)",
+      "(index=dcn OR sourcetype=x)",
+      "index=dcn OR index=dcn_archive",
+      `(index=${"a".repeat(81)} OR index=dcn)`,
+      "(index=dcn OR index=dcn_archive)\n",
+    ])
+      expect(indexNames({ ...macro, definition })).toEqual([]);
+    expect(
+      indexNames({ ...macro, definition: `index=${"a".repeat(79)}` }),
+    ).toEqual(["a".repeat(79)]);
+  });
+  it("uses admin_all_objects independently of role names", async () => {
+    const request = fetcher(["custom_setup_role"]);
+    request.mockImplementation(async (input: RequestInfo | URL, init) => {
+      const url = String(input);
+      if (url.includes("authentication/current-context"))
+        return response(
+          record({
+            roles: ["custom_setup_role"],
+            capabilities: ["admin_all_objects"],
+          }),
+        );
+      return fetcher(["admin"])(input, init);
+    });
+    const snapshot = await new ToolkitSetupClient(request).read();
+    expect(snapshot.authorized).toBe(true);
   });
   it("reads authorized state and paged scope completion", async () => {
     const request = fetcher(["sc_admin"]);
@@ -243,7 +290,9 @@ describe("ToolkitSetupClient", () => {
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.includes("authentication/current-context"))
-          return response(record({ roles: ["admin"] }));
+          return response(
+            record({ roles: ["admin"], capabilities: ["admin_all_objects"] }),
+          );
         if (url.includes("configs/conf-macros/adm_index_summary"))
           return response(record({ definition: "index=netflow" }, false));
         return fetcher()(input, init);
@@ -322,7 +371,9 @@ describe("ToolkitSetupClient request deadlines", () => {
           );
         }
         if (url.includes("authentication/current-context"))
-          return response(record({ roles: ["admin"] }));
+          return response(
+            record({ roles: ["admin"], capabilities: ["admin_all_objects"] }),
+          );
         return response(record({ definition: "index=netflow" }));
       });
       const promise = new ToolkitSetupClient(request).setIndexMacro(
@@ -337,4 +388,47 @@ describe("ToolkitSetupClient request deadlines", () => {
       vi.useRealTimers();
     }
   });
+});
+
+it("gates readiness on required pilot sources while reporting optional sources", () => {
+  const macros = INDEX_MACROS.map((name) => ({
+    name,
+    definition:
+      name === "adm_summary_index_name" ? "adm_summary" : "index=adm_summary",
+    canWrite: true,
+  }));
+  macros.find((macro) => macro.name === "adm_index_dcn")!.definition =
+    "(index=dcn OR index=dcn_archive)";
+  const snapshot = {
+    authorized: true,
+    macros: macros.filter(
+      (macro) =>
+        !["adm_index_ftd", "adm_index_isovalent", "adm_index_hubble"].includes(
+          macro.name,
+        ),
+    ),
+    summaryIndex: { name: "adm_summary", exists: true },
+    observerScopes: {
+      rows: [
+        {
+          _key: "aci",
+          observer_kind: "aci",
+          observer: "leaf",
+          scope: "prod",
+          cluster: "c",
+        },
+      ],
+      complete: true,
+    },
+    savedSearches: [],
+    warnings: [],
+  };
+  expect(setupReadiness(snapshot).ready).toBe(true);
+  expect(setupReadiness(snapshot).optionalWarnings).toHaveLength(3);
+  const blocked = {
+    ...snapshot,
+    macros: snapshot.macros.filter((macro) => macro.name !== "adm_index_k8s"),
+  };
+  expect(setupReadiness(blocked).ready).toBe(false);
+  expect(setupReadiness(blocked).missingRequired).toContain("adm_index_k8s");
 });

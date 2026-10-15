@@ -6,6 +6,8 @@ import { toolkitDefault } from "../app/interop";
 import { useHealthStatus } from "../data/healthStatus";
 import {
   indexName,
+  indexNames,
+  setupReadiness,
   validateIndexName,
   type SetupClient,
   type SetupMacro,
@@ -28,13 +30,25 @@ function MacroEditor({
   disabled: boolean;
   save: (name: string, value: string) => void;
 }) {
-  const [value, setValue] = useState(indexName(macro) ?? "");
-  useEffect(() => setValue(indexName(macro) ?? ""), [macro]);
+  const currentNames = indexNames(macro);
+  const currentValue =
+    indexName(macro) ??
+    (currentNames.length > 1
+      ? `(${currentNames.map((name) => `index=${name}`).join(" OR ")})`
+      : "");
+  const [value, setValue] = useState(currentValue);
+  useEffect(() => setValue(currentValue), [currentValue]);
   return (
     <Table.Row>
       <Table.Cell>{macro.name}</Table.Cell>
       <Table.Cell>{macro.error ?? macro.definition ?? "Unknown"}</Table.Cell>
       <Table.Cell>
+        {currentNames.length > 1 && (
+          <small>
+            Multiple indexes are configured; enter one index to replace this
+            expression.
+          </small>
+        )}
         <Text
           className="atlas-index-input"
           aria-label={`Index for ${macro.name}`}
@@ -134,6 +148,7 @@ export function SetupPage({
       if (!signal?.aborted) setBusy(false);
     }
   };
+  const scopes = snapshot?.observerScopes;
   const reader = snapshot?.macros.find(
     (macro) => macro.name === "adm_index_summary",
   );
@@ -145,7 +160,6 @@ export function SetupPage({
     !!writer &&
     !!indexName(reader) &&
     indexName(reader) === indexName(writer);
-  const scopes = snapshot?.observerScopes;
   const uppercase =
     scopes?.rows.filter(
       (row) =>
@@ -156,15 +170,8 @@ export function SetupPage({
     (row) =>
       !row.observer.trim() || !row.observer_kind.trim() || !row.scope.trim(),
   );
-  const prerequisites =
-    !!snapshot &&
-    snapshot.macros.every((macro) => !!indexName(macro) && !macro.error) &&
-    summaryMatches &&
-    snapshot.summaryIndex.exists === true &&
-    scopes?.complete === true &&
-    scopes.rows.length > 0 &&
-    uppercase.length === 0 &&
-    !invalidScopes;
+  const readiness = snapshot ? setupReadiness(snapshot) : undefined;
+  const prerequisites = readiness?.ready === true;
   return (
     <main className="atlas-page" aria-labelledby="setup-title">
       <h1 id="setup-title">Setup</h1>
@@ -198,6 +205,11 @@ export function SetupPage({
               )}
               {snapshot.warnings.map((warning, i) => (
                 <p role="alert" key={i}>
+                  {warning}
+                </p>
+              ))}
+              {readiness?.optionalWarnings.map((warning) => (
+                <p role="status" key={warning}>
                   {warning}
                 </p>
               ))}
