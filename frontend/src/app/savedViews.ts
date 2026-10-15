@@ -36,9 +36,13 @@ export function savedViewsFor(user?: string, storage?: Storage) {
     ? `splunk_adm:${encodeURIComponent(identity)}:views:v1`
     : "";
   const getStorage = () => {
-    if (storage) return storage;
-    if (typeof localStorage === "undefined") return undefined;
-    return localStorage;
+    try {
+      if (storage) return storage;
+      if (typeof localStorage === "undefined") return undefined;
+      return localStorage;
+    } catch {
+      return undefined;
+    }
   };
   const read = (): SavedView[] => {
     if (!enabled) return [];

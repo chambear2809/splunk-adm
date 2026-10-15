@@ -55,3 +55,30 @@ describe("saved views", () => {
     expect(() => store.save("x".repeat(81), state)).toThrow();
   });
 });
+
+it("reports unavailable storage when the browser denies the storage getter", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    globalThis,
+    "localStorage",
+  );
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new Error("SecurityError");
+    },
+  });
+  try {
+    const store = savedViewsFor("alice");
+    expect(store.read()).toEqual([]);
+    expect(() => store.save("Demo", state)).toThrow(
+      "Browser storage is unavailable.",
+    );
+    expect(() => store.remove("missing")).toThrow(
+      "Browser storage is unavailable.",
+    );
+  } finally {
+    if (descriptor)
+      Object.defineProperty(globalThis, "localStorage", descriptor);
+    else Reflect.deleteProperty(globalThis, "localStorage");
+  }
+});
