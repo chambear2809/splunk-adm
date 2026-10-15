@@ -247,6 +247,42 @@ export interface EmphasisPredicates {
   edgeDim: (edge: GraphEdge) => boolean;
 }
 
+/** Return the full incident neighborhood represented by a selected card. */
+export function neighborhoodForSelection(
+  selection: Selection,
+  index: GraphIndex,
+  layout: Layout,
+): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>();
+  const edges = new Set<string>();
+  if (selection.kind === "node") {
+    const members = layout.items.get(selection.id)?.members ?? [selection.id];
+    for (const id of members) {
+      nodes.add(id);
+      for (const edge of index.incident.get(id) ?? []) {
+        edges.add(edge.id);
+        nodes.add(edge.source);
+        nodes.add(edge.target);
+      }
+    }
+  } else {
+    const edge = index.edge.get(selection.id);
+    if (edge) {
+      edges.add(edge.id);
+      nodes.add(edge.source);
+      nodes.add(edge.target);
+      // A conversation into a Service frontend continues to its backends.
+      if (index.node.get(edge.target)?.endpoint_kind === "k8s_service")
+        for (const forward of index.outgoing.get(edge.target) ?? [])
+          if (forward.relationship === "forwards_to") {
+            edges.add(forward.id);
+            nodes.add(forward.target);
+          }
+    }
+  }
+  return { nodes, edges };
+}
+
 export function createEmphasis(
   index: GraphIndex,
   input: EmphasisInput,
@@ -496,56 +532,24 @@ export function MapView({
   }, [zoomBy]);
 
   const matching = matchNodes !== undefined;
-  const neighborhood = useMemo(() => {
-    if (!selection) return undefined;
-    const nodes = new Set<string>(),
-      edges = new Set<string>();
-    if (selection.kind === "node") {
-      nodes.add(selection.id);
-      for (const e of index.incident.get(selection.id) ?? []) {
-        edges.add(e.id);
-        nodes.add(e.source);
-        nodes.add(e.target);
-      }
-    } else {
-      const e = index.edge.get(selection.id);
-      if (e) {
-        edges.add(e.id);
-        nodes.add(e.source);
-        nodes.add(e.target);
-        // A conversation into a Service frontend continues to its backends.
-        if (index.node.get(e.target)?.endpoint_kind === "k8s_service")
-          for (const f of index.outgoing.get(e.target) ?? [])
-            if (f.relationship === "forwards_to") {
-              edges.add(f.id);
-              nodes.add(f.target);
-            }
-      }
-    }
-    return { nodes, edges };
-  }, [selection, index]);
+  const neighborhood = useMemo(
+    () =>
+      selection
+        ? neighborhoodForSelection(selection, index, layout)
+        : undefined,
+    [selection, index, layout],
+  );
   const emphasisPredicates = useMemo(
     () => createEmphasis(index, { matchNodes, matchEdges, neighborhood }),
     [index, matchNodes, matchEdges, neighborhood],
   );
   const { itemDim, edgeDim } = emphasisPredicates;
   const ids = (item: Item) => item.members ?? [item.nodeId];
-  const emphasis = useMemo(() => {
-    const items = layout.groups.flatMap((group) => group.items);
-    const dimmedCards = items.filter(itemDim).length;
-    const dimmedConnections = layout.edges.filter((routed) =>
-      routed.members.every((id) => {
-        const edge = index.edge.get(id);
-        return !edge || edgeDim(edge);
-      }),
-    ).length;
-    return {
-      cards: items.length - dimmedCards,
-      totalCards: items.length,
-      connections: layout.edges.length - dimmedConnections,
-      totalConnections: layout.edges.length,
-    };
-  }, [layout, index, itemDim, edgeDim]);
+  const emphasis = useMemo(
+    () =>
+      emphasisCounts(layout, index, { matchNodes, matchEdges, neighborhood }),
+    [layout, index, matchNodes, matchEdges, neighborhood],
+  );
   const node = (id: string) => index.node.get(id);
   const edgeClass = (e: GraphEdge) => {
     if (e.relationship === "calls") return "call";

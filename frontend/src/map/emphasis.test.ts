@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { emphasisCounts } from "../MapView";
-import { indexGraph } from "../graph";
+import { emphasisCounts, neighborhoodForSelection } from "../MapView";
+import { indexGraph, type Graph } from "../graph";
 import { computeLayout } from "../layout";
 import { demoGraph } from "../provider";
 
@@ -8,6 +8,119 @@ const graph = demoGraph("nxos");
 const index = indexGraph(graph);
 
 describe("map emphasis counts", () => {
+  it("includes every frontend member when a merged card is selected", () => {
+    const merged: Graph = {
+      schema_version: 1,
+      snapshot_id: "merged-selection",
+      generated_at: "2026-01-01T00:00:00Z",
+      demo: true,
+      window: {
+        start: "2026-01-01T00:00:00Z",
+        end: "2026-01-01T01:00:00Z",
+      },
+      boundary: {
+        id: "service:c/shop/api/prod",
+        service: "api",
+        environment: "prod",
+        cluster: "c",
+        namespace: "shop",
+        root_node_id: "service:c/shop/api/prod",
+      },
+      nodes: [
+        {
+          id: "service:c/shop/api/prod",
+          label: "api",
+          kind: "service",
+          namespace: "shop",
+          cluster: "c",
+        },
+        {
+          id: "workload:c/client",
+          label: "client",
+          kind: "workload",
+          namespace: "shop",
+          cluster: "c",
+          attributes: { owner: "client" },
+        },
+        {
+          id: "k8s_service:c/shop/api/vip",
+          label: "api · 10.0.0.1:443",
+          kind: "endpoint",
+          endpoint_kind: "k8s_service",
+          namespace: "shop",
+          cluster: "c",
+          addresses: ["10.0.0.1"],
+          attributes: {
+            service: "api",
+            frontend: "10.0.0.1:443",
+            type: "LoadBalancer",
+          },
+        },
+        {
+          id: "k8s_service:c/shop/api/nodeport",
+          label: "api · 10.0.0.2:30080",
+          kind: "endpoint",
+          endpoint_kind: "k8s_service",
+          namespace: "shop",
+          cluster: "c",
+          addresses: ["10.0.0.2"],
+          attributes: {
+            service: "api",
+            frontend: "10.0.0.2:30080",
+            type: "NodePort",
+          },
+        },
+      ],
+      edges: [
+        {
+          id: "client>vip",
+          source: "workload:c/client",
+          target: "k8s_service:c/shop/api/vip",
+          relationship: "communicates_with",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+        },
+        {
+          id: "client>nodeport",
+          source: "workload:c/client",
+          target: "k8s_service:c/shop/api/nodeport",
+          relationship: "communicates_with",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+        },
+      ],
+      coverage: {
+        spans: 0,
+        conversations: 2,
+        matched_conversations: 2,
+        unresolved_conversations: 0,
+        ambiguous_conversations: 0,
+        warnings: [],
+      },
+    };
+    const index = indexGraph(merged);
+    const layout = computeLayout(merged, index, "network", {
+      mergeFrontends: true,
+    });
+    const group = layout.groups.find(
+      (item) => item.items[0]?.members?.length === 2,
+    );
+    expect(group).toBeDefined();
+    const selected = group!.items[0].nodeId;
+    const neighborhood = neighborhoodForSelection(
+      { kind: "node", id: selected },
+      index,
+      layout,
+    );
+    expect(neighborhood.edges).toEqual(
+      new Set(["client>vip", "client>nodeport"]),
+    );
+    const counts = emphasisCounts(layout, index, { neighborhood });
+    expect(counts.connections).toBe(counts.totalConnections);
+  });
+
   it("reports no dimmed cards or connections without emphasis", () => {
     const counts = emphasisCounts(
       computeLayout(graph, index, "network"),
