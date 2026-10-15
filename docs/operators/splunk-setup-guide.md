@@ -63,7 +63,7 @@ Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum al
 
 ## Phase 6. Configure the app
 
-1. Set the index macros (list in [splunk-platform.md](splunk-platform.md#application-atlas-configuration)). Skill: [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup).
+1. Open **Application Atlas → Setup** as an administrator to review index macros, summary-index availability, stored observer keys and builder schedules. Set the index macros there (list in [splunk-platform.md](splunk-platform.md#application-atlas-configuration)). Skill: [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup).
 2. As an administrator, populate the `adm_observer_scope` KV lookup with one row per exporter, APIC, Nexus Dashboard, fabric, firewall, cluster and Isovalent HEC source; use the [KV upsert search](splunk-platform.md#application-atlas-configuration). Keep matching keys lowercase and verify collection/lookup ACLs: read `*`, write `admin`/`sc_admin`. Existing installations must first complete the [one-time CSV migration](../UPGRADES.md#one-time-csv-to-kv-scope-migration). The old CSV is not live configuration and no `limits.conf` override is needed.
 3. Grant pilot users read on the source indexes and the app; give the saved-search owner write to `adm_summary`.
 
@@ -71,7 +71,7 @@ Install `splunk_adm-<version>.tar.gz` (built with `npm run package`, checksum al
 
 ## Phase 7. Enable the saved searches
 
-Enable **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**, **ADM - Identity prune**, **ADM - Service binding prune**, **ADM - Service backends prune**, **ADM - Service routes prune** and **ADM - ACI policy prune** (they ship disabled). Skill: [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-knowledge-objects-setup). KV store must be healthy on the search head; backup and health: [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-kvstore-admin-setup).
+In **Setup**, enable **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup** and **ADM - Application catalog** after the prerequisite checklist passes. They ship disabled. Keep all prune searches disabled; pruning requires the paused-writer procedure in [Recovery and replay](../RECOVERY.md). KV store must be healthy on the search head; backup and health: [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-kvstore-admin-setup).
 
 **Check (after 15 minutes):**
 

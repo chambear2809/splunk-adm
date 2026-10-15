@@ -1651,7 +1651,8 @@
 
 /* Classic dashboard form rules otherwise paint a white field inside Toolkit's
    themed ComboBox. The surrounding Toolkit control owns its surface/border. */
-.atlas.atlas.atlas .atlas-scope-field input[type="text"] {
+.atlas.atlas.atlas .atlas-scope-field input[type="text"],
+.atlas.atlas.atlas .atlas-index-input input[type="text"] {
   background: transparent;
   color: inherit;
   border: 0;
@@ -1740,4 +1741,23 @@
 .atlas-page a:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 2px;
+}
+
+.atlas-nav .health-status {
+  margin-left: auto;
+}
+.health-status span {
+  color: var(--adm-muted);
+}
+.health-status.health-healthy span {
+  color: var(--adm-ok-ink);
+}
+.health-status.health-attention span {
+  color: var(--adm-warn-ink);
+}
+.health-status.health-error span {
+  color: var(--adm-error-ink);
+}
+.health-status.health-loading span {
+  color: var(--adm-link);
 }

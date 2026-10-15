@@ -30,6 +30,7 @@ test.describe("Application Atlas browser regressions", () => {
     page,
   }) => {
     await page.goto("/tests/browser/browser.html");
+    await page.getByRole("button", { name: "Map settings" }).click();
     await page.getByRole("button", { name: "Splunk" }).click();
     for (const [label, value] of [
       ["Environment", "demo"],
@@ -67,6 +68,7 @@ test.describe("Application Atlas browser regressions", () => {
 
   test("shows permission errors from the live search", async ({ page }) => {
     await page.goto("/tests/browser/browser.html?scenario=permission");
+    await page.getByRole("button", { name: "Map settings" }).click();
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByRole("alert")).toContainText("search failed");
@@ -75,6 +77,7 @@ test.describe("Application Atlas browser regressions", () => {
 
   test("surfaces an incomplete result warning", async ({ page }) => {
     await page.goto("/tests/browser/browser.html?scenario=incomplete");
+    await page.getByRole("button", { name: "Map settings" }).click();
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     const warnings = page.getByRole("button", { name: /warning/ });
@@ -122,6 +125,120 @@ test("loads each foundation page", async ({ page }) => {
       page.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
   }
+});
+
+test("setup checklist reads live configuration and gates safe actions", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=setup&mode=live");
+  await expect(
+    page.getByRole("heading", { name: "Setup", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Index macros", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Summary reader and writer match.", { exact: true }),
+  ).toBeVisible();
+  const input = page.getByLabel("Index for adm_index_netflow", { exact: true });
+  await input.fill("adm_index_netflow_test");
+  await page
+    .getByRole("button", { name: "Save adm_index_netflow", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __ADM_SETUP_REQUESTS__?: string[] })
+            .__ADM_SETUP_REQUESTS__ ?? [],
+      ),
+    )
+    .toContain("macro:adm_index_netflow:adm_index_netflow_test");
+  const enable = page.getByRole("button", {
+    name: "Enable schedule for ADM - Identity builder",
+    exact: true,
+  });
+  await expect(enable).toBeEnabled();
+  await enable.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window as Window & { __ADM_SETUP_REQUESTS__?: string[] })
+            .__ADM_SETUP_REQUESTS__ ?? [],
+      ),
+    )
+    .toContain("builder:ADM - Identity builder");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __ADM_SETUP_REQUESTS__?: string[] })
+          .__ADM_SETUP_REQUESTS__,
+    ),
+  ).toEqual(
+    expect.arrayContaining([
+      "macro:adm_index_netflow:adm_index_netflow_test",
+      "builder:ADM - Identity builder",
+    ]),
+  );
+});
+
+test("setup checklist blocks unknown and uppercase prerequisites", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=setup&mode=live&fault=setup-unknown",
+  );
+  await expect(page.getByRole("alert")).toContainText("Administrator access");
+  await expect(
+    page.getByRole("button", { name: /Enable schedule/ }).first(),
+  ).toBeDisabled();
+  await page.goto(
+    "/tests/browser/browser.html?page=setup&mode=live&fault=setup-uppercase",
+  );
+  await expect(page.getByText(/contain uppercase observer/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Enable schedule/ }).first(),
+  ).toBeDisabled();
+});
+
+test("demo setup never reads or mutates configuration", async ({ page }) => {
+  await page.goto("/tests/browser/browser.html?page=setup&mode=demo");
+  await expect(page.getByRole("status")).toContainText("unavailable in Demo");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __ADM_SETUP_REQUESTS__?: string[] })
+          .__ADM_SETUP_REQUESTS__,
+    ),
+  ).toBeUndefined();
+});
+
+test("setup verification failure clears the checklist and blank scopes stay gated", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=setup&mode=live&fault=setup-partial",
+  );
+  await expect(
+    page.getByLabel("Index for adm_index_netflow", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Index for adm_index_netflow", { exact: true })
+    .fill("adm_index_netflow_test");
+  await page
+    .getByRole("button", { name: "Save adm_index_netflow", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("verification failed");
+  await page.goto(
+    "/tests/browser/browser.html?page=setup&mode=live&fault=setup-blank",
+  );
+  await expect(
+    page.getByText("No observer mappings are configured.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Enable schedule/ }).first(),
+  ).toBeDisabled();
 });
 
 test("rejects injected state before dispatching a search", async ({ page }) => {
@@ -207,6 +324,7 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
 test("clears dependent scope fields and rejects invalid manual input", async ({
   page,
 }) => {
+  await page.clock.install();
   await page.goto("/tests/browser/browser.html?mode=live");
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
   const environment = page.getByRole("combobox", {
@@ -490,26 +608,38 @@ test("live evidence links preserve the graph window safely", async ({
   expect(href).toContain("1791374400");
 });
 
-test("stale health findings link to data health without inventing an edge", async ({
+test("live health refreshes every five minutes and demo stays quiet", async ({
   page,
 }) => {
-  await page.goto(
-    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&earliest=1791373500&latest=1791374400",
-  );
+  await page.clock.install();
+  await page.goto("/tests/browser/browser.html?mode=live");
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
-  await page.getByRole("button", { name: "Pipeline health" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Data sources" }),
-  ).toBeVisible();
-  const stale = page
-    .getByRole("article")
-    .filter({ hasText: "NetFlow source evidence needs review" })
-    .first();
-  await expect(stale).toBeVisible();
-  await expect(
-    stale.getByRole("link", { name: "Check data health" }),
-  ).toHaveAttribute("href", /data_health/);
-  await expect(stale.getByRole("button", { name: "Show path" })).toHaveCount(0);
+  const before = await page.evaluate(
+    () =>
+      (window.__ADM_REQUESTS__ ?? []).filter((r) =>
+        r.spl.includes("adm_health"),
+      ).length,
+  );
+  await page.clock.fastForward(300001);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (window.__ADM_REQUESTS__ ?? []).filter((r) =>
+            r.spl.includes("adm_health"),
+          ).length,
+      ),
+    )
+    .toBeGreaterThan(before);
+  await page.goto("/tests/browser/browser.html");
+  expect(
+    await page.evaluate(
+      () =>
+        (window.__ADM_REQUESTS__ ?? []).filter((r) =>
+          r.spl.includes("adm_health"),
+        ).length,
+    ),
+  ).toBe(0);
 });
 
 test("scope fields retain dark Toolkit surfaces under classic dashboard CSS", async ({
@@ -606,4 +736,34 @@ test("traced call actions open a validated collected trace", async ({
     actions.getByRole("button", { name: "Copy request", exact: true }),
   ).toBeDisabled();
   await expect(actions).toContainText("first collected trace");
+});
+
+test("Setup inputs keep Toolkit surfaces under classic dashboard CSS", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=setup&mode=live&theme=dark",
+  );
+  await page.addStyleTag({
+    content:
+      'input[type="text"] { background-color: white; border: 1px solid #ccc; box-shadow: inset 0 1px 1px #ddd; margin-bottom: 9px; }',
+  });
+  const input = page.getByLabel("Index for adm_index_hubble", { exact: true });
+  await expect(input).toBeVisible();
+  expect(
+    await input.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        background: style.backgroundColor,
+        border: style.borderWidth,
+        shadow: style.boxShadow,
+        margin: style.marginBottom,
+      };
+    }),
+  ).toEqual({
+    background: "rgba(0, 0, 0, 0)",
+    border: "0px",
+    shadow: "none",
+    margin: "0px",
+  });
 });

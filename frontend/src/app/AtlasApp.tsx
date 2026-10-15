@@ -1,3 +1,9 @@
+import { useState } from "react";
+import { HealthProvider } from "../data/healthStatus";
+import {
+  setupClient as nativeSetupClient,
+  type SetupClient,
+} from "../data/setupClient";
 import { Shell } from "./Shell";
 import { ApplicationsPage } from "../pages/ApplicationsPage";
 import { MapPage } from "../pages/MapPage";
@@ -14,6 +20,7 @@ export function AtlasApp({
   theme,
   timezone,
   inSplunk = false,
+  setupClient,
 }: {
   page: Page;
   state: UrlState;
@@ -21,31 +28,40 @@ export function AtlasApp({
   theme: Theme;
   timezone?: string;
   inSplunk?: boolean;
+  setupClient?: SetupClient;
 }) {
+  const [mode, setMode] = useState(state.mode);
+  const live = !!client && mode === "live";
   return (
-    <Shell page={page}>
-      {page === "map" ? (
-        <MapPage
-          client={client}
-          initialState={state}
-          theme={theme}
-          timezone={timezone}
-          inSplunk={inSplunk}
-        />
-      ) : page === "applications" ? (
-        <ApplicationsPage
-          state={state}
-          client={client}
-          timezone={timezone}
-          inSplunk={inSplunk}
-        />
-      ) : page === "data_health" ? (
-        <HealthPage client={client} live={inSplunk && state.mode === "live"} />
-      ) : page === "setup" ? (
-        <SetupPage />
-      ) : (
-        <HelpPage />
-      )}
-    </Shell>
+    <HealthProvider client={client} live={live}>
+      <Shell page={page} client={client} live={live}>
+        {page === "map" ? (
+          <MapPage
+            client={client}
+            initialState={state}
+            onModeChange={setMode}
+            theme={theme}
+            timezone={timezone}
+            inSplunk={inSplunk}
+          />
+        ) : page === "applications" ? (
+          <ApplicationsPage
+            state={state}
+            client={client}
+            timezone={timezone}
+            inSplunk={inSplunk}
+          />
+        ) : page === "data_health" ? (
+          <HealthPage client={client} live={live} />
+        ) : page === "setup" ? (
+          <SetupPage
+            client={setupClient ?? (inSplunk ? nativeSetupClient : undefined)}
+            live={mode === "live"}
+          />
+        ) : (
+          <HelpPage />
+        )}
+      </Shell>
+    </HealthProvider>
   );
 }

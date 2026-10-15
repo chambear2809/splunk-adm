@@ -3,6 +3,8 @@ import styled from "styled-components";
 import useSplunkThemeExport from "@splunk/themes/useSplunkTheme";
 import { toolkitDefault } from "./interop";
 import { PAGES, pageURL, type Page } from "./urlState";
+import type { SearchClient } from "../data/searchClient";
+import { healthIndicator, useHealthStatus } from "../data/healthStatus";
 
 const useSplunkTheme = toolkitDefault(useSplunkThemeExport);
 const Root = styled.div`
@@ -26,7 +28,16 @@ const labels: Record<Page, string> = {
 };
 
 /** Toolkit theme values also feed the existing SVG map's scoped CSS tokens. */
-export function Shell({ page, children }: { page: Page; children: ReactNode }) {
+export function Shell({
+  page,
+  children,
+  live,
+}: {
+  page: Page;
+  children: ReactNode;
+  client?: SearchClient;
+  live?: boolean;
+}) {
   const t = useSplunkTheme();
   const tokens = {
     fontFamily: t.fontFamily,
@@ -44,6 +55,20 @@ export function Shell({ page, children }: { page: Page; children: ReactNode }) {
     "--adm-focus": t.contentColorLink,
     "--adm-select-ring": t.contentColorDefault,
   } as CSSProperties;
+  const health = useHealthStatus();
+  const indicator = healthIndicator(
+    health?.report,
+    health?.busy ?? false,
+    health?.error,
+    live ?? false,
+  );
+  const indicatorLabel = {
+    unknown: "Health status unknown",
+    loading: "Checking pipeline health",
+    error: "Pipeline health check failed",
+    healthy: "Pipeline health available",
+    attention: "Pipeline health needs review",
+  }[indicator];
   return (
     <Root className="atlas" data-atlas-theme={t.colorScheme} style={tokens}>
       <nav className="atlas-nav" aria-label="Application Atlas">
@@ -53,17 +78,28 @@ export function Shell({ page, children }: { page: Page; children: ReactNode }) {
             key={p}
             href={pageURL(
               p,
-              p === "map"
-                ? new URLSearchParams(
-                    typeof location === "undefined" ? "" : location.search,
-                  )
-                : undefined,
+              new URLSearchParams(
+                typeof location === "undefined" ? "" : location.search,
+              ),
             )}
             aria-current={p === page ? "page" : undefined}
           >
             {labels[p]}
           </a>
         ))}
+        <a
+          className={`health-status health-${indicator}`}
+          href={pageURL(
+            "data_health",
+            new URLSearchParams(
+              typeof location === "undefined" ? "" : location.search,
+            ),
+          )}
+          title={indicatorLabel}
+          aria-label={indicatorLabel}
+        >
+          <span aria-hidden="true">●</span> Health
+        </a>
       </nav>
       {children}
     </Root>

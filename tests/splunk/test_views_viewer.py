@@ -226,6 +226,9 @@ class ViewerBrowserTest(unittest.TestCase):
                     )
                     self.assertFalse(route["notFound"], route)
                     self.assertTrue(route["headingPresent"], route)
+                health_tables = evidence.get("healthTables", {})
+                self.assertGreater(health_tables.get("sources", 0), 0, evidence)
+                self.assertGreater(health_tables.get("scheduled", 0), 0, evidence)
                 for setup in evidence.get("setup", {}).values():
                     self.assertTrue(
                         setup.get("loginRedirect")
@@ -237,6 +240,8 @@ class ViewerBrowserTest(unittest.TestCase):
                     evidence.get("setupRestStatus"), (401, 403, 404), evidence
                 )
                 self.assertTrue(evidence.get("searchRequests"), evidence)
+                self.assertGreater(evidence.get("graphRequests", 0), 0, evidence)
+                self.assertGreater(evidence.get("healthRequests", 0), 0, evidence)
                 self.assertFalse(evidence.get("requireMismatch"), evidence)
             process.stdin.write("quit\n")
             process.stdin.flush()

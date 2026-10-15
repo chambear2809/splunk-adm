@@ -52,6 +52,7 @@ try {
       searchPayloads.push({
         earliest: params.get("earliest_time"),
         latest: params.get("latest_time"),
+        search: params.get("search") || "",
         scopeOptions: body.includes("adm_scope_options"),
       });
     }
@@ -120,7 +121,9 @@ try {
     }
     await control.click();
     await control.fill("");
-    const option = page.getByRole("option", { name: value, exact: true }).last();
+    const option = page
+      .getByRole("option", { name: value, exact: true })
+      .last();
     if (await option.count()) {
       await option.click();
       return;
@@ -131,10 +134,17 @@ try {
 
   async function waitForSearch(after, timeout = 60000) {
     const deadline = Date.now() + timeout;
-    while (searchPayloads.length <= after && Date.now() < deadline) {
+    while (
+      !searchPayloads
+        .slice(after)
+        .some((item) => item.search.includes("adm_graph(")) &&
+      Date.now() < deadline
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    return searchPayloads.at(-1);
+    return searchPayloads
+      .slice(after)
+      .find((item) => item.search.includes("adm_graph("));
   }
 
   const rl = createInterface({ input: process.stdin });
@@ -177,10 +187,17 @@ try {
       evidence.themeOk = evidence.theme === theme;
       evidence.timezone = await adm.getAttribute("data-timezone");
       evidence.timezoneOk = evidence.timezone === timezone;
-      evidence.scopeFieldStyle = await page.getByRole("combobox", { name: "Environment", exact: true }).evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { background: style.backgroundColor, color: style.color, border: style.borderTopWidth, shadow: style.boxShadow };
-      });
+      evidence.scopeFieldStyle = await page
+        .getByRole("combobox", { name: "Environment", exact: true })
+        .evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            background: style.backgroundColor,
+            color: style.color,
+            border: style.borderTopWidth,
+            shadow: style.boxShadow,
+          };
+        });
       evidence.scopeService = await adm.locator(".scope-service").innerText();
       evidence.scopeDims = await adm.locator(".scope-dims").innerText();
       evidence.notLoaded = text.includes("Splunk · not loaded");
@@ -196,7 +213,8 @@ try {
 
       stage = "scope controls";
       const beforeBuild = searchPayloads.length;
-      const previousWindow = (await adm.locator(".scope-time").textContent()) ?? "";
+      const previousWindow =
+        (await adm.locator(".scope-time").textContent()) ?? "";
       await chooseScope("Environment", "demo");
       await chooseScope("Cluster", "demo-cluster");
       await chooseScope("Namespace", "shop");
@@ -208,8 +226,7 @@ try {
           (await timeRange.getAttribute("data-zone-name")) ??
           (await timeRange.getAttribute("data-atlas-timezone-name")),
         offset: Number(
-          (await timeRange.getAttribute("data-atlas-timezone-offset")) ??
-            "NaN",
+          (await timeRange.getAttribute("data-atlas-timezone-offset")) ?? "NaN",
         ),
       };
       const timeTag = await timeRange.evaluate((element) => element.tagName);
@@ -217,17 +234,34 @@ try {
         await timeRange.selectOption("-1h");
       } else {
         await timeRange.getByRole("button").click();
-        await page.locator('[data-test="time-range-dialog"]').screenshot({ path: `dist/atlas-picker-${theme}.png` });
-        await page.getByRole("button", { name: "Presets", exact: true }).click();
-        await page.getByText(/Last (60 minutes|hour)/i).last().click();
+        await page
+          .locator('[data-test="time-range-dialog"]')
+          .screenshot({ path: `dist/atlas-picker-${theme}.png` });
+        await page
+          .getByRole("button", { name: "Presets", exact: true })
+          .click();
+        await page
+          .getByText(/Last (60 minutes|hour)/i)
+          .last()
+          .click();
       }
-      await page.getByRole("button", { name: "Build map", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Build map", exact: true })
+        .click();
       const buildSearch = await waitForSearch(beforeBuild);
-      await page.waitForFunction((previous) => {
-        const current = document.querySelector(".scope-time")?.textContent?.trim();
-        return current && current !== previous.trim();
-      }, previousWindow, { timeout: 150000 });
-      await page.getByText(/Incomplete window/i).waitFor({ state: "visible", timeout: 60000 });
+      await page.waitForFunction(
+        (previous) => {
+          const current = document
+            .querySelector(".scope-time")
+            ?.textContent?.trim();
+          return current && current !== previous.trim();
+        },
+        previousWindow,
+        { timeout: 150000 },
+      );
+      await page
+        .getByText(/Incomplete window/i)
+        .waitFor({ state: "visible", timeout: 60000 });
       evidence.scopeControls = {
         buildEarliest: buildSearch?.earliest,
         buildLatest: buildSearch?.latest,
@@ -290,7 +324,10 @@ try {
       });
       const liveHref = await liveSearch.getAttribute("href");
       const popupPromise = page.waitForEvent("popup", { timeout: 30000 });
-      const [searchPopup] = await Promise.all([popupPromise, liveSearch.click()]);
+      const [searchPopup] = await Promise.all([
+        popupPromise,
+        liveSearch.click(),
+      ]);
       let searchSid;
       let macroRequest = false;
       searchPopup.on("response", async (response) => {
@@ -324,9 +361,17 @@ try {
           if (state?.ok()) {
             const payload = await state.json().catch(() => ({}));
             const content = payload.entry?.[0]?.content ?? {};
-            const failed = content.dispatchState === "FAILED" || content.isFailed === true || content.isFailed === 1 || content.isFailed === "1";
+            const failed =
+              content.dispatchState === "FAILED" ||
+              content.isFailed === true ||
+              content.isFailed === 1 ||
+              content.isFailed === "1";
             if (failed) break;
-            completed = content.dispatchState === "DONE" || content.isDone === true || content.isDone === 1 || content.isDone === "1";
+            completed =
+              content.dispatchState === "DONE" ||
+              content.isDone === true ||
+              content.isDone === 1 ||
+              content.isDone === "1";
             if (completed) {
               const results = await searchPopup.request
                 .get(
@@ -335,12 +380,15 @@ try {
                 .catch(() => null);
               if (results?.ok()) {
                 const resultPayload = await results.json().catch(() => ({}));
-                nonEmpty = Array.isArray(resultPayload.results) && resultPayload.results.length > 0;
+                nonEmpty =
+                  Array.isArray(resultPayload.results) &&
+                  resultPayload.results.length > 0;
               }
             }
           }
         }
-        if (!searchSid || !completed) await new Promise((resolve) => setTimeout(resolve, 500));
+        if (!searchSid || !completed)
+          await new Promise((resolve) => setTimeout(resolve, 500));
       }
       await searchPopup.close().catch(() => {});
       evidence.liveEvidence = {
@@ -399,15 +447,22 @@ try {
         .waitFor({ state: "visible", timeout: 60000 });
       stage = "live application Find";
       const findControls = page.locator("#atlas-root .atlas-find");
-      const findInput = findControls.getByLabel(/Find an address, EPG, or device/);
+      const findInput = findControls.getByLabel(
+        /Find an address, EPG, or device/,
+      );
       await findInput.fill("10.42.0.20");
       stage = "live Find submit";
-      await findControls.getByRole("button", { name: "Find", exact: true }).click();
+      await findControls
+        .getByRole("button", { name: "Find", exact: true })
+        .click();
       stage = "live Find result";
-      const findRow = page.locator('#atlas-root [aria-label="Find results"]').first().getByRole("button", {
-        name: "Open map for checkout",
-        exact: true,
-      });
+      const findRow = page
+        .locator('#atlas-root [aria-label="Find results"]')
+        .first()
+        .getByRole("button", {
+          name: "Open map for checkout",
+          exact: true,
+        });
       await findRow.waitFor({ state: "visible", timeout: 60000 });
       stage = "live Find map";
       await findRow.click();
@@ -455,7 +510,9 @@ try {
         .getByRole("status")
         .innerText()
         .catch(() => "");
-      const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+      const clipboard = await page.evaluate(() =>
+        navigator.clipboard.readText(),
+      );
       evidence.demoFindings = {
         copied: /request copied/i.test(copied),
         csv: /,|\n/.test(clipboard),
@@ -474,6 +531,22 @@ try {
             ? "Data health"
             : name[0].toUpperCase() + name.slice(1),
         );
+        if (name === "data_health") {
+          await page
+            .getByRole("heading", { name: "Data sources", exact: true })
+            .waitFor({ state: "visible", timeout: 90000 });
+          await page
+            .getByRole("heading", { name: "Scheduled searches", exact: true })
+            .waitFor({ state: "visible", timeout: 90000 });
+          evidence.healthTables = {
+            sources: await page
+              .getByRole("heading", { name: "Data sources", exact: true })
+              .count(),
+            scheduled: await page
+              .getByRole("heading", { name: "Scheduled searches", exact: true })
+              .count(),
+          };
+        }
       }
       stage = "setup view";
       evidence.setup = {
@@ -485,6 +558,12 @@ try {
       );
       evidence.setupRestStatus = setupRest.status();
       evidence.searchRequests = [...searchRequests];
+      evidence.graphRequests = searchPayloads.filter((item) =>
+        item.search.includes("adm_graph"),
+      ).length;
+      evidence.healthRequests = searchPayloads.filter((item) =>
+        item.search.includes("adm_health_"),
+      ).length;
       evidence.atlasScripts = [...atlasScripts];
       evidence.consoleErrorCount = consoleErrors.length;
       evidence.failedResponses = [...failures];
@@ -494,7 +573,11 @@ try {
     } catch (error) {
       evidence.error = `browser qualification failed at ${stage}`;
       const message = error instanceof Error ? error.message : "";
-      evidence.errorKind = message.includes("strict mode violation") ? "ambiguous locator" : message.includes("Timeout") ? "timeout" : "browser check";
+      evidence.errorKind = message.includes("strict mode violation")
+        ? "ambiguous locator"
+        : message.includes("Timeout")
+          ? "timeout"
+          : "browser check";
       evidence.consoleErrorCount = consoleErrors.length;
     }
     process.stdout.write(JSON.stringify(evidence) + "\n");

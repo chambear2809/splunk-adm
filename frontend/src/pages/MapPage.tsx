@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 import {
-  Activity,
   Ban,
   BookOpen,
   CircleAlert,
@@ -34,8 +33,7 @@ import { FIT_MIN, MapView, type Selection } from "../MapView";
 import { Inspector } from "../Inspector";
 import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
-import type { HealthReport } from "../health";
-import { HealthPanel } from "../HealthPanel";
+import { useHealthStatus } from "../data/healthStatus";
 import { PathStrip } from "../PathStrip";
 import { DevicesView } from "../DevicesView";
 import { requiredFlowsCsv } from "../csv";
@@ -53,7 +51,7 @@ import {
   type DemoScenario,
 } from "../data/demoClient";
 import type { SearchClient } from "../data/searchClient";
-import { parseUrlState, writeUrlState } from "../app/urlState";
+import { pageURL, parseUrlState, writeUrlState } from "../app/urlState";
 import { useMatches } from "../map/useMatches";
 import { useGraphQuery } from "../data/useGraphQuery";
 import { ExportMenu } from "../map/ExportMenu";
@@ -99,7 +97,7 @@ const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["namespace", "Namespace", "Kubernetes namespace"],
 ];
 type Tab = View | "devices" | "table";
-type Panel = "settings" | "help" | "warnings" | "export" | "health";
+type Panel = "settings" | "help" | "warnings" | "export";
 const TABS: [Tab, string][] = [
   ["network", "Network"],
   ["services", "Services"],
@@ -132,12 +130,14 @@ export function MapPage({
   timezone,
   inSplunk = false,
   demoData,
+  onModeChange,
 }: {
   client?: SearchClient;
   initialState?: import("../app/urlState").UrlState;
   theme?: Theme;
   timezone?: string;
   inSplunk?: boolean;
+  onModeChange?: (mode: "demo" | "live") => void;
   /** Overrides the shipped demo (development harness only). */
   demoData?: { graph: () => Graph; topology: () => Topology };
 }) {
@@ -158,7 +158,8 @@ export function MapPage({
   const [tab, setTab] = useState<Tab>(initialState.tab);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pathHidden, setPathHidden] = useState(false);
-  const [healthReport, setHealthReport] = useState<HealthReport>();
+  const healthReport = useHealthStatus()?.report;
+  useEffect(() => onModeChange?.(mode), [mode, onModeChange]);
   const [query, setQuery] = useState(initialState.query);
   const [matchIdx, setMatchIdx] = useState(-1);
   const [focusTarget, setFocusTarget] = useState<{
@@ -616,28 +617,6 @@ export function MapPage({
         )}
         <div className="actions">
           <button
-            className="secondary-button"
-            aria-expanded={panel === "health"}
-            onClick={() => togglePanel("health")}
-          >
-            <Activity size={16} aria-hidden /> Pipeline health
-          </button>
-          <div className="segmented" role="group" aria-label="Data source">
-            <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
-              Demo
-            </button>
-            <button
-              aria-pressed={mode === "live"}
-              onClick={switchLive}
-              disabled={!client}
-              title={
-                client ? undefined : "Available when the app runs inside Splunk"
-              }
-            >
-              Splunk
-            </button>
-          </div>
-          <button
             className="icon-button"
             aria-label="How to read this map"
             aria-expanded={panel === "help"}
@@ -663,14 +642,6 @@ export function MapPage({
             <Settings2 size={17} />
           </button>
         </div>
-        {panel === "health" && (
-          <HealthPanel
-            client={client}
-            live={mode === "live"}
-            onReport={setHealthReport}
-            close={() => setPanel(null)}
-          />
-        )}
         {panel === "export" && (
           <ExportMenu
             close={() => setPanel(null)}
@@ -688,6 +659,23 @@ export function MapPage({
                 onClick={() => setPanel(null)}
               >
                 <X size={16} />
+              </button>
+            </div>
+            <div className="segmented" role="group" aria-label="Data source">
+              <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
+                Demo
+              </button>
+              <button
+                aria-pressed={mode === "live"}
+                onClick={switchLive}
+                disabled={!client}
+                title={
+                  client
+                    ? undefined
+                    : "Available when the app runs inside Splunk"
+                }
+              >
+                Splunk
               </button>
             </div>
             {mode === "demo" && !demoData && (
@@ -715,8 +703,9 @@ export function MapPage({
               </p>
             )}
             <p className="muted small">
-              Uses the Application Atlas saved searches; an administrator
-              enables them after setting the index macros.
+              Uses the Application Atlas saved searches. Administrators can
+              configure index macros and schedules in{" "}
+              <a href={pageURL("setup")}>Setup</a>.
             </p>
           </section>
         )}

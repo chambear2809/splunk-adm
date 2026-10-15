@@ -7,6 +7,13 @@ import type {
   SearchClient,
   SearchRequest,
 } from "../../frontend/src/data/searchClient";
+import type {
+  SetupClient,
+  SetupSnapshot,
+  SetupMacro,
+  BuilderSearch,
+  IndexMacro,
+} from "../../frontend/src/data/setupClient";
 import { FINALIZED_SEARCH_WARNING } from "../../frontend/src/provider";
 import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
@@ -16,6 +23,103 @@ import "../../frontend/src/styles.css";
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
 const queryParams = new URLSearchParams(location.search);
 const faultScenario = queryParams.get("fault") ?? queryParams.get("scenario");
+const setupRequest = (value: string) => {
+  const target = window as Window & { __ADM_SETUP_REQUESTS__?: string[] };
+  target.__ADM_SETUP_REQUESTS__ ??= [];
+  target.__ADM_SETUP_REQUESTS__.push(value);
+};
+
+class FakeSetupClient implements SetupClient {
+  private snapshot: SetupSnapshot;
+  private writes = 0;
+  constructor() {
+    const uppercase = faultScenario === "setup-uppercase";
+    const names = [
+      "adm_index_netflow",
+      "adm_index_dcn",
+      "adm_index_ftd",
+      "adm_index_isovalent",
+      "adm_index_k8s",
+      "adm_index_traces",
+      "adm_index_hubble",
+      "adm_index_summary",
+      "adm_summary_index_name",
+    ] as const;
+    const macros: SetupMacro[] = names.map((name) => ({
+      name,
+      definition:
+        name === "adm_summary_index_name"
+          ? "adm_summary"
+          : name === "adm_index_summary"
+            ? "index=adm_summary"
+            : "index=adm_" + name.slice(10),
+      canWrite: true,
+    }));
+    const builders = [
+      "ADM - Identity builder",
+      "ADM - Service binding",
+      "ADM - Service backends",
+      "ADM - ACI policy",
+      "ADM - Interface inventory",
+      "ADM - Conversation rollup",
+      "ADM - Application catalog",
+    ] as const;
+    this.snapshot = {
+      authorized: faultScenario !== "setup-unknown",
+      macros,
+      summaryIndex: { name: "adm_summary", exists: true },
+      observerScopes: {
+        rows:
+          faultScenario === "setup-blank"
+            ? []
+            : [
+                {
+                  _key: "aci:prod",
+                  observer_kind: uppercase ? "ACI" : "aci",
+                  observer: uppercase ? "ACI-01" : "aci-01",
+                  scope: "prod",
+                  cluster: "cluster-a",
+                },
+              ],
+        complete: true,
+      },
+      savedSearches: builders.map((name) => ({
+        name,
+        disabled: true,
+        scheduled: true,
+        canWrite: true,
+      })),
+      warnings: [],
+    };
+  }
+  async read(signal?: AbortSignal) {
+    setupRequest("read");
+    if (faultScenario === "setup-stale")
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    if (faultScenario === "setup-partial" && this.writes > 0)
+      throw new Error("verification failed");
+    if (signal?.aborted) throw new Error("cancelled");
+    return this.snapshot;
+  }
+  async setIndexMacro(name: IndexMacro, index: string) {
+    setupRequest(`macro:${name}:${index}`);
+    this.writes += 1;
+    if (faultScenario === "setup-fail")
+      throw new Error("setup mutation failed");
+    const macro = this.snapshot.macros.find((row) => row.name === name);
+    if (macro)
+      macro.definition =
+        name === "adm_summary_index_name" ? index : `index=${index}`;
+  }
+  async setBuilderEnabled(name: BuilderSearch) {
+    setupRequest(`builder:${name}`);
+    this.writes += 1;
+    if (faultScenario === "setup-fail")
+      throw new Error("setup mutation failed");
+    const job = this.snapshot.savedSearches.find((row) => row.name === name);
+    if (job) job.disabled = false;
+  }
+}
 class FakeSearchClient implements SearchClient {
   async search(request: SearchRequest) {
     window.__ADM_REQUESTS__ ??= [];
@@ -82,6 +186,7 @@ try {
         page={page as Page}
         state={state}
         client={new FakeSearchClient()}
+        setupClient={new FakeSetupClient()}
         theme={dark ? "dark" : "light"}
       />
     </ThemeProvider>,
