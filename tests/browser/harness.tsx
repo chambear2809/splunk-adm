@@ -1,8 +1,13 @@
 import { createRoot } from "react-dom/client";
 import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
+import { DeepLinkNotice } from "../../frontend/src/app/DeepLinkNotice";
 import { AtlasApp } from "../../frontend/src/app/AtlasApp";
-import { parseUrlState, type Page } from "../../frontend/src/app/urlState";
+import {
+  recoverUrlState,
+  writeUrlState,
+  type Page,
+} from "../../frontend/src/app/urlState";
 import type {
   SearchClient,
   SearchRequest,
@@ -200,10 +205,12 @@ if (
 const root = document.getElementById("adm-root");
 if (!root) throw new Error("Missing browser test root");
 try {
-  const state = parseUrlState(stateParams);
+  const { state, notice } = recoverUrlState(stateParams);
+  if (notice) writeUrlState(state);
   const dark = params.get("theme") === "dark";
   createRoot(root).render(
     <ThemeProvider family="enterprise" colorScheme={dark ? "dark" : "light"}>
+      <DeepLinkNotice message={notice} />
       <AtlasApp
         user="browser-viewer"
         usePersonaDefault={!queryParams.has("tab")}

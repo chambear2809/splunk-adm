@@ -89,6 +89,51 @@ export function parseUrlState(
   };
 }
 
+/** Recover a user-entered deep link; persisted/shared state still uses strict parsing. */
+export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
+  const clean = new URLSearchParams(params);
+  const dropped: string[] = [];
+  for (const key of [
+    "mode",
+    "service",
+    "environment",
+    "cluster",
+    "namespace",
+    "earliest",
+    "latest",
+    "scenario",
+    "tab",
+    "q",
+  ]) {
+    if (!clean.has(key)) continue;
+    const probe = new URLSearchParams();
+    if (key !== "mode" && clean.has("mode"))
+      probe.set("mode", clean.get("mode")!);
+    probe.set(key, clean.get(key)!);
+    try {
+      parseUrlState(probe, inSplunk);
+    } catch {
+      clean.delete(key);
+      dropped.push(key);
+    }
+  }
+  try {
+    parseUrlState(clean, inSplunk);
+  } catch {
+    // Individually valid absolute bounds can still be reversed as a pair.
+    for (const key of ["earliest", "latest"]) {
+      clean.delete(key);
+      dropped.push(key);
+    }
+  }
+  return {
+    state: parseUrlState(clean, inSplunk),
+    notice: dropped.length
+      ? `Some link parameters were invalid and were reset: ${[...new Set(dropped)].join(", ")}.`
+      : undefined,
+  };
+}
+
 export function stateParams(state: UrlState): URLSearchParams {
   const params = new URLSearchParams({
     ...state.args,

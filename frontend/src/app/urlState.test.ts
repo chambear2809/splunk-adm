@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { pageFromPath, pageURL, parseUrlState, stateParams } from "./urlState";
+import {
+  pageFromPath,
+  pageURL,
+  parseUrlState,
+  recoverUrlState,
+  stateParams,
+} from "./urlState";
 describe("Atlas deep links", () => {
   it("round trips the complete map state", () => {
     const state = parseUrlState(
@@ -69,4 +75,24 @@ it("leaves missing live scope empty instead of selecting the demo", () => {
     });
   }
   expect(parseUrlState(new URLSearchParams()).args.service).toBe("frontend");
+});
+
+it("recovers invalid deep links while preserving valid scope and strict stored-state validation", () => {
+  const { state, notice } = recoverUrlState(
+    new URLSearchParams(
+      "mode=live&service=api&namespace=bad%7Cdelete&earliest=20&latest=10&tab=no&q=%00",
+    ),
+    true,
+  );
+  expect(state.args.service).toBe("api");
+  expect(state.args.namespace).toBe("");
+  expect(state.earliest).toBe("-1h");
+  expect(state.latest).toBe("now");
+  expect(state.tab).toBe("network");
+  expect(state.query).toBe("");
+  expect(notice).toContain("link parameters");
+  expect(() =>
+    parseUrlState(new URLSearchParams("namespace=bad%7Cdelete")),
+  ).toThrow();
+  expect(recoverUrlState(new URLSearchParams()).notice).toBeUndefined();
 });

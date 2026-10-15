@@ -9,9 +9,11 @@ import { resolveUserTheme } from "./app/theme";
 import {
   pageFromPath,
   pageURL,
-  parseUrlState,
+  recoverUrlState,
+  writeUrlState,
   type Page,
 } from "./app/urlState";
+import { DeepLinkNotice } from "./app/DeepLinkNotice";
 import { AtlasApp } from "./app/AtlasApp";
 import { jobClient } from "./data/searchClient";
 import { prepareDemo } from "./data/demoClient";
@@ -61,7 +63,8 @@ async function mount(node: HTMLElement) {
       location.replace(pageURL("map", params));
       return;
     }
-    const state = parseUrlState(params, __ADM_SPLUNK_BUILD__);
+    const { state, notice } = recoverUrlState(params, __ADM_SPLUNK_BUILD__);
+    if (notice) writeUrlState(state);
     if (page === "map" && state.mode === "demo") await prepareDemo();
     const [preference, timezone] = await Promise.all([
       __ADM_SPLUNK_BUILD__
@@ -72,6 +75,7 @@ async function mount(node: HTMLElement) {
     const options = getThemeOptions(preference);
     createRoot(node).render(
       <ThemeProvider {...options}>
+        <DeepLinkNotice message={notice} />
         <AtlasApp
           usePersonaDefault={!params.has("tab")}
           user={__ADM_SPLUNK_BUILD__ ? username : "demo"}

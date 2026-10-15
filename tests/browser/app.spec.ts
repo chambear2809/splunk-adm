@@ -1367,3 +1367,28 @@ test("copy and save require a loaded snapshot but existing views remain accessib
     page.getByRole("button", { name: "Save view", exact: true }),
   ).toBeDisabled();
 });
+
+test("invalid deep links recover safely with a dismissible notice", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&namespace=bad%7Cdelete&earliest=bad&tab=unknown&q=%00",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Choose an application to map" }),
+  ).toBeVisible();
+  const notice = page.getByRole("alert").filter({ hasText: "link parameters" });
+  await expect(notice).toBeVisible();
+  await expect(
+    page.getByRole("combobox", { name: "Namespace", exact: true }),
+  ).toHaveValue("");
+  expect(
+    await page.evaluate(
+      () =>
+        window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_graph("))
+          .length ?? 0,
+    ),
+  ).toBe(0);
+  await page.getByRole("button", { name: "Dismiss link notice" }).click();
+  await expect(notice).toHaveCount(0);
+});
