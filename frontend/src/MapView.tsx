@@ -741,6 +741,8 @@ export function MapView({
         width={size.w || undefined}
         height={size.h || undefined}
         className="map-svg"
+        data-export-width={layout.width}
+        data-export-height={layout.height}
       >
         <defs>
           {[
@@ -768,7 +770,10 @@ export function MapView({
             </marker>
           ))}
         </defs>
-        <g transform={`translate(${t.x},${t.y}) scale(${t.k})`}>
+        <g
+          data-export-root
+          transform={`translate(${t.x},${t.y}) scale(${t.k})`}
+        >
           {layout.lanes.map((lane) => (
             <g key={`${lane.x}:${lane.y}`} className="lane">
               <text x={lane.x} y={lane.y} className="lane-title">

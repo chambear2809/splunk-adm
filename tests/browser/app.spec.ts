@@ -1087,3 +1087,144 @@ test("long collected names truncate without losing their full text", async ({
     (await heading.textContent())!,
   );
 });
+
+test("copy link preserves validated scope, time, tab, and highlight state", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=demo&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&earliest=1791370800&latest=1791374400&tab=services&q=checkout",
+  );
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          (
+            window as Window & { __ADM_CLIPBOARD__?: string }
+          ).__ADM_CLIPBOARD__ = value;
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await page.getByRole("button", { name: "Copy link", exact: true }).click();
+  const copied = await page.evaluate(() => {
+    const value = (window as Window & { __ADM_CLIPBOARD__?: string })
+      .__ADM_CLIPBOARD__;
+    return value ?? "";
+  });
+  expect(copied).toContain("service=frontend");
+  expect(copied).toContain("earliest=1791373500");
+  expect(copied).toContain("tab=services");
+  expect(copied).toContain("q=checkout");
+  await page.goto(new URL(copied).pathname + new URL(copied).search);
+  await expect(page.locator(".scope-service")).toHaveText("frontend");
+  await expect(
+    page.getByRole("button", { name: "Services", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByLabel("Highlight by name, IP, EPG, port or device"),
+  ).toHaveValue("checkout");
+});
+
+test("saved views persist per user and can be reopened or deleted", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=demo");
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await page.getByLabel("View name", { exact: true }).fill("Checkout demo");
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Checkout demo", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Checkout demo", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Checkout demo", exact: true }).click();
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Checkout demo", exact: true }),
+  ).toHaveCount(0);
+});
+
+test("saved views report denied storage and do not render a false save", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Storage.prototype, "setItem", {
+      configurable: true,
+      value: () => {
+        throw new Error("denied");
+      },
+    });
+  });
+  await page.goto("/tests/browser/browser.html?mode=demo");
+  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await page.getByLabel("View name", { exact: true }).fill("Denied");
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("stored");
+});
+
+test("export downloads a nonempty PNG and print invokes the browser print API", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=demo");
+  await page.evaluate(() => {
+    window.print = () => {
+      (window as Window & { __ADM_PRINT__?: boolean }).__ADM_PRINT__ = true;
+    };
+  });
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Map image \(PNG\)/ }).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const bytes = await readFile(path!);
+  const signature = Array.from(bytes.subarray(0, 8));
+  expect(signature).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  await page.getByRole("button", { name: /Print \/ PDF/ }).click();
+  expect(
+    await page.evaluate(
+      () => (window as Window & { __ADM_PRINT__?: boolean }).__ADM_PRINT__,
+    ),
+  ).toBe(true);
+});
+
+test("ACI compare previous window identifies added connections", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=demo");
+  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Compare previous window", exact: true })
+    .click();
+  await expect(page.getByText(/^Previous:/)).toBeVisible();
+  await expect(page.getByText(/^Current:/)).toBeVisible();
+  await expect(page.getByText(/^[1-9]\d* connections added/)).toBeVisible();
+});
+
+test("image and print exports are unavailable for an empty filtered map", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=demo");
+  await page
+    .getByLabel("Filter identity", { exact: true })
+    .selectOption("unknown");
+  await page.getByLabel("Blocked only", { exact: true }).check();
+  await expect(page.locator(".map-canvas > svg")).toHaveCount(0);
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: /Map image \(PNG\)/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: /Print \/ PDF/ }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: /Required flows \(CSV\)/ }),
+  ).toBeEnabled();
+});

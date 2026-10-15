@@ -55,6 +55,10 @@ import { pageURL, parseUrlState, writeUrlState } from "../app/urlState";
 import { useMatches } from "../map/useMatches";
 import { useGraphQuery } from "../data/useGraphQuery";
 import { ExportMenu } from "../map/ExportMenu";
+import { ChangePanel } from "../ChangePanel";
+import { SavedViews } from "../SavedViews";
+import { exportMapPng, printMap } from "../exportMap";
+import "../print.css";
 import { filterGraph, focusHops, type Facets } from "../filters";
 import { FilterBar } from "../map/FilterBar";
 import {
@@ -106,7 +110,7 @@ const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["namespace", "Namespace", "Kubernetes namespace"],
 ];
 type Tab = View | "devices" | "table";
-type Panel = "settings" | "help" | "warnings" | "export";
+type Panel = "settings" | "help" | "warnings" | "export" | "changes" | "saved";
 const TABS: [Tab, string][] = [
   ["network", "Network"],
   ["services", "Services"],
@@ -212,6 +216,8 @@ export function MapPage({
     nonce: number;
   }>();
   const [panel, setPanel] = useState<Panel | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [args, setArgs] = useState<GraphArgs>(
     initialState.mode === "demo" ? loadDemo().boundary : initialState.args,
   );
@@ -504,6 +510,23 @@ export function MapPage({
     );
     setPanel(null);
   };
+  const exportPng = async () => {
+    setExportBusy(true);
+    setExportError("");
+    try {
+      const svg =
+        root.current?.querySelector<SVGSVGElement>(".map-canvas > svg");
+      if (!svg)
+        throw new Error("Choose Network or Services to export a map image.");
+      await exportMapPng(svg, { filename: `${fileStem}.png` });
+    } catch (e) {
+      setExportError(
+        e instanceof Error ? e.message : "Map image could not be exported.",
+      );
+    } finally {
+      setExportBusy(false);
+    }
+  };
   const exportJson = () => {
     download(
       `${fileStem}.json`,
@@ -740,6 +763,21 @@ export function MapPage({
         )}
         <div className="actions">
           <button
+            className="secondary-button"
+            aria-expanded={panel === "changes"}
+            disabled={!visible || busy}
+            onClick={() => togglePanel("changes")}
+          >
+            Changes
+          </button>
+          <button
+            className="secondary-button"
+            aria-expanded={panel === "saved"}
+            onClick={() => togglePanel("saved")}
+          >
+            Saved views
+          </button>
+          <button
             className="icon-button"
             aria-label="How to read this map"
             aria-expanded={panel === "help"}
@@ -770,7 +808,56 @@ export function MapPage({
             close={() => setPanel(null)}
             onCsv={exportCsv}
             onJson={exportJson}
+            onPng={exportPng}
+            onPrint={() => {
+              const svg =
+                root.current?.querySelector<SVGSVGElement>(".map-canvas > svg");
+              if (svg)
+                printMap(
+                  svg,
+                  `Application Atlas · ${graph.boundary.service} · ${graph.window.start} – ${graph.window.end}`,
+                );
+            }}
+            pngDisabled={
+              !pathTab || exportBusy || displayGraph.nodes.length === 0
+            }
+            busy={exportBusy}
+            error={exportError}
           />
+        )}
+        {panel === "changes" && visible && (
+          <section className="popover atlas-phase8-panel">
+            <button
+              className="icon-button"
+              aria-label="Close changes"
+              onClick={() => setPanel(null)}
+            >
+              <X size={16} />
+            </button>
+            <ChangePanel
+              key={`${mode}:${scenario}:${graph.snapshot_id}`}
+              graph={graph}
+              client={client}
+              timezone={timezone}
+              scenario={scenario}
+            />
+          </section>
+        )}
+        {panel === "saved" && (
+          <section className="popover atlas-phase8-panel">
+            <button
+              className="icon-button"
+              aria-label="Close saved views"
+              onClick={() => setPanel(null)}
+            >
+              <X size={16} />
+            </button>
+            <SavedViews
+              key={user}
+              user={user}
+              state={{ args, earliest, latest, mode, scenario, tab, query }}
+            />
+          </section>
         )}
         {panel === "settings" && (
           <section className="popover settings" aria-label="Map settings">

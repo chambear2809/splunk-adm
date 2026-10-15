@@ -1886,3 +1886,47 @@
 .adm .inspector-head {
   min-width: 0;
 }
+
+.adm .atlas-phase8-panel {
+  width: min(540px, calc(100vw - 40px));
+  max-height: 65vh;
+  overflow: auto;
+  padding: 18px;
+}
+.adm .atlas-phase8-panel > .icon-button {
+  float: right;
+}
+.adm .atlas-phase8-panel h2 {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.adm .atlas-phase8-panel p {
+  line-height: 1.5;
+  margin: 10px 0;
+}
+.adm .atlas-phase8-panel li {
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+}
+.adm .atlas-saved-views form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.adm .atlas-saved-views label {
+  display: grid;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+}
+.adm .atlas-saved-views input {
+  min-width: 0;
+  width: 100%;
+}
+.adm .atlas-changes details {
+  margin-top: 12px;
+}
+.adm .atlas-changes summary {
+  cursor: pointer;
+}

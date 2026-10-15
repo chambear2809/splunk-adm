@@ -91,3 +91,42 @@ export const demoTopology = (scenario: DemoScenario = "aci"): Topology => {
     Array.isArray(file) ? file : (file as { rows?: unknown }).rows,
   );
 };
+
+/** Second window captured with the same adm_graph search, never synthesized in the UI. */
+export async function previousDemoGraph(
+  scenario: DemoScenario,
+  signal?: AbortSignal,
+): Promise<Graph | undefined> {
+  if (scenario !== "aci") return undefined;
+  let fixture: { rows: Record<string, unknown>[]; args: GraphArgs };
+  if (__ADM_SPLUNK_BUILD__) {
+    fixture = await fetchPreviousDemo(signal);
+  } else {
+    fixture = (await import("../../../fixtures/demo-rows-aci-prev.json"))
+      .default;
+  }
+  if (signal?.aborted) throw new Error("Comparison cancelled.");
+  return rowsToGraph(fixture.rows, fixture.args, { demo: true });
+}
+
+export async function fetchPreviousDemo(
+  signal?: AbortSignal,
+): Promise<{ rows: Record<string, unknown>[]; args: GraphArgs }> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  const timeout = setTimeout(abort, 10000);
+  try {
+    const response = await fetch(
+      createStaticURL("app/splunk_adm/demo/demo-rows-aci-prev.json"),
+      { signal: controller.signal },
+    );
+    if (!response.ok)
+      throw new Error("Previous demo window could not be loaded.");
+    return await response.json();
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
+  }
+}

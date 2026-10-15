@@ -50,6 +50,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "demo-find",
                     "demo-rows",
                     "demo-rows-aci",
+                    "demo-rows-aci-prev",
                     "demo-topology",
                     "demo-topology-aci",
                 )

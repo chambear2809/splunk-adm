@@ -3,10 +3,20 @@ export function ExportMenu({
   close,
   onCsv,
   onJson,
+  onPng,
+  onPrint,
+  pngDisabled,
+  busy,
+  error,
 }: {
   close: () => void;
   onCsv: () => void;
   onJson: () => void;
+  onPng: () => void;
+  onPrint: () => void;
+  pngDisabled: boolean;
+  busy: boolean;
+  error: string;
 }) {
   return (
     <section className="popover export" aria-label="Export">
@@ -20,6 +30,22 @@ export function ExportMenu({
           <X size={16} />
         </button>
       </div>
+      <button className="menu-item" onClick={onPng} disabled={pngDisabled}>
+        <span>
+          <b>{busy ? "Preparing image…" : "Map image (PNG)"}</b>
+          <small>
+            Current Network or Services map, including visible filters and
+            focus.
+          </small>
+        </span>
+      </button>
+      <button className="menu-item" onClick={onPrint} disabled={pngDisabled}>
+        <span>
+          <b>Print / PDF</b>
+          <small>Open the browser print dialog to print or save as PDF.</small>
+        </span>
+      </button>
+      {error && <p role="alert">{error}</p>}
       <button className="menu-item" onClick={onCsv}>
         <FileSpreadsheet size={17} aria-hidden />
         <span>

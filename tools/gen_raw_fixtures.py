@@ -15,6 +15,7 @@ import hashlib
 import ipaddress
 import json
 import math
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -979,6 +980,52 @@ def otel_traces(s: Scenario) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 RAW_ACI = ROOT / "fixtures" / "raw-aci"
+ACI_PREV_RAW = ROOT / "dist" / "phase8-raw-aci-prev"
+
+_ISO_DATE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})"
+    r"(?P<fraction>\.\d+)?(?P<zone>Z|[+-]\d{2}:?\d{2})$"
+)
+
+
+def shift_iso_dates(value, seconds: int = -900):
+    """Recursively shift scenario ISO timestamps while preserving their spelling."""
+    if isinstance(value, dict):
+        return {key: shift_iso_dates(item, seconds) for key, item in value.items()}
+    if isinstance(value, list):
+        return [shift_iso_dates(item, seconds) for item in value]
+    if not isinstance(value, str):
+        return value
+    match = _ISO_DATE.fullmatch(value)
+    if not match:
+        return value
+    try:
+        shifted = parse(value) + timedelta(seconds=seconds)
+    except ValueError:
+        return value
+    fraction = match.group("fraction")
+    rendered = shifted.strftime("%Y-%m-%dT%H:%M:%S")
+    if fraction:
+        rendered += f".{shifted.microsecond:06d}"[: len(fraction)]
+    return rendered + match.group("zone")
+
+
+def previous_aci_scenario(base: dict | None = None) -> dict:
+    """Return the preceding 15-minute ACI window, without the blocked c8 conversation."""
+    source = (
+        base
+        if base is not None
+        else json.loads((RAW_ACI / "scenario.json").read_text())
+    )
+    previous = shift_iso_dates(json.loads(json.dumps(source)))
+    previous["conversations"] = [
+        conversation
+        for conversation in previous["conversations"]
+        if conversation.get("id") != "c8-blocked-db"
+    ]
+    return previous
+
+
 ACI_PROTO_NUMBER = {**PROTO_NUMBER, "ipip": 4}
 # APIC l4:Port named constants (vzEntry dFromPort validValues, APIC MIM 6.1).
 ACI_PORT_NAMES = {
@@ -2576,8 +2623,16 @@ def aci_otel_traces(s: AciScenario) -> list[dict]:
 
 def main_aci() -> int:
     s = AciScenario(json.loads((RAW_ACI / "scenario.json").read_text()))
+    outputs = aci_outputs(s)
+    for name, events in outputs.items():
+        print(f"{name}: {write(name, events, RAW_ACI)}")
+    main_aci_edge(s.doc)
+    return 0
+
+
+def aci_outputs(s: AciScenario) -> dict[str, list[dict]]:
     aci_stats, aci_class = aci_collections(s)
-    outputs = {
+    return {
         "stream_netflow.ndjson": aci_netflow(s),
         "nd_flows.ndjson": aci_nd_flows(s),
         "nd_endpoints.ndjson": aci_nd_endpoints(s),
@@ -2588,9 +2643,13 @@ def main_aci() -> int:
         "isovalent.ndjson": aci_isovalent(s),
         "otel_traces.ndjson": aci_otel_traces(s),
     }
-    for name, events in outputs.items():
-        print(f"{name}: {write(name, events, RAW_ACI)}")
-    main_aci_edge(s.doc)
+
+
+def main_aci_previous() -> int:
+    scenario = previous_aci_scenario()
+    s = AciScenario(scenario)
+    for name, events in aci_outputs(s).items():
+        print(f"{name}: {write(name, events, ACI_PREV_RAW)}")
     return 0
 
 
@@ -2739,6 +2798,7 @@ def main_aci_edge(base: dict) -> None:
 def write(name: str, events: list[dict], out_dir: Path = RAW) -> int:
     events = sorted(events, key=lambda e: e["time"])
     lines = [json.dumps(e, separators=(",", ":"), ensure_ascii=False) for e in events]
+    out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / name).write_text("".join(line + "\n" for line in lines))
     return len(lines)
 
@@ -2749,12 +2809,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("nxos", "aci"),
+        choices=("nxos", "aci", "aci-prev"),
         default="nxos",
-        help="nxos: fixtures/raw/ (default); aci: the ACI pilot in fixtures/raw-aci/",
+        help="nxos: fixtures/raw/ (default); aci: the ACI pilot; aci-prev: derived prior window in dist/",
     )
-    if parser.parse_args().scenario == "aci":
+    scenario = parser.parse_args().scenario
+    if scenario == "aci":
         return main_aci()
+    if scenario == "aci-prev":
+        return main_aci_previous()
     s = Scenario(json.loads((RAW / "scenario.json").read_text()))
     aci_stats, aci_class = aci(s)
     netflow, netflow_late = stream_netflow(s)

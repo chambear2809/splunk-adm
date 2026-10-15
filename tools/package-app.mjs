@@ -29,6 +29,7 @@ for (const file of [
   "demo-find.json",
   "demo-rows.json",
   "demo-rows-aci.json",
+  "demo-rows-aci-prev.json",
   "demo-topology.json",
   "demo-topology-aci.json",
 ])

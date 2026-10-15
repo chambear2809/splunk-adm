@@ -581,6 +581,24 @@ try {
         earliest: findMapUrl.searchParams.get("earliest"),
         latest: findMapUrl.searchParams.get("latest"),
       };
+      stage = "phase8 live changes compare";
+      await page.getByRole("button", { name: "Changes", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Compare previous window", exact: true })
+        .click();
+      await page
+        .getByText(/^Previous:/)
+        .waitFor({ state: "visible", timeout: 60000 });
+      await page
+        .getByText(/^Current:/)
+        .waitFor({ state: "visible", timeout: 60000 });
+      evidence.phase8LiveChanges = {
+        previous: true,
+        current: true,
+        added:
+          (await page.getByText(/^[1-9]\d* connections added/).count()) > 0,
+      };
+      await page.keyboard.press("Escape");
       await page.unroute("**/demo/*.json");
 
       stage = "demo map";
@@ -658,6 +676,149 @@ try {
         openDisabled: await demoFinding
           .getByRole("button", { name: "Open in Search", exact: true })
           .isDisabled(),
+      };
+
+      stage = "phase8 changes compare";
+      await demo.getByRole("button", { name: "Changes", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Compare previous window", exact: true })
+        .click();
+      await page
+        .getByText(/^Previous:/)
+        .waitFor({ state: "visible", timeout: 60000 });
+      await page
+        .getByText(/^Current:/)
+        .waitFor({ state: "visible", timeout: 60000 });
+      await demo.screenshot({ path: `dist/atlas-phase8-changes-${theme}.png` });
+      evidence.phase8Changes = {
+        previous: true,
+        current: true,
+        added:
+          (await page.getByText(/^[1-9]\d* connections added/).count()) > 0,
+      };
+      if (!evidence.phase8Changes.added)
+        throw new Error("demo comparison did not report added connections");
+      await page.keyboard.press("Escape");
+
+      stage = "phase8 saved views and link";
+      await page
+        .getByRole("button", { name: "Saved views", exact: true })
+        .click();
+      await page.evaluate(() => {
+        const original = navigator.clipboard.writeText.bind(
+          navigator.clipboard,
+        );
+        Object.defineProperty(navigator.clipboard, "writeText", {
+          configurable: true,
+          value: (value) => {
+            window.__ADM_SAVED_CLIPBOARD__ = value;
+            return original(value);
+          },
+        });
+      });
+      await page
+        .getByRole("button", { name: "Copy link", exact: true })
+        .click();
+      const copiedViewUrl = await page.evaluate(
+        () => window.__ADM_SAVED_CLIPBOARD__ || navigator.clipboard.readText(),
+      );
+      const copiedParams = new URL(copiedViewUrl).searchParams;
+      if (
+        !new URL(copiedViewUrl).pathname.includes("/app/splunk_adm/") ||
+        copiedParams.get("service") !== "frontend" ||
+        !copiedParams.get("earliest") ||
+        !copiedParams.get("latest")
+      )
+        throw new Error("saved link omitted validated state");
+      await page
+        .getByLabel("View name", { exact: true })
+        .fill("Native demo view");
+      await page
+        .getByRole("button", { name: "Save view", exact: true })
+        .click();
+      await page
+        .getByRole("link", { name: "Native demo view", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      await page
+        .locator(".atlas-saved-views")
+        .screenshot({ path: `dist/atlas-phase8-saved-views-${theme}.png` });
+      const savedHref = await page
+        .getByRole("link", { name: "Native demo view", exact: true })
+        .getAttribute("href");
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page
+        .getByRole("button", { name: "Saved views", exact: true })
+        .click();
+      await page
+        .getByRole("link", { name: "Native demo view", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      await page
+        .getByRole("link", { name: "Native demo view", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Saved views", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+      await page
+        .getByRole("link", { name: "Native demo view", exact: true })
+        .waitFor({ state: "detached", timeout: 60000 });
+      evidence.phase8SavedViews = {
+        copiedPath: new URL(copiedViewUrl).pathname,
+        savedHref,
+        reopened: true,
+        deleted: true,
+      };
+
+      stage = "phase8 export";
+      let printCalls = 0;
+      await page.evaluate(() => {
+        window.__ADM_ORIGINAL_PRINT__ = window.print;
+        window.print = () => {
+          window.__ADM_PRINT_CALLS__ = (window.__ADM_PRINT_CALLS__ || 0) + 1;
+          window.__ADM_PRINT_VIEWBOX__ = document
+            .querySelector(".atlas-print-output svg")
+            ?.getAttribute("viewBox");
+        };
+      });
+      await page.getByRole("button", { name: "Export", exact: true }).click();
+      const pngDownload = page.waitForEvent("download");
+      await page.getByRole("button", { name: /Map image \(PNG\)/ }).click();
+      const png = await pngDownload;
+      await png.saveAs(`dist/atlas-phase8-map-${theme}.png`);
+      const stream = await png.createReadStream();
+      const chunks = [];
+      for await (const chunk of stream) chunks.push(chunk);
+      const bytes = Buffer.concat(chunks);
+      if (
+        bytes.length === 0 ||
+        !bytes
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      )
+        throw new Error("PNG export signature invalid");
+      await page.getByRole("button", { name: /Print \/ PDF/ }).click();
+      printCalls = await page.evaluate(() => window.__ADM_PRINT_CALLS__ || 0);
+      const viewBox = await page.evaluate(() => window.__ADM_PRINT_VIEWBOX__);
+      const dimensions = viewBox?.trim().split(/\s+/).map(Number) || [];
+      if (
+        printCalls !== 1 ||
+        dimensions.length !== 4 ||
+        dimensions[2] <= 0 ||
+        dimensions[3] <= 0
+      )
+        throw new Error("print SVG viewBox is invalid");
+      if (await page.locator(".atlas-print-output").count())
+        throw new Error("print output was not cleaned up");
+      await page.evaluate(() => {
+        window.print = window.__ADM_ORIGINAL_PRINT__;
+      });
+      evidence.phase8Export = {
+        pngBytes: bytes.length,
+        pngSignature: true,
+        printCalls,
+        printViewBoxPositive: true,
+        printOutputRemoved:
+          (await page.locator(".atlas-print-output").count()) === 0,
       };
 
       stage = "supporting views";

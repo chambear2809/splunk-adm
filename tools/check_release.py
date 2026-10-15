@@ -165,6 +165,7 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
                 "demo-find",
                 "demo-rows",
                 "demo-rows-aci",
+                "demo-rows-aci-prev",
                 "demo-topology",
                 "demo-topology-aci",
             )
