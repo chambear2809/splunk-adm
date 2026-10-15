@@ -193,7 +193,14 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   await expect(
     page.getByRole("heading", { name: "Applications", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Open map", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open map for frontend", exact: true })
+    .click();
+  const demoMap = new URL(page.url());
+  expect(demoMap.searchParams.get("mode")).toBe("demo");
+  expect(demoMap.searchParams.get("scenario")).toBe("aci");
+  expect(demoMap.searchParams.get("earliest")).toBe("1791373500");
+  expect(demoMap.searchParams.get("latest")).toBe("1791374400");
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
 });
 
@@ -250,6 +257,171 @@ test("demo controls retain the captured scope and time", async ({ page }) => {
   ).toBeDisabled();
   expect(new URL(page.url()).searchParams.get("earliest")).toMatch(/^\d/);
   expect(new URL(page.url()).searchParams.get("latest")).toMatch(/^\d/);
+});
+
+test("applications catalog sorts numeric metrics and opens a captured scope", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&earliest=1791370800&latest=1791374400",
+  );
+  await expect(
+    page.getByRole("heading", { name: "Applications", exact: true }),
+  ).toBeVisible();
+  const catalog = page.locator("table").last();
+  const rows = catalog.locator("tbody > tr");
+  await expect(
+    page.getByRole("button", { name: "Open map for frontend", exact: true }),
+  ).toBeVisible();
+  const metric = page.getByRole("button", { name: /Conversations \(1h\)/ });
+  await metric.click();
+  const ascending = await rows.evaluateAll((items) =>
+    items.map((item) => Number(item.children[6]?.textContent?.trim())),
+  );
+  expect(ascending.filter(Number.isFinite)).toEqual(
+    expect.arrayContaining([1, 2, 4, 6]),
+  );
+  await metric.click();
+  const descending = await rows.evaluateAll((items) =>
+    items.map((item) => Number(item.children[6]?.textContent?.trim())),
+  );
+  expect(descending.filter(Number.isFinite)).toEqual(
+    expect.arrayContaining([1, 2, 4, 6]),
+  );
+  await page
+    .getByRole("button", { name: "Open map for frontend", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/map\?/);
+  expect(new URL(page.url()).searchParams.get("service")).toBe("frontend");
+  expect(new URL(page.url()).searchParams.get("earliest")).toBe("1791370800");
+  expect(new URL(page.url()).searchParams.get("latest")).toBe("1791374400");
+});
+
+test("catalog layout has one header row and contained narrow scrolling", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&earliest=1791370800&latest=1791374400",
+  );
+  const catalog = page.locator("table").last();
+  await expect(catalog).toBeVisible();
+  await expect(catalog.locator("thead tr")).toHaveCount(1);
+  const layout = await catalog
+    .locator("tbody > tr")
+    .first()
+    .evaluate((row) => ({
+      rowHeight: row.getBoundingClientRect().height,
+      widths: [...row.querySelectorAll("td")].map(
+        (cell) => cell.getBoundingClientRect().width,
+      ),
+    }));
+  expect(layout.rowHeight).toBeLessThan(130);
+  expect(layout.widths.every((width) => width >= 80)).toBe(true);
+
+  await page.setViewportSize({ width: 600, height: 900 });
+  await page.reload();
+  await expect(catalog).toBeVisible();
+  const narrow = await catalog.evaluate((table) => {
+    const parent = table.parentElement;
+    return {
+      overflow: parent ? getComputedStyle(parent).overflowX : "",
+      documentFits: document.documentElement.scrollWidth <= innerWidth + 1,
+    };
+  });
+  expect(narrow.overflow).toMatch(/auto|scroll/);
+  expect(narrow.documentFits).toBe(true);
+});
+
+test("Find opens the captured application scope and rejects injection", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&earliest=1791370800&latest=1791374400",
+  );
+  const input = page.getByLabel(/Find an address, EPG, or device/).first();
+  await input.fill("10.42.0.15");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  const checkout = page
+    .locator('[aria-label="Find results"]')
+    .getByRole("button", {
+      name: "Open map for checkout",
+      exact: true,
+    })
+    .first();
+  await expect(checkout).toBeVisible();
+  await checkout.first().click();
+  await expect(page).toHaveURL(/\/map\?/);
+  expect(new URL(page.url()).searchParams.get("service")).toBe("checkout");
+  await page.goBack();
+  await expect(input).toBeVisible();
+  const before = await page.evaluate(
+    () =>
+      window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_find"))
+        .length ?? 0,
+  );
+  await input.fill('10.42.0.15"|delete');
+  await expect(
+    page.getByText("Enter an exact IP, EPG or attached-device value."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Find", exact: true }),
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_find"))
+          .length ?? 0,
+    ),
+  ).toBe(before);
+});
+
+test("stale Find responses cannot replace a newer result", async ({ page }) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=find-stale",
+  );
+  const input = page.getByLabel(/Find an address, EPG, or device/).first();
+  const find = page.getByRole("button", { name: "Find", exact: true });
+  await input.fill("10.42.0.15");
+  await find.click();
+  await input.fill("db");
+  await expect(find).toBeEnabled();
+  await find.click();
+  const results = page.locator('[aria-label="Find results"]');
+  await expect(results).toContainText("checkout");
+  await expect(results).not.toContainText("frontend");
+});
+
+test("empty catalog falls back to scopes without invented metrics", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=empty-catalog",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: /metrics are unavailable/i }),
+  ).toBeVisible();
+  const batch = page.locator("tbody tr").filter({ hasText: "batch-worker" });
+  await expect(batch).toBeVisible();
+  await expect(batch).toContainText("—");
+});
+
+test("captured demo applications explain unavailable Find evidence", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=applications&mode=demo");
+  await expect(
+    page.getByRole("heading", { name: "Applications", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open map for frontend", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/Captured Find window/i)).toBeVisible();
+  const input = page.getByLabel(/Find an address, EPG, or device/).first();
+  await input.fill("not-captured");
+  await expect(
+    page.getByRole("button", { name: "Find", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText(/captured.*evidence/i)).toBeVisible();
 });
 
 test("findings expose safe demo evidence actions", async ({ page }) => {

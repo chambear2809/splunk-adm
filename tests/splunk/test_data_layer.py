@@ -38,6 +38,7 @@ COLLECTIONS = [
     "adm_service_backends",
     "adm_service_routes",
     "adm_aci_policy",
+    "adm_app_catalog",
 ]
 SCOPE_ROWS = [
     ("exporter", "192.0.2.11", "prod", ""),

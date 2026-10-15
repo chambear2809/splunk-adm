@@ -23,10 +23,12 @@ class ViewerBrowserTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         sys.path.insert(0, str(HERE))
+        import lab
         from test_data_layer import WINDOW
         from test_permissions import RestrictedViewerTest
 
         cls.window = WINDOW
+        cls.catalog_window = (int(WINDOW[1]) - 3600, int(WINDOW[1]))
         cls.restricted = RestrictedViewerTest
         # RestrictedViewerTest owns the ephemeral user, role, and saved-search
         # cleanup. The lab lifecycle itself is deliberately outside this test.
@@ -36,6 +38,27 @@ class ViewerBrowserTest(unittest.TestCase):
             RestrictedViewerTest.doClassCleanups()
             raise
         cls.addClassCleanup(RestrictedViewerTest.doClassCleanups)
+        # Seed only the rows captured by the fixture-backed catalog builder.
+        # The browser then exercises the real viewer lookup and Find searches.
+        cls.catalog_rows = lab.search("| `adm_catalog_build`", *cls.catalog_window)
+        cls.catalog_keys = [row["_key"] for row in cls.catalog_rows]
+        lab.search(
+            "| `adm_catalog_build` | outputlookup append=true key_field=_key adm_app_catalog",
+            *cls.catalog_window,
+        )
+        cls.addClassCleanup(cls._cleanup_catalog)
+
+    @classmethod
+    def _cleanup_catalog(cls) -> None:
+        import urllib.parse
+
+        for key in cls.catalog_keys:
+            with cls.restricted.lab._mgmt(
+                "DELETE",
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/"
+                f"adm_app_catalog/{urllib.parse.quote(key, safe='')}",
+            ) as response:
+                response.read()
 
     def _readline(self, process: subprocess.Popen[str], timeout: float = 1200) -> dict:
         ready = selectors.DefaultSelector()
@@ -165,6 +188,26 @@ class ViewerBrowserTest(unittest.TestCase):
                 self.assertTrue(popup.get("macroRequest"), evidence)
                 self.assertTrue(popup.get("completed"), evidence)
                 self.assertTrue(popup.get("nonEmpty"), evidence)
+                catalog = evidence.get("catalog", {})
+                self.assertTrue(catalog.get("loaded"), evidence)
+                self.assertEqual(
+                    catalog.get("mapPath"), "/en-US/app/splunk_adm/map", evidence
+                )
+                self.assertEqual(catalog.get("service"), "frontend", evidence)
+                self.assertEqual(
+                    catalog.get("earliest"), str(int(self.window[1]) - 3600), evidence
+                )
+                self.assertEqual(catalog.get("latest"), self.window[1], evidence)
+                found = evidence.get("find", {})
+                self.assertTrue(found.get("loaded"), evidence)
+                self.assertEqual(
+                    found.get("mapPath"), "/en-US/app/splunk_adm/map", evidence
+                )
+                self.assertEqual(found.get("service"), "checkout", evidence)
+                self.assertEqual(
+                    found.get("earliest"), str(int(self.window[1]) - 3600), evidence
+                )
+                self.assertEqual(found.get("latest"), self.window[1], evidence)
                 self.assertTrue(evidence.get("demo", {}).get("synthetic"), evidence)
                 self.assertGreater(
                     evidence.get("demo", {}).get("cards", 0), 0, evidence

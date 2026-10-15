@@ -18,6 +18,7 @@ export const JOB_NAMES = [
   "ACI policy",
   "Interface inventory",
   "Conversation rollup",
+  "Application catalog",
   "Identity prune",
   "Service binding prune",
   "Service backends prune",
@@ -173,7 +174,8 @@ export function jobStatus(job: JobHealth, now: number): string {
       : "Run outcome unavailable";
   const threshold = job.name.endsWith("prune")
     ? 26 * 3600
-    : job.name.endsWith("Interface inventory")
+    : job.name.endsWith("Interface inventory") ||
+        job.name.endsWith("Application catalog")
       ? 2 * 3600
       : 1200;
   if (!job.lastSuccess) return "Successful run not confirmed";

@@ -10,9 +10,12 @@ import type {
 import { FINALIZED_SEARCH_WARNING } from "../../frontend/src/provider";
 import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
+import catalogCapture from "../../fixtures/demo-catalog.json";
+import findCapture from "../../fixtures/demo-find.json";
 import "../../frontend/src/styles.css";
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
-const faultScenario = new URLSearchParams(location.search).get("scenario");
+const queryParams = new URLSearchParams(location.search);
+const faultScenario = queryParams.get("fault") ?? queryParams.get("scenario");
 class FakeSearchClient implements SearchClient {
   async search(request: SearchRequest) {
     window.__ADM_REQUESTS__ ??= [];
@@ -21,8 +24,30 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (request.search === "| inputlookup adm_app_catalog") {
+      if (faultScenario === "empty-catalog") return { rows: [], warnings: [] };
+      if (faultScenario === "stale") {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        return { rows: catalogCapture.rows, warnings: [] };
+      }
+      return { rows: catalogCapture.rows, warnings: [] };
+    }
     if (request.search === "| `adm_scope_options`")
       return { rows: scopes.rows, warnings: [] };
+    if (request.search.startsWith('| `adm_find("')) {
+      const query = request.search.match(/adm_find\("(.*)"\)/)?.[1] ?? "";
+      const capture = findCapture.queries.find((item) => item.query === query);
+      if (faultScenario === "find-stale" && query === "10.42.0.15")
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      if (faultScenario === "find-stale" && query === "db")
+        return {
+          rows: findCapture.queries
+            .flatMap((item) => item.rows)
+            .filter((row) => row.service === "checkout"),
+          warnings: [],
+        };
+      return { rows: capture?.rows ?? [], warnings: [] };
+    }
     if (request.search === "`adm_topology`") return { rows: [], warnings: [] };
     window.__ADM_LAST_EARLIEST__ = request.earliest;
     window.__ADM_LAST_GRAPH_SEARCH__ = request.search;

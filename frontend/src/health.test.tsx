@@ -24,7 +24,7 @@ const client: SearchClient = { search };
 describe("pipeline health", () => {
   it("preserves unknown values instead of inventing successful empty results", () => {
     expect(sourceRows([])).toHaveLength(8);
-    expect(jobRows([])).toHaveLength(11);
+    expect(jobRows([])).toHaveLength(12);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
     const source = sourceRows([

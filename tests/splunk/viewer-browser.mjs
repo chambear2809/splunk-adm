@@ -360,6 +360,72 @@ try {
           nonEmpty,
         },
       };
+      stage = "live applications catalog";
+      const catalogEarliest = String(Number(latest) - 3600);
+      await page.goto(
+        `${BASE}/en-US/app/splunk_adm/applications?mode=live&earliest=${catalogEarliest}&latest=${encodeURIComponent(latest)}`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("heading", { name: "Applications", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      const catalogRow = page.getByRole("button", {
+        name: "Open map for frontend",
+        exact: true,
+      });
+      await catalogRow.waitFor({ state: "visible", timeout: 60000 });
+      await catalogRow.click();
+      await page.waitForURL(
+        (url) => /\/app\/splunk_adm\/map\/?$/.test(url.pathname),
+        { timeout: 60000 },
+      );
+      const catalogMapUrl = new URL(page.url());
+      await page
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
+      evidence.catalog = {
+        loaded: true,
+        mapPath: catalogMapUrl.pathname,
+        service: catalogMapUrl.searchParams.get("service"),
+        earliest: catalogMapUrl.searchParams.get("earliest"),
+        latest: catalogMapUrl.searchParams.get("latest"),
+      };
+      await page.goto(
+        `${BASE}/en-US/app/splunk_adm/applications?mode=live&earliest=${catalogEarliest}&latest=${encodeURIComponent(latest)}`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("heading", { name: "Applications", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      stage = "live application Find";
+      const findControls = page.locator("#atlas-root .atlas-find");
+      const findInput = findControls.getByLabel(/Find an address, EPG, or device/);
+      await findInput.fill("10.42.0.20");
+      stage = "live Find submit";
+      await findControls.getByRole("button", { name: "Find", exact: true }).click();
+      stage = "live Find result";
+      const findRow = page.locator('#atlas-root [aria-label="Find results"]').first().getByRole("button", {
+        name: "Open map for checkout",
+        exact: true,
+      });
+      await findRow.waitFor({ state: "visible", timeout: 60000 });
+      stage = "live Find map";
+      await findRow.click();
+      await page.waitForURL(
+        (url) => /\/app\/splunk_adm\/map\/?$/.test(url.pathname),
+        { timeout: 60000 },
+      );
+      const findMapUrl = new URL(page.url());
+      await page
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
+      evidence.find = {
+        loaded: true,
+        mapPath: findMapUrl.pathname,
+        service: findMapUrl.searchParams.get("service"),
+        earliest: findMapUrl.searchParams.get("earliest"),
+        latest: findMapUrl.searchParams.get("latest"),
+      };
       await page.unroute("**/demo/*.json");
 
       stage = "demo map";
@@ -427,6 +493,8 @@ try {
       );
     } catch (error) {
       evidence.error = `browser qualification failed at ${stage}`;
+      const message = error instanceof Error ? error.message : "";
+      evidence.errorKind = message.includes("strict mode violation") ? "ambiguous locator" : message.includes("Timeout") ? "timeout" : "browser check";
       evidence.consoleErrorCount = consoleErrors.length;
     }
     process.stdout.write(JSON.stringify(evidence) + "\n");

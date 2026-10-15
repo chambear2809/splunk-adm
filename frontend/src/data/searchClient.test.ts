@@ -146,3 +146,20 @@ describe("ToolkitSearchClient", () => {
     await expect(pending).rejects.toThrow(/quota exceeded/);
   });
 });
+
+it("allows verified empty catalog/Find results only when explicitly requested", async () => {
+  let pending = new ToolkitSearchClient().search({
+    ...request(),
+    allowEmpty: true,
+  });
+  runtime.progress.next({ content: { resultCount: 0 } });
+  runtime.result.next({ results: [] });
+  await expect(pending).resolves.toEqual({ rows: [], warnings: [] });
+  pending = new ToolkitSearchClient().search({
+    ...request(),
+    allowEmpty: true,
+  });
+  runtime.progress.next({ content: { resultCount: 1 } });
+  runtime.result.next({ results: [] });
+  await expect(pending).rejects.toThrow(/count did not match/);
+});

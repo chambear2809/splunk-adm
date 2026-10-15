@@ -40,6 +40,7 @@ COLLECTIONS = (
     "adm_service_backends",
     "adm_service_routes",
     "adm_aci_policy",
+    "adm_app_catalog",
 )
 # Orthogonal pairs separate record volume, exporter count, graph size, history,
 # and observations of the same traffic at multiple network devices.

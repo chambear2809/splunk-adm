@@ -13,6 +13,8 @@ export interface SearchRequest {
   latest?: string;
   timezone?: string;
   maxRows: number;
+  /** Catalog and Find may legitimately return zero rows. Graph callers retain strict defaults. */
+  allowEmpty?: boolean;
   signal: AbortSignal;
 }
 export interface RunResult {
@@ -136,7 +138,7 @@ export class ToolkitSearchClient implements SearchClient {
                   ?.results;
                 if (!Array.isArray(results))
                   throw new Error("Search returned invalid results.");
-                if (results.length === 0)
+                if (results.length === 0 && !request.allowEmpty)
                   throw new Error("Search returned no rows.");
                 if (results.length > request.maxRows)
                   throw new Error("Search result exceeds the pilot limit.");
@@ -169,7 +171,8 @@ export class ToolkitSearchClient implements SearchClient {
                   throw new Error(
                     "Splunk did not report a valid final result count; results could not be verified.",
                   );
-                if (count === 0) throw new Error("Search returned no rows.");
+                if (count === 0 && !request.allowEmpty)
+                  throw new Error("Search returned no rows.");
                 if (count > request.maxRows)
                   throw new Error("Search result exceeds the pilot limit.");
                 if (rows.length !== count)

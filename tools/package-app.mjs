@@ -25,6 +25,8 @@ await access(`${app}/default/data/ui/views/map.xml`);
 await mkdir(`${app}/appserver/static/demo`, { recursive: true });
 for (const file of [
   "demo-scopes.json",
+  "demo-catalog.json",
+  "demo-find.json",
   "demo-rows.json",
   "demo-rows-aci.json",
   "demo-topology.json",

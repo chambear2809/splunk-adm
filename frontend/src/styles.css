@@ -1705,3 +1705,39 @@
     border-top: 1px solid var(--adm-line);
   }
 }
+
+.atlas-find {
+  margin: 16px 0;
+  max-width: 560px;
+}
+.atlas-find > label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.atlas-find-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.atlas-find-controls > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.atlas-application-cell > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.atlas-application-cell small {
+  display: block;
+  margin-top: 4px;
+}
+.atlas-page a {
+  color: var(--adm-link);
+}
+.atlas-page a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
