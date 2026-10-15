@@ -7,6 +7,55 @@ import type {
   Relationship,
 } from "./graph";
 
+/**
+ * Short explanations for evidence labels that otherwise require Splunk or
+ * networking context. Keep these descriptions factual: an info tip adds
+ * context to a label, it does not change the evidence represented by it.
+ */
+export const terms = {
+  DSR: "Direct Server Return: the response can bypass the load balancer and return directly from the backend.",
+  Local:
+    "External traffic policy Local keeps a node's traffic on local backend pods; a node without a local endpoint may have no eligible backend.",
+  IPIP: "IP-in-IP encapsulation carries one IP packet inside another tunnel packet.",
+  inferred:
+    "A backend candidate was linked by timing only. No matching Hubble tuple, translation or forwarded-client header directly determined that backend.",
+  Determined:
+    "Collected Hubble flow, address-translation or forwarded-client-header evidence linked the frontend to a backend pod. This does not establish the packet’s fabric route.",
+  "Not determined":
+    "The collected evidence did not identify which backend pod served the frontend connection. Candidate pods are not proof of a handoff.",
+  SNAT: "Source Network Address Translation replaces the client source address with an address owned by an intermediate node or gateway.",
+  ECMP: "Equal-Cost Multipath allows traffic to use any of several routes with the same routing cost.",
+  Hybrid:
+    "Hybrid load balancing combines direct server return for supported traffic with translated forwarding for other traffic.",
+  Intent:
+    "Intent is the policy contract collected from configuration; it describes the permitted relationship, not a packet observation.",
+  intent:
+    "Intent is the policy contract collected from configuration; it describes the permitted relationship, not a packet observation.",
+  sampling:
+    "Sampling means the exporter reported a sample of traffic, so counts and rates describe observed samples and may be approximate.",
+  unknown:
+    "Unknown means the available evidence could not establish a unique identity, direction, or route.",
+  VIP: "A virtual IP is the address presented by a Service or load-balancing frontend.",
+  NodePort:
+    "A NodePort exposes a Service on a port of each eligible cluster node.",
+  Ingress:
+    "Ingress is an HTTP or HTTPS route that sends requests to a backend Service.",
+  LoadBalancer:
+    "A LoadBalancer frontend exposes a Service through an externally reachable address.",
+  Gateway:
+    "A Gateway is the network entry point that accepts traffic before routing it to a backend.",
+  Hubble:
+    "Hubble is the flow observability source used here for Cilium network evidence.",
+  NetFlow:
+    "NetFlow is sampled or summarized flow telemetry describing network conversations.",
+  ACI: "ACI is the Cisco fabric policy source used for endpoint and contract evidence.",
+  OTel: "OpenTelemetry provides application span evidence, including trace and service relationships.",
+  externalTrafficPolicy:
+    "External traffic policy controls whether externally received traffic may be forwarded to a backend on another node.",
+} as const;
+
+export type GlossaryTerm = keyof typeof terms;
+
 /** Plain-language names used everywhere in the UI. */
 export const relationshipLabel: Record<Relationship, string> = {
   calls: "Traced call",

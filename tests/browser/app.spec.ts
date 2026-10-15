@@ -12,7 +12,7 @@ test.describe("Application Atlas browser regressions", () => {
       "Highlight by name, IP, EPG, port or device",
     );
     await search.fill("checkout");
-    await expect(page.getByRole("status")).toContainText("card");
+    await expect(page.locator(".match-count")).toContainText("card");
     await search.press("Enter");
     await expect(page.locator("[data-hit].match").first()).toBeVisible();
     await page.locator("[data-hit].match").first().click();
@@ -919,4 +919,171 @@ test("shrinking focus clears a selected connection outside the new neighborhood"
   await expect(
     page.getByRole("button", { name: "Clear selection", exact: true }),
   ).toHaveCount(0);
+});
+
+test("candidate paths stay on map tabs and remain available from Table inspection", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await page
+    .getByRole("article", { name: "Blocked conversation", exact: true })
+    .getByRole("button", { name: "Show path", exact: true })
+    .click();
+  await expect(page.locator(".path-strip")).toBeVisible();
+  await page.getByRole("button", { name: "Services", exact: true }).click();
+  await expect(page.locator(".path-strip")).toBeVisible();
+  await page.getByRole("button", { name: "Devices", exact: true }).click();
+  await expect(page.locator(".path-strip")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Show candidate path", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await expect(page.locator(".path-strip")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Show candidate path", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Network", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".path-strip")).toBeVisible();
+});
+
+test("inspector full names are readable and copy exact collected text", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/tests/browser/browser.html");
+  await page
+    .getByRole("article", { name: "Blocked conversation", exact: true })
+    .getByRole("button", { name: "Show path", exact: true })
+    .click();
+  const title = page.locator(".atlas-inspector-title h2");
+  const full = await title.textContent();
+  await expect(title).toHaveCSS("text-overflow", "ellipsis");
+  await page.locator(".atlas-inspector-title summary").click();
+  await expect(page.locator(".atlas-full-name")).toHaveText(full!);
+  await page
+    .getByRole("button", { name: "Copy full name", exact: true })
+    .click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe(full);
+  await expect(page.getByText("Name copied.", { exact: true })).toBeVisible();
+});
+
+test("map emphasis explains dimming and clears both highlight and selection", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  const search = page.getByLabel("Highlight by name, IP, EPG, port or device");
+  await search.fill("checkout");
+  await expect(page.locator(".atlas-emphasis-banner")).toContainText(
+    "checkout",
+  );
+  await page.mouse.move(0, 0);
+  const cards = await page.locator(".item").count();
+  const emphasizedCards = await page.locator(".item:not(.dim)").count();
+  const connections = await page.locator(".edge").count();
+  const emphasizedConnections = await page.locator(".edge:not(.dim)").count();
+  await expect(page.locator(".atlas-emphasis-banner")).toContainText(
+    `${emphasizedCards} of ${cards} cards and ${emphasizedConnections} of ${connections} connections`,
+  );
+  await search.press("Enter");
+  await page.locator(".item[data-hit].match").first().click();
+  await page.locator(".atlas-emphasis-banner").getByRole("button").click();
+  await expect(search).toHaveValue("");
+  await expect(page.locator(".atlas-emphasis-banner")).toHaveCount(0);
+  await expect(page.locator(".item.dim, .edge.dim")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Clear selection", exact: true }),
+  ).toHaveCount(0);
+  await search.fill("no-such-endpoint-zzzz");
+  await expect(page.locator(".atlas-emphasis-banner")).toContainText("0");
+});
+
+test("glossary explanations are available from the keyboard", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await page
+    .getByRole("article", { name: "Backend inferred", exact: true })
+    .getByRole("button", { name: "Show path", exact: true })
+    .click();
+  const info = page
+    .getByRole("button", { name: "Explain Determined", exact: true })
+    .first();
+  await info.focus();
+  await expect(page.getByRole("tooltip")).toContainText(
+    "linked the frontend to a backend pod",
+  );
+  await expect(info).toBeFocused();
+  await info.press("Tab");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+});
+
+test("copy-name feedback handles denied access and prevents overlapping attempts", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await page
+    .getByRole("article", { name: "Blocked conversation", exact: true })
+    .getByRole("button", { name: "Show path", exact: true })
+    .click();
+  await page.locator(".atlas-inspector-title summary").click();
+  await page.evaluate(() =>
+    Object.defineProperty(navigator.clipboard, "writeText", {
+      configurable: true,
+      value: () =>
+        new Promise((_, reject) =>
+          window.addEventListener(
+            "reject-copy",
+            () => reject(new Error("denied")),
+            { once: true },
+          ),
+        ),
+    }),
+  );
+  const copy = page.getByRole("button", {
+    name: "Copy full name",
+    exact: true,
+  });
+  await copy.click();
+  await expect(copy).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event("reject-copy")));
+  await expect(
+    page.locator(".atlas-inspector-title [role=alert]"),
+  ).toContainText("Could not copy");
+  await expect(copy).toBeEnabled();
+  await page.evaluate(() =>
+    Object.defineProperty(navigator.clipboard, "writeText", {
+      configurable: true,
+      value: () => Promise.resolve(),
+    }),
+  );
+  await copy.click();
+  await expect(page.locator(".atlas-inspector-title [role=alert]")).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".atlas-inspector-title [role=status]")).toHaveText(
+    "Name copied.",
+  );
+});
+
+test("long collected names truncate without losing their full text", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  const search = page.getByLabel("Highlight by name, IP, EPG, port or device");
+  await search.fill("cilium-ingress-shop-www");
+  await search.press("Enter");
+  await page.locator(".item[data-hit].match").first().click();
+  const heading = page.locator(".atlas-inspector-title h2");
+  await expect
+    .poll(() => heading.evaluate((el) => el.scrollWidth > el.clientWidth))
+    .toBe(true);
+  await page.locator(".atlas-inspector-title summary").click();
+  await expect(page.locator(".atlas-full-name")).toHaveText(
+    (await heading.textContent())!,
+  );
 });

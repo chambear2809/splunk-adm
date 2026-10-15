@@ -229,6 +229,80 @@ export interface EdgeDescription {
   lines: string[];
 }
 
+export interface EmphasisCounts {
+  cards: number;
+  totalCards: number;
+  connections: number;
+  totalConnections: number;
+}
+
+export interface EmphasisInput {
+  matchNodes?: ReadonlySet<string>;
+  matchEdges?: ReadonlySet<string>;
+  neighborhood?: { nodes: ReadonlySet<string>; edges: ReadonlySet<string> };
+}
+
+export interface EmphasisPredicates {
+  itemDim: (item: Item) => boolean;
+  edgeDim: (edge: GraphEdge) => boolean;
+}
+
+export function createEmphasis(
+  index: GraphIndex,
+  input: EmphasisInput,
+): EmphasisPredicates {
+  const matching = input.matchNodes !== undefined;
+  const matchEnds = new Set<string>();
+  for (const id of input.matchEdges ?? []) {
+    const edge = index.edge.get(id);
+    if (edge) matchEnds.add(edge.source).add(edge.target);
+  }
+  const ids = (item: Item) => item.members ?? [item.nodeId];
+  return {
+    itemDim: (item) =>
+      matching
+        ? !ids(item).some(
+            (id) => input.matchNodes!.has(id) || matchEnds.has(id),
+          )
+        : input.neighborhood
+          ? !ids(item).some((id) => input.neighborhood!.nodes.has(id))
+          : false,
+    edgeDim: (edge) =>
+      matching
+        ? !(
+            input.matchEdges?.has(edge.id) ||
+            input.matchNodes!.has(edge.source) ||
+            input.matchNodes!.has(edge.target)
+          )
+        : input.neighborhood
+          ? !input.neighborhood.edges.has(edge.id)
+          : false,
+  };
+}
+
+/** Counts rendered cards and routed connections using the same dim predicates as the map. */
+export function emphasisCounts(
+  layout: Layout,
+  index: GraphIndex,
+  input: EmphasisInput,
+): EmphasisCounts {
+  const { itemDim, edgeDim } = createEmphasis(index, input);
+  const items = layout.groups.flatMap((group) => group.items);
+  const dimmedCards = items.filter(itemDim).length;
+  const dimmedConnections = layout.edges.filter((routed) =>
+    routed.members.every((id) => {
+      const edge = index.edge.get(id);
+      return !edge || edgeDim(edge);
+    }),
+  ).length;
+  return {
+    cards: items.length - dimmedCards,
+    totalCards: items.length,
+    connections: layout.edges.length - dimmedConnections,
+    totalConnections: layout.edges.length,
+  };
+}
+
 export function MapView({
   layout,
   index,
@@ -243,6 +317,8 @@ export function MapView({
   deviceLabel,
   describeEdge,
   label,
+  emphasisReason,
+  onClearEmphasis,
 }: {
   layout: Layout;
   index: GraphIndex;
@@ -260,6 +336,8 @@ export function MapView({
   deviceLabel: (raw: string) => string;
   describeEdge: (edge: GraphEdge) => EdgeDescription;
   label: string;
+  emphasisReason?: string;
+  onClearEmphasis?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -446,31 +524,28 @@ export function MapView({
     }
     return { nodes, edges };
   }, [selection, index]);
-  const matchEnds = useMemo(() => {
-    const s = new Set<string>();
-    for (const id of matchEdges ?? []) {
-      const e = index.edge.get(id);
-      if (e) s.add(e.source).add(e.target);
-    }
-    return s;
-  }, [matchEdges, index]);
-  const ids = (it: Item) => it.members ?? [it.nodeId];
-  const itemDim = (it: Item) =>
-    matching
-      ? !ids(it).some((id) => matchNodes!.has(id) || matchEnds.has(id))
-      : neighborhood
-        ? !ids(it).some((id) => neighborhood.nodes.has(id))
-        : false;
-  const edgeDim = (e: GraphEdge) =>
-    matching
-      ? !(
-          matchEdges?.has(e.id) ||
-          matchNodes!.has(e.source) ||
-          matchNodes!.has(e.target)
-        )
-      : neighborhood
-        ? !neighborhood.edges.has(e.id)
-        : false;
+  const emphasisPredicates = useMemo(
+    () => createEmphasis(index, { matchNodes, matchEdges, neighborhood }),
+    [index, matchNodes, matchEdges, neighborhood],
+  );
+  const { itemDim, edgeDim } = emphasisPredicates;
+  const ids = (item: Item) => item.members ?? [item.nodeId];
+  const emphasis = useMemo(() => {
+    const items = layout.groups.flatMap((group) => group.items);
+    const dimmedCards = items.filter(itemDim).length;
+    const dimmedConnections = layout.edges.filter((routed) =>
+      routed.members.every((id) => {
+        const edge = index.edge.get(id);
+        return !edge || edgeDim(edge);
+      }),
+    ).length;
+    return {
+      cards: items.length - dimmedCards,
+      totalCards: items.length,
+      connections: layout.edges.length - dimmedConnections,
+      totalConnections: layout.edges.length,
+    };
+  }, [layout, index, itemDim, edgeDim]);
   const node = (id: string) => index.node.get(id);
   const edgeClass = (e: GraphEdge) => {
     if (e.relationship === "calls") return "call";
@@ -635,6 +710,31 @@ export function MapView({
           onSelect(null);
       }}
     >
+      {emphasisReason &&
+        (emphasis.cards < emphasis.totalCards ||
+          emphasis.connections < emphasis.totalConnections) && (
+          <div
+            className="atlas-emphasis-banner"
+            role="status"
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+          >
+            <span>
+              {emphasis.cards} of {emphasis.totalCards} cards and{" "}
+              {emphasis.connections} of {emphasis.totalConnections} connections
+              emphasized · {emphasisReason}
+            </span>
+            {onClearEmphasis && (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={onClearEmphasis}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       <svg
         role="group"
         aria-label={label}

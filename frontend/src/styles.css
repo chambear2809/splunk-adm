@@ -1817,3 +1817,72 @@
 .adm .atlas-frontend-picker select {
   width: 100%;
 }
+
+/* Compact titles keep the original collected text available on demand. */
+.adm .inspector-head > div {
+  min-width: 0;
+  flex: 1;
+}
+.adm .inspector-head > button {
+  flex-shrink: 0;
+}
+.adm .atlas-inspector-title h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+.adm .atlas-inspector-title summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--adm-ink-2);
+}
+.adm .atlas-full-name {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.adm .atlas-emphasis-banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: 6px;
+  background: var(--adm-surface);
+  color: var(--adm-ink-2);
+  font-size: 12px;
+}
+.adm .atlas-emphasis-banner button {
+  flex-shrink: 0;
+}
+.adm .atlas-info-tip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.adm .atlas-info-tip button {
+  color: inherit;
+  min-width: 18px;
+  min-height: 18px;
+}
+.adm .atlas-info-tip button:focus-visible {
+  outline: 2px solid var(--adm-call);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+.adm .atlas-emphasis-banner > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.adm .inspector-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+.adm .inspector-head {
+  min-width: 0;
+}

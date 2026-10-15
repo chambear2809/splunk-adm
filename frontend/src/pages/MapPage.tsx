@@ -431,6 +431,7 @@ export function MapPage({
       : undefined;
   const selectedEdge =
     selection?.kind === "edge" ? index.edge.get(selection.id) : undefined;
+  const pathTab = tab === "network" || tab === "services";
   const path = useMemo(
     () =>
       selectedEdge?.relationship === "communicates_with"
@@ -1179,6 +1180,17 @@ export function MapPage({
               <MapView
                 layout={layout}
                 index={displayIndex}
+                emphasisReason={
+                  q
+                    ? `Highlight matches “${q}”`
+                    : selection?.kind === "node"
+                      ? `Connections to ${label(selection.id)}`
+                      : "Selected connection and its path"
+                }
+                onClearEmphasis={() => {
+                  setQuery("");
+                  clearSelection();
+                }}
                 matchNodes={matchNodes}
                 matchEdges={matchEdges}
                 selection={selection}
@@ -1202,7 +1214,7 @@ export function MapPage({
               collapsed={layout.collapsed}
             />
           )}
-          {visible && path && selectedEdge && !pathHidden && (
+          {visible && pathTab && path && selectedEdge && !pathHidden && (
             <PathStrip
               path={path}
               title={`${label(selectedEdge.source)} → ${label(selectedEdge.target)} · ${portLabel(selectedEdge)}`}
@@ -1240,8 +1252,11 @@ export function MapPage({
                 topo={topo}
                 onSelect={(s) => (s ? select(s) : clearSelection())}
                 onClose={clearSelection}
-                onShowPath={() => setPathHidden(false)}
-                pathOpen={!!path && !pathHidden}
+                onShowPath={() => {
+                  if (!pathTab) setTab("network");
+                  setPathHidden(false);
+                }}
+                pathOpen={pathTab && !!path && !pathHidden}
                 summary={summary}
               />
               {selectedEdge && (

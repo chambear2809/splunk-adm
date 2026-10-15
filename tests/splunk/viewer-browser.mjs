@@ -254,6 +254,57 @@ try {
       await adm
         .getByRole("button", { name: "Clear selection", exact: true })
         .click();
+      stage = "phase7 emphasis and inspector";
+      await focusSearch.fill("frontend");
+      await focusSearch.press("Enter");
+      await adm
+        .getByRole("button", { name: "Service frontend", exact: true })
+        .click();
+      await adm.locator(".atlas-emphasis-banner").waitFor();
+      const fullName = await adm
+        .locator(".atlas-inspector-title h2")
+        .textContent();
+      await adm.locator(".atlas-inspector-title summary").click();
+      await adm
+        .getByRole("button", { name: "Copy full name", exact: true })
+        .click();
+      if (
+        (await page.evaluate(() => navigator.clipboard.readText())) !== fullName
+      )
+        throw new Error("Inspector name copy mismatch");
+      await root.screenshot({
+        path: `dist/atlas-phase7-inspector-${theme}.png`,
+      });
+      await adm
+        .locator(".atlas-emphasis-banner")
+        .getByRole("button", { name: "Clear", exact: true })
+        .click();
+      await adm.locator(".atlas-emphasis-banner").waitFor({ state: "hidden" });
+      if (await focusSearch.inputValue())
+        throw new Error("Highlight was not cleared");
+      stage = "phase7 path tabs";
+      await adm.getByRole("button", { name: "Table", exact: true }).click();
+      await adm
+        .locator(".table-view table")
+        .first()
+        .locator("tbody button")
+        .first()
+        .click();
+      if (await adm.locator(".path-strip").count())
+        throw new Error("Path strip leaked into Table");
+      await adm
+        .getByRole("button", { name: "Show candidate path", exact: true })
+        .click();
+      await adm.locator(".path-strip").waitFor();
+      await adm.getByRole("button", { name: "Devices", exact: true }).click();
+      await adm.locator(".path-strip").waitFor({ state: "hidden" });
+      await adm
+        .getByRole("button", { name: "Show candidate path", exact: true })
+        .click();
+      await adm
+        .getByRole("button", { name: "Clear selection", exact: true })
+        .click();
+      evidence.phase7 = { emphasis: true, copyName: true, pathTabs: true };
       evidence.readability = {
         filters: true,
         focus: true,
@@ -550,6 +601,40 @@ try {
       await demo.getByLabel("Hide infrastructure", { exact: true }).uncheck();
       if (await demo.locator(".atlas-filter-status").count())
         throw new Error("Demo filter did not clear");
+      stage = "phase7 demo tooltip";
+      await page
+        .getByRole("article", { name: "Backend inferred", exact: true })
+        .getByRole("button", { name: "Show path", exact: true })
+        .click();
+      const glossaryButton = page
+        .getByRole("button", { name: "Explain Determined", exact: true })
+        .first();
+      await glossaryButton.focus();
+      await page.getByRole("tooltip").waitFor();
+      if (
+        !(await page.getByRole("tooltip").innerText()).includes(
+          "linked the frontend to a backend pod",
+        )
+      )
+        throw new Error("Missing glossary explanation");
+      await root.screenshot({ path: `dist/atlas-phase7-tooltip-${theme}.png` });
+      await glossaryButton.press("Tab");
+      await page.getByRole("tooltip").waitFor({ state: "hidden" });
+      const longHeading = demo.locator(".atlas-inspector-title h2");
+      if (
+        !(await longHeading.evaluate((el) => el.scrollWidth > el.clientWidth))
+      )
+        throw new Error("Long inspector name did not truncate");
+      await demo.locator(".atlas-inspector-title summary").click();
+      await root.screenshot({
+        path: `dist/atlas-phase7-long-name-${theme}.png`,
+      });
+      await demo
+        .getByRole("button", { name: "Clear selection", exact: true })
+        .click();
+      evidence.phase7.tooltip = true;
+      evidence.phase7.longName = true;
+
       const demoFinding = page
         .getByRole("article")
         .filter({ hasText: "Blocked conversation" })
