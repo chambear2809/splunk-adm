@@ -103,6 +103,8 @@ export function stateParams(state: UrlState): URLSearchParams {
   return params;
 }
 
+export const URL_STATE_CHANGED = "atlas:url-state-changed";
+
 export function writeUrlState(state: UrlState) {
   if (typeof window === "undefined") return;
   // Invalid text in a scope field stays in the form, never in a shared URL.
@@ -127,6 +129,7 @@ export function writeUrlState(state: UrlState) {
       "",
       `${location.pathname}?${params}${location.hash}`,
     );
+    window.dispatchEvent(new Event(URL_STATE_CHANGED));
   } catch {
     /* Form validation explains the invalid value. */
   }

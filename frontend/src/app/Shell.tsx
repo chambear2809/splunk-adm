@@ -1,8 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import styled from "styled-components";
 import useSplunkThemeExport from "@splunk/themes/useSplunkTheme";
 import { toolkitDefault } from "./interop";
-import { PAGES, pageURL, type Page } from "./urlState";
+import { PAGES, pageURL, URL_STATE_CHANGED, type Page } from "./urlState";
 import type { SearchClient } from "../data/searchClient";
 import { healthIndicator, useHealthStatus } from "../data/healthStatus";
 
@@ -38,6 +38,19 @@ export function Shell({
   client?: SearchClient;
   live?: boolean;
 }) {
+  const [search, setSearch] = useState(() =>
+    typeof location === "undefined" ? "" : location.search,
+  );
+  useEffect(() => {
+    const sync = () => setSearch(location.search);
+    window.addEventListener(URL_STATE_CHANGED, sync);
+    window.addEventListener("popstate", sync);
+    sync();
+    return () => {
+      window.removeEventListener(URL_STATE_CHANGED, sync);
+      window.removeEventListener("popstate", sync);
+    };
+  }, []);
   const t = useSplunkTheme();
   const tokens = {
     fontFamily: t.fontFamily,
@@ -76,12 +89,7 @@ export function Shell({
         {PAGES.map((p) => (
           <a
             key={p}
-            href={pageURL(
-              p,
-              new URLSearchParams(
-                typeof location === "undefined" ? "" : location.search,
-              ),
-            )}
+            href={pageURL(p, new URLSearchParams(search))}
             aria-current={p === page ? "page" : undefined}
           >
             {labels[p]}
@@ -89,12 +97,7 @@ export function Shell({
         ))}
         <a
           className={`health-status health-${indicator}`}
-          href={pageURL(
-            "data_health",
-            new URLSearchParams(
-              typeof location === "undefined" ? "" : location.search,
-            ),
-          )}
+          href={pageURL("data_health", new URLSearchParams(search))}
           title={indicatorLabel}
           aria-label={indicatorLabel}
         >

@@ -1292,3 +1292,32 @@ test("a sole live scope is preselected without building automatically", async ({
     ),
   ).toBe(0);
 });
+
+test("navigation follows map scope edits and browser history", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
+  await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+  const namespace = page.getByRole("combobox", {
+    name: "Namespace",
+    exact: true,
+  });
+  await namespace.fill("payments");
+  for (const name of ["Applications", "Data health"]) {
+    await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute(
+      "href",
+      /namespace=payments/,
+    );
+  }
+  await page.evaluate(() => {
+    const url = new URL(location.href);
+    url.searchParams.set("namespace", "history-scope");
+    history.replaceState(null, "", url);
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(
+    page.getByRole("link", { name: "Applications", exact: true }),
+  ).toHaveAttribute("href", /namespace=history-scope/);
+});
