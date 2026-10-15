@@ -57,14 +57,19 @@ function edgeComparable(edge: GraphEdge): unknown {
   };
 }
 
-const workloadKey = (node: GraphNode) =>
-  [
+const workloadKey = (node: GraphNode) => {
+  const ownerOrService = [
+    node.attributes?.owner,
+    node.attributes?.service,
+  ].find((value) => typeof value === "string" && value.trim());
+  return [
     node.cluster ?? "",
     node.namespace ?? "",
-    node.attributes?.owner ?? node.attributes?.service ?? node.label,
+    ownerOrService ?? `id:${node.id}`,
   ]
     .map((part) => encodeURIComponent(part))
     .join("/");
+};
 
 function nodeKey(node: GraphNode): string {
   if (node.kind === "workload") return `workload:${workloadKey(node)}`;

@@ -81,7 +81,9 @@ export function ChangePanel({
       <p>
         Compare the loaded map with the immediately preceding window of the same
         length. Connections are matched by ID; pod groups by owner or service. A
-        changed pod ID can still change a connection ID.
+        changed pod ID can still change a connection ID. Pods without stable
+        owner or service metadata are matched by exact ID and may appear as an
+        addition and removal when they are replaced.
       </p>
       <button className="secondary-button" onClick={compare} disabled={busy}>
         {busy ? "Comparing…" : "Compare previous window"}

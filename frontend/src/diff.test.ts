@@ -116,6 +116,39 @@ describe("diffGraphs", () => {
     });
   });
 
+  it("does not conflate ownerless pods that share a generated label", () => {
+    const previousPod = node("pod/old-uid", "workload", {
+      label: "api-7c8d9f",
+      namespace: "ns",
+      cluster: "cluster",
+    });
+    const currentPod = { ...previousPod, id: "pod/new-uid" };
+    const result = diffGraphs(
+      graph([previousPod], []),
+      graph([currentPod], []),
+    );
+    expect(result.addedNodes).toEqual([currentPod]);
+    expect(result.removedNodes).toEqual([previousPod]);
+    expect(result.changedNodes).toEqual([]);
+  });
+
+  it("treats blank owner and service metadata as missing", () => {
+    const previousPod = node("pod/old-uid", "workload", {
+      label: "api-7c8d9f",
+      namespace: "ns",
+      cluster: "cluster",
+      attributes: { owner: "  ", service: "" },
+    });
+    const currentPod = { ...previousPod, id: "pod/new-uid" };
+    const result = diffGraphs(
+      graph([previousPod], []),
+      graph([currentPod], []),
+    );
+    expect(result.addedNodes).toEqual([currentPod]);
+    expect(result.removedNodes).toEqual([previousPod]);
+    expect(result.changedNodes).toEqual([]);
+  });
+
   it("keeps service identities from different environments distinct", () => {
     const previous = node("service:c/ns/api/demo", "service", {
       label: "api",
