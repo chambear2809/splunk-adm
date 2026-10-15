@@ -17,10 +17,23 @@ import { join } from "node:path";
 const root = new URL("../", import.meta.url);
 process.chdir(fileURLToPath(root));
 const app = "splunk_app/splunk_adm";
-await access(`${app}/appserver/static/adm.bundle.js`);
 await access(`${app}/appserver/static/adm.css`);
 await access(`${app}/appserver/static/pages/atlas.js`);
 await access(`${app}/default/data/ui/views/map.xml`);
+
+// Keep captured rows outside the executable bundle. They remain grounded lab data.
+await mkdir(`${app}/appserver/static/demo`, { recursive: true });
+for (const file of [
+  "demo-scopes.json",
+  "demo-catalog.json",
+  "demo-find.json",
+  "demo-rows.json",
+  "demo-rows-aci.json",
+  "demo-rows-aci-prev.json",
+  "demo-topology.json",
+  "demo-topology-aci.json",
+])
+  await copyFile(`fixtures/${file}`, `${app}/appserver/static/demo/${file}`);
 
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 const appConf = await readFile(`${app}/default/app.conf`, "utf8");
@@ -107,7 +120,7 @@ for (const dir of depDirs) {
 }
 await writeFile(
   `${stage}/THIRD_PARTY_NOTICES.txt`,
-  "Third-party software bundled in appserver/static/adm.bundle.js and pages/atlas.js\n\n" +
+  "Third-party software bundled in appserver/static/pages/atlas.js\n\n" +
     [...notices.keys()]
       .sort()
       .map((name) => notices.get(name))
@@ -132,36 +145,29 @@ async function normalizeModes(dir) {
 }
 await normalizeModes(stage);
 
-// A full install includes the legacy CSV template. Keep it out of upgrades
-// to preserve existing rows for the one-time admin migration to scope KV.
 const bsd = execFileSync("tar", ["--version"]).toString().includes("bsdtar");
 const ownership = bsd
   ? ["--uid", "0", "--gid", "0", "--uname", "splunk", "--gname", "splunk"]
   : ["--owner=0", "--group=0", "--numeric-owner"];
-for (const upgrade of [false, true]) {
-  const filename = `splunk_adm-${version}${upgrade ? "-upgrade" : ""}.tar.gz`;
-  const archive = `dist/${filename}`;
-  execFileSync(
-    "tar",
-    [
-      "-czf",
-      archive,
-      "--no-xattrs",
-      ...ownership,
-      "--exclude",
-      ".DS_Store",
-      ...(upgrade
-        ? ["--exclude", "splunk_adm/lookups/adm_observer_scope.csv"]
-        : []),
-      "-C",
-      stageRoot,
-      "splunk_adm",
-    ],
-    { stdio: "inherit", env: { ...process.env, COPYFILE_DISABLE: "1" } },
-  );
-  const sha = createHash("sha256")
-    .update(await readFile(archive))
-    .digest("hex");
-  await writeFile(`${archive}.sha256`, `${sha}  ${filename}\n`);
-  console.log(`Created ${archive} (build ${build})\nSHA256 ${sha}`);
-}
+const filename = `splunk_adm-${version}.tar.gz`;
+const archive = `dist/${filename}`;
+execFileSync(
+  "tar",
+  [
+    "-czf",
+    archive,
+    "--no-xattrs",
+    ...ownership,
+    "--exclude",
+    ".DS_Store",
+    "-C",
+    stageRoot,
+    "splunk_adm",
+  ],
+  { stdio: "inherit", env: { ...process.env, COPYFILE_DISABLE: "1" } },
+);
+const sha = createHash("sha256")
+  .update(await readFile(archive))
+  .digest("hex");
+await writeFile(`${archive}.sha256`, `${sha}  ${filename}\n`);
+console.log(`Created ${archive} (build ${build})\nSHA256 ${sha}`);

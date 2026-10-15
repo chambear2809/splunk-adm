@@ -1,0 +1,155 @@
+{
+  "earliest": "1791370800",
+  "latest": "1791374400",
+  "provenance": {
+    "source": "adm_find",
+    "schema": [
+      "_key",
+      "service",
+      "environment",
+      "cluster",
+      "namespace",
+      "pods",
+      "last_seen"
+    ],
+    "input_fields": [
+      "service",
+      "environment",
+      "cluster",
+      "namespace",
+      "pod_uid",
+      "last_seen",
+      "client_ip",
+      "server_ip",
+      "server_port",
+      "transport"
+    ],
+    "collections": [
+      "adm_service_workload",
+      "adm_ip_identity"
+    ],
+    "summary_index_macro": "adm_index_summary",
+    "macro_sha256": "d67a260a8cf193a66074df395619a40fe62f48c52adb61be524f60beda886fed",
+    "macro_definitions": {
+      "adm_catalog_append_kv": "ca479be37768112022cea6277972dce241a5f80c32c79f96f344f6427209f135",
+      "adm_catalog_build": "aaaa5ef7b2b692361ce3888be26271c59099ed3b5076d9898bf6fb4a222a8f2b",
+      "adm_catalog_build_status": "4bba45f506118cc52010c737487fa554583d2cf9823ea9f1b9042a8d8608f846",
+      "adm_catalog_edges": "fa73f5b98e9bd4653f6163172981eaa02f3c906f9780fb1ebd06c9fb063036f2",
+      "adm_catalog_metrics": "8c0a03d47e00460da7df2d05bd0b5309127c9324591bc758af78dbf3031bb43a",
+      "adm_find": "4d9d3609fb9128bc7a2866d433406ff0889728220aaba8171412aff46dc5febd",
+      "adm_identity_desc": "dc945cbe46ecf06ddfced172e1ba80ba8a54e8fb7feb814222a56df18f2a7fb9",
+      "adm_identity_max_matches": "1bf55f77f7bd3db917d5d0a1fc2a51c916f2c9d9383ea0287758ca39e3db03c1",
+      "adm_index_summary": "be4b2eb2b2a1e15ca036c69aba19b9c569c843e044ee0995471575b87a925eed",
+      "adm_is_private": "40a38ee01baae4027453661dd8d84aee55cf7f337b1d43b827241261171a8afd",
+      "adm_kv_complete": "0a42226083e92150c4832840e9f947e1d26c9f898d1573a5cd6dd5a0678a6e5a",
+      "adm_kv_page_size": "cc10cd70a9f6b77ea10ec6d5cddf7bbf5b490661cd5e0b382f25ac1279897479",
+      "adm_pick": "5347d41f0e9c1fcd8cf4e7d5b1352a11b0e4e1e731b8804a97f572f9352cb982",
+      "adm_poll_interval": "aed9f66b67207613ddcb2e4243c30c2068c17c755d3ce18ac445c952732a52f1",
+      "adm_resolve": "7c2d0d29c7d15b314cd028245c47264d2f5ec46189af4f55368b141d37633990",
+      "adm_summary_dedup": "760a7feaa6c3063eeeea3a0d11c42bae19d81900e8eafc1b13fe83a31f6f1e62"
+    },
+    "raw_scenario": "fixtures/raw-aci/scenario.json",
+    "method": "tests/splunk/lab.py search against initialized lab",
+    "earliest": "1791370800",
+    "latest": "1791374400",
+    "captured_at": 1792038960
+  },
+  "queries": [
+    {
+      "query": "10.42.0.15",
+      "search": "| `adm_find(\"10.42.0.15\")`",
+      "rows": [
+        {
+          "_key": "ad74d5f523b6fc18b40e263e2cb4b07f6c5bb7e9854a94ea327fbfa58a7ea2a7",
+          "service": "checkout",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791373820"
+        },
+        {
+          "_key": "898579f85d57f9db18d3b0d2413c764244dd14771b595e67f64da1e83df7f06f",
+          "service": "frontend",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791375360"
+        }
+      ]
+    },
+    {
+      "query": "10.20.30.40",
+      "search": "| `adm_find(\"10.20.30.40\")`",
+      "rows": [
+        {
+          "_key": "ad74d5f523b6fc18b40e263e2cb4b07f6c5bb7e9854a94ea327fbfa58a7ea2a7",
+          "service": "checkout",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791373820"
+        }
+      ]
+    },
+    {
+      "query": "db",
+      "search": "| `adm_find(\"db\")`",
+      "rows": [
+        {
+          "_key": "ad74d5f523b6fc18b40e263e2cb4b07f6c5bb7e9854a94ea327fbfa58a7ea2a7",
+          "service": "checkout",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791373820"
+        }
+      ]
+    },
+    {
+      "query": "pod-1/node-103",
+      "search": "| `adm_find(\"pod-1/node-103\")`",
+      "rows": [
+        {
+          "_key": "29a2229d28d9b7f29dcfe7fe6b397ea415489b46595bb1e0e6550c1400154356",
+          "service": "cart",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791373980"
+        },
+        {
+          "_key": "ad74d5f523b6fc18b40e263e2cb4b07f6c5bb7e9854a94ea327fbfa58a7ea2a7",
+          "service": "checkout",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791373820"
+        },
+        {
+          "_key": "898579f85d57f9db18d3b0d2413c764244dd14771b595e67f64da1e83df7f06f",
+          "service": "frontend",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791375360"
+        },
+        {
+          "_key": "9578413dabcdfa8d00484c31074664d6b6af489a1bd7895d4428f29c48657c2f",
+          "service": "payment",
+          "environment": "demo",
+          "cluster": "demo-cluster",
+          "namespace": "shop",
+          "pods": "1",
+          "last_seen": "1791374040"
+        }
+      ]
+    }
+  ]
+}

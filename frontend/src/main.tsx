@@ -1,74 +1,115 @@
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
-import type { SearchConstructor } from "./provider";
+import SplunkThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
+import { getThemeOptions } from "@splunk/splunk-utils/themes";
+import { username } from "@splunk/splunk-utils/config";
+import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
+import { createRESTURL } from "@splunk/splunk-utils/url";
+import { toolkitDefault } from "./app/interop";
+import { resolveUserTheme } from "./app/theme";
+import {
+  pageFromPath,
+  pageURL,
+  recoverUrlState,
+  writeUrlState,
+  type Page,
+} from "./app/urlState";
+import { DeepLinkNotice } from "./app/DeepLinkNotice";
+import { AtlasApp } from "./app/AtlasApp";
+import { jobClient } from "./data/searchClient";
+import { prepareDemo } from "./data/demoClient";
 import "./styles.css";
-interface MVC {
-  Components?: {
-    getInstance?: (id: string) => unknown;
-    revokeInstance?: (id: string) => void;
-  };
-}
-declare global {
-  interface Window {
-    require?: (
-      deps: string[],
-      callback: (SearchManager: SearchConstructor, mvc: MVC) => void,
-      error?: (error: Error) => void,
-    ) => void;
+
+const ThemeProvider = toolkitDefault(SplunkThemeProviderExport);
+async function userTimezone(): Promise<string | undefined> {
+  if (!username) return;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(
+      createRESTURL(`authentication/users/${encodeURIComponent(username)}`, {
+        sharing: "system",
+      }) + "?output_mode=json",
+      { ...getDefaultFetchInit(), signal: controller.signal },
+    );
+    if (!response.ok) return;
+    const data = await response.json();
+    const tz: unknown = data.entry?.[0]?.content?.tz;
+    if (typeof tz === "string" && tz) {
+      new Intl.DateTimeFormat(undefined, { timeZone: tz });
+      return tz;
+    }
+  } catch {
+    /* Browser timezone remains available if REST access is unavailable. */
+  } finally {
+    clearTimeout(timer);
   }
 }
-type DemoData = Parameters<typeof App>[0]["demoData"];
-function mount(
-  SearchManager?: SearchConstructor,
-  mvc?: MVC,
-  demoData?: DemoData,
-) {
-  const root = document.getElementById("adm-root");
-  if (!root || root.dataset.mounted) return;
-  root.dataset.mounted = "true";
-  const releaseManager = (id: string) => {
-    if (mvc?.Components?.getInstance?.(id)) mvc.Components.revokeInstance?.(id);
-  };
-  createRoot(root).render(
-    <App
-      SearchManager={SearchManager}
-      releaseManager={releaseManager}
-      inSplunk={root.dataset.splunk === "true"}
-      demoData={demoData}
-    />,
-  );
-}
-if (__ADM_SPLUNK_BUILD__) {
-  const failed = () => {
-    const root = document.getElementById("adm-root");
-    if (root)
-      root.textContent =
-        "Unable to load Splunk search integration. Check dashboard JavaScript permissions and reload.";
-  };
-  if (window.require)
-    window.require(
-      [
-        "splunkjs/mvc/searchmanager",
-        "splunkjs/mvc",
-        "splunkjs/mvc/simplexml/ready!",
-      ],
-      mount,
-      failed,
+async function mount(node: HTMLElement) {
+  if (node.dataset.mounted) return;
+  node.dataset.mounted = "true";
+  try {
+    const params = new URLSearchParams(location.search);
+    const page: Page | "dependency_map" = __ADM_SPLUNK_BUILD__
+      ? pageFromPath(location.pathname)
+      : (() => {
+          const name =
+            location.pathname.split("/").filter(Boolean).at(-1) ??
+            "applications";
+          return pageFromPath(
+            `/app/splunk_adm/${name === "index.html" ? "applications" : name}`,
+          );
+        })();
+    if (page === "dependency_map") {
+      location.replace(pageURL("map", params));
+      return;
+    }
+    const { state, notice } = recoverUrlState(params, __ADM_SPLUNK_BUILD__);
+    if (notice) writeUrlState(state);
+    if (page === "map" && state.mode === "demo") await prepareDemo();
+    const [preference, timezone] = await Promise.all([
+      __ADM_SPLUNK_BUILD__
+        ? resolveUserTheme()
+        : Promise.resolve(params.get("theme") === "dark" ? "dark" : "light"),
+      __ADM_SPLUNK_BUILD__ ? userTimezone() : Promise.resolve(undefined),
+    ]);
+    const options = getThemeOptions(preference);
+    createRoot(node).render(
+      <ThemeProvider {...options}>
+        <DeepLinkNotice message={notice} />
+        <AtlasApp
+          usePersonaDefault={!params.has("tab")}
+          user={__ADM_SPLUNK_BUILD__ ? username : "demo"}
+          page={page}
+          state={state}
+          client={__ADM_SPLUNK_BUILD__ ? jobClient : undefined}
+          theme={options.colorScheme === "dark" ? "dark" : "light"}
+          timezone={timezone}
+          inSplunk={__ADM_SPLUNK_BUILD__}
+        />
+      </ThemeProvider>,
     );
-  else failed();
-} else if (
-  import.meta.env.DEV &&
-  new URLSearchParams(location.search).get("data") === "aci-unit"
-) {
-  // Development harness: renders the unit-test ACI rows, never shipped.
-  void Promise.all([
-    import("./testdata/aci"),
-    import("./rows"),
-    import("./topology"),
-  ]).then(([d, rows, topo]) =>
-    mount(undefined, undefined, {
-      graph: () => rows.rowsToGraph(d.aciGraphRows, d.aciArgs, { demo: true }),
-      topology: () => topo.rowsToTopology(d.aciTopologyRows),
-    }),
-  );
-} else mount();
+  } catch (error) {
+    node.textContent = `Application Atlas could not load. ${error instanceof Error ? error.message : "Reload the page."}`;
+  }
+}
+// Simple XML loads custom JS before its HTML panel is necessarily ready.
+const existing = document.getElementById("atlas-root");
+if (existing) void mount(existing);
+else {
+  const observer = new MutationObserver(() => {
+    const node = document.getElementById("atlas-root");
+    if (node) {
+      observer.disconnect();
+      clearTimeout(timer);
+      void mount(node);
+    }
+  });
+  const timer = setTimeout(() => {
+    observer.disconnect();
+    console.error("Application Atlas mount node did not appear.");
+  }, 30000);
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}

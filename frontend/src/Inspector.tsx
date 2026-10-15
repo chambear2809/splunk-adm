@@ -1,3 +1,5 @@
+import { InfoTip } from "./InfoTip";
+import { InspectorTitle } from "./InspectorTitle";
 import { Fragment } from "react";
 import { ChevronRight, Route, X } from "lucide-react";
 import {
@@ -226,11 +228,10 @@ export function Inspector({
           <span className={`chip ${edge.relationship}`}>
             {relationshipLabel[edge.relationship]}
           </span>
-          <h2>
-            {from?.label ?? edge.source}
-            <span className="arrow">{unknownDir ? " ↔ " : " → "}</span>
-            {to?.label ?? edge.target}
-          </h2>
+          <InspectorTitle
+            key={edge.id}
+            name={`${from?.label ?? edge.source}${unknownDir ? " ↔ " : " → "}${to?.label ?? edge.target}`}
+          />
         </div>
         {close}
       </div>
@@ -264,7 +265,13 @@ export function Inspector({
               <span
                 className={`status ${edge.confidence === "inferred" ? "warn" : "ok"}`}
               >
-                {handoffConfidence(edge.confidence)}
+                <InfoTip
+                  term={
+                    edge.confidence === "inferred" ? "inferred" : "Determined"
+                  }
+                >
+                  {handoffConfidence(edge.confidence)}
+                </InfoTip>
               </span>
             ) : undefined,
           ],
@@ -292,11 +299,18 @@ export function Inspector({
           ["Direction", directionLabel(edge)],
           [
             "Encapsulation",
-            tunnelOf(edge)
-              ? tunnelOf(edge) === "ipip"
-                ? "IPIP between nodes (Cilium DSR to a remote backend); the client connection inside is not visible here"
-                : `${tunnelLabel(tunnelOf(edge)!)} between nodes; pod traffic inside is not visible here`
-              : undefined,
+            tunnelOf(edge) ? (
+              tunnelOf(edge) === "ipip" ? (
+                <>
+                  {" "}
+                  <InfoTip term="IPIP" /> between nodes (Cilium{" "}
+                  <InfoTip term="DSR" /> to a remote backend); the client
+                  connection inside is not visible here
+                </>
+              ) : (
+                `${tunnelLabel(tunnelOf(edge)!)} between nodes; pod traffic inside is not visible here`
+              )
+            ) : undefined,
           ],
           [
             conv || forward ? "Connections" : "Spans",
@@ -340,7 +354,15 @@ export function Inspector({
                     <span
                       className={`status ${s.confidence === "inferred" ? "warn" : "ok"}`}
                     >
-                      {handoffConfidence(s.confidence)}
+                      <InfoTip
+                        term={
+                          s.confidence === "inferred"
+                            ? "inferred"
+                            : "Determined"
+                        }
+                      >
+                        {handoffConfidence(s.confidence)}
+                      </InfoTip>
                     </span>{" "}
                     {handoffShort[s.handoff_basis!]}
                   </b>
@@ -369,8 +391,8 @@ export function Inspector({
           )}
           {edge.contract_basis === "intent" && (
             <p className="muted small">
-              Intent from collected ACI policy objects, not proof the fabric
-              permitted this traffic.
+              <InfoTip term="Intent" /> from collected ACI policy objects, not
+              proof the fabric permitted this traffic.
             </p>
           )}
           {policyReason(edge) && (
@@ -472,7 +494,7 @@ function NodeDetails({
           <span className={`chip ${unknown ? "warn" : node.kind}`}>
             {kindLabel(node)}
           </span>
-          <h2>{node.label}</h2>
+          <InspectorTitle key={node.id} name={node.label} />
         </div>
         {close}
       </div>
@@ -514,6 +536,14 @@ function NodeDetails({
               label,
               k === "attach_device" ? (
                 <Device raw={attrs[k]} topo={topo} />
+              ) : k === "traffic_policy" && attrs[k] === "Local" ? (
+                <InfoTip term="Local" />
+              ) : k === "lb_mode" && attrs[k] === "dsr" ? (
+                <InfoTip term="DSR" />
+              ) : k === "lb_mode" && attrs[k] === "snat" ? (
+                <InfoTip term="SNAT" />
+              ) : k === "lb_mode" && attrs[k] === "hybrid" ? (
+                <InfoTip term="Hybrid" />
               ) : (
                 attributeValue(k, attrs[k])
               ),

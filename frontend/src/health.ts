@@ -1,4 +1,4 @@
-import { runRows, type SearchConstructor } from "./provider";
+import type { SearchClient } from "./data/searchClient";
 import type { Row } from "./rows";
 
 export const SOURCE_NAMES = [
@@ -18,6 +18,7 @@ export const JOB_NAMES = [
   "ACI policy",
   "Interface inventory",
   "Conversation rollup",
+  "Application catalog",
   "Identity prune",
   "Service binding prune",
   "Service backends prune",
@@ -173,7 +174,8 @@ export function jobStatus(job: JobHealth, now: number): string {
       : "Run outcome unavailable";
   const threshold = job.name.endsWith("prune")
     ? 26 * 3600
-    : job.name.endsWith("Interface inventory")
+    : job.name.endsWith("Interface inventory") ||
+        job.name.endsWith("Application catalog")
       ? 2 * 3600
       : 1200;
   if (!job.lastSuccess) return "Successful run not confirmed";
@@ -182,22 +184,18 @@ export function jobStatus(job: JobHealth, now: number): string {
     : "Recent successful run";
 }
 export async function loadHealth(
-  SearchManager: SearchConstructor,
+  client: SearchClient,
   signal: AbortSignal,
-  release?: (id: string) => void,
 ): Promise<HealthReport> {
   const searches = ["sources", "jobs", "quality"] as const;
   const results = await Promise.allSettled(
     searches.map((part) =>
-      runRows(SearchManager, {
+      client.search({
         search: `| \`adm_health_${part}\``,
         earliest: "-24h",
+        latest: "now",
         maxRows: part === "quality" ? 500 : 100,
         signal,
-        release,
-        tooLarge: () =>
-          new Error("Health results exceeded the expected limit."),
-        empty: `No ${part} health rows were returned.`,
       }),
     ),
   );

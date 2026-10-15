@@ -2,10 +2,21 @@ import hashlib
 import io
 import tarfile
 import unittest
+from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.check_release import DEPLOYMENT_OWNED, check_release
+from tools.check_release import MAX_ATLAS_GZIP_BYTES, check_release
+
+
+def _incompressible(size: int) -> bytes:
+    """Deterministic bytes that do not let gzip hide bundle size."""
+    chunks: list[bytes] = []
+    counter = 0
+    while counter * 32 < size:
+        chunks.append(sha256(f"atlas-{counter}".encode()).digest())
+        counter += 1
+    return b"".join(chunks)[:size]
 
 
 class ReleaseArchiveTests(unittest.TestCase):
@@ -41,9 +52,24 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"[triggers]\nreload.adm_recovery = simple\n"
         )
         return {
-            "splunk_adm/appserver/static/adm.bundle.js": b"bundle",
             "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle",
-            "splunk_adm/default/data/ui/views/map.xml": b"view",
+            **{
+                f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
+                for name in (
+                    "demo-scopes",
+                    "demo-catalog",
+                    "demo-find",
+                    "demo-rows",
+                    "demo-rows-aci",
+                    "demo-rows-aci-prev",
+                    "demo-topology",
+                    "demo-topology-aci",
+                )
+            },
+            **{
+                f"splunk_adm/default/data/ui/views/{page}.xml": b"view"
+                for page in ("applications", "map", "data_health", "setup", "help")
+            },
             "splunk_adm/appserver/static/adm.css": b"css",
             "splunk_adm/default/app.conf": config,
             "splunk_adm/LICENSE": b"license",
@@ -61,30 +87,32 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/default/data/ui/nav/default.xml": b"<nav />\n",
             "splunk_adm/default/data/ui/views/dependency_map.xml": b"<view />\n",
             "splunk_adm/metadata/default.meta": b"[x]\n",
-            DEPLOYMENT_OWNED: b"observer,scope\n",
         }
 
     def _write_pair(self, install=None, upgrade=None):
         install = install or self._files()
-        upgrade = upgrade or {
-            key: value for key, value in install.items() if key != DEPLOYMENT_OWNED
-        }
         self._write_archive("splunk_adm-1.2.3.tar.gz", install)
-        self._write_archive("splunk_adm-1.2.3-upgrade.tar.gz", upgrade)
 
     def test_accepts_valid_pair(self):
         self._write_pair()
         check_release(self.root / "dist", self.root / "package.json")
 
-    def test_rejects_upgrade_byte_drift(self):
+    def test_rejects_atlas_bundle_over_gzip_limit(self):
         install = self._files()
-        upgrade = {
-            key: value for key, value in install.items() if key != DEPLOYMENT_OWNED
-        }
-        upgrade["splunk_adm/default/macros.conf"] = b"changed\n"
-        self._write_pair(install, upgrade)
-        with self.assertRaisesRegex(ValueError, "bytes differ"):
+        install["splunk_adm/appserver/static/pages/atlas.js"] = _incompressible(
+            MAX_ATLAS_GZIP_BYTES + 4096
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, r"atlas\.js gzip bundle.*maximum"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_accepts_atlas_bundle_just_under_gzip_limit(self):
+        install = self._files()
+        install["splunk_adm/appserver/static/pages/atlas.js"] = _incompressible(
+            MAX_ATLAS_GZIP_BYTES - 4096
+        )
+        self._write_pair(install)
+        check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_critical_config(self):
         install = self._files()
@@ -195,10 +223,6 @@ class ReleaseArchiveTests(unittest.TestCase):
         link.type = tarfile.SYMTYPE
         link.linkname = "app.conf"
         self._write_archive("splunk_adm-1.2.3.tar.gz", install, [link])
-        self._write_archive(
-            "splunk_adm-1.2.3-upgrade.tar.gz",
-            {key: value for key, value in install.items() if key != DEPLOYMENT_OWNED},
-        )
         with self.assertRaisesRegex(ValueError, "links or special files"):
             check_release(self.root / "dist", self.root / "package.json")
 
@@ -207,10 +231,6 @@ class ReleaseArchiveTests(unittest.TestCase):
         duplicate = tarfile.TarInfo("splunk_adm/LICENSE")
         duplicate.size = 0
         self._write_archive("splunk_adm-1.2.3.tar.gz", install, [duplicate])
-        self._write_archive(
-            "splunk_adm-1.2.3-upgrade.tar.gz",
-            {key: value for key, value in install.items() if key != DEPLOYMENT_OWNED},
-        )
         with self.assertRaisesRegex(ValueError, "duplicate archive member"):
             check_release(self.root / "dist", self.root / "package.json")
 

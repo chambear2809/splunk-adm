@@ -1,6 +1,6 @@
 # Application Atlas pilot
 
-Splunk app for network-perspective application dependency mapping, targeting Splunk Enterprise 10.6 for the pilot and Splunk Cloud afterwards. The app builds the map inside Splunk from the installed TAs' data; see [DATA_LAYER.md](DATA_LAYER.md) for the searches, lookups and contracts. It has been validated against TA-shaped synthetic events in a local Splunk 10.6 container, not yet against a live environment.
+Splunk app for network-perspective application dependency mapping, targeting Splunk Cloud and Splunk Enterprise 10.6+. The app builds the map inside Splunk from the installed TAs' data; see [DATA_LAYER.md](DATA_LAYER.md) for the searches, lookups and contracts. It has been validated against TA-shaped synthetic events in a local Splunk 10.6 container, not yet against a live environment.
 
 ## Run locally
 
@@ -21,7 +21,7 @@ npm test
 npm run package
 ```
 
-`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates full-install `dist/splunk_adm-<version>.tar.gz` and `dist/splunk_adm-<version>-upgrade.tar.gz` archives, each with a SHA256 file. Use the upgrade archive for an existing installation so its legacy CSV migration source is preserved (live scope data is in KV); see [upgrade checks](UPGRADES.md). Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
+`npm run package` builds the standalone preview into `dist/preview/`, builds a self-contained React bundle and CSS into the app's `appserver/static/`, stages the app in `dist/stage/splunk_adm` (adding an `[install] build` number and `docs/DATA_LAYER.md`), and creates one `dist/splunk_adm-<version>.tar.gz` archive and its SHA256 file for installs and updates. The archive contains neither scope KV rows nor the legacy CSV migration source, so existing state is preserved; see [upgrade checks](UPGRADES.md). Packaging fails if the `app.conf` versions differ from `package.json`. Set `SOURCE_DATE_EPOCH` for a reproducible build number. No CDN assets or runtime npm installation are required.
 
 Python lint: `ruff check tools tests` and `ruff format --check tools tests` (install Ruff separately).
 
@@ -31,7 +31,7 @@ AppInspect (requires libmagic, e.g. `brew install libmagic`; install `splunk-app
 splunk-appinspect inspect dist/splunk_adm-0.2.0.tar.gz --mode precert --included-tags cloud
 ```
 
-Expected result: no failures or errors; informational warnings for SplunkJS usage, `collections.conf`, and RFC 5737 documentation IPs in the demo data.
+Use Python 3.11 for AppInspect and save its JSON report (`--output-file dist/appinspect-cloud.json`). Run `python3 tools/check_appinspect.py dist/appinspect-cloud.json`; errors and failures block release. The integrated baseline has five warnings: Python script existence, custom-conf replication, `collections.conf`, Python SDK version and synthetic/documentation hostnames/IPs. No legacy SplunkJS bundle ships. See [final integration readiness](UI-PHASE-9.md) for the current evidence and Cloud qualification limits.
 
 ### Synthetic fixtures and the Splunk lab
 
@@ -40,9 +40,21 @@ Expected result: no failures or errors; informational warnings for SplunkJS usag
 `tests/splunk/lab.sh` runs a local Splunk container (`splunk/splunk`, ports bound to 127.0.0.1) with only the TAs' search-time configuration, never their inputs or scripts, and runs the data-layer tests:
 
 ```sh
-tests/splunk/lab.sh up && tests/splunk/lab.sh install
-ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk
-tests/splunk/lab.sh purge   # removes the container, volumes, image and generated secrets
+npm run package
+npx playwright install chromium  # Linux runners also need Playwright system dependencies
+python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
+  if docker inspect adm-splunk-lab >/dev/null 2>&1; then
+    echo "Refusing an existing lab container" >&2
+    exit 1
+  fi
+  archives=(dist/splunk_adm-*.tar.gz)
+  test "${#archives[@]}" -eq 1
+  export ADM_UPGRADE_PACKAGE="$PWD/${archives[0]}"
+  trap "tests/splunk/lab.sh purge" EXIT
+  tests/splunk/lab.sh up
+  tests/splunk/lab.sh install
+  ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v
+'
 ```
 
 Starting the lab accepts the Splunk General Terms for a local development instance and pulls an image of about 2 GB.
@@ -61,10 +73,10 @@ Starting the lab accepts the Splunk General Terms for a local development instan
 
 1. Have a Splunk administrator review and install the package (**Manage Apps → Install app from file**). On Splunk Cloud, use the private-app vetting process.
 2. Create a summary index (default name `adm_summary`; on Cloud through ACS). Grant app users read access to it and to the source indexes.
-3. Edit the app's index macros (`adm_index_netflow`, `adm_index_dcn`, `adm_index_ftd`, `adm_index_isovalent`, `adm_index_k8s`, `adm_index_traces`, `adm_index_summary`, `adm_summary_index_name`) and `adm_traces_sourcetype` to match your environment.
+3. In **Application Atlas → Setup**, edit the app's index macros (`adm_index_netflow`, `adm_index_dcn`, `adm_index_ftd`, `adm_index_isovalent`, `adm_index_k8s`, `adm_index_traces`, `adm_index_hubble`, `adm_index_summary`, `adm_summary_index_name`) to match your environment. Configure `adm_traces_sourcetype` separately through Splunk macro settings.
 4. Populate the `adm_observer_scope` KV lookup (`observer_kind,observer,scope,cluster`) as an administrator, with lowercase matching keys and read-all/admin-sc_admin-write collection ACLs; see the [upsert instructions](operators/splunk-platform.md#application-atlas-configuration). Existing installations must complete the [one-time CSV migration](UPGRADES.md#one-time-csv-to-kv-scope-migration) before enabling searches. Each exporter, fabric, firewall and cluster maps to its routing scope. Unmapped observers fall into scope `default`; identities only join within one scope.
-5. Enable the saved searches: **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**. They ship disabled. Do not run a manual identity backfill while the scheduled builder is running. Keep all prune schedules disabled; pruning requires the paused-writer maintenance procedure in [Recovery and replay](RECOVERY.md).
-6. Open **Application Atlas**, choose **Splunk data**, and enter the entry service, environment, cluster and namespace. The map covers the selected time range.
+5. After reviewing the Setup checklist, enable the saved searches: **ADM - Identity builder**, **ADM - Service binding**, **ADM - Service backends**, **ADM - ACI policy**, **ADM - Interface inventory**, **ADM - Conversation rollup**, **ADM - Application catalog**. They ship disabled. Do not run a manual identity backfill while the scheduled builder is running. Keep all prune schedules disabled; pruning requires the paused-writer maintenance procedure in [Recovery and replay](RECOVERY.md).
+6. Open **Application Atlas → Applications**, select an application or use Find, and open its map. Use the cascading scope controls and time picker, then **Build map**. Map settings switch between live Splunk data and captured demo scenarios.
 
 Coverage is limited to what the sources observe. Sampled flows, uninstrumented services, NAT without translated tuples and unmonitored segments stay visible as unknown endpoints or gaps; they are not filled in.
 

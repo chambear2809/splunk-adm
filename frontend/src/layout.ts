@@ -103,6 +103,8 @@ export interface LayoutOptions {
   collapse?: boolean;
   /** Group IDs kept expanded while collapsing. */
   expanded?: ReadonlySet<string>;
+  /** Merge Service frontends into one card while retaining every node id as an anchor. */
+  mergeFrontends?: boolean;
 }
 
 export const CARD_W = 196;
@@ -146,6 +148,7 @@ interface Draft {
   column: number;
   sort: string;
   stacked?: boolean;
+  aliases?: string[];
 }
 
 const podOwner = (n: GraphNode) => n.attributes?.owner ?? n.label;
@@ -179,23 +182,39 @@ export function frontendText(n: GraphNode): string {
   return a.type === "NodePort" ? `NodePort ${f.split(":").at(-1)}` : f;
 }
 function frontDoorSubtitle(rows: GraphNode[]): string {
-  const a = rows[0]?.attributes ?? {};
   const types = [
     ...new Set(
-      rows
-        .map((r) => r.attributes?.type)
-        .filter(Boolean)
-        .map((t) => (t === "LoadBalancer" ? "LB" : t)),
+      rows.flatMap((row) => {
+        const attrs = row.attributes ?? {};
+        return [
+          attrs.type === "LoadBalancer" ? "VIP" : attrs.type,
+          attrs.controller === "cilium_ingress"
+            ? "Ingress"
+            : attrs.controller === "cilium_gateway"
+              ? "Gateway"
+              : undefined,
+        ].filter((value): value is string => !!value);
+      }),
     ),
   ];
-  return [types.join(" + "), policyText(a)].filter(Boolean).join(" · ");
+  const policies = [
+    ...new Set(rows.map((r) => policyText(r.attributes ?? {}))),
+  ];
+  return [types.join(" + "), policies.length === 1 ? policies[0] : undefined]
+    .filter(Boolean)
+    .join(" · ");
 }
 const conversations = (index: GraphIndex, id: string) =>
   (index.incident.get(id) ?? []).filter(
     (e) => e.relationship === "communicates_with",
   );
 
-function draftGroups(graph: Graph, index: GraphIndex, view: View): Draft[] {
+function draftGroups(
+  graph: Graph,
+  index: GraphIndex,
+  view: View,
+  options: LayoutOptions,
+): Draft[] {
   const root = graph.boundary.root_node_id;
   const ns = graph.boundary.namespace;
   const services = graph.nodes.filter((n) => n.kind === "service");
@@ -237,14 +256,31 @@ function draftGroups(graph: Graph, index: GraphIndex, view: View): Draft[] {
     });
   if (view === "services") return drafts;
 
+  const serviceClusters = new Map<string, Set<string>>();
+  for (const f of frontDoors) {
+    if (f.endpoint_kind !== "k8s_service") continue;
+    const name = f.attributes?.service ?? f.label;
+    const key = `${f.namespace}/${name}`;
+    const clusters = serviceClusters.get(key) ?? new Set<string>();
+    clusters.add(f.cluster ?? graph.boundary.cluster);
+    serviceClusters.set(key, clusters);
+  }
   const doors = new Map<string, Draft>();
   for (const f of frontDoors) {
     const proxy = f.endpoint_kind === "k8s_node_proxy";
     const name = proxy ? "Cilium Envoy" : (f.attributes?.service ?? f.label);
-    const id = `group:entry:${proxy ? "envoy" : `${f.namespace}/${name}`}`;
+    const serviceKey = proxy
+      ? "envoy"
+      : `${f.cluster && f.cluster !== graph.boundary.cluster ? `${f.cluster}/` : ""}${f.namespace}/${name}`;
+    const id = `group:entry:${serviceKey}`;
+    const sameNameClusters = serviceClusters.get(`${f.namespace}/${name}`);
+    const visibleName =
+      !proxy && sameNameClusters && sameNameClusters.size > 1
+        ? `${name} · ${f.cluster ?? graph.boundary.cluster}`
+        : name;
     const d = doors.get(id) ?? {
       id,
-      title: name,
+      title: visibleName,
       kind: "frontdoor" as const,
       lane: "entry" as const,
       rows: [],
@@ -260,11 +296,20 @@ function draftGroups(graph: Graph, index: GraphIndex, view: View): Draft[] {
       ? "Gateway and Ingress upstream"
       : frontDoorSubtitle(d.rows);
     // A Service with one frontend is a single compact card.
-    if (d.rows.length === 1 && !d.id.endsWith(":envoy")) {
+    if (
+      (d.rows.length === 1 || options.mergeFrontends) &&
+      !d.id.endsWith(":envoy")
+    ) {
       const [only] = d.rows;
+      const frontends = [...d.rows];
+      if (options.mergeFrontends && frontends.length > 1)
+        d.aliases = frontends.slice(1).map((row) => row.id);
       d.header = only;
       d.rows = [];
-      d.subtitle = frontendText(only);
+      d.subtitle =
+        options.mergeFrontends && frontends.length > 1
+          ? frontDoorSubtitle(frontends)
+          : frontendText(only);
     }
     drafts.push(d);
   }
@@ -451,7 +496,7 @@ export function computeLayout(
   view: View,
   options: LayoutOptions = {},
 ): Layout {
-  const drafts = draftGroups(graph, index, view);
+  const drafts = draftGroups(graph, index, view, options);
   const collapsedIds = new Set(
     drafts
       .filter(
@@ -600,13 +645,16 @@ export function computeLayout(
             nodeId: d.header.id,
             groupId: d.id,
             role: "header",
+            members: d.aliases?.length
+              ? [d.header.id, ...d.aliases]
+              : undefined,
             x,
             y,
             w: CARD_W,
             h: HEADER_H,
             column: c,
           },
-          [d.header.id],
+          [d.header.id, ...(d.aliases ?? [])],
         );
       const ry = y + HEADER_H + GROUP_PAD;
       if (g.collapsed) {

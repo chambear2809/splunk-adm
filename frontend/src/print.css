@@ -1,0 +1,28 @@
+.atlas-print-output {
+  display: none;
+}
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+  body.atlas-printing > :not(.atlas-print-output) {
+    display: none !important;
+  }
+  body.atlas-printing > .atlas-print-output {
+    display: block !important;
+    color: black;
+    background: white;
+  }
+  .atlas-print-output h1 {
+    font: 16pt sans-serif;
+    margin: 0 0 10mm;
+  }
+  .atlas-print-output svg {
+    width: 100%;
+    height: auto;
+    max-height: 160mm;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

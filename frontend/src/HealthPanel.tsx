@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import TableExport from "@splunk/react-ui/Table";
+import { toolkitDefault } from "./app/interop";
 import { RefreshCw, X } from "lucide-react";
 import {
   loadHealth,
@@ -6,12 +8,52 @@ import {
   sourceStatus,
   type HealthReport,
 } from "./health";
-import type { SearchConstructor } from "./provider";
+import type { SearchClient } from "./data/searchClient";
 import { formatUtc } from "./time";
+import { useHealthStatus } from "./data/healthStatus";
 const time = (value?: number) =>
   value
     ? `${formatUtc(new Date(value * 1000).toISOString())} UTC`
     : "Not observed";
+const ToolkitTable = toolkitDefault(TableExport);
+
+type HealthTableProps = {
+  headers: string[];
+  rows: { key: string; cells: string[] }[];
+};
+function HealthTable({ headers, rows }: HealthTableProps) {
+  return (
+    <div className="health-table" style={{ overflowX: "auto" }}>
+      <ToolkitTable>
+        <ToolkitTable.Head>
+          {headers.map((header) => (
+            <ToolkitTable.HeadCell
+              key={header}
+              scope="col"
+              style={{ minWidth: 150 }}
+            >
+              {header}
+            </ToolkitTable.HeadCell>
+          ))}
+        </ToolkitTable.Head>
+        <ToolkitTable.Body>
+          {rows.map((row) => (
+            <ToolkitTable.Row key={row.key}>
+              {row.cells.map((cell, index) => (
+                <ToolkitTable.Cell
+                  key={`${row.key}-${index}`}
+                  style={{ whiteSpace: "pre-line" }}
+                >
+                  {cell}
+                </ToolkitTable.Cell>
+              ))}
+            </ToolkitTable.Row>
+          ))}
+        </ToolkitTable.Body>
+      </ToolkitTable>
+    </div>
+  );
+}
 export function HealthResults({ report }: { report: HealthReport }) {
   return (
     <>
@@ -34,38 +76,23 @@ export function HealthResults({ report }: { report: HealthReport }) {
         Quiet or optional sources may have no recent events. Missing results can
         also mean missing index permissions; they do not confirm an outage.
       </p>
-      <div className="health-table">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Source</th>
-              <th scope="col">Observation</th>
-              <th scope="col">Latest event / received</th>
-              <th scope="col">Events / max delay</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.sources.map((s) => (
-              <tr key={s.name}>
-                <th scope="row">{s.name}</th>
-                <td>{sourceStatus(s, report.checkedAt)}</td>
-                <td>
-                  {time(s.latestEvent)}
-                  <br />
-                  {time(s.latestIndexed)}
-                </td>
-                <td>
-                  {s.records ?? "Unknown"}
-                  <br />
-                  {s.maxIngestLag === undefined
-                    ? "Unknown"
-                    : `${Math.round(s.maxIngestLag)}s`}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <HealthTable
+        headers={[
+          "Source",
+          "Observation",
+          "Latest event / received",
+          "Events / max delay",
+        ]}
+        rows={report.sources.map((s) => ({
+          key: s.name,
+          cells: [
+            s.name,
+            sourceStatus(s, report.checkedAt),
+            `${time(s.latestEvent)}\n${time(s.latestIndexed)}`,
+            `${s.records ?? "Unknown"} / ${s.maxIngestLag === undefined ? "Unknown" : `${Math.round(s.maxIngestLag)}s`}`,
+          ],
+        }))}
+      />
       <p className="muted small">
         Delay is the largest nonnegative difference between event time and index
         time in this window. It includes exporter delay and clock differences.
@@ -81,28 +108,13 @@ export function HealthResults({ report }: { report: HealthReport }) {
         source-specific eligibility filters. Missing index access can hide data.
       </p>
       {report.quality.issues.length > 0 && (
-        <div className="health-table">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Source</th>
-                <th scope="col">Reason</th>
-                <th scope="col">Treatment</th>
-                <th scope="col">Records</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.quality.issues.map((q, i) => (
-                <tr key={`${q.source}-${q.reason}-${q.status}-${i}`}>
-                  <th scope="row">{q.source}</th>
-                  <td>{q.reason}</td>
-                  <td>{q.status}</td>
-                  <td>{q.records}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <HealthTable
+          headers={["Source", "Reason", "Treatment", "Records"]}
+          rows={report.quality.issues.map((q, i) => ({
+            key: `${q.source}-${q.reason}-${i}`,
+            cells: [q.source, q.reason, q.status, String(q.records)],
+          }))}
+        />
       )}
       <p className="muted small">
         A record can have several reasons, so reason counts overlap. Missing
@@ -114,59 +126,44 @@ export function HealthResults({ report }: { report: HealthReport }) {
         Run history requires access to scheduler logs in the internal index. A
         missing run is unconfirmed, not a successful run.
       </p>
-      <div className="health-table">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Search</th>
-              <th scope="col">Observation</th>
-              <th scope="col">Last run / success</th>
-              <th scope="col">Failures / skips</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.jobs.map((j) => (
-              <tr key={j.name}>
-                <th scope="row">{j.name.replace(/^ADM - /, "")}</th>
-                <td>{jobStatus(j, report.checkedAt)}</td>
-                <td>
-                  {time(j.lastRun)}
-                  <br />
-                  {time(j.lastSuccess)}
-                </td>
-                <td>
-                  {j.failures ?? "Unknown"} / {j.skips ?? "Unknown"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <HealthTable
+        headers={[
+          "Search",
+          "Observation",
+          "Last run / success",
+          "Failures / skips",
+        ]}
+        rows={report.jobs.map((j) => ({
+          key: j.name,
+          cells: [
+            j.name.replace(/^ADM - /, ""),
+            jobStatus(j, report.checkedAt),
+            `${time(j.lastRun)}\n${time(j.lastSuccess)}`,
+            `${j.failures ?? "Unknown"} / ${j.skips ?? "Unknown"}`,
+          ],
+        }))}
+      />
     </>
   );
 }
-export function HealthPanel({
-  SearchManager,
-  release,
-  live,
-  close,
-}: {
-  SearchManager?: SearchConstructor;
-  release?: (id: string) => void;
-  live: boolean;
-  close: () => void;
-}) {
+export function useHealthData(client?: SearchClient, live = false) {
+  const shared = useHealthStatus();
   const [report, setReport] = useState<HealthReport>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
-    if (!live || !SearchManager) return;
+    if (shared) return;
+    if (!live || !client) {
+      setReport(undefined);
+      setBusy(false);
+      return;
+    }
     const controller = new AbortController();
     setBusy(true);
     setError("");
     setReport(undefined);
-    loadHealth(SearchManager, controller.signal, release)
+    loadHealth(client, controller.signal)
       .then((result) => {
         if (!controller.signal.aborted) setReport(result);
       })
@@ -178,7 +175,29 @@ export function HealthPanel({
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [SearchManager, release, live, revision]);
+  }, [client, live, revision, shared]);
+  return {
+    report: shared?.report ?? report,
+    error: shared?.error ?? error,
+    busy: shared?.busy ?? busy,
+    checkAgain: () =>
+      shared ? shared.refresh() : setRevision((value) => value + 1),
+  };
+}
+
+export function HealthPanel({
+  client,
+  live,
+  close,
+  onReport,
+}: {
+  client?: SearchClient;
+  live: boolean;
+  close: () => void;
+  onReport?: (report: HealthReport | undefined) => void;
+}) {
+  const { report, error, busy, checkAgain } = useHealthData(client, live);
+  useEffect(() => onReport?.(report), [onReport, report]);
   return (
     <section className="popover health" aria-label="Pipeline health">
       <div className="popover-head">
@@ -200,8 +219,8 @@ export function HealthPanel({
         <>
           <button
             className="secondary-button"
-            onClick={() => setRevision((n) => n + 1)}
-            disabled={busy || !SearchManager}
+            onClick={checkAgain}
+            disabled={busy || !client}
           >
             <RefreshCw size={15} /> {busy ? "Checking…" : "Check again"}
           </button>

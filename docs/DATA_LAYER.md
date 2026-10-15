@@ -329,6 +329,69 @@ stability check. The post-replay summary-index comparison of every expected
 and replay](RECOVERY.md#automated-assisted-recovery-core-action) for the
 manual fallback, claim behavior, and native catch-up qualification result.
 
+## Application catalog and exact Find
+
+`ADM - Application catalog` is disabled by default, runs hourly at minute 15,
+and computes the preceding complete hour (`-1h@h` to `@h`). Like the other
+writers, it dispatches as owner and is readable/dispatchable/editable only by
+`admin`/`sc_admin`. Enable it through Splunk saved-search administration after
+identity, service binding and conversation rollup are configured. The existing
+application catalog is readable by viewers; both REST and `outputlookup` writes
+remain administrator-only.
+
+`adm_catalog_build` computes a read-only catalog from retained OTel service/pod
+bindings and temporally resolved conversation summaries. Bound pods count
+retained distinct `(cluster, namespace, pod_uid)` bindings, rather than asserting
+that those pods are currently running. Conversations count distinct scoped
+address/port/transport tuples directly touching those pods. Exporters, time
+buckets and replay do not multiply the count. Peers count resolved identities or
+scoped unknown addresses; public external peers do not count as unknown.
+Blocked tuples require observed ACL drops. These are direct application counts,
+not all edges in a dependency map. `window_start`/`window_end` record the actual
+metric window; `updated` records the refresh time.
+
+Keys are SHA-256 of a JSON array containing service, environment, cluster and
+namespace. The array keeps dimension boundaries unambiguous even when a source
+value contains a delimiter. Scope timestamps remain attached to their own
+binding association when multiple services share a pod. Unsupported or missing
+scope dimensions remain visible for repair and cannot open a map.
+
+Inline paged KV reads reuse the existing completeness probes. Identity candidate
+caps and multivalue expansion losses invalidate the computation. The single
+catalog writer merges fresh rows with previous rows whose `updated` is within
+`adm_identity_retention`; fresh keys win. It replaces storage only after both
+computation and prior-catalog reads prove complete. `override_if_empty=false`
+preserves the snapshot on an incomplete read. A complete snapshot with no
+retained applications writes one internal bookkeeping row, `_key=adm-catalog-empty`
+with `updated`, so every expired application can be removed without treating a
+failed computation as an empty result. This reserved key is not application or
+TA data and the UI ignores it. The writer uses inline reads and a final sort,
+not capped subsearch result sets, and permits one concurrent dispatch.
+
+The Applications page labels metrics as each row's last completed hour; its
+Find/map time picker does not alter catalog metrics. Results over 5,000 rows
+show an explicit message and can retry with an exact service prefilter.
+Oversized results never silently fall back to metric-free scope rows. Other
+catalog failures or an empty catalog can still show configured scopes with an
+explanation that metrics are unavailable. An empty catalog alone does not prove
+the job is disabled.
+
+`adm_find(1)` accepts an exact IP, EPG (including ACI DN), or attached-device
+value under a server-side single-line allowlist. It returns applications bound
+to a matching pod or observed communicating with the matching endpoint during
+the selected window. Resolution reuses temporal, scope-qualified graph identity
+rules. Incomplete evidence returns an explicit warning instead of a false
+no-match result. No owner is guessed. The frontend validates the value before
+creating the search.
+
+`fixtures/demo-catalog.json` and `fixtures/demo-find.json` are captured from real
+ACI lab searches. Capture with `tools/capture_catalog_fixtures.py` under the lab
+lock after `AciDataLayerTest.setUpClass()`, using the integer window and exact
+queries recorded in each fixture. They include the source scenario, schema and
+transitive macro definition hashes. Demo Find supports only those queries. Its
+one-hour capture window is displayed separately from the captured map's
+15-minute window; unavailable maps have disabled actions with explanations.
+
 ## Validation
 
 `tests/splunk/` runs a local Splunk 10.6 container with the TAs' search-time configuration only (no inputs or vendor scripts):

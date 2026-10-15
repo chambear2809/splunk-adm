@@ -1,3 +1,5 @@
+import { InfoTip } from "./InfoTip";
+import type { GlossaryTerm } from "./glossary";
 import { useEffect, useRef, useState } from "react";
 import {
   Ban,
@@ -40,6 +42,11 @@ const HANDOFF_CHIP = {
   inferred: "Inferred",
   undetermined: "Not determined",
 } as const;
+const HANDOFF_TERM = {
+  observed: "Determined",
+  inferred: "inferred",
+  undetermined: "Not determined",
+} as const satisfies Record<keyof typeof HANDOFF_CHIP, GlossaryTerm>;
 const POLICY_ICON = {
   intent: ShieldCheck,
   observed: Eye,
@@ -185,13 +192,17 @@ export function PathStrip({
                     <span className="stage-num">{++n}</span>
                     <StageIcon stage={s} />
                     <span className={`seen-chip ${status}`}>
-                      {s.handoff
-                        ? HANDOFF_CHIP[s.handoff.state]
-                        : s.kind === "entity"
-                          ? "Endpoint"
-                          : s.observed
-                            ? "Seen"
-                            : "Not seen"}
+                      {s.handoff ? (
+                        <InfoTip term={HANDOFF_TERM[s.handoff.state]}>
+                          {HANDOFF_CHIP[s.handoff.state]}
+                        </InfoTip>
+                      ) : s.kind === "entity" ? (
+                        "Endpoint"
+                      ) : s.observed ? (
+                        "Seen"
+                      ) : (
+                        "Not seen"
+                      )}
                     </span>
                   </div>
                   <strong>{fitText(s.title, CARD_TEXT_W, TITLE_FONT)}</strong>

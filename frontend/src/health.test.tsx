@@ -10,8 +10,7 @@ import {
   qualityRows,
   type HealthReport,
 } from "./health";
-import { runRows } from "./provider";
-vi.mock("./provider", () => ({ runRows: vi.fn() }));
+import type { SearchClient } from "./data/searchClient";
 const now = 200000;
 const report: HealthReport = {
   sources: sourceRows([]),
@@ -20,10 +19,12 @@ const report: HealthReport = {
   warnings: [],
   checkedAt: now,
 };
+const search = vi.fn();
+const client: SearchClient = { search };
 describe("pipeline health", () => {
   it("preserves unknown values instead of inventing successful empty results", () => {
     expect(sourceRows([])).toHaveLength(8);
-    expect(jobRows([])).toHaveLength(11);
+    expect(jobRows([])).toHaveLength(12);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
     const source = sourceRows([
@@ -103,7 +104,7 @@ describe("pipeline health", () => {
     });
   });
   it("keeps successful source evidence when scheduler visibility fails", async () => {
-    vi.mocked(runRows)
+    search
       .mockReset()
       .mockResolvedValueOnce({
         rows: [{ kind: "source", name: "NetFlow", records: 1 }],
@@ -122,14 +123,12 @@ describe("pipeline health", () => {
         ],
         warnings: [],
       });
-    const result = await loadHealth(vi.fn(), new AbortController().signal);
-    expect(vi.mocked(runRows).mock.calls.map((call) => call[1].search)).toEqual(
-      [
-        "| `adm_health_sources`",
-        "| `adm_health_jobs`",
-        "| `adm_health_quality`",
-      ],
-    );
+    const result = await loadHealth(client, new AbortController().signal);
+    expect(search.mock.calls.map((call) => call[0].search)).toEqual([
+      "| `adm_health_sources`",
+      "| `adm_health_jobs`",
+      "| `adm_health_quality`",
+    ]);
     expect(result.sources[0].records).toBe(1);
     expect(result.jobs.every((j) => j.disabled === undefined)).toBe(true);
     expect(result.warnings.join(" ")).toContain("Permission denied");
@@ -188,12 +187,10 @@ describe("pipeline health", () => {
     ).toBeUndefined();
   });
   it("does not publish a cancelled check", async () => {
-    vi.mocked(runRows)
-      .mockReset()
-      .mockResolvedValue({ rows: [], warnings: [] });
+    search.mockReset().mockResolvedValue({ rows: [], warnings: [] });
     const c = new AbortController();
     c.abort();
-    await expect(loadHealth(vi.fn(), c.signal)).rejects.toThrow("cancelled");
+    await expect(loadHealth(client, c.signal)).rejects.toThrow("cancelled");
   });
   it("renders accessible partial health and treats messages as text", () => {
     const html = renderToStaticMarkup(

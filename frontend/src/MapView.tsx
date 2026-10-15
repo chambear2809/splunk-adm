@@ -177,14 +177,18 @@ export function itemText(
   it: Item,
   n: GraphNode | undefined,
   deviceLabel: (raw: string) => string,
+  displayTitle?: string,
 ) {
   const header = it.role === "header";
   const summary = it.role === "summary";
   const unknown = !!n && isUnknown(n);
   // A Service frontend whose backend no evidence determined.
-  const noBackend = header && n?.attributes?.handoff === "service_only";
-  const meta =
-    n && !header
+  const merged = header && (it.members?.length ?? 0) > 1;
+  const noBackend =
+    !merged && header && n?.attributes?.handoff === "service_only";
+  const meta = merged
+    ? undefined
+    : n && !header
       ? rowMeta(n, deviceLabel)
       : n?.endpoint_kind === "k8s_service" &&
           n.attributes?.handoff !== "service_only"
@@ -197,15 +201,17 @@ export function itemText(
       : n?.kind === "workload"
         ? "Pod"
         : "Service";
-  const text = summary
-    ? `${it.members!.length} pods`
-    : n?.endpoint_kind === "k8s_service"
-      ? header
-        ? (n.attributes?.service ?? n.label)
-        : (n.attributes?.frontend ?? n.label)
-      : n?.endpoint_kind === "k8s_node_proxy"
-        ? (n.attributes?.node ?? n.label)
-        : (n?.label ?? it.nodeId);
+  const text =
+    displayTitle ??
+    (summary
+      ? `${it.members!.length} pods`
+      : n?.endpoint_kind === "k8s_service"
+        ? header
+          ? (n.attributes?.service ?? n.label)
+          : (n.attributes?.frontend ?? n.label)
+        : n?.endpoint_kind === "k8s_node_proxy"
+          ? (n.attributes?.node ?? n.label)
+          : (n?.label ?? it.nodeId));
   const metaW = meta ? textWidth(meta, META_FONT) + 12 : 0;
   const font = header ? HEADER_FONT : FONT;
   // Headers keep their subtitle line; rows may stack side text.
@@ -223,6 +229,116 @@ export interface EdgeDescription {
   lines: string[];
 }
 
+export interface EmphasisCounts {
+  cards: number;
+  totalCards: number;
+  connections: number;
+  totalConnections: number;
+}
+
+export interface EmphasisInput {
+  matchNodes?: ReadonlySet<string>;
+  matchEdges?: ReadonlySet<string>;
+  neighborhood?: { nodes: ReadonlySet<string>; edges: ReadonlySet<string> };
+}
+
+export interface EmphasisPredicates {
+  itemDim: (item: Item) => boolean;
+  edgeDim: (edge: GraphEdge) => boolean;
+}
+
+/** Return the full incident neighborhood represented by a selected card. */
+export function neighborhoodForSelection(
+  selection: Selection,
+  index: GraphIndex,
+  layout: Layout,
+): { nodes: Set<string>; edges: Set<string> } {
+  const nodes = new Set<string>();
+  const edges = new Set<string>();
+  if (selection.kind === "node") {
+    const members = layout.items.get(selection.id)?.members ?? [selection.id];
+    for (const id of members) {
+      nodes.add(id);
+      for (const edge of index.incident.get(id) ?? []) {
+        edges.add(edge.id);
+        nodes.add(edge.source);
+        nodes.add(edge.target);
+      }
+    }
+  } else {
+    const edge = index.edge.get(selection.id);
+    if (edge) {
+      edges.add(edge.id);
+      nodes.add(edge.source);
+      nodes.add(edge.target);
+      // A conversation into a Service frontend continues to its backends.
+      if (index.node.get(edge.target)?.endpoint_kind === "k8s_service")
+        for (const forward of index.outgoing.get(edge.target) ?? [])
+          if (forward.relationship === "forwards_to") {
+            edges.add(forward.id);
+            nodes.add(forward.target);
+          }
+    }
+  }
+  return { nodes, edges };
+}
+
+export function createEmphasis(
+  index: GraphIndex,
+  input: EmphasisInput,
+): EmphasisPredicates {
+  const matching = input.matchNodes !== undefined;
+  const matchEnds = new Set<string>();
+  for (const id of input.matchEdges ?? []) {
+    const edge = index.edge.get(id);
+    if (edge) matchEnds.add(edge.source).add(edge.target);
+  }
+  const ids = (item: Item) => item.members ?? [item.nodeId];
+  return {
+    itemDim: (item) =>
+      matching
+        ? !ids(item).some(
+            (id) => input.matchNodes!.has(id) || matchEnds.has(id),
+          )
+        : input.neighborhood
+          ? !ids(item).some((id) => input.neighborhood!.nodes.has(id))
+          : false,
+    edgeDim: (edge) =>
+      matching
+        ? !(
+            input.matchEdges?.has(edge.id) ||
+            input.matchNodes!.has(edge.source) ||
+            input.matchNodes!.has(edge.target)
+          )
+        : input.neighborhood
+          ? !input.neighborhood.edges.has(edge.id)
+          : false,
+  };
+}
+
+/** Counts rendered cards and routed connections using the same dim predicates as the map. */
+export function emphasisCounts(
+  layout: Layout,
+  index: GraphIndex,
+  input: EmphasisInput,
+): EmphasisCounts {
+  const { itemDim, edgeDim } = createEmphasis(index, input);
+  const items = layout.groups.flatMap((group) => group.items);
+  const dimmedCards = items.filter(itemDim).length;
+  const dimmedConnections = layout.edges.filter((routed) =>
+    routed.members.every((id) => {
+      const edge = index.edge.get(id);
+      return !edge || edgeDim(edge);
+    }),
+  ).length;
+  return {
+    cards: items.length - dimmedCards,
+    totalCards: items.length,
+    connections: layout.edges.length - dimmedConnections,
+    totalConnections: layout.edges.length,
+  };
+}
+
 export function MapView({
   layout,
   index,
@@ -237,6 +353,8 @@ export function MapView({
   deviceLabel,
   describeEdge,
   label,
+  emphasisReason,
+  onClearEmphasis,
 }: {
   layout: Layout;
   index: GraphIndex;
@@ -254,6 +372,8 @@ export function MapView({
   deviceLabel: (raw: string) => string;
   describeEdge: (edge: GraphEdge) => EdgeDescription;
   label: string;
+  emphasisReason?: string;
+  onClearEmphasis?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -412,59 +532,24 @@ export function MapView({
   }, [zoomBy]);
 
   const matching = matchNodes !== undefined;
-  const neighborhood = useMemo(() => {
-    if (!selection) return undefined;
-    const nodes = new Set<string>(),
-      edges = new Set<string>();
-    if (selection.kind === "node") {
-      nodes.add(selection.id);
-      for (const e of index.incident.get(selection.id) ?? []) {
-        edges.add(e.id);
-        nodes.add(e.source);
-        nodes.add(e.target);
-      }
-    } else {
-      const e = index.edge.get(selection.id);
-      if (e) {
-        edges.add(e.id);
-        nodes.add(e.source);
-        nodes.add(e.target);
-        // A conversation into a Service frontend continues to its backends.
-        if (index.node.get(e.target)?.endpoint_kind === "k8s_service")
-          for (const f of index.outgoing.get(e.target) ?? [])
-            if (f.relationship === "forwards_to") {
-              edges.add(f.id);
-              nodes.add(f.target);
-            }
-      }
-    }
-    return { nodes, edges };
-  }, [selection, index]);
-  const matchEnds = useMemo(() => {
-    const s = new Set<string>();
-    for (const id of matchEdges ?? []) {
-      const e = index.edge.get(id);
-      if (e) s.add(e.source).add(e.target);
-    }
-    return s;
-  }, [matchEdges, index]);
-  const ids = (it: Item) => it.members ?? [it.nodeId];
-  const itemDim = (it: Item) =>
-    matching
-      ? !ids(it).some((id) => matchNodes!.has(id) || matchEnds.has(id))
-      : neighborhood
-        ? !ids(it).some((id) => neighborhood.nodes.has(id))
-        : false;
-  const edgeDim = (e: GraphEdge) =>
-    matching
-      ? !(
-          matchEdges?.has(e.id) ||
-          matchNodes!.has(e.source) ||
-          matchNodes!.has(e.target)
-        )
-      : neighborhood
-        ? !neighborhood.edges.has(e.id)
-        : false;
+  const neighborhood = useMemo(
+    () =>
+      selection
+        ? neighborhoodForSelection(selection, index, layout)
+        : undefined,
+    [selection, index, layout],
+  );
+  const emphasisPredicates = useMemo(
+    () => createEmphasis(index, { matchNodes, matchEdges, neighborhood }),
+    [index, matchNodes, matchEdges, neighborhood],
+  );
+  const { itemDim, edgeDim } = emphasisPredicates;
+  const ids = (item: Item) => item.members ?? [item.nodeId];
+  const emphasis = useMemo(
+    () =>
+      emphasisCounts(layout, index, { matchNodes, matchEdges, neighborhood }),
+    [layout, index, matchNodes, matchEdges, neighborhood],
+  );
   const node = (id: string) => index.node.get(id);
   const edgeClass = (e: GraphEdge) => {
     if (e.relationship === "calls") return "call";
@@ -629,12 +714,39 @@ export function MapView({
           onSelect(null);
       }}
     >
+      {emphasisReason &&
+        (emphasis.cards < emphasis.totalCards ||
+          emphasis.connections < emphasis.totalConnections) && (
+          <div
+            className="atlas-emphasis-banner"
+            role="status"
+            onPointerDown={(event) => event.stopPropagation()}
+            onPointerUp={(event) => event.stopPropagation()}
+          >
+            <span>
+              {emphasis.cards} of {emphasis.totalCards} cards and{" "}
+              {emphasis.connections} of {emphasis.totalConnections} connections
+              emphasized · {emphasisReason}
+            </span>
+            {onClearEmphasis && (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={onClearEmphasis}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
       <svg
         role="group"
         aria-label={label}
         width={size.w || undefined}
         height={size.h || undefined}
         className="map-svg"
+        data-export-width={layout.width}
+        data-export-height={layout.height}
       >
         <defs>
           {[
@@ -662,7 +774,10 @@ export function MapView({
             </marker>
           ))}
         </defs>
-        <g transform={`translate(${t.x},${t.y}) scale(${t.k})`}>
+        <g
+          data-export-root
+          transform={`translate(${t.x},${t.y}) scale(${t.k})`}
+        >
           {layout.lanes.map((lane) => (
             <g key={`${lane.x}:${lane.y}`} className="lane">
               <text x={lane.x} y={lane.y} className="lane-title">
@@ -758,7 +873,14 @@ export function MapView({
                 kindText,
                 text,
                 fitted,
-              } = itemText(it, n, deviceLabel);
+              } = itemText(
+                it,
+                n,
+                deviceLabel,
+                it.role === "header" && g.kind === "frontdoor"
+                  ? g.title
+                  : undefined,
+              );
               const stacked = fitted.stacked;
               const chipW = CHIP_W;
               const selected = !!selectedItem && selectedItem === it;
@@ -804,7 +926,7 @@ export function MapView({
                   aria-label={
                     summary
                       ? `${text} in ${g.title}, collapsed. Press Enter to show them.`
-                      : `${kindText} ${n?.endpoint_kind === "k8s_service" ? (n.label ?? text) : text}${unknown ? ", identity unknown" : ""}`
+                      : `${kindText} ${n?.endpoint_kind === "k8s_service" ? `${text} · ${n.label}` : text}${unknown ? ", identity unknown" : ""}`
                   }
                   aria-pressed={summary ? undefined : selected}
                   aria-expanded={summary ? false : undefined}
@@ -822,9 +944,11 @@ export function MapView({
                   }}
                 >
                   <title>
-                    {summary
-                      ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
-                      : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
+                    {it.members && header
+                      ? `${text}: ${it.members.map((id) => node(id)?.label ?? id).join(", ")}`
+                      : summary
+                        ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
+                        : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
                   </title>
                   <rect
                     x={it.x + 3}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build && vite build --config vite.splunk.config.ts && vite build --config vite.toolkit.config.ts",
+    "build": "tsc --noEmit && vite build && vite build --config vite.splunk.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint frontend/src vite*.ts tools/package-app.mjs && tsc --noEmit && prettier --check frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
     "format": "prettier --write frontend tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
@@ -15,6 +15,7 @@
     "typecheck:browser": "tsc -p tsconfig.browser.json --noEmit"
   },
   "dependencies": {
+    "@splunk/react-time-range": "12.1.1",
     "@splunk/react-ui": "5.17.0",
     "@splunk/search-job": "3.1.0",
     "@splunk/splunk-utils": "4.1.0",
