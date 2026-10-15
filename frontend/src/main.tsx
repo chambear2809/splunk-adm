@@ -73,6 +73,8 @@ async function mount(node: HTMLElement) {
     createRoot(node).render(
       <ThemeProvider {...options}>
         <AtlasApp
+          usePersonaDefault={!params.has("tab")}
+          user={__ADM_SPLUNK_BUILD__ ? username : "demo"}
           page={page}
           state={state}
           client={__ADM_SPLUNK_BUILD__ ? jobClient : undefined}

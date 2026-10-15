@@ -177,14 +177,18 @@ export function itemText(
   it: Item,
   n: GraphNode | undefined,
   deviceLabel: (raw: string) => string,
+  displayTitle?: string,
 ) {
   const header = it.role === "header";
   const summary = it.role === "summary";
   const unknown = !!n && isUnknown(n);
   // A Service frontend whose backend no evidence determined.
-  const noBackend = header && n?.attributes?.handoff === "service_only";
-  const meta =
-    n && !header
+  const merged = header && (it.members?.length ?? 0) > 1;
+  const noBackend =
+    !merged && header && n?.attributes?.handoff === "service_only";
+  const meta = merged
+    ? undefined
+    : n && !header
       ? rowMeta(n, deviceLabel)
       : n?.endpoint_kind === "k8s_service" &&
           n.attributes?.handoff !== "service_only"
@@ -197,15 +201,17 @@ export function itemText(
       : n?.kind === "workload"
         ? "Pod"
         : "Service";
-  const text = summary
-    ? `${it.members!.length} pods`
-    : n?.endpoint_kind === "k8s_service"
-      ? header
-        ? (n.attributes?.service ?? n.label)
-        : (n.attributes?.frontend ?? n.label)
-      : n?.endpoint_kind === "k8s_node_proxy"
-        ? (n.attributes?.node ?? n.label)
-        : (n?.label ?? it.nodeId);
+  const text =
+    displayTitle ??
+    (summary
+      ? `${it.members!.length} pods`
+      : n?.endpoint_kind === "k8s_service"
+        ? header
+          ? (n.attributes?.service ?? n.label)
+          : (n.attributes?.frontend ?? n.label)
+        : n?.endpoint_kind === "k8s_node_proxy"
+          ? (n.attributes?.node ?? n.label)
+          : (n?.label ?? it.nodeId));
   const metaW = meta ? textWidth(meta, META_FONT) + 12 : 0;
   const font = header ? HEADER_FONT : FONT;
   // Headers keep their subtitle line; rows may stack side text.
@@ -758,7 +764,14 @@ export function MapView({
                 kindText,
                 text,
                 fitted,
-              } = itemText(it, n, deviceLabel);
+              } = itemText(
+                it,
+                n,
+                deviceLabel,
+                it.role === "header" && g.kind === "frontdoor"
+                  ? g.title
+                  : undefined,
+              );
               const stacked = fitted.stacked;
               const chipW = CHIP_W;
               const selected = !!selectedItem && selectedItem === it;
@@ -804,7 +817,7 @@ export function MapView({
                   aria-label={
                     summary
                       ? `${text} in ${g.title}, collapsed. Press Enter to show them.`
-                      : `${kindText} ${n?.endpoint_kind === "k8s_service" ? (n.label ?? text) : text}${unknown ? ", identity unknown" : ""}`
+                      : `${kindText} ${n?.endpoint_kind === "k8s_service" ? `${text} · ${n.label}` : text}${unknown ? ", identity unknown" : ""}`
                   }
                   aria-pressed={summary ? undefined : selected}
                   aria-expanded={summary ? false : undefined}
@@ -822,9 +835,11 @@ export function MapView({
                   }}
                 >
                   <title>
-                    {summary
-                      ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
-                      : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
+                    {it.members && header
+                      ? `${text}: ${it.members.map((id) => node(id)?.label ?? id).join(", ")}`
+                      : summary
+                        ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
+                        : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
                   </title>
                   <rect
                     x={it.x + 3}

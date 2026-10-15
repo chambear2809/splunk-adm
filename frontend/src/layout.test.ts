@@ -202,6 +202,243 @@ describe("computeLayout (network)", () => {
   });
 });
 
+describe("merged Service frontends", () => {
+  it("collapses dense frontends into one anchored card with badges", () => {
+    const g = parseGraph({
+      schema_version: 1,
+      snapshot_id: "frontends",
+      generated_at: "2026-01-01T00:00:00Z",
+      demo: true,
+      window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+      boundary: {
+        id: "b",
+        service: "api",
+        environment: "prod",
+        cluster: "c",
+        namespace: "shop",
+        root_node_id: "service:c/shop/api/prod",
+      },
+      nodes: [
+        {
+          id: "service:c/shop/api/prod",
+          label: "api",
+          kind: "service",
+          namespace: "shop",
+        },
+        {
+          id: "k8s_service:c/shop/api/lb",
+          label: "api · 10.0.0.1:443",
+          kind: "endpoint",
+          endpoint_kind: "k8s_service",
+          namespace: "shop",
+          addresses: ["10.0.0.1"],
+          attributes: {
+            service: "api",
+            frontend: "10.0.0.1:443",
+            type: "LoadBalancer",
+            controller: "cilium_ingress",
+          },
+        },
+        {
+          id: "k8s_service:c/shop/api/node",
+          label: "api · 10.0.0.2:30080",
+          kind: "endpoint",
+          endpoint_kind: "k8s_service",
+          namespace: "shop",
+          addresses: ["10.0.0.2"],
+          attributes: {
+            service: "api",
+            frontend: "10.0.0.2:30080",
+            type: "NodePort",
+          },
+        },
+      ],
+      edges: [],
+      coverage: {
+        spans: 0,
+        conversations: 0,
+        matched_conversations: 0,
+        unresolved_conversations: 0,
+        ambiguous_conversations: 0,
+        warnings: [],
+      },
+    });
+    const idx = indexGraph(g);
+    const layout = computeLayout(g, idx, "network", { mergeFrontends: true });
+    const group = layout.groups.find(
+      (item) => item.id === "group:entry:shop/api",
+    )!;
+    expect(group.items).toHaveLength(1);
+    expect(group.subtitle).toContain("VIP");
+    expect(group.subtitle).toContain("NodePort");
+    expect(group.subtitle).toContain("Ingress");
+    expect(layout.items.get("k8s_service:c/shop/api/lb")).toBe(group.items[0]);
+    expect(layout.items.get("k8s_service:c/shop/api/node")).toBe(
+      group.items[0],
+    );
+  });
+  it("keeps same service name separate across namespace and cluster", () => {
+    const node = (id: string, namespace: string, cluster: string) => ({
+      id,
+      label: "api",
+      kind: "endpoint" as const,
+      endpoint_kind: "k8s_service" as const,
+      namespace,
+      cluster,
+      addresses: ["10.0.0.1"],
+      attributes: {
+        service: "api",
+        frontend: "10.0.0.1:443",
+        type: "LoadBalancer",
+      },
+    });
+    const g = parseGraph({
+      schema_version: 1,
+      snapshot_id: "keys",
+      generated_at: "2026-01-01T00:00:00Z",
+      demo: true,
+      window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+      boundary: {
+        id: "b",
+        service: "api",
+        environment: "prod",
+        cluster: "c1",
+        namespace: "shop",
+        root_node_id: "service:c1/shop/api/prod",
+      },
+      nodes: [
+        {
+          id: "service:c1/shop/api/prod",
+          label: "api",
+          kind: "service",
+          namespace: "shop",
+          cluster: "c1",
+        },
+        node("k8s_service:c1/shop/api", "shop", "c1"),
+        node("k8s_service:c2/shop/api", "shop", "c2"),
+        node("k8s_service:c1/other/api", "other", "c1"),
+      ],
+      edges: [],
+      coverage: {
+        spans: 0,
+        conversations: 0,
+        matched_conversations: 0,
+        unresolved_conversations: 0,
+        ambiguous_conversations: 0,
+        warnings: [],
+      },
+    });
+    const layout = computeLayout(g, indexGraph(g), "network", {
+      mergeFrontends: true,
+    });
+    const groups = layout.groups.filter((group) => group.kind === "frontdoor");
+    expect(groups).toHaveLength(3);
+    expect(new Set(groups.map((group) => group.id)).size).toBe(3);
+    expect(groups.map((group) => group.title)).toEqual(
+      expect.arrayContaining(["api"]),
+    );
+  });
+
+  it("keeps many Services and ports in separate anchored cards", () => {
+    const nodes: Graph["nodes"] = [],
+      edges: Graph["edges"] = [],
+      services = 8;
+    for (let service = 0; service < services; service++) {
+      const sid = `service:c/shop/s${service}/prod`;
+      nodes.push({
+        id: sid,
+        label: `s${service}`,
+        kind: "service",
+        namespace: "shop",
+      });
+      const backend = `pod:c/shop/s${service}`;
+      nodes.push({
+        id: backend,
+        label: `s${service}-pod`,
+        kind: "workload",
+        namespace: "shop",
+      });
+      edges.push({
+        id: `run${service}`,
+        source: sid,
+        target: backend,
+        relationship: "runs_on",
+        confidence: "correlated",
+        evidence: [],
+        count: 1,
+      });
+      for (let port = 0; port < 3; port++) {
+        nodes.push({
+          id: `k8s_service:c/shop/s${service}/f${port}`,
+          label: `s${service} · 10.0.${service}.${port}:80`,
+          kind: "endpoint",
+          endpoint_kind: "k8s_service",
+          namespace: "shop",
+          addresses: [`10.0.${service}.${port}`],
+          attributes: {
+            service: `s${service}`,
+            frontend: `10.0.${service}.${port}:${[443, 30080, 8080][port]}`,
+            type: port === 0 ? "LoadBalancer" : "NodePort",
+          },
+        });
+        edges.push({
+          id: `flow${service}-${port}`,
+          source: `k8s_service:c/shop/s${service}/f${port}`,
+          target: backend,
+          relationship: "communicates_with",
+          confidence: "observed",
+          direction_basis: "initiator",
+          server_port: [443, 30080, 8080][port],
+          transport: "tcp",
+          evidence: [],
+          count: 1,
+        });
+      }
+    }
+    const many = parseGraph({
+      schema_version: 1,
+      snapshot_id: "many",
+      generated_at: "2026-01-01T00:00:00Z",
+      demo: true,
+      window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+      boundary: {
+        id: "b",
+        service: "s0",
+        environment: "prod",
+        cluster: "c",
+        namespace: "shop",
+        root_node_id: "service:c/shop/s0/prod",
+      },
+      nodes,
+      edges,
+      coverage: {
+        spans: 0,
+        conversations: 0,
+        matched_conversations: 0,
+        unresolved_conversations: 0,
+        ambiguous_conversations: 0,
+        warnings: [],
+      },
+    });
+    const manyIndex = indexGraph(many);
+    const unmerged = computeLayout(many, manyIndex, "network");
+    const layout = computeLayout(many, manyIndex, "network", {
+      mergeFrontends: true,
+    });
+    const cards = layout.groups.filter((group) => group.kind === "frontdoor");
+    assertSound(layout);
+    expect(cards).toHaveLength(services);
+    expect(cards.every((group) => group.items.length === 1)).toBe(true);
+    expect(layout.edges.map((edge) => edge.id).sort()).toEqual(
+      unmerged.edges.map((edge) => edge.id).sort(),
+    );
+    expect(cards.flatMap((group) => group.items[0].members ?? [])).toHaveLength(
+      services * 3,
+    );
+    expect(new Set(cards.map((group) => group.id)).size).toBe(services);
+  });
+});
+
 describe("computeLayout (services)", () => {
   const services = computeLayout(graph, index, "services");
   it("shows only services and traced calls", () => {

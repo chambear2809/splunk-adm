@@ -21,7 +21,11 @@ export function AtlasApp({
   timezone,
   inSplunk = false,
   setupClient,
+  user,
+  usePersonaDefault,
 }: {
+  user?: string;
+  usePersonaDefault?: boolean;
   page: Page;
   state: UrlState;
   client?: SearchClient;
@@ -37,6 +41,8 @@ export function AtlasApp({
       <Shell page={page} client={client} live={live}>
         {page === "map" ? (
           <MapPage
+            user={user}
+            usePersonaDefault={usePersonaDefault}
             client={client}
             initialState={state}
             onModeChange={setMode}

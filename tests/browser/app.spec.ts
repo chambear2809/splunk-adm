@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test.describe("Application Atlas browser regressions", () => {
@@ -766,4 +767,156 @@ test("Setup inputs keep Toolkit surfaces under classic dashboard CSS", async ({
     shadow: "none",
     margin: "0px",
   });
+});
+
+test("map facets combine, clear, and keep full evidence exports", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await expect(
+    page.getByRole("button", { name: "Legend", exact: true }),
+  ).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  const total = await page.locator(".table-view tbody tr").count();
+  await page
+    .getByLabel("Filter identity", { exact: true })
+    .selectOption("external");
+  const filtered = await page.locator(".table-view tbody tr").count();
+  expect(filtered).toBeGreaterThan(0);
+  expect(filtered).toBeLessThan(total);
+  await expect(page.locator(".atlas-filter-status")).toContainText(
+    "Findings and exports use the full map",
+  );
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Map data \(JSON\)/ }).click();
+  const artifact = await downloaded;
+  const exported = JSON.parse(
+    await readFile((await artifact.path())!, "utf8"),
+  ) as { nodes: unknown[] };
+  expect(exported.nodes.length).toBe(
+    Number(await page.locator(".adm").getAttribute("data-node-count")),
+  );
+  await page.getByLabel("Blocked only", { exact: true }).check();
+  await expect(page.locator(".atlas-filter-status")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Clear filters and focus", exact: true })
+    .first()
+    .click();
+  await expect(page.locator(".table-view tbody tr")).toHaveCount(total);
+  await page.getByLabel("Hide infrastructure", { exact: true }).check();
+  await page.getByLabel("Hide infrastructure", { exact: true }).uncheck();
+  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
+});
+
+test("focus limits the neighborhood and clears without a new search", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await expect(
+    page.getByLabel("Focus around selected card", { exact: true }),
+  ).toBeDisabled();
+  const highlight = page.getByLabel(
+    "Highlight by name, IP, EPG, port or device",
+  );
+  await highlight.fill("win-client-01");
+  await highlight.press("Enter");
+  await page.locator(".item[data-hit].match").first().click();
+  await highlight.fill("");
+  await page
+    .getByLabel("Focus around selected card", { exact: true })
+    .selectOption("1");
+  await expect(page.locator(".atlas-filter-status")).toContainText(
+    "Within 1 hop",
+  );
+  await page
+    .getByRole("button", { name: "Clear filters and focus", exact: true })
+    .first()
+    .click();
+  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
+});
+
+test("persona preference persists but explicit view links take precedence", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await page.getByRole("button", { name: "Map settings", exact: true }).click();
+  await page
+    .getByLabel("Default view for persona", { exact: true })
+    .selectOption("application");
+  await expect(
+    page.getByRole("button", { name: "Services", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/tests/browser/browser.html");
+  await expect(
+    page.getByRole("button", { name: "Services", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/tests/browser/browser.html?tab=network");
+  await expect(
+    page.getByRole("button", { name: "Network", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+});
+
+test("Services clears network facets and only lists traced-call legend", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await page
+    .getByLabel("Filter identity", { exact: true })
+    .selectOption("external");
+  await page.getByRole("button", { name: "Services", exact: true }).click();
+  await expect(page.getByLabel("Filter identity", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
+  await page.getByRole("button", { name: "Legend", exact: true }).click();
+  await expect(page.getByLabel("Legend", { exact: true })).toContainText(
+    "Traced call",
+  );
+  await expect(page.getByLabel("Legend", { exact: true })).not.toContainText(
+    "Node tunnel",
+  );
+  await page.getByRole("button", { name: "1 external", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Network", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Map settings", exact: true }).click();
+  await page
+    .getByLabel("Default view for persona", { exact: true })
+    .selectOption("application");
+  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
+});
+
+test("shrinking focus clears a selected connection outside the new neighborhood", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  const highlight = page.getByLabel(
+    "Highlight by name, IP, EPG, port or device",
+  );
+  await highlight.fill("frontend");
+  await highlight.press("Enter");
+  await page
+    .getByRole("button", { name: "Service frontend", exact: true })
+    .click();
+  await highlight.fill("");
+  await page
+    .getByLabel("Focus around selected card", { exact: true })
+    .selectOption("2");
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  await page
+    .locator(".table-view table")
+    .first()
+    .locator("tbody button")
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Clear selection", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByLabel("Focus around selected card", { exact: true })
+    .selectOption("1");
+  await expect(
+    page.getByRole("button", { name: "Clear selection", exact: true }),
+  ).toHaveCount(0);
 });

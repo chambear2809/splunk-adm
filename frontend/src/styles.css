@@ -1761,3 +1761,59 @@
 .health-status.health-loading span {
   color: var(--adm-link);
 }
+
+/* Map readability controls stay inside the standard dashboard panel. */
+.adm .atlas-map-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 14px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--adm-line);
+}
+.adm .atlas-map-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--adm-ink-2);
+}
+.adm .atlas-map-filters select {
+  max-width: 210px;
+  background: var(--adm-surface);
+  color: var(--adm-ink);
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  margin: 0;
+}
+.adm label.atlas-filter-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+}
+.adm .atlas-filter-check input {
+  margin: 0;
+}
+.adm .atlas-filter-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px;
+  color: var(--adm-ink-2);
+  background: var(--adm-surface);
+  font-size: 12px;
+}
+.adm .kpi[aria-pressed="true"] {
+  outline: 2px solid var(--adm-call);
+}
+.adm .atlas-frontend-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+}
+.adm .atlas-frontend-picker select {
+  width: 100%;
+}

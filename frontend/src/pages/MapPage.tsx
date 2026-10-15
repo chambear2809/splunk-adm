@@ -55,6 +55,15 @@ import { pageURL, parseUrlState, writeUrlState } from "../app/urlState";
 import { useMatches } from "../map/useMatches";
 import { useGraphQuery } from "../data/useGraphQuery";
 import { ExportMenu } from "../map/ExportMenu";
+import { filterGraph, focusHops, type Facets } from "../filters";
+import { FilterBar } from "../map/FilterBar";
+import {
+  prefsFor,
+  mapPreferences,
+  PERSONAS,
+  PERSONA_VIEWS,
+  type Persona,
+} from "../app/prefs";
 import { Legend } from "../map/Legend";
 import { TableView } from "../map/TableView";
 import { serviceNodeId, type GraphArgs } from "../rows";
@@ -131,7 +140,11 @@ export function MapPage({
   inSplunk = false,
   demoData,
   onModeChange,
+  user,
+  usePersonaDefault = false,
 }: {
+  user?: string;
+  usePersonaDefault?: boolean;
   client?: SearchClient;
   initialState?: import("../app/urlState").UrlState;
   theme?: Theme;
@@ -155,7 +168,34 @@ export function MapPage({
     initialState.mode === "demo" ? loadDemoTopology() : emptyTopology(),
   );
   const [mode, setMode] = useState<"demo" | "live">(initialState.mode);
-  const [tab, setTab] = useState<Tab>(initialState.tab);
+  const preferences = useMemo(
+    () => (user ? prefsFor(user) : undefined),
+    [user],
+  );
+  const [saved] = useState(() => mapPreferences(preferences?.read() ?? {}));
+  const [persona, setPersona] = useState<Persona>(saved.persona);
+  const [mergeFrontends, setMergeFrontends] = useState(saved.mergeFrontends);
+  const [tab, setTab] = useState<Tab>(
+    usePersonaDefault ? saved.view : initialState.tab,
+  );
+  const [facets, setFacets] = useState<Facets>({});
+  const [focus, setFocus] = useState<{ id: string; hops: number } | null>(null);
+  const clearFilters = () => {
+    setFacets({});
+    setFocus(null);
+  };
+  const changeFacets = (next: Facets) => {
+    if (tab === "services") setTab("network");
+    setFacets(next);
+    select(null);
+  };
+  const savePreferences = (nextPersona: Persona, merge: boolean) => {
+    preferences?.write({
+      ...preferences.read(),
+      persona: nextPersona,
+      mergeFrontends: merge,
+    });
+  };
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pathHidden, setPathHidden] = useState(false);
   const healthReport = useHealthStatus()?.report;
@@ -239,6 +279,7 @@ export function MapPage({
       setArgs(demoArgsFor(sc));
       setHasLiveGraph(false);
       resetView();
+      clearFilters();
       select(null);
     } catch (error) {
       if (requestRevision.current === revision)
@@ -275,6 +316,7 @@ export function MapPage({
         setTopology(topo);
         setHasLiveGraph(true);
         resetView();
+        clearFilters();
         select(null);
         setPanel(null);
       }
@@ -312,9 +354,40 @@ export function MapPage({
   const topo = useMemo(() => indexTopology(topology), [topology]);
   const node = useCallback((id: string) => index.node.get(id), [index]);
   const view: View = tab === "services" ? "services" : "network";
+  const filtered = useMemo(() => filterGraph(graph, facets), [graph, facets]);
+  const displayGraph = useMemo(() => {
+    if (!focus) return filtered;
+    const ids = focusHops(indexGraph(filtered), focus.id, focus.hops);
+    return {
+      ...filtered,
+      nodes: filtered.nodes.filter((n) => ids.has(n.id)),
+      edges: filtered.edges.filter(
+        (e) => ids.has(e.source) && ids.has(e.target),
+      ),
+    };
+  }, [filtered, focus]);
+  const displayIndex = useMemo(() => indexGraph(displayGraph), [displayGraph]);
+  useEffect(() => {
+    if (
+      selection &&
+      !(selection.kind === "node" ? displayIndex.node : displayIndex.edge).has(
+        selection.id,
+      )
+    ) {
+      setSelection(null);
+      setBackend(undefined);
+      setPathHidden(false);
+    }
+  }, [displayIndex, selection]);
+  const narrowed = displayGraph !== graph;
   const layout = useMemo(
-    () => computeLayout(graph, index, view, { collapse, expanded }),
-    [graph, index, view, collapse, expanded],
+    () =>
+      computeLayout(displayGraph, displayIndex, view, {
+        collapse,
+        expanded,
+        mergeFrontends,
+      }),
+    [displayGraph, displayIndex, view, collapse, expanded, mergeFrontends],
   );
   useEffect(() => resetView(), [view]);
   const onFitScale = useCallback(
@@ -324,7 +397,7 @@ export function MapPage({
 
   const q = query.trim();
   const { matchNodes, matchEdges, matchList } = useMatches(
-    graph,
+    displayGraph,
     topo,
     layout,
     q,
@@ -348,6 +421,14 @@ export function MapPage({
   const warnings = [
     ...new Set([...graph.coverage.warnings, ...topology.warnings]),
   ];
+  const selectedFrontends =
+    selection?.kind === "node"
+      ? layout.items
+          .get(selection.id)
+          ?.members?.filter(
+            (id) => index.node.get(id)?.endpoint_kind === "k8s_service",
+          )
+      : undefined;
   const selectedEdge =
     selection?.kind === "edge" ? index.edge.get(selection.id) : undefined;
   const path = useMemo(
@@ -449,6 +530,7 @@ export function MapPage({
         setBackend(edge.target);
       } else select({ kind: "edge", id: edge.id });
     } else select({ kind: "edge", id: edge.id });
+    clearFilters();
     setTab("network");
     setPathHidden(false);
   };
@@ -583,25 +665,65 @@ export function MapPage({
               {totals.services === 1 ? "service" : "services"}
             </span>
             {totals.conversations > 0 && (
-              <span className="kpi">
+              <button
+                className="kpi"
+                aria-pressed={facets.identity === "identified"}
+                onClick={() =>
+                  changeFacets({
+                    ...facets,
+                    identity:
+                      facets.identity === "identified"
+                        ? undefined
+                        : "identified",
+                  })
+                }
+              >
                 <b>{totals.identified}</b> of {totals.conversations}{" "}
                 conversations identified
-              </span>
+              </button>
             )}
             {unknownChips.length > 0 && (
-              <span className="kpi warn">
+              <button
+                className="kpi warn"
+                aria-pressed={facets.identity === "unknown"}
+                onClick={() =>
+                  changeFacets({
+                    ...facets,
+                    identity:
+                      facets.identity === "unknown" ? undefined : "unknown",
+                  })
+                }
+              >
                 <CircleAlert size={14} aria-hidden />
                 {unknownChips.join(" · ")}
-              </span>
+              </button>
             )}
             {totals.externalNodes > 0 && (
-              <span className="kpi">{totals.externalNodes} external</span>
+              <button
+                className="kpi"
+                aria-pressed={facets.identity === "external"}
+                onClick={() =>
+                  changeFacets({
+                    ...facets,
+                    identity:
+                      facets.identity === "external" ? undefined : "external",
+                  })
+                }
+              >
+                {totals.externalNodes} external
+              </button>
             )}
             {totals.blocked > 0 && (
-              <span className="kpi blocked">
+              <button
+                className="kpi blocked"
+                aria-pressed={!!facets.blocked}
+                onClick={() =>
+                  changeFacets({ ...facets, blocked: !facets.blocked })
+                }
+              >
                 <Ban size={14} aria-hidden />
                 {totals.blocked} blocked
-              </span>
+              </button>
             )}
             {warnings.length > 0 && (
               <button
@@ -661,6 +783,37 @@ export function MapPage({
                 <X size={16} />
               </button>
             </div>
+            <label className="scenario">
+              <span>Default view for</span>
+              <select
+                aria-label="Default view for persona"
+                value={persona}
+                onChange={(e) => {
+                  const next = e.target.value as Persona;
+                  setPersona(next);
+                  setTab(PERSONA_VIEWS[next]);
+                  clearFilters();
+                  savePreferences(next, mergeFrontends);
+                }}
+              >
+                {Object.entries(PERSONAS).map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="atlas-filter-check">
+              <input
+                type="checkbox"
+                checked={mergeFrontends}
+                onChange={(e) => {
+                  setMergeFrontends(e.target.checked);
+                  savePreferences(persona, e.target.checked);
+                }}
+              />
+              Group Service frontends
+            </label>
             <div className="segmented" role="group" aria-label="Data source">
               <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
                 Demo
@@ -840,7 +993,10 @@ export function MapPage({
                 <button
                   key={t}
                   aria-pressed={tab === t}
-                  onClick={() => setTab(t)}
+                  onClick={() => {
+                    if (t === "services") clearFilters();
+                    setTab(t);
+                  }}
                 >
                   {name}
                 </button>
@@ -888,6 +1044,52 @@ export function MapPage({
               </span>
             )}
           </div>
+          {visible && !empty && (
+            <>
+              <FilterBar
+                network={tab !== "services"}
+                graph={graph}
+                facets={facets}
+                onChange={changeFacets}
+                focus={focus?.hops ?? 0}
+                canFocus={selection?.kind === "node"}
+                onFocus={(hops) => {
+                  if (!hops) setFocus(null);
+                  else {
+                    const id =
+                      selection?.kind === "node" ? selection.id : focus?.id;
+                    if (id) setFocus({ id, hops });
+                  }
+                }}
+              />
+              {narrowed && (
+                <div className="atlas-filter-status">
+                  <span>
+                    {displayGraph.nodes.length} of {graph.nodes.length} nodes
+                    retained ·{" "}
+                    {
+                      displayGraph.edges.filter(
+                        (e) => e.relationship !== "runs_on",
+                      ).length
+                    }{" "}
+                    of{" "}
+                    {
+                      graph.edges.filter((e) => e.relationship !== "runs_on")
+                        .length
+                    }{" "}
+                    connections
+                    {focus
+                      ? ` · Within ${plural(focus.hops, "hop")} of ${label(focus.id)}`
+                      : ""}
+                    . Findings and exports use the full map.
+                  </span>
+                  <button className="link" onClick={clearFilters}>
+                    Clear filters and focus
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           <div className="map-area">
             {!visible ? (
               busy ? (
@@ -949,9 +1151,16 @@ export function MapPage({
                   <Settings2 size={15} /> Change application
                 </button>
               </div>
+            ) : displayGraph.nodes.length === 0 ? (
+              <div className="state">
+                <h2>No matches for these filters</h2>
+                <button className="secondary-button" onClick={clearFilters}>
+                  Clear filters and focus
+                </button>
+              </div>
             ) : tab === "table" ? (
               <TableView
-                graph={graph}
+                graph={displayGraph}
                 label={label}
                 selected={selection?.kind === "edge" ? selection.id : undefined}
                 onSelect={(id) => select({ kind: "edge", id })}
@@ -960,8 +1169,8 @@ export function MapPage({
               />
             ) : tab === "devices" ? (
               <DevicesView
-                graph={graph}
-                index={index}
+                graph={displayGraph}
+                index={displayIndex}
                 topo={topo}
                 selected={selection?.kind === "edge" ? selection.id : undefined}
                 onSelect={(id) => select({ kind: "edge", id })}
@@ -969,7 +1178,7 @@ export function MapPage({
             ) : (
               <MapView
                 layout={layout}
-                index={index}
+                index={displayIndex}
                 matchNodes={matchNodes}
                 matchEdges={matchEdges}
                 selection={selection}
@@ -986,12 +1195,11 @@ export function MapPage({
           </div>
           {visible && !empty && (tab === "network" || tab === "services") && (
             <Legend
-              view={view}
-              collapsed={layout.collapsed}
-              forwards={graph.edges.some(
-                (e) => e.relationship === "forwards_to",
+              edges={layout.edges.flatMap((e) =>
+                e.members.flatMap((id) => displayIndex.edge.get(id) ?? []),
               )}
-              blocked={totals.blocked > 0}
+              index={displayIndex}
+              collapsed={layout.collapsed}
             />
           )}
           {visible && path && selectedEdge && !pathHidden && (
@@ -1006,6 +1214,26 @@ export function MapPage({
         <aside className="inspector" aria-label="Details">
           {visible ? (
             <>
+              {selectedFrontends &&
+                selectedFrontends.length > 1 &&
+                selection && (
+                  <label className="atlas-frontend-picker">
+                    Frontend
+                    <select
+                      aria-label="Inspect Service frontend"
+                      value={selection.id}
+                      onChange={(e) =>
+                        select({ kind: "node", id: e.target.value })
+                      }
+                    >
+                      {selectedFrontends.map((id) => (
+                        <option key={id} value={id}>
+                          {index.node.get(id)?.label ?? id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               <Inspector
                 selection={selection}
                 index={index}

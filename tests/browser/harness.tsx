@@ -183,6 +183,8 @@ try {
   createRoot(root).render(
     <ThemeProvider family="enterprise" colorScheme={dark ? "dark" : "light"}>
       <AtlasApp
+        user="browser-viewer"
+        usePersonaDefault={!queryParams.has("tab")}
         page={page as Page}
         state={state}
         client={new FakeSearchClient()}

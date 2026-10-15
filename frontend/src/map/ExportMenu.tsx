@@ -34,7 +34,7 @@ export function ExportMenu({
         <FileJson size={17} aria-hidden />
         <span>
           <b>Map data (JSON)</b>
-          <small>The complete graph shown on screen.</small>
+          <small>The full loaded graph, before filters and focus.</small>
         </span>
       </button>
     </section>

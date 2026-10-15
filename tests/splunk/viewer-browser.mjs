@@ -211,6 +211,55 @@ try {
       evidence.nodesOk = evidence.nodeCount === Number(expectedNodes);
       evidence.demoRequests = demoRequests;
 
+      stage = "map readability";
+      if (
+        (await adm
+          .getByRole("button", { name: "Legend", exact: true })
+          .getAttribute("aria-expanded")) !== "false"
+      )
+        throw new Error("Legend should start collapsed");
+      await adm
+        .getByLabel("Filter identity", { exact: true })
+        .selectOption("unknown");
+      await adm.locator(".atlas-filter-status").waitFor();
+      if (
+        !(await adm.locator(".atlas-filter-status").innerText()).includes(
+          "Findings and exports use the full map",
+        )
+      )
+        throw new Error("Missing filter scope explanation");
+      await adm
+        .getByRole("button", { name: "Clear filters and focus", exact: true })
+        .first()
+        .click();
+      stage = "focus selection";
+      const focusSearch = adm.getByLabel(
+        "Highlight by name, IP, EPG, port or device",
+      );
+      await focusSearch.fill("frontend");
+      await focusSearch.press("Enter");
+      await adm
+        .getByRole("button", { name: "Service frontend", exact: true })
+        .click();
+      await focusSearch.fill("");
+      await adm
+        .getByLabel("Focus around selected card", { exact: true })
+        .selectOption("1");
+      await adm.locator(".atlas-filter-status").waitFor();
+      await root.screenshot({ path: `dist/atlas-phase6-focus-${theme}.png` });
+      await adm
+        .getByRole("button", { name: "Clear filters and focus", exact: true })
+        .first()
+        .click();
+      await adm
+        .getByRole("button", { name: "Clear selection", exact: true })
+        .click();
+      evidence.readability = {
+        filters: true,
+        focus: true,
+        legendCollapsed: true,
+      };
+
       stage = "scope controls";
       const beforeBuild = searchPayloads.length;
       const previousWindow =
@@ -496,6 +545,11 @@ try {
         synthetic: true,
         cards: await demo.locator("[data-hit]").count(),
       };
+      await demo.getByLabel("Hide infrastructure", { exact: true }).check();
+      await demo.locator(".atlas-filter-status").waitFor();
+      await demo.getByLabel("Hide infrastructure", { exact: true }).uncheck();
+      if (await demo.locator(".atlas-filter-status").count())
+        throw new Error("Demo filter did not clear");
       const demoFinding = page
         .getByRole("article")
         .filter({ hasText: "Blocked conversation" })
