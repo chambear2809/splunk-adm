@@ -336,7 +336,12 @@ export function MapPage({
     }
   };
   useEffect(() => {
-    if (initialState.mode === "live" && client) void refresh();
+    if (
+      initialState.mode === "live" &&
+      client &&
+      ARG_FIELDS.every(([key]) => !argError(key, initialState.args[key]))
+    )
+      void refresh();
     // Initial deep link is loaded once; subsequent edits use Build map.
   }, []);
   useEffect(() => {
@@ -598,6 +603,7 @@ export function MapPage({
         <ScopeBar
           args={args}
           live={mode === "live"}
+          autoSelectSingle
           client={client}
           demoArgs={mode === "demo" ? demoArgsFor(scenario) : undefined}
           onChange={(next) => {

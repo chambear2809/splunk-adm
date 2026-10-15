@@ -40,10 +40,15 @@ export function parseUrlState(
   params: URLSearchParams,
   inSplunk = false,
 ): UrlState {
-  const args = { ...defaults };
+  const mode = params.get("mode") ?? (inSplunk ? "live" : "demo");
+  const args =
+    mode === "live"
+      ? { service: "", environment: "", cluster: "", namespace: "" }
+      : { ...defaults };
   for (const key of Object.keys(args) as (keyof GraphArgs)[]) {
     const value = params.get(key) ?? args[key];
-    const error = argError(key, value);
+    const error =
+      mode === "live" && value === "" ? undefined : argError(key, value);
     if (error) throw new Error(error);
     args[key] = value;
   }
@@ -57,7 +62,6 @@ export function parseUrlState(
     Number(earliest) >= Number(latest)
   )
     throw new Error("Earliest must precede latest.");
-  const mode = params.get("mode") ?? (inSplunk ? "live" : "demo");
   const scenario = params.get("scenario") ?? "aci";
   const tab = params.get("tab") ?? "network";
   if (mode !== "demo" && mode !== "live")

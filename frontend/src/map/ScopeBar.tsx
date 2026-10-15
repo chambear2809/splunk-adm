@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import ComboBoxExport from "@splunk/react-ui/ComboBox";
 import ButtonExport from "@splunk/react-ui/Button";
 import { toolkitDefault } from "../app/interop";
@@ -15,15 +15,38 @@ export function ScopeBar({
   live,
   client,
   demoArgs,
+  autoSelectSingle = false,
 }: {
   args: GraphArgs;
   onChange: (args: GraphArgs) => void;
   live: boolean;
   client?: SearchClient;
   demoArgs?: GraphArgs;
+  autoSelectSingle?: boolean;
 }) {
   const id = useId();
   const options = useScopeOptions(live, client);
+  const selectedSingle = useRef(false);
+  useEffect(() => {
+    if (!autoSelectSingle || !live || selectedSingle.current || options.loading)
+      return;
+    selectedSingle.current = true;
+    if (
+      !options.error &&
+      !options.warnings?.length &&
+      options.rows.length === 1 &&
+      SCOPE_FIELDS.every((key) => !args[key]) &&
+      SCOPE_FIELDS.every((key) => !argError(key, options.rows[0][key]))
+    ) {
+      const row = options.rows[0];
+      onChange({
+        environment: row.environment,
+        cluster: row.cluster,
+        namespace: row.namespace,
+        service: row.service,
+      });
+    }
+  }, [autoSelectSingle, live, options, args, onChange]);
   return (
     <section className="atlas-scope-fields" aria-label="Application scope">
       {SCOPE_FIELDS.map((key, index) => {

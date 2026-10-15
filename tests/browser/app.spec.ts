@@ -1252,3 +1252,43 @@ for (const fault of [
     ).toBe(1);
   });
 }
+
+test("unscoped live map waits for a scope instead of querying the demo", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=live");
+  await expect(
+    page.getByRole("combobox", { name: "Environment", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("heading", { name: "Choose an application to map" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build map" })).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_graph("))
+          .length ?? 0,
+    ),
+  ).toBe(0);
+});
+
+test("a sole live scope is preselected without building automatically", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=live&fault=single-scope");
+  await expect(
+    page.getByRole("combobox", { name: "Service", exact: true }),
+  ).toHaveValue("frontend");
+  await expect(
+    page.getByRole("heading", { name: "Choose an application to map" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Build map" })).toBeEnabled();
+  expect(
+    await page.evaluate(
+      () =>
+        window.__ADM_REQUESTS__?.filter((r) => r.spl.includes("adm_graph("))
+          .length ?? 0,
+    ),
+  ).toBe(0);
+});

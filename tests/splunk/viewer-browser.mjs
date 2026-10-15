@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
 
 const require = createRequire(new URL("../../package.json", import.meta.url));
-const { chromium } = require("@playwright/test");
+const { chromium, expect } = require("@playwright/test");
 
 const BASE = "http://127.0.0.1:8000";
 const { ADM_VIEWER_USER: user, ADM_VIEWER_PASS: pass } = process.env;
@@ -164,6 +164,25 @@ try {
         demoRequests += 1;
         void route.abort();
       });
+      stage = "unscoped live map";
+      const beforeUnscoped = searchPayloads.length;
+      await routeEvidence("/en-US/app/splunk_adm/map?mode=live");
+      await expect(
+        page.getByRole("combobox", { name: "Environment", exact: true }),
+      ).toBeEnabled({ timeout: 150000 });
+      await expect(
+        page.getByRole("heading", { name: "Choose an application to map" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Build map" }),
+      ).toBeDisabled();
+      expect(
+        searchPayloads
+          .slice(beforeUnscoped)
+          .filter((request) => request.search.includes("adm_graph(")),
+      ).toHaveLength(0);
+      evidence.unscopedLiveMap = { graphSearches: 0, requiresScope: true };
+      stage = "live map";
       const map = await routeEvidence(
         `/en-US/app/splunk_adm/map?mode=live&earliest=${encodeURIComponent(earliest)}&latest=${encodeURIComponent(latest)}&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop`,
       );

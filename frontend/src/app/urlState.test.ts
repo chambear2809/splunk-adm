@@ -55,3 +55,18 @@ describe("Atlas deep links", () => {
     ).toBe("/en-US/app/splunk_adm/map?q=a%26b");
   });
 });
+
+it("leaves missing live scope empty instead of selecting the demo", () => {
+  for (const params of [
+    new URLSearchParams(),
+    new URLSearchParams("mode=live"),
+  ]) {
+    expect(parseUrlState(params, true).args).toEqual({
+      environment: "",
+      cluster: "",
+      namespace: "",
+      service: "",
+    });
+  }
+  expect(parseUrlState(new URLSearchParams()).args.service).toBe("frontend");
+});

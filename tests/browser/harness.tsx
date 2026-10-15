@@ -150,7 +150,15 @@ class FakeSearchClient implements SearchClient {
         )
       )
         throw new Error("Configured scopes unavailable.");
-      return { rows: scopes.rows, warnings: [] };
+      return {
+        rows:
+          faultScenario === "single-scope"
+            ? scopes.rows
+                .filter((row) => row.service === "frontend")
+                .slice(0, 1)
+            : scopes.rows,
+        warnings: [],
+      };
     }
     if (request.search.startsWith('| `adm_find("')) {
       const query = request.search.match(/adm_find\("(.*)"\)/)?.[1] ?? "";
