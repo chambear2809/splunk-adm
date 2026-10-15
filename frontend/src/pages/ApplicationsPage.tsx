@@ -106,32 +106,14 @@ export function ApplicationsPage({
         signal: controller.signal,
         allowEmpty: true,
       })
-      .then(async (result) => {
+      .then((result) => {
         if (controller.signal.aborted || current !== revision.current) return;
         if (result.rows.length) {
           setCatalog(parseCatalogRows(result.rows));
           setWarning(result.warnings[0]);
           return;
         }
-        setWarning(
-          "Application catalog is unavailable; showing configured scopes.",
-        );
-        const fallback = await client.search({
-          search: "| `adm_scope_options`",
-          earliest,
-          latest,
-          timezone,
-          maxRows: 5000,
-          signal: controller.signal,
-          allowEmpty: true,
-        });
-        if (controller.signal.aborted || current !== revision.current) return;
-        setCatalog(createScopeCatalogRows(fallback.rows));
-        setWarning(
-          fallback.rows.length
-            ? "Metrics are unavailable for fallback scopes."
-            : "No catalog or configured scopes were returned.",
-        );
+        throw new Error("No application catalog rows were returned.");
       })
       .catch(async (reason: unknown) => {
         if (controller.signal.aborted || current !== revision.current) return;

@@ -1228,3 +1228,27 @@ test("image and print exports are unavailable for an empty filtered map", async 
     page.getByRole("button", { name: /Required flows \(CSV\)/ }),
   ).toBeEnabled();
 });
+
+for (const fault of [
+  "empty-catalog-fallback-fails",
+  "catalog-and-fallback-fail",
+]) {
+  test(`catalog fallback failure is reported without a duplicate search: ${fault}`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/tests/browser/browser.html?page=applications&mode=live&fault=${fault}`,
+    );
+    await expect(
+      page.getByRole("alert").filter({ hasText: "Retry" }),
+    ).toContainText("Configured scopes unavailable.");
+    expect(
+      await page.evaluate(
+        () =>
+          window.__ADM_REQUESTS__?.filter(
+            (r) => r.spl === "| `adm_scope_options`" && r.earliest !== "0",
+          ).length,
+      ),
+    ).toBe(1);
+  });
+}

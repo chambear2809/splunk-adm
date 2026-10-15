@@ -104,6 +104,14 @@ jobs:
       ADM_TA_ROOT: ${{ vars.ADM_TA_ROOT }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci --registry=https://registry.npmjs.org --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: npm run package
+      - run: python3 tools/check_release.py --dist dist
       - name: Check TA research artifacts
         run: |
           set -euo pipefail
@@ -128,6 +136,12 @@ jobs:
           ADM_RUN_PIPELINE_REHEARSALS: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule' }}
         run: |
           python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
+            if docker inspect adm-splunk-lab >/dev/null 2>&1; then
+              echo "Refusing to adopt an existing adm-splunk-lab container; remove it before CI." >&2
+              exit 1
+            fi
+            export ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-$(node -p "require(\"./package.json\").version").tar.gz"
+            test -f "$ADM_UPGRADE_PACKAGE"
             trap "tests/splunk/lab.sh purge" EXIT
             tests/splunk/lab.sh up
             tests/splunk/lab.sh install

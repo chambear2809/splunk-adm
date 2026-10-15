@@ -1,6 +1,6 @@
 # Application Atlas — Phase 0 UI Toolkit compatibility spike
 
-Date: 2026-10-14. Scope: local only; no commit, push, or PR.
+Date: 2026-10-14. This is the historical Phase 0 investigation. Its pending decisions, legacy bundle references and AppInspect baseline describe that spike, not the current release. The integrated app uses HYBRID with the standard dashboard panel boundary and no legacy `adm.bundle.js`; see [final integration readiness](UI-PHASE-9.md) for current qualification.
 
 ## Recommendation: PENDING sign-off — evidence now favours HYBRID
 

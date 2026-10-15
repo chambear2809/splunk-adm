@@ -129,15 +129,29 @@ class FakeSearchClient implements SearchClient {
       latest: request.latest ?? "now",
     });
     if (request.search === "| inputlookup adm_app_catalog") {
-      if (faultScenario === "empty-catalog") return { rows: [], warnings: [] };
+      if (
+        ["empty-catalog", "empty-catalog-fallback-fails"].includes(
+          faultScenario ?? "",
+        )
+      )
+        return { rows: [], warnings: [] };
+      if (faultScenario === "catalog-and-fallback-fail")
+        throw new Error("Catalog unavailable.");
       if (faultScenario === "stale") {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return { rows: catalogCapture.rows, warnings: [] };
       }
       return { rows: catalogCapture.rows, warnings: [] };
     }
-    if (request.search === "| `adm_scope_options`")
+    if (request.search === "| `adm_scope_options`") {
+      if (
+        ["empty-catalog-fallback-fails", "catalog-and-fallback-fail"].includes(
+          faultScenario ?? "",
+        )
+      )
+        throw new Error("Configured scopes unavailable.");
       return { rows: scopes.rows, warnings: [] };
+    }
     if (request.search.startsWith('| `adm_find("')) {
       const query = request.search.match(/adm_find\("(.*)"\)/)?.[1] ?? "";
       const capture = findCapture.queries.find((item) => item.query === query);

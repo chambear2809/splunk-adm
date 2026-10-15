@@ -28,7 +28,7 @@ Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It
 
 The same `npm run package` archive installs and updates the app; deployment-owned state lives in KV store and `local/`. See [upgrade preservation checks](docs/UPGRADES.md).
 
-**Target:** Splunk Enterprise 10.6 for the pilot (a single ACI fabric with Kubernetes on Cilium), then Splunk Cloud. Validated in a local Splunk 10.6 container against synthetic data; not yet run against a live environment.
+**Targets:** Splunk Cloud and Splunk Enterprise 10.6+. The pilot is a single ACI fabric with Kubernetes on Cilium. Runtime validation uses a local Splunk 10.6.0.5 lab with synthetic data; Cloud runtime, formal vetting and a customer pilot remain unqualified. See [integration and release readiness](docs/UI-PHASE-9.md).
 
 ## Project layout
 
@@ -62,7 +62,7 @@ Python 3.10+ is needed only for the fixture generator and the lab tests. The lab
 
 ## Pipeline health
 
-In the installed app, choose **Splunk → Pipeline health** to inspect source freshness, ingestion delay, and scheduled-search outcomes. Health is app-wide and available even before a map loads. Missing data or restricted permissions are shown as unconfirmed; synthetic demo data is never presented as live health. See [the health contract](docs/DATA_LAYER.md#pipeline-health-and-search-completeness).
+In the installed app, choose **Data health** to inspect source freshness, ingestion delay, and scheduled-search outcomes. Health is app-wide and available even before a map loads. Missing data or restricted permissions are shown as unconfirmed; synthetic demo data is never presented as live health. See [the health contract](docs/DATA_LAYER.md#pipeline-health-and-search-completeness).
 
 ## Operator setup skills
 

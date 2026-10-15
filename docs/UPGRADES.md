@@ -8,7 +8,7 @@ Before updating, back up the KV collections and record effective index and scope
 
 ## One-time CSV-to-KV scope migration
 
-Do this once when upgrading from a CSV-scope version. There is no automatic import or scheduled privileged migration. Pause builders and rollup, back up the current CSV and derived state, and keep viewers off the pipeline until the following verification is complete. The upgrade archive preserves `lookups/adm_observer_scope.csv` so an administrator can still read it by filename after the named lookup changes to KV.
+Do this once when upgrading from a CSV-scope version. There is no automatic import or scheduled privileged migration. Pause builders and rollup, back up the current CSV and derived state, and keep viewers off the pipeline until the following verification is complete. The archive does not contain `lookups/adm_observer_scope.csv`. Splunk retains an existing deployment-local copy during the update so an administrator can read it by filename after the named lookup changes to KV; verify it against the pre-upgrade backup.
 
 1. Install the upgrade package. Before enabling access/searches, run the release check with an installed-app directory when the tools/archive are available on that host:
 
@@ -38,7 +38,7 @@ Then disable it again. This saved search ships disabled, has no cron schedule an
 5. Compare `| inputlookup adm_observer_scope | table observer_kind observer scope cluster` with the normalized trusted source, including every row and output value; compare row count with the number of distinct matching pairs. A failed/partial search is not a completed migration. Stable `_key` values make a verified rerun update the same mappings rather than duplicate them. Test a known mapping through the app's read macros, and verify a viewer can read the lookup but cannot write it through `outputlookup adm_observer_scope` or the REST collection endpoint. KV ACLs enforce this even with `[outputlookup] outputlookup_check_permission=false`; no platform override is required.
 6. Resume the pipeline only after the KV mapping and ACL checks pass. Stop using the CSV as configuration. Keep its trusted backup for rollback, but never periodically reimport the retained runtime file: a CSV write or tamper must not alter live scope mappings. For rollback to a CSV-era release, restore that release's CSV permission control and trusted mapping before resuming access/searches.
 
-Fresh installations start with an empty KV collection; administrators populate the named lookup using the same normalized-key upsert pattern. Never import unreviewed rows automatically from the shipped header-only legacy template. The four public field names and lookup name are unchanged. Case normalization is limited to `observer_kind`/`observer`, preserving the former case-insensitive matching without changing mixed-case scope or cluster values.
+Fresh installations start with an empty KV collection; administrators populate the named lookup using the same normalized-key upsert pattern. Never import unreviewed rows automatically from a header-only legacy template retained from an older release. The four public field names and lookup name are unchanged. Case normalization is limited to `observer_kind`/`observer`, preserving the former case-insensitive matching without changing mixed-case scope or cluster values.
 
 ## Upgrade regression
 

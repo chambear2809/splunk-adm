@@ -242,7 +242,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             names = {name.removeprefix("./") for name in package.getnames()}
         if f"{APP}/lookups/adm_observer_scope.csv" in names:
             raise AssertionError(
-                "Use the -upgrade archive: full-install packages overwrite the deployment scope CSV"
+                "Release archives must not ship the legacy scope CSV; use the validated single install/update archive"
             )
         cls.token = uuid.uuid4().hex[:12]
         cls.scope = "upgrade-" + cls.token
