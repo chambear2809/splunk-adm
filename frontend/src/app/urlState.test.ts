@@ -96,3 +96,26 @@ it("recovers invalid deep links while preserving valid scope and strict stored-s
   ).toThrow();
   expect(recoverUrlState(new URLSearchParams()).notice).toBeUndefined();
 });
+
+it("retains query strings in browsers without URLSearchParams.size", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    URLSearchParams.prototype,
+    "size",
+  );
+  Reflect.deleteProperty(URLSearchParams.prototype, "size");
+  try {
+    expect(
+      pageURL(
+        "map",
+        new URLSearchParams("namespace=shop"),
+        "/app/splunk_adm/map",
+      ),
+    ).toBe("/app/splunk_adm/map?namespace=shop");
+    expect(pageURL("map", new URLSearchParams(), "/app/splunk_adm/map")).toBe(
+      "/app/splunk_adm/map",
+    );
+  } finally {
+    if (descriptor)
+      Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
+  }
+});

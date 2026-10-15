@@ -189,5 +189,6 @@ export function pageURL(
 ): string {
   const match = /^(.*\/app\/splunk_adm\/)[^/]+\/?$/.exec(pathname);
   const base = match?.[1] ?? "/";
-  return `${base}${page}${params.size ? `?${params}` : ""}`;
+  const query = params.toString();
+  return `${base}${page}${query ? `?${query}` : ""}`;
 }
