@@ -40,7 +40,7 @@ What remains for HYBRID: (1) confirm the Cloud stack version the pilot will run 
 | Gate                                     | Result                                        | Evidence                                                                                                                                                        |
 | ---------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. Peer dependencies                     | PASS                                          | `npm ls --all` exits 0 after removing `@splunk/react-page`; React/ReactDOM 18.3.1, styled-components 5.3.11.                                                    |
-| 2. Bundle ceiling                        | PASS (gzip budget)                            | HYBRID `pages/atlas.js` 1,059,561 raw / 267,139 gzip. 350 KB gzip is the shipping comparison; the 1.2 MB raw figure was our own estimate, not a Splunk limit.   |
+| 2. Bundle ceiling                        | PASS (historical comparison)                  | HYBRID `pages/atlas.js` 1,059,561 raw / 267,139 gzip. The former 350 KB gzip figure was an estimate only; the release checker now enforces a 650 KiB (665,600-byte) gzip ceiling. |
 | 3. AppInspect Cloud precert              | FAIL — **not Toolkit-attributable**           | Worktree HYBRID package and clean main both give 112 success / 2 failure / 0 error / 7 warning / 124 n/a / 1 skipped, with the same failed checks and messages. |
 | 4. Viewer render + Toolkit search + CSRF | **PASS on HYBRID** (and custom-template host) | HYBRID run 4: mounted in `#atlas-root`, 46 rows, 10 edge cells; viewer's SearchJob POST returned 201.                                                           |
 | 5. User theme                            | **PASS on HYBRID** after fix (run 1 FAIL)     | Run 1 always rendered light. With `resolveUserTheme()`, dark → dark (`rgb(23,29,33)`) and light → light; text inherits the theme colour.                        |
@@ -84,7 +84,7 @@ All sizes are Node `zlib` gzip level 6.
 | **HYBRID as shipped in worktree (`pages/atlas.js`)** | **1,059,561** | **267,139** | measured                     |
 | Legacy `adm.bundle.js` (full SVG map, React 18)      |       323,023 |      93,400 | measured                     |
 
-The 1.2 MB raw ceiling was **our planning estimate**. **350 KB gzip** is the comparison that matters for shipping. The split experiment does not reduce time to first usable map, because the selected page must also load. It needs an ES-module loader before it could ship.
+The 1.2 MB raw ceiling and **350 KB gzip** figure were **planning estimates**, not platform limits. The release checker now enforces the measured shipping ceiling of **650 KiB gzip (665,600 bytes)** for `pages/atlas.js`; the current package must remain below that limit. The split experiment does not reduce time to first usable map, because the selected page must also load. It needs an ES-module loader before it could ship.
 
 ### Ten largest modules in `pages/atlas.js` (HYBRID)
 
@@ -112,7 +112,7 @@ Earlier react-page builds (`/tmp/adm-uitk-bundle-analysis-modules.json`, `/tmp/a
 - HYBRID + full map ≈ 1,059,561 + 179,314 ≈ **1.24 MB raw**, and 267,139 + 47,131 ≈ **314 KB gzip**. Some code is already in both bundles (demo fixtures, `provider.ts`, `rows.ts`), and the legacy chrome is replaced, so the real figure should be somewhat lower.
 - Upper bound: concatenating both current bundles (React included twice) gives 1,382,083 raw / **359,840 gzip**.
 
-**Estimate:** about 300–315 KB gzip, under 350 KB with roughly 35–50 KB headroom. Raw would likely exceed our own 1.2 MB estimate. Phase 1 must measure the real merged build. The cheapest reductions are moving demo fixtures out of the Splunk bundle and checking whether `lodash`/`colorjs.io` can be deduplicated.
+**Historical estimate:** about 300–315 KB gzip, under the former 350 KB comparison with roughly 35–50 KB headroom. That estimate is superseded by the enforced 650 KiB (665,600-byte) gzip ceiling. Raw would likely exceed our own 1.2 MB estimate. The cheapest reductions are moving demo fixtures out of the Splunk bundle and checking whether `lodash`/`colorjs.io` can be deduplicated.
 
 ## Gate 3 — AppInspect Cloud precert
 

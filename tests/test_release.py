@@ -2,10 +2,21 @@ import hashlib
 import io
 import tarfile
 import unittest
+from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.check_release import check_release
+from tools.check_release import MAX_ATLAS_GZIP_BYTES, check_release
+
+
+def _incompressible(size: int) -> bytes:
+    """Deterministic bytes that do not let gzip hide bundle size."""
+    chunks: list[bytes] = []
+    counter = 0
+    while counter * 32 < size:
+        chunks.append(sha256(f"atlas-{counter}".encode()).digest())
+        counter += 1
+    return b"".join(chunks)[:size]
 
 
 class ReleaseArchiveTests(unittest.TestCase):
@@ -84,6 +95,23 @@ class ReleaseArchiveTests(unittest.TestCase):
 
     def test_accepts_valid_pair(self):
         self._write_pair()
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_atlas_bundle_over_gzip_limit(self):
+        install = self._files()
+        install["splunk_adm/appserver/static/pages/atlas.js"] = _incompressible(
+            MAX_ATLAS_GZIP_BYTES + 4096
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, r"atlas\.js gzip bundle.*maximum"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_accepts_atlas_bundle_just_under_gzip_limit(self):
+        install = self._files()
+        install["splunk_adm/appserver/static/pages/atlas.js"] = _incompressible(
+            MAX_ATLAS_GZIP_BYTES - 4096
+        )
+        self._write_pair(install)
         check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_critical_config(self):

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+import gzip
 import hashlib
 import json
 import posixpath
@@ -17,6 +18,8 @@ from pathlib import Path
 MAX_MEMBERS = 10_000
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+MAX_ATLAS_GZIP_BYTES = 650 * 1024
+ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
 FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
 # Custom Mako templates are deprecated as of Splunk Enterprise 10.4.
@@ -197,6 +200,12 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "packaged default/transforms.conf",
         require_kv=True,
     )
+    atlas_gzip_bytes = len(gzip.compress(files[ATLAS_BUNDLE_PATH], mtime=0))
+    if atlas_gzip_bytes > MAX_ATLAS_GZIP_BYTES:
+        raise ValueError(
+            f"atlas.js gzip bundle is {atlas_gzip_bytes} bytes; "
+            f"maximum is {MAX_ATLAS_GZIP_BYTES} bytes"
+        )
     config = configparser.RawConfigParser(strict=True)
     try:
         config.read_string(files["splunk_adm/default/app.conf"].decode("utf-8"))

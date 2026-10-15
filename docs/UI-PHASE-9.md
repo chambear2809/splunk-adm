@@ -62,14 +62,14 @@ review completed successfully.
 
 Final archive: `dist/splunk_adm-0.2.0.tar.gz`, 847,672 bytes.
 SHA256: `ae4377fa909e084e2c478ac3933223068aac7a369dce4f300cf550ad963c048c`.
-Shared `atlas.js`: 2,330,177 bytes raw / 585,033 bytes gzip.
+Shared `atlas.js`: 2,330,177 bytes raw / 585,033 bytes gzip. The release checker enforces a 650 KiB (665,600-byte) gzip limit; this replaces the historical 350 KB planning comparison.
 
 ## Qualification limits and rollout
 
 Local validation and AppInspect are not formal Splunk Cloud approval. Cloud
 runtime testing and actual Cloud vetting remain required, as does a customer
 pilot with real data. Search-head cluster behavior is not qualified by this
-standalone lab. The shared bundle remains above the original size budget.
+standalone lab. The shared bundle is within the enforced 650 KiB gzip ceiling; the earlier 350 KB figure was a planning estimate and is retained only in the historical spike record.
 The separate mixed/scheduled pipeline rehearsals are outside this UI integration
 pass. No dependency upgrades or operator/cloud infrastructure changes were made.
 
