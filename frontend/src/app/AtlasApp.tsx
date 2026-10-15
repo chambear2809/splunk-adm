@@ -36,8 +36,9 @@ export function AtlasApp({
 }) {
   const [mode, setMode] = useState(state.mode);
   const live = !!client && mode === "live";
+  const healthLive = live && page !== "help" && page !== "setup";
   return (
-    <HealthProvider client={client} live={live}>
+    <HealthProvider client={client} live={healthLive}>
       <Shell page={page} client={client} live={live}>
         {page === "map" ? (
           <MapPage

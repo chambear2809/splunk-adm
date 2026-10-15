@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { healthIndicator } from "./healthStatus";
+import { healthIndicator, shouldPollHealth } from "./healthStatus";
 import {
   JOB_NAMES,
   SOURCE_NAMES,
@@ -121,5 +121,13 @@ describe("health indicator", () => {
         true,
       ),
     ).toBe("attention");
+  });
+});
+
+describe("health polling", () => {
+  it("polls only while live and visible", () => {
+    expect(shouldPollHealth(true, true)).toBe(true);
+    expect(shouldPollHealth(true, false)).toBe(false);
+    expect(shouldPollHealth(false, true)).toBe(false);
   });
 });

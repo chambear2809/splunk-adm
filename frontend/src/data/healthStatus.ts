@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -25,6 +26,8 @@ export interface HealthState {
   refresh: () => void;
 }
 const HealthContext = createContext<HealthState | undefined>(undefined);
+export const shouldPollHealth = (live: boolean, visible: boolean) =>
+  live && visible;
 
 export function HealthProvider({
   client,
@@ -39,14 +42,31 @@ export function HealthProvider({
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [visible, setVisible] = useState(
+    () =>
+      typeof document === "undefined" || document.visibilityState !== "hidden",
+  );
+  const active = useRef<AbortController>();
   useEffect(() => {
-    if (!live || !client) {
+    if (typeof document === "undefined") return;
+    const changed = () => {
+      const nextVisible = document.visibilityState !== "hidden";
+      if (!nextVisible) active.current?.abort();
+      setVisible(nextVisible);
+    };
+    document.addEventListener("visibilitychange", changed);
+    return () => document.removeEventListener("visibilitychange", changed);
+  }, []);
+  useEffect(() => {
+    if (!shouldPollHealth(live, visible) || !client) {
+      active.current?.abort();
       setReport(undefined);
       setError(undefined);
       setBusy(false);
       return;
     }
     const controller = new AbortController();
+    active.current = controller;
     setBusy(true);
     setError(undefined);
     setReport(undefined);
@@ -63,16 +83,19 @@ export function HealthProvider({
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
       });
-    return () => controller.abort();
-  }, [client, live, revision]);
+    return () => {
+      controller.abort();
+      if (active.current === controller) active.current = undefined;
+    };
+  }, [client, live, revision, visible]);
   useEffect(() => {
-    if (!live || !client) return;
+    if (!shouldPollHealth(live, visible) || !client) return;
     const timer = setInterval(
       () => setRevision((current) => current + 1),
       5 * 60 * 1000,
     );
     return () => clearInterval(timer);
-  }, [client, live]);
+  }, [client, live, visible]);
   const value = useMemo<HealthState>(
     () => ({
       report,
