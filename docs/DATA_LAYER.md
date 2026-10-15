@@ -357,13 +357,24 @@ binding association when multiple services share a pod. Unsupported or missing
 scope dimensions remain visible for repair and cannot open a map.
 
 Inline paged KV reads reuse the existing completeness probes. Identity candidate
-caps and multivalue expansion losses invalidate the computation. The writer
-upserts with `override_if_empty=false`, preserving the previous catalog if the
-computation is incomplete; it does not silently publish partial counts. Old
-retained scopes are not pruned by this writer. The Applications page displays
-stored observation windows and falls back to configured scopes with unavailable
-metrics when it cannot load a catalog. An empty catalog alone does not prove the
-job is disabled.
+caps and multivalue expansion losses invalidate the computation. The single
+catalog writer merges fresh rows with previous rows whose `updated` is within
+`adm_identity_retention`; fresh keys win. It replaces storage only after both
+computation and prior-catalog reads prove complete. `override_if_empty=false`
+preserves the snapshot on an incomplete read. A complete snapshot with no
+retained applications writes one internal bookkeeping row, `_key=adm-catalog-empty`
+with `updated`, so every expired application can be removed without treating a
+failed computation as an empty result. This reserved key is not application or
+TA data and the UI ignores it. The writer uses inline reads and a final sort,
+not capped subsearch result sets, and permits one concurrent dispatch.
+
+The Applications page labels metrics as each row's last completed hour; its
+Find/map time picker does not alter catalog metrics. Results over 5,000 rows
+show an explicit message and can retry with an exact service prefilter.
+Oversized results never silently fall back to metric-free scope rows. Other
+catalog failures or an empty catalog can still show configured scopes with an
+explanation that metrics are unavailable. An empty catalog alone does not prove
+the job is disabled.
 
 `adm_find(1)` accepts an exact IP, EPG (including ACI DN), or attached-device
 value under a server-side single-line allowlist. It returns applications bound

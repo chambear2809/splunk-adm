@@ -111,19 +111,22 @@ function validateRelations(result: CatalogRow): CatalogRow {
 export function parseCatalogRows(
   rows: readonly Record<string, unknown>[],
 ): CatalogRow[] {
-  return rows.map((row) => {
-    if (!validKey(row._key)) throw new Error("Catalog field _key is invalid.");
-    const dimensions = scope(row);
-    const invalidScope = scopeError(dimensions);
-    const result = {
-      _key: row._key,
-      ...dimensions,
-      ...(invalidScope ? { scopeError: invalidScope } : {}),
-    } as CatalogRow;
-    for (const field of metricFields)
-      result[field] = integer(row[field], field);
-    return validateRelations(result);
-  });
+  return rows
+    .filter((row) => row._key !== "adm-catalog-empty")
+    .map((row) => {
+      if (!validKey(row._key))
+        throw new Error("Catalog field _key is invalid.");
+      const dimensions = scope(row);
+      const invalidScope = scopeError(dimensions);
+      const result = {
+        _key: row._key,
+        ...dimensions,
+        ...(invalidScope ? { scopeError: invalidScope } : {}),
+      } as CatalogRow;
+      for (const field of metricFields)
+        result[field] = integer(row[field], field);
+      return validateRelations(result);
+    });
 }
 
 export function createScopeCatalogRows(
@@ -168,4 +171,17 @@ export function validatedBuildFindSearch(value: string): string {
   )
     throw new Error("Find value contains unsupported characters.");
   return `| \`adm_find("${value}")\``;
+}
+
+export const catalogLimitMessage = (maxRows = 5000) =>
+  `The application catalog contains more than ${maxRows.toLocaleString()} rows. Narrow the service scope and try again.`;
+
+/** Build a lookup search with an optional exact service prefilter. */
+export function validatedBuildCatalogSearch(service?: string): string {
+  if (service === undefined) return "| inputlookup adm_app_catalog";
+  const invalid = argError("service", service);
+  const exact = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/;
+  if (invalid || exact.exec(service)?.[0] !== service)
+    throw new Error(invalid ?? "Service contains unsupported characters.");
+  return `| inputlookup adm_app_catalog WHERE service="${service}"`;
 }

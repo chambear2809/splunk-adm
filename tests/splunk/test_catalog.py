@@ -12,6 +12,7 @@ import json
 import os
 import secrets
 import sys
+import time
 import unittest
 import urllib.parse
 
@@ -359,6 +360,154 @@ class CatalogTest(unittest.TestCase):
             f"/servicesNS/nobody/{APP}/storage/collections/data/adm_app_catalog/{urllib.parse.quote(key, safe='')}",
         ) as response:
             response.read()
+
+    def _delete_catalog_key_if_present(self, key: str) -> None:
+        try:
+            self._delete_catalog_key(key)
+        except self.lab.LabError as error:
+            if "HTTP 404 " not in str(error):
+                raise
+
+    def _seed_catalog_row(self, key: str, updated: int) -> None:
+        """Seed a complete catalog row so writer retention is tested directly."""
+        self.lab.search(
+            "| makeresults | eval _key="
+            + json.dumps(key)
+            + ", service="
+            + json.dumps(key)
+            + ', environment="test", cluster="test-cluster", namespace="test", '
+            + "pods=1, first_seen=2000000000, last_seen=2000000001, peers=0, "
+            + "conversations_1h=0, blocked_1h=0, unknown_peers_1h=0, updated="
+            + str(updated)
+            + ", window_start=2000000000, window_end=2000003600 "
+            + "| outputlookup append=true key_field=_key adm_app_catalog",
+            *CATALOG_WINDOW,
+        )
+
+    def test_catalog_writer_prunes_expired_but_retains_recent_snapshot_rows(self):
+        """A complete refresh merges retained rows and drops rows past retention."""
+        from test_data_layer import DataLayerTest
+
+        retention_path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_identity_retention"
+        )
+        original = self.lab._json("GET", retention_path)["entry"][0]["content"][
+            "definition"
+        ]
+        self.addCleanup(
+            self.lab._json,
+            "POST",
+            retention_path,
+            {"definition": original},
+        )
+        self.lab._json("POST", retention_path, {"definition": "100"})
+        now = int(time.time())
+        expired = "catalog-retention-expired-" + secrets.token_hex(8)
+        recent = "catalog-retention-recent-" + secrets.token_hex(8)
+        self.addCleanup(self._delete_catalog_key_if_present, expired)
+        self.addCleanup(self._delete_catalog_key, recent)
+        self._seed_catalog_row(expired, now - 101)
+        self._seed_catalog_row(recent, now - 1)
+
+        DataLayerTest.dispatch(
+            "ADM - Application catalog",
+            earliest=str(CATALOG_WINDOW[0]),
+            latest=str(CATALOG_WINDOW[1]),
+        )
+        stored = self.lab.search("| inputlookup adm_app_catalog", *CATALOG_WINDOW)
+        keys = {row.get("_key") for row in stored}
+        self.assertNotIn(expired, keys)
+        self.assertIn(recent, keys)
+
+    def test_complete_empty_catalog_refresh_clears_all_expired_rows(self):
+        """A complete empty build removes every expired application row."""
+        from test_data_layer import DataLayerTest
+
+        backups = {}
+        try:
+            for collection in ("adm_service_workload", "adm_app_catalog"):
+                backup = "catalog-empty-" + secrets.token_hex(8) + ".csv"
+                self.lab.search(
+                    f"| inputlookup {collection} | outputlookup {backup}",
+                    *CATALOG_WINDOW,
+                )
+                backups[collection] = backup
+                self.lab._mgmt(
+                    "DELETE",
+                    f"/servicesNS/nobody/{APP}/storage/collections/data/{collection}",
+                ).close()
+            key = "catalog-retention-all-expired-" + secrets.token_hex(8)
+            self._seed_catalog_row(key, 1)
+            DataLayerTest.dispatch(
+                "ADM - Application catalog",
+                earliest=str(CATALOG_WINDOW[0]),
+                latest=str(CATALOG_WINDOW[1]),
+            )
+            stored = self.lab.search("| inputlookup adm_app_catalog", *CATALOG_WINDOW)
+            self.assertEqual({row.get("_key") for row in stored}, {"adm-catalog-empty"})
+        finally:
+            for collection, backup in backups.items():
+                self.lab.search(
+                    f"| inputlookup {backup} | outputlookup override_if_empty=true {collection}",
+                    *CATALOG_WINDOW,
+                )
+
+    def test_failed_binding_lookup_never_becomes_a_valid_empty_snapshot(self):
+        from test_data_layer import DataLayerTest
+
+        key = "catalog-failed-binding-" + secrets.token_hex(8)
+        self.addCleanup(self._delete_catalog_key, key)
+        self._seed_catalog_row(key, 1)
+        path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-transforms/adm_service_workload"
+        )
+        original = self.lab._json("GET", path)["entry"][0]["content"]["collection"]
+        self.addCleanup(self.lab._json, "POST", path, {"collection": original})
+        self.lab._json("POST", path, {"collection": "adm_nonexistent_binding_test"})
+        with self.assertRaises(self.lab.LabError):
+            DataLayerTest.dispatch(
+                "ADM - Application catalog",
+                earliest=str(CATALOG_WINDOW[0]),
+                latest=str(CATALOG_WINDOW[1]),
+            )
+        stored = self.lab.search(
+            "| inputlookup adm_app_catalog | search _key=" + json.dumps(key),
+            *CATALOG_WINDOW,
+        )
+        self.assertEqual(len(stored), 1)
+
+    def test_incomplete_old_catalog_read_preserves_existing_snapshot(self):
+        """A capped prior-catalog read must never overwrite its stored snapshot."""
+        from test_data_layer import DataLayerTest
+
+        key = "catalog-old-read-cap-" + secrets.token_hex(8)
+        self.addCleanup(self._delete_catalog_key, key)
+        self._seed_catalog_row(key, 1)
+        path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/"
+            + urllib.parse.quote("adm_catalog_append_kv(1)", safe="")
+        )
+        original = self.lab._json("GET", path)["entry"][0]["content"]["definition"]
+        self.addCleanup(self.lab._json, "POST", path, {"definition": original})
+        # Inject a completeness fault only on the actual prior-catalog read.
+        self.lab._json(
+            "POST",
+            path,
+            {
+                "definition": original
+                + ' | eval adm_catalog_invalid=if("$collection$"=="adm_app_catalog", 1, adm_catalog_invalid)'
+            },
+        )
+        DataLayerTest.dispatch(
+            "ADM - Application catalog",
+            earliest=str(CATALOG_WINDOW[0]),
+            latest=str(CATALOG_WINDOW[1]),
+        )
+        stored = self.lab.search(
+            "| inputlookup adm_app_catalog | search _key=" + json.dumps(key),
+            *CATALOG_WINDOW,
+        )
+        self.assertEqual(len(stored), 1)
 
     def test_viewer_reads_catalog_and_find_but_cannot_write_or_dispatch_owner(self):
         case = self.RestrictedViewerTest("runTest")

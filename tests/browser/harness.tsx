@@ -12,6 +12,7 @@ import type {
   SearchClient,
   SearchRequest,
 } from "../../frontend/src/data/searchClient";
+import { SearchResultLimitError } from "../../frontend/src/data/searchClient";
 import type {
   SetupClient,
   SetupSnapshot,
@@ -133,20 +134,42 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
-    if (request.search === "| inputlookup adm_app_catalog") {
+    if (request.search.startsWith("| inputlookup adm_app_catalog")) {
+      if (
+        faultScenario === "catalog-overlimit-narrowed" &&
+        request.search.includes(' WHERE service="')
+      )
+        return { rows: catalogCapture.rows, warnings: ["narrowed warning"] };
+      if (
+        ["catalog-overlimit", "catalog-overlimit-narrowed"].includes(
+          faultScenario ?? "",
+        )
+      )
+        throw new SearchResultLimitError(5000);
       if (
         ["empty-catalog", "empty-catalog-fallback-fails"].includes(
           faultScenario ?? "",
         )
       )
         return { rows: [], warnings: [] };
+      if (faultScenario === "marker-only-catalog")
+        return {
+          rows: [{ _key: "adm-catalog-empty", updated: 10 }],
+          warnings: [],
+        };
       if (faultScenario === "catalog-and-fallback-fail")
         throw new Error("Catalog unavailable.");
       if (faultScenario === "stale") {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return { rows: catalogCapture.rows, warnings: [] };
       }
-      return { rows: catalogCapture.rows, warnings: [] };
+      const service = request.search.match(/WHERE service="([^"]+)"/)?.[1];
+      return {
+        rows: service
+          ? catalogCapture.rows.filter((row) => row.service === service)
+          : catalogCapture.rows,
+        warnings: [],
+      };
     }
     if (request.search === "| `adm_scope_options`") {
       if (

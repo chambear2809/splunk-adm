@@ -247,7 +247,13 @@ test("rejects injected state before dispatching a search", async ({ page }) => {
     "/tests/browser/browser.html?mode=live&service=bad%22%29%7Cdelete",
   );
   await expect(page.locator("#adm-root")).toContainText("Service may contain");
-  expect(await page.evaluate(() => window.__ADM_REQUESTS__)).toBeUndefined();
+  expect(
+    await page.evaluate(() =>
+      (window.__ADM_REQUESTS__ ?? []).filter((r) =>
+        /adm_(graph|topology|find|app_catalog)/.test(r.spl),
+      ),
+    ),
+  ).toEqual([]);
 });
 
 test("built bundle isolates dependencies from the dashboard AMD globals", async ({
@@ -326,7 +332,9 @@ test("clears dependent scope fields and rejects invalid manual input", async ({
   page,
 }) => {
   await page.clock.install();
-  await page.goto("/tests/browser/browser.html?mode=live");
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
   const environment = page.getByRole("combobox", {
     name: "Environment",
@@ -524,6 +532,75 @@ test("empty catalog falls back to scopes without invented metrics", async ({
   await expect(batch).toContainText("—");
 });
 
+test("catalog bookkeeping marker falls back without rendering the marker", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=marker-only-catalog",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: /metrics are unavailable/i }),
+  ).toBeVisible();
+  await expect(page.locator("tbody")).not.toContainText("adm-catalog-empty");
+  await expect(page.locator("tbody")).toContainText("batch-worker");
+});
+
+test("catalog over-limit is actionable and does not fall back to scopes", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit",
+  );
+  await expect(page.getByRole("alert")).toContainText(/more than 5,000 rows/i);
+  const requests = await page.evaluate(() => window.__ADM_REQUESTS__ ?? []);
+  expect(
+    requests.filter((request) => request.spl === "| `adm_scope_options`")
+      .length,
+  ).toBe(1);
+  expect(
+    requests.some((request) =>
+      request.spl.includes('inputlookup adm_app_catalog WHERE service="'),
+    ),
+  ).toBe(true);
+});
+
+test("catalog preserves warnings from a narrowed service search", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-narrowed",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
+});
+
+test("catalog uses its captured metric window when the Find/map picker changes", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&earliest=1791370800&latest=1791374400",
+  );
+  await expect(page.locator("table").last()).toBeVisible();
+  const catalogRequests = () =>
+    page.evaluate(() =>
+      (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+        request.spl.startsWith("| inputlookup adm_app_catalog"),
+      ),
+    );
+  const before = await catalogRequests();
+  expect(before[0]?.earliest).toBe("0");
+  expect(before[0]?.latest).toBe("now");
+  await page
+    .getByLabel("Time range", { exact: true })
+    .getByRole("button")
+    .click();
+  await page.getByRole("button", { name: "Presets", exact: true }).click();
+  await page.getByText("Last 24 hours", { exact: true }).click();
+  await page.waitForTimeout(100);
+  expect(await catalogRequests()).toHaveLength(before.length);
+});
+
 test("captured demo applications explain unavailable Find evidence", async ({
   page,
 }) => {
@@ -613,7 +690,9 @@ test("live health refreshes every five minutes and demo stays quiet", async ({
   page,
 }) => {
   await page.clock.install();
-  await page.goto("/tests/browser/browser.html?mode=live");
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
   const before = await page.evaluate(
     () =>
@@ -1246,7 +1325,15 @@ for (const fault of [
       await page.evaluate(
         () =>
           window.__ADM_REQUESTS__?.filter(
-            (r) => r.spl === "| `adm_scope_options`" && r.earliest !== "0",
+            (r) => r.spl === "| `adm_scope_options`",
+          ).length,
+      ),
+    ).toBe(2); // ScopeBar bootstrap plus exactly one catalog fallback.
+    expect(
+      await page.evaluate(
+        () =>
+          window.__ADM_REQUESTS__?.filter((r) =>
+            r.spl.startsWith("| inputlookup adm_app_catalog"),
           ).length,
       ),
     ).toBe(1);

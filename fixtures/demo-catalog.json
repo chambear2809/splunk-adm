@@ -38,10 +38,11 @@
       "adm_ip_identity"
     ],
     "summary_index_macro": "adm_index_summary",
-    "macro_sha256": "67fc4343e5ef30abc6cc6920b0dc99430403b482481190e14ebb6415c512673a",
+    "macro_sha256": "d67a260a8cf193a66074df395619a40fe62f48c52adb61be524f60beda886fed",
     "macro_definitions": {
-      "adm_catalog_append_kv": "6bee8e1406bc238fa314f3186c98dffd508bed76e2d418f4c2910e88fb30cd19",
-      "adm_catalog_build": "bfd6d54e735a9fb160d4b32adf5067f6b859b0cd52264e5b6e4910f62bf9929a",
+      "adm_catalog_append_kv": "ca479be37768112022cea6277972dce241a5f80c32c79f96f344f6427209f135",
+      "adm_catalog_build": "aaaa5ef7b2b692361ce3888be26271c59099ed3b5076d9898bf6fb4a222a8f2b",
+      "adm_catalog_build_status": "4bba45f506118cc52010c737487fa554583d2cf9823ea9f1b9042a8d8608f846",
       "adm_catalog_edges": "fa73f5b98e9bd4653f6163172981eaa02f3c906f9780fb1ebd06c9fb063036f2",
       "adm_catalog_metrics": "8c0a03d47e00460da7df2d05bd0b5309127c9324591bc758af78dbf3031bb43a",
       "adm_find": "4d9d3609fb9128bc7a2866d433406ff0889728220aaba8171412aff46dc5febd",
@@ -60,7 +61,7 @@
     "method": "tests/splunk/lab.py search against initialized lab",
     "earliest": "1791370800",
     "latest": "1791374400",
-    "captured_at": 1792023952
+    "captured_at": 1792038960
   },
   "rows": [
     {
@@ -76,7 +77,7 @@
       "conversations_1h": "1",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792023950",
+      "updated": "1792038958",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -93,7 +94,7 @@
       "conversations_1h": "2",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792023950",
+      "updated": "1792038958",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -110,7 +111,7 @@
       "conversations_1h": "4",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792023950",
+      "updated": "1792038958",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -127,7 +128,7 @@
       "conversations_1h": "6",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792023950",
+      "updated": "1792038958",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -144,7 +145,7 @@
       "conversations_1h": "2",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792023950",
+      "updated": "1792038958",
       "window_start": "1791370800",
       "window_end": "1791374400"
     }

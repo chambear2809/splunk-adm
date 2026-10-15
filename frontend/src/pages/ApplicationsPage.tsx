@@ -4,11 +4,16 @@ import TableExport from "@splunk/react-ui/Table";
 import TextExport from "@splunk/react-ui/Text";
 import { ScopeBar } from "../map/ScopeBar";
 import { TimePicker } from "../map/TimePicker";
-import type { SearchClient } from "../data/searchClient";
+import {
+  SearchResultLimitError,
+  type SearchClient,
+} from "../data/searchClient";
 import {
   createScopeCatalogRows,
   parseCatalogRows,
   parseFindRows,
+  catalogLimitMessage,
+  validatedBuildCatalogSearch,
   validatedBuildFindSearch,
   type CatalogRow,
   type FindRow,
@@ -32,6 +37,11 @@ const utc = (epoch: string | number) =>
     .replace(":00.000Z", " UTC");
 const scopeLabel = (value: string) =>
   value.length > 255 ? value.slice(0, 255) + "…" : value;
+const isSearchResultLimitError = (
+  value: unknown,
+): value is SearchResultLimitError =>
+  value instanceof SearchResultLimitError ||
+  (value instanceof Error && value.name === "SearchResultLimitError");
 const columns: { key: SortKey; label: string }[] = [
   { key: "service", label: "Service" },
   { key: "environment", label: "Environment" },
@@ -42,8 +52,8 @@ const columns: { key: SortKey; label: string }[] = [
   { key: "conversations_1h", label: "Conversations (1h)" },
   { key: "blocked_1h", label: "Blocked (1h)" },
   { key: "unknown_peers_1h", label: "Unknown peers (1h)" },
-  { key: "window_start", label: "Window start (UTC)" },
-  { key: "window_end", label: "Window end (UTC)" },
+  { key: "window_start", label: "Last completed hour start (UTC)" },
+  { key: "window_end", label: "Last completed hour end (UTC)" },
 ];
 
 export function ApplicationsPage({
@@ -98,18 +108,20 @@ export function ApplicationsPage({
     setCatalog([]);
     void client
       .search({
-        search: "| inputlookup adm_app_catalog",
-        earliest,
-        latest,
-        timezone,
+        search: validatedBuildCatalogSearch(),
+        // Catalog metrics are precomputed per row; the Find/map picker does
+        // not change which lookup window is returned.
+        earliest: "0",
+        latest: "now",
         maxRows: 5000,
         signal: controller.signal,
         allowEmpty: true,
       })
       .then((result) => {
         if (controller.signal.aborted || current !== revision.current) return;
-        if (result.rows.length) {
-          setCatalog(parseCatalogRows(result.rows));
+        const parsed = parseCatalogRows(result.rows);
+        if (parsed.length) {
+          setCatalog(parsed);
           setWarning(result.warnings[0]);
           return;
         }
@@ -117,15 +129,54 @@ export function ApplicationsPage({
       })
       .catch(async (reason: unknown) => {
         if (controller.signal.aborted || current !== revision.current) return;
+        if (isSearchResultLimitError(reason)) {
+          if (!args.service) {
+            setError(catalogLimitMessage(reason.maxRows));
+            return;
+          }
+          try {
+            const serviceSearch = validatedBuildCatalogSearch(args.service);
+            const narrowed = await client.search({
+              search: serviceSearch,
+              earliest: "0",
+              latest: "now",
+              maxRows: 5000,
+              signal: controller.signal,
+              allowEmpty: true,
+            });
+            if (controller.signal.aborted || current !== revision.current)
+              return;
+            if (narrowed.rows.length) {
+              setCatalog(parseCatalogRows(narrowed.rows));
+              setWarning(
+                [
+                  `Catalog narrowed to service “${args.service}”; metrics use each row’s last completed hour.`,
+                  ...narrowed.warnings,
+                ].join(" "),
+              );
+            } else {
+              setError(catalogLimitMessage(reason.maxRows));
+            }
+          } catch (narrowReason: unknown) {
+            if (!controller.signal.aborted && current === revision.current)
+              setError(
+                isSearchResultLimitError(narrowReason)
+                  ? catalogLimitMessage(narrowReason.maxRows)
+                  : narrowReason instanceof Error
+                    ? narrowReason.message
+                    : catalogLimitMessage(reason.maxRows),
+              );
+          }
+          return;
+        }
         setWarning(
           `Application catalog unavailable (${reason instanceof Error ? reason.message : "search failed"}); showing configured scopes.`,
         );
         try {
           const fallback = await client.search({
             search: "| `adm_scope_options`",
-            earliest,
-            latest,
-            timezone,
+            earliest: "0",
+            latest: "now",
             maxRows: 5000,
             signal: controller.signal,
             allowEmpty: true,
@@ -152,7 +203,7 @@ export function ApplicationsPage({
         if (!controller.signal.aborted && current === revision.current)
           setLoading(false);
       });
-  }, [client, earliest, latest, state.mode, timezone]);
+  }, [args.service, client, state.mode]);
 
   useEffect(() => {
     findController.current?.abort();
@@ -358,6 +409,10 @@ export function ApplicationsPage({
       <p>
         Choose an application scope to explore its services and network
         dependencies.
+      </p>
+      <p>
+        Catalog metrics use each row’s last completed hour; the selected
+        Find/map time window does not change this catalog window.
       </p>
       {(state.mode === "live" || state.mode === "demo") && (
         <>
@@ -568,7 +623,18 @@ export function ApplicationsPage({
         />
       </form>
       <p>
-        <a href={pageURL("map", stateParams({ ...state, mode: "demo" }))}>
+        <a
+          href={pageURL(
+            "map",
+            stateParams({
+              ...state,
+              mode: "demo",
+              args: demoArgs,
+              earliest: DEMO_WINDOW.earliest,
+              latest: DEMO_WINDOW.latest,
+            }),
+          )}
+        >
           Explore captured synthetic demo data
         </a>
       </p>

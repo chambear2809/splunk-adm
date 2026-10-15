@@ -3,6 +3,8 @@ import {
   createScopeCatalogRows,
   parseCatalogRows,
   parseFindRows,
+  catalogLimitMessage,
+  validatedBuildCatalogSearch,
   validatedBuildFindSearch,
 } from "./catalog";
 
@@ -52,6 +54,12 @@ describe("catalog parsing", () => {
       namespace: "shop",
     });
     expect(createScopeCatalogRows([row])[0].pods).toBeUndefined();
+  });
+
+  it("ignores the reserved empty-catalog bookkeeping row", () => {
+    expect(
+      parseCatalogRows([{ _key: "adm-catalog-empty", updated: 10 }]),
+    ).toEqual([]);
   });
 
   it("rejects invalid dimensions, key, types, ranges, order, and counts", () => {
@@ -126,5 +134,20 @@ describe("catalog parsing", () => {
     expect(() =>
       parseFindRows([{ warnings: "incomplete identity evidence" }]),
     ).toThrow("incomplete identity evidence");
+  });
+
+  it("pushes an exact service filter into the catalog lookup", () => {
+    expect(validatedBuildCatalogSearch()).toBe("| inputlookup adm_app_catalog");
+    expect(validatedBuildCatalogSearch("frontend")).toBe(
+      '| inputlookup adm_app_catalog WHERE service="frontend"',
+    );
+    for (const value of ['frontend"', "frontend\n", "frontend|search", " "])
+      expect(() => validatedBuildCatalogSearch(value)).toThrow();
+  });
+
+  it("gives over-limit catalog results an actionable message", () => {
+    expect(catalogLimitMessage()).toMatch(/more than 5,000 rows/i);
+    expect(catalogLimitMessage(12)).toMatch(/more than 12 rows/i);
+    expect(catalogLimitMessage()).toMatch(/narrow the service scope/i);
   });
 });

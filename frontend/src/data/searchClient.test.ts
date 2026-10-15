@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ToolkitSearchClient, timeError } from "./searchClient";
+import {
+  SearchResultLimitError,
+  ToolkitSearchClient,
+  timeError,
+} from "./searchClient";
 
 const runtime = vi.hoisted(() => ({
   progress: undefined as any,
@@ -93,7 +97,7 @@ describe("ToolkitSearchClient", () => {
     pending = new ToolkitSearchClient().search(request());
     runtime.progress.next({ content: { resultCount: 3 } });
     runtime.result.next({ results: [{ a: 1 }] });
-    await expect(pending).rejects.toThrow(/exceeds/);
+    await expect(pending).rejects.toBeInstanceOf(SearchResultLimitError);
   });
   it("requires an exact safe final result count", async () => {
     let pending = new ToolkitSearchClient().search(request());

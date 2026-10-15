@@ -25,6 +25,18 @@ export interface SearchClient {
   search(request: SearchRequest): Promise<RunResult>;
 }
 
+export class SearchResultLimitError extends Error {
+  readonly maxRows: number;
+
+  constructor(maxRows: number) {
+    super(
+      `Search returned more than ${maxRows.toLocaleString()} rows. Narrow the scope or time range and try again.`,
+    );
+    this.name = "SearchResultLimitError";
+    this.maxRows = maxRows;
+  }
+}
+
 const errorDetail = (base: string, payload: unknown) => {
   const message = splunkWarnings(payload)[0];
   return new Error(message ? `${base} Splunk reported: ${message}` : base);
@@ -141,7 +153,7 @@ export class ToolkitSearchClient implements SearchClient {
                 if (results.length === 0 && !request.allowEmpty)
                   throw new Error("Search returned no rows.");
                 if (results.length > request.maxRows)
-                  throw new Error("Search result exceeds the pilot limit.");
+                  throw new SearchResultLimitError(request.maxRows);
                 if (
                   !results.every(
                     (row) =>
@@ -174,7 +186,7 @@ export class ToolkitSearchClient implements SearchClient {
                 if (count === 0 && !request.allowEmpty)
                   throw new Error("Search returned no rows.");
                 if (count > request.maxRows)
-                  throw new Error("Search result exceeds the pilot limit.");
+                  throw new SearchResultLimitError(request.maxRows);
                 if (rows.length !== count)
                   throw new Error(
                     "Splunk result count did not match returned rows; results could not be verified.",
