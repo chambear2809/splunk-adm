@@ -27,6 +27,51 @@ describe("parseGraph", () => {
     expect(() => parseGraph(g)).toThrow(/invalid relationships/);
   });
 
+  it("accepts and validates optional NetFlow VLAN observations", () => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    edge.vlan_observations = [
+      {
+        vlan: 120,
+        position: "ingress",
+        exporter: "leaf-101",
+        interface_index: "49",
+        src_ip: "10.0.0.1",
+        dest_ip: "10.0.0.2",
+        first_seen: 1_700_000_000,
+        last_seen: 1_700_000_001,
+      },
+    ];
+    edge.vlan_observations_truncated = true;
+    expect(
+      parseGraph(g).edges.find((e) => e.id === edge.id)?.vlan_observations,
+    ).toHaveLength(1);
+    edge.vlan_observations[0].vlan = 4095;
+    expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+
+  it.each([4095, 4099])(
+    "rejects saved VLAN %s while accepting 4094",
+    (vlan) => {
+      const g = clone();
+      const edge = edgeOf(g, "communicates_with");
+      edge.vlan_observations = [
+        {
+          vlan,
+          position: "egress",
+          exporter: "192.0.2.1",
+          src_ip: "10.0.0.1",
+          dest_ip: "10.0.0.2",
+          first_seen: 1,
+          last_seen: 2,
+        },
+      ];
+      expect(() => parseGraph(g)).toThrow();
+      edge.vlan_observations[0].vlan = 4094;
+      expect(() => parseGraph(g)).not.toThrow();
+    },
+  );
+
   it("accepts an empty graph whose root is absent", () => {
     const g = clone();
     g.nodes = [];

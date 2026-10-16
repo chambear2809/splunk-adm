@@ -127,6 +127,8 @@ export const attributeLabels: [string, string][] = [
   ["tenant", "Tenant"],
   ["app_profile", "App profile"],
   ["epg", "EPG"],
+  ["vlan", "VLAN"],
+  ["bridge_domain", "Bridge Domain"],
   ["attach_device", "Attached to"],
   ["attach_interface", "Port"],
   ["owner", "Deployment"],

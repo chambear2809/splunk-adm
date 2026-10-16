@@ -328,6 +328,55 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
 });
 
+test("inspector remains usable at narrow width in light and dark themes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const theme of ["light", "dark"]) {
+    await page.goto(
+      `/tests/browser/browser.html?fault=vlan-ui&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&theme=${theme}`,
+    );
+    await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+    await page
+      .getByRole("button", { name: /node-a/ })
+      .first()
+      .dispatchEvent("click");
+    await expect(
+      page.getByRole("complementary", { name: "Details" }),
+    ).toBeVisible();
+    await expect(page.getByText("EPG-ui", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("VLAN 1030 · ingress", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("1030", { exact: true })).toBeVisible();
+    await expect(page.getByText("bd-clients", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Observed VLANs — NetFlow/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Network history is capped/)).toBeVisible();
+    expect(
+      await page
+        .getByRole("complementary", { name: "Details" })
+        .evaluate((element) => element.getBoundingClientRect().width),
+    ).toBeLessThanOrEqual(390);
+    await page
+      .getByRole("button", { name: /node-b/ })
+      .first()
+      .dispatchEvent("click");
+    await expect(page.locator(".facts dt", { hasText: "VLAN" })).toHaveCount(0);
+    await expect(
+      page.locator(".facts dt", { hasText: "Bridge Domain" }),
+    ).toHaveCount(0);
+    await expect(page.getByText("shop", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("EPG-incomplete", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("02:00:00:00:00:02", { exact: true }),
+    ).toBeVisible();
+  }
+});
+
 test("clears dependent scope fields and rejects invalid manual input", async ({
   page,
 }) => {

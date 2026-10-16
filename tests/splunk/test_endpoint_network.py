@@ -1,0 +1,498 @@
+"""End-to-end ACI/ND network metadata checks for the disposable Splunk lab."""
+
+from __future__ import annotations
+
+import copy
+from datetime import datetime, timezone
+import json
+import os
+from pathlib import Path
+import time
+import unittest
+import uuid
+
+import lab
+
+
+ROOT = Path(__file__).resolve().parents[2]
+RAW = ROOT / "fixtures" / "raw-aci"
+
+
+@unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires disposable Splunk lab")
+class EndpointNetworkTest(unittest.TestCase):
+    """Use isolated observer scopes and public data-layer macros only."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.scopes = []
+        cls.addClassCleanup(cls.cleanup)
+
+    def setUp(self) -> None:
+        self.token = "network-" + uuid.uuid4().hex[:12]
+        self.scope = self.token
+        base = (int(uuid.uuid4().hex[:8], 16) % 32768) * 4
+        observers = [
+            f"198.{18 + ((base + n) >> 16)}.{((base + n) >> 8) & 255}.{(base + n) & 255}"
+            for n in range(4)
+        ]
+        self.apic, self.nd = observers[:2]
+        self.exporters = tuple(observers[2:])
+        self.start = int(time.time()) - 180
+        self.loaded = 0
+        type(self).scopes.append(self.scope)
+        rows = [
+            {"observer_kind": "apic", "observer": self.apic, "scope": self.scope},
+            {"observer_kind": "nd_host", "observer": self.nd, "scope": self.scope},
+            *[
+                {"observer_kind": "exporter", "observer": exporter, "scope": self.scope}
+                for exporter in self.exporters
+            ],
+        ]
+        payload = json.dumps(json.dumps(rows))
+        lab.search(
+            f"| makeresults format=json data={payload} "
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+            "_key=sha256(json_array(observer_kind, observer)) "
+            "| fields _key observer_kind observer scope | outputlookup append=true "
+            "key_field=_key adm_observer_scope"
+        )
+
+    @classmethod
+    def cleanup(cls) -> None:
+        import urllib.parse
+
+        query = urllib.parse.urlencode(
+            {"query": json.dumps({"scope": {"$in": cls.scopes}})}
+        )
+        for collection in ("adm_ip_identity", "adm_observer_scope"):
+            response = lab._mgmt(
+                "DELETE",
+                f"/servicesNS/nobody/{lab.APP}/storage/collections/data/"
+                f"{collection}?{query}",
+            )
+            response.close()
+
+    @staticmethod
+    def fixture(name: str) -> list[dict]:
+        return [
+            json.loads(line)
+            for line in (RAW / name).read_text("utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def isolated(self, event: dict, *, at: int) -> dict:
+        row = copy.deepcopy(event)
+        row["time"] = at
+        row["source"] = self.token
+        row["host"] = "network-test"
+        row["index"] = (
+            "cisco_dc" if row["sourcetype"].startswith("cisco:") else "netflow"
+        )
+        if row["sourcetype"].startswith("cisco:"):
+            row["event"] = row["event"].replace("192.0.2.50", self.apic)
+            row["event"] = row["event"].replace("192.0.2.60", self.nd)
+        elif isinstance(row["event"], dict):
+            observed = (
+                datetime.fromtimestamp(at, timezone.utc)
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z")
+            )
+            row["event"]["timestamp"] = observed
+            row["event"]["endtime"] = (
+                datetime.fromtimestamp(at + 1, timezone.utc)
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z")
+            )
+        return row
+
+    def load(self, rows: list[dict]) -> None:
+        lab._hec_post(("\n".join(json.dumps(row) for row in rows) + "\n").encode())
+        self.loaded += len(rows)
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            found = lab.search(
+                f'index=* source="{self.token}" | stats count', "0", "+10y"
+            )
+            if found and int(found[0]["count"]) == self.loaded:
+                return
+            time.sleep(1)
+        self.fail("network fixture events did not become searchable")
+
+    def build_identity(self) -> list[dict]:
+        return lab.search(
+            "| `adm_identity_build`",
+            self.start - 5,
+            self.start + 700,
+        )
+
+    def test_apic_relation_and_nd_fallback_are_mac_scoped(self):
+        endpoints = self.fixture("aci_class.ndjson")
+        aci_ep = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
+        relation = next(e for e in endpoints if 'component="fvRsBd"' in e["event"])
+        nd = self.fixture("nd_endpoints.ndjson")[0]
+        nd["event"] = json.loads(nd["event"])
+        nd["event"].update(
+            endpointId="network-fallback",
+            mac="00:50:56:AA:40:25",
+            ip=["10.30.40.25"],
+            nodeName="leaf-101",
+            displayBd="bd-clients",
+            displayEpg="win-clients",
+            nd_host=self.nd,
+        )
+        nd["event"] = json.dumps(nd["event"])
+        fallback_ep = copy.deepcopy(aci_ep)
+        fallback_ep["event"] = (
+            fallback_ep["event"]
+            .replace("10.30.40.25", "10.99.40.99")
+            .replace("00:50:56:AA:40:25", "00:50:56:AA:40:99")
+            .replace("epg-win-clients", "epg-no-bd")
+        )
+        fallback_nd = copy.deepcopy(nd)
+        fallback_nd["event"] = json.loads(fallback_nd["event"])
+        fallback_nd["event"].update(
+            endpointId="network-fallback-only",
+            mac="00:50:56:AA:40:99",
+            ip=["10.99.40.99"],
+        )
+        fallback_nd["event"] = json.dumps(fallback_nd["event"])
+        self.load(
+            [
+                self.isolated(aci_ep, at=self.start),
+                self.isolated(relation, at=self.start),
+                self.isolated(nd, at=self.start),
+                self.isolated(fallback_ep, at=self.start),
+                self.isolated(fallback_nd, at=self.start),
+            ]
+        )
+        summary = self.build_identity()
+        self.assertEqual(len(summary), 1)
+        identities = lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" '
+            "| table ip entity_kind tenant app_profile epg mac source attr_vlan attr_bridge_domain desc"
+        )
+        apic = next(
+            row
+            for row in identities
+            if row["ip"] == "10.30.40.25" and row.get("source") == "aci"
+        )
+        self.assertEqual(apic["source"], "aci")
+        self.assertEqual(apic.get("attr_vlan"), "1030")
+        self.assertEqual(apic.get("attr_bridge_domain"), "bd-clients")
+        fallback = next(
+            (
+                row
+                for row in identities
+                if row["ip"] == "10.99.40.99" and row.get("source") == "nd_endpoints"
+            ),
+            None,
+        )
+        self.assertIsNotNone(fallback, identities)
+        assert fallback is not None
+        self.assertEqual(fallback["source"], "nd_endpoints")
+        self.assertEqual(fallback.get("attr_bridge_domain"), "bd-clients")
+        self.assertNotEqual(apic["mac"], fallback["mac"])
+        graph = lab.search(
+            f'| makeresults | eval adm_row="conv", client_ip="10.99.40.99", '
+            f'server_ip="203.0.113.99", server_port=443, transport="tcp", '
+            f'scope="{self.scope}", first_seen={self.start}, last_seen={self.start}, '
+            f"adm_ws={self.start - 1}, adm_we={self.start + 1}, "
+            f"adm_bfs={self.start}, adm_bls={self.start} "
+            '| `adm_graph_resolve("frontend","demo","network-cluster","shop")` '
+            "| table adm_c_state adm_c_id adm_c_src adm_c_node",
+            self.start - 5,
+            self.start + 10,
+        )
+        self.assertEqual(len(graph), 1, graph)
+        self.assertEqual(graph[0]["adm_c_state"], "resolved")
+        self.assertEqual(graph[0]["adm_c_src"], "aci")
+        node = json.loads(graph[0]["adm_c_node"])
+        self.assertEqual(node["id"], f"vm:{self.scope}/10.99.40.99")
+        self.assertEqual(node.get("attr_bridge_domain"), "bd-clients")
+        apic_graph = lab.search(
+            f'| makeresults | eval adm_row="conv", client_ip="10.30.40.25", '
+            f'server_ip="203.0.113.98", server_port=443, transport="tcp", '
+            f'scope="{self.scope}", first_seen={self.start}, last_seen={self.start}, '
+            f"adm_ws={self.start - 1}, adm_we={self.start + 1}, "
+            f"adm_bfs={self.start}, adm_bls={self.start} "
+            '| `adm_graph_resolve("frontend","demo","network-cluster","shop")` '
+            "| table adm_c_state adm_c_src adm_c_node",
+            self.start - 5,
+            self.start + 10,
+        )
+        self.assertEqual(len(apic_graph), 1, apic_graph)
+        self.assertEqual(apic_graph[0]["adm_c_state"], "resolved")
+        self.assertEqual(apic_graph[0]["adm_c_src"], "aci")
+        self.assertEqual(
+            json.loads(apic_graph[0]["adm_c_node"]).get("attr_bridge_domain"),
+            "bd-clients",
+        )
+
+    def test_netflow_rollup_preserves_totals_and_observations(self):
+        flows = self.fixture("stream_netflow.ndjson")
+        selected = [
+            e
+            for e in flows
+            if e["event"].get("src_ip") == "10.30.40.25"
+            and e["event"].get("dest_ip") == "10.50.0.10"
+        ][:2]
+        self.assertTrue(selected)
+        selected = [copy.deepcopy(selected[0]) for _ in range(4)]
+        selected[2]["event"]["src_ip"], selected[2]["event"]["dest_ip"] = (
+            selected[2]["event"]["dest_ip"],
+            selected[2]["event"]["src_ip"],
+        )
+        selected[2]["event"]["src_port"], selected[2]["event"]["dest_port"] = (
+            selected[2]["event"]["dest_port"],
+            selected[2]["event"]["src_port"],
+        )
+        selected[3]["event"]["src_port"], selected[3]["event"]["dest_port"] = (
+            30000,
+            30001,
+        )
+        reverse_bytes = selected[2]["event"]["bytes"]
+        expected_bytes = sum(row["event"]["bytes"] for row in selected)
+        for i, row in enumerate(selected):
+            row = self.isolated(row, at=self.start + i)
+            row["event"]["exporter_ip"] = self.exporters[i % 2]
+            row["event"]["input_snmpidx"] = 436224000 + i
+            row["event"]["ingress_vlan"] = 1100 + i
+            row["event"]["egress_vlan"] = 1200 + i
+            selected[i] = row
+        self.load(selected)
+        rows = lab.search(
+            f'| `adm_conversation_rollup` | where scope="{self.scope}"',
+            self.start - 5,
+            self.start + 30,
+        )
+        self.assertTrue(rows)
+        self.assertEqual(
+            sum(float(row["bytes_c2s"]) for row in rows), expected_bytes - reverse_bytes
+        )
+        self.assertEqual(sum(float(row["bytes_s2c"]) for row in rows), reverse_bytes)
+        observations = [
+            item for row in rows for item in json.loads(row["vlan_observations"])
+        ]
+        self.assertIsInstance(observations, list)
+        self.assertTrue(observations)
+        self.assertEqual(sum(int(row["records"]) for row in rows), 4)
+        self.assertTrue(any(row["direction_basis"] == "unknown" for row in rows))
+        self.assertEqual({o["position"] for o in observations}, {"ingress", "egress"})
+        self.assertTrue(
+            any(o["src_ip"] == "10.50.0.10" and o["vlan"] == 1102 for o in observations)
+        )
+        for observation in observations:
+            self.assertIn(observation["position"], {"ingress", "egress"})
+            self.assertTrue(1 <= int(observation["vlan"]) <= 4094)
+            self.assertIn(observation["src_ip"], {"10.30.40.25", "10.50.0.10"})
+            self.assertNotIn("interface", observation)
+            if "interface_index" in observation:
+                self.assertIsInstance(observation["interface_index"], str)
+            if observation.get("interface_index") is None:
+                self.assertNotIn("interface_index", observation)
+
+    def test_vlan_merge_bounds_contexts_and_preserves_row_counters(self):
+        items = [
+            {
+                "vlan": 1030,
+                "position": "ingress",
+                "exporter": "198.51.100.71",
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 100,
+                "last_seen": 110,
+            },
+            {
+                "vlan": 1030,
+                "position": "ingress",
+                "exporter": "198.51.100.71",
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 90,
+                "last_seen": 120,
+            },
+        ]
+        for index in range(40):
+            item = {
+                "vlan": 1000 + index,
+                "position": "egress" if index % 2 else "ingress",
+                "exporter": f"198.51.101.{index + 1}",
+                "interface_index": str(4000 + index),
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 200 + index,
+                "last_seen": 210 + index,
+            }
+            items.append(item)
+        encoded = ";".join(json.dumps(item, separators=(",", ":")) for item in items)
+        query = (
+            f"| makeresults | eval items={json.dumps(encoded)}, bytes_c2s=1234, "
+            'bytes_s2c=567, records=7 | makemv delim=";" items '
+            "| `adm_vlan_merge(items)`"
+        )
+        rows = lab.search(query, "0", "+10y")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["bytes_c2s"], "1234")
+        self.assertEqual(rows[0]["bytes_s2c"], "567")
+        self.assertEqual(rows[0]["records"], "7")
+        self.assertEqual(rows[0]["vlan_observations_truncated"], "1")
+        observations = json.loads(rows[0]["vlan_observations"])
+        self.assertEqual(len(observations), 32)
+        merged = next(
+            observation
+            for observation in observations
+            if observation["exporter"] == "198.51.100.71"
+        )
+        self.assertEqual(merged["first_seen"], 90)
+        self.assertEqual(merged["last_seen"], 120)
+        no_optional = next(
+            observation
+            for observation in observations
+            if observation["exporter"] == "198.51.101.1"
+        )
+        self.assertNotIn("interface", no_optional)
+        self.assertIn("interface_index", no_optional)
+        self.assertNotIn("interface_index", merged)
+
+        repeat = lab.search(query, "0", "+10y")
+        self.assertEqual(len(repeat), 1, repeat)
+        self.assertEqual(repeat[0]["vlan_observations"], rows[0]["vlan_observations"])
+
+    def test_invalid_relation_states_and_tenant_are_not_promoted(self):
+        endpoints = self.fixture("aci_class.ndjson")
+        endpoint = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
+        relation = next(e for e in endpoints if 'component="fvRsBd"' in e["event"])
+        cases = [
+            ("10.99.41.1", "00:50:56:AA:41:01", "unformed", self.start),
+            ("10.99.41.2", "00:50:56:AA:41:02", "formed", self.start + 500),
+            ("10.99.41.3", "00:50:56:AA:41:03", "formed", self.start),
+            ("10.99.41.4", "00:50:56:AA:41:04", "formed", self.start - 601),
+            ("10.99.41.5", "00:50:56:AA:41:05", "formed", self.start),
+            ("10.99.41.6", "00:50:56:AA:41:06", "formed", self.start),
+        ]
+        rows = []
+        for ip, mac, state, relation_time in cases:
+            cep = copy.deepcopy(endpoint)
+            cep["event"] = (
+                cep["event"]
+                .replace("10.30.40.25", ip)
+                .replace("00:50:56:AA:40:25", mac)
+            )
+            rel = copy.deepcopy(relation)
+            rel["event"] = (
+                rel["event"]
+                .replace("epg-win-clients", f"epg-test-{mac[-2:]}")
+                .replace('state="formed"', f'state="{state}"')
+            )
+            cep["event"] = cep["event"].replace(
+                "epg-win-clients", f"epg-test-{mac[-2:]}"
+            )
+            if ip.endswith(".3"):
+                rel["event"] = rel["event"].replace("uni/tn-shop/", "uni/tn-other/")
+            if ip.endswith(".6"):
+                rel["event"] = rel["event"].replace(
+                    "uni/tn-shop/BD-bd-clients", "uni/BD-fake"
+                )
+            if ip.endswith(".5"):
+                rel["event"] = rel["event"].replace("192.0.2.50", "192.0.2.250")
+            rows.extend(
+                [
+                    self.isolated(cep, at=self.start),
+                    self.isolated(rel, at=relation_time),
+                ]
+            )
+        self.load(rows)
+        self.build_identity()
+        identities = lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" '
+            "| table ip attr_bridge_domain"
+        )
+        by_ip = {row["ip"]: row for row in identities}
+        for ip, *_ in cases:
+            with self.subTest(ip=ip):
+                self.assertIn(ip, by_ip, identities)
+                self.assertNotIn("attr_bridge_domain", by_ip[ip])
+
+    def test_encapsulation_validation_and_shared_tenant_target(self):
+        endpoint = next(
+            e
+            for e in self.fixture("aci_class.ndjson")
+            if 'component="fvCEp"' in e["event"]
+        )
+        relation = next(
+            e
+            for e in self.fixture("aci_class.ndjson")
+            if 'component="fvRsBd"' in e["event"]
+        )
+        relation["event"] = relation["event"].replace(
+            'tDn="uni/tn-shop/BD-bd-clients"', 'tDn="uni/tn-common/BD-bd-clients"'
+        )
+        cases = [
+            ("vlan-1", "1"),
+            ("vlan-4094", "4094"),
+            ("vlan-4095", None),
+            ("vlan-0", None),
+            ("vxlan-1030", None),
+            ("1030", None),
+            ("vlan-10x", None),
+            ("", None),
+        ]
+        rows = [self.isolated(relation, at=self.start)]
+        for i, (encap, _) in enumerate(cases, 1):
+            ep = copy.deepcopy(endpoint)
+            ep["event"] = (
+                ep["event"]
+                .replace("10.30.40.25", f"10.99.42.{i}")
+                .replace("00:50:56:AA:40:25", f"00:50:56:AA:42:{i:02X}")
+                .replace('encap="vlan-1030"', f'encap="{encap}"')
+            )
+            rows.append(self.isolated(ep, at=self.start))
+        self.load(rows)
+        self.build_identity()
+        actual = lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" | table ip attr_vlan attr_bridge_domain desc'
+        )
+        by_ip = {r["ip"]: r for r in actual}
+        for i, (_, expected) in enumerate(cases, 1):
+            row = by_ip[f"10.99.42.{i}"]
+            self.assertEqual(row.get("attr_vlan"), expected)
+            self.assertEqual(row.get("attr_bridge_domain"), "bd-clients")
+            sample = json.loads(row["desc"])["nh"][0]
+            self.assertEqual(sample["bd_dn"], "uni/tn-common/BD-bd-clients")
+            self.assertEqual(sample["bd_tenant"], "common")
+            self.assertEqual(sample["observer"], self.apic)
+
+    def test_graph_resolve_keeps_identity_after_metadata_change(self):
+        endpoints = self.fixture("aci_class.ndjson")
+        aci_ep = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
+        relation = next(e for e in endpoints if 'component="fvRsBd"' in e["event"])
+        changed = copy.deepcopy(aci_ep)
+        changed["event"] = changed["event"].replace(
+            'encap="vlan-1030"', 'encap="vlan-1031"'
+        )
+        self.load(
+            [
+                self.isolated(aci_ep, at=self.start),
+                self.isolated(relation, at=self.start),
+                self.isolated(changed, at=self.start + 60),
+            ]
+        )
+        self.build_identity()
+        rows = lab.search(
+            f'| makeresults | eval adm_row="conv", client_ip="10.30.40.25", '
+            f'server_ip="10.50.0.10", server_port=443, transport="tcp", '
+            f'scope="{self.scope}", first_seen={self.start + 1}, last_seen={self.start + 61}, '
+            f"adm_ws={self.start}, adm_we={self.start + 120}, "
+            f"adm_bfs={self.start + 1}, adm_bls={self.start + 61} "
+            '| `adm_graph_resolve("frontend","demo","network-cluster","shop")` '
+            "| table adm_c_state adm_s_state adm_c_id adm_s_id",
+            self.start - 5,
+            self.start + 130,
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["adm_c_state"], "resolved")
+        self.assertEqual(rows[0]["adm_s_state"], "none")
+
+
+if __name__ == "__main__":
+    unittest.main()

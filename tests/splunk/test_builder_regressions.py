@@ -285,7 +285,7 @@ class BuilderRegressions(unittest.TestCase):
             "cisco:dc:aci:class",
         )
         rows = lab.search(
-            f'`adm_identity_observations` | search entity_id="{dn}" | table ip scope',
+            f'| `adm_identity_observations` | search entity_id="{dn}" | table ip scope',
             self.start + 500,
             self.start + 511,
         )

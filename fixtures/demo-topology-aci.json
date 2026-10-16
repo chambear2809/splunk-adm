@@ -21,7 +21,10 @@
     "fabric": "apic:192.0.2.50",
     "aci_node": "pod-1/node-101",
     "role": "leaf",
-    "sources": ["aci", "nd"]
+    "sources": [
+      "aci",
+      "nd"
+    ]
   },
   {
     "row_type": "device",
@@ -33,7 +36,10 @@
     "fabric": "apic:192.0.2.50",
     "aci_node": "pod-1/node-102",
     "role": "leaf",
-    "sources": ["aci", "nd"]
+    "sources": [
+      "aci",
+      "nd"
+    ]
   },
   {
     "row_type": "device",
@@ -45,7 +51,10 @@
     "fabric": "apic:192.0.2.50",
     "aci_node": "pod-1/node-103",
     "role": "leaf",
-    "sources": ["aci", "nd"]
+    "sources": [
+      "aci",
+      "nd"
+    ]
   },
   {
     "row_type": "device",
@@ -175,6 +184,6 @@
     "devices": "6",
     "links": "11",
     "interfaces": "0",
-    "generated_at": "1791374400"
+    "generated_at": "1792162963"
   }
 ]

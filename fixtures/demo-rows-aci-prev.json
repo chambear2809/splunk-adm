@@ -20,6 +20,7 @@
       "attr_app_profile",
       "attr_attach_device",
       "attr_attach_interface",
+      "attr_bridge_domain",
       "attr_controller",
       "attr_environment",
       "attr_epg",
@@ -35,6 +36,7 @@
       "attr_tenant",
       "attr_traffic_policy",
       "attr_type",
+      "attr_vlan",
       "attr_vm_name",
       "bytes",
       "cluster",
@@ -74,16 +76,18 @@
       "transport",
       "unresolved_conversations",
       "via_node",
+      "vlan_observations",
+      "vlan_observations_truncated",
       "window_end",
       "window_start"
     ],
     "macro_sha256": "6c48e8cd94b8734be7b9965deb1226b96dcfa1fa9da2901f76f0a4b258c8b132",
-    "macro_file_sha256": "7574cb672b93c15258b4bb7c1960b7b74dae69b3d90e83e396da0421e28fdb66",
-    "generator_sha256": "31bea08b72674e66213acdbfecc605990e9e4b8716e5ab303ac0ca13352df654",
+    "macro_file_sha256": "3e76f45a86fc64e4412a7d0f0083893d067d6c6e99e06a32e21dc4745812d54f",
+    "generator_sha256": "2b3210233bd168fb543026764123fd5b1f7a54d64638905a71ff0b5f1068825a",
     "scenario_sha256": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
     "raw_scenario": "dist/phase8-raw-aci-prev (derived from fixtures/raw-aci/scenario.json)",
     "method": "tests/splunk/lab.py search against initialized lab",
-    "captured_at": 1792039063
+    "captured_at": 1792164285
   },
   "rows": [
     {
@@ -315,6 +319,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.101\",\"src_ip\":\"10.42.0.200\",\"dest_ip\":\"10.42.1.15\",\"interface_index\":\"436248576\",\"first_seen\":1791372910,\"last_seen\":1791372910.6},{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.42.1.15\",\"dest_ip\":\"10.42.0.200\",\"interface_index\":\"436252672\",\"first_seen\":1791372910,\"last_seen\":1791372910.6}]",
+      "vlan_observations_truncated": "0",
       "contract": "k8s-fabric",
       "contract_subject": "any-ip",
       "contract_filter": "any-ip",
@@ -334,7 +340,8 @@
       "sources": "hubble",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "initiator"
+      "direction_basis": "initiator",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -349,7 +356,8 @@
       "sources": "hubble",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "initiator"
+      "direction_basis": "initiator",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -365,6 +373,8 @@
       "sources": "netflow",
       "transport": "ipip",
       "direction_basis": "unknown",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.10.20.12\",\"dest_ip\":\"10.10.22.13\",\"interface_index\":\"436252672\",\"first_seen\":1791373080,\"last_seen\":1791373080.2}]",
+      "vlan_observations_truncated": "0",
       "contract": "k8s-fabric",
       "contract_subject": "any-ip",
       "contract_filter": "any-ip",
@@ -395,6 +405,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "a1a1a1a1a1a1a102"
     },
     {
@@ -426,6 +437,8 @@
       "server_port": "5432",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.42.1.20\",\"dest_ip\":\"10.20.30.40\",\"interface_index\":\"436252672\",\"first_seen\":1791372920.12,\"last_seen\":1791372920.38},{\"vlan\":1040,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.20.30.40\",\"dest_ip\":\"10.42.1.20\",\"interface_index\":\"436228096\",\"first_seen\":1791372920.12,\"last_seen\":1791372920.38}]",
+      "vlan_observations_truncated": "0",
       "span_ids": "c3c3c3c3c3c3c304",
       "contract": "k8s-to-db",
       "contract_subject": "postgres",
@@ -465,6 +478,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.101\",\"src_ip\":\"10.42.0.15\",\"dest_ip\":\"10.42.1.20\",\"interface_index\":\"436248576\",\"first_seen\":1791372910.32,\"last_seen\":1791372910.42},{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.42.1.20\",\"dest_ip\":\"10.42.0.15\",\"interface_index\":\"436252672\",\"first_seen\":1791372910.32,\"last_seen\":1791372910.42}]",
+      "vlan_observations_truncated": "0",
       "span_ids": "b2b2b2b2b2b2b202",
       "contract": "k8s-fabric",
       "contract_subject": "any-ip",
@@ -489,6 +504,7 @@
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "f6f6f6f6f6f6f602",
       "contract": "k8s-to-internet",
       "contract_subject": "https-out",
@@ -527,6 +543,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1022,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.50.0.40\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436256768\",\"first_seen\":1791373080,\"last_seen\":1791373080.2},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.50.0.40\",\"interface_index\":\"436224000\",\"first_seen\":1791373080,\"last_seen\":1791373080.2}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-b",
       "contract": "win-to-shop",
       "contract_subject": "shop-frontends",
@@ -562,6 +580,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "port_rule",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.101\",\"src_ip\":\"10.50.0.30\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436248576\",\"first_seen\":1791372960,\"last_seen\":1791373020.25},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.50.0.30\",\"interface_index\":\"436224000\",\"first_seen\":1791372960,\"last_seen\":1791373020.25}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-a",
       "contract": "win-to-shop",
       "contract_subject": "shop-frontends",
@@ -597,6 +617,8 @@
       "server_port": "30081",
       "transport": "tcp",
       "direction_basis": "port_rule",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.10.20.12\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436252672\",\"first_seen\":1791373200,\"last_seen\":1791373200.3},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.10.20.12\",\"interface_index\":\"436224000\",\"first_seen\":1791373200,\"last_seen\":1791373200.3}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-b",
       "contract": "win-to-nodeports",
       "contract_subject": "nodeports",
@@ -638,6 +660,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.50.0.20\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436252672\",\"first_seen\":1791372920,\"last_seen\":1791372920.5},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.50.0.20\",\"interface_index\":\"436224000\",\"first_seen\":1791372920,\"last_seen\":1791372920.5}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-b",
       "contract": "win-to-shop",
       "contract_subject": "shop-frontends",
@@ -676,6 +700,8 @@
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "port_rule",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.101\",\"src_ip\":\"10.50.0.10\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436248576\",\"first_seen\":1791372910,\"last_seen\":1791372910.6},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.50.0.10\",\"interface_index\":\"436224000\",\"first_seen\":1791372910,\"last_seen\":1791372910.6}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-a",
       "contract": "win-to-shop",
       "contract_subject": "shop-frontends",
@@ -711,6 +737,8 @@
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "port_rule",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.50.0.11\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436252672\",\"first_seen\":1791372940,\"last_seen\":1791372940.3},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.50.0.11\",\"interface_index\":\"436224000\",\"first_seen\":1791372940,\"last_seen\":1791372940.3}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-b",
       "contract": "win-to-shop",
       "contract_subject": "shop-frontends",
@@ -749,6 +777,8 @@
       "server_port": "30080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.101\",\"src_ip\":\"10.10.20.11\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436248576\",\"first_seen\":1791373140,\"last_seen\":1791373140.4},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.10.20.11\",\"interface_index\":\"436224000\",\"first_seen\":1791373140,\"last_seen\":1791373140.4}]",
+      "vlan_observations_truncated": "0",
       "via_node": "node-a",
       "contract": "win-to-nodeports",
       "contract_subject": "nodeports",
@@ -787,6 +817,8 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations": "[{\"vlan\":1020,\"position\":\"ingress\",\"exporter\":\"192.0.2.102\",\"src_ip\":\"10.42.1.15\",\"dest_ip\":\"10.30.40.25\",\"interface_index\":\"436252672\",\"first_seen\":1791373260,\"last_seen\":1791373260.2},{\"vlan\":1030,\"position\":\"ingress\",\"exporter\":\"192.0.2.103\",\"src_ip\":\"10.30.40.25\",\"dest_ip\":\"10.42.1.15\",\"interface_index\":\"436224000\",\"first_seen\":1791373260,\"last_seen\":1791373260.2}]",
+      "vlan_observations_truncated": "0",
       "contract": "win-to-pods",
       "contract_subject": "pods",
       "contract_filter": "pod-8080",
@@ -1125,10 +1157,12 @@
       "attr_app_profile": "orders",
       "attr_attach_device": "pod-1/node-102",
       "attr_attach_interface": "eth1/6",
+      "attr_bridge_domain": "bd-db",
       "attr_epg": "db",
       "attr_mac": "00:50:56:AA:10:40",
       "attr_scope": "prod",
       "attr_tenant": "shop",
+      "attr_vlan": "1040",
       "attr_vm_name": "orders-db-01"
     },
     {
@@ -1142,10 +1176,12 @@
       "attr_app_profile": "clients",
       "attr_attach_device": "pod-1/node-103",
       "attr_attach_interface": "eth1/5",
+      "attr_bridge_domain": "bd-clients",
       "attr_epg": "win-clients",
       "attr_mac": "00:50:56:AA:40:25",
       "attr_scope": "prod",
       "attr_tenant": "shop",
+      "attr_vlan": "1030",
       "attr_vm_name": "win-client-01"
     },
     {
@@ -1162,7 +1198,7 @@
       "root_present": "1",
       "nodes": "25",
       "edges": "32",
-      "generated_at": "1792039062"
+      "generated_at": "1792164284"
     }
   ]
 }

@@ -210,8 +210,51 @@ class FakeSearchClient implements SearchClient {
       throw new Error(
         "The Splunk search failed. Splunk reported: index=otel permission denied",
       );
+    const rows = structuredClone(aciRows.rows) as Record<string, unknown>[];
+    if (scenario === "vlan-ui") {
+      const node = rows.find(
+        (row) =>
+          row.row_type === "node" && row.endpoint_kind === "k8s_node_proxy",
+      );
+      if (node) {
+        node.attr_epg = "EPG-ui";
+        node.attr_vlan = "1030";
+        node.attr_bridge_domain = "bd-clients";
+        node.attr_network_history_capped = "1";
+      }
+      const edge = rows.find(
+        (row) =>
+          row.row_type === "edge" && row.relationship === "communicates_with",
+      );
+      if (edge)
+        edge.vlan_observations = JSON.stringify([
+          {
+            vlan: 1030,
+            position: "ingress",
+            exporter: "198.51.100.10",
+            interface_index: "49",
+            src_ip: "10.0.0.1",
+            dest_ip: "10.0.0.2",
+            first_seen: 1791373500,
+            last_seen: 1791373520,
+          },
+        ]);
+      const incomplete = rows.find(
+        (row) =>
+          row.row_type === "node" &&
+          row.endpoint_kind === "k8s_node_proxy" &&
+          row !== node,
+      );
+      if (incomplete) {
+        incomplete.attr_tenant = "shop";
+        incomplete.attr_epg = "EPG-incomplete";
+        incomplete.attr_mac = "02:00:00:00:00:02";
+        incomplete.attr_vlan_status = "incomplete";
+        incomplete.attr_bridge_domain_status = "incomplete";
+      }
+    }
     return {
-      rows: aciRows.rows,
+      rows,
       warnings: scenario === "incomplete" ? [FINALIZED_SEARCH_WARNING] : [],
     };
   }
