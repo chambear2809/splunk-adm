@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { vlanContexts } from "./vlan";
+import { vlanContexts, vlanEdges } from "./vlan";
+import { indexGraph } from "./graph";
 import type { GraphEdge } from "./graph";
 
 const edge = (
@@ -50,5 +51,50 @@ describe("vlanContexts", () => {
         { ...edge("one", [observation()]), vlan_observations_truncated: true },
       ]).truncated,
     ).toBe(true);
+  });
+
+  it("keeps contexts on distinct interfaces and retains truncation-only edges", () => {
+    const first = observation({ interface_index: "49" });
+    const second = observation({ interface_index: "50" });
+    expect(vlanContexts([edge("one", [first, second])]).contexts).toHaveLength(
+      2,
+    );
+    const graph = {
+      schema_version: 1 as const,
+      snapshot_id: "x",
+      generated_at: "2026-01-01T00:00:00Z",
+      demo: false,
+      window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+      boundary: {
+        id: "b",
+        service: "s",
+        environment: "e",
+        cluster: "c",
+        namespace: "n",
+        root_node_id: "svc",
+      },
+      nodes: [
+        { id: "svc", label: "svc", kind: "service" as const },
+        { id: "a", label: "a", kind: "endpoint" as const },
+        { id: "b", label: "b", kind: "endpoint" as const },
+      ],
+      edges: [
+        {
+          ...edge("truncated", []),
+          source: "a",
+          target: "b",
+          vlan_observations_truncated: true,
+        },
+      ],
+      coverage: {
+        spans: 0,
+        conversations: 0,
+        matched_conversations: 0,
+        unresolved_conversations: 0,
+        ambiguous_conversations: 0,
+        warnings: [],
+      },
+    };
+    expect(vlanEdges(indexGraph(graph), "a")).toHaveLength(1);
   });
 });

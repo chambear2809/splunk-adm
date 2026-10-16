@@ -67,7 +67,18 @@ function VlanEvidence({
       <ul className="seen-list">
         {contexts.map((o) => (
           <li
-            key={`${o.edgeId}:${o.vlan}:${o.exporter}:${o.src_ip}:${o.dest_ip}:${o.position}`}
+            key={JSON.stringify([
+              o.edgeId,
+              o.vlan,
+              o.position,
+              o.exporter,
+              o.interface_index ?? "",
+              o.interface ?? "",
+              o.src_ip,
+              o.dest_ip,
+              o.first_seen,
+              o.last_seen,
+            ])}
           >
             <b>
               VLAN {o.vlan} · {o.position}
@@ -544,21 +555,14 @@ function NodeDetails({
   const forwards = frontDoor ? backendChoices(index, node.id) : [];
   const vlan = vlanEdges(index, node.id);
   const displayAttributes = attributeLabels
-    .filter(([k]) => !hidden.has(k) && attrs[k])
+    .filter(
+      ([k]) =>
+        !hidden.has(k) &&
+        (attrs[k] !== undefined ||
+          (k === "vlan" && attrs.vlan_status !== undefined) ||
+          (k === "bridge_domain" && attrs.bridge_domain_status !== undefined)),
+    )
     .map(([k, label]) => [k, label] as [string, string]);
-  for (const [key, label, statusKey] of [
-    ["vlan", "VLAN", "vlan_status"],
-    ["bridge_domain", "Bridge Domain", "bridge_domain_status"],
-  ] as const) {
-    if (!attrs[key] && attrs[statusKey]) {
-      const epg = displayAttributes.findIndex(([k]) => k === "epg");
-      displayAttributes.splice(
-        epg < 0 ? displayAttributes.length : epg + 1,
-        0,
-        [key, label],
-      );
-    }
-  }
   return (
     <div className="inspector-body">
       <div className="inspector-head">
@@ -575,6 +579,11 @@ function NodeDetails({
           {node.endpoint_kind === "ambiguous"
             ? "More than one identity record claims this address in the time range."
             : "No identity record covers this address in the time range. Check the identity saved searches and the observer scope lookup."}
+        </p>
+      )}
+      {attrs.network_history_capped === "1" && (
+        <p className="callout neutral">
+          Network history is capped; this view may omit older observations.
         </p>
       )}
       {frontDoor && (

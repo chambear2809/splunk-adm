@@ -157,26 +157,36 @@ const allowedEdges: Record<Relationship, [NodeKind[], NodeKind[]]> = {
 };
 const optionalText = (v: unknown) => v === undefined || typeof v === "string";
 const optionalCount = (v: unknown) => v === undefined || number(v);
-const validVlanObservation = (v: unknown): v is VlanObservation => {
+export const validVlan = (v: unknown): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 4094;
+export const validVlanString = (v: unknown): v is string =>
+  typeof v === "string" &&
+  /^\d+$/.test(v) &&
+  String(Number(v)) === v &&
+  validVlan(Number(v));
+export const validEpochSeconds = (v: unknown): v is number =>
+  typeof v === "number" &&
+  Number.isFinite(v) &&
+  v >= 0 &&
+  v <= 8_640_000_000_000;
+export const validVlanObservation = (v: unknown): v is VlanObservation => {
   if (!object(v)) return false;
   const text = (x: unknown) =>
     typeof x === "string" && x.length > 0 && x.length <= 4096;
+  const interfaceIndex = v.interface_index;
   return (
-    typeof v.vlan === "number" &&
-    Number.isInteger(v.vlan) &&
-    v.vlan >= 1 &&
-    v.vlan <= 4094 &&
+    validVlan(v.vlan) &&
     (v.position === "ingress" || v.position === "egress") &&
     text(v.exporter) &&
     text(v.src_ip) &&
     text(v.dest_ip) &&
-    (v.interface_index === undefined || text(v.interface_index)) &&
+    (interfaceIndex === undefined ||
+      (typeof interfaceIndex === "string" &&
+        /^\d+$/.test(interfaceIndex) &&
+        interfaceIndex.length <= 20)) &&
     (v.interface === undefined || text(v.interface)) &&
-    typeof v.first_seen === "number" &&
-    Number.isFinite(v.first_seen) &&
-    v.first_seen >= 0 &&
-    typeof v.last_seen === "number" &&
-    Number.isFinite(v.last_seen) &&
+    validEpochSeconds(v.first_seen) &&
+    validEpochSeconds(v.last_seen) &&
     v.last_seen >= v.first_seen
   );
 };
@@ -261,12 +271,7 @@ export function parseGraph(value: unknown): Graph {
           !Object.values(n.attributes).every((v) => typeof v === "string")))
     )
       throw new Error("Invalid node metadata.");
-    if (
-      n.attributes?.vlan !== undefined &&
-      !/^(?:[1-9]|[1-9]\d{1,2}|[1-3]\d{3}|40\d{2}|409[0-4])$/.test(
-        String(n.attributes.vlan),
-      )
-    )
+    if (n.attributes?.vlan !== undefined && !validVlanString(n.attributes.vlan))
       throw new Error("Invalid node VLAN metadata.");
     for (const k of ["vlan_status", "bridge_domain_status"])
       if (

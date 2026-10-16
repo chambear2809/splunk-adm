@@ -3,6 +3,7 @@ import {
   ENDPOINT_KINDS,
   HANDOFF_BASES,
   parseGraph,
+  validVlanString,
   RELATIONSHIPS,
   type AclAction,
   type ContractBasis,
@@ -84,12 +85,7 @@ function toNode(row: Row): GraphNode {
       const v = one(row, key);
       if (v !== undefined) attributes[key.slice(5)] = v;
     }
-  if (
-    attributes.vlan !== undefined &&
-    !/^(?:[1-9]|[1-9]\d{1,2}|[1-3]\d{3}|40\d{2}|409[0-4])$/.test(
-      attributes.vlan,
-    )
-  )
+  if (attributes.vlan !== undefined && !validVlanString(attributes.vlan))
     fail(
       `node ${String(row.id)} attr_vlan must be a decimal VLAN between 1 and 4094`,
     );

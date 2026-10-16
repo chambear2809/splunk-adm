@@ -15,7 +15,9 @@ test.describe("Application Atlas browser regressions", () => {
     await expect(page.locator(".match-count")).toContainText("card");
     await search.press("Enter");
     await expect(page.locator("[data-hit].match").first()).toBeVisible();
-    await page.locator("[data-hit].match").first().click();
+    await page
+      .getByRole("button", { name: "Service checkout", exact: true })
+      .click();
     await expect(
       page.getByRole("complementary", { name: "Details" }),
     ).toContainText("checkout");
@@ -299,7 +301,7 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   page,
 }) => {
   for (const theme of ["dark", "light"]) {
-    await page.goto(`/map?mode=demo&theme=${theme}`);
+    await page.goto(`/tests/browser/browser.html?theme=${theme}`);
     await expect(page.locator(".atlas")).toHaveAttribute(
       "data-atlas-theme",
       theme,
@@ -326,6 +328,30 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   expect(demoMap.searchParams.get("earliest")).toBe("1791373500");
   expect(demoMap.searchParams.get("latest")).toBe("1791374400");
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+});
+
+test("inspector remains usable at narrow width in light and dark themes", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const theme of ["light", "dark"]) {
+    await page.goto(`/map?mode=demo&theme=${theme}`);
+    await expect(
+      page.getByText("Synthetic demo", { exact: true }),
+    ).toBeVisible();
+    const search = page.getByLabel(
+      "Highlight by name, IP, EPG, port or device",
+    );
+    await search.fill("checkout");
+    await search.press("Enter");
+    await page.locator("[data-hit].match").first().click();
+    await expect(
+      page.getByRole("complementary", { name: "Details" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
+  }
 });
 
 test("clears dependent scope fields and rejects invalid manual input", async ({

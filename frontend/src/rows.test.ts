@@ -85,6 +85,94 @@ describe("rowsToGraph on captured lab rows", () => {
 describe("rowsToGraph validation", () => {
   const meta = () => rows().find((r) => r.row_type === "meta")!;
 
+  it("parses, validates, and preserves VLAN JSON evidence", () => {
+    const r = rows();
+    const e = r.find((x) => x.row_type === "edge")!;
+    e.vlan_observations = JSON.stringify([
+      {
+        vlan: 4094,
+        position: "ingress",
+        exporter: "192.0.2.1",
+        interface_index: "49",
+        src_ip: "10.0.0.1",
+        dest_ip: "10.0.0.2",
+        first_seen: 1,
+        last_seen: 2,
+      },
+    ]);
+    expect(
+      rowsToGraph(r, args).edges.find((x) => x.id === e.id)?.vlan_observations,
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    ["malformed JSON", "{"],
+    ["non-array JSON", JSON.stringify({ vlan: 120 })],
+    [
+      "invalid VLAN",
+      JSON.stringify([
+        {
+          vlan: 4095,
+          position: "ingress",
+          exporter: "x",
+          src_ip: "a",
+          dest_ip: "b",
+          first_seen: 1,
+          last_seen: 2,
+        },
+      ]),
+    ],
+    [
+      "invalid time",
+      JSON.stringify([
+        {
+          vlan: 120,
+          position: "ingress",
+          exporter: "x",
+          src_ip: "a",
+          dest_ip: "b",
+          first_seen: -1,
+          last_seen: 2,
+        },
+      ]),
+    ],
+    [
+      "invalid interface index",
+      JSON.stringify([
+        {
+          vlan: 120,
+          position: "ingress",
+          exporter: "x",
+          interface_index: "eth49",
+          src_ip: "a",
+          dest_ip: "b",
+          first_seen: 1,
+          last_seen: 2,
+        },
+      ]),
+    ],
+  ])("rejects VLAN %s", (_name, json) => {
+    const r = rows();
+    r.find((x) => x.row_type === "edge")!.vlan_observations = json;
+    expect(() => rowsToGraph(r, args)).toThrow();
+  });
+
+  it("rejects more than 32 VLAN contexts on one edge", () => {
+    const r = rows();
+    r.find((x) => x.row_type === "edge")!.vlan_observations = JSON.stringify(
+      Array.from({ length: 33 }, (_, i) => ({
+        vlan: i + 1,
+        position: "ingress",
+        exporter: "x",
+        src_ip: "a",
+        dest_ip: "b",
+        first_seen: 1,
+        last_seen: 2,
+      })),
+    );
+    expect(() => rowsToGraph(r, args)).toThrow();
+  });
+
   it("keeps pipe characters inside a value instead of splitting", () => {
     const r = rows();
     const e = r.find((x) => x.relationship === "communicates_with")!;
