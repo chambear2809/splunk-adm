@@ -212,6 +212,75 @@ class EndpointNetworkTest(unittest.TestCase):
             if observation.get("interface_index") is None:
                 self.assertNotIn("interface_index", observation)
 
+    def test_vlan_merge_bounds_contexts_and_preserves_row_counters(self):
+        items = [
+            {
+                "vlan": 1030,
+                "position": "ingress",
+                "exporter": "198.51.100.71",
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 100,
+                "last_seen": 110,
+            },
+            {
+                "vlan": 1030,
+                "position": "ingress",
+                "exporter": "198.51.100.71",
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 90,
+                "last_seen": 120,
+            },
+        ]
+        for index in range(40):
+            item = {
+                "vlan": 1000 + index,
+                "position": "egress" if index % 2 else "ingress",
+                "exporter": f"198.51.101.{index + 1}",
+                "interface_index": str(4000 + index),
+                "src_ip": "10.30.40.25",
+                "dest_ip": "10.50.0.10",
+                "first_seen": 200 + index,
+                "last_seen": 210 + index,
+            }
+            items.append(item)
+        encoded = ";".join(json.dumps(item, separators=(",", ":")) for item in items)
+        query = (
+            f'| makeresults | eval items={json.dumps(encoded)}, bytes_c2s=1234, '
+            'bytes_s2c=567, records=7 | makemv delim=";" items '
+            '| `adm_vlan_merge(items)`'
+        )
+        rows = lab.search(query, "0", "+10y")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["bytes_c2s"], "1234")
+        self.assertEqual(rows[0]["bytes_s2c"], "567")
+        self.assertEqual(rows[0]["records"], "7")
+        self.assertEqual(rows[0]["vlan_observations_truncated"], "1")
+        observations = json.loads(rows[0]["vlan_observations"])
+        self.assertEqual(len(observations), 32)
+        merged = next(
+            observation
+            for observation in observations
+            if observation["exporter"] == "198.51.100.71"
+        )
+        self.assertEqual(merged["first_seen"], 90)
+        self.assertEqual(merged["last_seen"], 120)
+        no_optional = next(
+            observation
+            for observation in observations
+            if observation["exporter"] == "198.51.101.1"
+        )
+        self.assertNotIn("interface", no_optional)
+        self.assertIn("interface_index", no_optional)
+        self.assertNotIn("interface_index", merged)
+
+        repeat = lab.search(query, "0", "+10y")
+        self.assertEqual(len(repeat), 1, repeat)
+        self.assertEqual(
+            repeat[0]["vlan_observations"], rows[0]["vlan_observations"]
+        )
+
     def test_invalid_relation_states_and_tenant_are_not_promoted(self):
         endpoints = self.fixture("aci_class.ndjson")
         endpoint = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
