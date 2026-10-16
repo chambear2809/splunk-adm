@@ -38,7 +38,7 @@
       "adm_ip_identity"
     ],
     "summary_index_macro": "adm_index_summary",
-    "macro_sha256": "d67a260a8cf193a66074df395619a40fe62f48c52adb61be524f60beda886fed",
+    "macro_sha256": "32e5dd88f9113c6a22b826ad534b7a4584cbee2ad94b99e1fcad921627b075bd",
     "macro_definitions": {
       "adm_catalog_append_kv": "ca479be37768112022cea6277972dce241a5f80c32c79f96f344f6427209f135",
       "adm_catalog_build": "aaaa5ef7b2b692361ce3888be26271c59099ed3b5076d9898bf6fb4a222a8f2b",
@@ -46,22 +46,23 @@
       "adm_catalog_edges": "fa73f5b98e9bd4653f6163172981eaa02f3c906f9780fb1ebd06c9fb063036f2",
       "adm_catalog_metrics": "8c0a03d47e00460da7df2d05bd0b5309127c9324591bc758af78dbf3031bb43a",
       "adm_find": "4d9d3609fb9128bc7a2866d433406ff0889728220aaba8171412aff46dc5febd",
-      "adm_identity_desc": "dc945cbe46ecf06ddfced172e1ba80ba8a54e8fb7feb814222a56df18f2a7fb9",
+      "adm_identity_desc": "67fb5b9037725eb9f8b281e8e471e71e6618d474853f5b9e6581dfe880d5aacd",
       "adm_identity_max_matches": "1bf55f77f7bd3db917d5d0a1fc2a51c916f2c9d9383ea0287758ca39e3db03c1",
       "adm_index_summary": "be4b2eb2b2a1e15ca036c69aba19b9c569c843e044ee0995471575b87a925eed",
       "adm_is_private": "40a38ee01baae4027453661dd8d84aee55cf7f337b1d43b827241261171a8afd",
       "adm_kv_complete": "0a42226083e92150c4832840e9f947e1d26c9f898d1573a5cd6dd5a0678a6e5a",
       "adm_kv_page_size": "cc10cd70a9f6b77ea10ec6d5cddf7bbf5b490661cd5e0b382f25ac1279897479",
+      "adm_network_resolve": "32215db8c7a6741e1ddd2edc0b71296e844d29535044f40b9e6f1c1ba1770cdb",
       "adm_pick": "5347d41f0e9c1fcd8cf4e7d5b1352a11b0e4e1e731b8804a97f572f9352cb982",
       "adm_poll_interval": "aed9f66b67207613ddcb2e4243c30c2068c17c755d3ce18ac445c952732a52f1",
-      "adm_resolve": "7c2d0d29c7d15b314cd028245c47264d2f5ec46189af4f55368b141d37633990",
+      "adm_resolve": "431bf0a249cbe5de347d303af2ee29192af5e19a65edc00011c052164853b297",
       "adm_summary_dedup": "760a7feaa6c3063eeeea3a0d11c42bae19d81900e8eafc1b13fe83a31f6f1e62"
     },
     "raw_scenario": "fixtures/raw-aci/scenario.json",
     "method": "tests/splunk/lab.py search against initialized lab",
     "earliest": "1791370800",
     "latest": "1791374400",
-    "captured_at": 1792038960
+    "captured_at": 1792162966
   },
   "rows": [
     {
@@ -77,7 +78,7 @@
       "conversations_1h": "1",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792038958",
+      "updated": "1792162964",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -94,7 +95,7 @@
       "conversations_1h": "2",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792038958",
+      "updated": "1792162964",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -111,7 +112,7 @@
       "conversations_1h": "4",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792038958",
+      "updated": "1792162964",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -128,7 +129,7 @@
       "conversations_1h": "6",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792038958",
+      "updated": "1792162964",
       "window_start": "1791370800",
       "window_end": "1791374400"
     },
@@ -145,7 +146,7 @@
       "conversations_1h": "2",
       "blocked_1h": "0",
       "unknown_peers_1h": "0",
-      "updated": "1792038958",
+      "updated": "1792162964",
       "window_start": "1791370800",
       "window_end": "1791374400"
     }

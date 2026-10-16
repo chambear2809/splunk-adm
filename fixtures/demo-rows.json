@@ -121,7 +121,8 @@
       "sources": "netflow",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "port_rule"
+      "direction_basis": "port_rule",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -132,18 +133,25 @@
       "confidence": "correlated",
       "count": "2",
       "bytes": "9300",
-      "evidence": ["nd", "netflow"],
+      "evidence": [
+        "nd",
+        "netflow"
+      ],
       "observers": [
         "nd:dc1-vxlan:leaf-101:eth1/11>leaf-102:eth1/12",
         "nd:dc1-vxlan:leaf-102:eth1/12>leaf-101:eth1/11",
         "netflow:192.0.2.11:Ethernet1/49>ifIndex 436212736",
         "netflow:192.0.2.11:ifIndex 436212736>Ethernet1/49"
       ],
-      "sources": ["nd", "netflow"],
+      "sources": [
+        "nd",
+        "netflow"
+      ],
       "server_port": "8472",
       "transport": "udp",
       "direction_basis": "unknown",
-      "encapsulation": "vxlan"
+      "encapsulation": "vxlan",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -164,7 +172,8 @@
       "sources": "netflow",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "port_rule"
+      "direction_basis": "port_rule",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -179,7 +188,8 @@
       "sources": "isovalent",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "initiator"
+      "direction_basis": "initiator",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -189,12 +199,16 @@
       "relationship": "communicates_with",
       "confidence": "correlated",
       "count": "1",
-      "evidence": ["isovalent", "span_peer"],
+      "evidence": [
+        "isovalent",
+        "span_peer"
+      ],
       "observers": "isovalent:node-a",
       "sources": "isovalent",
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "b7ad6b7169203331"
     },
     {
@@ -206,7 +220,12 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "6000",
-      "evidence": ["isovalent", "nd", "netflow", "span_peer"],
+      "evidence": [
+        "isovalent",
+        "nd",
+        "netflow",
+        "span_peer"
+      ],
       "observers": [
         "isovalent:node-a",
         "nd:dc1-vxlan:leaf-101:eth1/11>leaf-102:eth1/12",
@@ -216,10 +235,15 @@
         "netflow:192.0.2.12:Ethernet1/49>ifIndex 436213248",
         "netflow:192.0.2.12:ifIndex 436213248>Ethernet1/49"
       ],
-      "sources": ["isovalent", "nd", "netflow"],
+      "sources": [
+        "isovalent",
+        "nd",
+        "netflow"
+      ],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "d9cf8d938b3c5021"
     },
     {
@@ -231,7 +255,10 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "4200",
-      "evidence": ["isovalent", "netflow"],
+      "evidence": [
+        "isovalent",
+        "netflow"
+      ],
       "observers": [
         "isovalent:node-a",
         "netflow:192.0.2.11:Ethernet1/49>ifIndex 436212736",
@@ -239,10 +266,14 @@
         "netflow:192.0.2.12:Ethernet1/49>ifIndex 436213248",
         "netflow:192.0.2.12:ifIndex 436213248>Ethernet1/49"
       ],
-      "sources": ["isovalent", "netflow"],
+      "sources": [
+        "isovalent",
+        "netflow"
+      ],
       "server_port": "50051",
       "transport": "tcp",
-      "direction_basis": "initiator"
+      "direction_basis": "initiator",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -253,7 +284,12 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "2300",
-      "evidence": ["isovalent", "nd", "netflow", "span_peer"],
+      "evidence": [
+        "isovalent",
+        "nd",
+        "netflow",
+        "span_peer"
+      ],
       "observers": [
         "isovalent:node-a",
         "nd:dc1-vxlan:leaf-101:eth1/11>leaf-102:eth1/12",
@@ -263,10 +299,15 @@
         "netflow:192.0.2.12:Ethernet1/49>ifIndex 436213248",
         "netflow:192.0.2.12:ifIndex 436213248>Ethernet1/49"
       ],
-      "sources": ["isovalent", "nd", "netflow"],
+      "sources": [
+        "isovalent",
+        "nd",
+        "netflow"
+      ],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "f1e1afb5ad5e7243"
     },
     {
@@ -278,7 +319,11 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "1000",
-      "evidence": ["isovalent", "netflow", "span_peer"],
+      "evidence": [
+        "isovalent",
+        "netflow",
+        "span_peer"
+      ],
       "observers": [
         "isovalent:node-a",
         "netflow:192.0.2.11:Ethernet1/49>ifIndex 436212736",
@@ -286,10 +331,14 @@
         "netflow:192.0.2.12:Ethernet1/49>ifIndex 436213248",
         "netflow:192.0.2.12:ifIndex 436213248>Ethernet1/49"
       ],
-      "sources": ["isovalent", "netflow"],
+      "sources": [
+        "isovalent",
+        "netflow"
+      ],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "c4b4d2e8d0815576"
     },
     {
@@ -305,7 +354,8 @@
       "sources": "isovalent",
       "server_port": "53",
       "transport": "udp",
-      "direction_basis": "initiator"
+      "direction_basis": "initiator",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -316,7 +366,12 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "20100",
-      "evidence": ["isovalent", "nd", "netflow", "span_peer"],
+      "evidence": [
+        "isovalent",
+        "nd",
+        "netflow",
+        "span_peer"
+      ],
       "observers": [
         "isovalent:node-a",
         "nd:dc1-vxlan:?>leaf-101:eth1/11",
@@ -324,10 +379,15 @@
         "netflow:192.0.2.11:Ethernet1/49>ifIndex 436212736",
         "netflow:192.0.2.11:ifIndex 436212736>Ethernet1/49"
       ],
-      "sources": ["isovalent", "nd", "netflow"],
+      "sources": [
+        "isovalent",
+        "nd",
+        "netflow"
+      ],
       "server_port": "5432",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "e6d6f4a0f2a37798"
     },
     {
@@ -339,17 +399,27 @@
       "confidence": "unresolved",
       "count": "1",
       "bytes": "3550",
-      "evidence": ["ftd", "isovalent", "netflow", "span_peer"],
+      "evidence": [
+        "ftd",
+        "isovalent",
+        "netflow",
+        "span_peer"
+      ],
       "observers": [
         "ftd:192.0.2.1:inside>outside",
         "isovalent:node-b",
         "netflow:192.0.2.12:Ethernet1/49>ifIndex 436213248",
         "netflow:192.0.2.12:ifIndex 436213248>Ethernet1/49"
       ],
-      "sources": ["ftd", "isovalent", "netflow"],
+      "sources": [
+        "ftd",
+        "isovalent",
+        "netflow"
+      ],
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "initiator",
+      "vlan_observations_truncated": "0",
       "span_ids": "b3a3c1d7cf709465"
     },
     {
@@ -371,7 +441,8 @@
       "sources": "netflow",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "port_rule"
+      "direction_basis": "port_rule",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -392,7 +463,8 @@
       "sources": "netflow",
       "server_port": "8080",
       "transport": "tcp",
-      "direction_basis": "port_rule"
+      "direction_basis": "port_rule",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -410,7 +482,8 @@
       ],
       "sources": "netflow",
       "transport": "icmp",
-      "direction_basis": "unknown"
+      "direction_basis": "unknown",
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "node",
@@ -678,10 +751,12 @@
       "attr_app_profile": "orders",
       "attr_attach_device": "pod-1/node-201",
       "attr_attach_interface": "eth1/5",
+      "attr_bridge_domain_status": "incomplete",
       "attr_epg": "db",
       "attr_mac": "00:50:56:AA:10:40",
       "attr_scope": "prod",
       "attr_tenant": "shop",
+      "attr_vlan": "1040",
       "attr_vm_name": "orders-db-01"
     },
     {
@@ -698,7 +773,69 @@
       "root_present": "1",
       "nodes": "21",
       "edges": "24",
-      "generated_at": "1791374400"
+      "generated_at": "1792163190"
     }
-  ]
+  ],
+  "provenance": {
+    "source": "splunk_app/splunk_adm/default/macros.conf:adm_graph",
+    "schema": [
+      "addresses",
+      "ambiguous_conversations",
+      "attr_app_profile",
+      "attr_attach_device",
+      "attr_attach_interface",
+      "attr_bridge_domain_status",
+      "attr_environment",
+      "attr_epg",
+      "attr_mac",
+      "attr_node",
+      "attr_owner",
+      "attr_owner_kind",
+      "attr_scope",
+      "attr_tenant",
+      "attr_vlan",
+      "attr_vm_name",
+      "bytes",
+      "cluster",
+      "confidence",
+      "conversations",
+      "conversations_in_scope",
+      "count",
+      "direction_basis",
+      "edges",
+      "encapsulation",
+      "endpoint_kind",
+      "evidence",
+      "generated_at",
+      "id",
+      "kind",
+      "label",
+      "matched_conversations",
+      "missing_parent_spans",
+      "namespace",
+      "nodes",
+      "observers",
+      "reason",
+      "relationship",
+      "root_present",
+      "row_type",
+      "server_port",
+      "source",
+      "sources",
+      "span_ids",
+      "spans",
+      "target",
+      "transport",
+      "unresolved_conversations",
+      "vlan_observations_truncated",
+      "window_end",
+      "window_start"
+    ],
+    "macro_file_sha256": "3e76f45a86fc64e4412a7d0f0083893d067d6c6e99e06a32e21dc4745812d54f",
+    "generator_sha256": "2b3210233bd168fb543026764123fd5b1f7a54d64638905a71ff0b5f1068825a",
+    "scenario_sha256": "ac68d0e466c06ed51f44cbed447a1857a19178630710fe9b402b69207d08d728",
+    "raw_scenario": "fixtures/raw/scenario.json",
+    "method": "tests/splunk/lab.py search after test suite synthetic setup",
+    "captured_at": 1792163191
+  }
 }
