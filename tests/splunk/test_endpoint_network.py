@@ -123,7 +123,9 @@ class EndpointNetworkTest(unittest.TestCase):
         fallback_ep = copy.deepcopy(aci_ep)
         fallback_ep["event"] = fallback_ep["event"].replace(
             "10.30.40.25", "10.99.40.99"
-        ).replace("00:50:56:AA:40:25", "00:50:56:AA:40:99")
+        ).replace("00:50:56:AA:40:25", "00:50:56:AA:40:99").replace(
+            "epg-win-clients", "epg-no-bd"
+        )
         fallback_nd = copy.deepcopy(nd)
         fallback_nd["event"] = json.loads(fallback_nd["event"])
         fallback_nd["event"].update(
@@ -145,10 +147,10 @@ class EndpointNetworkTest(unittest.TestCase):
         self.assertEqual(len(summary), 1)
         identities = lab.search(
             f'| inputlookup adm_ip_identity where scope="{self.scope}" '
-            '| table ip entity_kind tenant app_profile epg mac attr_vlan attr_bridge_domain desc'
+            '| table ip entity_kind tenant app_profile epg mac source attr_vlan attr_bridge_domain desc'
         )
         apic = next(row for row in identities if row["ip"] == "10.30.40.25")
-        self.assertEqual(apic["entity_kind"], "vm")
+        self.assertEqual(apic["source"], "aci")
         self.assertEqual(apic.get("attr_vlan"), "1030")
         self.assertEqual(apic.get("attr_bridge_domain"), "bd-clients")
         fallback = next(
@@ -156,9 +158,25 @@ class EndpointNetworkTest(unittest.TestCase):
         )
         self.assertIsNotNone(fallback, identities)
         assert fallback is not None
-        self.assertEqual(fallback["entity_kind"], "endpoint")
+        self.assertEqual(fallback["source"], "nd_endpoints")
         self.assertEqual(fallback.get("attr_bridge_domain"), "bd-clients")
         self.assertNotEqual(apic["mac"], fallback["mac"])
+        graph = lab.search(
+            f'| makeresults | eval adm_row="conv", client_ip="10.99.40.99", '
+            f'server_ip="203.0.113.99", server_port=443, transport="tcp", '
+            f'scope="{self.scope}", first_seen={self.start}, last_seen={self.start}, '
+            f'adm_ws={self.start - 1}, adm_we={self.start + 1} '
+            '| `adm_graph_resolve("frontend","demo","network-cluster","shop")` '
+            '| table adm_c_state adm_c_id adm_c_src adm_c_node',
+            self.start - 5,
+            self.start + 10,
+        )
+        self.assertEqual(len(graph), 1, graph)
+        self.assertEqual(graph[0]["adm_c_state"], "resolved")
+        self.assertEqual(graph[0]["adm_c_src"], "nd_endpoints")
+        node = json.loads(graph[0]["adm_c_node"])
+        self.assertEqual(node["id"], f"vm:{self.scope}/10.99.40.99")
+        self.assertEqual(node.get("attr_bridge_domain"), "bd-clients")
 
     def test_netflow_rollup_preserves_totals_and_observations(self):
         flows = self.fixture("stream_netflow.ndjson")
@@ -176,8 +194,7 @@ class EndpointNetworkTest(unittest.TestCase):
             selected[i] = row
         self.load(selected)
         rows = lab.search(
-            f'index=netflow source="{self.token}" | `adm_flows` '
-            f'| `adm_conversation_rollup` | where scope="{self.scope}"',
+            f'`adm_conversation_rollup` | where scope="{self.scope}"',
             self.start - 5,
             self.start + 30,
         )
