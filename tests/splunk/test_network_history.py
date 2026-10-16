@@ -69,11 +69,15 @@ class NetworkHistoryTest(unittest.TestCase):
                 json.dumps(descriptor, separators=(",", ":"))
             )
             expressions.append(expr)
-        desc_expr = expressions[0] if len(expressions) == 1 else "mvappend(" + ",".join(expressions) + ")"
+        desc_expr = (
+            expressions[0]
+            if len(expressions) == 1
+            else "mvappend(" + ",".join(expressions) + ")"
+        )
         query = (
-            '| makeresults | eval adm_c_desc=%s, adm_bfs=%d, adm_bls=%d, '
+            "| makeresults | eval adm_c_desc=%s, adm_bfs=%d, adm_bls=%d, "
             'client_ip="10.0.0.1", scope="test" | `adm_resolve(c,client_ip)` '
-            '| table adm_c_state adm_c_node'
+            "| table adm_c_state adm_c_node"
         ) % (desc_expr, start, end)
         rows = self.lab.search(query)
         self.assertEqual(len(rows), 1, rows)
@@ -187,17 +191,19 @@ class NetworkHistoryTest(unittest.TestCase):
     @staticmethod
     def _merge_row(samples: list[dict], ip: str = "198.18.0.1") -> str:
         sample_expr = ",".join(
-            "json_object(\"t\",%d,\"v\",\"%s\",\"b\",\"%s\",\"bd_dn\",\"uni/tn-t/BD-b\",\"bd_tenant\",\"t\",\"source\",\"aci\")"
+            'json_object("t",%d,"v","%s","b","%s","bd_dn","uni/tn-t/BD-b","bd_tenant","t","source","aci")'
             % (s["t"], s.get("v", "1030"), s.get("b", "bd"))
             for s in samples
         )
-        history_expr = sample_expr if len(samples) == 1 else "mvappend(%s)" % sample_expr
+        history_expr = (
+            sample_expr if len(samples) == 1 else "mvappend(%s)" % sample_expr
+        )
         return (
             '| makeresults | eval ip="%s", scope="history-test", entity_kind="endpoint", '
             'entity_id="ep-history", entity_name="history", source="aci", ek="ep:history/%s", '
-            'mac="AA", valid_from=0, valid_to=null(), first_seen=0, last_seen=now(), priority=3, '
+            'mac="AA", valid_from=0, valid_to=null(), first_seen=0, last_seen=%d, priority=3, '
             "network_history=%s"
-        ) % (ip, ip, history_expr)
+        ) % (ip, ip, max(s["t"] for s in samples), history_expr)
 
     def merge_history(self, rows: list[list[dict]]) -> dict:
         query = self._merge_row(rows[0])
@@ -214,7 +220,7 @@ class NetworkHistoryTest(unittest.TestCase):
         parsed = json.loads(row["desc"])
         self.assertIsInstance(parsed.get("nh"), list)
         self.assertEqual(len(parsed["nh"]), 512)
-        self.assertEqual(parsed["nh"][0]["t"], 1800)
+        self.assertEqual(parsed["nh"][0]["t"], 1080)
         self.assertEqual(parsed["nh"][-1]["t"], 6190)
         self.assertEqual(row.get("attr_network_history_capped"), "1")
 
@@ -225,4 +231,3 @@ class NetworkHistoryTest(unittest.TestCase):
         parsed = json.loads(row["desc"])
         self.assertEqual([sample["t"] for sample in parsed["nh"]], [1000, 3000])
         self.assertEqual(parsed["nh"][-1]["v"], "1030")
-

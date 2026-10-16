@@ -18,7 +18,6 @@ class NetworkMetadataContractTest(unittest.TestCase):
         self.assertIn("vlan_observations_truncated", MACROS)
         self.assertIn("vlan_observations", DATA_LAYER)
 
-
     def test_identity_network_metadata_has_apic_relation_and_nd_fallback(self):
         self.assertIn('component=="fvRsBd"', MACROS)
         self.assertIn("adm_aci_epg_dn", MACROS)
@@ -30,7 +29,6 @@ class NetworkMetadataContractTest(unittest.TestCase):
         for key in ("t", "v", "b", "bd_dn", "bd_tenant", "source"):
             self.assertIn(f"`{key}`", DATA_LAYER)
 
-
     def test_lookup_contract_carries_network_fields(self):
         for field in (
             "attr_vlan",
@@ -41,4 +39,3 @@ class NetworkMetadataContractTest(unittest.TestCase):
         ):
             self.assertIn(field, TRANSFORMS)
             self.assertIn(field, COLLECTIONS)
-

@@ -30,9 +30,13 @@ class EndpointNetworkTest(unittest.TestCase):
     def setUp(self) -> None:
         self.token = "network-" + uuid.uuid4().hex[:12]
         self.scope = self.token
-        self.apic = "198.51.100.50"
-        self.nd = "198.51.100.60"
-        self.exporters = ("198.51.100.71", "198.51.100.72")
+        base = (int(uuid.uuid4().hex[:8], 16) % 32768) * 4
+        observers = [
+            f"198.{18 + ((base + n) >> 16)}.{((base + n) >> 8) & 255}.{(base + n) & 255}"
+            for n in range(4)
+        ]
+        self.apic, self.nd = observers[:2]
+        self.exporters = tuple(observers[2:])
         self.start = int(time.time()) - 180
         self.loaded = 0
         type(self).scopes.append(self.scope)
@@ -125,10 +129,6 @@ class EndpointNetworkTest(unittest.TestCase):
         endpoints = self.fixture("aci_class.ndjson")
         aci_ep = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
         relation = next(e for e in endpoints if 'component="fvRsBd"' in e["event"])
-        relation_primary = copy.deepcopy(relation)
-        relation_primary["event"] = relation_primary["event"].replace(
-            "epg-win-clients", "epg-no-bd"
-        )
         nd = self.fixture("nd_endpoints.ndjson")[0]
         nd["event"] = json.loads(nd["event"])
         nd["event"].update(
@@ -159,7 +159,7 @@ class EndpointNetworkTest(unittest.TestCase):
         self.load(
             [
                 self.isolated(aci_ep, at=self.start),
-                self.isolated(relation_primary, at=self.start),
+                self.isolated(relation, at=self.start),
                 self.isolated(nd, at=self.start),
                 self.isolated(fallback_ep, at=self.start),
                 self.isolated(fallback_nd, at=self.start),
@@ -205,7 +205,7 @@ class EndpointNetworkTest(unittest.TestCase):
         )
         self.assertEqual(len(graph), 1, graph)
         self.assertEqual(graph[0]["adm_c_state"], "resolved")
-        self.assertEqual(graph[0]["adm_c_src"], "nd_endpoints")
+        self.assertEqual(graph[0]["adm_c_src"], "aci")
         node = json.loads(graph[0]["adm_c_node"])
         self.assertEqual(node["id"], f"vm:{self.scope}/10.99.40.99")
         self.assertEqual(node.get("attr_bridge_domain"), "bd-clients")
@@ -236,30 +236,56 @@ class EndpointNetworkTest(unittest.TestCase):
             if e["event"].get("src_ip") == "10.30.40.25"
             and e["event"].get("dest_ip") == "10.50.0.10"
         ][:2]
-        self.assertEqual(len(selected), 2)
+        self.assertTrue(selected)
+        selected = [copy.deepcopy(selected[0]) for _ in range(4)]
+        selected[2]["event"]["src_ip"], selected[2]["event"]["dest_ip"] = (
+            selected[2]["event"]["dest_ip"],
+            selected[2]["event"]["src_ip"],
+        )
+        selected[2]["event"]["src_port"], selected[2]["event"]["dest_port"] = (
+            selected[2]["event"]["dest_port"],
+            selected[2]["event"]["src_port"],
+        )
+        selected[3]["event"]["src_port"], selected[3]["event"]["dest_port"] = (
+            30000,
+            30001,
+        )
+        reverse_bytes = selected[2]["event"]["bytes"]
         expected_bytes = sum(row["event"]["bytes"] for row in selected)
         for i, row in enumerate(selected):
             row = self.isolated(row, at=self.start + i)
-            row["event"]["exporter_ip"] = "198.51.100." + str(71 + i)
+            row["event"]["exporter_ip"] = self.exporters[i % 2]
             row["event"]["input_snmpidx"] = 436224000 + i
+            row["event"]["ingress_vlan"] = 1100 + i
+            row["event"]["egress_vlan"] = 1200 + i
             selected[i] = row
         self.load(selected)
         rows = lab.search(
-            f'`adm_conversation_rollup` | where scope="{self.scope}"',
+            f'| `adm_conversation_rollup` | where scope="{self.scope}"',
             self.start - 5,
             self.start + 30,
         )
         self.assertTrue(rows)
-        rollup = rows[0]
-        self.assertEqual(float(rollup["bytes_c2s"]), expected_bytes)
-        self.assertEqual(float(rollup["bytes_s2c"]), 0)
-        observations = json.loads(rollup["vlan_observations"])
+        self.assertEqual(sum(float(row["bytes_c2s"]) for row in rows), expected_bytes)
+        self.assertEqual(sum(float(row["bytes_s2c"]) for row in rows), reverse_bytes)
+        observations = [
+            item for row in rows for item in json.loads(row["vlan_observations"])
+        ]
         self.assertIsInstance(observations, list)
         self.assertTrue(observations)
+        self.assertEqual(sum(int(row["records"]) for row in rows), 4)
+        self.assertTrue(any(row["direction_basis"] == "unknown" for row in rows))
+        self.assertEqual({o["position"] for o in observations}, {"ingress", "egress"})
+        self.assertTrue(
+            any(o["src_ip"] == "10.50.0.10" and o["vlan"] == 1102 for o in observations)
+        )
         for observation in observations:
             self.assertIn(observation["position"], {"ingress", "egress"})
             self.assertTrue(1 <= int(observation["vlan"]) <= 4094)
-            self.assertEqual(observation["src_ip"], "10.30.40.25")
+            self.assertIn(observation["src_ip"], {"10.30.40.25", "10.50.0.10"})
+            self.assertNotIn("interface", observation)
+            if "interface_index" in observation:
+                self.assertIsInstance(observation["interface_index"], str)
             if observation.get("interface_index") is None:
                 self.assertNotIn("interface_index", observation)
 
@@ -338,6 +364,8 @@ class EndpointNetworkTest(unittest.TestCase):
             ("10.99.41.1", "00:50:56:AA:41:01", "unformed", self.start),
             ("10.99.41.2", "00:50:56:AA:41:02", "formed", self.start + 500),
             ("10.99.41.3", "00:50:56:AA:41:03", "formed", self.start),
+            ("10.99.41.4", "00:50:56:AA:41:04", "formed", self.start - 601),
+            ("10.99.41.5", "00:50:56:AA:41:05", "formed", self.start),
         ]
         rows = []
         for ip, mac, state, relation_time in cases:
@@ -358,6 +386,8 @@ class EndpointNetworkTest(unittest.TestCase):
             )
             if ip.endswith(".3"):
                 rel["event"] = rel["event"].replace("uni/tn-shop/", "uni/tn-other/")
+            if ip.endswith(".5"):
+                rel["event"] = rel["event"].replace("192.0.2.50", "192.0.2.250")
             rows.extend(
                 [
                     self.isolated(cep, at=self.start),
@@ -375,6 +405,55 @@ class EndpointNetworkTest(unittest.TestCase):
             with self.subTest(ip=ip):
                 self.assertIn(ip, by_ip, identities)
                 self.assertNotIn("attr_bridge_domain", by_ip[ip])
+
+    def test_encapsulation_validation_and_shared_tenant_target(self):
+        endpoint = next(
+            e
+            for e in self.fixture("aci_class.ndjson")
+            if 'component="fvCEp"' in e["event"]
+        )
+        relation = next(
+            e
+            for e in self.fixture("aci_class.ndjson")
+            if 'component="fvRsBd"' in e["event"]
+        )
+        relation["event"] = relation["event"].replace(
+            'tDn="uni/tn-shop/BD-bd-clients"', 'tDn="uni/tn-common/BD-bd-clients"'
+        )
+        cases = [
+            ("vlan-1", "1"),
+            ("vlan-4094", "4094"),
+            ("vlan-4095", None),
+            ("vlan-0", None),
+            ("vxlan-1030", None),
+            ("1030", None),
+            ("vlan-10x", None),
+            ("", None),
+        ]
+        rows = [self.isolated(relation, at=self.start)]
+        for i, (encap, _) in enumerate(cases, 1):
+            ep = copy.deepcopy(endpoint)
+            ep["event"] = (
+                ep["event"]
+                .replace("10.30.40.25", f"10.99.42.{i}")
+                .replace("00:50:56:AA:40:25", f"00:50:56:AA:42:{i:02X}")
+                .replace('encap="vlan-1030"', f'encap="{encap}"')
+            )
+            rows.append(self.isolated(ep, at=self.start))
+        self.load(rows)
+        self.build_identity()
+        actual = lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" | table ip attr_vlan attr_bridge_domain desc'
+        )
+        by_ip = {r["ip"]: r for r in actual}
+        for i, (_, expected) in enumerate(cases, 1):
+            row = by_ip[f"10.99.42.{i}"]
+            self.assertEqual(row.get("attr_vlan"), expected)
+            self.assertEqual(row.get("attr_bridge_domain"), "bd-clients")
+            sample = json.loads(row["desc"])["nh"][0]
+            self.assertEqual(sample["bd_dn"], "uni/tn-common/BD-bd-clients")
+            self.assertEqual(sample["bd_tenant"], "common")
+            self.assertEqual(sample["observer"], self.apic)
 
     def test_graph_resolve_keeps_identity_after_metadata_change(self):
         endpoints = self.fixture("aci_class.ndjson")
