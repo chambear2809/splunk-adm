@@ -47,6 +47,8 @@ export const FLOW_COLUMNS = [
   "service",
   "backend",
   "handoff",
+  "vlan_observations",
+  "vlan_observations_truncated",
 ] as const;
 
 const side = (n: GraphNode | undefined, id: string) => [
@@ -110,6 +112,8 @@ export function requiredFlowsCsv(
         [...new Set(forwards.map((f) => handoffShort[f.handoff_basis!]))].join(
           "; ",
         ),
+        e.vlan_observations?.length ? JSON.stringify(e.vlan_observations) : "",
+        e.vlan_observations_truncated ? "1" : "",
       ]);
     });
   return [csvRow([...FLOW_COLUMNS]), ...rows].join("\r\n") + "\r\n";

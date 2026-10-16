@@ -74,6 +74,21 @@ export interface GraphEdge {
   acl_leaf?: string;
   acl_permits?: number;
   acl_drops?: number;
+  /** NetFlow VLAN observations, serialized as one JSON array in Splunk rows. */
+  vlan_observations?: VlanObservation[];
+  /** NetFlow discarded additional VLAN contexts for this edge. */
+  vlan_observations_truncated?: boolean;
+}
+export interface VlanObservation {
+  vlan: number;
+  position: "ingress" | "egress";
+  exporter: string;
+  interface_index?: string;
+  interface?: string;
+  src_ip: string;
+  dest_ip: string;
+  first_seen: number;
+  last_seen: number;
 }
 export interface Graph {
   schema_version: 1;
@@ -142,6 +157,29 @@ const allowedEdges: Record<Relationship, [NodeKind[], NodeKind[]]> = {
 };
 const optionalText = (v: unknown) => v === undefined || typeof v === "string";
 const optionalCount = (v: unknown) => v === undefined || number(v);
+const validVlanObservation = (v: unknown): v is VlanObservation => {
+  if (!object(v)) return false;
+  const text = (x: unknown) =>
+    typeof x === "string" && x.length > 0 && x.length <= 4096;
+  return (
+    typeof v.vlan === "number" &&
+    Number.isInteger(v.vlan) &&
+    v.vlan >= 1 &&
+    v.vlan <= 4094 &&
+    (v.position === "ingress" || v.position === "egress") &&
+    text(v.exporter) &&
+    text(v.src_ip) &&
+    text(v.dest_ip) &&
+    (v.interface_index === undefined || text(v.interface_index)) &&
+    (v.interface === undefined || text(v.interface)) &&
+    typeof v.first_seen === "number" &&
+    Number.isFinite(v.first_seen) &&
+    v.first_seen >= 0 &&
+    typeof v.last_seen === "number" &&
+    Number.isFinite(v.last_seen) &&
+    v.last_seen >= v.first_seen
+  );
+};
 /**
  * Node-to-node tunnel of a conversation. Cilium DSR forwards to remote
  * backends over IPIP, which flow records report as transport `ipip`.
@@ -223,6 +261,19 @@ export function parseGraph(value: unknown): Graph {
           !Object.values(n.attributes).every((v) => typeof v === "string")))
     )
       throw new Error("Invalid node metadata.");
+    if (
+      n.attributes?.vlan !== undefined &&
+      !/^(?:[1-9]|[1-9]\d{1,2}|[1-3]\d{3}|40\d{2}|409[0-4])$/.test(
+        String(n.attributes.vlan),
+      )
+    )
+      throw new Error("Invalid node VLAN metadata.");
+    for (const k of ["vlan_status", "bridge_domain_status"])
+      if (
+        n.attributes?.[k] !== undefined &&
+        !["varies", "incomplete"].includes(String(n.attributes[k]))
+      )
+        throw new Error("Invalid node network metadata.");
     kinds.set(n.id, n.kind as NodeKind);
     endpointKinds.set(n.id, n.endpoint_kind);
   }
@@ -265,6 +316,12 @@ export function parseGraph(value: unknown): Graph {
       (e.reason !== undefined && typeof e.reason !== "string") ||
       (e.evidence_truncated !== undefined &&
         typeof e.evidence_truncated !== "boolean") ||
+      (e.vlan_observations !== undefined &&
+        (!Array.isArray(e.vlan_observations) ||
+          e.vlan_observations.length > 32 ||
+          !e.vlan_observations.every(validVlanObservation))) ||
+      (e.vlan_observations_truncated !== undefined &&
+        typeof e.vlan_observations_truncated !== "boolean") ||
       (e.via_node !== undefined && !strings(e.via_node)) ||
       !optionalText(e.contract_reason) ||
       !optionalText(e.contract) ||

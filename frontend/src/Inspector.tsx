@@ -38,6 +38,60 @@ import {
   observationsByDevice,
   type TopologyIndex,
 } from "./topology";
+import {
+  vlanContexts,
+  vlanEdges,
+  vlanExporter,
+  vlanInterface,
+  vlanTime,
+} from "./vlan";
+
+function VlanEvidence({
+  edges,
+  topo,
+}: {
+  edges: GraphEdge[];
+  topo: TopologyIndex;
+}) {
+  const { contexts, truncated } = vlanContexts(edges);
+  if (!contexts.length && !truncated) return null;
+  return (
+    <section className="vlan-evidence" aria-label="Observed VLANs — NetFlow">
+      <h3>
+        Observed VLANs — NetFlow{" "}
+        <span className="count">{contexts.length}</span>
+      </h3>
+      <p className="muted small">
+        Observed along conversations; this does not confirm endpoint attachment.
+      </p>
+      <ul className="seen-list">
+        {contexts.map((o) => (
+          <li
+            key={`${o.edgeId}:${o.vlan}:${o.exporter}:${o.src_ip}:${o.dest_ip}:${o.position}`}
+          >
+            <b>
+              VLAN {o.vlan} · {o.position}
+            </b>
+            <small>
+              {vlanExporter(o, topo)}
+              {vlanInterface(o, topo)
+                ? ` · ${vlanInterface(o, topo)}`
+                : ""} · {o.src_ip} → {o.dest_ip}
+              <br />
+              {vlanTime(o.first_seen)} – {vlanTime(o.last_seen)}
+            </small>
+          </li>
+        ))}
+      </ul>
+      {truncated && (
+        <p className="muted small">
+          Additional VLAN contexts were omitted because the selected range is
+          capped at 32.
+        </p>
+      )}
+    </section>
+  );
+}
 
 function Facts({ rows }: { rows: [string, React.ReactNode][] }) {
   return (
@@ -407,6 +461,7 @@ export function Inspector({
           )}
         </>
       )}
+      {conv && <VlanEvidence edges={[edge]} topo={topo} />}
       {seen.length > 0 && !pathOpen && (
         <>
           <h3>Seen by</h3>
@@ -487,6 +542,23 @@ function NodeDetails({
   ]);
   const frontDoor = node.endpoint_kind === "k8s_service";
   const forwards = frontDoor ? backendChoices(index, node.id) : [];
+  const vlan = vlanEdges(index, node.id);
+  const displayAttributes = attributeLabels
+    .filter(([k]) => !hidden.has(k) && attrs[k])
+    .map(([k, label]) => [k, label] as [string, string]);
+  for (const [key, label, statusKey] of [
+    ["vlan", "VLAN", "vlan_status"],
+    ["bridge_domain", "Bridge Domain", "bridge_domain_status"],
+  ] as const) {
+    if (!attrs[key] && attrs[statusKey]) {
+      const epg = displayAttributes.findIndex(([k]) => k === "epg");
+      displayAttributes.splice(
+        epg < 0 ? displayAttributes.length : epg + 1,
+        0,
+        [key, label],
+      );
+    }
+  }
   return (
     <div className="inspector-body">
       <div className="inspector-head">
@@ -530,24 +602,32 @@ function NodeDetails({
           ["Namespace", node.namespace],
           ["Cluster", node.cluster],
           ["Addresses", node.addresses?.join(", ")],
-          ...attributeLabels
-            .filter(([k]) => !hidden.has(k) && attrs[k])
-            .map(([k, label]): [string, React.ReactNode] => [
-              label,
-              k === "attach_device" ? (
-                <Device raw={attrs[k]} topo={topo} />
-              ) : k === "traffic_policy" && attrs[k] === "Local" ? (
-                <InfoTip term="Local" />
-              ) : k === "lb_mode" && attrs[k] === "dsr" ? (
-                <InfoTip term="DSR" />
-              ) : k === "lb_mode" && attrs[k] === "snat" ? (
-                <InfoTip term="SNAT" />
-              ) : k === "lb_mode" && attrs[k] === "hybrid" ? (
-                <InfoTip term="Hybrid" />
-              ) : (
-                attributeValue(k, attrs[k])
-              ),
-            ]),
+          ...displayAttributes.map(([k, label]): [string, React.ReactNode] => [
+            label,
+            k === "attach_device" ? (
+              <Device raw={attrs[k]} topo={topo} />
+            ) : k === "traffic_policy" && attrs[k] === "Local" ? (
+              <InfoTip term="Local" />
+            ) : k === "lb_mode" && attrs[k] === "dsr" ? (
+              <InfoTip term="DSR" />
+            ) : k === "lb_mode" && attrs[k] === "snat" ? (
+              <InfoTip term="SNAT" />
+            ) : k === "lb_mode" && attrs[k] === "hybrid" ? (
+              <InfoTip term="Hybrid" />
+            ) : k === "vlan" && attrs.vlan_status === "varies" ? (
+              "Varies in selected range"
+            ) : k === "vlan" && attrs.vlan_status === "incomplete" ? (
+              "Unavailable: endpoint evidence is incomplete"
+            ) : k === "bridge_domain" &&
+              attrs.bridge_domain_status === "varies" ? (
+              "Varies in selected range"
+            ) : k === "bridge_domain" &&
+              attrs.bridge_domain_status === "incomplete" ? (
+              "Unavailable: endpoint evidence is incomplete"
+            ) : (
+              attributeValue(k, attrs[k])
+            ),
+          ]),
           [
             "Backends",
             frontDoor
@@ -572,6 +652,7 @@ function NodeDetails({
           ],
         ]}
       />
+      <VlanEvidence edges={vlan} topo={topo} />
       <ConnectionList
         title="Inbound"
         edges={inbound}

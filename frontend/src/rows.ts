@@ -11,6 +11,7 @@ import {
   type Graph,
   type GraphEdge,
   type GraphNode,
+  type VlanObservation,
   type HandoffBasis,
   type NodeKind,
   type Relationship,
@@ -83,6 +84,21 @@ function toNode(row: Row): GraphNode {
       const v = one(row, key);
       if (v !== undefined) attributes[key.slice(5)] = v;
     }
+  if (
+    attributes.vlan !== undefined &&
+    !/^(?:[1-9]|[1-9]\d{1,2}|[1-3]\d{3}|40\d{2}|409[0-4])$/.test(
+      attributes.vlan,
+    )
+  )
+    fail(
+      `node ${String(row.id)} attr_vlan must be a decimal VLAN between 1 and 4094`,
+    );
+  for (const key of ["vlan_status", "bridge_domain_status"])
+    if (
+      attributes[key] !== undefined &&
+      !["varies", "incomplete"].includes(attributes[key])
+    )
+      fail(`node ${String(row.id)} attr_${key} has unsupported value`);
   const node: GraphNode = {
     id: required(row, "id"),
     label: one(row, "label") ?? required(row, "id"),
@@ -124,6 +140,21 @@ function toEdge(row: Row): GraphEdge {
     fail(`edge ${edge.id} is missing relationship or confidence`);
   const bytes = count(row, "bytes");
   if (bytes !== undefined) edge.bytes = bytes;
+  const vlanRaw = one(row, "vlan_observations");
+  if (vlanRaw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(vlanRaw);
+    } catch {
+      fail(`edge ${edge.id} vlan_observations must be valid JSON`);
+    }
+    if (!Array.isArray(parsed))
+      fail(`edge ${edge.id} vlan_observations must be an array`);
+    edge.vlan_observations = parsed as VlanObservation[];
+  }
+  const vlanTruncated = oneOf(row, "vlan_observations_truncated", ["0", "1"]);
+  if (vlanTruncated !== undefined)
+    edge.vlan_observations_truncated = vlanTruncated === "1";
   const port = count(row, "server_port");
   if (port !== undefined) edge.server_port = port;
   const transport = one(row, "transport");
