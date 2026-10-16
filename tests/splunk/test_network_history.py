@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 
 
@@ -190,11 +191,22 @@ class NetworkHistoryTest(unittest.TestCase):
 
     @staticmethod
     def _merge_row(samples: list[dict], ip: str = "198.18.0.1") -> str:
-        sample_expr = ",".join(
-            'json_object("t",%d,"v","%s","b","%s","bd_dn","uni/tn-t/BD-b","bd_tenant","t","source","aci")'
-            % (s["t"], s.get("v", "1030"), s.get("b", "bd"))
-            for s in samples
-        )
+        sample_exprs = []
+        for sample in samples:
+            fields = ['"t",%d' % sample["t"]]
+            if "v" in sample:
+                fields.append('"v","%s"' % sample["v"])
+            if "b" in sample:
+                fields.extend(
+                    [
+                        '"b","%s"' % sample["b"],
+                        '"bd_dn","%s"' % sample.get("bd_dn", "uni/tn-t/BD-b"),
+                        '"bd_tenant","%s"' % sample.get("bd_tenant", "t"),
+                    ]
+                )
+            fields.append('"source","aci"')
+            sample_exprs.append("json_object(%s)" % ",".join(fields))
+        sample_expr = ",".join(sample_exprs)
         history_expr = (
             sample_expr if len(samples) == 1 else "mvappend(%s)" % sample_expr
         )
@@ -269,6 +281,72 @@ class NetworkHistoryTest(unittest.TestCase):
         self.assertEqual(
             [r["t"] for r in json.loads(retained["network_history"])], [700000]
         )
+
+    def test_separate_builds_mark_cross_builder_network_changes_varies(self):
+        import uuid
+        import urllib.parse
+
+        scope = "network-change-" + uuid.uuid4().hex
+        query = urllib.parse.urlencode({"query": json.dumps({"scope": scope})})
+        self.addCleanup(
+            lambda: self.lab._mgmt(
+                "DELETE",
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_ip_identity?"
+                + query,
+            ).close()
+        )
+
+        def persist(sample):
+            spl = self._merge_row([sample]).replace(
+                'scope="history-test"', f'scope="{scope}"'
+            )
+            spl += " | `adm_identity_merge` | fields _key ip scope entity_kind entity_id entity_name source ek mac priority valid_from valid_to valid_end first_seen last_seen desc attr_vlan attr_bridge_domain attr_vlan_status attr_bridge_domain_status network_history attr_network_history_capped | outputlookup append=true key_field=_key adm_ip_identity | table attr_vlan attr_bridge_domain attr_vlan_status attr_bridge_domain_status desc network_history"
+            return self.lab.search(spl)[0]
+
+        base = int(time.time())
+        persist({"t": base, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"})
+        stable = persist(
+            {"t": base + 50, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"}
+        )
+        self.assertEqual(stable.get("attr_vlan"), "1030")
+        self.assertEqual(stable.get("attr_bridge_domain"), "bd")
+        self.assertNotIn("attr_vlan_status", stable)
+        self.assertNotIn("attr_bridge_domain_status", stable)
+        changed = persist(
+            {"t": base + 100, "v": "1040", "b": "bd", "bd_dn": "uni/tn-t/BD-b"}
+        )
+        replay = persist(
+            {"t": base + 200, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"}
+        )
+        for row in (changed, replay):
+            self.assertNotIn("attr_vlan", row)
+            self.assertNotIn("attr_bridge_domain", row)
+            self.assertEqual(row.get("attr_vlan_status"), "varies")
+            self.assertEqual(row.get("attr_bridge_domain_status"), "varies")
+            descriptor = json.loads(row["desc"])
+            self.assertIsNone(descriptor.get("vlan"))
+            self.assertIsNone(descriptor.get("bd"))
+            self.assertEqual(descriptor.get("vlan_status"), "varies")
+            self.assertEqual(descriptor.get("bd_status"), "varies")
+        self.assertEqual(
+            [sample["t"] for sample in json.loads(replay["network_history"])],
+            [base, base + 50, base + 100, base + 200],
+        )
+        missing = persist({"t": base + 700000})
+        self.assertNotIn("attr_vlan", missing)
+        self.assertNotIn("attr_bridge_domain", missing)
+        self.assertEqual(missing.get("attr_vlan_status"), "incomplete")
+        self.assertEqual(missing.get("attr_bridge_domain_status"), "incomplete")
+
+    def test_capped_consistent_history_does_not_confirm_discarded_periods(self):
+        samples = [{"t": 1000 + i, "v": "1030", "b": "bd"} for i in range(520)]
+        result = self.merge_history([samples])
+        descriptor = json.loads(result["desc"])
+        self.assertEqual(descriptor.get("nhc"), "1")
+        self.assertIsNone(descriptor.get("vlan"))
+        self.assertIsNone(descriptor.get("bd"))
+        self.assertEqual(descriptor.get("vlan_status"), "incomplete")
+        self.assertEqual(descriptor.get("bd_status"), "incomplete")
 
     def test_graph_aggregation_keeps_missing_legacy_period_incomplete(self):
         old = self._descriptor("aci", [])
