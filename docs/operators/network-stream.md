@@ -38,6 +38,14 @@ observation_domain_id  tcp_flags
 
 Stream adds `timestamp` (flow start) and `endtime` (flow end) to each event. ACI records carry the ingress interface only, so `output_snmpidx` is usually empty.
 
+When the ACI exporter and record policy support VLAN match or collect fields,
+`ingress_vlan` is an observed access VLAN on the ingress record. It does not
+identify a bridge domain by itself: an access VLAN is distinct from an ACI
+bridge domain's internal or VXLAN identifier. ACI exports do not establish an
+egress VLAN or EPG-to-BD relation, and some exporter limitations (including
+EX platforms or record policies without VLAN fields) omit `ingress_vlan`
+entirely. Use the APIC `fvRsBd` relation for that mapping.
+
 ## Sizing
 
 Each exported flow becomes one event. Estimate events per second as active flows per leaf ÷ export interval × number of leaves. Size the forwarder, the `netflow` index and license accordingly. Sampling on the exporter reduces volume; the map scales bytes by `exporter_sampling_interval` when present.
@@ -56,6 +64,11 @@ Every leaf OOB address should appear as an `exporter_ip`, and `timestamp` should
 Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
 - [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): Splunk Stream, stream forwarder (`streamfwd`) and the NetFlow/IPFIX receiver (`netflowReceiver`).
+
+Before enabling a new field set, render the owning setup plan and review the
+class or record arrival. For the APIC relation input, use the dry-run command
+in [aci-network.md](aci-network.md#optional-epg-to-bridge-domain-and-vlan-facts)
+and validate `fvRsBd` arrival before relying on it in dependency mapping.
 
 ## What to send back
 

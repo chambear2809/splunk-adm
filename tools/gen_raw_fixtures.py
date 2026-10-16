@@ -1040,6 +1040,7 @@ ACI_PORT_NAMES = {
 }
 # Values the ACI scenario does not define; listed under "Scenario gaps" in FIELDS.md.
 ACI_TOPOLOGY_INPUT = "cisco_nexus_aci://classInfo_adm"
+ACI_NETWORK_INPUT = "cisco_nexus_aci://classInfo_adm_network"
 ACI_MOD_TS = datetime(2026, 10, 7, 9, 0, tzinfo=timezone.utc)
 ACI_UID = "15374"
 HUBBLE_FILE_DELAY = timedelta(seconds=1)
@@ -1189,6 +1190,7 @@ def aci_netflow(s: AciScenario) -> list[dict]:
             rel_start = int((start - EXPORTER_BOOT).total_seconds() * 1000)
             rel_end = int((end - EXPORTER_BOOT).total_seconds() * 1000)
             proto = leg["proto"]
+            ingress_vlan = s.vlan(leaf, port)
             event = {
                 "endtime": iso_us(end),
                 "timestamp": iso_us(start),
@@ -1208,7 +1210,9 @@ def aci_netflow(s: AciScenario) -> list[dict]:
                 "flow_end_rel": rel_end,
                 "flow_start_rel": rel_start,
                 "input_snmpidx": nxos_ifindex(port),
-                "ingress_vlan": s.vlan(leaf, port),
+                # Routed L3Out interfaces may have no VLAN encap. APIC/Stream
+                # omits ingress_vlan in that case; do not invent VLAN 0.
+                **({"ingress_vlan": ingress_vlan} if ingress_vlan else {}),
                 "version": 4,
             }
             mac = s.sender_mac(leaf, port)
@@ -1349,6 +1353,30 @@ def rel_attrs(dn: str, t_cl: str, t_dn: str, extra=()) -> list[tuple[str, object
             ("tDn", t_dn),
             ("tType", "mo"),
             *extra,
+        ]
+    )
+
+
+def fvrsbd_attrs(dn: str, name: str, t_dn: str) -> list[tuple[str, object]]:
+    """Grounded fvRsBd relation fields from the APIC MIM classInfo writer.
+
+    The relation is emitted beneath an fvAEPg.  ``name``/``tnFvBDName`` are
+    the APIC relation's BD name fields; ``tDn`` is the resolved fvBD DN.
+    Keep this list limited to attributes present in the MIM relation and the
+    existing TA relation writer vocabulary.
+    """
+    return sorted(
+        [
+            ("dn", dn),
+            ("forceResolve", "yes"),
+            ("name", name),
+            ("rType", "mo"),
+            ("state", "formed"),
+            ("status", ""),
+            ("tCl", "fvBD"),
+            ("tDn", t_dn),
+            ("tType", "mo"),
+            ("tnFvBDName", name),
         ]
     )
 
@@ -1745,6 +1773,22 @@ def aci_collections(s: AciScenario) -> tuple[list[dict], list[dict]]:
                     attrs,
                     component,
                 )
+        # fvRsBd is collected by the optional network classInfo input.  Emit
+        # one resolved relation per EPG per poll so the endpoint's EPG and its
+        # bridge domain remain linkable even when the relation arrives before
+        # a later endpoint snapshot.
+        for epg_key, epg in sorted(s.epgs.items()):
+            ap, epg_name = epg_key.split("/")
+            epg_dn = f"uni/tn-{s.tenant}/ap-{ap}/epg-{epg_name}"
+            bd_dn = f"uni/tn-{s.tenant}/BD-{epg['bd']}"
+            emit(
+                klass,
+                ACI_NETWORK_INPUT,
+                "cisco:dc:aci:class",
+                at,
+                fvrsbd_attrs(f"{epg_dn}/rsbd", epg["bd"], bd_dn),
+                "fvRsBd",
+            )
         # topSystem for leaves, spines and the controller (same attribute set as aci()).
         systems = [
             (sw["node_id"], sw["name"], sw["role"], sw["tep"], sw["oob"], sw["serial"])

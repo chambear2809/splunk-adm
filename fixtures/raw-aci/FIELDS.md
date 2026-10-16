@@ -10,7 +10,7 @@ The preceding demo window is generated with `python3 tools/gen_raw_fixtures.py -
 | `nd_flows.ndjson` | 7 | `cisco:dc:nd:flows` |
 | `nd_endpoints.ndjson` | 4 | `cisco:dc:nd:endpoints` |
 | `aci_stats.ndjson` | 28 | `cisco:dc:aci:stats` (fvCEp + fvRsCEpToPathEp + fvIp) |
-| `aci_class.ndjson` | 667 | `cisco:dc:aci:class` (fvCEp, compVm, compHv, fvRsVm, fvRsHyper, topSystem, fabricLink, lldpAdjEp, vzBrCP, vzSubj, vzRsSubjFiltAtt, vzEntry, fvRsCons, fvRsProv, l3extInstP, l3extSubnet, acllogPermitL3Pkt, acllogDropL3Pkt) |
+| `aci_class.ndjson` | 688 | `cisco:dc:aci:class` (fvCEp, compVm, compHv, fvRsVm, fvRsHyper, topSystem, fabricLink, lldpAdjEp, fvRsBd, vzBrCP, vzSubj, vzRsSubjFiltAtt, vzEntry, fvRsCons, fvRsProv, l3extInstP, l3extSubnet, acllogPermitL3Pkt, acllogDropL3Pkt) |
 | `kube_objects.ndjson` | 61 | `kube:object:{pods,services,endpointslices,ingresses,gateways,httproutes,nodes}` |
 | `hubble_flows.ndjson` | 17 | `cilium:hubble:flow` |
 | `isovalent.ndjson` | 4 | `cisco:isovalent` (renamed to `cisco:isovalent:processConnect` at index time) |
@@ -43,6 +43,7 @@ Writers: `bin/cisco_nexus_aci.py:467-490` (generic `classInfo`, every class) and
 | `cisco_nexus_aci://classInfo_faultInst` | fvCEp (+ fvIp), compVm, compHv, fvRsVm, fvRsHyper, topSystem, fvRsCons, fvRsProv | `default/inputs.conf:117` |
 | `cisco_nexus_aci://classInfo_fvRsCEpToPathEp` | acllogPermitL3Pkt, acllogDropL3Pkt | `default/inputs.conf:111` |
 | `cisco_nexus_aci://classInfo_adm` (admin-added, `apic_input_type=classInfo`, `apic_arguments = fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet`; free-text class list per `README/inputs.conf.spec:28`) | fabricLink, lldpAdjEp, vzBrCP, vzSubj, vzRsSubjFiltAtt, vzEntry, l3extInstP, l3extSubnet | new |
+| `cisco_nexus_aci://classInfo_adm_network` (optional admin-added, `apic_input_type=classInfo`, `apic_arguments = fvRsBd`, 300 seconds) | fvRsBd | new |
 
 | Class | Attribute names and value formats | Scenario |
 | --- | --- | --- |
@@ -54,6 +55,7 @@ Writers: `bin/cisco_nexus_aci.py:467-490` (generic `classInfo`, every class) and
 | vzBrCP, vzSubj, vzRsSubjFiltAtt, vzEntry | MIM names; enums by value name (`prot=tcp`, `dFromPort=https` or the number, `directives=log` or `""`, `action=permit/deny`, `revFltPorts=yes`, `scope=context`); DNs `uni/tn-T/brc-C`, `…/subj-S`, `…/rssubjFiltAtt-F`, `uni/tn-T/flt-F/e-E` | 7 contracts |
 | fvRsCons, fvRsProv | MIM names; DNs `uni/tn-T/ap-A/epg-E/rscons-C`, `uni/tn-T/out-L/instP-I/rsprov-C` | consumers/providers per contract |
 | l3extInstP, l3extSubnet | MIM names; `pcTag`, `scope` (VRF VNID), subnet `scope=import-security`; DNs `uni/tn-T/out-L/instP-I`, `…/extsubnet-[ip]` | k8s-services 10.50.0.0/24, k8s-pods 10.42.0.0/16, k8s-nodes 10.10.22.0/24, internet 0.0.0.0/0 |
+| fvRsBd | APIC MIM relation under `fvAEPg`; `dn`, `name`, `forceResolve`, `rType`, `state`, `status`, `tCl`, `tDn`, `tType`, `tnFvBDName` | EPG `uni/tn-shop/ap-clients/epg-win-clients/rsbd`, name `bd-clients`, `tDn=uni/tn-shop/BD-bd-clients`, `tCl=fvBD`, `state=formed`; the EPG's observed access encap is `vlan-1030` |
 | acllogPermitL3Pkt, acllogDropL3Pkt | MIM names (`srcIp dstIp srcPort dstPort protocol srcEpgName dstEpgName srcPcTag dstPcTag srcIntf srcMacAddr dstMacAddr pktLen recordId timeStamp vrfEncap`); DN `topology/pod-{id}/node-{id}/ndbgs/acllog/tn-T/ctx-V/{permit,drop}l3pkt-{recordId}-smac-…-dmac-…-time-{timeStamp}` | 8 permits (log subjects), 1 drop (c8), on the poll after the packet |
 
 ## kube:object:* (Splunk OTel Collector Helm chart, watch mode)
