@@ -555,15 +555,20 @@ function NodeDetails({
   const forwards = frontDoor ? backendChoices(index, node.id) : [];
   const vlan = vlanEdges(index, node.id);
   const displayAttributes = attributeLabels
-    .filter(
-      ([k]) =>
-        !hidden.has(k) &&
-        ((attrs[k] !== undefined &&
-          attrs[k === "vlan" ? "vlan_status" : "bridge_domain_status"] !==
-            "incomplete") ||
-          (k === "vlan" && attrs.vlan_status === "varies") ||
-          (k === "bridge_domain" && attrs.bridge_domain_status === "varies")),
-    )
+    .filter(([k]) => {
+      if (hidden.has(k)) return false;
+      const statusKey =
+        k === "vlan"
+          ? "vlan_status"
+          : k === "bridge_domain"
+            ? "bridge_domain_status"
+            : undefined;
+      if (!statusKey) return attrs[k] !== undefined;
+      return (
+        (attrs[k] !== undefined && attrs[statusKey] !== "incomplete") ||
+        attrs[statusKey] === "varies"
+      );
+    })
     .map(([k, label]) => [k, label] as [string, string]);
   return (
     <div className="inspector-body">

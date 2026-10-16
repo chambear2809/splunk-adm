@@ -367,6 +367,13 @@ test("inspector remains usable at narrow width in light and dark themes", async 
     await expect(
       page.locator(".facts dt", { hasText: "Bridge Domain" }),
     ).toHaveCount(0);
+    await expect(page.getByText("shop", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("EPG-incomplete", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("02:00:00:00:00:02", { exact: true }),
+    ).toBeVisible();
   }
 });
 

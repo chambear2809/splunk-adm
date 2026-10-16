@@ -246,6 +246,9 @@ class FakeSearchClient implements SearchClient {
           row !== node,
       );
       if (incomplete) {
+        incomplete.attr_tenant = "shop";
+        incomplete.attr_epg = "EPG-incomplete";
+        incomplete.attr_mac = "02:00:00:00:00:02";
         incomplete.attr_vlan_status = "incomplete";
         incomplete.attr_bridge_domain_status = "incomplete";
       }
