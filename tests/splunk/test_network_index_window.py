@@ -7,6 +7,7 @@ not affect another run.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import os
 import time
@@ -33,12 +34,20 @@ class NetworkIndexWindowTest(unittest.TestCase):
         cls.lab = lab
 
     def _install_scope(self, observer: str, scope: str) -> None:
+        self.scope = scope
         row = json.dumps(
-            [{"observer_kind": "apic", "observer": observer, "scope": scope, "cluster": ""}]
+            [
+                {
+                    "observer_kind": "apic",
+                    "observer": observer,
+                    "scope": scope,
+                    "cluster": "",
+                }
+            ]
         )
         self.lab.search(
             "| inputlookup adm_observer_scope | append [| makeresults format=json data=%s] "
-            '| eval observer_kind=lower(observer_kind), observer=lower(observer), '
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
             "_key=sha256(json_array(observer_kind, observer)) | dedup observer_kind observer "
             "| fields _key observer_kind observer scope cluster | outputlookup adm_observer_scope"
             % json.dumps(row)
@@ -56,7 +65,11 @@ class NetworkIndexWindowTest(unittest.TestCase):
 
     @staticmethod
     def _event(
-        event: str, *, timestamp: float, marker: str, sourcetype: str = "cisco:dc:aci:class"
+        event: str,
+        *,
+        timestamp: float,
+        marker: str,
+        sourcetype: str = "cisco:dc:aci:class",
     ) -> dict:
         return {
             "time": timestamp,
@@ -64,13 +77,19 @@ class NetworkIndexWindowTest(unittest.TestCase):
             "source": "cisco_nexus_aci://class",
             "sourcetype": sourcetype,
             "index": "cisco_dc",
-            "event": event,
+            "event": datetime.fromtimestamp(timestamp, timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            + "\t"
+            + event,
         }
 
     @classmethod
     def _load(cls, events: list[dict]) -> None:
         path = Path("/tmp/adm-index-window-%s.ndjson" % uuid.uuid4().hex)
-        path.write_text("\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8")
+        path.write_text(
+            "\n".join(json.dumps(e) for e in events) + "\n", encoding="utf-8"
+        )
         try:
             cls.lab.load([path])
         finally:
@@ -106,7 +125,11 @@ class NetworkIndexWindowTest(unittest.TestCase):
                 0,
                 "now",
             )
-            if rows and int(rows[0].get("found", 0)) >= expected and rows[0].get("indexed"):
+            if (
+                rows
+                and int(rows[0].get("found", 0)) >= expected
+                and rows[0].get("indexed")
+            ):
                 return int(float(rows[0]["indexed"]))
             time.sleep(2)
         self.fail("timed out waiting for %s to index" % marker)
@@ -115,8 +138,8 @@ class NetworkIndexWindowTest(unittest.TestCase):
         self, ip: str, *, expect_bd: str | None, present: bool = True
     ) -> None:
         rows = self.lab.search(
-            '| inputlookup adm_ip_identity where ip="%s" | table ip scope attr_bridge_domain attr_vlan'
-            % ip,
+            '| inputlookup adm_ip_identity where ip="%s" scope="%s" | table ip scope attr_bridge_domain attr_vlan'
+            % (ip, self.scope),
             0,
             "now",
         )
@@ -145,7 +168,7 @@ class NetworkIndexWindowTest(unittest.TestCase):
         old_dn = "uni/tn-test/ap-app/epg-old-%s/cep-00:00:00:00:00:10" % suffix
         fresh_dn = "uni/tn-test/ap-app/%s/cep-00:00:00:00:00:11" % epg
         relation_dn = "uni/tn-test/ap-app/%s/rsbd" % epg
-        now = time.time()
+        now = int(time.time()) - 1200
         old_events = [
             self._event(
                 'dn="%s"\tencap="vlan-3990"\tip=%s\tmac="00:00:00:00:00:10"\t'
@@ -158,7 +181,7 @@ class NetworkIndexWindowTest(unittest.TestCase):
                 'dn="%s"\ttDn="uni/tn-test/BD-bd-late"\ttnFvBDName="bd-late"\t'
                 'state="formed"\tcomponent="fvRsBd"\tapic_host=%s'
                 % (relation_dn, apic),
-                timestamp=now,
+                timestamp=now - 300,
                 marker=old_marker,
             ),
         ]
@@ -170,15 +193,13 @@ class NetworkIndexWindowTest(unittest.TestCase):
             'dn="%s"\tencap="vlan-3991"\tip=%s\tmac="00:00:00:00:00:11"\t'
             'addr=%s\tcomponent="fvCEp"\tapic_host=%s\tstate="formed"'
             % (fresh_dn, fresh_ip, fresh_ip, apic),
-            timestamp=time.time(),
+            timestamp=now + 1,
             marker=fresh_marker,
         )
         self._load([fresh_event])
         fresh_index = self._wait_indexed(fresh_marker)
         self.assertGreater(fresh_index, old_index)
-        self._dispatch_identity(
-            (old_index + 1, fresh_index + 1), (int(now) - 900, int(now) + 60)
-        )
+        self._dispatch_identity((old_index + 1, fresh_index + 1), (now - 1, now + 60))
 
         self._assert_identity(fresh_ip, expect_bd="bd-late")
         self._assert_identity(old_ip, expect_bd=None, present=False)
@@ -197,7 +218,7 @@ class NetworkIndexWindowTest(unittest.TestCase):
         epg = "epg-stale-" + suffix
         relation_dn = "uni/tn-test/ap-app/%s/rsbd" % epg
         endpoint_dn = "uni/tn-test/ap-app/%s/cep-00:00:00:00:00:12" % epg
-        now = time.time()
+        now = int(time.time()) - 1200
         self._load(
             [
                 self._event(
@@ -218,15 +239,12 @@ class NetworkIndexWindowTest(unittest.TestCase):
                     'dn="%s"\tencap="vlan-3992"\tip=%s\tmac="00:00:00:00:00:12"\t'
                     'addr=%s\tcomponent="fvCEp"\tapic_host=%s\tstate="formed"'
                     % (endpoint_dn, ip, ip, apic),
-                    timestamp=time.time(),
+                    timestamp=now + 1,
                     marker=fresh_marker,
                 )
             ]
         )
         fresh_index = self._wait_indexed(fresh_marker)
         self.assertGreater(fresh_index, old_index)
-        self._dispatch_identity(
-            (old_index + 1, fresh_index + 1), (int(now) - 900, int(now) + 60)
-        )
+        self._dispatch_identity((old_index + 1, fresh_index + 1), (now - 1, now + 60))
         self._assert_identity(ip, expect_bd=None)
-
