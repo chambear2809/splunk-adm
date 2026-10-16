@@ -1,5 +1,5 @@
 import type { GraphEdge, GraphIndex, VlanObservation } from "./graph";
-import { deviceName } from "./topology";
+import { deviceName, interfaceLabel } from "./topology";
 import type { TopologyIndex } from "./topology";
 
 export interface VlanContext extends VlanObservation {
@@ -85,10 +85,16 @@ export function vlanInterface(
 ): string | undefined {
   if (observation.interface) return observation.interface;
   if (observation.interface_index) {
+    const exporterKey = observation.exporter.trim().toLowerCase();
+    const device =
+      topo.byIp.get(observation.exporter) ?? topo.byKey.get(exporterKey);
+    const canonicalId = device?.id ?? exporterKey;
     const resolved = topo.ifName.get(
-      `${observation.exporter.trim().toLowerCase()}|${observation.interface_index}`,
+      `${canonicalId.trim().toLowerCase()}|${observation.interface_index}`,
     );
-    return resolved ?? `ifIndex ${observation.interface_index}`;
+    return resolved
+      ? interfaceLabel(resolved)
+      : `ifIndex ${observation.interface_index}`;
   }
   return undefined;
 }
