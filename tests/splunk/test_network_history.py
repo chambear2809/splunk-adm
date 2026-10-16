@@ -304,3 +304,35 @@ class NetworkHistoryTest(unittest.TestCase):
         )
         rows = self.lab.search(query)
         self.assertEqual(rows, [{"count": "20", "confirmed": "20"}])
+
+    def test_incomplete_relationship_read_cannot_close_a_stored_owner(self):
+        import uuid
+        import urllib.parse
+
+        scope = "network-guard-" + uuid.uuid4().hex
+        query = urllib.parse.urlencode({"query": json.dumps({"scope": scope})})
+        self.addCleanup(
+            lambda: self.lab._mgmt(
+                "DELETE",
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_ip_identity?"
+                + query,
+            ).close()
+        )
+        base = (
+            '| makeresults | eval ip="198.18.1.1", scope="%s", source="k8s_pods", '
+            'entity_kind="pod", entity_id="old", cluster="guard", ek="pod:guard/old", '
+            "priority=1, valid_from=1000, first_seen=1000, last_seen=1000"
+        ) % scope
+        self.lab.search(
+            base
+            + " | `adm_identity_merge` | fields _key ip scope source entity_kind entity_id cluster ek priority valid_from first_seen last_seen desc | outputlookup append=true key_field=_key adm_ip_identity"
+        )
+        rows = self.lab.search(
+            base
+            + ' | eval entity_id="new", ek="pod:guard/new", valid_from=2000, first_seen=2000, last_seen=2000, adm_network_complete=0 '
+            "| `adm_identity_merge` | table entity_id adm_close adm_write valid_to"
+        )
+        self.assertEqual({row["entity_id"] for row in rows}, {"old", "new"})
+        self.assertTrue(all(row["adm_write"] == "0" for row in rows), rows)
+        self.assertTrue(all(row["adm_close"] == "0" for row in rows), rows)
+        self.assertTrue(all("valid_to" not in row for row in rows), rows)

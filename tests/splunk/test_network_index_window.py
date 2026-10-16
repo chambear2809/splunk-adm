@@ -248,3 +248,29 @@ class NetworkIndexWindowTest(unittest.TestCase):
         self.assertGreater(fresh_index, old_index)
         self._dispatch_identity((old_index + 1, fresh_index + 1), (now - 1, now + 60))
         self._assert_identity(ip, expect_bd=None)
+
+    def test_truncated_relation_groups_do_not_write_identity_rows(self):
+        self.test_prior_relation_is_visible_to_narrow_current_builder_slice()
+        before = self.lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" | sort 0 _key | table _key desc'
+        )
+        path = "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_identity_observations"
+        with self.lab._mgmt("GET", path + "?output_mode=json") as response:
+            original = json.load(response)["entry"][0]["content"]["definition"]
+        self.assertIn("maxout=50001", original)
+        self.addCleanup(
+            lambda: self.lab._mgmt("POST", path, {"definition": original}).close()
+        )
+        with self.lab._mgmt(
+            "POST", path, {"definition": original.replace("maxout=50001", "maxout=1")}
+        ):
+            pass
+        now = int(time.time()) + 1
+        result = self._dispatch_identity((now - 600, now), (now - 1800, now))
+        self.assertEqual(result[0]["network_lookup_complete"], "0", result)
+        self.assertEqual(result[0]["rows_written"], "0", result)
+        self.assertIn("no identity rows were written", str(result[0].get("warnings")))
+        after = self.lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" | sort 0 _key | table _key desc'
+        )
+        self.assertEqual(after, before)
