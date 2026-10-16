@@ -166,7 +166,49 @@ class EndpointNetworkTest(unittest.TestCase):
             self.assertIn(observation["position"], {"ingress", "egress"})
             self.assertTrue(1 <= int(observation["vlan"]) <= 4094)
             self.assertEqual(observation["src_ip"], "10.30.40.25")
-            self.assertNotIn("interface_index", observation) if observation.get("interface_index") is None else None
+            if observation.get("interface_index") is None:
+                self.assertNotIn("interface_index", observation)
+
+    def test_invalid_relation_states_and_tenant_are_not_promoted(self):
+        endpoints = self.fixture("aci_class.ndjson")
+        endpoint = next(e for e in endpoints if 'component="fvCEp"' in e["event"])
+        relation = next(e for e in endpoints if 'component="fvRsBd"' in e["event"])
+        cases = [
+            ("10.99.41.1", "00:50:56:AA:41:01", "unformed", self.start),
+            ("10.99.41.2", "00:50:56:AA:41:02", "formed", self.start + 500),
+            ("10.99.41.3", "00:50:56:AA:41:03", "formed", self.start),
+        ]
+        rows = []
+        for ip, mac, state, relation_time in cases:
+            cep = copy.deepcopy(endpoint)
+            cep["event"] = cep["event"].replace("10.30.40.25", ip).replace(
+                "00:50:56:AA:40:25", mac
+            )
+            rel = copy.deepcopy(relation)
+            rel["event"] = (
+                rel["event"]
+                .replace("epg-win-clients/rsbd", f"epg-win-clients-{mac[-2:]}/rsbd")
+                .replace("uni/tn-shop/BD-bd-clients", "uni/tn-shop/BD-bd-clients")
+                .replace('state="formed"', f'state="{state}"')
+            )
+            if ip.endswith(".3"):
+                rel["event"] = rel["event"].replace("uni/tn-shop/", "uni/tn-other/")
+            rows.extend(
+                [
+                    self.isolated(cep, at=self.start),
+                    self.isolated(rel, at=relation_time),
+                ]
+            )
+        self.load(rows)
+        self.build_identity()
+        identities = lab.search(
+            f'| inputlookup adm_ip_identity where scope="{self.scope}" '
+            '| table ip attr_bridge_domain'
+        )
+        by_ip = {row["ip"]: row for row in identities}
+        for ip, *_ in cases:
+            with self.subTest(ip=ip):
+                self.assertNotIn("attr_bridge_domain", by_ip.get(ip, {}))
 
     def test_graph_resolve_keeps_identity_after_metadata_change(self):
         endpoints = self.fixture("aci_class.ndjson")
