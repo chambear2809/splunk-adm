@@ -235,6 +235,7 @@ class NetworkHistoryTest(unittest.TestCase):
     def test_stored_array_survives_late_ingestion_and_replay(self):
         import uuid
         import urllib.parse
+        import time
 
         scope = "network-history-" + uuid.uuid4().hex
 
@@ -268,6 +269,41 @@ class NetworkHistoryTest(unittest.TestCase):
         retained = persist([{"t": 700000, "v": "1040"}])
         self.assertEqual(
             [r["t"] for r in json.loads(retained["network_history"])], [700000]
+        )
+
+    def test_separate_builds_mark_cross_builder_network_changes_varies(self):
+        import uuid
+        import urllib.parse
+
+        scope = "network-change-" + uuid.uuid4().hex
+        query = urllib.parse.urlencode({"query": json.dumps({"scope": scope})})
+        self.addCleanup(
+            lambda: self.lab._mgmt(
+                "DELETE",
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_ip_identity?"
+                + query,
+            ).close()
+        )
+
+        def persist(sample):
+            spl = self._merge_row([sample]).replace(
+                'scope="history-test"', f'scope="{scope}"'
+            )
+            spl += " | `adm_identity_merge` | fields _key ip scope entity_kind entity_id entity_name source ek mac priority valid_from valid_to valid_end first_seen last_seen desc attr_vlan attr_bridge_domain attr_vlan_status attr_bridge_domain_status network_history attr_network_history_capped | outputlookup append=true key_field=_key adm_ip_identity | table attr_vlan attr_bridge_domain attr_vlan_status attr_bridge_domain_status desc network_history"
+            return self.lab.search(spl)[0]
+
+        base = int(time.time())
+        persist({"t": base, "v": "1030", "b": "bd-a"})
+        changed = persist({"t": base + 100, "v": "1040", "b": "bd-b"})
+        replay = persist({"t": base + 200, "v": "1030", "b": "bd-a"})
+        for row in (changed, replay):
+            self.assertNotIn("attr_vlan", row)
+            self.assertNotIn("attr_bridge_domain", row)
+            self.assertEqual(row.get("attr_vlan_status"), "varies")
+            self.assertEqual(row.get("attr_bridge_domain_status"), "varies")
+        self.assertEqual(
+            [sample["t"] for sample in json.loads(replay["network_history"])],
+            [base, base + 100, base + 200],
         )
 
     def test_graph_aggregation_keeps_missing_legacy_period_incomplete(self):
