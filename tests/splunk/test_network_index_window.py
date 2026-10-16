@@ -96,16 +96,21 @@ class NetworkIndexWindowTest(unittest.TestCase):
             time.sleep(2)
         self.fail("timed out waiting for %s to index" % marker)
 
-    def _assert_identity(self, ip: str, *, expect_bd: str | None) -> None:
+    def _assert_identity(
+        self, ip: str, *, expect_bd: str | None, present: bool = True
+    ) -> None:
         rows = self.lab.search(
             '| inputlookup adm_ip_identity where ip="%s" | table ip scope attr_bridge_domain attr_vlan'
             % ip,
             0,
             "now",
         )
+        if not present:
+            self.assertEqual(rows, [], rows)
+            return
         self.assertEqual(len(rows), 1, rows)
         if expect_bd is None:
-            self.assertNotEqual(rows[0].get("attr_bridge_domain"), "bd-late")
+            self.assertIsNone(rows[0].get("attr_bridge_domain"))
         else:
             self.assertEqual(rows[0].get("attr_bridge_domain"), expect_bd)
 
@@ -152,7 +157,7 @@ class NetworkIndexWindowTest(unittest.TestCase):
         self._dispatch_identity((old_index + 1, fresh_index + 1))
 
         self._assert_identity(fresh_ip, expect_bd="bd-late")
-        self._assert_identity(old_ip, expect_bd=None)
+        self._assert_identity(old_ip, expect_bd=None, present=False)
 
     def test_old_relation_event_time_is_not_used_after_freshness_window(self):
         suffix = uuid.uuid4().hex[:8]
