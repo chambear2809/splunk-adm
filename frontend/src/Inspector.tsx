@@ -558,9 +558,11 @@ function NodeDetails({
     .filter(
       ([k]) =>
         !hidden.has(k) &&
-        (attrs[k] !== undefined ||
-          (k === "vlan" && attrs.vlan_status !== undefined) ||
-          (k === "bridge_domain" && attrs.bridge_domain_status !== undefined)),
+        ((attrs[k] !== undefined &&
+          attrs[k === "vlan" ? "vlan_status" : "bridge_domain_status"] !==
+            "incomplete") ||
+          (k === "vlan" && attrs.vlan_status === "varies") ||
+          (k === "bridge_domain" && attrs.bridge_domain_status === "varies")),
     )
     .map(([k, label]) => [k, label] as [string, string]);
   return (

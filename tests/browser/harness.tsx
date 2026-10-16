@@ -218,8 +218,8 @@ class FakeSearchClient implements SearchClient {
       );
       if (node) {
         node.attr_epg = "EPG-ui";
-        node.attr_vlan = "120";
-        node.attr_bridge_domain = "bd-ui";
+        node.attr_vlan = "1030";
+        node.attr_bridge_domain = "bd-clients";
         node.attr_network_history_capped = "1";
       }
       const edge = rows.find(
@@ -229,7 +229,7 @@ class FakeSearchClient implements SearchClient {
       if (edge)
         edge.vlan_observations = JSON.stringify([
           {
-            vlan: 120,
+            vlan: 1030,
             position: "ingress",
             exporter: "198.51.100.10",
             interface_index: "49",
@@ -239,6 +239,16 @@ class FakeSearchClient implements SearchClient {
             last_seen: 1791373520,
           },
         ]);
+      const incomplete = rows.find(
+        (row) =>
+          row.row_type === "node" &&
+          row.endpoint_kind === "k8s_node_proxy" &&
+          row !== node,
+      );
+      if (incomplete) {
+        incomplete.attr_vlan_status = "incomplete";
+        incomplete.attr_bridge_domain_status = "incomplete";
+      }
     }
     return {
       rows,

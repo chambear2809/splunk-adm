@@ -348,8 +348,10 @@ test("inspector remains usable at narrow width in light and dark themes", async 
     ).toBeVisible();
     await expect(page.getByText("EPG-ui", { exact: true })).toBeVisible();
     await expect(
-      page.getByText("VLAN 120 · ingress", { exact: true }),
+      page.getByText("VLAN 1030 · ingress", { exact: true }),
     ).toBeVisible();
+    await expect(page.getByText("1030", { exact: true })).toBeVisible();
+    await expect(page.getByText("bd-clients", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /Observed VLANs — NetFlow/ }),
     ).toBeVisible();
@@ -359,6 +361,14 @@ test("inspector remains usable at narrow width in light and dark themes", async 
         .getByRole("complementary", { name: "Details" })
         .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeLessThanOrEqual(390);
+    await page
+      .getByRole("button", { name: /node-b/ })
+      .first()
+      .dispatchEvent("click");
+    await expect(page.locator(".facts dt", { hasText: "VLAN" })).toHaveCount(0);
+    await expect(
+      page.locator(".facts dt", { hasText: "Bridge Domain" }),
+    ).toHaveCount(0);
   }
 });
 
