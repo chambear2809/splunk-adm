@@ -5,7 +5,7 @@
 ## What we need from you
 
 - [ ] A read-only APIC account and a read-only Nexus Dashboard account for the Cisco DC Networking add-on.
-- [ ] The four existing APIC inputs enabled, plus the optional policy and network classInfo inputs where needed.
+- [ ] The four existing APIC inputs and the required `classInfo_adm` topology input enabled; add the optional policy and network classInfo inputs where needed.
 - [ ] LLDP enabled on the leaf ports facing Kubernetes nodes.
 - [ ] ACI NetFlow v9 export from the leaves to the Splunk Stream receiver, sourced from each leaf's out-of-band address.
 - [ ] Nexus Dashboard flow and endpoint inputs for the pilot site.
@@ -54,8 +54,10 @@ disabled = 0
 Enable a separate 300-second classInfo input for `fvRsBd`. This relation is
 APIC-only: it resolves an EPG to its configured bridge domain and must not be
 inferred from a VLAN number. The relation's `tDn` and `tnFvBDName` are the
-authoritative BD facts; the EPG's `encap` is the access VLAN observed on that
-EPG. An access VLAN can differ from the BD's internal or VXLAN identifier.
+authoritative BD facts. An endpoint's `fvCEp.encap` is the access VLAN
+observed for that endpoint; it is not a single VLAN guarantee for every
+endpoint in an EPG. An access VLAN can differ from the BD's internal or VXLAN
+identifier.
 
 Render and review the input without applying it:
 
@@ -184,4 +186,4 @@ Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-s
 
 ## Sources
 
-Input stanzas and classes: DC Networking 1.2.2 `default/inputs.conf:81-127`, `README/inputs.conf.spec:25-32`, `appserver/static/js/build/globalConfig.json` (account fields). Class writer and sourcetype: `bin/cisco_nexus_aci.py:467-490,549-609`; `default/props.conf:191`. `fvRsBd` relation attributes (`dn`, `name`, `state`, `tCl`, `tDn`, `tnFvBDName`) and bridge-domain/EPG model: Cisco APIC Management Information Model, release 6.1(x), classes `fvAEPg`, `fvRsBd`, and `fvBD`. NetFlow exporter and VLAN fields: APIC MIM `netflow:ExporterPol`/`netflow:RecordPol` and Splunk App for Stream 8.1.6 `default/streams/netflow`. ACL-log and contract model: same MIM. Contract and topology use: `docs/DATA_LAYER.md`.
+Input stanzas and classes: DC Networking 1.2.2 `default/inputs.conf:81-127`, `README/inputs.conf.spec:25-32`, `appserver/static/js/build/globalConfig.json` (account fields). Class writer and sourcetype: `bin/cisco_nexus_aci.py:467-490,549-609`; `default/props.conf:191`. `fvRsBd` relation attributes (`dn`, `state`, `tCl`, `tDn`, `tnFvBDName`) and bridge-domain/EPG model: [Cisco APIC Management Information Model](https://developer.cisco.com/site/apic-mim-ref/), release 6.1(x), classes `fvAEPg`, `fvRsBd`, and `fvBD`. NetFlow exporter and VLAN fields: APIC MIM `netflow:ExporterPol`/`netflow:RecordPol` and [Splunk App for Stream](https://docs.splunk.com/Documentation/Stream/8.1.6/DeployStream/NetFlow) 8.1.6. ACL-log and contract model: same MIM. Contract and topology use: `docs/DATA_LAYER.md`.

@@ -44,7 +44,9 @@ identify a bridge domain by itself: an access VLAN is distinct from an ACI
 bridge domain's internal or VXLAN identifier. ACI exports do not establish an
 egress VLAN or EPG-to-BD relation, and some exporter limitations (including
 EX platforms or record policies without VLAN fields) omit `ingress_vlan`
-entirely. Use the APIC `fvRsBd` relation for that mapping.
+entirely. The fixture generator omits the field when the scenario has no
+configured access encap for that ingress interface. Use the APIC `fvRsBd`
+relation for EPG-to-BD mapping.
 
 ## Sizing
 

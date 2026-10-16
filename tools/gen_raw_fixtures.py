@@ -1210,8 +1210,8 @@ def aci_netflow(s: AciScenario) -> list[dict]:
                 "flow_end_rel": rel_end,
                 "flow_start_rel": rel_start,
                 "input_snmpidx": nxos_ifindex(port),
-                # Routed L3Out interfaces may have no VLAN encap. APIC/Stream
-                # omits ingress_vlan in that case; do not invent VLAN 0.
+                # The scenario has no configured access encap on some routed
+                # L3Out interfaces, so omit unavailable fixture VLAN data.
                 **({"ingress_vlan": ingress_vlan} if ingress_vlan else {}),
                 "version": 4,
             }
@@ -1357,11 +1357,11 @@ def rel_attrs(dn: str, t_cl: str, t_dn: str, extra=()) -> list[tuple[str, object
     )
 
 
-def fvrsbd_attrs(dn: str, name: str, t_dn: str) -> list[tuple[str, object]]:
+def fvrsbd_attrs(dn: str, bd_name: str, t_dn: str) -> list[tuple[str, object]]:
     """Grounded fvRsBd relation fields from the APIC MIM classInfo writer.
 
-    The relation is emitted beneath an fvAEPg.  ``name``/``tnFvBDName`` are
-    the APIC relation's BD name fields; ``tDn`` is the resolved fvBD DN.
+    The relation is emitted beneath an fvAEPg. ``tnFvBDName`` is the APIC
+    relation's BD name field; ``tDn`` is the resolved fvBD DN.
     Keep this list limited to attributes present in the MIM relation and the
     existing TA relation writer vocabulary.
     """
@@ -1369,14 +1369,13 @@ def fvrsbd_attrs(dn: str, name: str, t_dn: str) -> list[tuple[str, object]]:
         [
             ("dn", dn),
             ("forceResolve", "yes"),
-            ("name", name),
             ("rType", "mo"),
             ("state", "formed"),
             ("status", ""),
             ("tCl", "fvBD"),
             ("tDn", t_dn),
             ("tType", "mo"),
-            ("tnFvBDName", name),
+            ("tnFvBDName", bd_name),
         ]
     )
 
