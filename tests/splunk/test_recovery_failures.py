@@ -323,7 +323,7 @@ class RecoveryFailureLiveTest(unittest.TestCase):
             "POST",
             macro,
             {
-                "definition": "index=adm | append [| makeresults count=50000] | eval n=mvrange(0,20) | mvexpand n | eval x=sha512(sha512(tostring(n))) | stats count"
+                "definition": "search index=adm | append [| makeresults count=50000] | eval n=mvrange(0,20) | mvexpand n | eval x=sha512(sha512(tostring(n))) | stats count"
             },
         )
         outer = self
