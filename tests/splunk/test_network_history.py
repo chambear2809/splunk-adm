@@ -305,6 +305,13 @@ class NetworkHistoryTest(unittest.TestCase):
 
         base = int(time.time())
         persist({"t": base, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"})
+        stable = persist(
+            {"t": base + 50, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"}
+        )
+        self.assertEqual(stable.get("attr_vlan"), "1030")
+        self.assertEqual(stable.get("attr_bridge_domain"), "bd")
+        self.assertNotIn("attr_vlan_status", stable)
+        self.assertNotIn("attr_bridge_domain_status", stable)
         changed = persist(
             {"t": base + 100, "v": "1040", "b": "bd", "bd_dn": "uni/tn-t/BD-b"}
         )
@@ -316,15 +323,30 @@ class NetworkHistoryTest(unittest.TestCase):
             self.assertNotIn("attr_bridge_domain", row)
             self.assertEqual(row.get("attr_vlan_status"), "varies")
             self.assertEqual(row.get("attr_bridge_domain_status"), "varies")
+            descriptor = json.loads(row["desc"])
+            self.assertIsNone(descriptor.get("vlan"))
+            self.assertIsNone(descriptor.get("bd"))
+            self.assertEqual(descriptor.get("vlan_status"), "varies")
+            self.assertEqual(descriptor.get("bd_status"), "varies")
         self.assertEqual(
             [sample["t"] for sample in json.loads(replay["network_history"])],
-            [base, base + 100, base + 200],
+            [base, base + 50, base + 100, base + 200],
         )
-        missing = persist({"t": base + 300})
+        missing = persist({"t": base + 700000})
         self.assertNotIn("attr_vlan", missing)
         self.assertNotIn("attr_bridge_domain", missing)
         self.assertEqual(missing.get("attr_vlan_status"), "incomplete")
         self.assertEqual(missing.get("attr_bridge_domain_status"), "incomplete")
+
+    def test_capped_consistent_history_does_not_confirm_discarded_periods(self):
+        samples = [{"t": 1000 + i, "v": "1030", "b": "bd"} for i in range(520)]
+        result = self.merge_history([samples])
+        descriptor = json.loads(result["desc"])
+        self.assertEqual(descriptor.get("nhc"), "1")
+        self.assertIsNone(descriptor.get("vlan"))
+        self.assertIsNone(descriptor.get("bd"))
+        self.assertEqual(descriptor.get("vlan_status"), "incomplete")
+        self.assertEqual(descriptor.get("bd_status"), "incomplete")
 
     def test_graph_aggregation_keeps_missing_legacy_period_incomplete(self):
         old = self._descriptor("aci", [])
