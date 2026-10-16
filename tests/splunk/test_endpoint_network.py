@@ -23,16 +23,25 @@ class EndpointNetworkTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.token = "network-" + uuid.uuid4().hex[:12]
-        cls.scope = cls.token
-        cls.apic = "198.51.100.50"
-        cls.nd = "198.51.100.60"
-        cls.start = int(time.time()) - 180
-        cls.loaded = 0
+        cls.scopes = []
         cls.addClassCleanup(cls.cleanup)
+
+    def setUp(self) -> None:
+        self.token = "network-" + uuid.uuid4().hex[:12]
+        self.scope = self.token
+        self.apic = "198.51.100.50"
+        self.nd = "198.51.100.60"
+        self.exporters = ("198.51.100.71", "198.51.100.72")
+        self.start = int(time.time()) - 180
+        self.loaded = 0
+        type(self).scopes.append(self.scope)
         rows = [
-            {"observer_kind": "apic", "observer": cls.apic, "scope": cls.scope},
-            {"observer_kind": "nd_host", "observer": cls.nd, "scope": cls.scope},
+            {"observer_kind": "apic", "observer": self.apic, "scope": self.scope},
+            {"observer_kind": "nd_host", "observer": self.nd, "scope": self.scope},
+            *[
+                {"observer_kind": "exporter", "observer": exporter, "scope": self.scope}
+                for exporter in self.exporters
+            ],
         ]
         payload = json.dumps(json.dumps(rows))
         lab.search(
@@ -47,9 +56,7 @@ class EndpointNetworkTest(unittest.TestCase):
     def cleanup(cls) -> None:
         import urllib.parse
 
-        query = urllib.parse.urlencode(
-            {"query": json.dumps({"scope": cls.scope})}
-        )
+        query = urllib.parse.urlencode({"query": json.dumps({"scope": {"$in": cls.scopes}})})
         for collection in ("adm_ip_identity", "adm_observer_scope"):
             response = lab._mgmt(
                 "DELETE",
@@ -94,7 +101,7 @@ class EndpointNetworkTest(unittest.TestCase):
         return lab.search(
             f'source="{self.token}" `adm_identity_build`',
             self.start - 5,
-            self.start + 30,
+            self.start + 700,
         )
 
     def test_apic_relation_and_nd_fallback_are_mac_scoped(self):
@@ -105,19 +112,33 @@ class EndpointNetworkTest(unittest.TestCase):
         nd["event"] = json.loads(nd["event"])
         nd["event"].update(
             endpointId="network-fallback",
-            mac="00:50:56:AA:40:99",
-            ip=["10.99.40.99"],
+            mac="00:50:56:AA:40:25",
+            ip=["10.30.40.25"],
             nodeName="leaf-101",
             displayBd="bd-clients",
             displayEpg="win-clients",
             nd_host=self.nd,
         )
         nd["event"] = json.dumps(nd["event"])
+        fallback_ep = copy.deepcopy(aci_ep)
+        fallback_ep["event"] = fallback_ep["event"].replace(
+            "10.30.40.25", "10.99.40.99"
+        ).replace("00:50:56:AA:40:25", "00:50:56:AA:40:99")
+        fallback_nd = copy.deepcopy(nd)
+        fallback_nd["event"] = json.loads(fallback_nd["event"])
+        fallback_nd["event"].update(
+            endpointId="network-fallback-only",
+            mac="00:50:56:AA:40:99",
+            ip=["10.99.40.99"],
+        )
+        fallback_nd["event"] = json.dumps(fallback_nd["event"])
         self.load(
             [
                 self.isolated(aci_ep, at=self.start),
                 self.isolated(relation, at=self.start),
                 self.isolated(nd, at=self.start),
+                self.isolated(fallback_ep, at=self.start),
+                self.isolated(fallback_nd, at=self.start),
             ]
         )
         summary = self.build_identity()
@@ -130,7 +151,11 @@ class EndpointNetworkTest(unittest.TestCase):
         self.assertEqual(apic["entity_kind"], "vm")
         self.assertEqual(apic.get("attr_vlan"), "1030")
         self.assertEqual(apic.get("attr_bridge_domain"), "bd-clients")
-        fallback = next(row for row in identities if row["ip"] == "10.99.40.99")
+        fallback = next(
+            (row for row in identities if row["ip"] == "10.99.40.99"), None
+        )
+        self.assertIsNotNone(fallback, identities)
+        assert fallback is not None
         self.assertEqual(fallback["entity_kind"], "endpoint")
         self.assertEqual(fallback.get("attr_bridge_domain"), "bd-clients")
         self.assertNotEqual(apic["mac"], fallback["mac"])
@@ -143,6 +168,7 @@ class EndpointNetworkTest(unittest.TestCase):
             if e["event"].get("src_ip") == "10.30.40.25"
             and e["event"].get("dest_ip") == "10.50.0.10"
         ][:2]
+        expected_bytes = sum(row["event"]["bytes"] for row in selected)
         for i, row in enumerate(selected):
             row = self.isolated(row, at=self.start + i)
             row["event"]["exporter_ip"] = "198.51.100." + str(71 + i)
@@ -157,7 +183,7 @@ class EndpointNetworkTest(unittest.TestCase):
         )
         self.assertTrue(rows)
         rollup = rows[0]
-        self.assertEqual(float(rollup["bytes_c2s"]), 3600)
+        self.assertEqual(float(rollup["bytes_c2s"]), expected_bytes)
         self.assertEqual(float(rollup["bytes_s2c"]), 0)
         observations = json.loads(rollup["vlan_observations"])
         self.assertIsInstance(observations, list)
@@ -187,9 +213,11 @@ class EndpointNetworkTest(unittest.TestCase):
             rel = copy.deepcopy(relation)
             rel["event"] = (
                 rel["event"]
-                .replace("epg-win-clients/rsbd", f"epg-win-clients-{mac[-2:]}/rsbd")
-                .replace("uni/tn-shop/BD-bd-clients", "uni/tn-shop/BD-bd-clients")
+                .replace("epg-win-clients", f"epg-test-{mac[-2:]}")
                 .replace('state="formed"', f'state="{state}"')
+            )
+            cep["event"] = cep["event"].replace(
+                "epg-win-clients", f"epg-test-{mac[-2:]}"
             )
             if ip.endswith(".3"):
                 rel["event"] = rel["event"].replace("uni/tn-shop/", "uni/tn-other/")
@@ -208,7 +236,8 @@ class EndpointNetworkTest(unittest.TestCase):
         by_ip = {row["ip"]: row for row in identities}
         for ip, *_ in cases:
             with self.subTest(ip=ip):
-                self.assertNotIn("attr_bridge_domain", by_ip.get(ip, {}))
+                self.assertIn(ip, by_ip, identities)
+                self.assertNotIn("attr_bridge_domain", by_ip[ip])
 
     def test_graph_resolve_keeps_identity_after_metadata_change(self):
         endpoints = self.fixture("aci_class.ndjson")
