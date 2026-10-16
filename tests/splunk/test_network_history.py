@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import unittest
 
 
@@ -190,11 +191,22 @@ class NetworkHistoryTest(unittest.TestCase):
 
     @staticmethod
     def _merge_row(samples: list[dict], ip: str = "198.18.0.1") -> str:
-        sample_expr = ",".join(
-            'json_object("t",%d,"v","%s","b","%s","bd_dn","uni/tn-t/BD-b","bd_tenant","t","source","aci")'
-            % (s["t"], s.get("v", "1030"), s.get("b", "bd"))
-            for s in samples
-        )
+        sample_exprs = []
+        for sample in samples:
+            fields = ['"t",%d' % sample["t"]]
+            if "v" in sample:
+                fields.append('"v","%s"' % sample["v"])
+            if "b" in sample:
+                fields.extend(
+                    [
+                        '"b","%s"' % sample["b"],
+                        '"bd_dn","%s"' % sample.get("bd_dn", "uni/tn-t/BD-b"),
+                        '"bd_tenant","%s"' % sample.get("bd_tenant", "t"),
+                    ]
+                )
+            fields.append('"source","aci"')
+            sample_exprs.append("json_object(%s)" % ",".join(fields))
+        sample_expr = ",".join(sample_exprs)
         history_expr = (
             sample_expr if len(samples) == 1 else "mvappend(%s)" % sample_expr
         )
@@ -235,7 +247,6 @@ class NetworkHistoryTest(unittest.TestCase):
     def test_stored_array_survives_late_ingestion_and_replay(self):
         import uuid
         import urllib.parse
-        import time
 
         scope = "network-history-" + uuid.uuid4().hex
 
@@ -293,9 +304,13 @@ class NetworkHistoryTest(unittest.TestCase):
             return self.lab.search(spl)[0]
 
         base = int(time.time())
-        persist({"t": base, "v": "1030", "b": "bd-a"})
-        changed = persist({"t": base + 100, "v": "1040", "b": "bd-b"})
-        replay = persist({"t": base + 200, "v": "1030", "b": "bd-a"})
+        persist({"t": base, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"})
+        changed = persist(
+            {"t": base + 100, "v": "1040", "b": "bd", "bd_dn": "uni/tn-t/BD-b"}
+        )
+        replay = persist(
+            {"t": base + 200, "v": "1030", "b": "bd", "bd_dn": "uni/tn-t/BD-a"}
+        )
         for row in (changed, replay):
             self.assertNotIn("attr_vlan", row)
             self.assertNotIn("attr_bridge_domain", row)
@@ -305,6 +320,11 @@ class NetworkHistoryTest(unittest.TestCase):
             [sample["t"] for sample in json.loads(replay["network_history"])],
             [base, base + 100, base + 200],
         )
+        missing = persist({"t": base + 300})
+        self.assertNotIn("attr_vlan", missing)
+        self.assertNotIn("attr_bridge_domain", missing)
+        self.assertEqual(missing.get("attr_vlan_status"), "incomplete")
+        self.assertEqual(missing.get("attr_bridge_domain_status"), "incomplete")
 
     def test_graph_aggregation_keeps_missing_legacy_period_incomplete(self):
         old = self._descriptor("aci", [])
