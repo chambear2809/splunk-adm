@@ -231,3 +231,41 @@ class NetworkHistoryTest(unittest.TestCase):
         parsed = json.loads(row["desc"])
         self.assertEqual([sample["t"] for sample in parsed["nh"]], [1000, 3000])
         self.assertEqual(parsed["nh"][-1]["v"], "1030")
+
+    def test_stored_array_survives_late_ingestion_and_replay(self):
+        import uuid
+        import urllib.parse
+
+        scope = "network-history-" + uuid.uuid4().hex
+
+        def cleanup():
+            query = urllib.parse.urlencode({"query": json.dumps({"scope": scope})})
+            self.lab._mgmt(
+                "DELETE",
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_ip_identity?"
+                + query,
+            ).close()
+
+        self.addCleanup(cleanup)
+
+        def persist(samples):
+            query = self._merge_row(samples).replace(
+                'scope="history-test"', f'scope="{scope}"'
+            )
+            query += " | `adm_identity_merge` | fields _key ip scope entity_kind entity_id entity_name source ek mac valid_from valid_to valid_end first_seen last_seen priority desc network_history attr_network_history_capped | outputlookup append=true key_field=_key adm_ip_identity | table desc network_history last_seen"
+            return self.lab.search(query)[0]
+
+        persist([{"t": 3000, "v": "1030"}])
+        late = persist([{"t": 1000, "v": "1020"}])
+        replay = persist([{"t": 3000, "v": "1030"}])
+        self.assertEqual(
+            json.loads(late["network_history"]), json.loads(replay["network_history"])
+        )
+        self.assertEqual(
+            [r["t"] for r in json.loads(replay["desc"])["nh"]], [1000, 3000]
+        )
+        self.assertEqual(float(replay["last_seen"]), 3000)
+        retained = persist([{"t": 700000, "v": "1040"}])
+        self.assertEqual(
+            [r["t"] for r in json.loads(retained["network_history"])], [700000]
+        )

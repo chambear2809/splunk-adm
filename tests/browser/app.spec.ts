@@ -15,9 +15,7 @@ test.describe("Application Atlas browser regressions", () => {
     await expect(page.locator(".match-count")).toContainText("card");
     await search.press("Enter");
     await expect(page.locator("[data-hit].match").first()).toBeVisible();
-    await page
-      .getByRole("button", { name: "Service checkout", exact: true })
-      .click();
+    await page.locator("[data-hit].match").first().click();
     await expect(
       page.getByRole("complementary", { name: "Details" }),
     ).toContainText("checkout");
