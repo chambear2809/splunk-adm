@@ -51,4 +51,30 @@ describe("requiredFlowsCsv", () => {
     expect(ext).toContain(",External,");
     expect(ext).toContain("ftd-edge");
   });
+
+  it("exports observed VLAN evidence and truncation state", () => {
+    const graphWithVlan = structuredClone(graph);
+    const edge = graphWithVlan.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.vlan_observations = [
+      {
+        vlan: 120,
+        position: "ingress",
+        exporter: "198.51.100.10",
+        src_ip: "10.0.0.1",
+        dest_ip: "10.0.0.2",
+        first_seen: 1,
+        last_seen: 2,
+      },
+    ];
+    edge.vlan_observations_truncated = true;
+    const output = requiredFlowsCsv(
+      graphWithVlan,
+      indexGraph(graphWithVlan),
+      indexTopology(demoTopology("nxos")),
+    );
+    expect(output).toContain('""vlan"":120');
+    expect(output).toContain(",1\r\n");
+  });
 });

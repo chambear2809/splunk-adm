@@ -301,7 +301,7 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   page,
 }) => {
   for (const theme of ["dark", "light"]) {
-    await page.goto(`/tests/browser/browser.html?theme=${theme}`);
+    await page.goto(`/map?mode=demo&theme=${theme}`);
     await expect(page.locator(".atlas")).toHaveAttribute(
       "data-atlas-theme",
       theme,
@@ -335,21 +335,29 @@ test("inspector remains usable at narrow width in light and dark themes", async 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ["light", "dark"]) {
-    await page.goto(`/map?mode=demo&theme=${theme}`);
-    await expect(
-      page.getByText("Synthetic demo", { exact: true }),
-    ).toBeVisible();
-    const search = page.getByLabel(
-      "Highlight by name, IP, EPG, port or device",
+    await page.goto(
+      `/tests/browser/browser.html?fault=vlan-ui&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&theme=${theme}`,
     );
-    await search.fill("checkout");
-    await search.press("Enter");
-    await page.locator("[data-hit].match").first().click();
+    await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+    await page
+      .getByRole("button", { name: /node-a/ })
+      .first()
+      .dispatchEvent("click");
     await expect(
       page.getByRole("complementary", { name: "Details" }),
     ).toBeVisible();
+    await expect(page.getByText("EPG-ui", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("VLAN 120 · ingress", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /Observed VLANs — NetFlow/ }),
+    ).toBeVisible();
+    await expect(page.getByText(/Network history is capped/)).toBeVisible();
     expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
+      await page
+        .getByRole("complementary", { name: "Details" })
+        .evaluate((element) => element.getBoundingClientRect().width),
     ).toBeLessThanOrEqual(390);
   }
 });
