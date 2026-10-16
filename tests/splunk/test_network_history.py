@@ -44,17 +44,23 @@ class NetworkHistoryTest(unittest.TestCase):
         }
 
     def resolve(self, descriptors: list[dict], start: int, end: int) -> dict:
-        desc_expr = ",".join(
-            "json_set(json_object(\"vf\",0,\"ve\",100000,\"fs\",0,\"ls\",10000,\"p\",3,\"kind\",\"endpoint\",\"id\",\"%s\",\"name\",\"test\",\"source\",\"%s\",\"ek\",\"ep:test/10.0.0.1/%s\",\"mac\",\"%s\"),\"nh\",json(%s))"
-            % (
-                d["id"],
-                d["source"],
-                d["mac"],
-                d["mac"],
-                json.dumps(json.dumps(d["nh"], separators=(",", ":"))),
+        expressions = []
+        for d in descriptors:
+            expr = (
+                'json_object("vf",0,"ve",100000,"fs",0,"ls",10000,"p",3,'
+                '"kind","endpoint","id","%s","name","test","source","%s",'
+                '"ek","ep:test/10.0.0.1/%s","mac","%s")'
+                % (d["id"], d["source"], d["mac"], d["mac"])
             )
-            for d in descriptors
-        )
+            if "nh" in d:
+                expr = 'json_set(%s,"nh",json(%s))' % (
+                    expr,
+                    json.dumps(json.dumps(d["nh"], separators=(",", ":"))),
+                )
+            if "nhc" in d:
+                expr = 'json_set(%s,"nhc",%d)' % (expr, d["nhc"])
+            expressions.append(expr)
+        desc_expr = expressions[0] if len(expressions) == 1 else "mvappend(" + ",".join(expressions) + ")"
         query = (
             '| makeresults | eval adm_c_desc=mvappend(%s), adm_bfs=%d, adm_bls=%d, '
             'client_ip="10.0.0.1", scope="test" | `adm_resolve(c,client_ip)` '
@@ -141,10 +147,31 @@ class NetworkHistoryTest(unittest.TestCase):
             1002,
         )
         self.assertIsNone(wildcard.get("attr_vlan"))
-        self.assertIsNone(wildcard.get("attr_bridge_domain"))
+        self.assertEqual(wildcard.get("attr_bridge_domain"), "nd-bd")
         old = self._descriptor("aci", [])
         old.pop("nh")
         result = self.resolve([old], 1001, 1002)
         self.assertIsNone(result.get("attr_vlan"))
         self.assertIsNone(result.get("attr_bridge_domain"))
+
+    def test_mismatched_mac_keeps_identity_ambiguous(self):
+        result = self.resolve(
+            [
+                self._descriptor("aci", [{"t": 1000, "v": "1030"}], mac="AA"),
+                self._descriptor("nd_endpoints", [{"t": 1000, "b": "nd-bd"}], mac="BB"),
+            ],
+            1001,
+            1002,
+        )
+        self.assertEqual(result.get("state"), "ambiguous")
+        self.assertIsNone(result.get("attr_vlan"))
+        self.assertIsNone(result.get("attr_bridge_domain"))
+
+    def test_cap_flag_is_retained_without_extrapolating_before_history(self):
+        capped = self._descriptor("aci", [{"t": 2000, "v": "1030"}])
+        capped["nhc"] = "1"
+        result = self.resolve([capped], 1001, 1002)
+        self.assertIsNone(result.get("attr_vlan"))
+        self.assertEqual(result.get("attr_vlan_status"), "incomplete")
+        self.assertEqual(result.get("attr_network_history_capped"), "1")
 
