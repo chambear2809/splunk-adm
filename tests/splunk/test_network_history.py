@@ -269,3 +269,38 @@ class NetworkHistoryTest(unittest.TestCase):
         self.assertEqual(
             [r["t"] for r in json.loads(retained["network_history"])], [700000]
         )
+
+    def test_graph_aggregation_keeps_missing_legacy_period_incomplete(self):
+        old = self._descriptor("aci", [])
+        old.pop("nh")
+        new = self._descriptor("aci", [{"t": 1000, "v": "1030", "b": "bd"}])
+        query = (
+            "| makeresults count=2 | streamstats count AS seq | eval adm_c_desc=if(seq==1, "
+            + json.dumps(json.dumps(old))
+            + ", "
+            + json.dumps(json.dumps(new))
+            + '), adm_bfs=1001, adm_bls=1002, client_ip="10.0.0.1", scope="test" '
+            '| `adm_resolve(c,client_ip)` | eval adm_row="node_src", adm_node_out="1#".adm_c_node '
+            '| append [| makeresults | eval adm_row="span", adm_span=json_object("root",1)] '
+            '| `adm_graph_output("frontend","demo","demo-cluster","shop")` '
+            '| where row_type="node"'
+        )
+        rows = self.lab.search(query)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["attr_vlan_status"], "incomplete")
+        self.assertEqual(rows[0]["attr_bridge_domain_status"], "incomplete")
+        self.assertNotIn("attr_vlan", rows[0])
+        self.assertNotIn("attr_bridge_domain", rows[0])
+
+    def test_full_history_expansion_preserves_all_conversation_rows(self):
+        desc = self._descriptor(
+            "aci", [{"t": 1000 + 10 * i, "v": "1030", "b": "bd"} for i in range(512)]
+        )
+        query = (
+            "| makeresults count=20 | eval adm_c_desc="
+            + json.dumps(json.dumps(desc))
+            + ', adm_bfs=5000, adm_bls=5100, client_ip="10.0.0.1", scope="test" '
+            '| `adm_resolve(c,client_ip)` | stats count count(eval(adm_c_network_vlan=="1030")) AS confirmed'
+        )
+        rows = self.lab.search(query)
+        self.assertEqual(rows, [{"count": "20", "confirmed": "20"}])

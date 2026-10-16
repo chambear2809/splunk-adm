@@ -107,7 +107,7 @@ class IdentityOwnershipTest(unittest.TestCase):
 
     def build(self, first=0, last=2000):
         rows = lab.search(
-            f'source="{self.source}" `adm_identity_build`',
+            "| `adm_identity_build`",
             self.start + first,
             self.start + last,
         )

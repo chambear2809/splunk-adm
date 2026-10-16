@@ -120,7 +120,7 @@ class EndpointNetworkTest(unittest.TestCase):
 
     def build_identity(self) -> list[dict]:
         return lab.search(
-            f'source="{self.token}" `adm_identity_build`',
+            "| `adm_identity_build`",
             self.start - 5,
             self.start + 700,
         )
@@ -266,7 +266,9 @@ class EndpointNetworkTest(unittest.TestCase):
             self.start + 30,
         )
         self.assertTrue(rows)
-        self.assertEqual(sum(float(row["bytes_c2s"]) for row in rows), expected_bytes)
+        self.assertEqual(
+            sum(float(row["bytes_c2s"]) for row in rows), expected_bytes - reverse_bytes
+        )
         self.assertEqual(sum(float(row["bytes_s2c"]) for row in rows), reverse_bytes)
         observations = [
             item for row in rows for item in json.loads(row["vlan_observations"])
@@ -366,6 +368,7 @@ class EndpointNetworkTest(unittest.TestCase):
             ("10.99.41.3", "00:50:56:AA:41:03", "formed", self.start),
             ("10.99.41.4", "00:50:56:AA:41:04", "formed", self.start - 601),
             ("10.99.41.5", "00:50:56:AA:41:05", "formed", self.start),
+            ("10.99.41.6", "00:50:56:AA:41:06", "formed", self.start),
         ]
         rows = []
         for ip, mac, state, relation_time in cases:
@@ -386,6 +389,10 @@ class EndpointNetworkTest(unittest.TestCase):
             )
             if ip.endswith(".3"):
                 rel["event"] = rel["event"].replace("uni/tn-shop/", "uni/tn-other/")
+            if ip.endswith(".6"):
+                rel["event"] = rel["event"].replace(
+                    "uni/tn-shop/BD-bd-clients", "uni/BD-fake"
+                )
             if ip.endswith(".5"):
                 rel["event"] = rel["event"].replace("192.0.2.50", "192.0.2.250")
             rows.extend(
