@@ -35,7 +35,8 @@ const record = (content: Record<string, unknown> = {}, canWrite = true) => ({
 });
 const stagedMacroDefinitions: Record<string, string> = {
   adm_data_contract_version: "1",
-  adm_graph_v2: "search index=adm_summary_v2",
+  "adm_graph(4)": "search index=adm_summary",
+  "adm_graph_v2(4)": "search index=adm_summary_v2",
   adm_index_summary_v2: "index=adm_summary_v2",
   adm_summary_index_v2_name: "adm_summary_v2",
   adm_network_client_history_observations:
@@ -90,7 +91,11 @@ function stagedIntegrationFetcher(
     if (url.includes("authentication/current-context"))
       return response(record({ capabilities: ["admin_all_objects"] }));
     if (url.includes("configs/conf-macros/")) {
-      const name = url.split("configs/conf-macros/")[1]?.split("?")[0] ?? "";
+      const name = decodeURIComponent(
+        url.split("configs/conf-macros/")[1]?.split("?")[0] ?? "",
+      );
+      if (name === "adm_graph" || name === "adm_graph_v2")
+        return response({ message: "Unknown macro stanza" }, 404);
       const definition =
         stagedMacroDefinitions[name] ??
         (name === "adm_summary_index_name"

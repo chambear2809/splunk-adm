@@ -98,7 +98,14 @@ class RestrictedViewerTest(unittest.TestCase):
         # the known fixture before the restricted account is created.
         from test_data_layer import DataLayerTest
 
-        DataLayerTest.setUpClass()
+        # Called on DataLayerTest itself, so its class cleanups (which restore the
+        # saved-search state it changes) must be run explicitly, last.
+        try:
+            DataLayerTest.setUpClass()
+        except Exception:
+            DataLayerTest.doClassCleanups()
+            raise
+        cls.addClassCleanup(DataLayerTest.doClassCleanups)
         cls.admin_rows = DataLayerTest.rows
         saved = configparser.RawConfigParser()
         saved.read(HERE.parent / "../splunk_app/splunk_adm/default/savedsearches.conf")

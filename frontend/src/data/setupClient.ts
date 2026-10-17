@@ -25,8 +25,8 @@ export const BUILDER_SEARCHES = [
 ] as const;
 export const CISCO_READ_MACROS = [
   "adm_data_contract_version",
-  "adm_graph",
-  "adm_graph_v2",
+  "adm_graph(4)",
+  "adm_graph_v2(4)",
   "adm_index_summary_v2",
   "adm_summary_index_v2_name",
   "adm_network_client_history_observations",
@@ -428,7 +428,10 @@ export class ToolkitSetupClient implements SetupClient {
   ): Promise<ReadonlyMacroStatus> {
     try {
       const record = entry(
-        await this.request(`configs/conf-macros/${name}`, signal),
+        await this.request(
+          `configs/conf-macros/${encodeURIComponent(name)}`,
+          signal,
+        ),
       );
       const definition = text(record.content.definition);
       if (definition === undefined)

@@ -451,14 +451,15 @@ class HealthSearchTest(unittest.TestCase):
         token = uuid.uuid4().hex
         end = int(time.time()) // 60 * 60
         old_start = end - 24 * 60 * 60
-        # Catalog slots run hourly at :15. Keep the checkpoint safely more
-        # than five minutes before the old 24-hour search boundary.
-        prior = old_start - (old_start - 900) % 3600
-        if prior >= old_start - 300:
-            prior -= 3600
+        # Catalog slots run hourly at :15 (cron "15 * * * *"). The checkpoint is
+        # the latest slot strictly before the old 24-hour boundary, so it always
+        # lies inside the alert's fixed 25-hour window. Both dispatches below pin
+        # "now" to `end`, so the bounds do not drift with the wall clock.
+        prior = old_start - 1 - (old_start - 1 - 900) % 3600
         early = old_start + (900 - old_start) % 3600
         later = early + 3600
-        self.assertLess(prior, old_start - 300)
+        self.assertLess(prior, old_start)
+        self.assertGreaterEqual(prior, end - 1500 * 60)
         self.assertGreaterEqual(early, old_start)
         self.assertLess(later, end - 600)
 
@@ -508,9 +509,9 @@ class HealthSearchTest(unittest.TestCase):
 
         def dispatch_with(earliest):
             self.change_live_config(path, {"dispatch.earliest_time": earliest})
-            sid = self.lab._json("POST", path + "/dispatch", {"trigger_actions": "0"})[
-                "sid"
-            ]
+            sid = self.lab._json(
+                "POST", path + "/dispatch", {"trigger_actions": "0", "now": str(end)}
+            )["sid"]
             job = self.lab._wait_job(sid)
             rows = self.lab._results(sid)
             matching = {
@@ -535,6 +536,9 @@ class HealthSearchTest(unittest.TestCase):
                 new_job["earliestTime"].replace("Z", "+00:00")
             ).timestamp()
         )
+        # Exact bounds prove Splunk applied the pinned "now".
+        self.assertEqual(old_lower, old_start)
+        self.assertEqual(new_lower, end - 1500 * 60)
         self.assertLess(prior, old_lower)
         self.assertLessEqual(new_lower, prior)
 

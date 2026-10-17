@@ -43,6 +43,32 @@ MAX_SLICES = MAX_BACKFILL_SECONDS // SLICE_SECONDS
 # Fixed allowance for the first resumed V1 cycle and the bounded re-inventory
 # retries, on top of the per-slice gap recovery budget below.
 ROLLBACK_RECOVERY_MARGIN_SECONDS = 60 * 60
+# Persisted-row readbacks wait for a freshly collected summary to become
+# searchable: exponential pauses from 1 s, each capped, with a bounded total.
+SUMMARY_INDEX_WAIT_INITIAL_SECONDS = 1.0
+SUMMARY_INDEX_WAIT_MAX_SECONDS = 15.0
+SUMMARY_INDEX_WAIT_BUDGET_SECONDS = 60.0
+
+
+def _summary_wait_delays(
+    initial: float, cap: float, budget: float
+) -> tuple[float, ...]:
+    delays: list[float] = []
+    delay, total = initial, 0.0
+    while total < budget:
+        step = min(delay, cap, budget - total)
+        delays.append(step)
+        total += step
+        delay *= 2
+    return tuple(delays)
+
+
+SUMMARY_INDEX_WAIT_DELAYS = _summary_wait_delays(
+    SUMMARY_INDEX_WAIT_INITIAL_SECONDS,
+    SUMMARY_INDEX_WAIT_MAX_SECONDS,
+    SUMMARY_INDEX_WAIT_BUDGET_SECONDS,
+)
+SUMMARY_INDEX_WAIT_ATTEMPTS = len(SUMMARY_INDEX_WAIT_DELAYS) + 1
 # _v1_recovery_window refuses once the last resumed cycle ends more than seven
 # days after the pre-pause boundary, and that end tracks the wall clock on every
 # rerun, so rollback must finish inside the bound. The tool imposes no wall-clock
@@ -52,7 +78,7 @@ ROLLBACK_RECOVERY_MARGIN_SECONDS = 60 * 60
 # at most ROLLBACK_SEARCHES_PER_SLICE searches, each allowed
 # ROLLBACK_SEARCH_BUDGET_SECONDS, plus the readback sleeps and the writer's
 # JOB_METADATA_WAIT_SECONDS identity wait.
-ROLLBACK_SEARCHES_PER_SLICE = 3 + 5
+ROLLBACK_SEARCHES_PER_SLICE = 3 + SUMMARY_INDEX_WAIT_ATTEMPTS
 ROLLBACK_SEARCH_BUDGET_SECONDS = 15
 CATALOG_SETTLED_JOB_STATES = frozenset(
     {"complete", "failed", "rejected", "preparation_aborted"}
@@ -72,14 +98,12 @@ MAX_COLLECTION_ROWS = 100000
 LIVE_BUILDER_COLLECTIONS = ("adm_ip_identity", "adm_interfaces")
 COLLECTION_PAGE_SIZE = 500
 ROLLUP_ID_QUERY_BATCH = 250
-SUMMARY_INDEX_WAIT_ATTEMPTS = 5
-SUMMARY_INDEX_WAIT_SECONDS = 1.0
 SCHEDULED_WRITER_WAIT_SECONDS = 2.0
 JOB_METADATA_WAIT_SECONDS = 30.0
 JOB_METADATA_WAIT_ATTEMPTS = 120
 ROLLBACK_SLICE_BUDGET_SECONDS = (
     ROLLBACK_SEARCHES_PER_SLICE * ROLLBACK_SEARCH_BUDGET_SECONDS
-    + (SUMMARY_INDEX_WAIT_ATTEMPTS - 1) * SUMMARY_INDEX_WAIT_SECONDS
+    + sum(SUMMARY_INDEX_WAIT_DELAYS)
     + JOB_METADATA_WAIT_SECONDS
 )
 JOURNAL_SCHEMA = 2
@@ -3072,6 +3096,10 @@ class Migration:
                 }
         return observed
 
+    def _wait_before_summary_retry(self, attempt: int) -> None:
+        if attempt <= len(SUMMARY_INDEX_WAIT_DELAYS):
+            self.sleep(SUMMARY_INDEX_WAIT_DELAYS[attempt - 1])
+
     def _persisted_query(
         self, journal, spec, expected, label: str, attempt: int
     ) -> dict[str, dict[str, Any]]:
@@ -3125,8 +3153,7 @@ class Migration:
                 if observed == wanted:
                     actual.update(observed)
                     break
-                if attempt < SUMMARY_INDEX_WAIT_ATTEMPTS:
-                    self.sleep(SUMMARY_INDEX_WAIT_SECONDS)
+                self._wait_before_summary_retry(attempt)
             else:
                 raise Refused(
                     f"{stream} staged rollup IDs, record kinds, or event counts do not match source slice"
@@ -4162,8 +4189,7 @@ class Migration:
                 )
                 self._write_journal(journal)
                 return
-            if attempt < SUMMARY_INDEX_WAIT_ATTEMPTS:
-                self.sleep(SUMMARY_INDEX_WAIT_SECONDS)
+            self._wait_before_summary_retry(attempt)
         raise Refused(
             "network client history rows did not become visible in the collection"
         )
@@ -4551,7 +4577,7 @@ class Migration:
             if actual is not None:
                 break
             if attempt < SUMMARY_INDEX_WAIT_ATTEMPTS:
-                self.sleep(SUMMARY_INDEX_WAIT_SECONDS)
+                self._wait_before_summary_retry(attempt)
                 rows = self._collection_rows(contract["collection"])
         if actual is None:
             raise Refused(
@@ -6453,8 +6479,7 @@ class Migration:
                     )
                     if observed == cumulative_expected:
                         break
-                    if attempt < SUMMARY_INDEX_WAIT_ATTEMPTS:
-                        self.sleep(SUMMARY_INDEX_WAIT_SECONDS)
+                    self._wait_before_summary_retry(attempt)
                 else:
                     raise Refused("V1 recovery summary rows did not become visible")
                 matching_jobs = [
@@ -6549,8 +6574,7 @@ class Migration:
                 )
                 if actual == cumulative_expected:
                     break
-                if attempt < SUMMARY_INDEX_WAIT_ATTEMPTS:
-                    self.sleep(SUMMARY_INDEX_WAIT_SECONDS)
+                self._wait_before_summary_retry(attempt)
             if actual != cumulative_expected:
                 raise Refused("resumed V1 scheduler output is not completely retained")
             recovery["scheduler_cycles"][key] = {
@@ -7183,6 +7207,7 @@ class Migration:
         return True
 
     def cutover(self) -> dict[str, Any]:
+        self.qualify()
         journal = self._load()
         if journal.get("phase") not in {"coverage_validated", "cutover_in_progress"}:
             if journal.get("phase") == "cutover":
@@ -7324,6 +7349,7 @@ class Migration:
         return {"status": "cutover", "migration_id": journal["migration_id"]}
 
     def rollback(self) -> dict[str, Any]:
+        self.qualify()
         journal = self._load()
         if journal.get("phase") not in {
             "cutover",

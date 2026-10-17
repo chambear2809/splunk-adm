@@ -10,6 +10,46 @@ The local synthetic lab can check parsing, mapping, history, and display behavio
 
 The current positive SD-WAN scenario preserves flow-level overlay session references for investigation. It does not derive router or tunnel topology, and TLOC option-envelope parsing and correlation are unsupported. Do not interpret the retained references as validated topology or use them to infer a TLOC relationship.
 
+## Post-review revalidation (2026-10-17)
+
+This section records a rerun against commit `88e04e5` (PR #6 head, including the reviewed fixes from PRs #7 and #8) after the independent review changed the migration tool, SPL macros, frontend, and packaging. The sections below that cite counts, logs, or hashes describe the earlier pre-review candidate and are labelled as such. All evidence is from the isolated local Splunk Enterprise 10.6.0.5 lab with TA-grounded synthetic events; it does not cover real controllers, distributed or SHC deployments, Splunk Cloud, or production capacity.
+
+- Archive: `dist/splunk_adm-0.3.0.tar.gz`, SHA-256 `1278945037b1bb16085217417bec90157b082d3ba117bf7290ae04d4a1b64d13`; `tools/check_release.py` passed (`dist/post-review-build.log`). Real-release baseline: 0.2.0 built from `origin/main` `0a81682`, SHA-256 `49aae437077aad9cbacdd3c7a96e638aa8fd6e0a1a26affc4ab90206467542ff`.
+- AppInspect 4.3.1 (`--mode precert --included-tags cloud`, Python 3.11): 0 errors, 0 failures, 5 warnings, 1 skipped, 113 passed, 127 not applicable (`dist/post-review-appinspect.json`, `.log`; `tools/check_appinspect.py` passed). The warnings are the same five checks as before. Two lookup checks (`check_for_lookups_file_name`, `check_lookups_allow_list`) changed from passed to not applicable because the archive no longer ships a lookup CSV. The hostname/IP warning lists different files than the pre-review report but the same class of synthetic or documentation values. This is not Cloud acceptance.
+- Full live suite with the archive and real 0.2.0 baseline (`ADM_UPGRADE_PACKAGE`, `ADM_UPGRADE_BASELINE_PACKAGE`): 330 tests in 2,117.937 seconds, 1 failure, 0 errors, 1 skip (`dist/post-review-full-live.log`). The skip is the opt-in Cisco migration test, which was run separately below. `test_real_release_rollback_preserves_local_state` and the other `test_upgrade` live checks passed against the real baseline.
+- The single failure, `test_health.HealthSearchTest.test_saved_alert_uses_preceding_hourly_catalog_checkpoint` (`tests/splunk/test_health.py:526`), is a wall-clock dependency in the test rather than a product regression. It picks the preceding hourly checkpoint a full hour before the 24-hour boundary when the boundary falls within five minutes after a `:15` slot, which places the checkpoint just outside the alert's fixed 25-hour (`-1500m@m`) search window. It passed when rerun at 13:41 EDT and failed again, deterministically, when run at 16:16 EDT (`dist/post-review-health-clock-repro.log`). It failed when run in minutes `:15` through `:19` of any hour (the full suite happened to reach it at 13:15). It was a test defect, not environmental noise, and is fixed in the follow-up below.
+- Cisco V2 migration, disabled origin: after a fresh lab, a V1 baseline seeded through the real V1 writer, and a verified-TLS session, the first attempt stopped in staging because the helper's five-second persisted-row poll did not see freshly written V2 rows (`dist/post-review-disabled-migration-live-attempt1.log`); a read-only recomputation immediately afterwards found no mismatch. Resuming the same retained journal passed stage, validate, cutover, and rollback (2 tests, 378.863 seconds, `dist/post-review-disabled-migration-live.log`; journal phase `rolled_back`). The five-second poll was replaced in the follow-up below; both migration runs in this section used the earlier five-second poll.
+- Cisco V2 migration, enabled origin with the opt-in V1 missed-window injection: passed stage, validate, cutover, and rollback with gap recovery (2 tests, 1,286.117 seconds, `dist/post-review-enabled-migration-live.log`).
+- After a full-suite run the lab's `ADM - Conversation rollup` writer was left locally overridden (`disabled=0`, `enableSched=0`), and the migration helper then refused with "writer schedule or definition differs from the shipped contract". Migration runs therefore used a freshly installed lab. The leaking tests are identified and fixed in the follow-up below.
+- Immediately after replacing the lab certificate and restarting, the standalone-shape guard refused on the first qualification attempt and passed on retry, as in the earlier record. It passed on the first attempt after a reset that did not replace the certificate. The cause is not established; a transient `server_roles` mismatch right after startup is a hypothesis.
+- Non-lab checks: 448 Python tests, 501 Vitest tests (43 files), 70 browser tests, `npm run lint`, `ruff check`, and `ruff format --check` all passed (`dist/post-review-python-unit.log`, `-vitest.log`, `-browser.log`, `-lint.log`).
+
+## Repository integration and deployment status
+
+The optional integration is merged as staged functionality with the shipped
+V1 readers retained and V2 writers disabled by default. Repository integration
+does not qualify a production deployment or authorize a V2 cutover. Every
+applicable deployment gate below remains open until target-specific evidence
+is collected and reviewed; Cloud and distributed deployments are not claimed
+as supported by the local standalone evidence.
+
+The follow-up changes extend persisted-row visibility polling to a bounded
+60-second sleep budget, adjust the rollback planning budget accordingly,
+restore saved-search state after lab fixtures, and pin the health test's search
+clock. The Setup screen also reads the actual parameterized macro stanza names
+(`adm_graph(4)` and `adm_graph_v2(4)`). History compaction now checks expansion
+counts before allowing identity writes, and cutover/rollback repeat standalone
+deployment qualification before loading the journal. These changes received static review;
+the earlier live migration results above exercised the five-second poll, not
+the new retry schedule. No tests were run during the takeover review.
+
+Existing follow-up logs record 16 passing health checks
+(`dist/followup-test_health-2.log`) and three passing recovery-supervisor checks
+(`dist/followup-test_recovery_supervisor.log`). The first health attempt
+(`dist/followup-test_health.log`) had an `adm_recovery_state` lookup error;
+the successful rerun does not establish its cause. Full live-suite and migration
+qualification of the final follow-up changes remain unverified.
+
 ## Qualification gates
 
 All deployment gates remain open until evidence is collected and reviewed for the intended target:
@@ -23,11 +63,11 @@ All deployment gates remain open until evidence is collected and reviewed for th
 - [ ] Supported deployment qualification for distributed Enterprise, search head clustering, checkpoint/state persistence, upgrades and rollback. The local standalone deployment-shape check is not this gate.
 - [ ] Splunk Cloud support and operational behavior, if Cloud is in scope.
 - [ ] Production capacity, request pacing, index volume, search cost, and failure recovery at the intended scale.
-- [ ] Independent review and target-environment evidence captured before promoting beyond draft PR status.
+- [ ] Independent review and target-environment evidence captured before activating the integration on that target. An independent code review of PR #6 was completed and its fixes revalidated locally (see the post-review section); target-environment evidence remains outstanding, so this deployment gate stays open.
 
 ## Full local integration suite
 
-The complete local Splunk suite passed 308 tests in 2,160.603 seconds, with zero failures or errors and one intentional migration opt-in skip (`dist/cisco-full-splunk-final-v24.log`). The destructive migration path was exercised separately for both recorded origins. This run includes native browser, permissions, source handling, topology, history, recovery, and archive upgrade/rollback checks. Legacy and combined Cisco fixtures were recaptured from the implemented pipeline; all 22 fixture checks passed. The refreshed package passed 18 upgrade checks (including three live checks) and the AppInspect error/failure gate. After lab cleanup, all 398 Python tests passed; frontend checks passed 459 unit tests and 69 browser tests.
+Pre-review candidate: the complete local Splunk suite passed 308 tests in 2,160.603 seconds, with zero failures or errors and one intentional migration opt-in skip (`dist/cisco-full-splunk-final-v24.log`). The destructive migration path was exercised separately for both recorded origins. This run includes native browser, permissions, source handling, topology, history, recovery, and archive upgrade/rollback checks. Legacy and combined Cisco fixtures were recaptured from the implemented pipeline; all 22 fixture checks passed. The refreshed package passed 18 upgrade checks (including three live checks) and the AppInspect error/failure gate. After lab cleanup, all 398 Python tests passed; frontend checks passed 459 unit tests and 69 browser tests.
 
 ## Local permission and topology evidence
 
@@ -57,7 +97,7 @@ The successful disabled-origin resumption is recorded in `dist/cisco-disabled-mi
 
 ## AppInspect warning review
 
-The refreshed-fixture archive passed the automated error/failure gate with five warnings and one skipped check (`dist/cisco-appinspect-v28.json`). Its exact hash is recorded with the upgrade evidence. Later qualification-document updates require the normal package/CI checks; they do not change runtime files. This is not Cloud acceptance.
+Pre-review candidate: the refreshed-fixture archive passed the automated error/failure gate with five warnings and one skipped check (`dist/cisco-appinspect-v28.json`). Its exact hash is recorded with the upgrade evidence. Later qualification-document updates require the normal package/CI checks; they do not change runtime files. This is not Cloud acceptance.
 
 | Check                                  | Finding and disposition                                                                                                                                                                            |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

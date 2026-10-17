@@ -32,6 +32,22 @@ class NetworkIndexWindowTest(unittest.TestCase):
         import lab
 
         cls.lab = lab
+        # Dispatch refuses a disabled saved search; enable it unscheduled and
+        # restore the prior state afterwards.
+        path = "/servicesNS/nobody/splunk_adm/saved/searches/" + urllib.parse.quote(
+            "ADM - Identity builder", safe=""
+        )
+        original = lab._json("GET", path)["entry"][0]["content"]
+        cls.addClassCleanup(
+            lab._json,
+            "POST",
+            path,
+            {
+                "disabled": str(int(original["disabled"] in (True, 1, "1"))),
+                "is_scheduled": str(int(original["is_scheduled"] in (True, 1, "1"))),
+            },
+        )
+        lab._json("POST", path, {"disabled": "0", "is_scheduled": "0"})
 
     def _install_scope(self, observer: str, scope: str) -> None:
         self.scope = scope
@@ -269,7 +285,7 @@ class NetworkIndexWindowTest(unittest.TestCase):
         result = self._dispatch_identity((now - 600, now), (now - 1800, now))
         self.assertEqual(result[0]["network_lookup_complete"], "0", result)
         self.assertEqual(result[0]["rows_written"], "0", result)
-        self.assertIn("no identity rows were written", str(result[0].get("warnings")))
+        self.assertIn("affected rows were not written", str(result[0].get("warnings")))
         after = self.lab.search(
             f'| inputlookup adm_ip_identity where scope="{self.scope}" | sort 0 _key | table _key desc'
         )
