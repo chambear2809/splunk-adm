@@ -1616,6 +1616,26 @@ describe("Stream/IPFIX exporter resolution", () => {
     expect(seen[0].resolved).toBe(false);
   });
 
+  it("leaves a netflow observer unresolved on V2 when the edge has no traffic observation and only a scope", () => {
+    const { topology, edge } = scenario();
+    const topo = indexTopology(topology);
+    const bare = {
+      ...edge,
+      traffic_observations: undefined,
+      observers: ["netflow:192.0.2.102:ifIndex 1>"],
+    };
+    for (const context of [{ scope: "campus-aci" }, {}]) {
+      const seen = observationsByDevice(bare, topo, [], context);
+      expect(seen).toHaveLength(1);
+      expect(seen[0].resolved).toBe(false);
+    }
+    const full = observationsByDevice(bare, topo, [], {
+      scope: "campus-aci",
+      cluster: "cilium-aci-east",
+    });
+    expect(full[0].resolved).toBe(true);
+  });
+
   it("leaves an exporter without a cluster unresolved even for a device whose cluster is empty", () => {
     const { topology, edge } = scenario();
     for (const item of edge.traffic_observations!) delete item.cluster;

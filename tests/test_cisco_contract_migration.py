@@ -761,6 +761,20 @@ class ContractMigrationTest(unittest.TestCase):
                 pass
             self.assertEqual(group.stat().st_mode & 0o7777, 0o755)
 
+    @staticmethod
+    def _symlink_owned_by(link, uid):
+        real_lstat = Path.lstat
+
+        def fake_lstat(self, *args, **kwargs):
+            result = real_lstat(self, *args, **kwargs)
+            if self == link:
+                values = list(result)
+                values[stat.ST_UID] = uid
+                return os.stat_result(values)
+            return result
+
+        return patch.object(Path, "lstat", fake_lstat)
+
     def test_journal_refuses_unsafe_existing_directory(self):
         with tempfile.TemporaryDirectory() as root:
             open_dir = Path(root) / "open"
@@ -772,9 +786,11 @@ class ContractMigrationTest(unittest.TestCase):
             link.symlink_to(real)
             plain = Path(root) / "file"
             plain.write_text("x")
+            # A symlink owned by a non-root user, even when the suite runs as root.
+            user_link = self._symlink_owned_by(link, os.geteuid() or 1)
             for directory in (open_dir, link, plain / "sub"):
                 journal = self._state_dir_journal(directory)
-                with self.subTest(directory=directory.name):
+                with self.subTest(directory=directory.name), user_link:
                     with self.assertRaises(Refused), journal.locked():
                         pass
                     with self.assertRaises(Refused):
@@ -904,19 +920,12 @@ class ContractMigrationTest(unittest.TestCase):
             real.mkdir(mode=0o700)
             link = Path(root) / "link"
             link.symlink_to(real)
-            real_lstat = Path.lstat
-
-            def fake_lstat(self, *args, **kwargs):
-                result = real_lstat(self, *args, **kwargs)
-                if self == link:
-                    values = list(result)
-                    values[stat.ST_UID] = 0
-                    return os.stat_result(values)
-                return result
-
-            with patch.object(Path, "lstat", fake_lstat):
+            with self._symlink_owned_by(link, 0):
                 ensure_state_directory(link)
-            with self.assertRaises(Refused):
+            with (
+                self._symlink_owned_by(link, os.geteuid() or 1),
+                self.assertRaises(Refused),
+            ):
                 ensure_state_directory(link)
 
     def test_journal_lock_symlink_is_a_refusal(self):

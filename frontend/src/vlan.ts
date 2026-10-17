@@ -90,7 +90,7 @@ export function vlanExporter(
   const resolved = deviceName(
     observation.exporter,
     topo,
-    exporterResolutionContext(context),
+    exporterResolutionContext(context, topo),
   ).name;
   return resolved.trim().toLowerCase() ===
     observation.exporter.trim().toLowerCase()
@@ -120,7 +120,7 @@ export function vlanInterface(
     const device = resolveDevice(
       observation.exporter,
       topo,
-      exporterResolutionContext(context),
+      exporterResolutionContext(context, topo),
     );
     const identity =
       device?.id ?? (topo.containsV2Devices ? undefined : observation.exporter);
