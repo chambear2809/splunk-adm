@@ -32,6 +32,22 @@ class NetworkIndexWindowTest(unittest.TestCase):
         import lab
 
         cls.lab = lab
+        # Dispatch refuses a disabled saved search; enable it unscheduled and
+        # restore the prior state afterwards.
+        path = "/servicesNS/nobody/splunk_adm/saved/searches/" + urllib.parse.quote(
+            "ADM - Identity builder", safe=""
+        )
+        original = lab._json("GET", path)["entry"][0]["content"]
+        cls.addClassCleanup(
+            lab._json,
+            "POST",
+            path,
+            {
+                "disabled": str(int(original["disabled"] in (True, 1, "1"))),
+                "is_scheduled": str(int(original["is_scheduled"] in (True, 1, "1"))),
+            },
+        )
+        lab._json("POST", path, {"disabled": "0", "is_scheduled": "0"})
 
     def _install_scope(self, observer: str, scope: str) -> None:
         self.scope = scope

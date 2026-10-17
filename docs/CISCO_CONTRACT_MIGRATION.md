@@ -132,8 +132,10 @@ scheduler log entry alone cannot replace the required job and result evidence.
    journaled absolute event-time upper bound. The persisted-summary search is
    keyed by that slice's expected rollup IDs and a separate bounded summary
    ingestion-time window; it never reuses raw slice index-time bounds. The
-   helper polls a limited number of times for index visibility before it
-   refuses an incomplete match.
+   helper polls for index visibility with exponential pauses (1, 2, 4, 8 s,
+   then 15 s each) for at most 60 s of waiting across 8 readbacks, journaling
+   every attempt, before it refuses an incomplete match. A genuine mismatch
+   still refuses once that budget is spent.
 4. Validate repeats the source and persisted-coverage checks, then builds the
    separate adm_app_catalog_v2 collection. It requires one valid catalog
    status row, complete output rows, and a complete unique-key readback whose
@@ -328,11 +330,11 @@ must cover the paused V1 window and finish within seven days of its pre-pause
 boundary. The scheduler end the helper checks tracks the wall clock on every
 rerun, and the gap is written one slice (5 minutes) at a time, so the time
 needed grows with the gap. Before resuming V1 or changing the journal, the
-helper therefore refuses unless `gap + slices x 154 s + 1 h` fits in seven days,
-where 154 s is a conservative planning budget per slice (up to 8 searches at
-15 s each, the readback sleeps and the 30 s job-metadata wait), not a Splunk
-guarantee and not enforced as a job timeout. With these constants rollback must
-start within about 4.6 days of the pause; the trade-off is that a rollback which
+helper therefore refuses unless `gap + slices x 255 s + 1 h` fits in seven days,
+where 255 s is a conservative planning budget per slice (up to 11 searches at
+15 s each, the 60 s of readback sleeps and the 30 s job-metadata wait), not a
+Splunk guarantee and not enforced as a job timeout. With these constants
+rollback must start within just under 3.8 days of the pause; the trade-off is that a rollback which
 might have finished on a fast system is refused early rather than risking a
 half-finished one. Re-measure the per-slice time on the target before relying on
 the margin. The same refusal is raised on a rerun of a journal already in

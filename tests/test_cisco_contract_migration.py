@@ -15,6 +15,10 @@ from urllib.parse import parse_qs, unquote
 from tools.cisco_contract_migration import (
     Journal,
     JOURNAL_SCHEMA,
+    SUMMARY_INDEX_WAIT_ATTEMPTS,
+    SUMMARY_INDEX_WAIT_BUDGET_SECONDS,
+    SUMMARY_INDEX_WAIT_DELAYS,
+    SUMMARY_INDEX_WAIT_MAX_SECONDS,
     SUMMARY_CANONICALIZER_VERSION,
     Migration,
     Refused,
@@ -651,6 +655,64 @@ class ContractMigrationTest(unittest.TestCase):
             sleep=lambda _: None,
             qualifier=lambda: None,
         )
+
+    def sleeping_migration(self):
+        sleeps = []
+        migration = Migration(
+            FakeApi(),
+            self.journal,
+            clock=lambda: 1_000_000,
+            sleep=sleeps.append,
+            qualifier=lambda: None,
+        )
+        return migration, sleeps
+
+    def test_summary_readback_wait_is_exponential_capped_and_bounded(self):
+        self.assertEqual(SUMMARY_INDEX_WAIT_DELAYS[:4], (1.0, 2.0, 4.0, 8.0))
+        self.assertLessEqual(
+            max(SUMMARY_INDEX_WAIT_DELAYS), SUMMARY_INDEX_WAIT_MAX_SECONDS
+        )
+        self.assertEqual(
+            sum(SUMMARY_INDEX_WAIT_DELAYS), SUMMARY_INDEX_WAIT_BUDGET_SECONDS
+        )
+        self.assertEqual(
+            SUMMARY_INDEX_WAIT_ATTEMPTS, len(SUMMARY_INDEX_WAIT_DELAYS) + 1
+        )
+        migration, sleeps = self.sleeping_migration()
+        for attempt in range(1, SUMMARY_INDEX_WAIT_ATTEMPTS + 1):
+            migration._wait_before_summary_retry(attempt)
+        self.assertEqual(tuple(sleeps), SUMMARY_INDEX_WAIT_DELAYS)
+
+    def test_persisted_rollup_readback_tolerates_slow_visibility(self):
+        migration, sleeps = self.sleeping_migration()
+        wanted = {"a" * 64: {"records": "3"}}
+        calls = []
+
+        def query(_journal, _spec, expected, _label, attempt):
+            calls.append(attempt)
+            return dict(expected) if attempt == 7 else {}
+
+        migration._persisted_query = query
+        actual = migration._poll_persisted_rows({}, wanted, "conversation", "slow")
+        self.assertEqual(actual, wanted)
+        self.assertEqual(calls, list(range(1, 8)))
+        self.assertEqual(tuple(sleeps), SUMMARY_INDEX_WAIT_DELAYS[:6])
+
+    def test_persisted_rollup_readback_still_refuses_after_budget(self):
+        migration, sleeps = self.sleeping_migration()
+        calls = []
+
+        def query(_journal, _spec, _expected, _label, attempt):
+            calls.append(attempt)
+            return {}
+
+        migration._persisted_query = query
+        with self.assertRaisesRegex(Refused, "do not match source slice"):
+            migration._poll_persisted_rows(
+                {}, {"a" * 64: {"records": "3"}}, "conversation", "never"
+            )
+        self.assertEqual(calls, list(range(1, SUMMARY_INDEX_WAIT_ATTEMPTS + 1)))
+        self.assertEqual(tuple(sleeps), SUMMARY_INDEX_WAIT_DELAYS)
 
     @staticmethod
     def history_row(received_time=1000):
