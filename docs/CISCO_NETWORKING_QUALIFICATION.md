@@ -25,6 +25,10 @@ All deployment gates remain open until evidence is collected and reviewed for th
 - [ ] Production capacity, request pacing, index volume, search cost, and failure recovery at the intended scale.
 - [ ] Independent review and target-environment evidence captured before promoting beyond draft PR status.
 
+## Full local integration suite
+
+The complete local Splunk suite passed 308 tests in 2,160.603 seconds, with zero failures or errors and one intentional migration opt-in skip (`dist/cisco-full-splunk-final-v24.log`). The destructive migration path was exercised separately for both recorded origins. This run includes native browser, permissions, source handling, topology, history, recovery, and archive upgrade/rollback checks. Legacy and combined Cisco fixtures were recaptured from the implemented pipeline; all 22 fixture checks passed. The refreshed package passed 18 upgrade checks (including three live checks) and the AppInspect error/failure gate. After lab cleanup, all 398 Python tests passed; frontend checks passed 459 unit tests and 69 browser tests.
+
 ## Local permission and topology evidence
 
 Four restricted-viewer checks passed, including full topology row parity with the administrator and denied protected writes/dispatch. The combined fixture deliberately retains two unresolved ESXi `vmnic2` LLDP peers: Kubernetes host inventory cannot establish these hypervisor identities. Their links remain absent. The expected topology metadata reports incomplete inventory links, unresolved LLDP host matches, and uncorrelated Nexus Dashboard fabric labels; these warnings are not suppressed.
@@ -51,9 +55,9 @@ The helper stages `adm_summary_v2`, additive `adm_network_client_history`, and s
 
 The successful disabled-origin resumption is recorded in `dist/cisco-disabled-migration-live-v22.log`. Its retained journal uses bounded secure immutable external result artifacts after the v19 journal exceeded the 16 MiB limit. The earlier result-artifact unit log records 121 passing tests (`dist/cisco-result-artifact-unit-v3.log`); the current migration suite records 123 (`dist/cisco-scheduler-identity-unit-v2.log`). Job-list identity now comes from `content.sid`, with the REST URL identifier checked separately, because observed `entry.name` values contain search text. The phase-aware upgrade harness records 10 runs with one opt-in skip (`dist/cisco-upgrade-harness-unit-v2.log`).
 
-## Interim AppInspect warning review
+## AppInspect warning review
 
-The current archive passed the automated error/failure gate with five warnings and one skipped check. This is not Cloud acceptance; inspect the final archive again after packaging changes.
+The refreshed-fixture archive passed the automated error/failure gate with five warnings and one skipped check (`dist/cisco-appinspect-v28.json`). Its exact hash is recorded with the upgrade evidence. Later qualification-document updates require the normal package/CI checks; they do not change runtime files. This is not Cloud acceptance.
 
 | Check                                  | Finding and disposition                                                                                                                                                                            |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

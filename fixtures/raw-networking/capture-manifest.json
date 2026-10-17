@@ -1,19 +1,19 @@
 {
   "scenario_id": "campus-meraki-two-cluster",
   "fixture_kind": "synthetic_raw_only",
-  "base_time": "2026-10-17T01:34:00.000Z",
+  "base_time": "2026-10-17T04:47:56.000Z",
   "graph_window": {
-    "start": "2026-10-17T01:34:00.000Z",
-    "end": "2026-10-17T01:49:00.000Z",
+    "start": "2026-10-17T04:47:56.000Z",
+    "end": "2026-10-17T05:02:56.000Z",
     "description": "Intended 15-minute scenario window; this is distinct from the wider HEC ingestion range."
   },
   "ingestion_window": {
-    "start": "2026-10-16T22:49:00.000Z",
-    "end": "2026-10-17T01:50:00.000Z",
+    "start": "2026-10-17T02:02:56.000Z",
+    "end": "2026-10-17T05:02:56.000Z",
     "basis": "Minimum and maximum HEC event time across every generated raw file, including deliberately stale and inventory records."
   },
-  "window_start": "2026-10-17T01:34:00.000Z",
-  "window_end": "2026-10-17T01:49:00.000Z",
+  "window_start": "2026-10-17T04:47:56.000Z",
+  "window_end": "2026-10-17T05:02:56.000Z",
   "source_profiles": {
     "file": "source-profiles.json",
     "sha256": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467"

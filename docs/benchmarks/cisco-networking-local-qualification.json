@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "in_progress",
+  "status": "local_synthetic_qualification_complete_external_gates_open",
   "scope": "Isolated local Splunk Enterprise with TA-grounded synthetic events",
   "base_commit": "0a816823558ce7fa18d2964e71dcdf5826ff1468",
   "application_version": "0.3.0",
@@ -35,15 +35,15 @@
     "frontend_lint": {
       "status": "passed",
       "command": "npm run lint",
-      "log": "dist/cisco-final-lint-v24.log"
+      "log": "dist/cisco-final-lint-v29.log"
     },
     "frontend_unit": {
       "status": "passed",
       "command": "npm test",
       "tests": 459,
       "files": 42,
-      "duration_seconds": 2.43,
-      "log": "dist/cisco-final-frontend-v24.log"
+      "duration_seconds": 1.78,
+      "log": "dist/cisco-final-frontend-v28.log"
     },
     "browser_types": {
       "status": "passed",
@@ -55,8 +55,8 @@
       "tests": 69,
       "passed": 69,
       "failed": 0,
-      "duration_seconds": 45.1,
-      "log": "dist/cisco-final-frontend-browser-v19.log"
+      "duration_seconds": 27.7,
+      "log": "dist/cisco-final-browser-v28.log"
     },
     "python_lint": {
       "status": "passed",
@@ -69,12 +69,14 @@
       "evidence": "All 95 files formatted."
     },
     "python_unit": {
-      "status": "pending_full_unlocked_rerun",
-      "latest_partial_log": "dist/cisco-python-unit-without-lock-resume-v2.log",
-      "outstanding": "Legacy catalog/Find/previous fixture recapture and six tests requiring the lab lock; full lock tests deferred until lab release."
+      "status": "passed",
+      "tests": 398,
+      "duration_seconds": 10.579,
+      "log": "dist/cisco-final-python-unlocked-v28.log",
+      "command": "python3 -m unittest discover -s tests -p 'test_*.py'"
     },
     "splunk_integration": {
-      "status": "full_rerun_in_progress",
+      "status": "passed",
       "attempts": [
         {
           "status": "failed",
@@ -97,7 +99,14 @@
           "log": "dist/cisco-final-splunk-suite-v2.log"
         }
       ],
-      "current_log": "dist/cisco-full-splunk-final-v24.log"
+      "tests": 308,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "duration_seconds": 2160.603,
+      "log": "dist/cisco-full-splunk-final-v24.log",
+      "command": "ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v",
+      "skip_reason": "Destructive migration opt-in is qualified separately by both recorded live-origin runs."
     },
     "native_splunk_browser": {
       "status": "passed",
@@ -234,11 +243,11 @@
       "status": "passed",
       "tests": 18,
       "live_tests": 3,
-      "duration_seconds": 7.957,
-      "log": "dist/cisco-archive-upgrade-final.log",
+      "duration_seconds": 8.417,
+      "log": "dist/cisco-archive-upgrade-v28.log",
       "baseline": "0.2.0",
       "candidate": "0.3.0",
-      "package_sha256": "4b74d2773d8c2c02a183970e46719a6623ac8092fb5ee2b6c2d1ecd5b7b3323a",
+      "package_sha256": "9c1e25de12908a55cf1c6ddf3fa3dd0ba6f4c711c58ca6c0023b82587aaa91c3",
       "cleanup_regression": {
         "status": "passed",
         "unit_tests": 15,
@@ -252,15 +261,15 @@
       "failures": 0,
       "warnings": 5,
       "skipped": 1,
-      "log": "dist/cisco-appinspect-v23.log",
-      "report": "dist/cisco-appinspect-v23.json",
-      "package_sha256": "0f67411ab5e7b32bead50b0a2a1b86c25dd317e37378c5aad1d7830ad585e42d",
+      "log": "dist/cisco-appinspect-v28.log",
+      "report": "dist/cisco-appinspect-v28.json",
+      "package_sha256": "9c1e25de12908a55cf1c6ddf3fa3dd0ba6f4c711c58ca6c0023b82587aaa91c3",
       "cloud_acceptance": false,
-      "note": "Interim candidate; repeat after final fixture and documentation packaging."
+      "note": "Validated candidate containing refreshed fixtures; subsequent qualification-document edits do not alter runtime files. Cloud acceptance remains separate."
     },
     "independent_final_review": {
-      "status": "integrated_static_review_complete_execution_gates_pending",
-      "review": "Independent Astra integrated static review closed identified implementation findings, including delayed scheduler dispatch and exclusive observation bounds. Both local migration origins passed with recorded retention/resumption limits. Clean full suite, refreshed captures and final package evidence remain pending."
+      "status": "approved_bounded_local_candidate",
+      "review": "Independent GPT-6 Astra static review found no new correctness blocker. Recaptures preserve graph counts, topology content apart from timestamps/order, catalog sizes and Find coverage. Full local evidence is recorded separately; real collectors, SHC, Cloud and production capacity remain unqualified."
     },
     "cisco_topology_remediation": {
       "status": "passed",
@@ -340,12 +349,21 @@
     },
     "final_fixture_capture": {
       "status": "passed",
-      "log": "dist/cisco-final-capture-v3.log",
+      "log": "dist/cisco-final-networking-capture-v27.log",
       "fixture_tests": 8,
-      "capture_tests": 7
+      "capture_tests": 7,
+      "prior_refusal_log": "dist/cisco-final-networking-capture-v26.log",
+      "reconciliation": "Capture refused a packaged app.conf fingerprint left by archive upgrade tests. All search/parsing defaults matched; current source reinstalled before dataset regeneration.",
+      "reconciliation_log": "dist/cisco-capture-defaults-diff.log",
+      "unit_log": "dist/cisco-final-fixture-unit-v28.log",
+      "unit_tests": 22,
+      "legacy_logs": [
+        "dist/cisco-final-previous-capture-v26.log",
+        "dist/cisco-final-legacy-capture-v26.log"
+      ]
     },
     "migration_live_preparation": {
-      "status": "historical_failures_repaired",
+      "status": "historical_failures_repaired_and_local_qualification_passed",
       "attempts": [
         {
           "log": "dist/cisco-disabled-migration-live.log",
@@ -447,6 +465,34 @@
       "tests": 7,
       "log": "dist/cisco-capture-completeness-unit-v2.log",
       "review": "Independent Astra review closed result-truncation handling; explicit null and malformed values are rejected."
+    },
+    "ci_browser_overlay_regression": {
+      "status": "passed_on_reviewed_correction",
+      "run_id": 39002195894,
+      "head_commit": "c1f2ce9",
+      "tests": 69,
+      "prior_failed_runs": [
+        39001381557,
+        39001764997
+      ],
+      "cause": "Candidate path overlay remained open over the final network-card click in two browser tests.",
+      "fix": "Close the path through its visible button after path assertions; assertions and timeouts unchanged.",
+      "review": "Independent Astra static review confirmed selected-path and aggregate assertions are preserved."
+    },
+    "ci_python": {
+      "status": "fixture_failures_corrected_local_checks_passed_rerun_pending",
+      "run_id": 39002195894,
+      "failures": [
+        "test_catalog_capture_schema_and_provenance",
+        "test_find_capture_has_positive_grounded_queries",
+        "test_captured_previous_rows_are_macro_grounded_when_present"
+      ],
+      "log": "dist/cisco-ci-third-failures.log"
+    },
+    "lab_cleanup": {
+      "status": "passed",
+      "log": "dist/cisco-final-lab-purge.log",
+      "scope": "Disposable container, volumes, lab image and lab secrets removed; exclusive lock released."
     }
   },
   "external_release_gates": {
