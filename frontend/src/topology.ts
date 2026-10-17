@@ -287,13 +287,20 @@ export interface DeviceResolutionContext {
 // catalyst inventory has no mgmt_ip yet, so it only resolves once that mapping exists.
 const EXPORTER_FAMILIES = ["aci", "nxos", "meraki", "catalyst"];
 
-/** An exporter IP names the device itself, so no observation or endpoint authority applies to it. */
+/**
+ * An exporter IP names the device itself, so no observation or endpoint authority applies to it.
+ * On V2 it resolves only when both scope and cluster are known.
+ */
 export function exporterResolutionContext(
-  context: DeviceResolutionContext = {},
+  context: DeviceResolutionContext,
+  topo: TopologyIndex,
 ): DeviceResolutionContext {
+  const unqualified =
+    topo.containsV2Devices &&
+    (context.scope === undefined || context.cluster === undefined);
   return {
     ...(context.conflict ? { conflict: true } : {}),
-    ...(context.clusterUnknown ? { clusterUnknown: true } : {}),
+    ...(context.clusterUnknown || unqualified ? { clusterUnknown: true } : {}),
     ...(context.scope !== undefined ? { scope: context.scope } : {}),
     ...(context.cluster !== undefined ? { cluster: context.cluster } : {}),
     families: context.families?.length ? context.families : EXPORTER_FAMILIES,
@@ -795,7 +802,7 @@ export function parseObserver(
     topo,
     source === "ftd"
       ? { ...sourceContext, families: ["ftd"] }
-      : exporterResolutionContext(sourceContext),
+      : exporterResolutionContext(sourceContext, topo),
   );
   const name = device?.id ?? ip;
   return [
@@ -867,11 +874,6 @@ function parseEdgeObserver(
         ...context,
         scope: context.scope ?? observation.scope,
         cluster: context.cluster ?? observation.cluster,
-        // A V2 exporter without a known cluster matches no device, as in deviceSummaries.
-        ...(topo.containsV2Devices &&
-        (context.cluster ?? observation.cluster) === undefined
-          ? { clusterUnknown: true }
-          : {}),
       }
     : context;
   const points = parseObserver(observer, topo, scopedContext);
@@ -2034,10 +2036,10 @@ export function deviceSummaries(
             ? resolveDevice(
                 observation.exporter_ip,
                 topo,
-                exporterResolutionContext({
-                  scope: observation.scope,
-                  cluster: observation.cluster,
-                }),
+                exporterResolutionContext(
+                  { scope: observation.scope, cluster: observation.cluster },
+                  topo,
+                ),
               )
             : undefined;
           const resolved =

@@ -109,6 +109,14 @@ describe("vlanContexts", () => {
     expect(vlanInterface(sample, topo, { scope: "elsewhere" })).toBe(
       "ifIndex 49",
     );
+    for (const partial of [
+      { scope: "campus-aci" },
+      { cluster: "cilium-aci-east" },
+      {},
+    ]) {
+      expect(vlanInterface(sample, topo, partial)).toBe("ifIndex 49");
+      expect(vlanExporter(sample, topo, partial)).toBe("192.0.2.10");
+    }
   });
 
   it("deduplicates contexts while retaining the broadest timing", () => {
