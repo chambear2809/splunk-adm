@@ -43,6 +43,11 @@ deployment qualification before loading the journal. These changes received stat
 the earlier live migration results above exercised the five-second poll, not
 the new retry schedule. No tests were run during the takeover review.
 
+The preceding ACI demo fixture retains its original capture hash and timestamp.
+A separate, exact-hash compatibility record documents static review of the
+history-write guard: complete-input output is unchanged, but the fixture was
+not recaptured. Future macro revisions still invalidate its grounding check.
+
 Existing follow-up logs record 16 passing health checks
 (`dist/followup-test_health-2.log`) and three passing recovery-supervisor checks
 (`dist/followup-test_recovery_supervisor.log`). The first health attempt

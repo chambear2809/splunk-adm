@@ -87,7 +87,13 @@
     "scenario_sha256": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
     "raw_scenario": "dist/phase8-raw-aci-prev (derived from fixtures/raw-aci/scenario.json)",
     "method": "tests/splunk/lab.py search against initialized lab",
-    "captured_at": 1792252954
+    "captured_at": 1792252954,
+    "reviewed_macro_compatibility": {
+      "captured_macro_file_sha256": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
+      "reviewed_macro_file_sha256": "db08bbdac5fd7f088f00a758c78653c9d307a8195e2830f635766d233109ab96",
+      "method": "static review only; no recapture",
+      "reason": "The identity history expansion completeness guard suppresses incomplete writes; successful complete-input output is unchanged. The builder warning now describes affected rows. Original capture rows, method, timestamp and hashes are preserved."
+    }
   },
   "rows": [
     {

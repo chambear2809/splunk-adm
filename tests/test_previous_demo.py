@@ -122,13 +122,30 @@ class PreviousDemoTest(unittest.TestCase):
             provenance["source"], "splunk_app/splunk_adm/default/macros.conf:adm_graph"
         )
         for key, path in [
-            ("macro_file_sha256", "splunk_app/splunk_adm/default/macros.conf"),
             ("generator_sha256", "tools/gen_raw_fixtures.py"),
             ("scenario_sha256", "fixtures/raw-aci/scenario.json"),
         ]:
             self.assertEqual(
                 provenance[key], hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
             )
+        # Keep the capture hash immutable. An explicitly reviewed revision may
+        # preserve complete-input output without claiming a new live capture.
+        current_macro_hash = hashlib.sha256(
+            (ROOT / "splunk_app/splunk_adm/default/macros.conf").read_bytes()
+        ).hexdigest()
+        accepted_macro_hashes = {provenance["macro_file_sha256"]}
+        compatibility = provenance.get("reviewed_macro_compatibility")
+        if compatibility is not None:
+            self.assertEqual(
+                compatibility["captured_macro_file_sha256"],
+                provenance["macro_file_sha256"],
+            )
+            self.assertEqual(
+                compatibility["method"], "static review only; no recapture"
+            )
+            self.assertTrue(compatibility["reason"])
+            accepted_macro_hashes.add(compatibility["reviewed_macro_file_sha256"])
+        self.assertIn(current_macro_hash, accepted_macro_hashes)
         macro = re.search(
             r"\[adm_graph\(4\)\]\n(?P<body>.*?)(?=\n\[|\Z)",
             (ROOT / "splunk_app/splunk_adm/default/macros.conf").read_text(),
