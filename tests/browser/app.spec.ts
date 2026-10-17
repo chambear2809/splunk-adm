@@ -211,6 +211,20 @@ test.describe("Application Atlas browser regressions", () => {
     await expect(page.getByRole("alert")).toContainText("permission denied");
   });
 
+  test("shows WARN job messages as search warnings without failing the map", async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/browser.html?scenario=graph-warning");
+    await page.getByRole("button", { name: "Map settings" }).click();
+    await page.getByRole("button", { name: "Splunk" }).click();
+    await page.getByRole("button", { name: "Build map" }).click();
+    await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+    await page.getByRole("button", { name: /1 warning/ }).click();
+    await expect(
+      page.getByRole("region", { name: "Search warnings" }),
+    ).toContainText("Peer indexer-3 was unreachable.");
+  });
+
   test("fails closed when a live graph result is incomplete", async ({
     page,
   }) => {
@@ -219,7 +233,7 @@ test.describe("Application Atlas browser regressions", () => {
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByRole("alert")).toContainText(
-      "search was incomplete",
+      "finalized this job before all results were available",
     );
     await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "false");
     await expect(page.locator(".adm")).toHaveAttribute("data-node-count", "0");

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { vlanContexts, vlanEdges, vlanInterface } from "./vlan";
+import { vlanContexts, vlanEdges, vlanExporter, vlanInterface } from "./vlan";
 import { indexGraph } from "./graph";
 import type { GraphEdge } from "./graph";
 import { indexTopology } from "./topology";
@@ -73,6 +73,42 @@ describe("vlanContexts", () => {
         topo,
       ),
     ).toBe("ifIndex 7");
+  });
+
+  it("resolves V2 exporters by scoped management IP regardless of controller authority", () => {
+    const leaf = {
+      id: `aci:${"a".repeat(64)}`,
+      name: "leaf-101",
+      kind: "switch" as const,
+      mgmt_ip: "192.0.2.10",
+      sources: ["aci_topSystem"],
+      scope: "campus-aci",
+      cluster: "cilium-aci-east",
+      device_authority: "192.0.2.50",
+      mapping_status: "mapped",
+    };
+    const topo = indexTopology({
+      devices: [
+        leaf,
+        { ...leaf, id: `aci:${"b".repeat(64)}`, name: "other", scope: "dc" },
+      ],
+      links: [],
+      interfaces: [
+        { device_id: leaf.id, interface: "Ethernet1/49", ifindex: 49 },
+      ],
+      warnings: [],
+    });
+    const context = {
+      scope: "campus-aci",
+      cluster: "cilium-aci-east",
+      authority: "https://catalyst-center.example.invalid",
+    };
+    const sample = observation({ exporter: "192.0.2.10" });
+    expect(vlanInterface(sample, topo, context)).toBe("Eth1/49");
+    expect(vlanExporter(sample, topo, context)).toBe("leaf-101 (192.0.2.10)");
+    expect(vlanInterface(sample, topo, { scope: "elsewhere" })).toBe(
+      "ifIndex 49",
+    );
   });
 
   it("deduplicates contexts while retaining the broadest timing", () => {

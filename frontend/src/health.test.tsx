@@ -76,6 +76,24 @@ describe("pipeline health", () => {
     );
     expect(sources.map((s) => s.name)).toContain("Catalyst SD-WAN IPFIX");
   });
+  it("reads Catalyst Center and Meraki rows emitted by the health macro", () => {
+    const sources = sourceRows([
+      {
+        kind: "source",
+        name: "Catalyst Center",
+        records: "4",
+        max_ingest_lag: "12",
+        status: "ok",
+      },
+      { kind: "source", name: "Meraki", records: "0", max_ingest_lag: "7" },
+    ]);
+    expect(
+      sources.find((s) => s.name === "Catalyst client observations"),
+    ).toMatchObject({ records: 4, maxIngestLag: 12 });
+    expect(
+      sources.find((s) => s.name === "Meraki wireless associations"),
+    ).toMatchObject({ records: 0, maxIngestLag: 7 });
+  });
   it("distinguishes disabled, unobserved, failed, and overdue jobs", () => {
     const job = {
       name: "ADM - Identity builder",
@@ -136,6 +154,7 @@ describe("pipeline health", () => {
       .mockResolvedValueOnce({
         rows: [{ kind: "source", name: "NetFlow", records: 1 }],
         warnings: ["Search may be incomplete"],
+        errors: [],
       })
       .mockRejectedValueOnce(new Error("Permission denied"))
       .mockResolvedValueOnce({
@@ -149,6 +168,7 @@ describe("pipeline health", () => {
           },
         ],
         warnings: [],
+        errors: [],
       });
     const result = await loadHealth(client, new AbortController().signal);
     expect(search.mock.calls.map((call) => call[0].search)).toEqual([
@@ -160,6 +180,17 @@ describe("pipeline health", () => {
     expect(result.jobs.every((j) => j.disabled === undefined)).toBe(true);
     expect(result.warnings.join(" ")).toContain("Permission denied");
     expect(result.warnings.join(" ")).toContain("Search may be incomplete");
+  });
+  it("treats a health search with ERROR job messages as unavailable", async () => {
+    search.mockReset().mockResolvedValue({
+      rows: [{ kind: "source", name: "NetFlow", records: 1 }],
+      warnings: ["peer down"],
+      errors: ["peer down"],
+    });
+    const result = await loadHealth(client, new AbortController().signal);
+    expect(result.sources.every((s) => s.records === undefined)).toBe(true);
+    expect(result.warnings.join(" ")).toContain("sources health unavailable");
+    expect(result.warnings.join(" ")).toContain("peer down");
   });
   it("counts excluded records once while showing overlapping reasons", () => {
     const quality = qualityRows([
@@ -214,7 +245,9 @@ describe("pipeline health", () => {
     ).toBeUndefined();
   });
   it("does not publish a cancelled check", async () => {
-    search.mockReset().mockResolvedValue({ rows: [], warnings: [] });
+    search
+      .mockReset()
+      .mockResolvedValue({ rows: [], warnings: [], errors: [] });
     const c = new AbortController();
     c.abort();
     await expect(loadHealth(client, c.signal)).rejects.toThrow("cancelled");

@@ -85,25 +85,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/UPGRADES.md": b"migration docs",
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
-            **{
-                f"splunk_adm/docs/benchmarks/{name}.json": b"{}"
-                for name in (
-                    "cisco-networking-native-browser",
-                    "cisco-networking-local-load",
-                    "cisco-networking-local-qualification",
-                )
-            },
             "splunk_adm/docs/operators/cisco-enterprise-networking.md": b"operator docs",
-            **{
-                f"splunk_adm/research/{name}.json": b"{}"
-                for name in (
-                    "package-manifest",
-                    "cisco-catalyst-evidence",
-                    "cisco-meraki-evidence",
-                    "cisco-integration-contract",
-                    "cisco-pipeline-interface",
-                )
-            },
             "splunk_adm/default/collections.conf": b"[x]\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
             "splunk_adm/default/macros.conf": b"[x]\n",
@@ -141,12 +123,18 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         check_release(self.root / "dist", self.root / "package.json")
 
-    def test_rejects_missing_linked_qualification_evidence(self):
-        install = self._files()
-        del install["splunk_adm/docs/benchmarks/cisco-networking-native-browser.json"]
-        self._write_pair(install)
-        with self.assertRaisesRegex(ValueError, "missing required files"):
-            check_release(self.root / "dist", self.root / "package.json")
+    def test_rejects_development_records_in_archive(self):
+        for name in (
+            "research/cisco-pipeline-interface.json",
+            "research/package-manifest.json",
+            "docs/benchmarks/cisco-networking-local-load.json",
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                install[f"splunk_adm/{name}"] = b"{}"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "development record"):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_critical_config(self):
         install = self._files()

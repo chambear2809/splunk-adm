@@ -22,6 +22,7 @@ import {
   edgeDeviceContext,
   handoffCoverageMessage,
   observationsByDevice,
+  observedKeyContext,
   type TopologyIndex,
 } from "./topology";
 
@@ -132,7 +133,8 @@ export function requiredFlowsCsv(
         identityLabel[edgeIdentity(e, node)],
         observationsByDevice(e, topo, [], context)
           .map((d) => {
-            const n = deviceName(d.key, topo, context);
+            if (!d.resolved) return d.label;
+            const n = deviceName(d.key, topo, observedKeyContext(context));
             return n.secondary ? `${n.name} (${n.secondary})` : n.name;
           })
           .join("; "),

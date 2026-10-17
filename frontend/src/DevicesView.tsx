@@ -23,6 +23,8 @@ import {
   type TopologyIndex,
 } from "./topology";
 
+export const MAX_ATTACHMENT_REFERENCES = 32;
+
 const ROLE_LABEL: Record<DeviceSummary["role"], string> = {
   firewall: "Firewall",
   switch: "Switch",
@@ -255,55 +257,71 @@ export function DevicesView({
             </div>
           </header>
           <ul className="seen-list">
-            {attachmentReferences.map((reference) => (
-              <li key={reference.key}>
-                <b>
-                  {reference.device
-                    ? `${reference.device.name} (${deviceKindLabel(
-                        reference.device.kind,
-                        reference.device.cluster,
-                      )})`
-                    : "Unresolved attachment device"}
-                </b>
-                <small>
-                  {reference.device
-                    ? [
-                        reference.device.id,
-                        reference.device.device_authority,
-                        reference.device.scope,
-                        reference.device.cluster,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")
-                    : [
-                        reference.unresolvedReason,
-                        reference.evidence.device_id,
-                        reference.evidence.device_name,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                  <br />
-                  {[
-                    reference.client ? `Client ${reference.client}` : undefined,
-                    reference.evidence.status,
-                    reference.evidence.basis,
-                    reference.evidence.device_serial,
-                    reference.evidence.ssid_number
-                      ? `SSID ${reference.evidence.ssid_number}`
-                      : undefined,
-                    ...reference.exporterContext,
-                    `${reference.flowEdges.length} correlated flow ${
-                      reference.flowEdges.length === 1
-                        ? "observation"
-                        : "observations"
-                    }`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </small>
-              </li>
-            ))}
+            {attachmentReferences
+              .slice(0, MAX_ATTACHMENT_REFERENCES)
+              .map((reference) => (
+                <li key={reference.key}>
+                  <b>
+                    {reference.device
+                      ? `${reference.device.name} (${deviceKindLabel(
+                          reference.device.kind,
+                          reference.device.cluster,
+                        )})`
+                      : "Unresolved attachment device"}
+                  </b>
+                  <small>
+                    {reference.device
+                      ? [
+                          reference.device.id,
+                          reference.device.device_authority,
+                          reference.device.scope,
+                          reference.device.cluster,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : [
+                          reference.unresolvedReason,
+                          reference.evidence.device_id,
+                          reference.evidence.device_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                    <br />
+                    {[
+                      reference.client
+                        ? `Client ${reference.client}`
+                        : undefined,
+                      reference.evidence.status,
+                      reference.evidence.basis,
+                      reference.evidence.device_serial,
+                      reference.evidence.ssid_number
+                        ? `SSID ${reference.evidence.ssid_number}`
+                        : undefined,
+                      ...reference.exporterContext,
+                      `${reference.flowEdges.length} correlated flow ${
+                        reference.flowEdges.length === 1
+                          ? "observation"
+                          : "observations"
+                      }`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </small>
+                </li>
+              ))}
           </ul>
+          {attachmentReferences.length > MAX_ATTACHMENT_REFERENCES && (
+            <p className="muted small">
+              {plural(
+                attachmentReferences.length - MAX_ATTACHMENT_REFERENCES,
+                "additional attachment reference",
+              )}{" "}
+              {attachmentReferences.length - MAX_ATTACHMENT_REFERENCES === 1
+                ? "was"
+                : "were"}{" "}
+              omitted because the list is capped at {MAX_ATTACHMENT_REFERENCES}.
+            </p>
+          )}
         </section>
       )}
       <section className="device-card quiet">

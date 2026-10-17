@@ -80,28 +80,11 @@ await copyFile(
   "docs/CISCO_NETWORKING_QUALIFICATION.md",
   `${stage}/docs/CISCO_NETWORKING_QUALIFICATION.md`,
 );
-await mkdir(`${stage}/docs/benchmarks`, { recursive: true });
-for (const file of [
-  "cisco-networking-native-browser.json",
-  "cisco-networking-local-load.json",
-  "cisco-networking-local-qualification.json",
-])
-  await copyFile(`docs/benchmarks/${file}`, `${stage}/docs/benchmarks/${file}`);
 await mkdir(`${stage}/docs/operators`, { recursive: true });
 await copyFile(
   "docs/operators/cisco-enterprise-networking.md",
   `${stage}/docs/operators/cisco-enterprise-networking.md`,
 );
-// Ship the referenced evidence records, never downloaded vendor archives/code.
-await mkdir(`${stage}/research`, { recursive: true });
-for (const file of [
-  "package-manifest.json",
-  "cisco-catalyst-evidence.json",
-  "cisco-meraki-evidence.json",
-  "cisco-integration-contract.json",
-  "cisco-pipeline-interface.json",
-])
-  await copyFile(`research/${file}`, `${stage}/research/${file}`);
 await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 

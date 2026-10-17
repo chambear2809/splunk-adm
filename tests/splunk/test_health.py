@@ -568,6 +568,42 @@ class HealthSearchTest(unittest.TestCase):
         self.assertEqual(netflow["latest_indexed"], "320")
         self.assertEqual(netflow["records"], "2")
 
+    def test_v2_source_health_keeps_legacy_lag_and_status_vocabulary(self):
+        import re
+
+        query = self.definition("adm_health_sources_v2").replace(
+            "`adm_health_sources_v1_impl`",
+            self.definition("adm_health_sources_v1_impl").lstrip("| "),
+        )
+        seed = (
+            '| makeresults | eval samples=split("100@200;300@320", ";") '
+            '| mvexpand samples | eval parts=split(samples, "@") '
+            "| eval _time=tonumber(mvindex(parts, 0)), _indextime=tonumber(mvindex(parts, 1)) "
+        )
+        summary_seed = "| makeresults | eval _time=500, _indextime=530 "
+        query = re.sub(r"search `adm_index_netflow`[^|]*", lambda _: seed, query)
+        query = re.sub(
+            r"search `adm_index_summary_v2` source=\"adm:conversation\"[^|]*",
+            lambda _: summary_seed,
+            query,
+        )
+        query = re.sub(
+            r"search `adm_index_[a-z0-9_]+`[^|]*",
+            "| makeresults | where false()",
+            query,
+        )
+        rows = {row["name"]: row for row in self.lab.search(query, "0", "1")}
+        netflow = rows["NetFlow"]
+        self.assertEqual(netflow["max_ingest_lag"], "100")
+        self.assertEqual(netflow["records"], "2")
+        self.assertEqual(netflow["status"], "ok")
+        self.assertEqual(rows["Catalyst Center"]["status"], "no_visible_records")
+        self.assertEqual(rows["Meraki"]["status"], "no_visible_records")
+        v2 = rows["Conversation summary v2"]
+        self.assertEqual(v2["status"], "visible")
+        self.assertEqual(v2["max_ingest_lag"], "30")
+        self.assertEqual(v2["contract_version"], "2")
+
     def test_source_window_uses_ingestion_time_for_old_events(self):
         import time
         import uuid

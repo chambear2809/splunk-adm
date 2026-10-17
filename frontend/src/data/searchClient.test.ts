@@ -87,6 +87,28 @@ describe("ToolkitSearchClient", () => {
       warnings: ["slow"],
     });
   });
+  it("reports ERROR and FATAL job messages separately", async () => {
+    const pending = new ToolkitSearchClient().search(request());
+    runtime.progress.next({
+      content: {
+        resultCount: 1,
+        messages: [
+          { type: "DEBUG", text: "trace" },
+          { type: "ERROR", text: "peer unreachable" },
+        ],
+      },
+    });
+    runtime.result.next({
+      results: [{ row_type: "meta" }],
+      messages: [{ type: "FATAL", text: "search process ended" }],
+    });
+    const result = await pending;
+    expect(result.errors).toEqual(["peer unreachable", "search process ended"]);
+    expect(result.warnings).toEqual([
+      "peer unreachable",
+      "search process ended",
+    ]);
+  });
   it("rejects finalized, truncated, and dropped result sets", async () => {
     for (const [field, value, pattern] of [
       ["isFinalized", "1", /finalized/],
@@ -163,7 +185,11 @@ it("allows verified empty catalog/Find results only when explicitly requested", 
   });
   runtime.progress.next({ content: { resultCount: 0 } });
   runtime.result.next({ results: [] });
-  await expect(pending).resolves.toEqual({ rows: [], warnings: [] });
+  await expect(pending).resolves.toEqual({
+    rows: [],
+    warnings: [],
+    errors: [],
+  });
   pending = new ToolkitSearchClient().search({
     ...request(),
     allowEmpty: true,

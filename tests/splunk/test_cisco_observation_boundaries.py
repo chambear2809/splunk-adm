@@ -832,6 +832,52 @@ class CiscoTrafficContextOwnershipBoundariesTest(unittest.TestCase):
         malformed_candidate_id, _, _ = self._load_long_flow_and_build(positive)
         self._assert_context_count(malformed_candidate_id, 0)
 
+    def test_traffic_evidence_drilldown_returns_stored_scope_columns(self):
+        positive = self._positive_context_fixture()
+        observation_id, _, _ = self._load_long_flow_and_build(positive)
+        stored, _ = search(
+            self.lab,
+            'index=adm_summary_v2 source="adm:traffic_observation" '
+            f'rollup_id="{observation_id}" | table source_ip destination_ip '
+            "server_port transport traffic_observations adm_scope_source "
+            "adm_scope_authority adm_scope_observation_domain_present "
+            "adm_scope_observation_domain_id adm_scope_vpn_id adm_profile_status",
+            "0",
+            "+10y",
+        )
+        self.assertEqual(len(stored), 1, stored)
+        summary = stored[0]
+        blob = json.loads(summary["traffic_observations"])[0]
+        self.assertTrue(summary["adm_scope_authority"])
+        self.assertEqual(summary["adm_scope_authority"], blob["source_authority"])
+        self.assertEqual(summary["adm_profile_status"], blob["mapping_status"])
+
+        rows, _ = search(
+            self.lab,
+            f'`adm_traffic_evidence_v2("{summary["source_ip"]}",'
+            f'"{summary["destination_ip"]}",{summary["server_port"]},'
+            f'"{summary["transport"]}","{observation_id}")`',
+            "0",
+            "+10y",
+        )
+        self.assertEqual(len(rows), 1, rows)
+        row = rows[0]
+        self.assertEqual(row["source"], summary["adm_scope_source"])
+        self.assertNotEqual(row["source"], "adm:traffic_observation")
+        self.assertEqual(row["source_authority"], summary["adm_scope_authority"])
+        self.assertEqual(
+            row["observation_domain_present"],
+            summary["adm_scope_observation_domain_present"],
+        )
+        self.assertEqual(
+            row["observation_domain_id"], summary["adm_scope_observation_domain_id"]
+        )
+        self.assertEqual(row.get("vpn_id", ""), summary.get("adm_scope_vpn_id", ""))
+        self.assertTrue(row["profile"])
+        self.assertEqual(row["profile"], blob["profile"])
+        self.assertEqual(row["mapping_status"], summary["adm_profile_status"])
+        self.assertEqual(row["mapping_status"], "mapped")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,7 @@ import { TimePicker } from "../map/TimePicker";
 import {
   SearchResultLimitError,
   type SearchClient,
+  requireNoSearchErrors,
 } from "../data/searchClient";
 import { settledFindResults } from "../data/findResults";
 import {
@@ -161,10 +162,11 @@ export function ApplicationsPage({
       })
       .then((result) => {
         if (controller.signal.aborted || current !== revision.current) return;
+        requireNoSearchErrors(result, "Application catalog search");
         const parsed = parseCatalogRows(result.rows);
         if (parsed.length) {
           setCatalog(parsed);
-          setWarning(result.warnings[0]);
+          setWarning(result.warnings.join(" ") || undefined);
           return;
         }
         throw new Error("No application catalog rows were returned.");
@@ -188,6 +190,7 @@ export function ApplicationsPage({
             });
             if (controller.signal.aborted || current !== revision.current)
               return;
+            requireNoSearchErrors(narrowed, "Narrowed catalog search");
             if (narrowed.rows.length) {
               setCatalog(parseCatalogRows(narrowed.rows));
               setWarning(
@@ -224,6 +227,7 @@ export function ApplicationsPage({
             allowEmpty: true,
           });
           if (controller.signal.aborted || current !== revision.current) return;
+          requireNoSearchErrors(fallback, "Scope options search");
           setCatalog(createScopeCatalogRows(fallback.rows));
           setWarning(
             fallback.rows.length
@@ -455,26 +459,34 @@ export function ApplicationsPage({
       /* Network-client Find is restricted to exact IP or MAC; app Find still runs. */
     }
     void Promise.allSettled([
-      client.search({
-        search,
-        earliest,
-        latest,
-        timezone,
-        maxRows: 5000,
-        signal: controller.signal,
-        allowEmpty: true,
-      }),
+      client
+        .search({
+          search,
+          earliest,
+          latest,
+          timezone,
+          maxRows: 5000,
+          signal: controller.signal,
+          allowEmpty: true,
+        })
+        .then((result) =>
+          requireNoSearchErrors(result, "Application Find search"),
+        ),
       ...(networkSearch
         ? [
-            client.search({
-              search: networkSearch,
-              earliest,
-              latest,
-              timezone,
-              maxRows: 5000,
-              signal: controller.signal,
-              allowEmpty: true,
-            }),
+            client
+              .search({
+                search: networkSearch,
+                earliest,
+                latest,
+                timezone,
+                maxRows: 5000,
+                signal: controller.signal,
+                allowEmpty: true,
+              })
+              .then((result) =>
+                requireNoSearchErrors(result, "Network-client Find search"),
+              ),
           ]
         : []),
     ])

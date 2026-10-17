@@ -83,6 +83,61 @@ describe("requiredFlowsCsv", () => {
     expect(row).toContain("leaf-102");
   });
 
+  it("resolves an IPFIX exporter in Seen by when the edge carries a controller authority", () => {
+    const captured = structuredClone(demoGraph("catalyst-aci"));
+    const edge = captured.edges.find(
+      (candidate) =>
+        candidate.relationship === "communicates_with" &&
+        (candidate.source === "vm:campus-aci/10.20.30.40" ||
+          candidate.target === "vm:campus-aci/10.20.30.40"),
+    )!;
+    for (const id of [edge.source, edge.target]) {
+      const node = captured.nodes.find((item) => item.id === id)!;
+      if (node.attributes) delete node.attributes.source_authority;
+    }
+    Object.assign(edge, {
+      source_authority: "https://catalyst-center.example.invalid",
+      observers: ["netflow:192.0.2.102:ifIndex 436400128>"],
+    });
+    const output = requiredFlowsCsv(
+      captured,
+      indexGraph(captured),
+      indexTopology(demoTopology("catalyst-aci")),
+    );
+    expect(output).toContain("leaf-102");
+    expect(output).not.toMatch(/aci:[a-f0-9]{64}/);
+  });
+
+  it("does not name a same-IP network client for an unresolved exporter in Seen by", () => {
+    const captured = structuredClone(demoGraph("catalyst-aci"));
+    const topology = structuredClone(demoTopology("catalyst-aci"));
+    const edge = captured.edges.find(
+      (candidate) =>
+        candidate.relationship === "communicates_with" &&
+        (candidate.source === "vm:campus-aci/10.20.30.40" ||
+          candidate.target === "vm:campus-aci/10.20.30.40"),
+    )!;
+    const leaf = topology.devices.find(
+      (device) => device.mgmt_ip === "192.0.2.102",
+    )!;
+    leaf.mgmt_ip = "192.0.2.199";
+    const client = topology.devices.find(
+      (device) => device.kind === "network_client",
+    )!;
+    client.mgmt_ip = "192.0.2.102";
+    client.name = "SHADOW-CLIENT-NAME";
+    client.scope = leaf.scope;
+    client.cluster = leaf.cluster;
+    edge.observers = ["netflow:192.0.2.102:ifIndex 436400128>"];
+    const output = requiredFlowsCsv(
+      captured,
+      indexGraph(captured),
+      indexTopology(topology),
+    );
+    expect(output).not.toContain("SHADOW-CLIENT-NAME");
+    expect(output).toContain("Exporter 192.0.2.102");
+  });
+
   it("does not export aggregate backend choices as a client-specific handoff", () => {
     const captured = structuredClone(demoGraph("catalyst-aci"));
     const edge = captured.edges.find(

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createStaticURL } from "@splunk/splunk-utils/url";
 import { parseScopes, type ScopeOption } from "./scopes";
-import type { SearchClient } from "./searchClient";
+import { requireNoSearchErrors, type SearchClient } from "./searchClient";
 import demoScopes from "../../../fixtures/demo-scopes.json";
 import networkingScopes from "../../../fixtures/demo-networking-scopes.json";
 import type { DemoScenario } from "./demoClient";
@@ -33,6 +33,7 @@ export function useScopeOptions(
           maxRows: 20000,
           signal: controller.signal,
         });
+        requireNoSearchErrors(result, "Scope options search");
         return { rows: parseScopes(result.rows), warnings: result.warnings };
       }
       if (!__ADM_SPLUNK_BUILD__)

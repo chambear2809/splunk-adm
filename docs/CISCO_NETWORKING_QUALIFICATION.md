@@ -39,7 +39,7 @@ The V2 graph-input and topology macros now preserve the same implicit-search con
 
 ## Native browser evidence
 
-The restricted-viewer browser check passed for both TA-grounded synthetic paths, with no demo fallback and normal browser shutdown. Catalyst → ACI returned 25 nodes and 36 edges; Meraki wireless → NX-OS returned 21 nodes and 23 edges. Reload preserved those counts. Both paths exposed attachment devices and live Find evidence. Meraki displayed association-based attribution and the SSID number without inventing an SSID name. See [recorded browser evidence](benchmarks/cisco-networking-native-browser.json). This validates the local synthetic pipeline and UI, not collection from real devices.
+The restricted-viewer browser check passed for both TA-grounded synthetic paths, with no demo fallback and normal browser shutdown. Catalyst → ACI returned 25 nodes and 36 edges; Meraki wireless → NX-OS returned 21 nodes and 23 edges. Reload preserved those counts. Both paths exposed attachment devices and live Find evidence. Meraki displayed association-based attribution and the SSID number without inventing an SSID name. See [recorded browser evidence](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/cisco-networking-native-browser.json). This validates the local synthetic pipeline and UI, not collection from real devices.
 
 ## Package upgrade and rollback evidence
 
@@ -70,10 +70,10 @@ The refreshed-fixture archive passed the automated error/failure gate with five 
 
 ## Evidence references
 
-- [Cisco integration contract](../research/cisco-integration-contract.json)
-- [Catalyst package evidence](../research/cisco-catalyst-evidence.json)
-- [Meraki package evidence](../research/cisco-meraki-evidence.json)
-- [Package versions, provenance, and checksums](../research/package-manifest.json)
+- [Cisco integration contract](https://github.com/chambear2809/splunk-adm/blob/main/research/cisco-integration-contract.json)
+- [Catalyst package evidence](https://github.com/chambear2809/splunk-adm/blob/main/research/cisco-catalyst-evidence.json)
+- [Meraki package evidence](https://github.com/chambear2809/splunk-adm/blob/main/research/cisco-meraki-evidence.json)
+- [Package versions, provenance, and checksums](https://github.com/chambear2809/splunk-adm/blob/main/research/package-manifest.json)
 - [V2 staging, cutover, and rollback procedure](CISCO_CONTRACT_MIGRATION.md)
 - Standalone TLS deployment requalification passed on retry after restart (`dist/cisco-tls-requalification-v2.log`); the initial failed attempt is retained in `dist/cisco-tls-requalification.log`.
 - [Operator handout](operators/cisco-enterprise-networking.md)

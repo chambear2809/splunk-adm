@@ -67,6 +67,22 @@ class TopologyV2ProposalTest(unittest.TestCase):
         self.assertIn("adm_mv_has(adm_qualified_devices,adm_a_key)", self.text)
         self.assertIn("adm_mv_has(adm_qualified_devices,adm_b_key)", self.text)
 
+    def test_observer_scope_keys_match_the_lowercase_writer(self):
+        # adm_observer_scope is case-sensitive and every writer lowercases
+        # observer_kind/observer (savedsearches.conf "ADM - Migrate observer scope").
+        import re
+
+        kinds = re.findall(r'adm_(?:local_|peer_)?scope_kind="([^"]*)"', self.text)
+        self.assertTrue(kinds)
+        self.assertEqual([kind for kind in kinds if kind != kind.lower()], [])
+        observers = re.findall(
+            r"adm_(?:local_|peer_)?scope_observer=([^,\\\s]+)", self.text
+        )
+        self.assertGreaterEqual(len(observers), 11)
+        self.assertEqual(
+            [value for value in observers if not value.startswith("lower(")], []
+        )
+
     def test_history_generators_have_a_pipeline_context_in_subsearches(self):
         self.assertEqual(
             self.text.count("| append [ | `adm_network_client_history_observations`"),
@@ -398,3 +414,194 @@ class TopologyV2LabTest(unittest.TestCase):
             },
             expected_indexes,
         )
+
+
+@unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires disposable Splunk lab")
+class TopologyV2MixedCaseScopeLabTest(unittest.TestCase):
+    """Mixed-case source authorities must match lowercase-keyed scope rows.
+
+    Clones are indexed 20 days in the past so they stay outside the
+    wall-clock-anchored fixture windows used by the other topology tests.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import sys
+        import time
+        import urllib.parse
+        import uuid
+
+        sys.path.insert(0, str(ROOT / "tools"))
+        sys.path.insert(0, str(ROOT / "tests" / "splunk"))
+        from lab_lock import LabLock
+
+        if not LabLock(ROOT).check_owned():
+            raise RuntimeError("run this suite under tools/lab_lock.py")
+        import lab
+
+        cls.lab = lab
+        token = uuid.uuid4().hex[:8]
+        cls.apic = f"APIC-{token.upper()}.Example"
+        cls.organization = f"ORG-{token.upper()}"
+        cls.network = f"N_{token.upper()}Mixed"
+        cls.meraki_authority = json.dumps(
+            [cls.organization, cls.network], separators=(",", ":")
+        )
+        cls.cluster = f"Cilium-{token.upper()}-East"
+        cls.scope = f"Mixed-Case-{token}"
+        anchor = int(time.time()) - 20 * 86400
+        cls.window = (str(anchor - 60), str(anchor + 60))
+
+        query = urllib.parse.urlencode({"query": json.dumps({"scope": cls.scope})})
+        cls.cleanup_path = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/"
+            "adm_observer_scope?" + query
+        )
+        # Mirrors the shipped writer: matching keys lowercased, values unchanged.
+        mappings = [
+            {"observer_kind": "apic", "observer": cls.apic},
+            {"observer_kind": "network_authority", "observer": cls.meraki_authority},
+            {"observer_kind": "cluster", "observer": cls.cluster},
+        ]
+        rows = [{**row, "scope": cls.scope, "cluster": cls.cluster} for row in mappings]
+        data = json.dumps(json.dumps(rows, separators=(",", ":")))
+        try:
+            lab.search(
+                f"| makeresults format=json data={data} "
+                "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+                'cluster=coalesce(cluster, ""), _key=sha256(json_array(observer_kind, observer)) '
+                "| fields _key observer_kind observer scope cluster "
+                "| outputlookup append=true key_field=_key override_if_empty=false adm_observer_scope",
+                "0",
+                str(int(time.time()) + 3600),
+            )
+            stored = lab.search(
+                "| inputlookup adm_observer_scope "
+                f"| where scope={json.dumps(cls.scope)} "
+                "| table observer_kind observer",
+                "0",
+                str(int(time.time()) + 3600),
+            )
+            if sorted(row["observer"] for row in stored) != sorted(
+                row["observer"].lower() for row in mappings
+            ):
+                raise RuntimeError("mixed-case scope rows were not stored lowercase")
+            cls._load_events(token, anchor)
+            cls.rows = lab.search("| search `adm_topology_v2`", *cls.window)
+        finally:
+            lab._mgmt("DELETE", cls.cleanup_path).close()
+
+    @classmethod
+    def _load_events(cls, token: str, anchor: int):
+        import tempfile
+        import time
+
+        aci = (
+            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime(anchor))}"
+            '\taddress=10.0.200.91\tdn="topology/pod-1/node-901/sys"\tfabricId=1'
+            '\tinbMgmtAddr=0.0.0.0\tname="leaf-mixed-901"\toobMgmtAddr=192.0.2.91'
+            '\tpodId=1\trole="leaf"\tserial="FDOMIXED901"\tstate="in-service"'
+            f"\tapic_host={cls.apic}\tactual_host={cls.apic}"
+            '\tcomponent="topSystem"'
+        )
+        events = [
+            {
+                "time": anchor,
+                "host": "splunk-hf-01",
+                "source": "cisco_nexus_aci://classInfo_topSystem",
+                "sourcetype": "cisco:dc:aci:class",
+                "index": "cisco_dc",
+                "event": aci,
+            },
+            {
+                "time": anchor,
+                "host": "mr-mixed-01",
+                "source": "cisco_meraki_devices::networking_inventory",
+                "sourcetype": "meraki:devices",
+                "index": "cisco_meraki",
+                "event": {
+                    "name": "MR-MIXED-01",
+                    "networkId": cls.network,
+                    "serial": f"Q2XX-MIXED-{token.upper()[:4]}",
+                    "model": "MR46",
+                    "productType": "wireless",
+                    "organizationId": cls.organization,
+                },
+            },
+            {
+                "time": anchor,
+                "host": "node-mixed",
+                "source": "kubernetes",
+                "sourcetype": "kube:object:nodes",
+                "index": "k8s",
+                "event": {
+                    "type": "MODIFIED",
+                    "object": {
+                        "apiVersion": "v1",
+                        "kind": "Node",
+                        "metadata": {"name": "node-mixed", "uid": f"uid-{token}"},
+                        "spec": {},
+                        "status": {
+                            "addresses": [
+                                {"type": "InternalIP", "address": "10.10.90.11"}
+                            ]
+                        },
+                    },
+                },
+                "fields": {
+                    "metric_source": "kubernetes",
+                    "k8s.cluster.name": cls.cluster,
+                    "k8s.resource.name": "nodes",
+                },
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "mixed-case-scope.ndjson"
+            path.write_text(
+                "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in events)
+            )
+            if cls.lab.load([path]) != len(events):
+                raise RuntimeError("did not load every mixed-case inventory event")
+        deadline = time.monotonic() + 90
+        spl = (
+            "search (index=cisco_dc sourcetype=cisco:dc:aci:class) OR "
+            "(index=cisco_meraki sourcetype=meraki:devices) OR "
+            "(index=k8s sourcetype=kube:object:nodes) "
+            f"{json.dumps(token)} OR {json.dumps(token.upper())} | stats count"
+        )
+        while True:
+            counted = cls.lab.search(spl, *cls.window)
+            if counted and int(counted[0].get("count", 0)) >= len(events):
+                return
+            if time.monotonic() > deadline:
+                raise RuntimeError("mixed-case inventory events were not indexed")
+            time.sleep(2)
+
+    def _device(self, authority: str) -> dict:
+        matches = [
+            row
+            for row in self.rows
+            if row.get("row_type") == "device"
+            and row.get("device_authority") == authority
+        ]
+        self.assertEqual(len(matches), 1, authority)
+        return matches[0]
+
+    def test_mixed_case_apic_host_is_mapped(self):
+        row = self._device(self.apic)
+        self.assertTrue(row["device_id"].startswith("aci:"))
+        self.assertEqual(row.get("mapping_status"), "mapped")
+        self.assertEqual(row.get("scope"), self.scope)
+        self.assertEqual(row.get("cluster"), self.cluster)
+
+    def test_mixed_case_meraki_organization_and_network_are_mapped(self):
+        row = self._device(self.meraki_authority)
+        self.assertTrue(row["device_id"].startswith("meraki:"))
+        self.assertEqual(row.get("mapping_status"), "mapped")
+        self.assertEqual(row.get("scope"), self.scope)
+
+    def test_mixed_case_kubernetes_cluster_is_mapped(self):
+        row = self._device(self.cluster)
+        self.assertTrue(row["device_id"].startswith("host:"))
+        self.assertEqual(row.get("mapping_status"), "mapped")
+        self.assertEqual(row.get("cluster"), self.cluster)

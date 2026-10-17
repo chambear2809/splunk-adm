@@ -2,6 +2,7 @@ import type { GraphEdge, GraphIndex, VlanObservation } from "./graph";
 import {
   deviceName,
   edgeDeviceContext,
+  exporterResolutionContext,
   interfaceLabel,
   resolveDevice,
 } from "./topology";
@@ -86,7 +87,11 @@ export function vlanExporter(
   topo: TopologyIndex,
   context: DeviceResolutionContext = {},
 ): string {
-  const resolved = deviceName(observation.exporter, topo, context).name;
+  const resolved = deviceName(
+    observation.exporter,
+    topo,
+    exporterResolutionContext(context),
+  ).name;
   return resolved.trim().toLowerCase() ===
     observation.exporter.trim().toLowerCase()
     ? resolved
@@ -112,7 +117,11 @@ export function vlanInterface(
 ): string | undefined {
   if (observation.interface) return observation.interface;
   if (observation.interface_index) {
-    const device = resolveDevice(observation.exporter, topo, context);
+    const device = resolveDevice(
+      observation.exporter,
+      topo,
+      exporterResolutionContext(context),
+    );
     const identity =
       device?.id ?? (topo.containsV2Devices ? undefined : observation.exporter);
     const resolved = topo.ifName.get(

@@ -6,7 +6,7 @@ import {
   type GraphIndex,
   type GraphNode,
 } from "./graph";
-import type { AttachmentEvidence } from "./graph";
+import type { AttachmentEvidence, TrafficObservation } from "./graph";
 import {
   aclSummary,
   attributeValue,
@@ -275,11 +275,43 @@ const isV2Device = (d: Device) =>
 
 export interface DeviceResolutionContext {
   conflict?: boolean;
+  /** A cluster is required but unknown: nothing resolves, but the point is kept as unresolved. */
+  clusterUnknown?: boolean;
   scope?: string;
   cluster?: string;
   authority?: string;
   families?: string[];
 }
+
+// Families that export IPFIX/NetFlow. FTD is excluded (eStreamer, resolved by its own observer path);
+// catalyst inventory has no mgmt_ip yet, so it only resolves once that mapping exists.
+const EXPORTER_FAMILIES = ["aci", "nxos", "meraki", "catalyst"];
+
+/** An exporter IP names the device itself, so no observation or endpoint authority applies to it. */
+export function exporterResolutionContext(
+  context: DeviceResolutionContext = {},
+): DeviceResolutionContext {
+  return {
+    ...(context.conflict ? { conflict: true } : {}),
+    ...(context.clusterUnknown ? { clusterUnknown: true } : {}),
+    ...(context.scope !== undefined ? { scope: context.scope } : {}),
+    ...(context.cluster !== undefined ? { cluster: context.cluster } : {}),
+    families: context.families?.length ? context.families : EXPORTER_FAMILIES,
+  };
+}
+
+/** An observation key is already a canonical ID resolved under its source's authority rules, so endpoint authority must not filter it again. */
+export const observedKeyContext = (
+  context: DeviceResolutionContext = {},
+): DeviceResolutionContext => ({ ...context, authority: undefined });
+
+// Stream/IPFIX source_authority is the exporter address (adm_traffic_observation in macros.conf).
+const exporterAuthorityAgrees = (
+  observation: TrafficObservation,
+  topo: TopologyIndex,
+) =>
+  observation.source_authority === observation.exporter_ip ||
+  (!topo.containsV2Devices && !observation.source_authority);
 
 /** Summarize aggregate frontend coverage; client-specific evidence is validated separately. */
 export function handoffCoverageMessage(
@@ -394,7 +426,7 @@ export function resolveDevice(
   topo: TopologyIndex,
   context: DeviceResolutionContext = {},
 ): Device | undefined {
-  if (context.conflict) return undefined;
+  if (context.conflict || context.clusterUnknown) return undefined;
   if (!raw?.trim()) return undefined;
   const exactId = raw.trim();
   const normalized = key(raw);
@@ -758,7 +790,13 @@ export function parseObserver(
   }
   const m = /^(.*):([^:>]*)>([^:>]*)$/.exec(rest);
   const ip = m ? m[1] : rest;
-  const device = resolveDevice(ip, topo, sourceContext);
+  const device = resolveDevice(
+    ip,
+    topo,
+    source === "ftd"
+      ? { ...sourceContext, families: ["ftd"] }
+      : exporterResolutionContext(sourceContext),
+  );
   const name = device?.id ?? ip;
   return [
     {
@@ -813,48 +851,47 @@ function parseEdgeObserver(
       (context.cluster === undefined ||
         item.cluster === undefined ||
         item.cluster === context.cluster) &&
-      (context.authority === undefined ||
-        item.source_authority === undefined ||
-        item.source_authority === context.authority),
+      exporterAuthorityAgrees(item, topo),
   );
   if (observations.length && !compatibleObservations.length) return [];
   const contextKeys = new Set(
     compatibleObservations.map((item) =>
-      JSON.stringify([
-        item.scope ?? null,
-        item.cluster ?? null,
-        item.source_authority ?? null,
-      ]),
+      JSON.stringify([item.scope ?? null, item.cluster ?? null]),
     ),
   );
   if (contextKeys.size > 1) return [];
   const observation =
     contextKeys.size === 1 ? compatibleObservations[0] : undefined;
-  const scopeConflict =
-    !!observation &&
-    !!context.scope &&
-    !!observation.scope &&
-    context.scope !== observation.scope;
-  const clusterConflict =
-    !!observation &&
-    !!context.cluster &&
-    !!observation.cluster &&
-    context.cluster !== observation.cluster;
-  const authorityConflict =
-    !!observation &&
-    !!context.authority &&
-    !!observation.source_authority &&
-    context.authority !== observation.source_authority;
-  if (scopeConflict || clusterConflict || authorityConflict) return [];
   const scopedContext = observation
     ? {
-        scope: observation.scope,
-        cluster: observation.cluster,
-        authority: observation.source_authority,
         ...context,
+        scope: context.scope ?? observation.scope,
+        cluster: context.cluster ?? observation.cluster,
+        // A V2 exporter without a known cluster matches no device, as in deviceSummaries.
+        ...(topo.containsV2Devices &&
+        (context.cluster ?? observation.cluster) === undefined
+          ? { clusterUnknown: true }
+          : {}),
       }
     : context;
-  return parseObserver(observer, topo, scopedContext);
+  const points = parseObserver(observer, topo, scopedContext);
+  if (!observation || (!scopedContext.scope && !scopedContext.cluster))
+    return points;
+  return points.map((point) =>
+    point.resolved
+      ? point
+      : {
+          ...point,
+          key: JSON.stringify([
+            point.key,
+            scopedContext.scope ?? "",
+            scopedContext.cluster ?? "",
+          ]),
+          label: [point.label, scopedContext.scope, scopedContext.cluster]
+            .filter(Boolean)
+            .join(" · "),
+        },
+  );
 }
 /** Observation points grouped by device, for "Seen by" lists. */
 export function observationsByDevice(
@@ -1809,7 +1846,8 @@ export function edgeMatches(
   for (const d of observationsByDevice(edge, topo, [], context)) {
     if (topo.containsV2Devices) {
       if (!d.resolved) continue;
-      const device = resolveDevice(d.key, topo, context);
+      // d.key is the canonical ID already resolved under its source's own authority rules.
+      const device = resolveDevice(d.key, topo, observedKeyContext(context));
       if (!device) continue;
       hay.push(
         d.label,
@@ -1874,6 +1912,25 @@ export interface DeviceSummary {
   interfaces: string[];
   edges: GraphEdge[];
 }
+// A Record forces every AttachmentEvidence field into the reference key.
+const ATTACHMENT_KEY_FIELD_SET: Record<keyof AttachmentEvidence, true> = {
+  basis: true,
+  status: true,
+  event_time: true,
+  received_time: true,
+  collected_time: true,
+  device_id: true,
+  device_name: true,
+  device_mac: true,
+  device_serial: true,
+  ssid_number: true,
+  client_source: true,
+  client_authority: true,
+  client_native_id: true,
+};
+const ATTACHMENT_KEY_FIELDS = Object.keys(
+  ATTACHMENT_KEY_FIELD_SET,
+) as (keyof AttachmentEvidence)[];
 export interface AttachmentDeviceReference {
   key: string;
   device?: Device;
@@ -1952,7 +2009,15 @@ export function deviceSummaries(
                     : undefined;
         const device = unresolvedReason ? undefined : inventory;
         const id = device?.id ?? evidenceId ?? `${e.id}:${i}`;
-        const groupKey = `${device ? "device" : "unresolved"}:${key(id)}`;
+        // Association evidence belongs to one client, so references never merge across clients.
+        const groupKey = JSON.stringify([
+          device ? "device" : "unresolved",
+          key(id),
+          clientNode?.id ?? e.id,
+          ...ATTACHMENT_KEY_FIELDS.map((field) =>
+            String(evidence[field] ?? ""),
+          ),
+        ]);
         const reference = attachmentByKey.get(groupKey) ?? {
           key: groupKey,
           device,
@@ -1965,11 +2030,16 @@ export function deviceSummaries(
         if (!reference.flowEdges.includes(e)) reference.flowEdges.push(e);
         for (const observation of e.traffic_observations ?? []) {
           if (!observation.exporter_ip) continue;
-          const exporter = resolveDevice(observation.exporter_ip, topo, {
-            scope: observation.scope,
-            cluster: observation.cluster,
-            authority: observation.source_authority,
-          });
+          const exporter = exporterAuthorityAgrees(observation, topo)
+            ? resolveDevice(
+                observation.exporter_ip,
+                topo,
+                exporterResolutionContext({
+                  scope: observation.scope,
+                  cluster: observation.cluster,
+                }),
+              )
+            : undefined;
           const resolved =
             exporter &&
             exporter.cluster === observation.cluster &&
@@ -2032,10 +2102,13 @@ export function deviceSummaries(
     devices,
     unseenByFabric,
     idle,
-    attachmentReferences: [...attachmentByKey.values()].sort((a, b) =>
-      (a.device?.name ?? a.evidence.device_id ?? "").localeCompare(
-        b.device?.name ?? b.evidence.device_id ?? "",
-      ),
+    attachmentReferences: [...attachmentByKey.values()].sort(
+      (a, b) =>
+        (a.device?.name ?? a.evidence.device_id ?? "").localeCompare(
+          b.device?.name ?? b.evidence.device_id ?? "",
+        ) ||
+        (a.client ?? "").localeCompare(b.client ?? "") ||
+        a.key.localeCompare(b.key),
     ),
   };
 }

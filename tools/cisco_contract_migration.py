@@ -10,6 +10,7 @@ legacy summary index macro.
 from __future__ import annotations
 
 import argparse
+import contextlib
 from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 import fcntl
@@ -39,10 +40,36 @@ CONTRACT_VERSION = "2"
 SLICE_SECONDS = 300
 MAX_BACKFILL_SECONDS = 7 * 24 * 60 * 60
 MAX_SLICES = MAX_BACKFILL_SECONDS // SLICE_SECONDS
+# Fixed allowance for the first resumed V1 cycle and the bounded re-inventory
+# retries, on top of the per-slice gap recovery budget below.
+ROLLBACK_RECOVERY_MARGIN_SECONDS = 60 * 60
+# _v1_recovery_window refuses once the last resumed cycle ends more than seven
+# days after the pre-pause boundary, and that end tracks the wall clock on every
+# rerun, so rollback must finish inside the bound. The tool imposes no wall-clock
+# limit on a search job, so the pre-flight uses this planning budget per gap
+# slice (a conservative allowance, not a Splunk guarantee): the source read,
+# retained-row read, writer and up to SUMMARY_INDEX_WAIT_ATTEMPTS readbacks are
+# at most ROLLBACK_SEARCHES_PER_SLICE searches, each allowed
+# ROLLBACK_SEARCH_BUDGET_SECONDS, plus the readback sleeps and the writer's
+# JOB_METADATA_WAIT_SECONDS identity wait.
+ROLLBACK_SEARCHES_PER_SLICE = 3 + 5
+ROLLBACK_SEARCH_BUDGET_SECONDS = 15
+CATALOG_SETTLED_JOB_STATES = frozenset(
+    {"complete", "failed", "rejected", "preparation_aborted"}
+)
 MAX_RESULTS = 10000
+MAX_JOURNAL_BYTES = 16 * 1024 * 1024
 MAX_RESULT_ARTIFACT_BYTES = 16 * 1024 * 1024
+# The candidate copies journal coverage plus the validation scenario.
+MAX_CANDIDATE_BYTES = 2 * MAX_JOURNAL_BYTES
 MAX_RESULT_EVIDENCE_BYTES = 256 * 1024 * 1024
+# Rollback evidence has its own budget so forward-path evidence cannot leave a
+# started rollback unable to persist the results it must read back on resume.
+MAX_RECOVERY_EVIDENCE_BYTES = 256 * 1024 * 1024
 MAX_COLLECTION_ROWS = 100000
+# Enabled identity and interface builders rewrite these on every run. Staged
+# outputs that read them are compared row by row, so only readability is bound.
+LIVE_BUILDER_COLLECTIONS = ("adm_ip_identity", "adm_interfaces")
 COLLECTION_PAGE_SIZE = 500
 ROLLUP_ID_QUERY_BATCH = 250
 SUMMARY_INDEX_WAIT_ATTEMPTS = 5
@@ -50,6 +77,11 @@ SUMMARY_INDEX_WAIT_SECONDS = 1.0
 SCHEDULED_WRITER_WAIT_SECONDS = 2.0
 JOB_METADATA_WAIT_SECONDS = 30.0
 JOB_METADATA_WAIT_ATTEMPTS = 120
+ROLLBACK_SLICE_BUDGET_SECONDS = (
+    ROLLBACK_SEARCHES_PER_SLICE * ROLLBACK_SEARCH_BUDGET_SECONDS
+    + (SUMMARY_INDEX_WAIT_ATTEMPTS - 1) * SUMMARY_INDEX_WAIT_SECONDS
+    + JOB_METADATA_WAIT_SECONDS
+)
 JOURNAL_SCHEMA = 2
 JOURNAL_DEFAULT = Path.home() / ".splunk-adm" / "cisco-contract-migration.json"
 VOLATILE_SAVED_SEARCH_FIELDS = {
@@ -213,7 +245,84 @@ V2_ROW_FIELDS = {
         "records traffic_observations".split()
     ),
 }
-SUMMARY_CANONICALIZER_VERSION = 1
+# Version 2 drops the columns below from parity material: they are resolved
+# against adm_ip_identity / adm_interfaces, which enabled builders rewrite, so a
+# later recomputation cannot tell builder activity from a changed source.
+SUMMARY_CANONICALIZER_VERSION = 3
+V2_LOOKUP_DERIVED_FIELDS = {"conversation": ("encapsulation",), "traffic": ()}
+
+
+def _observations_without_netflow_interfaces(value: Any, observer: Any) -> Any:
+    """Keep every observation; V1 resolves only NetFlow interface names.
+
+    A NetFlow entry is "<observer>[:<in>><out>]" where the row's observer is
+    "netflow:<exporter>". Only the interface part is looked up, so the observer
+    prefix stays in the material. Matching on the known observer avoids parsing
+    exporter addresses or interface names, either of which may contain ":".
+    """
+    if not isinstance(value, str):
+        return value
+    prefix = f"{observer}:" if isinstance(observer, str) else None
+    netflow = prefix is not None and observer.startswith("netflow:")
+    kept = set()
+    for item in value.split("|"):
+        if netflow and item.startswith(prefix):
+            item = prefix
+        kept.add(item)
+    return "|".join(sorted(kept))
+
+
+def _vlan_observations_without_interface_names(value: Any, truncated: Any) -> Any:
+    """Drop V1's looked-up "interface" key; keep every other VLAN context field."""
+    if not isinstance(value, str):
+        return value
+    try:
+        items = json.loads(value)
+    except ValueError:
+        return value
+    if not isinstance(items, list) or not all(isinstance(i, dict) for i in items):
+        return value
+    if _truth(truncated):
+        # The retained 32 contexts are chosen by sorted JSON text, which the
+        # interface name changes, so nothing but truncation itself is stable.
+        return {"truncated": True}
+    # Contexts that differed only by interface (named in one run, unnamed in
+    # another) are one context; merge their time bounds like adm_vlan_merge.
+    contexts: dict[str, dict[str, Any]] = {}
+    for item in items:
+        context = {
+            key: item[key]
+            for key in item
+            if key not in {"interface", "first_seen", "last_seen"}
+        }
+        text = json.dumps(context, sort_keys=True, separators=(",", ":"))
+        merged = contexts.setdefault(text, {"first_seen": [], "last_seen": []})
+        for bound in ("first_seen", "last_seen"):
+            if bound in item:
+                number = _number(item[bound])
+                if number is None:
+                    raise Refused("VLAN observation time bound is not numeric")
+                merged[bound].append(int(number) if number.is_integer() else number)
+    return sorted(
+        json.dumps(
+            {
+                **json.loads(text),
+                **(
+                    {"first_seen": min(bounds["first_seen"])}
+                    if bounds["first_seen"]
+                    else {}
+                ),
+                **(
+                    {"last_seen": max(bounds["last_seen"])}
+                    if bounds["last_seen"]
+                    else {}
+                ),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        for text, bounds in contexts.items()
+    )
 
 
 def _summary_content(row: dict[str, Any], fields: tuple[str, ...]) -> dict[str, Any]:
@@ -437,6 +546,16 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) and number >= 0 else None
 
 
+def rollback_recovery_horizon_seconds(gap_seconds: int) -> float:
+    """Projected pre-pause-to-finish span of an enabled-origin rollback."""
+    slices = -(-max(0, gap_seconds) // SLICE_SECONDS)
+    return (
+        gap_seconds
+        + slices * ROLLBACK_SLICE_BUDGET_SECONDS
+        + ROLLBACK_RECOVERY_MARGIN_SECONDS
+    )
+
+
 def plan_slices(start: int, end: int, now: int | None = None) -> list[dict[str, int]]:
     """Return aligned, fully closed 5-minute index-time slices within fixed bounds."""
     if isinstance(start, bool) or isinstance(end, bool) or start >= end:
@@ -458,6 +577,80 @@ def plan_slices(start: int, end: int, now: int | None = None) -> list[dict[str, 
     return result
 
 
+def _check_state_directory(directory: Path) -> None:
+    try:
+        link = directory.lstat()
+        if stat.S_ISLNK(link.st_mode) and link.st_uid != 0:
+            raise Refused(
+                f"journal directory {directory} is a symlink; use its real path"
+            )
+        info = directory.stat()
+    except OSError as error:
+        raise Refused(
+            f"journal directory {directory} is not usable: {error.strerror or error}"
+        ) from None
+    if not stat.S_ISDIR(info.st_mode):
+        raise Refused(f"journal directory {directory} is not a directory")
+    if info.st_uid not in (0, os.geteuid()):
+        raise Refused(
+            f"journal directory {directory} is owned by another user; "
+            "choose a directory you own"
+        )
+    if info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX:
+        raise Refused(
+            f"journal directory {directory} is group/world-writable without the "
+            "sticky bit; choose a private directory (for example chmod 700 it yourself)"
+        )
+
+
+def _verify_created_directory(directory: Path) -> None:
+    try:
+        info = directory.lstat()
+    except OSError as error:
+        raise Refused(
+            f"journal directory {directory} is not usable: {error.strerror or error}"
+        ) from None
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.geteuid()
+        or info.st_mode & 0o077
+    ):
+        raise Refused(
+            f"journal directory {directory} was not created as an owner-only "
+            "directory; choose a directory you own"
+        )
+
+
+def ensure_state_directory(directory: Path) -> None:
+    """Create (0700) or validate the directory holding journal state; never chmod it.
+
+    Every directory this function creates is verified after creation, and one that
+    appears concurrently is validated like an existing leaf. Pre-existing ancestors
+    above the first directory created are trusted as given by the operator.
+    """
+    directory = Path(directory)
+    missing = []
+    try:
+        probe = directory
+        while not os.path.lexists(probe):
+            missing.append(probe)
+            if probe.parent == probe:
+                break
+            probe = probe.parent
+        for candidate in reversed(missing):
+            try:
+                candidate.mkdir(mode=0o700)
+            except FileExistsError:
+                _check_state_directory(candidate)
+            else:
+                _verify_created_directory(candidate)
+    except OSError as error:
+        raise Refused(
+            f"journal directory {directory} is not usable: {error.strerror or error}"
+        ) from None
+    _check_state_directory(directory)
+
+
 class Journal:
     """Atomic local journal with a companion advisory lock and owner-only mode."""
 
@@ -467,30 +660,69 @@ class Journal:
 
     @contextmanager
     def locked(self):
-        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(self.path.parent, 0o700)
-        fd = os.open(
-            self.lock_path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600
-        )
+        ensure_state_directory(self.path.parent)
         try:
-            os.fchmod(fd, 0o600)
-            fcntl.flock(fd, fcntl.LOCK_EX)
+            fd = os.open(
+                self.lock_path,
+                os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+        except OSError as error:
+            raise Refused(
+                f"journal lock {self.lock_path} is unavailable: "
+                f"{error.strerror or error}"
+            ) from None
+        try:
+            try:
+                if os.fstat(fd).st_uid != os.geteuid():
+                    raise Refused("journal lock file is owned by another user")
+                os.fchmod(fd, 0o600)
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            except OSError as error:
+                raise Refused(
+                    f"journal lock {self.lock_path} is unavailable: "
+                    f"{error.strerror or error}"
+                ) from None
             yield
         finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
 
     def read(self) -> dict[str, Any] | None:
         try:
-            info = self.path.lstat()
+            fd = os.open(
+                self.path,
+                os.O_RDONLY
+                | getattr(os, "O_NOFOLLOW", 0)
+                | getattr(os, "O_NONBLOCK", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
         except FileNotFoundError:
             return None
-        if not self.path.is_file() or self.path.is_symlink() or info.st_mode & 0o077:
-            raise Refused("journal must be a regular owner-only file")
-        if info.st_size > 16 * 1024 * 1024:
-            raise Refused("journal exceeds the 16 MiB limit")
+        except OSError:
+            raise Refused(
+                "journal must be a regular owner-only file owned by the current user"
+            ) from None
         try:
-            value = json.loads(self.path.read_text(encoding="utf-8"))
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or info.st_uid != os.geteuid()
+                    or info.st_mode & 0o077
+                ):
+                    raise Refused(
+                        "journal must be a regular owner-only file owned by the "
+                        "current user"
+                    )
+                if info.st_size > MAX_JOURNAL_BYTES:
+                    raise Refused("journal exceeds the 16 MiB limit")
+                raw = stream.read(MAX_JOURNAL_BYTES + 1)
+            if len(raw) > MAX_JOURNAL_BYTES:
+                raise Refused("journal exceeds the 16 MiB limit")
+            value = json.loads(raw.decode("utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
             raise Refused("journal is unreadable or corrupt") from None
         if not isinstance(value, dict) or value.get("schema") != JOURNAL_SCHEMA:
@@ -499,49 +731,44 @@ class Journal:
 
     def write(self, value: dict[str, Any]) -> None:
         payload = canonical(value)
-        if len(payload) > 16 * 1024 * 1024:
+        if len(payload) > MAX_JOURNAL_BYTES:
             raise Refused("journal exceeds the 16 MiB limit")
-        fd, name = tempfile.mkstemp(prefix=".cisco-contract-", dir=self.path.parent)
-        try:
-            os.fchmod(fd, 0o600)
-            with os.fdopen(fd, "wb") as stream:
-                stream.write(payload)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(name, self.path)
-            os.chmod(self.path, 0o600)
-            parent_fd = os.open(self.path.parent, os.O_RDONLY)
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
-        finally:
-            if os.path.exists(name):
-                os.unlink(name)
+        self._atomic_write(self.path, payload, "journal")
 
     @staticmethod
-    def write_artifact(path: Path, value: dict[str, Any]) -> str:
-        path = Path(path)
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        os.chmod(path.parent, 0o700)
-        payload = canonical(value)
-        fd, name = tempfile.mkstemp(prefix=".cisco-candidate-", dir=path.parent)
+    def _atomic_write(
+        path: Path, payload: bytes, label: str, prefix: str = ".cisco-contract-"
+    ) -> None:
+        name = None
         try:
+            fd, name = tempfile.mkstemp(prefix=prefix, dir=path.parent)
             os.fchmod(fd, 0o600)
             with os.fdopen(fd, "wb") as stream:
                 stream.write(payload)
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(name, path)
-            os.chmod(path, 0o600)
             parent_fd = os.open(path.parent, os.O_RDONLY)
             try:
                 os.fsync(parent_fd)
             finally:
                 os.close(parent_fd)
+        except OSError as error:
+            raise Refused(
+                f"{label} {path} could not be written: {error.strerror or error}"
+            ) from None
         finally:
-            if os.path.exists(name):
-                os.unlink(name)
+            if name is not None:
+                with contextlib.suppress(OSError):
+                    if os.path.exists(name):
+                        os.unlink(name)
+
+    @staticmethod
+    def write_artifact(path: Path, value: dict[str, Any]) -> str:
+        path = Path(path)
+        ensure_state_directory(path.parent)
+        payload = canonical(value)
+        Journal._atomic_write(path, payload, "artifact", ".cisco-candidate-")
         return hashlib.sha256(payload).hexdigest()
 
 
@@ -832,6 +1059,17 @@ class Migration:
             "complete_paged_read": True,
         }
 
+    def _live_collection_presence(self, name: str) -> dict[str, Any]:
+        base = APP + "/storage/collections/data/" + quote(name, safe="")
+        page = self._request("GET", base + "?limit=1")
+        if (
+            not isinstance(page, list)
+            or len(page) > 1
+            or any(not isinstance(row, dict) or not row.get("_key") for row in page)
+        ):
+            raise Refused(f"{name} collection read is malformed")
+        return {"live_builder_collection": True, "readable": True}
+
     def _macro(self, name: str) -> dict[str, Any]:
         return self._single_entry(MACROS + quote(name, safe=""))
 
@@ -1012,10 +1250,14 @@ class Migration:
                 "adm_observer_scope",
                 "adm_network_source_scope",
                 "adm_cilium_cluster_settings",
-                "adm_ip_identity",
-                "adm_interfaces",
             )
         }
+        data_snapshots.update(
+            {
+                name: self._live_collection_presence(name)
+                for name in LIVE_BUILDER_COLLECTIONS
+            }
+        )
         return {
             "target": {
                 "guid": server["guid"],
@@ -1045,6 +1287,7 @@ class Migration:
                 raise Refused("effective configuration differs from the journal origin")
             if journal.get("interface_sha256") != interface_hash:
                 raise Refused("pipeline interface manifest changed after preparation")
+            self._assert_canonicalizer_current(journal)
             if journal.get("range") != {"start": start, "end": end}:
                 raise Refused("journal already belongs to a different backfill range")
             if "preexisting_v2_rows" not in journal:
@@ -1052,6 +1295,7 @@ class Migration:
             return journal
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": uuid.uuid4().hex,
             "created_at": int(self.clock()),
             "interface_sha256": interface_hash,
@@ -1094,11 +1338,17 @@ class Migration:
         ):
             raise Refused("result artifact identity is invalid")
         return self.journal.path.with_name(
-            self.journal.path.name + ".result-" + fingerprint(identity) + ".json"
+            self.journal.path.name
+            + ".result-"
+            + ("recovery-" if record.get("recovery_evidence") else "")
+            + fingerprint(identity)
+            + ".json"
         )
 
     @staticmethod
-    def _read_result_artifact_file(path: Path) -> bytes:
+    def _read_result_artifact_file(
+        path: Path, limit: int = MAX_RESULT_ARTIFACT_BYTES
+    ) -> bytes:
         try:
             fd = os.open(
                 path,
@@ -1112,16 +1362,13 @@ class Migration:
                     not stat.S_ISREG(info.st_mode)
                     or info.st_uid != os.geteuid()
                     or info.st_mode & 0o077
-                    or info.st_size > MAX_RESULT_ARTIFACT_BYTES
+                    or info.st_size > limit
                 ):
                     raise Refused(
                         "result artifact ownership, permissions, type or size is invalid"
                     )
-                payload = stream.read(MAX_RESULT_ARTIFACT_BYTES + 1)
-                if (
-                    len(payload) != info.st_size
-                    or len(payload) > MAX_RESULT_ARTIFACT_BYTES
-                ):
+                payload = stream.read(limit + 1)
+                if len(payload) != info.st_size or len(payload) > limit:
                     raise Refused("result artifact changed or exceeds its bound")
                 return payload
         except OSError:
@@ -1150,6 +1397,9 @@ class Migration:
         if len(payload) > MAX_RESULT_ARTIFACT_BYTES:
             raise Refused("result artifact exceeds the 16 MiB limit")
         prefix = self.journal.path.name + ".result-"
+        recovery_prefix = prefix + "recovery-"
+        recovery = bool(record.get("recovery_evidence"))
+        limit = MAX_RECOVERY_EVIDENCE_BYTES if recovery else MAX_RESULT_EVIDENCE_BYTES
         total = 0
         for candidate in path.parent.iterdir():
             if candidate.name.startswith(prefix) and candidate.name.endswith(".json"):
@@ -1161,20 +1411,22 @@ class Migration:
                     or info.st_size > MAX_RESULT_ARTIFACT_BYTES
                 ):
                     raise Refused("existing result evidence is unsafe")
-                total += info.st_size
+                if candidate.name.startswith(recovery_prefix) == recovery:
+                    total += info.st_size
         if path.exists() or path.is_symlink():
             if self._read_result_artifact_file(path) != payload:
                 raise Refused("immutable result artifact differs from this job")
         else:
-            if total + len(payload) > MAX_RESULT_EVIDENCE_BYTES:
+            if total + len(payload) > limit:
                 raise Refused("result evidence exceeds the 256 MiB budget")
             try:
                 self.journal.write_artifact(path, value)
-            except OSError:
+            except (OSError, Refused) as error:
                 raise Refused(
-                    "result evidence could not be persisted; resume the recorded SID"
-                ) from None
-        if total > MAX_RESULT_EVIDENCE_BYTES:
+                    f"result evidence could not be persisted ({error}); "
+                    "resume the recorded SID"
+                ) from error
+        if total > limit:
             raise Refused("existing result evidence exceeds the 256 MiB budget")
         record["result_artifact"] = {
             "sha256": hashlib.sha256(payload).hexdigest(),
@@ -1217,7 +1469,7 @@ class Migration:
         if journal.get("migration_id"):
             for record in journal.get("jobs", []):
                 if (
-                    record.get("kind") == "search"
+                    record.get("kind") in {"search", "saved_search"}
                     and record.get("state") == "complete"
                     and "result_rows" in record
                 ):
@@ -1233,7 +1485,7 @@ class Migration:
             self._assert_cutover_origin_compatible(journal)
             return
         if fingerprint(self.snapshot()) != journal.get("origin_fingerprint"):
-            raise Refused("effective pipeline, mappings, identity, or target changed")
+            raise Refused("effective pipeline, mappings, or target changed")
         self._assert_no_competing_staged_jobs(journal)
 
     def _assert_no_competing_staged_jobs(self, journal: dict[str, Any]) -> None:
@@ -1847,11 +2099,30 @@ class Migration:
         _, current_interface_hash = self._interface()
         if journal.get("interface_sha256") != current_interface_hash:
             raise Refused("pipeline interface manifest changed after preparation")
+        self._assert_canonicalizer_current(journal)
         return journal
+
+    @staticmethod
+    def _assert_canonicalizer_current(journal: dict[str, Any]) -> None:
+        # Digests recorded under another canonicalizer cannot be compared; fail
+        # here instead of surfacing as misleading "content changed" refusals.
+        recorded = journal.get("canonicalizer_version", 1)
+        if recorded != SUMMARY_CANONICALIZER_VERSION:
+            raise Refused(
+                f"journal was written with summary canonicalizer version {recorded} "
+                f"but this helper uses version {SUMMARY_CANONICALIZER_VERSION}; "
+                "finish or roll it back with the helper that created it"
+            )
 
     def _save_job(self, journal, job):
         journal.setdefault("jobs", []).append(job)
         self._write_journal(journal)
+
+    @staticmethod
+    def _evidence_class(journal) -> dict[str, Any]:
+        if journal.get("phase") == "rollback_in_progress":
+            return {"recovery_evidence": True}
+        return {}
 
     def _manual_writer_entry(self, name: str) -> dict[str, Any]:
         return self._saved_search(name)
@@ -2203,6 +2474,7 @@ class Migration:
             "query_fingerprint": query_hash,
             "request_bounds": request_bounds,
             "persist_result_rows": persist_result_rows,
+            **self._evidence_class(journal),
         }
         self._save_job(journal, record)
         try:
@@ -2416,10 +2688,26 @@ class Migration:
         if len(rows) != total:
             raise Refused("search result count does not match returned rows")
         record.update(state="complete", result_count=total)
-        if record.get("kind") == "search" and record.get("persist_result_rows", True):
+        if record.get("kind") in {"search", "saved_search"} and record.get(
+            "persist_result_rows", True
+        ):
             record["result_rows"] = rows
+        else:
+            record["result_digest"] = hashlib.sha256(canonical(rows)).hexdigest()
         self._write_journal(journal)
         return rows
+
+    def _completed_job_rows(
+        self, journal: dict[str, Any], record: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Reuse durable results of a validated complete job instead of its artifact."""
+        if record.get("state") == "complete":
+            rows = self._cached_result_rows(journal, record)
+            if isinstance(rows, list):
+                return rows
+            if record.get("persist_result_rows") is False:
+                raise Refused("completed writer job did not retain its result rows")
+        return self._read_job(journal, record)
 
     def _validate_job_identity(
         self,
@@ -2757,7 +3045,14 @@ class Migration:
                 or row.get("adm_record") not in spec["records"]
             ):
                 raise Refused(f"{stream} output failed row validation")
-            content = _summary_content(row, V2_ROW_FIELDS[stream])
+            content = _summary_content(
+                row,
+                tuple(
+                    field
+                    for field in V2_ROW_FIELDS[stream]
+                    if field not in V2_LOOKUP_DERIVED_FIELDS[stream]
+                ),
+            )
             digest = fingerprint(
                 {"canonicalizer": SUMMARY_CANONICALIZER_VERSION, "row": content}
             )
@@ -2812,7 +3107,10 @@ class Migration:
             return {}
         ids = sorted(expected)
         if len(ids) > MAX_RESULTS:
-            raise Refused("slice rollup ID count exceeds the qualified bound")
+            raise Refused(
+                f"cumulative {stream} rollup IDs exceed the {MAX_RESULTS}-ID "
+                "migration bound; prepare a shorter backfill range"
+            )
         actual = {}
         for offset in range(0, len(ids), ROLLUP_ID_QUERY_BATCH):
             batch_number = offset // ROLLUP_ID_QUERY_BATCH + 1
@@ -2888,6 +3186,39 @@ class Migration:
             self._write_journal(journal)
         return record["id"]
 
+    def _settle_prior_catalog_writer_jobs(
+        self, journal: dict[str, Any], writer_search: str
+    ) -> None:
+        for job in journal.get("jobs", []):
+            if (
+                job.get("kind") != "saved_search"
+                or job.get("label") != writer_search
+                or job.get("state") in CATALOG_SETTLED_JOB_STATES
+            ):
+                continue
+            if job.get("sid"):
+                try:
+                    self._read_job(journal, job)
+                except Refused as exc:
+                    if job.get("state") not in CATALOG_SETTLED_JOB_STATES:
+                        raise Refused(
+                            f"prior catalog writer job {job['sid']} could not be "
+                            f"settled ({exc}); confirm its outcome in Splunk Job "
+                            f"Manager/audit evidence and run `reconcile --sid "
+                            f"{job['sid']}` (see 'Interrupted and failed operations' "
+                            "in docs/CISCO_CONTRACT_MIGRATION.md) before resuming"
+                        ) from exc
+            elif job.get("state") == "configuration_pending":
+                self._retire_undispatched_attempt(journal, job)
+            else:
+                raise Refused(
+                    "catalog output changed while a prior catalog writer dispatch "
+                    "has an unknown outcome and no recorded SID; find its SID in "
+                    "Splunk Job Manager/audit evidence and run `reconcile --sid "
+                    "<SID>` (see 'Interrupted and failed operations' in "
+                    "docs/CISCO_CONTRACT_MIGRATION.md) before resuming"
+                )
+
     def _dispatch_writer(
         self,
         journal: dict[str, Any],
@@ -2896,8 +3227,13 @@ class Migration:
         *,
         label: str,
         intent_fingerprint: str | None = None,
-    ) -> list[dict[str, Any]]:
-        """Dispatch one exact allowlisted saved-search slice with SID journaling."""
+        persist_result_rows: bool = False,
+    ) -> list[dict[str, Any]] | None:
+        """Dispatch one exact allowlisted saved-search slice with SID journaling.
+
+        Rows are returned (and durably retained) only when the caller reads them
+        back; otherwise a completed job keeps its count and result digest.
+        """
         interface, _ = self._interface()
         writer = next(
             (
@@ -2964,7 +3300,9 @@ class Migration:
                 self._restore_manual_writer(journal, execution)
             raise Uncertain(f"{label} preparation or dispatch requires reconciliation")
         if record is not None and record.get("state") == "complete":
-            return self._read_job(journal, record)
+            if persist_result_rows:
+                return self._completed_job_rows(journal, record)
+            return None
         if record is None:
             self._assert_origin_unchanged(journal)
             self._assert_no_competing_staged_jobs(journal)
@@ -2979,6 +3317,8 @@ class Migration:
                 "writer_contract_id": writer["id"],
                 "writer_role": writer.get("role"),
                 "intent_fingerprint": intent_fingerprint,
+                "persist_result_rows": persist_result_rows,
+                **self._evidence_class(journal),
                 **(
                     {
                         "slice_start": request_bounds["index_earliest"],
@@ -3023,11 +3363,13 @@ class Migration:
                     raise Uncertain(f"{label} returned no SID; reconcile before retry")
                 record.update(state="running", sid=sid)
                 self._write_journal(journal)
-                return self._read_job(journal, record)
+                rows = self._read_job(journal, record)
+                return rows if persist_result_rows else None
             finally:
                 if execution is not None and execution.get("state") != "restored":
                     self._restore_manual_writer(journal, execution)
-        return self._read_job(journal, record)
+        rows = self._read_job(journal, record)
+        return rows if persist_result_rows else None
 
     def _validate_migration_ingestion_window(
         self, journal, *, upper_bound: int | None = None
@@ -3279,6 +3621,8 @@ class Migration:
                 "stream": stream,
                 "slice_start": start,
                 "slice_end": end,
+                "persist_result_rows": False,
+                **self._evidence_class(journal),
                 "request_bounds": {
                     "earliest_time": str(journal["event_earliest"]),
                     "latest_time": str(journal["event_latest"]),
@@ -3344,7 +3688,10 @@ class Migration:
                         self._restore_manual_writer(journal, execution)
             elif matching_writer.get("state") == "running":
                 writer_job = matching_writer
-            self._read_job(journal, writer_job)
+            # A complete record was fully validated when it was marked complete;
+            # its Splunk artifact may have expired since.
+            if writer_job.get("state") != "complete":
+                self._read_job(journal, writer_job)
             stream_state["state"] = "backfill_done"
             self._write_journal(journal)
         self._assert_origin_unchanged(journal)
@@ -3976,7 +4323,19 @@ class Migration:
             expected_stable_fingerprint,
             legacy_expected_fingerprint,
         ):
-            raise Refused("catalog output changed within a journaled build generation")
+            # The catalog is a rewritable derived collection built from live
+            # workload and identity state, so unchanged staged input with a new
+            # output is a new build. Refuse only while the prior generation's
+            # writer could still be running or its outcome is unknown; a job
+            # with a recorded SID is settled here by reading it to completion.
+            self._settle_prior_catalog_writer_jobs(journal, contract["writer_search"])
+            state.setdefault("superseded_generations", []).append(
+                {
+                    "build_generation": state.get("build_generation"),
+                    "expected_fingerprint": prior_fingerprint,
+                }
+            )
+            same_generation = False
         if (
             same_generation
             and prior_fingerprint == legacy_expected_fingerprint
@@ -4396,11 +4755,14 @@ class Migration:
             "cutover_eligible": bool(surfaces) and scenario is not None,
             "reason": public_surface_error,
         }
+        if len(canonical(candidate)) > MAX_CANDIDATE_BYTES:
+            raise Refused(
+                "validated candidate evidence exceeds its bound; validate a shorter range"
+            )
         candidate_path = self.journal.path.with_suffix(".candidate.json")
         candidate_hash = self.journal.write_artifact(candidate_path, candidate)
         if journal.get("phase") != "cutover_in_progress":
             journal["phase"] = "coverage_validated"
-        journal["candidate_path"] = str(candidate_path)
         journal["candidate_sha256"] = candidate_hash
         journal["candidate_cutover_eligible"] = candidate["cutover_eligible"]
         self._write_journal(journal)
@@ -4478,8 +4840,8 @@ class Migration:
         current_snapshot = self.snapshot(allow_activation=True)
         origin = journal.get("origin") or {}
         # Normalize only the allowlisted fields that this journal may mutate;
-        # all other effective configuration, ACL, mapping and identity inputs
-        # must continue to match the original fingerprint.
+        # all other effective configuration, ACL and mapping inputs must
+        # continue to match the original fingerprint.
         for name, macro in current_snapshot["macros"].items():
             origin_macro = origin["macros"][name]
             if not self._macro_args_equal(
@@ -4503,9 +4865,7 @@ class Migration:
                     mutation["field"]
                 ]
         if fingerprint(current_snapshot) != journal.get("origin_fingerprint"):
-            raise Refused(
-                "non-selector configuration, ACL, profile, identity, or target drifted"
-            )
+            raise Refused("non-selector configuration, ACL, profile, or target drifted")
 
     def _apply_mutation(
         self, journal: dict[str, Any], mutation: dict[str, Any]
@@ -5260,6 +5620,8 @@ class Migration:
         }
         stable = {}
         for field in V1_ROW_FIELDS:
+            if field == "encapsulation":
+                continue
             value = row.get(field)
             if value in ("", "null", "None"):
                 value = None
@@ -5267,6 +5629,14 @@ class Migration:
                 parsed = _number(value)
                 if parsed is not None:
                     value = int(parsed) if parsed.is_integer() else parsed
+            if field == "observations":
+                value = _observations_without_netflow_interfaces(
+                    value, row.get("observer")
+                )
+            elif field == "vlan_observations":
+                value = _vlan_observations_without_interface_names(
+                    value, row.get("vlan_observations_truncated")
+                )
             stable[field] = value
         return stable
 
@@ -5775,7 +6145,7 @@ class Migration:
             if len(jobs) != 1:
                 raise Refused("pending V1 recovery has ambiguous complete writer SIDs")
             job = jobs[0]
-            output_rows = self._read_job(journal, job)
+            output_rows = self._completed_job_rows(journal, job)
             if self._v1_record_map(output_rows) != expected:
                 raise Refused("pending V1 manual recovery SID output changed")
             request_bounds = job.get("request_bounds") or {}
@@ -5865,7 +6235,12 @@ class Migration:
             raise Refused("resumed V1 scheduler slice overlaps its pre-pause boundary")
         end = cycles[-1]["index_bounds"][1]
         if end - pre_end > MAX_BACKFILL_SECONDS:
-            raise Refused("V1 rollback recovery exceeds the seven-day slice bound")
+            raise Refused(
+                "V1 rollback recovery exceeds the seven-day slice bound; V1 is "
+                "already resumed and the journal stays rollback_in_progress. See "
+                "'If rollback refuses on the seven-day bound' in "
+                "docs/CISCO_CONTRACT_MIGRATION.md"
+            )
         retention = self._verify_v1_raw_retention(journal, pre_end, end)
         first_resumed_start = cycles[0]["index_bounds"][0]
         gap_slices = (
@@ -6060,6 +6435,7 @@ class Migration:
                     bounds,
                     label=f"V1 rollback recovery slice {start}",
                     intent_fingerprint=writer_intent,
+                    persist_result_rows=True,
                 )
                 if self._v1_record_map(output_rows) != expected:
                     raise Refused(
@@ -6812,11 +7188,14 @@ class Migration:
             if journal.get("phase") == "cutover":
                 return {"status": "cutover", "migration_id": journal["migration_id"]}
             raise Refused("coverage must be validated before cutover")
-        candidate_path = Path(journal.get("candidate_path", ""))
+        # Derived from the locked journal, never from a path stored in it.
+        candidate_path = self.journal.path.with_suffix(".candidate.json")
         try:
-            candidate_bytes = candidate_path.read_bytes()
+            candidate_bytes = self._read_result_artifact_file(
+                candidate_path, MAX_CANDIDATE_BYTES
+            )
             candidate = json.loads(candidate_bytes)
-        except (OSError, UnicodeError, json.JSONDecodeError):
+        except (Refused, UnicodeError, json.JSONDecodeError):
             raise Refused("validated candidate evidence is unavailable") from None
         if hashlib.sha256(candidate_bytes).hexdigest() != journal.get(
             "candidate_sha256"
@@ -6965,6 +7344,51 @@ class Migration:
             if not isinstance(journal.get("v1_pre_pause"), dict):
                 raise Refused(
                     "enabled-origin rollback lacks a validated pre-pause V1 slice"
+                )
+            # request_pending, request_unknown, readback_failed and applied may
+            # all have enabled V1 and must reach the reconcile path below. A
+            # not-started request proves nothing by itself, and a rejected one
+            # only means the readback differed (e.g. ACL) while the value may
+            # already equal the target, so a live read decides both.
+            v1_resume = next(
+                (
+                    item
+                    for item in (journal.get("rollback") or {}).get("mutations", [])
+                    if item.get("name") == "ADM - Conversation rollup"
+                    and item.get("field") == "disabled"
+                ),
+                None,
+            )
+            v1_possibly_resumed = v1_resume is not None and (
+                v1_resume.get("state") not in {"pending", "rejected"}
+                or not self._mutation_equal(
+                    v1_resume,
+                    self._mutation_target(v1_resume)["value"],
+                    v1_resume["before"],
+                )
+            )
+            pre_end = _integer(
+                (journal["v1_pre_pause"].get("index_bounds") or [None, None])[-1]
+            )
+            if pre_end is None:
+                raise Refused(
+                    "enabled-origin rollback lacks a validated pre-pause V1 slice"
+                )
+            if not v1_possibly_resumed and (
+                rollback_recovery_horizon_seconds(int(self.clock()) - pre_end)
+                > MAX_BACKFILL_SECONDS
+            ):
+                consequence = (
+                    "the journal stays rollback_in_progress with V1 paused and V2 public"
+                    if journal.get("phase") == "rollback_in_progress"
+                    else "nothing was changed"
+                )
+                raise Refused(
+                    "enabled-origin rollback can no longer recover the paused V1 "
+                    "window and finish inside the seven-day bound (the gap slices "
+                    "are written one search each, so the required time grows with "
+                    f"the gap); {consequence}. See 'If rollback refuses on the "
+                    "seven-day bound' in docs/CISCO_CONTRACT_MIGRATION.md"
                 )
         if journal.get("phase") == "rollback_in_progress":
             rollback_mutations = journal.get("rollback", {}).get("mutations", [])
@@ -7189,6 +7613,10 @@ def main(argv: list[str] | None = None) -> int:
                 result = journal.read() or {"status": "uninitialized"}
     except MigrationError as exc:
         print(json.dumps({"status": "refused", "reason": str(exc)}, sort_keys=True))
+        return 2
+    except OSError as exc:
+        reason = f"local file or TLS setup failed: {exc.strerror or type(exc).__name__}"
+        print(json.dumps({"status": "refused", "reason": reason}, sort_keys=True))
         return 2
     print(json.dumps(result, sort_keys=True, indent=2))
     return 0
