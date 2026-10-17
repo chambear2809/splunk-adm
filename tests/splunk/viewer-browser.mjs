@@ -33,7 +33,9 @@ try {
       consoleErrors.push(message.text().slice(0, 300));
   });
   page.on("pageerror", (error) =>
-    consoleErrors.push(`pageerror: ${String(error).slice(0, 300)}`),
+    consoleErrors.push(
+      `pageerror: ${(error.stack || String(error)).slice(0, 1200)}`,
+    ),
   );
   page.on("response", (response) => {
     const url = response.url();
@@ -50,6 +52,7 @@ try {
       const body = response.request().postData() || "";
       const params = new URLSearchParams(body);
       searchPayloads.push({
+        status: response.status(),
         earliest: params.get("earliest_time"),
         latest: params.get("latest_time"),
         search: params.get("search") || "",
@@ -154,6 +157,7 @@ try {
     if (command !== "theme") continue;
     const evidence = { theme };
     let stage = "live map";
+    let catalogSearchStart = null;
     try {
       consoleErrors.length = 0;
       failures.length = 0;
@@ -527,20 +531,29 @@ try {
           nonEmpty,
         },
       };
-      stage = "live applications catalog";
+      stage = "live applications catalog route";
       const catalogEarliest = String(Number(latest) - 3600);
+      catalogSearchStart = searchPayloads.length;
       await page.goto(
         `${BASE}/en-US/app/splunk_adm/applications?mode=live&earliest=${catalogEarliest}&latest=${encodeURIComponent(latest)}`,
         { waitUntil: "domcontentloaded" },
       );
+      stage = "live applications heading";
       await page
         .getByRole("heading", { name: "Applications", exact: true })
         .waitFor({ state: "visible", timeout: 60000 });
-      const catalogRow = page.getByRole("button", {
-        name: "Open map for frontend",
-        exact: true,
-      });
+      stage = "live application catalog table";
+      const catalogTable = page.locator(
+        '#atlas-root [aria-label="Application catalog"]',
+      );
+      await catalogTable.waitFor({ state: "visible", timeout: 60000 });
+      stage = "live application catalog row";
+      const catalogRow = catalogTable.locator(
+        'button[aria-label="Open map for frontend"]',
+      );
       await catalogRow.waitFor({ state: "visible", timeout: 60000 });
+      if (await catalogRow.isDisabled())
+        throw new Error("catalog map action is disabled for frontend");
       await catalogRow.click();
       await page.waitForURL(
         (url) => /\/app\/splunk_adm\/map\/?$/.test(url.pathname),
@@ -892,12 +905,79 @@ try {
     } catch (error) {
       evidence.error = `browser qualification failed at ${stage}`;
       const message = error instanceof Error ? error.message : "";
+      evidence.errorDetail = message
+        .split("\n")[0]
+        .replaceAll(user, "[viewer]")
+        .replaceAll(pass, "[redacted]")
+        .slice(0, 240);
       evidence.errorKind = message.includes("strict mode violation")
         ? "ambiguous locator"
         : message.includes("Timeout")
           ? "timeout"
           : "browser check";
       evidence.consoleErrorCount = consoleErrors.length;
+      if (
+        stage.startsWith("live application") ||
+        stage.startsWith("live Find")
+      ) {
+        const catalogActions = await page
+          .locator('#atlas-root [aria-label="Application catalog"] button')
+          .evaluateAll((buttons) =>
+            buttons.map((button) => ({
+              label: button.getAttribute("aria-label"),
+              text: button.textContent?.trim() ?? "",
+              disabled: button.disabled,
+            })),
+          )
+          .catch(() => []);
+        evidence.catalogDiagnostics = {
+          stage,
+          path: new URL(page.url()).pathname,
+          headingCount: await page
+            .getByRole("heading", { name: "Applications", exact: true })
+            .count()
+            .catch(() => 0),
+          catalogTableCount: await page
+            .locator('#atlas-root [aria-label="Application catalog"]')
+            .count(),
+          catalogRowCount: await page
+            .locator('#atlas-root [aria-label="Application catalog"] tbody tr')
+            .count(),
+          findResultCount: await page
+            .locator('#atlas-root [aria-label="Find results"] tbody tr')
+            .count()
+            .catch(() => 0),
+          catalogActions,
+          alerts: await page
+            .locator("#atlas-root [role=alert]")
+            .allInnerTexts()
+            .then((messages) =>
+              messages.map((message) =>
+                message
+                  .replaceAll(user, "[viewer]")
+                  .replaceAll(pass, "[redacted]")
+                  .slice(0, 300),
+              ),
+            )
+            .catch(() => []),
+          searches: searchPayloads
+            .slice(catalogSearchStart ?? searchPayloads.length)
+            .map((request) => ({
+              status: request.status,
+              catalogSearch: request.search.includes("adm_app_catalog"),
+              scopeFallback: request.search.includes("adm_scope_options"),
+            })),
+          failedResponses: failures.slice(-8),
+          consoleErrors: consoleErrors
+            .slice(-5)
+            .map((message) =>
+              message
+                .replaceAll(user, "[viewer]")
+                .replaceAll(pass, "[redacted]")
+                .slice(0, 300),
+            ),
+        };
+      }
     }
     process.stdout.write(JSON.stringify(evidence) + "\n");
   }

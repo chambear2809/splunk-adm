@@ -12,9 +12,13 @@ TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
   "cisco-security-cloud_372/CiscoSecurityCloud"
   "cisco-dc-networking_122/cisco_dc_networking_app_for_splunk"
+  "cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst"
+  "cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl"
+  "cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki"
 )
-SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros)
-LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent k8s otel_traces cilium_hubble adm_summary adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y)
+VENDOR_APP="cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app"
+SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros collections ipfixmap)
+LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y)
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
@@ -80,6 +84,28 @@ cmd_install() {
     [[ -d "$EXTRACTED/$ta" ]] || { echo "missing $EXTRACTED/$ta" >&2; return 1; }
     copy_ta "$EXTRACTED/$ta" "$stage/$(basename "$ta")"
   done
+  # Co-install the dashboard app separately from Atlas. Its scheduled lookup
+  # writers stay disabled until explicitly dispatched by a qualification test.
+  [[ -d "$EXTRACTED/$VENDOR_APP" ]] || { echo "missing $EXTRACTED/$VENDOR_APP" >&2; return 1; }
+  cp -R "$EXTRACTED/$VENDOR_APP" "$stage/cisco-catalyst-app"
+  python3 - "$stage/cisco-catalyst-app" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+app = Path(sys.argv[1])
+# Splunk permits unindented backslash continuations that ConfigParser rejects.
+# Only stanza names are needed to disable every vendor writer.
+searches = re.findall(r"(?m)^\[([^\r\n\]]+)\]\s*$", (app / "default/savedsearches.conf").read_text())
+local = app / "local"
+local.mkdir(exist_ok=True)
+(local / "savedsearches.conf").write_text(
+    "\n".join(
+        f"[{name}]\ndisabled = 1\nenableSched = 0\n"
+        for name in dict.fromkeys(searches)
+    )
+)
+PY
   # Install the source app (not a possibly stale dist/stage copy) so tests see current knowledge objects.
   cp -R "$ROOT/splunk_app/splunk_adm" "$stage/splunk_adm"
   cp -R "$HERE/lab_app" "$stage/adm_lab"

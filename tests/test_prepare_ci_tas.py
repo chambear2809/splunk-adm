@@ -4,6 +4,7 @@ import tarfile
 import unittest
 import hashlib
 import json
+import io
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -21,6 +22,10 @@ class PrepareCiTasTests(unittest.TestCase):
                 "Stream Wire Data": "Splunk_TA_stream_wire_data",
                 "Cisco Security Cloud": "CiscoSecurityCloud",
                 "Cisco DC Networking": "cisco_dc_networking_app_for_splunk",
+                "Cisco Enterprise Networking App for Splunk": "cisco-catalyst-app",
+                "Cisco Enterprise Networking Add-on for Splunk": "TA_cisco_catalyst",
+                "Cisco Enterprise Networking NetFlow Add-on for Splunk": "splunk_app_stream_ipfix_cisco_hsl",
+                "Cisco Meraki Add-on for Splunk": "Splunk_TA_cisco_meraki",
             }
             for title, (archive_name, wrapper) in REQUIRED.items():
                 archive = packages / archive_name
@@ -84,3 +89,38 @@ class PrepareCiTasTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsafe archive member"):
                 _safe_extract(archive, destination)
             self.assertFalse((tmp_path / "outside.txt").exists())
+
+    def test_extract_strips_executable_mode(self) -> None:
+        with TemporaryDirectory() as root:
+            path = Path(root)
+            archive = path / "test.tar"
+            with tarfile.open(archive, "w") as tar:
+                info = tarfile.TarInfo("app/bin/input.py")
+                info.mode = 0o4755
+                info.size = 4
+                tar.addfile(info, io.BytesIO(b"data"))
+            _safe_extract(archive, path / "out")
+            self.assertEqual(
+                (path / "out/app/bin/input.py").stat().st_mode & 0o7777, 0o600
+            )
+
+    def test_extract_refuses_duplicate_link_special_and_windows_paths(self) -> None:
+        for kind in ("duplicate", "symlink", "fifo", "windows", "backslash"):
+            with self.subTest(kind=kind), TemporaryDirectory() as root:
+                path = Path(root)
+                archive = path / "test.tar"
+                with tarfile.open(archive, "w") as tar:
+                    name = {"windows": "C:/app/file", "backslash": "app\\file"}.get(
+                        kind, "app/file"
+                    )
+                    info = tarfile.TarInfo(name)
+                    if kind == "symlink":
+                        info.type, info.linkname = tarfile.SYMTYPE, "../outside"
+                    elif kind == "fifo":
+                        info.type = tarfile.FIFOTYPE
+                    tar.addfile(info)
+                    if kind == "duplicate":
+                        tar.addfile(info)
+                with self.assertRaises(ValueError):
+                    _safe_extract(archive, path / "out")
+                self.assertFalse((path / "out").exists())

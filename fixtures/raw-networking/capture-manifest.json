@@ -1,0 +1,75 @@
+{
+  "scenario_id": "campus-meraki-two-cluster",
+  "fixture_kind": "synthetic_raw_only",
+  "base_time": "2026-10-17T01:34:00.000Z",
+  "graph_window": {
+    "start": "2026-10-17T01:34:00.000Z",
+    "end": "2026-10-17T01:49:00.000Z",
+    "description": "Intended 15-minute scenario window; this is distinct from the wider HEC ingestion range."
+  },
+  "ingestion_window": {
+    "start": "2026-10-16T22:49:00.000Z",
+    "end": "2026-10-17T01:50:00.000Z",
+    "basis": "Minimum and maximum HEC event time across every generated raw file, including deliberately stale and inventory records."
+  },
+  "window_start": "2026-10-17T01:34:00.000Z",
+  "window_end": "2026-10-17T01:49:00.000Z",
+  "source_profiles": {
+    "file": "source-profiles.json",
+    "sha256": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467"
+  },
+  "output_events": {
+    "catalyst_clients.ndjson": 1,
+    "meraki_associations.ndjson": 7,
+    "meraki_inventory.ndjson": 3,
+    "meraki_topology.ndjson": 1,
+    "campus_netflow.ndjson": 1,
+    "sdwan_netflow.ndjson": 1,
+    "meraki_ms390_ipfix.ndjson": 3,
+    "aci_stats.ndjson": 28,
+    "aci_class.ndjson": 688,
+    "aci_netflow.ndjson": 34,
+    "aci_nd_flows.ndjson": 8,
+    "aci_nd_endpoints.ndjson": 4,
+    "nxos_inventory.ndjson": 105,
+    "nxos_nd_flows.ndjson": 2,
+    "nxos_nd_endpoints.ndjson": 3,
+    "kube_objects.ndjson": 122,
+    "hubble_flows.ndjson": 36,
+    "isovalent.ndjson": 8,
+    "otel_traces.ndjson": 34
+  },
+  "index_events": {
+    "cilium_hubble": 36,
+    "cisco_catalyst": 1,
+    "cisco_dc": 838,
+    "cisco_isovalent": 8,
+    "cisco_meraki": 11,
+    "k8s": 122,
+    "netflow": 39,
+    "otel_traces": 34
+  },
+  "sourcetype_events": {
+    "cilium:hubble:flow": 36,
+    "cisco:dc:aci:class": 688,
+    "cisco:dc:aci:stats": 28,
+    "cisco:dc:nd:endpoints": 7,
+    "cisco:dc:nd:flows": 10,
+    "cisco:dc:nexus9k": 105,
+    "cisco:dnac:client": 1,
+    "cisco:isovalent": 8,
+    "kube:object:endpointslices": 18,
+    "kube:object:gateways": 2,
+    "kube:object:httproutes": 2,
+    "kube:object:ingresses": 2,
+    "kube:object:nodes": 42,
+    "kube:object:pods": 28,
+    "kube:object:services": 28,
+    "meraki:accesspoints": 7,
+    "meraki:custom": 1,
+    "meraki:devices": 3,
+    "otel:traces": 34,
+    "stream:netflow": 39
+  },
+  "qualification": "Synthetic TA-shaped fixture; no API collection, exporter template decoding, or live attachment is asserted."
+}

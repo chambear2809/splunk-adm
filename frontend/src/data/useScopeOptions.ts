@@ -3,7 +3,13 @@ import { createStaticURL } from "@splunk/splunk-utils/url";
 import { parseScopes, type ScopeOption } from "./scopes";
 import type { SearchClient } from "./searchClient";
 import demoScopes from "../../../fixtures/demo-scopes.json";
-export function useScopeOptions(live: boolean, client?: SearchClient) {
+import networkingScopes from "../../../fixtures/demo-networking-scopes.json";
+import type { DemoScenario } from "./demoClient";
+export function useScopeOptions(
+  live: boolean,
+  client?: SearchClient,
+  scenario: DemoScenario = "aci",
+) {
   const [state, setState] = useState<{
     rows: ScopeOption[];
     loading: boolean;
@@ -29,9 +35,18 @@ export function useScopeOptions(live: boolean, client?: SearchClient) {
         });
         return { rows: parseScopes(result.rows), warnings: result.warnings };
       }
-      if (!__ADM_SPLUNK_BUILD__) return { rows: parseScopes(demoScopes.rows) };
+      if (!__ADM_SPLUNK_BUILD__)
+        return {
+          rows: parseScopes(
+            scenario === "catalyst-aci" || scenario === "meraki-nxos"
+              ? networkingScopes.rows
+              : demoScopes.rows,
+          ),
+        };
       const response = await fetch(
-        createStaticURL("app/splunk_adm/demo/demo-scopes.json"),
+        createStaticURL(
+          `app/splunk_adm/demo/${scenario === "catalyst-aci" || scenario === "meraki-nxos" ? "demo-networking-scopes.json" : "demo-scopes.json"}`,
+        ),
         { signal: controller.signal },
       );
       if (!response.ok)
@@ -60,6 +75,6 @@ export function useScopeOptions(live: boolean, client?: SearchClient) {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [live, client, revision]);
+  }, [live, client, scenario, revision]);
   return { ...state, retry: () => setRevision((value) => value + 1) };
 }

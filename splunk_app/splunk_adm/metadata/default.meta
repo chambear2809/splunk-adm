@@ -5,7 +5,25 @@ export = none
 [collections/adm_observer_scope]
 access = read : [ * ], write : [ admin, sc_admin ]
 
+[collections/adm_network_source_scope]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/adm_network_client_history]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/adm_cilium_cluster_settings]
+access = read : [ * ], write : [ admin, sc_admin ]
+
 [transforms/adm_observer_scope]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[transforms/adm_network_source_scope]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[transforms/adm_network_client_history]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[transforms/adm_cilium_cluster_settings]
 access = read : [ * ], write : [ admin, sc_admin ]
 
 # All saved searches in this app write derived state or perform maintenance.
@@ -39,4 +57,10 @@ export = none
 access = read : [ * ], write : [ admin, sc_admin ]
 
 [transforms/adm_app_catalog]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/adm_app_catalog_v2]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[transforms/adm_app_catalog_v2]
 access = read : [ * ], write : [ admin, sc_admin ]

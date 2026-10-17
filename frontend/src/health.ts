@@ -10,6 +10,9 @@ export const SOURCE_NAMES = [
   "Traces",
   "Hubble",
   "Summary",
+  "Catalyst client observations",
+  "Meraki wireless associations",
+  "Catalyst SD-WAN IPFIX",
 ] as const;
 export const JOB_NAMES = [
   "Identity builder",
@@ -31,6 +34,9 @@ export interface SourceHealth {
   latestEvent?: number;
   latestIndexed?: number;
   maxIngestLag?: number;
+  unmapped?: number;
+  unresolved?: number;
+  warning?: string;
 }
 export interface JobHealth {
   name: string;
@@ -130,6 +136,9 @@ export function sourceRows(rows: Row[]): SourceHealth[] {
       latestEvent: timestamp(r.latest_event),
       latestIndexed: timestamp(r.latest_indexed),
       maxIngestLag: numeric(r.max_ingest_lag),
+      unmapped: numeric(r.unmapped),
+      unresolved: numeric(r.unresolved),
+      warning: text(r.warning),
     };
   });
 }

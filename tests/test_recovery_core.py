@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import socket
+from copy import deepcopy
 import unittest
 import urllib.error
 from io import BytesIO
@@ -43,6 +44,107 @@ class NullApi:
         if method == "POST" and "adm_recovery_audit" in path:
             return {}
         raise AssertionError(f"unexpected API request: {method} {path}")
+
+
+class RecoveryDeploymentTest(unittest.TestCase):
+    def responses(self):
+        return {
+            "/services/server/info": {
+                "entry": [
+                    {
+                        "content": {
+                            "version": "10.6.0.5",
+                            "product_type": "enterprise",
+                            "mode": "normal",
+                            "isForwarding": False,
+                            "server_roles": [
+                                "indexer",
+                                "license_master",
+                                "license_manager",
+                                "kv_store",
+                            ],
+                        }
+                    }
+                ],
+            },
+            "/servicesNS/nobody/system/configs/conf-server/shclustering": {
+                "entry": [{"content": {"disabled": True}}],
+            },
+            "/servicesNS/nobody/system/configs/conf-server/clustering": {
+                "entry": [{"content": {"mode": "disabled"}}],
+            },
+            "/services/search/distributed/peers?count=0": {
+                "entry": [],
+                "paging": {"total": 0},
+            },
+        }
+
+    def qualify(self, responses):
+        class ReadOnlyApi:
+            def request(self, method, path, **kwargs):
+                if method != "GET":
+                    raise AssertionError("qualification must be read-only")
+                return deepcopy(responses[path])
+
+        return Recovery(ReadOnlyApi()).qualify_deployment()
+
+    def test_observed_standalone_shape_is_qualified(self):
+        self.qualify(self.responses())
+
+    def test_unknown_cloud_forwarder_and_remote_search_head_are_refused(self):
+        for key, value in (
+            ("version", "10.7.0"),
+            ("product_type", "cloud"),
+            ("instance_type", "cloud"),
+            ("instance_type", "unknown"),
+            ("mode", "unknown"),
+            ("isForwarding", True),
+            ("server_roles", ["search_head", "kv_store"]),
+            ("server_roles", "indexer"),
+        ):
+            with self.subTest(key=key, value=value), self.assertRaises(Refused):
+                responses = self.responses()
+                responses["/services/server/info"]["entry"][0]["content"][key] = value
+                self.qualify(responses)
+        for key in ("version", "product_type", "mode", "isForwarding", "server_roles"):
+            with self.subTest(missing=key), self.assertRaises(Refused):
+                responses = self.responses()
+                del responses["/services/server/info"]["entry"][0]["content"][key]
+                self.qualify(responses)
+
+    def test_clustering_and_incomplete_evidence_are_refused(self):
+        for path, replacement in (
+            ("/services/server/info", {"entry": []}),
+            ("/services/server/info", {"entry": [{"content": None}]}),
+            (
+                "/servicesNS/nobody/system/configs/conf-server/shclustering",
+                {"entry": [{"content": {}}]},
+            ),
+            (
+                "/servicesNS/nobody/system/configs/conf-server/shclustering",
+                {"entry": [{"content": {"disabled": False}}]},
+            ),
+            (
+                "/servicesNS/nobody/system/configs/conf-server/clustering",
+                {"entry": [{"content": {"mode": "searchhead"}}]},
+            ),
+            (
+                "/services/search/distributed/peers?count=0",
+                {"entry": [{"content": {"disabled": True}}], "paging": {"total": 1}},
+            ),
+            (
+                "/services/search/distributed/peers?count=0",
+                {"entry": [], "paging": {"total": 1}},
+            ),
+            ("/services/search/distributed/peers?count=0", {"entry": []}),
+        ):
+            with (
+                self.subTest(path=path, replacement=replacement),
+                self.assertRaises(Refused),
+            ):
+                responses = self.responses()
+                responses[path] = replacement
+                self.qualify(responses)
 
 
 class RecoveryPlanTest(unittest.TestCase):

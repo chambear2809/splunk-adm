@@ -10,6 +10,8 @@ export const INDEX_MACROS = [
   "adm_index_traces",
   "adm_index_hubble",
   "adm_index_summary",
+  "adm_index_catalyst",
+  "adm_index_meraki",
   "adm_summary_index_name",
 ] as const;
 export const BUILDER_SEARCHES = [
@@ -21,8 +23,23 @@ export const BUILDER_SEARCHES = [
   "ADM - Conversation rollup",
   "ADM - Application catalog",
 ] as const;
+export const CISCO_READ_MACROS = [
+  "adm_data_contract_version",
+  "adm_graph",
+  "adm_graph_v2",
+  "adm_index_summary_v2",
+  "adm_summary_index_v2_name",
+  "adm_network_client_history_observations",
+  "adm_network_client_history_build",
+] as const;
+export const CISCO_STAGED_SEARCHES = [
+  "ADM - Network client history builder",
+  "ADM - Conversation rollup v2",
+  "ADM - Traffic observation rollup v2",
+] as const;
 export type IndexMacro = (typeof INDEX_MACROS)[number];
 export type BuilderSearch = (typeof BUILDER_SEARCHES)[number];
+export type CiscoStagedSearch = (typeof CISCO_STAGED_SEARCHES)[number];
 export interface SetupMacro {
   name: IndexMacro;
   definition?: string;
@@ -42,7 +59,7 @@ export interface ObserverScope {
   cluster: string;
 }
 export interface SavedSearchStatus {
-  name: BuilderSearch;
+  name: string;
   disabled?: boolean;
   scheduled?: boolean;
   canWrite: boolean;
@@ -54,7 +71,52 @@ export interface SetupSnapshot {
   summaryIndex: SummaryIndex;
   observerScopes: { rows: ObserverScope[]; complete: boolean; error?: string };
   savedSearches: SavedSearchStatus[];
+  ciscoIntegration: CiscoIntegrationStatus;
   warnings: string[];
+}
+export interface ReadonlyMacroStatus {
+  name: string;
+  definition?: string;
+  error?: string;
+  canWrite: boolean;
+}
+export interface NetworkSourceProfile {
+  _key: string;
+  mapping_key: string;
+  duplicate_count: number;
+  source: string;
+  source_authority: string;
+  domain_kind: string;
+  observation_domain_present: string;
+  observation_domain_id: string;
+  vpn_id: string;
+  routing_domain: string;
+  scope: string;
+  cluster: string;
+  mapping_status: string;
+  profile: string;
+}
+export interface CiliumClusterSetting {
+  _key: string;
+  cluster: string;
+  lb_mode: string;
+  ingress_mode: string;
+  l2announcements_enabled: string;
+  mapping_status: string;
+}
+export interface ReadonlyCollection<T> {
+  rows: T[];
+  complete: boolean;
+  error?: string;
+}
+export interface CiscoIntegrationStatus {
+  macros: ReadonlyMacroStatus[];
+  searches: SavedSearchStatus[];
+  summaryIndex: SummaryIndex;
+  sourceProfiles: ReadonlyCollection<NetworkSourceProfile>;
+  clusterSettings: ReadonlyCollection<CiliumClusterSetting>;
+  state: "unavailable" | "incomplete" | "staged";
+  reasons: string[];
 }
 export interface SetupReadiness {
   ready: boolean;
@@ -150,7 +212,35 @@ const OPTIONAL_MACROS: readonly [IndexMacro, string][] = [
   ["adm_index_ftd", "FTD"],
   ["adm_index_isovalent", "Isovalent"],
   ["adm_index_hubble", "Hubble"],
+  ["adm_index_catalyst", "Catalyst Center and SD-WAN"],
+  ["adm_index_meraki", "Meraki wireless"],
 ];
+const EXPECTED_SOURCE_PROFILES = new Set([
+  "standard_netflow",
+  "catalyst_campus_fnf",
+  "catalyst_sdwan_ipfix",
+  "meraki_ms390_ipfix",
+]);
+const SOURCE_PROFILE_FIELDS = [
+  "source",
+  "source_authority",
+  "domain_kind",
+  "observation_domain_present",
+  "observation_domain_id",
+  "vpn_id",
+  "routing_domain",
+  "scope",
+  "cluster",
+  "mapping_status",
+  "profile",
+] as const;
+const CLUSTER_SETTING_FIELDS = [
+  "cluster",
+  "lb_mode",
+  "ingress_mode",
+  "l2announcements_enabled",
+  "mapping_status",
+] as const;
 export function setupReadiness(snapshot: SetupSnapshot): SetupReadiness {
   const missingRequired: string[] = REQUIRED_MACROS.filter((name) => {
     const macro = snapshot.macros.find((row) => row.name === name);
@@ -196,6 +286,13 @@ export function setupReadiness(snapshot: SetupSnapshot): SetupReadiness {
     optionalWarnings,
   };
 }
+const parseBareIndex = (value: string | undefined): string | undefined =>
+  value && /^[a-z][a-z0-9_-]{0,79}$/.test(value) ? value : undefined;
+const parseIndexMacro = (value: string | undefined): string | undefined => {
+  if (!value) return undefined;
+  const match = /^index=([a-z][a-z0-9_-]{0,79})$/.exec(value);
+  return match?.[1];
+};
 class SetupHTTPError extends Error {
   constructor(readonly status: number) {
     super(`Splunk setup request failed (HTTP ${status}).`);
@@ -325,6 +422,334 @@ export class ToolkitSetupClient implements SetupClient {
     }
     return { rows, complete: false };
   }
+  private async readonlyMacro(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<ReadonlyMacroStatus> {
+    try {
+      const record = entry(
+        await this.request(`configs/conf-macros/${name}`, signal),
+      );
+      const definition = text(record.content.definition);
+      if (definition === undefined)
+        throw new Error("Macro definition is unavailable.");
+      return { name, definition, canWrite: record.writable };
+    } catch (error) {
+      return { name, canWrite: false, error: message(error) };
+    }
+  }
+  private async readonlySearch(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<SavedSearchStatus> {
+    try {
+      const record = entry(
+        await this.request(
+          `saved/searches/${encodeURIComponent(name)}`,
+          signal,
+        ),
+      );
+      const disabled = flag(record.content.disabled);
+      if (disabled === undefined)
+        throw new Error("Saved-search enabled state is unavailable.");
+      const scheduled = flag(record.content.is_scheduled);
+      if (scheduled === undefined)
+        throw new Error("Saved-search schedule state is unavailable.");
+      return { name, disabled, scheduled, canWrite: record.writable };
+    } catch (error) {
+      return { name, canWrite: false, error: message(error) };
+    }
+  }
+  private async readonlyCollection<T>(
+    collection: string,
+    parseRow: (value: unknown) => T,
+    signal?: AbortSignal,
+  ): Promise<ReadonlyCollection<T>> {
+    const rows: T[] = [];
+    const seenKeys = new Set<string>();
+    const pageSize = 250;
+    const maximum = 1000;
+    try {
+      for (let skip = 0; skip <= maximum; skip += pageSize) {
+        const limit = skip === maximum ? 1 : pageSize;
+        const query = new URLSearchParams({
+          count: String(limit),
+          skip: String(skip),
+          sort: "_key:1",
+        });
+        const payload = await this.request(
+          `storage/collections/data/${collection}?${query}`,
+          signal,
+        );
+        if (!Array.isArray(payload) || payload.length > limit)
+          throw new Error("Collection returned an invalid or partial page.");
+        if (skip === maximum)
+          return {
+            rows,
+            complete: payload.length === 0,
+            ...(payload.length
+              ? {
+                  error: `Collection exceeds the ${maximum}-row setup review limit.`,
+                }
+              : {}),
+          };
+        const page = payload.map(parseRow);
+        for (const row of page) {
+          const key = (row as { _key: string })._key;
+          if (seenKeys.has(key))
+            throw new Error(
+              "Collection has duplicate keys or changed during paging.",
+            );
+          seenKeys.add(key);
+          rows.push(row);
+        }
+        if (payload.length < pageSize) return { rows, complete: true };
+      }
+      return {
+        rows,
+        complete: false,
+        error: "Collection read was incomplete.",
+      };
+    } catch (error) {
+      return { rows, complete: false, error: message(error) };
+    }
+  }
+  private sourceProfileRows(signal?: AbortSignal) {
+    return this.readonlyCollection(
+      "adm_network_source_scope",
+      (value): NetworkSourceProfile => {
+        if (
+          !object(value) ||
+          typeof value._key !== "string" ||
+          !/^[a-f0-9]{64}$/.test(value._key) ||
+          typeof value.mapping_key !== "string" ||
+          !/^[a-f0-9]{64}$/.test(value.mapping_key) ||
+          typeof value.duplicate_count !== "number" ||
+          !Number.isSafeInteger(value.duplicate_count) ||
+          value.duplicate_count < 1 ||
+          SOURCE_PROFILE_FIELDS.some(
+            (field) => typeof value[field] !== "string",
+          ) ||
+          SOURCE_PROFILE_FIELDS.some(
+            (field) =>
+              field !== "observation_domain_id" &&
+              field !== "vpn_id" &&
+              field !== "routing_domain" &&
+              !(value[field] as string).trim(),
+          ) ||
+          !["0", "1"].includes(value.observation_domain_present as string) ||
+          !["mapped", "unmapped", "ambiguous", "unsupported"].includes(
+            value.mapping_status as string,
+          )
+        )
+          throw new Error("Source-scope records are malformed or incomplete.");
+        return value as unknown as NetworkSourceProfile;
+      },
+      signal,
+    ).then((collection) => {
+      const keys = new Set<string>();
+      const mappingKeys = new Set<string>();
+      for (const row of collection.rows) {
+        const key = JSON.stringify([
+          row.source,
+          row.source_authority,
+          row.domain_kind,
+          row.observation_domain_present,
+          row.observation_domain_id,
+          row.vpn_id,
+          row.routing_domain,
+        ]);
+        if (keys.has(key))
+          return {
+            ...collection,
+            complete: false,
+            error:
+              "Duplicate seven-key source profiles make mapping ambiguous.",
+          };
+        keys.add(key);
+        if (mappingKeys.has(row.mapping_key))
+          return {
+            ...collection,
+            complete: false,
+            error:
+              "Duplicate source mapping keys make the seven-key mapping ambiguous.",
+          };
+        mappingKeys.add(row.mapping_key);
+      }
+      return collection;
+    });
+  }
+  private clusterSettingRows(signal?: AbortSignal) {
+    return this.readonlyCollection(
+      "adm_cilium_cluster_settings",
+      (value): CiliumClusterSetting => {
+        if (
+          !object(value) ||
+          typeof value._key !== "string" ||
+          !/^[a-f0-9]{64}$/.test(value._key) ||
+          CLUSTER_SETTING_FIELDS.some(
+            (field) =>
+              field !== "l2announcements_enabled" &&
+              typeof value[field] !== "string",
+          ) ||
+          CLUSTER_SETTING_FIELDS.some(
+            (field) =>
+              field !== "l2announcements_enabled" &&
+              !(value[field] as string).trim(),
+          ) ||
+          ![0, 1, "0", "1", "true", "false"].includes(
+            value.l2announcements_enabled as number | string,
+          ) ||
+          !["mapped", "unmapped", "ambiguous"].includes(
+            value.mapping_status as string,
+          )
+        )
+          throw new Error("Cluster settings are malformed or incomplete.");
+        return {
+          ...(value as unknown as CiliumClusterSetting),
+          l2announcements_enabled: String(value.l2announcements_enabled),
+        };
+      },
+      signal,
+    );
+  }
+  private async ciscoIntegration(
+    signal: AbortSignal | undefined,
+    authorized: boolean,
+  ): Promise<CiscoIntegrationStatus> {
+    const [macros, searches, sourceProfiles, clusterSettings] =
+      await Promise.all([
+        Promise.all(
+          CISCO_READ_MACROS.map((name) => this.readonlyMacro(name, signal)),
+        ),
+        Promise.all(
+          CISCO_STAGED_SEARCHES.map((name) =>
+            this.readonlySearch(name, signal),
+          ),
+        ),
+        this.sourceProfileRows(signal),
+        this.clusterSettingRows(signal),
+      ]);
+    const v2ReaderIndex = macros.find(
+      (row) => row.name === "adm_index_summary_v2",
+    );
+    const v2WriterIndex = macros.find(
+      (row) => row.name === "adm_summary_index_v2_name",
+    );
+    const readerIndex = parseIndexMacro(v2ReaderIndex?.definition);
+    const writerIndex = parseBareIndex(v2WriterIndex?.definition);
+    let summaryIndex: SummaryIndex =
+      readerIndex && writerIndex && readerIndex === writerIndex
+        ? { name: readerIndex }
+        : {
+            error: "Version-2 summary reader and writer indexes do not match.",
+          };
+    if (summaryIndex.name) {
+      try {
+        const record = entry(
+          await this.request(
+            `data/indexes/${summaryIndex.name}`,
+            signal,
+            false,
+          ),
+        );
+        const disabled = flag(record.content.disabled);
+        if (disabled === undefined)
+          throw new Error("Version-2 summary index state is unavailable.");
+        summaryIndex = {
+          name: summaryIndex.name,
+          exists: !disabled,
+          ...(disabled
+            ? { error: "The version-2 summary index is disabled." }
+            : {}),
+        };
+      } catch (error) {
+        summaryIndex = {
+          name: summaryIndex.name,
+          error: message(error),
+        };
+      }
+    }
+    const reasons: string[] = [];
+    if (!authorized)
+      reasons.push("Administrator capabilities are unavailable.");
+    if (macros.some((row) => row.error))
+      reasons.push("One or more integration macros could not be read.");
+    if (searches.some((row) => row.error))
+      reasons.push("One or more staged builder states could not be read.");
+    if (!sourceProfiles.complete)
+      reasons.push(sourceProfiles.error ?? "Source profiles are incomplete.");
+    if (!clusterSettings.complete)
+      reasons.push(clusterSettings.error ?? "Cluster settings are incomplete.");
+    if (
+      sourceProfiles.rows.some(
+        (row) => !EXPECTED_SOURCE_PROFILES.has(row.profile),
+      )
+    )
+      reasons.push("Unknown source profiles require operator review.");
+    if (sourceProfiles.rows.some((row) => row.mapping_status !== "mapped"))
+      reasons.push(
+        "Unmapped or ambiguous source profiles cannot support correlation.",
+      );
+    if (sourceProfiles.rows.some((row) => row.duplicate_count !== 1))
+      reasons.push(
+        "Duplicate source-profile candidates make the seven-key mapping ambiguous.",
+      );
+    if (clusterSettings.rows.some((row) => row.mapping_status !== "mapped"))
+      reasons.push(
+        "Unmapped or ambiguous cluster settings cannot support cluster joins.",
+      );
+    const clusters = new Set<string>();
+    if (
+      clusterSettings.rows.some((row) => {
+        if (clusters.has(row.cluster)) return true;
+        clusters.add(row.cluster);
+        return false;
+      })
+    )
+      reasons.push(
+        "Duplicate cluster settings make cluster configuration ambiguous.",
+      );
+    if (summaryIndex.exists !== true)
+      reasons.push(
+        summaryIndex.error ?? "Version-2 summary index is unavailable.",
+      );
+    const contract = macros.find(
+      (row) => row.name === "adm_data_contract_version",
+    );
+    if (contract?.definition !== "1")
+      reasons.push("The active data contract is not the shipped version 1.");
+    const historySearch = searches.find(
+      (row) => row.name === "ADM - Network client history builder",
+    );
+    if (historySearch?.disabled !== true || historySearch.scheduled !== true)
+      reasons.push(
+        "Client history builder is not in the expected disabled staged state.",
+      );
+    const v2Writers = searches.filter(
+      (row) => row.name !== "ADM - Network client history builder",
+    );
+    if (
+      v2Writers.some((row) => row.disabled !== true || row.scheduled !== true)
+    )
+      reasons.push(
+        "Version-2 rollup writers are not in the expected disabled staged state.",
+      );
+    const allUnreadable = !authorized || macros.every((row) => !!row.error);
+    return {
+      macros,
+      searches,
+      summaryIndex,
+      sourceProfiles,
+      clusterSettings,
+      state: allUnreadable
+        ? "unavailable"
+        : reasons.length > 0
+          ? "incomplete"
+          : "staged",
+      reasons,
+    };
+  }
   async read(signal?: AbortSignal): Promise<SetupSnapshot> {
     const warnings: string[] = [];
     let authorized = false;
@@ -377,6 +802,7 @@ export class ToolkitSetupClient implements SetupClient {
     } catch (error) {
       observerScopes = { rows: [], complete: false, error: message(error) };
     }
+    const ciscoIntegration = await this.ciscoIntegration(signal, authorized);
     const writer = macros.find(
       (macro) => macro.name === "adm_summary_index_name",
     )!;
@@ -415,6 +841,7 @@ export class ToolkitSetupClient implements SetupClient {
       summaryIndex,
       observerScopes,
       savedSearches,
+      ciscoIntegration,
       warnings,
     };
   }

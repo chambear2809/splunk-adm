@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import type { Graph, GraphNode } from "../graph";
+import type { Graph, GraphIndex, GraphNode } from "../graph";
 import { IdentityBadge } from "../Inspector";
 import {
   contractCell,
@@ -8,13 +8,18 @@ import {
   prettyBytes,
   relationshipLabel,
 } from "../glossary";
-import { observationsByDevice, type indexTopology } from "../topology";
+import {
+  edgeDeviceContext,
+  observationsByDevice,
+  type indexTopology,
+} from "../topology";
 export function TableView({
   graph,
   label,
   selected,
   onSelect,
   topo,
+  index,
   node,
 }: {
   graph: Graph;
@@ -22,6 +27,7 @@ export function TableView({
   selected?: string;
   onSelect: (id: string) => void;
   topo: ReturnType<typeof indexTopology>;
+  index: GraphIndex;
   node: (id: string) => GraphNode | undefined;
 }) {
   const conv = graph.edges.filter(
@@ -60,13 +66,17 @@ export function TableView({
               </td>
               <td>{portLabel(e)}</td>
               <td>
-                {observationsByDevice(e, topo)
+                {observationsByDevice(e, topo, [], edgeDeviceContext(e, index))
                   .map((d) => d.label)
                   .join(", ") || "—"}
               </td>
               <td>{contractCell(e)}</td>
               <td className="num">
-                {e.bytes !== undefined ? prettyBytes(e.bytes) : "—"}
+                {e.traffic_observations?.length
+                  ? "See observations"
+                  : e.bytes !== undefined
+                    ? prettyBytes(e.bytes)
+                    : "—"}
               </td>
               <td>
                 {e.acl_action === "drop" ? (

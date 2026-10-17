@@ -23,7 +23,7 @@ const search = vi.fn();
 const client: SearchClient = { search };
 describe("pipeline health", () => {
   it("preserves unknown values instead of inventing successful empty results", () => {
-    expect(sourceRows([])).toHaveLength(8);
+    expect(sourceRows([])).toHaveLength(11);
     expect(jobRows([])).toHaveLength(12);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
@@ -51,6 +51,30 @@ describe("pipeline health", () => {
         now,
       ),
     ).toBe("Clock is ahead");
+  });
+  it("retains Catalyst and Meraki source mapping and identity warnings", () => {
+    const sources = sourceRows([
+      {
+        kind: "source",
+        name: "Catalyst client observations",
+        records: 4,
+        unmapped: 2,
+        unresolved: 1,
+        warning: "One controller authority is unavailable",
+      },
+    ]);
+    expect(
+      sources.find((s) => s.name === "Catalyst client observations"),
+    ).toMatchObject({
+      records: 4,
+      unmapped: 2,
+      unresolved: 1,
+      warning: "One controller authority is unavailable",
+    });
+    expect(sources.map((s) => s.name)).toContain(
+      "Meraki wireless associations",
+    );
+    expect(sources.map((s) => s.name)).toContain("Catalyst SD-WAN IPFIX");
   });
   it("distinguishes disabled, unobserved, failed, and overdue jobs", () => {
     const job = {
@@ -101,6 +125,9 @@ describe("pipeline health", () => {
       latestEvent: undefined,
       latestIndexed: undefined,
       maxIngestLag: undefined,
+      unmapped: undefined,
+      unresolved: undefined,
+      warning: undefined,
     });
   });
   it("keeps successful source evidence when scheduler visibility fails", async () => {

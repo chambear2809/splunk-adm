@@ -46,6 +46,55 @@ const trueFlag = (value: unknown) =>
   value === 1 ||
   value === "1" ||
   (typeof value === "string" && value.toLowerCase() === "true");
+const finiteCount = (value: unknown) => {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+};
+const searchMetadata = (value: unknown): Record<string, unknown>[] => {
+  if (!value || typeof value !== "object") return [];
+  const root = value as Record<string, unknown>;
+  const content = root.content;
+  return [
+    root,
+    ...(content && typeof content === "object"
+      ? [content as Record<string, unknown>]
+      : []),
+  ];
+};
+const incompleteSearchError = (value: unknown) => {
+  const metadata = searchMetadata(value);
+  if (
+    metadata.some(
+      (m) => m.isDone === false || m.isDone === 0 || m.isDone === "0",
+    )
+  )
+    return "Splunk search had not finished; results could be incomplete.";
+  if (
+    metadata.some(
+      (m) =>
+        typeof m.dispatchState === "string" &&
+        !["DONE", "FAILED"].includes(m.dispatchState.toUpperCase()),
+    )
+  )
+    return "Splunk search had not reached a complete state; results could be incomplete.";
+  if (metadata.some((m) => trueFlag(m.isFinalized)))
+    return "Splunk finalized this job before all results were available; results could be incomplete.";
+  if (
+    metadata.some(
+      (m) => trueFlag(m.resultIsTruncated) || trueFlag(m.eventIsTruncated),
+    )
+  )
+    return "Splunk truncated this search; results could be incomplete.";
+  if (
+    metadata.some((m) => {
+      if (m.dropCount === undefined || m.dropCount === null) return false;
+      const count = finiteCount(m.dropCount);
+      return count === undefined || count > 0;
+    })
+  )
+    return "Splunk dropped or could not verify search events; results could be incomplete.";
+  return undefined;
+};
 
 export class ToolkitSearchClient implements SearchClient {
   search(request: SearchRequest): Promise<RunResult> {
@@ -148,6 +197,10 @@ export class ToolkitSearchClient implements SearchClient {
               try {
                 const results = (payload as { results?: unknown } | null)
                   ?.results;
+                const incomplete =
+                  incompleteSearchError(finalState) ??
+                  incompleteSearchError(payload);
+                if (incomplete) throw new Error(incomplete);
                 if (!Array.isArray(results))
                   throw new Error("Search returned invalid results.");
                 if (results.length === 0 && !request.allowEmpty)
@@ -167,10 +220,6 @@ export class ToolkitSearchClient implements SearchClient {
                     { content?: Record<string, unknown> } | undefined
                 )?.content;
                 const warnings = splunkWarnings(finalState);
-                if (trueFlag(stateContent?.isFinalized))
-                  warnings.push(
-                    "Splunk finalized this job before all results were available; the graph may be incomplete.",
-                  );
                 const rawCount = stateContent?.resultCount;
                 const count =
                   typeof rawCount === "number"

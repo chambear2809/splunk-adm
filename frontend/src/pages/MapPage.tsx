@@ -17,7 +17,12 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import { indexGraph, type Graph, type GraphEdge } from "../graph";
+import {
+  indexGraph,
+  type Graph,
+  type GraphEdge,
+  type GraphNode,
+} from "../graph";
 import {
   edgeIdentity,
   handoffConfidence,
@@ -36,7 +41,7 @@ import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
 import { PathStrip } from "../PathStrip";
 import { DevicesView } from "../DevicesView";
-import { requiredFlowsCsv } from "../csv";
+import { contextEvidenceCsv, requiredFlowsCsv } from "../csv";
 import { formatUtc, formatInZone } from "../time";
 import { argError } from "../provider";
 import { ScopeBar } from "../map/ScopeBar";
@@ -75,8 +80,10 @@ import { useTheme, type Theme } from "../theme";
 import {
   buildPath,
   deviceName,
+  edgeDeviceContext,
   indexTopology,
   emptyTopology,
+  nodeDeviceContext,
   observationsByDevice,
   type Topology,
 } from "../topology";
@@ -453,13 +460,15 @@ export function MapPage({
   const label = (id: string) => index.node.get(id)?.label ?? id;
   const empty = visible && graph.nodes.length === 0;
   const deviceLabel = useCallback(
-    (raw: string) => deviceName(raw, topo).name,
+    (raw: string, host?: GraphNode) =>
+      deviceName(raw, topo, nodeDeviceContext(host)).name,
     [topo],
   );
   const describeEdge = useCallback(
     (e: GraphEdge) => {
       const name = (id: string) => node(id)?.label ?? id;
-      const title = `${name(e.source)} ${e.direction_basis === "unknown" ? "↔" : "→"} ${name(e.target)}`;
+      const observation = e.relationship === "traffic_observation";
+      const title = `${name(e.source)} ${observation ? "·" : e.direction_basis === "unknown" ? "↔" : "→"} ${name(e.target)}`;
       if (e.relationship === "calls")
         return {
           title,
@@ -477,7 +486,19 @@ export function MapPage({
           ),
         };
       }
-      const seen = observationsByDevice(e, topo)
+      if (observation)
+        return {
+          title,
+          lines: [
+            `Traffic observation · ${plural(e.records ?? e.count, "flow record")} · counters non-authoritative`,
+          ],
+        };
+      const seen = observationsByDevice(
+        e,
+        topo,
+        [],
+        edgeDeviceContext(e, index),
+      )
         .map((d) => d.label)
         .join(", ");
       return {
@@ -485,8 +506,14 @@ export function MapPage({
         lines: [
           [
             portLabel(e),
-            e.bytes !== undefined ? prettyBytes(e.bytes) : "bytes not reported",
-            plural(e.count, "connection"),
+            e.traffic_observations?.length
+              ? "traffic observations; see inspector"
+              : e.bytes !== undefined
+                ? prettyBytes(e.bytes)
+                : "bytes not reported",
+            e.traffic_observations?.length
+              ? "connection count not inferred from flow records"
+              : plural(e.count, "connection"),
             edgeIdentity(e, node) === "identified"
               ? "Identified"
               : edgeIdentity(e, node) === "external"
@@ -512,6 +539,14 @@ export function MapPage({
       `${fileStem}-required-flows.csv`,
       "text/csv;charset=utf-8",
       requiredFlowsCsv(graph, index, topo),
+    );
+    setPanel(null);
+  };
+  const exportContextEvidenceCsv = () => {
+    download(
+      `${fileStem}-context-evidence.csv`,
+      "text/csv;charset=utf-8",
+      contextEvidenceCsv(graph),
     );
     setPanel(null);
   };
@@ -605,6 +640,7 @@ export function MapPage({
           live={mode === "live"}
           autoSelectSingle
           client={client}
+          scenario={scenario}
           demoArgs={mode === "demo" ? demoArgsFor(scenario) : undefined}
           onChange={(next) => {
             cancelQuery();
@@ -813,6 +849,12 @@ export function MapPage({
           <ExportMenu
             close={() => setPanel(null)}
             onCsv={exportCsv}
+            onContextEvidenceCsv={exportContextEvidenceCsv}
+            hasContextEvidence={graph.edges.some(
+              (edge) =>
+                (edge.attachment_evidence?.length ?? 0) > 0 ||
+                (edge.traffic_observations?.length ?? 0) > 0,
+            )}
             onJson={exportJson}
             onPng={exportPng}
             onPrint={() => {
@@ -1276,6 +1318,7 @@ export function MapPage({
                 selected={selection?.kind === "edge" ? selection.id : undefined}
                 onSelect={(id) => select({ kind: "edge", id })}
                 topo={topo}
+                index={displayIndex}
                 node={node}
               />
             ) : tab === "devices" ? (

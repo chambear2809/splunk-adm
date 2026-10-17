@@ -64,6 +64,12 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "demo-rows-aci-prev",
                     "demo-topology",
                     "demo-topology-aci",
+                    "demo-networking-aci",
+                    "demo-networking-nxos",
+                    "demo-networking-topology",
+                    "demo-networking-scopes",
+                    "demo-networking-catalog",
+                    "demo-networking-find",
                 )
             },
             **{
@@ -77,6 +83,27 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
             "splunk_adm/docs/DATA_LAYER.md": b"docs",
             "splunk_adm/docs/UPGRADES.md": b"migration docs",
+            "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
+            "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
+            **{
+                f"splunk_adm/docs/benchmarks/{name}.json": b"{}"
+                for name in (
+                    "cisco-networking-native-browser",
+                    "cisco-networking-local-load",
+                    "cisco-networking-local-qualification",
+                )
+            },
+            "splunk_adm/docs/operators/cisco-enterprise-networking.md": b"operator docs",
+            **{
+                f"splunk_adm/research/{name}.json": b"{}"
+                for name in (
+                    "package-manifest",
+                    "cisco-catalyst-evidence",
+                    "cisco-meraki-evidence",
+                    "cisco-integration-contract",
+                    "cisco-pipeline-interface",
+                )
+            },
             "splunk_adm/default/collections.conf": b"[x]\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
             "splunk_adm/default/macros.conf": b"[x]\n",
@@ -113,6 +140,13 @@ class ReleaseArchiveTests(unittest.TestCase):
         )
         self._write_pair(install)
         check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_linked_qualification_evidence(self):
+        install = self._files()
+        del install["splunk_adm/docs/benchmarks/cisco-networking-native-browser.json"]
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "missing required files"):
+            check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_critical_config(self):
         install = self._files()
@@ -170,6 +204,15 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "legacy CSV scope lookup"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_deployment_owned_source_mapping_csv(self):
+        for name in ("adm_observer_scope.csv", "adm_network_source_scope.csv"):
+            with self.subTest(name=name):
+                install = self._files()
+                install[f"splunk_adm/lookups/{name}"] = b"source,scope\n"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "deployment-owned scope CSV"):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_wrong_id_version_even_with_correct_launcher(self):
         install = self._files()

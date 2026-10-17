@@ -1,0 +1,38 @@
+{
+  "captured_at": "2026-10-17T01:28:04Z",
+  "demoRequests": 0,
+  "scenarios": [
+    {
+      "attachmentDevice": true,
+      "cluster": "cilium-aci-east",
+      "edgeCount": 36,
+      "expectedEdges": 36,
+      "expectedNodes": 25,
+      "label": "Catalyst wired to ACI",
+      "liveFind": true,
+      "nodeCount": 25,
+      "reload": {
+        "edgeCount": 36,
+        "nodeCount": 25
+      }
+    },
+    {
+      "associationBasis": true,
+      "attachmentDevice": true,
+      "cluster": "cilium-nxos-west",
+      "edgeCount": 23,
+      "expectedEdges": 23,
+      "expectedNodes": 21,
+      "inventedSsidName": false,
+      "label": "Meraki wireless to NXOS",
+      "liveFind": true,
+      "nodeCount": 21,
+      "reload": {
+        "edgeCount": 23,
+        "nodeCount": 21
+      },
+      "ssidNumber": true
+    }
+  ],
+  "synthetic_local_scope": true
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   confidenceLabel,
   endpointKindLabel,
+  networkClientAttachmentMessage,
   kindLabel,
   portLabel,
   prettyBytes,
@@ -26,6 +27,35 @@ describe("glossary", () => {
     expect(
       kindLabel({ id: "a", label: "a", kind: "endpoint", endpoint_kind: "vm" }),
     ).toBe("VM");
+  });
+  it("keeps point, stale, conflicting, and unmapped client evidence unresolved", () => {
+    expect(
+      networkClientAttachmentMessage({
+        attachment_basis: "meraki_association_flow",
+        attachment_status: "associated",
+      }),
+    ).toContain("Correlated from association and flow evidence");
+    expect(
+      networkClientAttachmentMessage({
+        attachment_basis: "meraki_association_event",
+        attachment_status: "associated",
+      }),
+    ).toContain("point observation");
+    expect(
+      networkClientAttachmentMessage({
+        attachment_basis: "catalyst_client_snapshot",
+        attachment_status: "observed_snapshot",
+      }),
+    ).toContain("receipt time onward");
+    expect(
+      networkClientAttachmentMessage({ attachment_status: "stale" }),
+    ).toContain("not established");
+    expect(
+      networkClientAttachmentMessage({ attachment_status: "conflict" }),
+    ).toContain("unresolved");
+    expect(
+      networkClientAttachmentMessage({ attachment_status: "unmapped" }),
+    ).toContain("not correlated");
   });
   it("formats ports and bytes", () => {
     const e = { server_port: 5432, transport: "tcp" } as GraphEdge;

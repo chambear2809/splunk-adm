@@ -4,6 +4,7 @@ import {
   buildGraphSearch,
   demoGraph,
   loadLive,
+  loadTopology,
   resultRows,
   splunkMessage,
   splunkWarnings,
@@ -49,6 +50,14 @@ describe("messages", () => {
         },
       }),
     ).toEqual(["truncated"]));
+  it("includes top-level message arrays even when content messages exist", () => {
+    expect(
+      splunkWarnings({
+        content: { messages: [{ type: "INFO", text: "done" }] },
+        messages: [{ type: "WARN", text: "index denied" }],
+      }),
+    ).toEqual(["index denied"]);
+  });
 });
 describe("resultRows", () => {
   it("round-trips json rows", () =>
@@ -74,13 +83,14 @@ describe("loadLive", () => {
       maxRows: MAX_ROWS,
     });
   });
-  it("propagates warnings", async () => {
-    const graph = await loadLive(
-      fake(demo.rows, ["truncated"]),
-      ok,
-      new AbortController().signal,
-    );
-    expect(graph.coverage.warnings).toContain("truncated");
+  it("fails closed on warning-bearing graph results", async () => {
+    await expect(
+      loadLive(
+        fake(demo.rows, ["truncated"]),
+        ok,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(/incomplete.*truncated/);
   });
   it("rejects invalid requests without searching", async () => {
     let called = false;
@@ -104,5 +114,14 @@ describe("loadLive", () => {
     const controller = new AbortController();
     await loadLive(client, ok, controller.signal);
     expect(client.seen?.signal).toBe(controller.signal);
+  });
+  it("fails closed on denied or partial topology searches", async () => {
+    await expect(
+      loadTopology(
+        fake([], ["permission denied"]),
+        "-1h",
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow(/incomplete.*permission denied/);
   });
 });

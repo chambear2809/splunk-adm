@@ -88,15 +88,16 @@ export function splunkWarnings(payload: unknown): string[] {
     const message = splunkMessage(payload);
     return message ? [message] : [];
   }
-  const p = payload as { message?: unknown; content?: { messages?: unknown } };
-  const messages = Array.isArray(p.content?.messages)
-    ? p.content.messages
-    : undefined;
-  const values = messages?.length
-    ? messages
-    : p.message === undefined
-      ? []
-      : [p.message];
+  const p = payload as {
+    message?: unknown;
+    messages?: unknown;
+    content?: { messages?: unknown };
+  };
+  const values = [
+    ...(Array.isArray(p.content?.messages) ? p.content.messages : []),
+    ...(Array.isArray(p.messages) ? p.messages : []),
+    ...(p.message === undefined ? [] : [p.message]),
+  ];
   return values
     .filter((value) => {
       if (!value || typeof value !== "object") return true;
@@ -166,10 +167,9 @@ export function loadLive(
       ),
     )
     .then(({ rows, warnings }) => {
+      if (warnings.length)
+        throw new Error(`Splunk graph search was incomplete: ${warnings[0]}`);
       const graph = rowsToGraph(rows, input);
-      graph.coverage.warnings = [
-        ...new Set([...graph.coverage.warnings, ...warnings]),
-      ];
       return graph;
     });
 }
@@ -192,8 +192,11 @@ export function loadTopology(
       ),
     )
     .then(({ rows, warnings }) => {
+      if (warnings.length)
+        throw new Error(
+          `Splunk topology search was incomplete: ${warnings[0]}`,
+        );
       const topology = rowsToTopology(rows);
-      topology.warnings = [...new Set([...topology.warnings, ...warnings])];
       return topology;
     });
 }

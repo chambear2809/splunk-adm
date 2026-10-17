@@ -2,6 +2,8 @@ import { FileSpreadsheet, FileJson, X } from "lucide-react";
 export function ExportMenu({
   close,
   onCsv,
+  onContextEvidenceCsv,
+  hasContextEvidence,
   onJson,
   onPng,
   onPrint,
@@ -11,6 +13,8 @@ export function ExportMenu({
 }: {
   close: () => void;
   onCsv: () => void;
+  onContextEvidenceCsv: () => void;
+  hasContextEvidence: boolean;
   onJson: () => void;
   onPng: () => void;
   onPrint: () => void;
@@ -56,6 +60,18 @@ export function ExportMenu({
           </small>
         </span>
       </button>
+      {hasContextEvidence && (
+        <button className="menu-item" onClick={onContextEvidenceCsv}>
+          <FileSpreadsheet size={17} aria-hidden />
+          <span>
+            <b>Context evidence (CSV)</b>
+            <small>
+              Original per-edge attachment and traffic observation records, kept
+              separate from merged client summaries.
+            </small>
+          </span>
+        </button>
+      )}
       <button className="menu-item" onClick={onJson}>
         <FileJson size={17} aria-hidden />
         <span>

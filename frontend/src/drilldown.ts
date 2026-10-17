@@ -1,4 +1,5 @@
 import type { GraphEdge, GraphIndex } from "./graph";
+import type { TrafficObservation } from "./graph";
 import { csvRow } from "./csv";
 import { contractSummary } from "./glossary";
 
@@ -62,6 +63,31 @@ export function buildFlowSearch(input: FlowTuple): string {
     throw new Error("Evidence search supports TCP, UDP or SCTP.");
   return `| \`adm_flow_evidence("${input.client.toLowerCase()}","${input.server.toLowerCase()}",${input.port},"${input.transport.toLowerCase()}")\``;
 }
+export function buildTrafficObservationSearch(
+  observation: TrafficObservation,
+  observationId: string,
+): string {
+  if (!full(/[0-9a-f]{64}/, observationId))
+    throw new Error("Traffic evidence needs an exact observation identifier.");
+  if (!observation.source_ip || !observation.destination_ip)
+    throw new Error(
+      "Traffic evidence needs an exact source and destination IP.",
+    );
+  if (observation.server_port === undefined || !observation.transport)
+    throw new Error("Traffic evidence needs a destination port and transport.");
+  const tuple = buildFlowSearch({
+    client: observation.source_ip,
+    server: observation.destination_ip,
+    port: observation.server_port,
+    transport: observation.transport,
+  });
+  const args =
+    /^\| `adm_flow_evidence\(("[^"\r\n]+"),("[^"\r\n]+"),([0-9]+),("[^"\r\n]+")\)`$/.exec(
+      tuple,
+    );
+  if (!args) throw new Error("Traffic evidence tuple could not be normalized.");
+  return `| \`adm_traffic_evidence_v2(${args[1]},${args[2]},${args[3]},${args[4]},"${observationId}")\``;
+}
 export function buildTraceSearch(trace: string, span?: string): string {
   if (
     typeof trace !== "string" ||
@@ -83,16 +109,30 @@ export function searchUrl(
       search,
     );
   const trace = /^\| `adm_trace_evidence\("([0-9a-f]+)"\)`$/.exec(search);
-  const canonical = flow
-    ? buildFlowSearch({
-        client: flow[1],
-        server: flow[2],
-        port: Number(flow[3]),
-        transport: flow[4],
-      })
-    : trace
-      ? buildTraceSearch(trace[1])
-      : undefined;
+  const traffic =
+    /^\| `adm_traffic_evidence_v2\("([^"\r\n]+)","([^"\r\n]+)",([0-9]+),"([^"\r\n]+)","([0-9a-f]{64})"\)`$/.exec(
+      search,
+    );
+  const canonical = traffic
+    ? buildTrafficObservationSearch(
+        {
+          source_ip: traffic[1],
+          destination_ip: traffic[2],
+          server_port: Number(traffic[3]),
+          transport: traffic[4],
+        },
+        traffic[5],
+      )
+    : flow
+      ? buildFlowSearch({
+          client: flow[1],
+          server: flow[2],
+          port: Number(flow[3]),
+          transport: flow[4],
+        })
+      : trace
+        ? buildTraceSearch(trace[1])
+        : undefined;
   if (canonical !== search)
     throw new Error("Only validated evidence macros can be opened in Search.");
   const start = epoch(window.start),
@@ -155,6 +195,33 @@ export function evidenceSearch(edge: GraphEdge, index: GraphIndex): string {
         return buildTraceSearch(match[1], match[2]);
     }
     throw new Error("No valid trace reference is available for this call.");
+  }
+  if (edge.relationship === "traffic_observation") {
+    const observations = edge.traffic_observations ?? [];
+    if (!observations.length)
+      throw new Error("No traffic observation tuple is available for Search.");
+    const idFromEdge = /^traffic-observation:([0-9a-f]{64})$/.exec(
+      edge.id,
+    )?.[1];
+    const observationId = edge.traffic_observation_id;
+    if (!observationId || observationId !== idFromEdge)
+      throw new Error(
+        "No exact traffic observation identifier is available for Search.",
+      );
+    const context = observations[0];
+    const tuple = {
+      ...context,
+      source_ip: edge.source_ip ?? context.source_ip,
+      destination_ip: edge.destination_ip ?? context.destination_ip,
+      server_port: edge.server_port ?? context.server_port,
+      transport: edge.transport ?? context.transport,
+    };
+    const searches = [buildTrafficObservationSearch(tuple, observationId)];
+    if (new Set(searches).size !== 1)
+      throw new Error(
+        "Multiple observation tuples prevent a single exact Search.",
+      );
+    return searches[0];
   }
   if (
     edge.relationship !== "communicates_with" ||

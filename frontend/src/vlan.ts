@@ -1,13 +1,25 @@
 import type { GraphEdge, GraphIndex, VlanObservation } from "./graph";
-import { deviceName } from "./topology";
-import type { TopologyIndex } from "./topology";
+import {
+  deviceName,
+  edgeDeviceContext,
+  interfaceLabel,
+  resolveDevice,
+} from "./topology";
+import type { DeviceResolutionContext, TopologyIndex } from "./topology";
 
 export interface VlanContext extends VlanObservation {
   edgeId: string;
+  scope?: string;
+  cluster?: string;
+  authority?: string;
+  context_conflict?: boolean;
 }
 
 /** Flatten, deduplicate, and cap NetFlow contexts for an edge or endpoint. */
-export function vlanContexts(edges: GraphEdge[]): {
+export function vlanContexts(
+  edges: GraphEdge[],
+  index?: GraphIndex,
+): {
   contexts: VlanContext[];
   truncated: boolean;
 } {
@@ -15,6 +27,7 @@ export function vlanContexts(edges: GraphEdge[]): {
   let truncated = false;
   for (const edge of edges) {
     if (edge.vlan_observations_truncated) truncated = true;
+    const deviceContext = index ? edgeDeviceContext(edge, index) : {};
     for (const observation of edge.vlan_observations ?? []) {
       const keyParts = [
         observation.vlan,
@@ -24,6 +37,10 @@ export function vlanContexts(edges: GraphEdge[]): {
         observation.interface ?? "",
         observation.src_ip,
         observation.dest_ip,
+        deviceContext.scope ?? "",
+        deviceContext.cluster ?? "",
+        deviceContext.authority ?? "",
+        deviceContext.conflict ? "conflict" : "",
       ];
       const key = JSON.stringify(keyParts);
       const previous = map.get(key);
@@ -37,7 +54,15 @@ export function vlanContexts(edges: GraphEdge[]): {
           observation.last_seen,
         );
         previous.edgeId = [previous.edgeId, edge.id].sort()[0];
-      } else map.set(key, { ...observation, edgeId: edge.id });
+      } else
+        map.set(key, {
+          ...observation,
+          edgeId: edge.id,
+          scope: deviceContext.scope,
+          cluster: deviceContext.cluster,
+          authority: deviceContext.authority,
+          context_conflict: deviceContext.conflict || undefined,
+        });
     }
   }
   const all = [...map.values()].sort((a, b) =>
@@ -59,8 +84,9 @@ export function vlanEdges(index: GraphIndex, nodeId: string): GraphEdge[] {
 export function vlanExporter(
   observation: VlanObservation,
   topo: TopologyIndex,
+  context: DeviceResolutionContext = {},
 ): string {
-  const resolved = deviceName(observation.exporter, topo).name;
+  const resolved = deviceName(observation.exporter, topo, context).name;
   return resolved.trim().toLowerCase() ===
     observation.exporter.trim().toLowerCase()
     ? resolved
@@ -82,13 +108,21 @@ const contextKey = (observation: VlanObservation) => [
 export function vlanInterface(
   observation: VlanObservation,
   topo: TopologyIndex,
+  context: DeviceResolutionContext = {},
 ): string | undefined {
   if (observation.interface) return observation.interface;
   if (observation.interface_index) {
+    const device = resolveDevice(observation.exporter, topo, context);
+    const identity =
+      device?.id ?? (topo.containsV2Devices ? undefined : observation.exporter);
     const resolved = topo.ifName.get(
-      `${observation.exporter.trim().toLowerCase()}|${observation.interface_index}`,
+      identity
+        ? `${identity.trim().toLowerCase()}|${observation.interface_index}`
+        : "",
     );
-    return resolved ?? `ifIndex ${observation.interface_index}`;
+    return resolved
+      ? interfaceLabel(resolved)
+      : `ifIndex ${observation.interface_index}`;
   }
   return undefined;
 }

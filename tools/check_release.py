@@ -117,7 +117,10 @@ def _assert_safe_files(files: dict[str, bytes]) -> None:
     for name in files:
         if name.casefold() == "splunk_adm/local/transforms.conf":
             _check_scope_transform(files[name], name)
-        if name.casefold() == "splunk_adm/lookups/adm_observer_scope.csv":
+        if name.casefold() in {
+            "splunk_adm/lookups/adm_observer_scope.csv",
+            "splunk_adm/lookups/adm_network_source_scope.csv",
+        }:
             raise ValueError(f"deployment-owned scope CSV must not ship: {name}")
         relative = name.removeprefix("splunk_adm/")
         if relative.casefold().startswith(MAKO_DIRS):
@@ -171,6 +174,12 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
                 "demo-rows-aci-prev",
                 "demo-topology",
                 "demo-topology-aci",
+                "demo-networking-aci",
+                "demo-networking-nxos",
+                "demo-networking-topology",
+                "demo-networking-scopes",
+                "demo-networking-catalog",
+                "demo-networking-find",
             )
         },
         *{
@@ -183,6 +192,17 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
         "splunk_adm/docs/UPGRADES.md",
+        "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md",
+        "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md",
+        "splunk_adm/docs/benchmarks/cisco-networking-native-browser.json",
+        "splunk_adm/docs/benchmarks/cisco-networking-local-load.json",
+        "splunk_adm/docs/benchmarks/cisco-networking-local-qualification.json",
+        "splunk_adm/docs/operators/cisco-enterprise-networking.md",
+        "splunk_adm/research/package-manifest.json",
+        "splunk_adm/research/cisco-catalyst-evidence.json",
+        "splunk_adm/research/cisco-meraki-evidence.json",
+        "splunk_adm/research/cisco-integration-contract.json",
+        "splunk_adm/research/cisco-pipeline-interface.json",
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",
         "splunk_adm/default/macros.conf",

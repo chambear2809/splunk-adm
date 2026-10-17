@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import demo from "../../fixtures/demo-rows.json";
+import networkingAci from "../../fixtures/demo-networking-aci.json";
+import networkingNxos from "../../fixtures/demo-networking-nxos.json";
 import expected from "../../tests/splunk/expected/graph.json";
 import { MAX_ROWS, rowsToGraph, type Row } from "./rows";
 
@@ -103,6 +105,84 @@ describe("rowsToGraph validation", () => {
     expect(
       rowsToGraph(r, args).edges.find((x) => x.id === e.id)?.vlan_observations,
     ).toHaveLength(1);
+  });
+
+  it("reads network-client endpoint facts and separated traffic observations in schema v1", () => {
+    const r = rows();
+    const endpoint = r.find(
+      (x) => x.row_type === "node" && x.kind === "endpoint",
+    )!;
+    endpoint.endpoint_kind = "network_client";
+    endpoint.attr_source_authority = "org/network";
+    endpoint.attr_routing_domain = "vrf-prod";
+    endpoint.attr_client_mac = "00:11:22:33:44:55";
+    endpoint.attr_access_platform = "meraki";
+    endpoint.attr_attachment_basis = "meraki_association_flow";
+    endpoint.attr_attachment_status = "associated";
+    endpoint.attr_attachment_received_time = "1791700000";
+    const edgeRow = r.find((x) => x.row_type === "edge")!;
+    edgeRow.traffic_observations = JSON.stringify([
+      {
+        source: "cisco_sdwan_ipfix",
+        source_authority: "controller-a",
+        routing_domain: "vrf-prod",
+        first_seen: 1791700000,
+        last_seen: 1791700002,
+        direction: "ingress",
+        observation_point: "wan-edge",
+        bytes_in: 1024,
+        packets_in: 8,
+        records: 1,
+        counter_semantics: "exporter_directional_view",
+        metrics_authoritative: true,
+        ingress_overlay_session_id: 12,
+        egress_overlay_session_id: "overlay-34",
+        quality_status: "accepted_with_warning",
+        quality_errors: "",
+        quality_warnings: "direction_missing",
+      },
+    ]);
+    const parsed = rowsToGraph(r, args, { demo: true });
+    const client = parsed.nodes.find(
+      (n) => n.endpoint_kind === "network_client",
+    )!;
+    expect(parsed.schema_version).toBe(1);
+    expect(client.attributes).toMatchObject({
+      attachment_basis: "meraki_association_flow",
+      attachment_status: "associated",
+      attachment_received_time: "1791700000",
+    });
+    expect(parsed.edges[0].traffic_observations?.[0]).toMatchObject({
+      records: 1,
+      bytes_in: 1024,
+      metrics_authoritative: true,
+      ingress_overlay_session_id: "12",
+      egress_overlay_session_id: "overlay-34",
+      quality_status: "accepted_with_warning",
+      quality_warnings: "direction_missing",
+    });
+  });
+
+  it("rejects unsupported traffic observation quality statuses", () => {
+    const r = rows();
+    const edgeRow = r.find((x) => x.row_type === "edge")!;
+    edgeRow.traffic_observations = JSON.stringify([
+      { quality_status: "maybe" },
+    ]);
+    expect(() => rowsToGraph(r, args, { demo: true })).toThrow(
+      /traffic_observations has an invalid observation/,
+    );
+  });
+
+  it("rejects non-string quality status values instead of coercing them", () => {
+    const r = rows();
+    const edgeRow = r.find((x) => x.row_type === "edge")!;
+    edgeRow.traffic_observations = JSON.stringify([
+      { quality_status: ["accepted"] },
+    ]);
+    expect(() => rowsToGraph(r, args, { demo: true })).toThrow(
+      /traffic_observations has an invalid observation/,
+    );
   });
 
   it.each([
@@ -305,4 +385,45 @@ describe("rowsToGraph validation", () => {
   it("rejects a non-array result", () => {
     expect(() => rowsToGraph({ rows: [] }, args)).toThrow();
   });
+});
+
+describe("actual staged Cisco graph rows", () => {
+  it.each([
+    ["aci", networkingAci],
+    ["nxos", networkingNxos],
+  ])(
+    "parses captured %s graph context without route or metric inflation",
+    (_name, capture) => {
+      const graph = rowsToGraph(capture.rows as Row[], capture.args);
+      const traffic = graph.edges.filter(
+        (edge) => edge.relationship === "traffic_observation",
+      );
+      expect(
+        graph.nodes.some(
+          (node) =>
+            node.kind === "client" && node.endpoint_kind === "network_client",
+        ),
+      ).toBe(true);
+      expect(traffic.length).toBeGreaterThan(0);
+      expect(
+        traffic.every(
+          (edge) =>
+            edge.traffic_observation_id === undefined ||
+            edge.id === `traffic-observation:${edge.traffic_observation_id}`,
+        ),
+      ).toBe(true);
+      expect(
+        traffic.every(
+          (edge) =>
+            edge.bytes === undefined && edge.metrics_authoritative === false,
+        ),
+      ).toBe(true);
+      expect(traffic[0].traffic_observations?.[0]).toMatchObject({
+        counter_semantics: "unknown",
+        metrics_authoritative: false,
+        records: 1,
+        domain_kind: "exporter",
+      });
+    },
+  );
 });

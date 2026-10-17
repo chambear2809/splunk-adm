@@ -134,7 +134,7 @@ The builder never reads the whole collection. For each new observation it reads 
 
 **ADM - Identity prune** (manual maintenance only) reads the collection with `adm_kv_read_all`: 20 pages of 10,000 rows plus a probe at offset 1. It rewrites the collection without rows whose `valid_end` is older than `adm_identity_retention` only when the read is provably complete: pages contiguous, every page before the last full, the page after the last read and empty, and a short first page whose probe returned exactly one row fewer (otherwise the store capped the read). Otherwise it writes nothing and returns a warning. It never empties the collection (`override_if_empty=false`). **ADM - Service binding prune** (manual maintenance only) does the same for `adm_service_workload` by `last_seen`.
 
-**Concurrency.** A saved search's single-instance limit does not serialize different searches or manual macro calls. A prune's full rewrite can discard a concurrent builder upsert. All five prunes therefore ship with `enableSched=0` and require `adm_prune_maintenance=1` before writing. The default `0` returns a read-only report and warning. The gate is an operator assertion, not a lock: pause and drain all writers, back up the collections, run one prune at a time, then reset the gate before resuming. Follow [Recovery and replay](RECOVERY.md#pruning-and-maintenance).
+**Concurrency.** A saved search's single-instance limit does not serialize different searches or manual macro calls. A prune's full rewrite can discard a concurrent builder upsert. All prunes, including the additional Cisco client-history prune, therefore ship with `enableSched=0` and require `adm_prune_maintenance=1` before writing. The default `0` returns a read-only report and warning. The gate is an operator assertion, not a lock: pause and drain all writers, back up the collections, run one prune at a time, then reset the gate before resuming. Follow [Recovery and replay](RECOVERY.md#pruning-and-maintenance).
 
 All prune searches retain the empty-write safeguard: when every stored row is expired, they report `rows_pruned=0` and warn that administrator cleanup is required. They do not silently report a successful deletion or clear a collection from an empty result.
 
@@ -278,6 +278,24 @@ All ship `disabled = 1` and `dispatchAs = owner`. Builders and the rollup have `
 | ADM - Service routes prune | `19 3 * * *` | — | — | — |
 | ADM - ACI policy prune | `24 3 * * *` | — | — | — |
 
+The Cisco contract adds the following separately staged searches. Their shipped
+defaults are disabled; the public readers remain on V1. Follow the
+[migration procedure](CISCO_CONTRACT_MIGRATION.md) and
+[qualification gates](CISCO_NETWORKING_QUALIFICATION.md) before activation.
+
+| Saved search | Schedule | Index time | Event time | Purpose |
+| --- | --- | --- | --- | --- |
+| ADM - Network client history builder | `1-56/5 * * * *` | `-10m@m` → `@m` | `0` → `+15m` | Source-qualified client and attachment history |
+| ADM - Conversation rollup v2 | `*/5 * * * *` | `-10m@m` → `-5m@m` | `-24h` → `+15m` | V2 conversation rows in the separate summary index |
+| ADM - Traffic observation rollup v2 | `*/5 * * * *` | `-10m@m` → `-5m@m` | `-24h` → `+15m` | Per-observer flow evidence with explicit counter limitations |
+| ADM - Application catalog v2 | `15 * * * *` | — | `-1h@h` → `@h` | Separate V2 application catalog |
+| ADM - Network client history prune | `5 3 * * *` | — | — | Unscheduled maintenance, shared prune gate required |
+
+The history builder retains source event time separately from indexed receipt
+time. Its unbounded event-time lower bound allows a newly received older
+association event to be considered within the bounded index-time slice. It
+does not backdate a Catalyst inventory snapshot into historical attachment.
+
 ### Automated assisted recovery
 
 The `adm_recovery` custom administrator-only alert action is shipped
@@ -285,8 +303,9 @@ disabled through both `action.adm_recovery=0` and `[recovery] enabled=0` in
 `default/adm_recovery.conf`; enable it only through local overrides. Enabling
 the detector's notification does not enable recovery. The action is intended
 for standalone Splunk Enterprise 10.6.0.5, where the [core milestone live tests](benchmarks/2026-10-14-recovery-core.md)
-passed. Supervisor and crash handling remain deferred to Milestone 2; SHC and
-failover are outside the qualification. It requires the
+passed. The separately disabled abandoned-lease supervisor reports uncertain
+recovery state for operator reconciliation; it does not take over a claim or
+resume a writer. SHC and failover are outside the qualification. It requires the
 target saved search to retain its shipped absolute windows and
 `dispatchAs=owner`, and it refuses an enabled SHC, non-administrator owner,
 configuration drift, or a backlog over four initial slots before pausing.
@@ -415,7 +434,7 @@ The focused lab regressions in `tests/splunk/test_builder_regressions.py` and `t
 
 The **Pipeline health** panel runs two read-only, on-demand searches independently of the map's filters. `adm_health_sources` summarizes the eight configured source index macros for events indexed in the last 24 hours, including empty sources. It reports event count, latest event time, latest index time, and the maximum per-event nonnegative ingestion delay. The panel calls out sources with no data received within 20 minutes; optional or quiet sources are not automatically considered failed. Counts use the configured indexes and supported source types (including the FTD connection-event predicate and configured trace/Hubble source types); they do not imply every event normalized successfully. The source probes override the map event-time window: event timestamps from epoch through ten years ahead are accepted, so late-arriving backlogs are included.
 
-`adm_health_jobs` combines app-local saved-search configuration with visible `_internal` scheduler events for `ADM - *` searches in the same window. It reports disabled searches, latest run and successful-run times, outcome, failures, and skips. Overdue indications use the shipped schedules: 20 minutes for five-minute builders, two hours for interface inventory, and a legacy 26-hour threshold if an operator schedules pruning. Prunes are intentionally disabled during normal operation; their Disabled status does not mean they should be enabled. An unscheduled manual prune has no scheduler evidence. Operators who customize schedules must interpret these thresholds accordingly. Health is a snapshot; use **Check again** to refresh it. `adm_health_jobs` only shows the most recent scheduler status per search, so a missed slot hidden behind a later successful one is invisible to it; `adm_health_missed_slots` (used by the disabled-by-default `ADM - Scheduler missed-slot alert`) uses only scheduler.log successes with a `scheduler__` SID. It reports `reason=missed_slot` for unsatisfied five-minute slots strictly after each target's earliest visible success, subject to the ten-minute grace period. Slots before that checkpoint are not reported. With no successful checkpoint, a target produces exactly one `reason=no_successful_checkpoint` row without `scheduled_time`, rather than an invented backlog. Disabled and explicitly unscheduled targets are excluded; unknown schedule flags do not silently suppress reporting. The saved alert searches 24 hours plus a preceding five-minute checkpoint (`-1445m@m`); extend that bound when increasing `adm_missed_slot_lookback`. After maintenance, a pre-pause checkpoint still anchors detection, so paused-period gaps remain visible and require absolute-slice replay. Manual successes neither establish a checkpoint nor clear scheduled gaps. See [Recovery and replay](RECOVERY.md#missed-runs-during-an-outage).
+`adm_health_jobs` combines app-local saved-search configuration with visible `_internal` scheduler events for `ADM - *` searches in the same window. It reports disabled searches, latest run and successful-run times, outcome, failures, and skips. Overdue indications use the shipped schedules: 20 minutes for five-minute builders, two hours for interface inventory, and a legacy 26-hour threshold if an operator schedules pruning. Prunes are intentionally disabled during normal operation; their Disabled status does not mean they should be enabled. An unscheduled manual prune has no scheduler evidence. Operators who customize schedules must interpret these thresholds accordingly. Health is a snapshot; use **Check again** to refresh it. `adm_health_jobs` only shows the most recent scheduler status per search, so a missed slot hidden behind a later successful one is invisible to it; `adm_health_missed_slots` (used by the disabled-by-default `ADM - Scheduler missed-slot alert`) uses only scheduler.log successes with a `scheduler__` SID. It reports `reason=missed_slot` for unsatisfied five-minute writer slots and hourly V2 catalog slots strictly after each target's earliest visible success, subject to the ten-minute grace period. Slots before that checkpoint are not reported. With no successful checkpoint, a target produces exactly one `reason=no_successful_checkpoint` row without `scheduled_time`, rather than an invented backlog. Disabled and explicitly unscheduled targets are excluded; unknown schedule flags do not silently suppress reporting. The saved alert searches 24 hours plus a preceding hourly checkpoint (`-1500m@m`); extend that bound when increasing `adm_missed_slot_lookback`. After maintenance, a pre-pause checkpoint still anchors detection, so paused-period gaps remain visible and require absolute-slice replay. Manual successes neither establish a checkpoint nor clear scheduled gaps. See [Recovery and replay](RECOVERY.md#missed-runs-during-an-outage).
 
 These searches run with the viewer's permissions. Missing index access can look like no visible data; absent saved-search configuration or scheduler history is explicitly unconfirmed. No additional privileges are granted by the app. An administrator can inspect health when an ordinary viewer lacks internal-log access. Partial search results and search failures remain visible in the panel. The checks do not enable searches, ingest events, or write collections.
 

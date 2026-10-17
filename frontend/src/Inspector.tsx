@@ -8,6 +8,7 @@ import {
   type GraphEdge,
   type GraphIndex,
   type GraphNode,
+  type TrafficObservation,
 } from "./graph";
 import {
   aclSummary,
@@ -29,12 +30,20 @@ import {
   prettyBytes,
   relationshipLabel,
   sourceLabel,
+  networkClientAttachmentMessage,
   type IdentityState,
 } from "./glossary";
 import type { Selection } from "./MapView";
 import {
   deviceName,
   backendChoices,
+  clientBackendChoices,
+  clientHandoffResolution,
+  clientHandoffReceivingNodes,
+  backendChoiceSummary,
+  edgeDeviceContext,
+  handoffCoverageMessage,
+  nodeDeviceContext,
   observationsByDevice,
   type TopologyIndex,
 } from "./topology";
@@ -49,11 +58,13 @@ import {
 function VlanEvidence({
   edges,
   topo,
+  index,
 }: {
   edges: GraphEdge[];
   topo: TopologyIndex;
+  index: GraphIndex;
 }) {
-  const { contexts, truncated } = vlanContexts(edges);
+  const { contexts, truncated } = vlanContexts(edges, index);
   if (!contexts.length && !truncated) return null;
   return (
     <section className="vlan-evidence" aria-label="Observed VLANs — NetFlow">
@@ -84,10 +95,26 @@ function VlanEvidence({
               VLAN {o.vlan} · {o.position}
             </b>
             <small>
-              {vlanExporter(o, topo)}
-              {vlanInterface(o, topo)
-                ? ` · ${vlanInterface(o, topo)}`
-                : ""} · {o.src_ip} → {o.dest_ip}
+              {vlanExporter(o, topo, {
+                scope: o.scope,
+                cluster: o.cluster,
+                authority: o.authority,
+                conflict: o.context_conflict,
+              })}
+              {vlanInterface(o, topo, {
+                scope: o.scope,
+                cluster: o.cluster,
+                authority: o.authority,
+                conflict: o.context_conflict,
+              })
+                ? ` · ${vlanInterface(o, topo, {
+                    scope: o.scope,
+                    cluster: o.cluster,
+                    authority: o.authority,
+                    conflict: o.context_conflict,
+                  })}`
+                : ""}{" "}
+              · {o.src_ip} → {o.dest_ip}
               <br />
               {vlanTime(o.first_seen)} – {vlanTime(o.last_seen)}
             </small>
@@ -119,6 +146,228 @@ function Facts({ rows }: { rows: [string, React.ReactNode][] }) {
   );
 }
 
+const evidenceTime = (raw?: string) => {
+  if (!raw || !/^\d+(?:\.\d+)?$/.test(raw)) return undefined;
+  const date = new Date(Number(raw) * 1000);
+  return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
+};
+function TrafficEvidence({
+  observations,
+}: {
+  observations: TrafficObservation[];
+}) {
+  if (!observations.length) return null;
+  return (
+    <section aria-label="Traffic observations">
+      <h3>
+        Traffic observations{" "}
+        <span className="count">{observations.length}</span>
+      </h3>
+      <p className="muted small">
+        Exporter observations are evidence at collection points. They do not
+        establish physical adjacency or packet route. Record counts and
+        directional counters are shown separately.
+      </p>
+      <ul className="seen-list">
+        {observations.map((o, i) => (
+          <li key={`${o.record_fingerprint ?? o.flow_id ?? i}`}>
+            <b>
+              {sourceLabel(o.source ?? "Flow exporter")}
+              {o.direction ? ` · ${o.direction}` : ""}
+            </b>
+            <small>
+              {[
+                o.quality_status &&
+                  `Quality ${
+                    typeof o.quality_status === "string"
+                      ? o.quality_status.replaceAll("_", " ")
+                      : "unavailable"
+                  }`,
+                o.exporter_ip && `Exporter ${o.exporter_ip}`,
+                o.source_authority && `Authority ${o.source_authority}`,
+                o.observation_domain_id && `Domain ${o.observation_domain_id}`,
+                o.routing_domain && `Routing domain ${o.routing_domain}`,
+                o.vpn_id && `VPN ${o.vpn_id}`,
+                o.observation_point && `Point ${o.observation_point}`,
+                o.source_ip && `Source IP ${o.source_ip}`,
+                o.destination_ip && `Destination IP ${o.destination_ip}`,
+                o.source_mac && `Source MAC ${o.source_mac}`,
+                o.destination_mac && `Destination MAC ${o.destination_mac}`,
+                o.scope && `Scope ${o.scope}`,
+                o.profile && `Profile ${o.profile}`,
+                o.mapping_status && `Mapping ${o.mapping_status}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+              {(o.quality_errors || o.quality_warnings) && (
+                <>
+                  <br />
+                  {o.quality_errors && `Quality errors: ${o.quality_errors}`}
+                  {o.quality_errors && o.quality_warnings ? " · " : ""}
+                  {o.quality_warnings &&
+                    `Quality warnings: ${o.quality_warnings}`}
+                </>
+              )}
+              {(o.ingress_interface ||
+                o.egress_interface ||
+                o.interface_in ||
+                o.interface_out) && (
+                <>
+                  <br />
+                  {[
+                    o.ingress_interface && `Ingress ${o.ingress_interface}`,
+                    o.egress_interface && `Egress ${o.egress_interface}`,
+                    o.interface_in && `Interface in ${o.interface_in}`,
+                    o.interface_out && `Interface out ${o.interface_out}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </>
+              )}
+              {(o.first_seen !== undefined ||
+                o.last_seen !== undefined ||
+                o.collected_time !== undefined ||
+                o.received_time !== undefined) && (
+                <>
+                  <br />
+                  {evidenceTime(
+                    o.first_seen === undefined
+                      ? undefined
+                      : String(o.first_seen),
+                  ) ?? "First time unavailable"}{" "}
+                  –{" "}
+                  {evidenceTime(
+                    o.last_seen === undefined ? undefined : String(o.last_seen),
+                  ) ?? "last time unavailable"}
+                  {o.collected_time !== undefined
+                    ? ` · received ${evidenceTime(String(o.collected_time))}`
+                    : o.received_time !== undefined
+                      ? ` · received ${evidenceTime(String(o.received_time)) ?? "unavailable"}`
+                      : ""}
+                </>
+              )}
+              {(o.bytes_in !== undefined ||
+                o.bytes_out !== undefined ||
+                o.packets_in !== undefined ||
+                o.packets_out !== undefined) && (
+                <>
+                  <br />
+                  {[
+                    o.bytes_in !== undefined && `Bytes in ${o.bytes_in}`,
+                    o.bytes_out !== undefined && `Bytes out ${o.bytes_out}`,
+                    o.packets_in !== undefined && `Packets in ${o.packets_in}`,
+                    o.packets_out !== undefined &&
+                      `Packets out ${o.packets_out}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </>
+              )}
+              {o.records !== undefined && (
+                <>
+                  <br />
+                  {o.records.toLocaleString()} flow records
+                  {o.metrics_authoritative === false
+                    ? " · counters are not authoritative"
+                    : o.metrics_authoritative === true
+                      ? " · counters marked authoritative by source"
+                      : " · counter authority unspecified"}
+                  {o.counter_semantics ? ` · ${o.counter_semantics}` : ""}
+                </>
+              )}
+              {(o.raw_bytes !== undefined ||
+                o.raw_bytes_in !== undefined ||
+                o.raw_bytes_out !== undefined ||
+                o.raw_packets !== undefined ||
+                o.raw_packets_in !== undefined ||
+                o.raw_packets_out !== undefined ||
+                o.raw_sampling !== undefined) && (
+                <>
+                  <br />
+                  Raw exporter values (non-authoritative):{" "}
+                  {[
+                    o.raw_bytes !== undefined && `bytes ${o.raw_bytes}`,
+                    o.raw_bytes_in !== undefined &&
+                      `bytes in ${o.raw_bytes_in}`,
+                    o.raw_bytes_out !== undefined &&
+                      `bytes out ${o.raw_bytes_out}`,
+                    o.raw_packets !== undefined && `packets ${o.raw_packets}`,
+                    o.raw_packets_in !== undefined &&
+                      `packets in ${o.raw_packets_in}`,
+                    o.raw_packets_out !== undefined &&
+                      `packets out ${o.raw_packets_out}`,
+                    o.raw_sampling !== undefined &&
+                      `sampling ${o.raw_sampling}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </>
+              )}
+              {(o.flow_id || o.sequence || o.record_fingerprint) && (
+                <>
+                  <br />
+                  {[
+                    o.flow_id && `Flow ${o.flow_id}`,
+                    o.sequence && `Sequence ${o.sequence}`,
+                    o.record_fingerprint && `Record ${o.record_fingerprint}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </>
+              )}
+              {!o.routing_domain && !o.scope && (
+                <>
+                  <br />
+                  Routing domain and source scope unavailable
+                  {o.mapping_status ? ` · mapping ${o.mapping_status}` : ""}.
+                </>
+              )}
+              {!o.routing_domain && o.scope && (
+                <>
+                  <br />
+                  Routing domain not reported; source scope is {o.scope}
+                  {o.cluster ? ` · ${o.cluster}` : ""}.
+                </>
+              )}
+              {(o.exporter_sampling_mode ||
+                o.exporter_sampling_interval !== undefined) && (
+                <>
+                  <br />
+                  Sampling:{" "}
+                  {[
+                    o.exporter_sampling_mode,
+                    o.exporter_sampling_interval !== undefined &&
+                      `interval ${o.exporter_sampling_interval}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </>
+              )}
+              {(o.ingress_overlay_session_id ||
+                o.egress_overlay_session_id) && (
+                <>
+                  <br />
+                  Overlay session references (unjoined):{" "}
+                  {[
+                    o.ingress_overlay_session_id &&
+                      `ingress ${o.ingress_overlay_session_id}`,
+                    o.egress_overlay_session_id &&
+                      `egress ${o.egress_overlay_session_id}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}{" "}
+                  · these references do not establish a tunnel peer or packet
+                  route.
+                </>
+              )}
+            </small>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Inputs for a plain-language hand-off explanation of a forwards_to edge. */
 export function handoffText(edge: GraphEdge, index: GraphIndex): string {
   const service = index.node.get(edge.source);
@@ -146,8 +395,16 @@ export function IdentityBadge({ state }: { state: IdentityState }) {
   );
 }
 
-function Device({ raw, topo }: { raw: string; topo: TopologyIndex }) {
-  const d = deviceName(raw, topo);
+function Device({
+  raw,
+  topo,
+  context,
+}: {
+  raw: string;
+  topo: TopologyIndex;
+  context?: Parameters<typeof deviceName>[2];
+}) {
+  const d = deviceName(raw, topo, context);
   return (
     <>
       {d.name}
@@ -173,8 +430,9 @@ function ConnectionList({
   const node = (id: string) => index.node.get(id);
   const sorted = [...edges].sort(
     (a, b) =>
-      (b.bytes ?? -1) - (a.bytes ?? -1) ||
-      b.count - a.count ||
+      (a.traffic_observations?.length || b.traffic_observations?.length
+        ? 0
+        : (b.bytes ?? -1) - (a.bytes ?? -1) || b.count - a.count) ||
       a.id.localeCompare(b.id),
   );
   return (
@@ -195,9 +453,11 @@ function ConnectionList({
                     {conv
                       ? [
                           portLabel(e),
-                          e.bytes !== undefined
-                            ? prettyBytes(e.bytes)
-                            : "bytes not reported",
+                          e.traffic_observations?.length
+                            ? "per-observation counters below"
+                            : e.bytes !== undefined
+                              ? prettyBytes(e.bytes)
+                              : "bytes not reported",
                         ].join(" · ")
                       : e.relationship === "forwards_to"
                         ? `${handoffShort[e.handoff_basis!]} · ${handoffConfidence(e.confidence)}`
@@ -268,12 +528,30 @@ export function Inspector({
     to = lookup(edge.target);
   const unknownDir = edge.direction_basis === "unknown";
   const conv = edge.relationship === "communicates_with";
+  const trafficObservation = edge.relationship === "traffic_observation";
   const forward = edge.relationship === "forwards_to";
-  const seen = conv ? observationsByDevice(edge, topo) : [];
-  const backends =
+  const context = edgeDeviceContext(edge, index);
+  const seen = conv ? observationsByDevice(edge, topo, [], context) : [];
+  const clientHandoff =
     conv && to?.endpoint_kind === "k8s_service"
-      ? backendChoices(index, to.id)
+      ? clientHandoffResolution(edge, to, index)
+      : undefined;
+  const clientHandoffCoverage = clientHandoff?.version2
+    ? clientHandoff.message
+    : conv && to?.endpoint_kind === "k8s_service"
+      ? handoffCoverageMessage(to)
+      : undefined;
+  const backends =
+    conv && to?.endpoint_kind === "k8s_service" && !clientHandoffCoverage
+      ? clientHandoff?.version2
+        ? clientBackendChoices(index, clientHandoff.records)
+        : backendChoices(index, to.id)
       : [];
+  const receivedNodes = clientHandoff?.version2
+    ? clientHandoff.complete
+      ? clientHandoffReceivingNodes(clientHandoff.records)
+      : []
+    : (edge.via_node ?? []);
   const siblings = forward
     ? (index.outgoing.get(edge.source) ?? []).filter(
         (e) => e.relationship === "forwards_to" && e.target === edge.target,
@@ -283,7 +561,9 @@ export function Inspector({
   const acl = conv
     ? aclSummary(
         edge,
-        edge.acl_leaf ? deviceName(edge.acl_leaf, topo).name : undefined,
+        edge.acl_leaf
+          ? deviceName(edge.acl_leaf, topo, context).name
+          : undefined,
       )
     : undefined;
   return (
@@ -295,7 +575,7 @@ export function Inspector({
           </span>
           <InspectorTitle
             key={edge.id}
-            name={`${from?.label ?? edge.source}${unknownDir ? " ↔ " : " → "}${to?.label ?? edge.target}`}
+            name={`${from?.label ?? edge.source}${trafficObservation ? " · " : unknownDir ? " ↔ " : " → "}${to?.label ?? edge.target}`}
           />
         </div>
         {close}
@@ -311,11 +591,23 @@ export function Inspector({
       <Facts
         rows={[
           [
-            forward ? "Service" : unknownDir ? "Endpoint A" : "Client",
+            trafficObservation
+              ? "Observation source"
+              : forward
+                ? "Service"
+                : unknownDir
+                  ? "Endpoint A"
+                  : "Client",
             from?.label,
           ],
           [
-            forward ? "Backend pod" : unknownDir ? "Endpoint B" : "Server",
+            trafficObservation
+              ? "Observed peer"
+              : forward
+                ? "Backend pod"
+                : unknownDir
+                  ? "Endpoint B"
+                  : "Server",
             to?.label,
           ],
           [
@@ -340,7 +632,10 @@ export function Inspector({
               </span>
             ) : undefined,
           ],
-          ["Received on", receivedOn(edge.via_node)],
+          [
+            "Received on",
+            clientHandoffCoverage ? undefined : receivedOn(receivedNodes),
+          ],
           [
             "Identity",
             conv ? (
@@ -349,16 +644,12 @@ export function Inspector({
           ],
           [
             "Backend",
-            backends.length
-              ? backends
-                  .map(
-                    (b) =>
-                      `${b.label}${b.state === "inferred" ? " (inferred)" : ""}`,
-                  )
-                  .join(", ")
-              : to?.attributes?.handoff === "service_only"
-                ? `Not determined (${to.attributes.candidates ?? "?"} candidates)`
-                : undefined,
+            clientHandoffCoverage ??
+              (backends.length
+                ? backends.map((b) => backendChoiceSummary(b)).join(", ")
+                : to?.attributes?.handoff === "service_only"
+                  ? `Not determined (${to.attributes.candidates ?? "?"} candidates)`
+                  : undefined),
           ],
           ["Service port", conv ? portLabel(edge) : undefined],
           ["Direction", directionLabel(edge)],
@@ -378,18 +669,28 @@ export function Inspector({
             ) : undefined,
           ],
           [
-            conv || forward ? "Connections" : "Spans",
-            (siblings.length > 1
-              ? siblings.reduce((n, s) => n + s.count, 0)
-              : edge.count
-            ).toLocaleString(),
+            trafficObservation
+              ? "Flow records"
+              : conv || forward
+                ? "Connections"
+                : "Spans",
+            trafficObservation
+              ? (edge.records ?? edge.count).toLocaleString()
+              : conv && edge.traffic_observations?.length
+                ? "Not aggregated from flow records"
+                : (siblings.length > 1
+                    ? siblings.reduce((n, s) => n + s.count, 0)
+                    : edge.count
+                  ).toLocaleString(),
           ],
           [
             "Bytes",
             conv
-              ? edge.bytes !== undefined
-                ? prettyBytes(edge.bytes)
-                : "Not reported by these sources"
+              ? edge.traffic_observations?.length
+                ? "Not aggregated; see per-observation counters"
+                : edge.bytes !== undefined
+                  ? prettyBytes(edge.bytes)
+                  : "Not reported by these sources"
               : undefined,
           ],
           [
@@ -472,7 +773,63 @@ export function Inspector({
           )}
         </>
       )}
-      {conv && <VlanEvidence edges={[edge]} topo={topo} />}
+      {conv && <VlanEvidence edges={[edge]} topo={topo} index={index} />}
+      {(conv || trafficObservation) && edge.traffic_observations && (
+        <TrafficEvidence observations={edge.traffic_observations} />
+      )}
+      {edge.attachment_evidence?.length ? (
+        <section aria-label="Client attachment evidence">
+          <h3>
+            Client attachment evidence{" "}
+            <span className="count">{edge.attachment_evidence.length}</span>
+          </h3>
+          <p className="muted small">
+            Association records describe attachment evidence at a point in time;
+            they do not prove a packet route.
+          </p>
+          <ul className="seen-list">
+            {edge.attachment_evidence.map((a, i) => (
+              <li
+                key={`${a.client_native_id ?? "client"}-${a.event_time ?? i}`}
+              >
+                <b>
+                  {a.status ?? "Attachment status unavailable"}
+                  {a.basis ? ` · ${a.basis}` : ""}
+                </b>
+                <small>
+                  {[
+                    a.device_name,
+                    a.device_mac,
+                    a.device_serial,
+                    a.ssid_number ? `SSID ${a.ssid_number}` : undefined,
+                    a.client_source,
+                    a.client_authority,
+                    a.client_native_id,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  <br />
+                  Event{" "}
+                  {evidenceTime(
+                    a.event_time === undefined
+                      ? undefined
+                      : String(a.event_time),
+                  ) ?? "unavailable"}{" "}
+                  · received{" "}
+                  {evidenceTime(
+                    a.received_time === undefined
+                      ? undefined
+                      : String(a.received_time),
+                  ) ?? "unavailable"}
+                  {a.collected_time !== undefined
+                    ? ` · collected ${evidenceTime(String(a.collected_time)) ?? "unavailable"}`
+                    : ""}
+                </small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
       {seen.length > 0 && !pathOpen && (
         <>
           <h3>Seen by</h3>
@@ -529,7 +886,10 @@ function NodeDetails({
   close: React.ReactNode;
 }) {
   const incident = index.incident.get(node.id) ?? [];
-  const links = incident.filter((e) => e.relationship !== "runs_on");
+  const links = incident.filter(
+    (e) =>
+      e.relationship !== "runs_on" && e.relationship !== "traffic_observation",
+  );
   const runsOn = incident.filter((e) => e.relationship === "runs_on");
   const unknownDir = links.filter(
     (e) =>
@@ -552,6 +912,14 @@ function NodeDetails({
     ...(node.endpoint_kind === "k8s_node" ? ["node"] : []),
   ]);
   const frontDoor = node.endpoint_kind === "k8s_service";
+  const aggregateHandoffCoverage = frontDoor
+    ? handoffCoverageMessage(node)
+    : undefined;
+  const networkClient = node.endpoint_kind === "network_client";
+  const attachmentStatus = attrs.attachment_status;
+  const wirelessCorrelated =
+    attrs.attachment_basis === "meraki_association_flow" &&
+    attachmentStatus === "associated";
   const forwards = frontDoor ? backendChoices(index, node.id) : [];
   const vlan = vlanEdges(index, node.id);
   const displayAttributes = attributeLabels
@@ -588,6 +956,42 @@ function NodeDetails({
             : "No identity record covers this address in the time range. Check the identity saved searches and the observer scope lookup."}
         </p>
       )}
+      {networkClient && (
+        <>
+          {wirelessCorrelated && (
+            <p className="callout neutral">
+              {networkClientAttachmentMessage(attrs)}
+            </p>
+          )}
+          {!wirelessCorrelated && (
+            <p
+              className={`callout ${attachmentStatus === "conflict" || attachmentStatus === "stale" ? "warn" : "neutral"}`}
+            >
+              {networkClientAttachmentMessage(attrs)}
+            </p>
+          )}
+          <Facts
+            rows={[
+              ["Source", sourceLabel(attrs.access_platform ?? "") || undefined],
+              ["Authority", attrs.source_authority],
+              ["Routing domain", attrs.routing_domain],
+              ["MAC address", attrs.client_mac],
+              ["Attachment status", attachmentStatus],
+              ["Evidence basis", attrs.attachment_basis],
+              ["Source event time", evidenceTime(attrs.attachment_event_time)],
+              ["Received time", evidenceTime(attrs.attachment_received_time)],
+              [
+                "Source collection time",
+                evidenceTime(attrs.attachment_collected_time),
+              ],
+              ["Access point or device", attrs.attachment_device_name],
+              ["Attachment device ID", attrs.attachment_device_id],
+              ["Attachment device MAC", attrs.attachment_device_mac],
+              ["SSID number", attrs.ssid_number],
+            ]}
+          />
+        </>
+      )}
       {attrs.network_history_capped === "1" && (
         <p className="callout neutral">
           Network history is capped; this view may omit older observations.
@@ -599,6 +1003,12 @@ function NodeDetails({
           {attrs.service ? <b>{attrs.service}</b> : "this Service"}. Cilium
           translates the frontend to a backend pod; each line to a pod says how
           that pod was identified.
+        </p>
+      )}
+      {aggregateHandoffCoverage && (
+        <p className="callout warn">
+          {aggregateHandoffCoverage} Any backend links shown here summarize only
+          connections with determined handoffs.
         </p>
       )}
       {node.endpoint_kind === "k8s_node_proxy" && (
@@ -621,7 +1031,11 @@ function NodeDetails({
           ...displayAttributes.map(([k, label]): [string, React.ReactNode] => [
             label,
             k === "attach_device" ? (
-              <Device raw={attrs[k]} topo={topo} />
+              <Device
+                raw={attrs[k]}
+                topo={topo}
+                context={nodeDeviceContext(node)}
+              />
             ) : k === "traffic_policy" && attrs[k] === "Local" ? (
               <InfoTip term="Local" />
             ) : k === "lb_mode" && attrs[k] === "dsr" ? (
@@ -647,11 +1061,15 @@ function NodeDetails({
           [
             "Backends",
             frontDoor
-              ? forwards.length
-                ? `${forwards.length} identified`
-                : attrs.handoff === "service_only"
-                  ? `Not determined (${attrs.candidates ?? "?"} candidates)`
-                  : "None in this time range"
+              ? aggregateHandoffCoverage
+                ? forwards.length
+                  ? `${forwards.length} aggregate backends for determined connections`
+                  : "No determined backend connections"
+                : forwards.length
+                  ? `${forwards.length} identified`
+                  : attrs.handoff === "service_only"
+                    ? `Not determined (${attrs.candidates ?? "?"} candidates)`
+                    : "None in this time range"
               : undefined,
           ],
           [
@@ -668,7 +1086,13 @@ function NodeDetails({
           ],
         ]}
       />
-      <VlanEvidence edges={vlan} topo={topo} />
+      <VlanEvidence edges={vlan} topo={topo} index={index} />
+      {networkClient &&
+        incident.flatMap((e) => e.traffic_observations ?? []).length > 0 && (
+          <TrafficEvidence
+            observations={incident.flatMap((e) => e.traffic_observations ?? [])}
+          />
+        )}
       <ConnectionList
         title="Inbound"
         edges={inbound}
