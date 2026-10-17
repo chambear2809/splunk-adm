@@ -1018,6 +1018,7 @@ test("partial client handoff keeps its selected path unresolved and labels aggre
   await expect(path).not.toContainText(
     "Kubernetes node · received the traffic",
   );
+  await path.getByRole("button", { name: "Close path", exact: true }).click();
 
   await page.getByRole("button", { name: "Network", exact: true }).click();
   const checkoutFrontend = page.getByRole("button", {
@@ -1070,6 +1071,7 @@ test("complete aggregate handoff cannot replace missing selected-client metadata
   await expect(path).not.toContainText(
     "Kubernetes node · received the traffic",
   );
+  await path.getByRole("button", { name: "Close path", exact: true }).click();
 
   await page.getByRole("button", { name: "Network", exact: true }).click();
   const checkoutFrontend = page.getByRole("button", {
