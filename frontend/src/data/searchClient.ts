@@ -2,7 +2,7 @@ import SearchJobExport from "@splunk/search-job/SearchJob";
 import { username } from "@splunk/splunk-utils/config";
 import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
 import { toolkitDefault } from "../app/interop";
-import { splunkWarnings } from "../provider";
+import { splunkErrors, splunkWarnings } from "../provider";
 import type { Row } from "../rows";
 import { timeError } from "./timeBounds";
 export { timeError } from "./timeBounds";
@@ -20,9 +20,21 @@ export interface SearchRequest {
 export interface RunResult {
   rows: Row[];
   warnings: string[];
+  /** ERROR/FATAL job messages; callers that require complete results reject these. */
+  errors: string[];
 }
 export interface SearchClient {
   search(request: SearchRequest): Promise<RunResult>;
+}
+
+/** Fail closed when Splunk reported ERROR or FATAL job messages. */
+export function requireNoSearchErrors(
+  result: RunResult,
+  label: string,
+): RunResult {
+  if (result.errors.length)
+    throw new Error(`${label} was incomplete: ${result.errors[0]}`);
+  return result;
 }
 
 export class SearchResultLimitError extends Error {
@@ -61,7 +73,7 @@ const searchMetadata = (value: unknown): Record<string, unknown>[] => {
       : []),
   ];
 };
-const incompleteSearchError = (value: unknown) => {
+export const incompleteSearchError = (value: unknown) => {
   const metadata = searchMetadata(value);
   if (
     metadata.some(
@@ -240,11 +252,18 @@ export class ToolkitSearchClient implements SearchClient {
                   throw new Error(
                     "Splunk result count did not match returned rows; results could not be verified.",
                   );
+                const errors = [
+                  ...new Set([
+                    ...splunkErrors(finalState),
+                    ...splunkErrors(payload),
+                  ]),
+                ];
                 finish({
                   rows,
                   warnings: [
                     ...new Set([...warnings, ...splunkWarnings(payload)]),
                   ],
+                  errors,
                 });
               } catch (error) {
                 finish(

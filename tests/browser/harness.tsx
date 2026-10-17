@@ -12,7 +12,10 @@ import type {
   SearchClient,
   SearchRequest,
 } from "../../frontend/src/data/searchClient";
-import { SearchResultLimitError } from "../../frontend/src/data/searchClient";
+import {
+  incompleteSearchError,
+  SearchResultLimitError,
+} from "../../frontend/src/data/searchClient";
 import type {
   SetupClient,
   SetupSnapshot,
@@ -21,7 +24,6 @@ import type {
   IndexMacro,
   CiscoIntegrationStatus,
 } from "../../frontend/src/data/setupClient";
-import { FINALIZED_SEARCH_WARNING } from "../../frontend/src/provider";
 import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
 import catalogCapture from "../../fixtures/demo-catalog.json";
@@ -226,7 +228,11 @@ class FakeSearchClient implements SearchClient {
         faultScenario === "catalog-overlimit-narrowed" &&
         request.search.includes(' WHERE service="')
       )
-        return { rows: catalogCapture.rows, warnings: ["narrowed warning"] };
+        return {
+          rows: catalogCapture.rows,
+          warnings: ["narrowed warning"],
+          errors: [],
+        };
       if (
         ["catalog-overlimit", "catalog-overlimit-narrowed"].includes(
           faultScenario ?? "",
@@ -238,17 +244,18 @@ class FakeSearchClient implements SearchClient {
           faultScenario ?? "",
         )
       )
-        return { rows: [], warnings: [] };
+        return { rows: [], warnings: [], errors: [] };
       if (faultScenario === "marker-only-catalog")
         return {
           rows: [{ _key: "adm-catalog-empty", updated: 10 }],
           warnings: [],
+          errors: [],
         };
       if (faultScenario === "catalog-and-fallback-fail")
         throw new Error("Catalog unavailable.");
       if (faultScenario === "stale") {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        return { rows: catalogCapture.rows, warnings: [] };
+        return { rows: catalogCapture.rows, warnings: [], errors: [] };
       }
       const service = request.search.match(/WHERE service="([^"]+)"/)?.[1];
       return {
@@ -256,6 +263,7 @@ class FakeSearchClient implements SearchClient {
           ? catalogCapture.rows.filter((row) => row.service === service)
           : catalogCapture.rows,
         warnings: [],
+        errors: [],
       };
     }
     if (request.search === "| `adm_scope_options`") {
@@ -273,6 +281,7 @@ class FakeSearchClient implements SearchClient {
                 .slice(0, 1)
             : scopes.rows,
         warnings: [],
+        errors: [],
       };
     }
     if (request.search.startsWith('| `adm_find("')) {
@@ -288,8 +297,9 @@ class FakeSearchClient implements SearchClient {
             .flatMap((item) => item.rows)
             .filter((row) => row.service === "checkout"),
           warnings: [],
+          errors: [],
         };
-      return { rows: capture?.rows ?? [], warnings: [] };
+      return { rows: capture?.rows ?? [], warnings: [], errors: [] };
     }
     if (request.search.startsWith('| `adm_find_network_client("')) {
       if (faultScenario === "find-client-fails")
@@ -319,9 +329,11 @@ class FakeSearchClient implements SearchClient {
           faultScenario === "find-client-warning"
             ? ["Network-client evidence may be incomplete."]
             : [],
+        errors: [],
       };
     }
-    if (request.search === "`adm_topology`") return { rows: [], warnings: [] };
+    if (request.search === "`adm_topology`")
+      return { rows: [], warnings: [], errors: [] };
     window.__ADM_LAST_EARLIEST__ = request.earliest;
     window.__ADM_LAST_GRAPH_SEARCH__ = request.search;
     const scenario = faultScenario;
@@ -329,6 +341,9 @@ class FakeSearchClient implements SearchClient {
       throw new Error(
         "The Splunk search failed. Splunk reported: index=otel permission denied",
       );
+    if (scenario === "incomplete") {
+      throw new Error(incompleteSearchError({ content: { isFinalized: "1" } }));
+    }
     const rows = structuredClone(aciRows.rows) as Record<string, unknown>[];
     if (
       scenario === "partial-shared-handoff" ||
@@ -438,7 +453,9 @@ class FakeSearchClient implements SearchClient {
     }
     return {
       rows,
-      warnings: scenario === "incomplete" ? [FINALIZED_SEARCH_WARNING] : [],
+      warnings:
+        scenario === "graph-warning" ? ["Peer indexer-3 was unreachable."] : [],
+      errors: [],
     };
   }
 }
@@ -448,7 +465,8 @@ const stateParams = new URLSearchParams(params);
 // Fault scenarios are harness configuration, not demo scenario state.
 if (
   params.get("scenario") === "permission" ||
-  params.get("scenario") === "incomplete"
+  params.get("scenario") === "incomplete" ||
+  params.get("scenario") === "graph-warning"
 )
   stateParams.delete("scenario");
 const root = document.getElementById("adm-root");

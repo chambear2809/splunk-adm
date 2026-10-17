@@ -820,6 +820,20 @@ describe("parseObserver", () => {
       out: "outside",
     });
   });
+  it("does not name a same-IP network client as the firewall for an ftd observer", () => {
+    const rows = structuredClone(demoTopology("catalyst-aci"));
+    const device = rows.devices.find((d) => d.kind === "network_client")!;
+    device.mgmt_ip = "192.0.2.77";
+    const point = parseObserver(
+      "ftd:192.0.2.77:inside>outside",
+      indexTopology(rows),
+      { scope: device.scope, cluster: device.cluster },
+    )[0];
+    expect(point).toMatchObject({
+      resolved: false,
+      label: "Firewall 192.0.2.77",
+    });
+  });
   it("falls back to the raw address for unknown exporters", () => {
     expect(parseObserver("netflow:198.51.100.99:a>b", topo)[0].label).toBe(
       "Exporter 198.51.100.99",
@@ -1397,5 +1411,403 @@ describe("edgeMatches and deviceName", () => {
     // ingress→frontend, frontend→checkout and checkout→coredns are Isovalent-only.
     expect(s.unseenByFabric).toHaveLength(3);
     expect(s.idle.map((d) => d.name)).toEqual(["border-1", "leaf-201"]);
+  });
+});
+
+describe("Stream/IPFIX exporter resolution", () => {
+  const LEAF_102 =
+    "aci:ef405db29b9d1f604f20af39a492a8798198f746faa1004703a5b7f056b6a561";
+  const scenario = () => {
+    const graph = structuredClone(demoGraph("catalyst-aci"));
+    const topology = structuredClone(demoTopology("catalyst-aci"));
+    const edge = graph.edges.find((candidate) =>
+      candidate.traffic_observations?.some(
+        (item) => item.exporter_ip === "192.0.2.102",
+      ),
+    )!;
+    return { graph, topology, edge };
+  };
+  const unresolvedKey = JSON.stringify([
+    "192.0.2.102",
+    "campus-aci",
+    "cilium-aci-east",
+  ]);
+  const exporterContexts = (
+    graph: Graph,
+    topology: ReturnType<typeof demoTopology>,
+  ) =>
+    deviceSummaries(
+      graph.edges,
+      indexTopology(topology),
+      indexGraph(graph),
+    ).attachmentReferences.flatMap((reference) => reference.exporterContext);
+  const seenBy = (
+    graph: Graph,
+    topology: ReturnType<typeof demoTopology>,
+    edge: GraphEdge,
+  ) =>
+    observationsByDevice(
+      { ...edge, observers: ["netflow:192.0.2.102:ifIndex 436400128>"] },
+      indexTopology(topology),
+      [],
+      edgeDeviceContext(edge, indexGraph(graph)),
+    );
+
+  it("resolves an exporter whose authority is its own address to the inventory switch", () => {
+    const { graph, topology, edge } = scenario();
+    const observation = edge.traffic_observations!.find(
+      (item) => item.exporter_ip === "192.0.2.102",
+    )!;
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    expect(observation.source_authority).toBe("192.0.2.102");
+    expect(leaf.device_authority).toBe("192.0.2.50");
+    expect(exporterContexts(graph, topology)).toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)[0]).toMatchObject({
+      key: LEAF_102,
+      label: "leaf-102",
+      resolved: true,
+    });
+  });
+
+  it("does not compare a controller authority from the edge context with the exporter", () => {
+    const { graph, topology, edge } = scenario();
+    const withAuthority = {
+      ...edge,
+      source_authority: "https://catalyst-center.example.invalid",
+    } as GraphEdge;
+    const context = edgeDeviceContext(withAuthority, indexGraph(graph));
+    expect(context.authority).toBe("https://catalyst-center.example.invalid");
+    expect(
+      observationsByDevice(
+        { ...withAuthority, observers: ["netflow:192.0.2.102:ifIndex 1>"] },
+        indexTopology(topology),
+        [],
+        context,
+      )[0],
+    ).toMatchObject({ key: LEAF_102, resolved: true });
+  });
+
+  it("does not resolve the same management IP from another scope", () => {
+    const { graph, topology, edge } = scenario();
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    leaf.scope = "meraki-nxos";
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)[0]).toMatchObject({
+      key: unresolvedKey,
+      resolved: false,
+    });
+  });
+
+  it("leaves an exporter unresolved when two switches share its IP in one scope", () => {
+    const { graph, topology, edge } = scenario();
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    topology.devices.push({
+      ...leaf,
+      id: `aci:${"e".repeat(64)}`,
+      name: "leaf-102-duplicate",
+    });
+    expect(
+      exporterContexts(graph, topology).some((text) =>
+        text.startsWith("Exporter leaf-102"),
+      ),
+    ).toBe(false);
+    expect(seenBy(graph, topology, edge)[0].resolved).toBe(false);
+  });
+
+  it("leaves an exporter unresolved on V2 when neither observation nor context carries a scope", () => {
+    const { graph, topology, edge } = scenario();
+    for (const item of edge.traffic_observations!) delete item.scope;
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(
+      observationsByDevice(
+        {
+          ...edge,
+          traffic_observations: edge.traffic_observations,
+          observers: ["netflow:192.0.2.102:ifIndex 1>"],
+        },
+        indexTopology(topology),
+        [],
+        {},
+      )[0],
+    ).toMatchObject({
+      key: JSON.stringify(["192.0.2.102", "", "cilium-aci-east"]),
+      resolved: false,
+    });
+  });
+
+  it("leaves an exporter unresolved when its cluster differs from the inventory device's", () => {
+    const { graph, topology, edge } = scenario();
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    leaf.cluster = "another-cluster";
+    expect(leaf.cluster).not.toBe(
+      edge.traffic_observations!.find(
+        (item) => item.exporter_ip === "192.0.2.102",
+      )!.cluster,
+    );
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)[0]).toMatchObject({
+      key: unresolvedKey,
+      resolved: false,
+    });
+  });
+
+  it("never resolves an exporter IP to a network client with the same address", () => {
+    const { graph, topology, edge } = scenario();
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    leaf.mgmt_ip = "192.0.2.199";
+    const client = topology.devices.find(
+      (device) => device.kind === "network_client",
+    )!;
+    client.mgmt_ip = "192.0.2.102";
+    expect(seenBy(graph, topology, edge)[0]).toMatchObject({
+      key: unresolvedKey,
+      resolved: false,
+    });
+  });
+
+  it("keeps an exporter unresolved when its authority names a different address", () => {
+    const { graph, topology, edge } = scenario();
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "192.0.2.102")
+        item.source_authority = "192.0.2.50";
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)).toEqual([]);
+  });
+
+  it("requires an exporter authority equal to the exporter address on a V2 topology", () => {
+    const { graph, topology, edge } = scenario();
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "192.0.2.102") item.source_authority = "";
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)).toEqual([]);
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "192.0.2.102") delete item.source_authority;
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    expect(seenBy(graph, topology, edge)).toEqual([]);
+  });
+
+  it("leaves an exporter unresolved when neither the observation nor the context carries a cluster", () => {
+    const { graph, topology, edge } = scenario();
+    for (const item of edge.traffic_observations!) delete item.cluster;
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    const seen = observationsByDevice(
+      { ...edge, observers: ["netflow:192.0.2.102:ifIndex 1>"] },
+      indexTopology(topology),
+      [],
+      { scope: "campus-aci" },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0].resolved).toBe(false);
+  });
+
+  it("leaves an exporter without a cluster unresolved even for a device whose cluster is empty", () => {
+    const { topology, edge } = scenario();
+    for (const item of edge.traffic_observations!) delete item.cluster;
+    const leaf = topology.devices.find((d) => d.id === LEAF_102)!;
+    leaf.cluster = "";
+    const seen = observationsByDevice(
+      { ...edge, observers: ["netflow:192.0.2.102:ifIndex 1>"] },
+      indexTopology(topology),
+      [],
+      { scope: "campus-aci" },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0].resolved).toBe(false);
+  });
+
+  it("keeps unresolved exporters with the same address in different scopes and clusters apart", () => {
+    const { graph, topology, edge } = scenario();
+    const template = edge.traffic_observations![0];
+    const copy = (id: string, scope: string, cluster: string) =>
+      ({
+        ...structuredClone(edge),
+        id,
+        source: `missing:${id}:source`,
+        target: `missing:${id}:target`,
+        relationship: "communicates_with",
+        scope,
+        cluster,
+        observers: ["netflow:192.0.2.77:ifIndex 1>"],
+        traffic_observations: [
+          {
+            ...structuredClone(template),
+            exporter_ip: "192.0.2.77",
+            source_authority: "192.0.2.77",
+            scope,
+            cluster,
+          },
+        ],
+      }) as GraphEdge;
+    const edges = [
+      copy("flow-a", "scope-a", "cluster-a"),
+      copy("flow-b", "scope-b", "cluster-b"),
+    ];
+    const { devices } = deviceSummaries(
+      edges,
+      indexTopology(topology),
+      indexGraph({ ...graph, edges }),
+    );
+    expect(devices).toHaveLength(2);
+    expect(devices.map((item) => item.label).sort()).toEqual([
+      "Exporter 192.0.2.77 · scope-a · cluster-a",
+      "Exporter 192.0.2.77 · scope-b · cluster-b",
+    ]);
+    expect(devices.every((item) => item.edges.length === 1)).toBe(true);
+  });
+});
+
+describe("Client attachment references", () => {
+  const scenario = () => {
+    const graph = structuredClone(demoGraph("catalyst-aci"));
+    const topology = structuredClone(demoTopology("catalyst-aci"));
+    const edge = graph.edges.find(
+      (candidate) => candidate.attachment_evidence?.length,
+    )!;
+    for (const other of graph.edges)
+      if (other !== edge) delete other.attachment_evidence;
+    const client = graph.nodes.find((node) => node.id === edge.source)!;
+    const second = (suffix: string, ssid: number) => {
+      const node = structuredClone(client);
+      node.id = `${client.id}-${suffix}`;
+      node.label = `CLIENT-${suffix}`;
+      const copy = structuredClone(edge);
+      copy.id = `${edge.id}-${suffix}`;
+      copy.source = node.id;
+      copy.attachment_evidence![0].ssid_number = ssid;
+      graph.nodes.push(node);
+      graph.edges.push(copy);
+      return { node, edge: copy };
+    };
+    const references = () =>
+      deviceSummaries(graph.edges, indexTopology(topology), indexGraph(graph))
+        .attachmentReferences;
+    return { graph, edge, client, second, references };
+  };
+
+  it("keeps two clients on one access point separate with their own SSID and flows", () => {
+    const { edge, client, second, references } = scenario();
+    client.label = "CLIENT-ONE";
+    edge.attachment_evidence![0].ssid_number = 1;
+    const other = second("TWO", 7);
+    const refs = references();
+    expect(refs).toHaveLength(2);
+    const one = refs.find((reference) => reference.client === "CLIENT-ONE")!;
+    const two = refs.find((reference) => reference.client === "CLIENT-TWO")!;
+    expect(one.device?.id).toBe(two.device?.id);
+    expect(one.key).not.toBe(two.key);
+    expect(one.evidence.ssid_number).toBe(1);
+    expect(two.evidence.ssid_number).toBe(7);
+    expect(one.flowEdges).toEqual([edge]);
+    expect(two.flowEdges).toEqual([other.edge]);
+  });
+
+  it("keeps one client's flows under their own association record", () => {
+    const { edge, graph, references } = scenario();
+    edge.attachment_evidence![0].ssid_number = 1;
+    const copy = structuredClone(edge);
+    copy.id = `${edge.id}-later`;
+    copy.attachment_evidence![0].ssid_number = 9;
+    graph.edges.push(copy);
+    const refs = references();
+    expect(refs).toHaveLength(2);
+    const first = refs.find(
+      (reference) => reference.evidence.ssid_number === 1,
+    )!;
+    const later = refs.find(
+      (reference) => reference.evidence.ssid_number === 9,
+    )!;
+    expect(first.flowEdges).toEqual([edge]);
+    expect(later.flowEdges).toEqual([copy]);
+  });
+
+  it("merges one client's flows that share an association record", () => {
+    const { edge, graph, references } = scenario();
+    const copy = structuredClone(edge);
+    copy.id = `${edge.id}-same`;
+    graph.edges.push(copy);
+    const refs = references();
+    expect(refs).toHaveLength(1);
+    expect(refs[0].flowEdges).toEqual([edge, copy]);
+  });
+
+  it("keeps one client's records that differ in any evidence field apart", () => {
+    const { edge, references } = scenario();
+    const base = edge.attachment_evidence![0];
+    const fields = {
+      basis: "other-basis",
+      status: "other-status",
+      device_name: "other-name",
+      device_mac: "00:00:5e:00:53:01",
+      device_serial: "OTHER-SERIAL",
+      client_source: "other-source",
+      client_authority: "other-authority",
+      client_native_id: "other-native-id",
+    } as const;
+    edge.attachment_evidence = [
+      base,
+      ...Object.entries(fields).map(([field, value]) => ({
+        ...structuredClone(base),
+        [field]: value,
+      })),
+    ];
+    expect(references()).toHaveLength(1 + Object.keys(fields).length);
+  });
+
+  it("merges identical records whose numeric and string values name the same thing", () => {
+    const { edge, graph, references } = scenario();
+    edge.attachment_evidence![0].ssid_number = 1;
+    edge.attachment_evidence![0].event_time = 1700000000;
+    const copy = structuredClone(edge);
+    copy.id = `${edge.id}-text`;
+    copy.attachment_evidence![0].ssid_number = "1";
+    copy.attachment_evidence![0].event_time = "1700000000";
+    graph.edges.push(copy);
+    const refs = references();
+    expect(refs).toHaveLength(1);
+    expect(refs[0].flowEdges).toEqual([edge, copy]);
+  });
+
+  it("keeps two clients with the same unresolved attachment ID separate", () => {
+    const { edge, client, second, references } = scenario();
+    client.label = "CLIENT-ONE";
+    edge.attachment_evidence![0].device_id = "catalyst:" + "0".repeat(64);
+    const other = second("TWO", 7);
+    other.edge.attachment_evidence![0].device_id = "catalyst:" + "0".repeat(64);
+    const refs = references();
+    expect(refs).toHaveLength(2);
+    expect(refs.every((reference) => !reference.device)).toBe(true);
+    expect(refs.map((reference) => reference.flowEdges.length)).toEqual([1, 1]);
+  });
+
+  it("does not attribute a client's flow to an access point without that client's association evidence", () => {
+    const { graph, edge, second, references } = scenario();
+    const other = second("TWO", 7);
+    delete other.edge.attachment_evidence;
+    const refs = references();
+    expect(refs).toHaveLength(1);
+    expect(refs[0].flowEdges).toEqual([edge]);
+    expect(graph.edges).toContain(other.edge);
+  });
+
+  it("does not attribute association evidence that lacks a correlated flow", () => {
+    const { edge, references } = scenario();
+    edge.confidence = "observed";
+    expect(references()).toHaveLength(0);
   });
 });

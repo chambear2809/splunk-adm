@@ -473,7 +473,7 @@ export class ToolkitSetupClient implements SetupClient {
       for (let skip = 0; skip <= maximum; skip += pageSize) {
         const limit = skip === maximum ? 1 : pageSize;
         const query = new URLSearchParams({
-          count: String(limit),
+          limit: String(limit),
           skip: String(skip),
           sort: "_key:1",
         });

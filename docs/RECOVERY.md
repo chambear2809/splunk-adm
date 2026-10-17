@@ -5,7 +5,7 @@ Recovery runs are administrator operations. Keep the original raw data and recor
 ## Missed runs during an outage
 
 Do not assume that continuous scheduling automatically replays an outage. The
-[exclusive local scheduler rehearsal](benchmarks/2026-10-13-pipeline.md) resumed
+[exclusive local scheduler rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-13-pipeline.md) resumed
 future jobs but did not recover a missed slice, despite a 24-hour lookback.
 Compare expected scheduled slots with successful executions after restart and
 verify raw-versus-summary counts. Recover each affected closed slice using the
@@ -17,14 +17,14 @@ behavior in the tested environment, not a qualification of other deployments.
 The lab now waits for both KV Store readiness and a successful collection data
 read after restart; that readiness check alone does not restore missed slots.
 
-The [assisted lab rehearsal](SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
+The [assisted lab rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
 exercises the absolute-slice procedure and records replay jobs separately from
 native scheduler activity. The shipped action is **automated assisted
 recovery**: it is administrator-only and separately opt-in. The accepted KV
-claim gate covers standalone Splunk only. The [core milestone live tests](benchmarks/2026-10-14-recovery-core.md)
-passed on standalone Splunk 10.6.0.5. The separate abandoned-lease supervisor
+claim gate covers standalone Splunk only. The [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
+passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts any 10.6.x patch release. The separate abandoned-lease supervisor
 adds detection; it never takes over a recovery. SHC and failover behavior are not qualified. The action
-refuses other versions, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
+refuses versions other than 10.6.x, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
 overrides explicitly enable both the saved-search action and
 `local/adm_recovery.conf`. Native scheduler catch-up remains a failed
 qualification; the manual absolute-slice fallback remains required when the
@@ -149,7 +149,7 @@ inconclusive, the slot remains uncertain and the manual fallback applies.
 ## Abandoned recovery claims
 
 `ADM - Recovery abandoned-lease alert` ships disabled. On qualified standalone
-Splunk 10.6.0.5, an administrator can enable it independently of the recovery
+Splunk 10.6.x (live-tested on 10.6.0.5), an administrator can enable it independently of the recovery
 action. It pages through the recovery-state lookup every five minutes,
 including targets that are paused and claims older than the missed-slot
 history window. It reuses `adm_kv_read_all` (20 pages of 10,000 rows) and
@@ -239,4 +239,4 @@ Splunk documents the underlying bucket and event-address fields in [Use default 
 
 ## Clean restore rehearsal
 
-The [backup/restore rehearsal](BACKUP_RESTORE.md) recreates the disposable lab, restores all six app collections and deployment-local files, rebuilds summaries from retained synthetic fixtures, and compares the resulting map. It does not substitute for a production raw-index or platform backup.
+The [backup/restore rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/BACKUP_RESTORE.md) recreates the disposable lab, restores all six app collections and deployment-local files, rebuilds summaries from retained synthetic fixtures, and compares the resulting map. It does not substitute for a production raw-index or platform backup.

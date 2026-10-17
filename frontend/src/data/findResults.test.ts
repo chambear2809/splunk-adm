@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { settledFindResults } from "./findResults";
 import type { RunResult } from "./searchClient";
 
-const result = (rows: RunResult["rows"]): RunResult => ({ rows, warnings: [] });
+const result = (rows: RunResult["rows"]): RunResult => ({
+  rows,
+  warnings: [],
+  errors: [],
+});
 
 describe("settledFindResults", () => {
   it("keeps successful client evidence when application Find fails", () => {

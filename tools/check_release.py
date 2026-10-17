@@ -23,6 +23,7 @@ ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
 FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
 # Custom Mako templates are deprecated as of Splunk Enterprise 10.4.
+DEV_RECORD_DIRS = ("research/", "docs/benchmarks/")
 MAKO_DIRS = ("appserver/templates/", "appserver/modules/")
 FORBIDDEN_NAMES = {".env", ".env.local", "credentials", "secrets.json"}
 
@@ -123,6 +124,8 @@ def _assert_safe_files(files: dict[str, bytes]) -> None:
         }:
             raise ValueError(f"deployment-owned scope CSV must not ship: {name}")
         relative = name.removeprefix("splunk_adm/")
+        if relative.casefold().startswith(DEV_RECORD_DIRS):
+            raise ValueError(f"development record must not ship: {name}")
         if relative.casefold().startswith(MAKO_DIRS):
             raise ValueError(f"custom Mako template path in archive: {name}")
         components = {component.casefold() for component in relative.split("/")}
@@ -194,15 +197,7 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/docs/UPGRADES.md",
         "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md",
         "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md",
-        "splunk_adm/docs/benchmarks/cisco-networking-native-browser.json",
-        "splunk_adm/docs/benchmarks/cisco-networking-local-load.json",
-        "splunk_adm/docs/benchmarks/cisco-networking-local-qualification.json",
         "splunk_adm/docs/operators/cisco-enterprise-networking.md",
-        "splunk_adm/research/package-manifest.json",
-        "splunk_adm/research/cisco-catalyst-evidence.json",
-        "splunk_adm/research/cisco-meraki-evidence.json",
-        "splunk_adm/research/cisco-integration-contract.json",
-        "splunk_adm/research/cisco-pipeline-interface.json",
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",
         "splunk_adm/default/macros.conf",

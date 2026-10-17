@@ -23,8 +23,6 @@ export interface LiveRequest extends GraphArgs {
 }
 const MAX_MESSAGE_CHARS = 300;
 const MAX_MESSAGES = 20;
-export const FINALIZED_SEARCH_WARNING =
-  "Splunk finalized this job before all results were available; the graph may be incomplete.";
 export const ARG_RULES: Record<keyof GraphArgs, { re: RegExp; hint: string }> =
   {
     service: {
@@ -83,9 +81,25 @@ export function splunkMessage(payload: unknown): string | undefined {
     ? `${clean.slice(0, MAX_MESSAGE_CHARS - 1)}…`
     : clean;
 }
-export function splunkWarnings(payload: unknown): string[] {
+const messageType = (value: unknown) => {
+  if (!value || typeof value !== "object") return undefined;
+  const type = (value as { type?: unknown }).type;
+  return typeof type === "string" ? type.trim().toLowerCase() : undefined;
+};
+const IGNORED_MESSAGE_TYPES = new Set([
+  "debug",
+  "info",
+  "information",
+  "notice",
+]);
+const ERROR_MESSAGE_TYPES = new Set(["error", "fatal"]);
+function splunkMessages(
+  payload: unknown,
+  keep: (type: string | undefined) => boolean,
+  untitled?: string,
+): string[] {
   if (!payload || typeof payload !== "object") {
-    const message = splunkMessage(payload);
+    const message = keep(undefined) ? splunkMessage(payload) : undefined;
     return message ? [message] : [];
   }
   const p = payload as {
@@ -99,18 +113,26 @@ export function splunkWarnings(payload: unknown): string[] {
     ...(p.message === undefined ? [] : [p.message]),
   ];
   return values
-    .filter((value) => {
-      if (!value || typeof value !== "object") return true;
-      const type = (value as { type?: unknown }).type;
-      return !(
-        typeof type === "string" &&
-        /^(?:info|information|notice)$/i.test(type.trim())
-      );
-    })
-    .map(splunkMessage)
+    .filter((value) => keep(messageType(value)))
+    .map((value) => splunkMessage(value) ?? untitled)
     .filter((value): value is string => !!value)
     .filter((value, index, all) => all.indexOf(value) === index)
     .slice(0, MAX_MESSAGES);
+}
+/** Job messages other than DEBUG, INFO and NOTICE, including errors. */
+export function splunkWarnings(payload: unknown): string[] {
+  return splunkMessages(
+    payload,
+    (type) => type === undefined || !IGNORED_MESSAGE_TYPES.has(type),
+  );
+}
+/** ERROR and FATAL job messages: the job finished but its results cannot be trusted. */
+export function splunkErrors(payload: unknown): string[] {
+  return splunkMessages(
+    payload,
+    (type) => type !== undefined && ERROR_MESSAGE_TYPES.has(type),
+    "Splunk reported an error without a message.",
+  );
 }
 interface Results {
   fields: (string | { name?: string })[];
@@ -166,10 +188,13 @@ export function loadLive(
         input.timezone,
       ),
     )
-    .then(({ rows, warnings }) => {
-      if (warnings.length)
-        throw new Error(`Splunk graph search was incomplete: ${warnings[0]}`);
+    .then(({ rows, warnings, errors }) => {
+      if (errors.length)
+        throw new Error(`Splunk graph search was incomplete: ${errors[0]}`);
       const graph = rowsToGraph(rows, input);
+      graph.coverage.warnings = [
+        ...new Set([...graph.coverage.warnings, ...warnings]),
+      ];
       return graph;
     });
 }
@@ -191,12 +216,11 @@ export function loadTopology(
         timezone,
       ),
     )
-    .then(({ rows, warnings }) => {
-      if (warnings.length)
-        throw new Error(
-          `Splunk topology search was incomplete: ${warnings[0]}`,
-        );
+    .then(({ rows, warnings, errors }) => {
+      if (errors.length)
+        throw new Error(`Splunk topology search was incomplete: ${errors[0]}`);
       const topology = rowsToTopology(rows);
+      topology.warnings = [...new Set([...topology.warnings, ...warnings])];
       return topology;
     });
 }

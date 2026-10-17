@@ -91,6 +91,40 @@ class RecoveryDeploymentTest(unittest.TestCase):
     def test_observed_standalone_shape_is_qualified(self):
         self.qualify(self.responses())
 
+    def test_any_numeric_10_6_patch_release_is_qualified(self):
+        for version in ("10.6.0.5", "10.6.1", "10.6.2.3"):
+            with self.subTest(version=version):
+                responses = self.responses()
+                responses["/services/server/info"]["entry"][0]["content"]["version"] = (
+                    version
+                )
+                self.qualify(responses)
+
+    def test_other_or_malformed_versions_are_refused(self):
+        for version in (
+            "10.7.0",
+            "10.5.9",
+            "9.4.3",
+            "10.60.0",
+            "10.6",
+            "10.6.",
+            "10.6.0.5.1",
+            "10.6.0.5-beta",
+            "10.6.0.5\n",
+            "10.6.x",
+            "10.6.\u0660",
+            "",
+            None,
+            10.6,
+        ):
+            with self.subTest(version=version):
+                responses = self.responses()
+                responses["/services/server/info"]["entry"][0]["content"]["version"] = (
+                    version
+                )
+                with self.assertRaisesRegex(Refused, "10.6.x"):
+                    self.qualify(responses)
+
     def test_unknown_cloud_forwarder_and_remote_search_head_are_refused(self):
         for key, value in (
             ("version", "10.7.0"),

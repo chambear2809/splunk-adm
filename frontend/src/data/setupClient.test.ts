@@ -69,11 +69,15 @@ const clusterSetting = (overrides: Record<string, unknown> = {}) => ({
   mapping_status: "mapped",
   ...overrides,
 });
+// Mirrors the KV Store data endpoint, which pages with limit/skip and ignores
+// count. The client must always send a positive limit.
 const pageFromURL = (url: string, rows: unknown[]) => {
   const query = new URL(url, "https://test").searchParams;
   const skip = Number(query.get("skip") ?? "0");
-  const count = Number(query.get("count") ?? "1000");
-  return rows.slice(skip, skip + count);
+  const limit = Number(query.get("limit"));
+  if (!Number.isInteger(limit) || limit <= 0)
+    throw new Error(`KV read without a positive limit: ${url}`);
+  return rows.slice(skip, skip + limit);
 };
 function stagedIntegrationFetcher(
   sourceRows = [sourceProfile()],
@@ -688,4 +692,89 @@ it("walks source profile pages and marks collections at the configured cap incom
   expect(capped.ciscoIntegration.sourceProfiles.complete).toBe(false);
   expect(capped.ciscoIntegration.sourceProfiles.error).toContain("1000-row");
   expect(capped.ciscoIntegration.state).toBe("incomplete");
+});
+
+describe("KV Store collection paging", () => {
+  const makeProfiles = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      sourceProfile({
+        _key: i.toString(16).padStart(64, "0"),
+        mapping_key: (i + 1).toString(16).padStart(64, "0"),
+        source_authority: "192.0.2." + i,
+      }),
+    );
+  const makeClusters = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      clusterSetting({
+        _key: i.toString(16).padStart(64, "0"),
+        cluster: "cluster-" + i,
+      }),
+    );
+  const collectionURLs = (
+    request: MockedFunction<FetchMock>,
+    collection: string,
+  ) =>
+    request.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes(`storage/collections/data/${collection}`));
+
+  it("requests pages with limit and skip, never count", async () => {
+    const request = stagedIntegrationFetcher(makeProfiles(600));
+    await new ToolkitSetupClient(request).read();
+    for (const collection of [
+      "adm_network_source_scope",
+      "adm_cilium_cluster_settings",
+    ]) {
+      const urls = collectionURLs(request, collection);
+      expect(urls.length).toBeGreaterThan(0);
+      for (const url of urls) {
+        const query = new URL(url, "https://test").searchParams;
+        expect(query.get("limit")).toMatch(/^[1-9][0-9]*$/);
+        expect(query.has("skip")).toBe(true);
+        expect(query.has("count")).toBe(false);
+      }
+    }
+  });
+
+  it("reads a collection larger than one page completely", async () => {
+    const request = stagedIntegrationFetcher(
+      makeProfiles(600),
+      makeClusters(600),
+    );
+    const state = await new ToolkitSetupClient(request).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(true);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBeUndefined();
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(600);
+    expect(state.ciscoIntegration.clusterSettings.complete).toBe(true);
+    expect(state.ciscoIntegration.clusterSettings.rows).toHaveLength(600);
+    expect(
+      collectionURLs(request, "adm_network_source_scope").map((url) =>
+        new URL(url, "https://test").searchParams.get("skip"),
+      ),
+    ).toEqual(["0", "250", "500"]);
+  });
+
+  it("treats exactly the review limit as complete", async () => {
+    const request = stagedIntegrationFetcher(makeProfiles(1000));
+    const state = await new ToolkitSetupClient(request).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(true);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBeUndefined();
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(1000);
+    const probe = collectionURLs(request, "adm_network_source_scope").at(-1);
+    const query = new URL(probe ?? "", "https://test").searchParams;
+    expect(query.get("skip")).toBe("1000");
+    expect(query.get("limit")).toBe("1");
+  });
+
+  it("reports the review limit when the collection exceeds it", async () => {
+    const state = await new ToolkitSetupClient(
+      stagedIntegrationFetcher(makeProfiles(1001)),
+    ).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(false);
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(1000);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBe(
+      "Collection exceeds the 1000-row setup review limit.",
+    );
+    expect(state.ciscoIntegration.state).toBe("incomplete");
+  });
 });

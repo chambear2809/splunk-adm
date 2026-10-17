@@ -1,22 +1,31 @@
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+import io
 from pathlib import Path
+import hashlib
 import json
 import os
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote
 
 from tools.cisco_contract_migration import (
     Journal,
     JOURNAL_SCHEMA,
+    SUMMARY_CANONICALIZER_VERSION,
     Migration,
     Refused,
     Uncertain,
     _job_sid,
+    canonical,
+    ensure_state_directory,
     fingerprint,
+    main,
     plan_slices,
+    rollback_recovery_horizon_seconds,
 )
 
 
@@ -57,6 +66,7 @@ class FakeApi:
         reject_writer=False,
         delayed_visibility=0,
         mutate_profile_after_dispatch=False,
+        live_builder_writes=False,
         history_rows=None,
         catalog_rows=None,
         catalog_invalid=False,
@@ -75,6 +85,8 @@ class FakeApi:
         self.reject_writer = reject_writer
         self.delayed_visibility = delayed_visibility
         self.mutate_profile_after_dispatch = mutate_profile_after_dispatch
+        self.live_builder_writes = live_builder_writes
+        self.source_overrides = {}
         self.history_rows = history_rows or []
         self.catalog_rows = catalog_rows or []
         self.catalog_invalid = catalog_invalid
@@ -270,7 +282,12 @@ class FakeApi:
             name = unquote(
                 path.split("/storage/collections/data/", 1)[1].split("?", 1)[0]
             )
-            return list(self.collections[name])
+            params = parse_qs(path.split("?", 1)[1]) if "?" in path else {}
+            skip = int(params.get("skip", ["0"])[0])
+            rows = list(self.collections[name])[skip:]
+            if "limit" in params:
+                rows = rows[: int(params["limit"][0])]
+            return rows
         if method == "GET" and "/configs/conf-macros/" in path:
             name = unquote(path.rsplit("/", 1)[1])
             content = {"definition": self.macros[name]}
@@ -417,6 +434,8 @@ class FakeApi:
                         )
                     existing[row["_key"]] = merged
                 self.collections["adm_network_client_history"] = list(existing.values())
+            if self.live_builder_writes:
+                self.builder_cycle()
             if self.mutate_profile_after_dispatch:
                 self.collections["adm_network_source_scope"].append(
                     {"_key": "changed-profile", "profile": "catalyst_sdwan_ipfix"}
@@ -486,12 +505,14 @@ class FakeApi:
             elif "adm_traffic_observations_v2" in query:
                 if "index_earliest" not in data or "index_latest" not in data:
                     raise AssertionError("source query must carry exact index bounds")
-                rows = [SIDES["traffic"]]
+                rows = [
+                    {**SIDES["traffic"], **self.source_overrides.get("traffic", {})}
+                ]
             elif "adm_conversation_rollup_v2" in query:
                 if "index_earliest" not in data or "index_latest" not in data:
                     raise AssertionError("source query must carry exact index bounds")
                 rows = [
-                    SIDES[name]
+                    {**SIDES[name], **self.source_overrides.get(name, {})}
                     for name in ("conversation", "hubble_xlate", "hubble_l7")
                 ]
             elif "adm_network_client_history_observations" in query:
@@ -547,6 +568,17 @@ class FakeApi:
                 raise AssertionError("unknown SID")
             return {"entry": [self._job_entry(sid, self.jobs[sid])]}
         raise AssertionError((method, path, data))
+
+    def builder_cycle(self):
+        """Simulate scheduled identity and interface upserts between phases."""
+        cycle = len(self.collections["adm_ip_identity"]) + 1
+        self.collections["adm_ip_identity"] = [
+            {**row, "updated": str(cycle), "last_seen": str(cycle)}
+            for row in self.collections["adm_ip_identity"]
+        ] + [{"_key": f"identity-{cycle}", "ip": f"198.51.100.{cycle}"}]
+        self.collections["adm_interfaces"] = [
+            {**row, "updated": str(cycle)} for row in self.collections["adm_interfaces"]
+        ] + [{"_key": f"interface-{cycle}", "ifindex": str(cycle)}]
 
     def _macro_args_readback(self, name):
         value = self.macro_args[name]
@@ -695,6 +727,301 @@ class ContractMigrationTest(unittest.TestCase):
         self.assertEqual(self.journal.read()["phase"], "prepared")
         self.assertEqual(self.journal.path.stat().st_mode & 0o777, 0o600)
         self.assertEqual(self.journal.lock_path.stat().st_mode & 0o777, 0o600)
+
+    def _state_dir_journal(self, directory: Path, name: str = "j.json") -> Journal:
+        return Journal(directory / name)
+
+    def test_journal_creates_missing_directory_owner_only(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / "state"
+            journal = self._state_dir_journal(target)
+            with journal.locked():
+                journal.write({"schema": JOURNAL_SCHEMA, "phase": "prepared"})
+            self.assertEqual(target.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(journal.path.stat().st_mode & 0o777, 0o600)
+
+    def test_journal_never_changes_existing_directory_mode(self):
+        with tempfile.TemporaryDirectory() as root:
+            shared = Path(root) / "shared"
+            shared.mkdir()
+            shared.chmod(0o1777)
+            journal = self._state_dir_journal(shared)
+            with journal.locked():
+                journal.write({"schema": JOURNAL_SCHEMA, "phase": "prepared"})
+            Journal.write_artifact(shared / "artifact.json", {"a": 1})
+            self.assertEqual(shared.stat().st_mode & 0o7777, 0o1777)
+            self.assertEqual(journal.path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(journal.lock_path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual((shared / "artifact.json").stat().st_mode & 0o777, 0o600)
+
+            group = Path(root) / "group"
+            group.mkdir()
+            group.chmod(0o755)
+            with self._state_dir_journal(group).locked():
+                pass
+            self.assertEqual(group.stat().st_mode & 0o7777, 0o755)
+
+    def test_journal_refuses_unsafe_existing_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            open_dir = Path(root) / "open"
+            open_dir.mkdir()
+            open_dir.chmod(0o770)
+            real = Path(root) / "real"
+            real.mkdir()
+            link = Path(root) / "link"
+            link.symlink_to(real)
+            plain = Path(root) / "file"
+            plain.write_text("x")
+            for directory in (open_dir, link, plain / "sub"):
+                journal = self._state_dir_journal(directory)
+                with self.subTest(directory=directory.name):
+                    with self.assertRaises(Refused), journal.locked():
+                        pass
+                    with self.assertRaises(Refused):
+                        Journal.write_artifact(directory / "a.json", {"a": 1})
+            self.assertEqual(open_dir.stat().st_mode & 0o777, 0o770)
+            self.assertEqual(list(real.iterdir()), [])
+
+    @unittest.skipIf(os.geteuid() == 0, "ownership check is moot as root")
+    def test_journal_refuses_directory_owned_by_another_user(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / "state"
+            directory.mkdir(mode=0o700)
+            with patch(
+                "tools.cisco_contract_migration.os.geteuid",
+                return_value=os.geteuid() + 1,
+            ):
+                with (
+                    self.assertRaises(Refused),
+                    self._state_dir_journal(directory).locked(),
+                ):
+                    pass
+
+    def test_journal_directory_oserror_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = self._state_dir_journal(Path(root) / "state")
+            with patch.object(
+                Path, "mkdir", side_effect=PermissionError(13, "Permission denied")
+            ):
+                with self.assertRaises(Refused), journal.locked():
+                    pass
+                with self.assertRaises(Refused):
+                    Journal.write_artifact(Path(root) / "state" / "a.json", {"a": 1})
+
+    @unittest.skipIf(os.geteuid() == 0, "permission denial is moot as root")
+    def test_journal_unwritable_directory_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / "state"
+            directory.mkdir(mode=0o500)
+            try:
+                with (
+                    self.assertRaises(Refused),
+                    self._state_dir_journal(directory).locked(),
+                ):
+                    pass
+            finally:
+                directory.chmod(0o700)
+
+    def _write_journal_file(self, directory: Path, mode: int = 0o600) -> Path:
+        path = directory / "j.json"
+        path.write_text(json.dumps({"schema": JOURNAL_SCHEMA, "phase": "prepared"}))
+        path.chmod(mode)
+        return path
+
+    def test_journal_read_accepts_owned_owner_only_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self._write_journal_file(Path(root))
+            self.assertEqual(Journal(path).read()["phase"], "prepared")
+
+    def test_journal_read_refuses_file_owned_by_another_user(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self._write_journal_file(Path(root))
+            with patch(
+                "tools.cisco_contract_migration.os.geteuid",
+                return_value=os.geteuid() + 1,
+            ):
+                with self.assertRaises(Refused):
+                    Journal(path).read()
+
+    def test_journal_read_refuses_symlink_and_loose_mode(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            path = self._write_journal_file(directory)
+            link = directory / "link.json"
+            link.symlink_to(path)
+            with self.assertRaises(Refused):
+                Journal(link).read()
+            path.chmod(0o640)
+            with self.assertRaises(Refused):
+                Journal(path).read()
+
+    def test_journal_read_refuses_non_regular_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            fifo = Path(root) / "j.json"
+            os.mkfifo(fifo, 0o600)
+            with self.assertRaises(Refused):
+                Journal(fifo).read()
+
+    def test_journal_read_refuses_oversized_file(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self._write_journal_file(Path(root))
+            with patch("tools.cisco_contract_migration.MAX_JOURNAL_BYTES", 8):
+                with self.assertRaises(Refused):
+                    Journal(path).read()
+
+    def test_journal_write_os_errors_are_refusals(self):
+        with tempfile.TemporaryDirectory() as root:
+            journal = Journal(Path(root) / "j.json")
+            with journal.locked():
+                with patch(
+                    "tools.cisco_contract_migration.os.replace",
+                    side_effect=PermissionError(1, "Operation not permitted"),
+                ):
+                    with self.assertRaises(Refused):
+                        journal.write({"schema": JOURNAL_SCHEMA})
+                    with self.assertRaises(Refused):
+                        Journal.write_artifact(Path(root) / "a.json", {"a": 1})
+            self.assertEqual(
+                [p.name for p in Path(root).iterdir() if p.name.startswith(".cisco")],
+                [],
+            )
+
+    def test_journal_creates_missing_parents_owner_only(self):
+        with tempfile.TemporaryDirectory() as root:
+            old = os.umask(0)
+            try:
+                journal = Journal(Path(root) / "a" / "b" / "j.json")
+                with journal.locked():
+                    pass
+            finally:
+                os.umask(old)
+            for part in ("a", "a/b"):
+                self.assertEqual((Path(root) / part).stat().st_mode & 0o777, 0o700)
+
+    def test_journal_accepts_root_owned_symlink_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            real = Path(root) / "real"
+            real.mkdir(mode=0o700)
+            link = Path(root) / "link"
+            link.symlink_to(real)
+            real_lstat = Path.lstat
+
+            def fake_lstat(self, *args, **kwargs):
+                result = real_lstat(self, *args, **kwargs)
+                if self == link:
+                    values = list(result)
+                    values[stat.ST_UID] = 0
+                    return os.stat_result(values)
+                return result
+
+            with patch.object(Path, "lstat", fake_lstat):
+                ensure_state_directory(link)
+            with self.assertRaises(Refused):
+                ensure_state_directory(link)
+
+    def test_journal_lock_symlink_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / "state"
+            directory.mkdir(mode=0o700)
+            target = directory / "elsewhere"
+            target.write_text("")
+            journal = Journal(directory / "j.json")
+            journal.lock_path.symlink_to(target)
+            with self.assertRaises(Refused), journal.locked():
+                pass
+
+    def test_journal_lock_owned_by_another_user_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / "state"
+            directory.mkdir(mode=0o700)
+            journal = Journal(directory / "j.json")
+            real_fstat = os.fstat
+
+            def foreign_fstat(fd):
+                values = list(real_fstat(fd))
+                values[stat.ST_UID] = os.geteuid() + 1
+                return os.stat_result(values)
+
+            with patch("tools.cisco_contract_migration.os.fstat", foreign_fstat):
+                with self.assertRaisesRegex(Refused, "owned by another user"):
+                    with journal.locked():
+                        pass
+
+    @unittest.skipIf(os.geteuid() == 0, "ownership check is moot as root")
+    def test_ancestor_created_concurrently_by_another_user_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            ancestor = Path(root) / "a"
+            real_mkdir = Path.mkdir
+
+            def racing_mkdir(self, *args, **kwargs):
+                if self == ancestor:
+                    real_mkdir(self, mode=0o700)
+                    if not kwargs.get("exist_ok"):
+                        raise FileExistsError(17, "File exists")
+                    return None
+                return real_mkdir(self, *args, **kwargs)
+
+            with (
+                patch.object(Path, "mkdir", racing_mkdir),
+                patch(
+                    "tools.cisco_contract_migration.os.geteuid",
+                    return_value=os.geteuid() + 1,
+                ),
+            ):
+                with self.assertRaisesRegex(Refused, "owned by another user"):
+                    ensure_state_directory(ancestor / "b")
+            self.assertFalse((ancestor / "b").exists())
+
+    def test_created_ancestor_with_loose_mode_is_a_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            ancestor = Path(root) / "a"
+            real_mkdir = Path.mkdir
+
+            def loose_mkdir(self, *args, **kwargs):
+                real_mkdir(self, *args, **kwargs)
+                if self == ancestor:
+                    self.chmod(0o777)
+
+            with patch.object(Path, "mkdir", loose_mkdir):
+                with self.assertRaises(Refused):
+                    ensure_state_directory(ancestor / "b")
+
+    def test_atomic_write_cleanup_failure_does_not_mask_refusal(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "j.json"
+            with (
+                patch(
+                    "tools.cisco_contract_migration.os.replace",
+                    side_effect=PermissionError(1, "Operation not permitted"),
+                ),
+                patch(
+                    "tools.cisco_contract_migration.os.unlink",
+                    side_effect=PermissionError(1, "Operation not permitted"),
+                ),
+            ):
+                with self.assertRaises(Refused):
+                    Journal._atomic_write(path, b"{}", "journal")
+
+    def test_main_turns_unexpected_oserror_into_refused_output(self):
+        with tempfile.TemporaryDirectory() as root:
+            output = io.StringIO()
+            with (
+                patch(
+                    "tools.cisco_contract_migration._api_from_stdin",
+                    return_value=object(),
+                ),
+                patch.object(
+                    Journal,
+                    "locked",
+                    side_effect=OSError(5, "Input/output error", root),
+                ),
+                redirect_stdout(output),
+            ):
+                code = main(["--journal", str(Path(root) / "j.json"), "status"])
+            self.assertEqual(code, 2)
+            report = json.loads(output.getvalue())
+            self.assertEqual(report["status"], "refused")
+            self.assertNotIn(root, output.getvalue())
 
     def test_saved_search_fingerprint_ignores_runtime_rest_metadata(self):
         first = {
@@ -1024,6 +1351,7 @@ class ContractMigrationTest(unittest.TestCase):
         }
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "rollback-writer-dispatch",
             "phase": "rollback_in_progress",
             "origin": origin,
@@ -2165,10 +2493,36 @@ class ContractMigrationTest(unittest.TestCase):
         entry["content"]["searchLatestTime"] = "1792176001"
         self.assertIsNone(Migration._absolute_index_bounds(entry))
 
+    def test_cutover_reads_candidate_only_from_a_safe_file_beside_the_journal(self):
+        migration = self.migration()
+        candidate = {"migration_id": "migration-test", "cutover_eligible": True}
+        candidate_path = self.journal.path.with_suffix(".candidate.json")
+        digest = self.journal.write_artifact(candidate_path, candidate)
+        elsewhere = self.journal.path.with_name("elsewhere.json")
+        self.journal.write_artifact(elsewhere, candidate)
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "migration-test",
+            "phase": "coverage_validated",
+            "origin_fingerprint": "origin",
+            "interface_sha256": "interface",
+            "candidate_path": str(elsewhere),
+            "candidate_sha256": digest,
+            "jobs": [],
+        }
+        self.journal.write(journal)
+        migration._interface = lambda: ({}, "interface")
+        candidate_path.unlink()
+        candidate_path.symlink_to(elsewhere)
+        with self.assertRaisesRegex(Refused, "candidate evidence is unavailable"):
+            migration.cutover()
+
     def test_cutover_reloads_mutation_from_durable_journal_after_catchup(self):
         migration = self.migration()
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "migration-test",
             "phase": "coverage_validated",
             "origin_fingerprint": "origin",
@@ -2808,6 +3162,804 @@ class ContractMigrationTest(unittest.TestCase):
         with self.assertRaises(Refused):
             migration.backfill()
         self.assertEqual(sum(path.endswith("/dispatch") for _, path, _ in api.calls), 1)
+
+    def test_live_builder_writes_do_not_block_backfill_or_validation(self):
+        api = FakeApi(live_builder_writes=True)
+        api.builder_cycle()
+        migration = self.migration(api)
+        migration.prepare(900_000, 900_300)
+        api.builder_cycle()
+        self.assertEqual(migration.backfill(), {"status": "backfilled", "slices": 1})
+        api.builder_cycle()
+        self.assertEqual(migration.validate()["status"], "coverage_validated")
+        self.assertGreater(len(api.collections["adm_ip_identity"]), 3)
+
+    def test_live_builder_writes_do_not_block_rollback(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        interface, interface_hash = migration._interface()
+        origin = migration.snapshot()
+        mutations = migration._build_cutover_mutations({"origin": origin}, interface)
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "live-builder-rollback",
+            "interface_sha256": interface_hash,
+            "origin": origin,
+            "origin_fingerprint": fingerprint(origin),
+            "phase": "cutover_in_progress",
+            "cutover": {"state": "in_progress", "mutations": mutations, "scenario": {}},
+            "jobs": [],
+        }
+        migration._write_journal(journal)
+        migration._apply_mutation(journal, mutations[0])
+        migration._public_selector_smoke = lambda *_args, **_kwargs: []
+        api.builder_cycle()
+        api.builder_cycle()
+
+        self.assertEqual(migration.rollback()["status"], "rolled_back")
+        self.assertEqual(api.macros["adm_data_contract_version"], "1")
+
+    def test_operator_mapping_and_lookup_binding_drift_still_refuse(self):
+        for drift in ("observer_scope", "cilium_settings", "identity_binding"):
+            with self.subTest(drift=drift):
+                api = FakeApi()
+                migration = self.migration(api)
+                migration.prepare(900_000, 900_300)
+                if drift == "observer_scope":
+                    api.collections["adm_observer_scope"].append(
+                        {"_key": "new-observer", "observer": "apic-2"}
+                    )
+                elif drift == "cilium_settings":
+                    api.collections["adm_cilium_cluster_settings"].append(
+                        {"_key": "new-cluster", "lb_mode": "dsr"}
+                    )
+                else:
+                    api.transforms["adm_ip_identity"]["collection"] = "other"
+                with self.assertRaises(Refused):
+                    migration.backfill()
+                self.assertFalse(
+                    any(path.endswith("/dispatch") for _, path, _ in api.calls)
+                )
+                self.journal.path.unlink()
+
+    def test_unreadable_live_builder_collection_refuses(self):
+        api = FakeApi()
+        api.collections["adm_ip_identity"] = [{"ip": "198.51.100.1"}]
+        with self.assertRaisesRegex(Refused, "adm_ip_identity collection read"):
+            self.migration(api).prepare(900_000, 900_300)
+
+    def test_resume_does_not_reread_expired_forward_writer_jobs(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        migration.prepare(900_000, 900_300)
+        migration.backfill()
+        journal = self.journal.read()
+        writers = [
+            job
+            for job in journal["jobs"]
+            if job["kind"] == "saved_search" and job["state"] == "complete"
+        ]
+        self.assertTrue(writers)
+        for job in writers:
+            self.assertIs(job["persist_result_rows"], False)
+            self.assertNotIn("result_artifact", job)
+            self.assertNotIn("result_rows", job)
+            self.assertEqual(
+                job["result_digest"], hashlib.sha256(canonical([])).hexdigest()
+            )
+        for job in writers:
+            api.jobs.pop(job["sid"])
+        for stream in journal["slices"][0]["streams"].values():
+            stream["state"] = "running"
+        migration._write_journal(journal)
+        api.calls.clear()
+
+        self.assertEqual(migration.backfill(), {"status": "backfilled", "slices": 1})
+        self.assertFalse(
+            any(job["sid"] in path for _, path, _ in api.calls for job in writers)
+        )
+        with self.assertRaisesRegex(Refused, "did not retain"):
+            migration._completed_job_rows(self.journal.read(), writers[0])
+
+    def test_rollback_evidence_has_its_own_budget(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        journal = migration.prepare(900_000, 900_300)
+        migration._query(journal, "| makeresults", None, None, label="forward")
+        with patch("tools.cisco_contract_migration.MAX_RESULT_EVIDENCE_BYTES", 1):
+            with self.assertRaisesRegex(Refused, "256 MiB budget"):
+                migration._query(
+                    self.journal.read(), "| makeresults", None, None, label="more"
+                )
+            journal = self.journal.read()
+            journal["phase"] = "rollback_in_progress"
+            migration._write_journal(journal)
+            migration._query(journal, "| makeresults", None, None, label="recovery")
+            record = next(
+                x for x in self.journal.read()["jobs"] if x["label"] == "recovery"
+            )
+            self.assertTrue(record["recovery_evidence"])
+            self.assertIn("result_artifact", record)
+            self.assertIn(
+                ".result-recovery-",
+                str(migration._result_artifact_path(journal, record)),
+            )
+            with patch("tools.cisco_contract_migration.MAX_RECOVERY_EVIDENCE_BYTES", 1):
+                with self.assertRaisesRegex(Refused, "256 MiB budget"):
+                    migration._query(
+                        self.journal.read(), "| makeresults", None, None, label="r2"
+                    )
+
+    def test_v1_recovery_writer_rows_are_retained_for_resume(self):
+        api = FakeApi()
+        api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+        migration = self.migration(api)
+        origin = migration.snapshot()
+        interface, _ = migration._interface()
+        cutover_mutations = migration._build_cutover_mutations(
+            {"origin": origin}, interface
+        )
+        for selector in interface["activation"]["cutover_selectors"]:
+            api.macros[selector["name"]] = selector["after"]
+        v1_restore = next(
+            item
+            for item in cutover_mutations
+            if item.get("name") == "ADM - Conversation rollup"
+            and item.get("field") == "disabled"
+        )
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "rollback-writer-rows",
+            "phase": "rollback_in_progress",
+            "origin": origin,
+            "origin_fingerprint": fingerprint(origin),
+            "cutover": {"mutations": cutover_mutations},
+            "rollback": {
+                "mutations": [
+                    {
+                        **v1_restore,
+                        "before": v1_restore["after"],
+                        "after": v1_restore["before"],
+                        "state": "applied",
+                        "verified_at": 999_600,
+                    }
+                ]
+            },
+            "created_at": 900_000,
+            "event_earliest": "0",
+            "event_latest": "1000000",
+            "jobs": [],
+        }
+        migration._write_journal(journal)
+        bounds = {
+            "earliest_time": "900000",
+            "latest_time": "900900",
+            "index_earliest": "900000",
+            "index_latest": "900300",
+        }
+
+        rows = migration._dispatch_writer(
+            journal,
+            "ADM - Conversation rollup",
+            bounds,
+            label="V1 rollback recovery dispatch",
+            intent_fingerprint="rollback-intent",
+            persist_result_rows=True,
+        )
+
+        self.assertEqual(rows, [])
+        record = self.journal.read()["jobs"][0]
+        self.assertTrue(record["persist_result_rows"])
+        self.assertTrue(record["recovery_evidence"])
+        self.assertIn("result_artifact", record)
+        self.assertNotIn("result_digest", record)
+        api.jobs.pop(record["sid"])
+        self.assertEqual(migration._completed_job_rows(self.journal.read(), record), [])
+        self.assertEqual(
+            migration._dispatch_writer(
+                self.journal.read(),
+                "ADM - Conversation rollup",
+                bounds,
+                label="V1 rollback recovery dispatch",
+                intent_fingerprint="rollback-intent",
+                persist_result_rows=True,
+            ),
+            [],
+        )
+
+    def test_enabled_origin_rollback_refuses_before_resume_near_seven_days(self):
+        window = 7 * 24 * 3600
+        step = 300
+        largest_ok = max(
+            gap
+            for gap in range(0, window, step)
+            if rollback_recovery_horizon_seconds(gap) <= window
+        )
+        self.assertLess(largest_ok, window - 3600)
+        for age, refused in (
+            (largest_ok, False),
+            (largest_ok + step, True),
+            (window - 1800, True),
+            (window - 3600, True),
+        ):
+            with self.subTest(age=age):
+                api = FakeApi()
+                api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+                migration = self.migration(api)
+                interface, interface_hash = migration._interface()
+                origin = migration.snapshot()
+                mutations = migration._build_cutover_mutations(
+                    {"origin": origin}, interface
+                )
+                pre_end = 1_000_000 - age
+                journal = {
+                    "schema": JOURNAL_SCHEMA,
+                    "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+                    "migration_id": "rollback-age-bound",
+                    "interface_sha256": interface_hash,
+                    "origin": origin,
+                    "origin_fingerprint": fingerprint(origin),
+                    "phase": "cutover",
+                    "cutover": {
+                        "state": "complete",
+                        "started_at": pre_end,
+                        "mutations": mutations,
+                        "scenario": {},
+                    },
+                    "created_at": pre_end - 300,
+                    "v1_pre_pause": {
+                        "index_bounds": [pre_end - 300, pre_end],
+                        "event_bounds": {
+                            "earliest_time": str(pre_end - 86400),
+                            "latest_time": str(pre_end + 900),
+                        },
+                        "expected": {},
+                        "expected_fingerprint": fingerprint({}),
+                    },
+                    "jobs": [],
+                }
+                migration._write_journal(journal)
+                posts_before = sum(method == "POST" for method, _, _ in api.calls)
+                if refused:
+                    with self.assertRaisesRegex(Refused, "seven-day bound"):
+                        migration.rollback()
+                    self.assertEqual(self.journal.read()["phase"], "cutover")
+                    self.assertNotIn("rollback", self.journal.read())
+                    self.assertEqual(
+                        sum(method == "POST" for method, _, _ in api.calls),
+                        posts_before,
+                    )
+                else:
+                    try:
+                        migration.rollback()
+                    except Refused as exc:
+                        self.assertNotIn("seven-day bound", str(exc))
+                    self.assertEqual(
+                        self.journal.read()["phase"], "rollback_in_progress"
+                    )
+                self.journal.path.unlink()
+
+    def _enabled_origin_rollback_journal(self, api, migration, *, phase, v1_state):
+        interface, interface_hash = migration._interface()
+        origin = migration.snapshot()
+        forward = migration._build_cutover_mutations({"origin": origin}, interface)
+        pre_end = 1_000_000 - 8 * 24 * 3600
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "rollback-state-bound",
+            "interface_sha256": interface_hash,
+            "origin": origin,
+            "origin_fingerprint": fingerprint(origin),
+            "phase": phase,
+            "cutover": {
+                "state": "complete",
+                "started_at": pre_end,
+                "mutations": forward,
+                "scenario": {},
+            },
+            "created_at": pre_end - 300,
+            "v1_pre_pause": {
+                "index_bounds": [pre_end - 300, pre_end],
+                "event_bounds": {
+                    "earliest_time": str(pre_end - 86400),
+                    "latest_time": str(pre_end + 900),
+                },
+                "expected": {},
+                "expected_fingerprint": fingerprint({}),
+            },
+            "jobs": [],
+        }
+        if phase == "rollback_in_progress":
+            reverse = []
+            for mutation in reversed(forward):
+                item = {
+                    key: mutation[key]
+                    for key in ("id", "kind", "name", "rest_target", "field", "acl")
+                    if key in mutation
+                }
+                item.update(
+                    before=mutation["after"],
+                    after=mutation["before"],
+                    state=(
+                        v1_state
+                        if mutation["name"] == "ADM - Conversation rollup"
+                        else "pending"
+                    ),
+                    drain_after=False,
+                )
+                reverse.append(item)
+            journal["rollback"] = {
+                "state": "in_progress",
+                "started_at": 999_000,
+                "mutations": reverse,
+            }
+        migration._write_journal(journal)
+        return journal
+
+    def test_rollback_preflight_refusal_does_not_claim_a_clean_state_when_in_progress(
+        self,
+    ):
+        api = FakeApi()
+        api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+        migration = self.migration(api)
+        self._enabled_origin_rollback_journal(
+            api, migration, phase="rollback_in_progress", v1_state="pending"
+        )
+        api.searches["ADM - Conversation rollup"]["disabled"] = "1"
+        with self.assertRaisesRegex(Refused, "stays rollback_in_progress") as caught:
+            migration.rollback()
+        self.assertNotIn("nothing was changed", str(caught.exception))
+
+    def test_rollback_preflight_defers_to_reconcile_for_possibly_resumed_v1(self):
+        for state in ("request_pending", "request_unknown", "readback_failed"):
+            with self.subTest(state=state):
+                api = FakeApi()
+                api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+                migration = self.migration(api)
+                self._enabled_origin_rollback_journal(
+                    api, migration, phase="rollback_in_progress", v1_state=state
+                )
+                try:
+                    migration.rollback()
+                except Refused as exc:
+                    self.assertNotIn("seven-day bound", str(exc))
+                v1 = next(
+                    item
+                    for item in self.journal.read()["rollback"]["mutations"]
+                    if item["name"] == "ADM - Conversation rollup"
+                )
+                self.assertEqual(v1["state"], "applied")
+                self.journal.path.unlink()
+
+    def test_rollback_preflight_treats_rejected_v1_resume_as_still_paused(self):
+        api = FakeApi()
+        api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+        migration = self.migration(api)
+        self._enabled_origin_rollback_journal(
+            api, migration, phase="rollback_in_progress", v1_state="rejected"
+        )
+        api.searches["ADM - Conversation rollup"]["disabled"] = "1"
+        with self.assertRaisesRegex(Refused, "seven-day bound"):
+            migration.rollback()
+
+    def test_rollback_preflight_defers_to_reconcile_when_rejected_v1_is_live_enabled(
+        self,
+    ):
+        api = FakeApi()
+        api.searches["ADM - Conversation rollup"]["disabled"] = "0"
+        migration = self.migration(api)
+        self._enabled_origin_rollback_journal(
+            api, migration, phase="rollback_in_progress", v1_state="rejected"
+        )
+        try:
+            migration.rollback()
+        except Refused as exc:
+            self.assertNotIn("seven-day bound", str(exc))
+        v1 = next(
+            item
+            for item in self.journal.read()["rollback"]["mutations"]
+            if item["name"] == "ADM - Conversation rollup"
+        )
+        self.assertEqual(v1["state"], "applied")
+
+    def test_journal_records_and_enforces_the_summary_canonicalizer_version(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        migration.prepare(900_000, 900_300)
+        self.assertEqual(
+            self.journal.read()["canonicalizer_version"],
+            SUMMARY_CANONICALIZER_VERSION,
+        )
+        for recorded in (None, SUMMARY_CANONICALIZER_VERSION - 1):
+            with self.subTest(recorded=recorded):
+                journal = self.journal.read()
+                if recorded is None:
+                    journal.pop("canonicalizer_version")
+                else:
+                    journal["canonicalizer_version"] = recorded
+                self.journal.write(journal)
+                with self.assertRaisesRegex(Refused, "summary canonicalizer version"):
+                    migration.rollback()
+                with self.assertRaisesRegex(Refused, "summary canonicalizer version"):
+                    migration.prepare(900_000, 900_300)
+
+    def test_validate_tolerates_identity_derived_encapsulation_change(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        migration.prepare(900_000, 900_300)
+        migration.backfill()
+        api.source_overrides = {"conversation": {"encapsulation": "vxlan"}}
+
+        self.assertEqual(migration.validate()["status"], "coverage_validated")
+
+    def test_validate_still_refuses_genuine_source_drift(self):
+        for override in (
+            {"bytes_c2s": "9"},
+            {"records": "4"},
+            {"scope": "other-scope"},
+            {"encapsulation": "vxlan", "direction_basis": "port_rule"},
+        ):
+            with self.subTest(override=override):
+                api = FakeApi()
+                migration = self.migration(api)
+                migration.prepare(900_000, 900_300)
+                migration.backfill()
+                api.source_overrides = {"conversation": override}
+                with self.assertRaises(Refused):
+                    migration.validate()
+                self.journal.path.unlink()
+
+    def test_stage_dispatch_tolerates_identity_change_before_writer_runs(self):
+        api = FakeApi()
+        api.source_overrides = {"conversation": {"encapsulation": "geneve"}}
+        migration = self.migration(api)
+        migration.prepare(900_000, 900_300)
+        original = FakeApi._source_rows
+        with patch.object(
+            FakeApi,
+            "_source_rows",
+            staticmethod(
+                lambda source: [
+                    {**row, "encapsulation": "vxlan"}
+                    if source == "adm:conversation"
+                    else row
+                    for row in original(source)
+                ]
+            ),
+        ):
+            self.assertEqual(
+                migration.backfill(), {"status": "backfilled", "slices": 1}
+            )
+
+    def test_v2_manifest_ignores_only_lookup_derived_columns(self):
+        row = {**SIDES["conversation"], "scope": "prod/ns-a", "bytes_c2s": "1"}
+        base = Migration._record_map([row], "conversation")
+        self.assertEqual(
+            base,
+            Migration._record_map([dict(row, encapsulation="vxlan")], "conversation"),
+        )
+        self.assertNotEqual(
+            base,
+            Migration._record_map([dict(row, bytes_c2s="2")], "conversation"),
+        )
+
+    def test_v1_manifest_ignores_looked_up_interface_names_and_encapsulation(self):
+        netflow = {
+            "rollup_id": "7" * 64,
+            "records": "2",
+            "adm_record": "conversation",
+            "flow_source": "netflow",
+            "observer": "netflow:10.0.0.1",
+            "scope": "prod/ns-a",
+            "bytes_c2s": "10",
+            "observations": "aci:apic-1:Eth1/2>Eth1/3|netflow:10.0.0.1:ifIndex 12>ifIndex 3",
+            "vlan_observations": json.dumps(
+                [
+                    {"interface_index": "12", "vlan": 10, "first_seen": 1},
+                    {"interface_index": "3", "vlan": 20, "first_seen": 1},
+                ]
+            ),
+            "vlan_observations_truncated": "0",
+        }
+        learned = dict(
+            netflow,
+            encapsulation="vxlan",
+            observations="aci:apic-1:Eth1/2>Eth1/3|netflow:10.0.0.1:Eth1/1>Eth1/2",
+            vlan_observations=json.dumps(
+                [
+                    {
+                        "interface_index": "3",
+                        "vlan": 20,
+                        "first_seen": 1,
+                        "interface": "Eth1/2",
+                    },
+                    {
+                        "interface_index": "12",
+                        "vlan": 10,
+                        "first_seen": 1,
+                        "interface": "Eth1/1",
+                    },
+                ]
+            ),
+        )
+        base = Migration._v1_record_map([netflow])
+        self.assertEqual(base, Migration._v1_record_map([learned]))
+        for field, value in (
+            ("bytes_c2s", "11"),
+            ("scope", "prod/ns-b"),
+            ("records", "3"),
+            (
+                "observations",
+                "aci:apic-1:Eth1/2>Eth1/9|netflow:10.0.0.1:ifIndex 12>ifIndex 3",
+            ),
+            (
+                "vlan_observations",
+                json.dumps([{"interface_index": "12", "vlan": 11, "first_seen": 1}]),
+            ),
+            ("observations", "aci:apic-1:Eth1/2>Eth1/3"),
+            (
+                "observations",
+                "aci:apic-1:Eth1/2>Eth1/3|netflow:10.0.0.9:Eth1/1>Eth1/2",
+            ),
+            (
+                "observations",
+                "aci:apic-1:Eth1/2>Eth1/3|netflow:10.0.0.1:Eth1/1>Eth1/2"
+                "|netflow:10.0.0.2:Eth1/1>Eth1/2",
+            ),
+        ):
+            with self.subTest(field=field, value=value):
+                self.assertNotEqual(
+                    base, Migration._v1_record_map([dict(learned, **{field: value})])
+                )
+
+    def test_v1_manifest_strips_interfaces_containing_colons_and_ipv6_exporters(self):
+        for observer, raw, learned in (
+            ("netflow:10.0.0.1", "netflow:10.0.0.1:?>?", "netflow:10.0.0.1:eth0:1>?"),
+            (
+                "netflow:10.0.0.1",
+                "netflow:10.0.0.1:ifIndex 4>ifIndex 5",
+                "netflow:10.0.0.1:Serial0/0:1>eth0:2",
+            ),
+            (
+                "netflow:2001:db8::1",
+                "netflow:2001:db8::1:ifIndex 4>?",
+                "netflow:2001:db8::1:Eth1/1>?",
+            ),
+        ):
+            with self.subTest(observer=observer, learned=learned):
+                row = {
+                    "rollup_id": "9" * 64,
+                    "records": "1",
+                    "adm_record": "conversation",
+                    "flow_source": "netflow",
+                    "observer": observer,
+                    "observations": raw,
+                }
+                self.assertEqual(
+                    Migration._v1_record_map([row]),
+                    Migration._v1_record_map([dict(row, observations=learned)]),
+                )
+
+    def test_v1_manifest_merges_vlan_contexts_that_differ_only_by_interface(self):
+        row = {
+            "rollup_id": "8" * 64,
+            "records": "2",
+            "adm_record": "conversation",
+            "vlan_observations_truncated": "0",
+        }
+        unnamed = dict(
+            row,
+            vlan_observations=json.dumps(
+                [{"interface_index": "12", "vlan": 10, "first_seen": 5, "last_seen": 6}]
+            ),
+        )
+        split = dict(
+            row,
+            vlan_observations=json.dumps(
+                [
+                    {
+                        "interface_index": "12",
+                        "vlan": 10,
+                        "first_seen": 5,
+                        "last_seen": 5,
+                    },
+                    {
+                        "interface_index": "12",
+                        "vlan": 10,
+                        "first_seen": 6,
+                        "last_seen": 6,
+                        "interface": "Eth1/1",
+                    },
+                ]
+            ),
+        )
+        self.assertEqual(
+            Migration._v1_record_map([unnamed]), Migration._v1_record_map([split])
+        )
+        other_vlan = dict(
+            row,
+            vlan_observations=json.dumps(
+                [{"interface_index": "12", "vlan": 11, "first_seen": 5, "last_seen": 6}]
+            ),
+        )
+        self.assertNotEqual(
+            Migration._v1_record_map([unnamed]),
+            Migration._v1_record_map([other_vlan]),
+        )
+
+    def test_v1_manifest_truncated_vlan_rows_compare_only_truncation(self):
+        def contexts(names):
+            return json.dumps(
+                [
+                    {
+                        "interface_index": str(index),
+                        "vlan": index,
+                        "first_seen": 1,
+                        **({"interface": f"Eth1/{index}"} if names else {}),
+                    }
+                    for index in range(32)
+                ]
+            )
+
+        row = {
+            "rollup_id": "9" * 64,
+            "records": "2",
+            "adm_record": "conversation",
+            "vlan_observations_truncated": "1",
+        }
+        self.assertEqual(
+            Migration._v1_record_map([dict(row, vlan_observations=contexts(False))]),
+            Migration._v1_record_map([dict(row, vlan_observations=contexts(True))]),
+        )
+        self.assertNotEqual(
+            Migration._v1_record_map([dict(row, vlan_observations=contexts(True))]),
+            Migration._v1_record_map(
+                [
+                    dict(
+                        row,
+                        vlan_observations=contexts(True),
+                        vlan_observations_truncated="0",
+                    )
+                ]
+            ),
+        )
+
+    def test_v1_recovery_rerun_tolerates_interface_learned_after_first_audit(self):
+        migration = self.migration(FakeApi())
+        old = {
+            "rollup_id": "9" * 64,
+            "records": "2",
+            "adm_record": "conversation",
+            "flow_source": "netflow",
+            "observer": "netflow:10.0.0.1",
+            "observations": "netflow:10.0.0.1:ifIndex 12>ifIndex 3",
+        }
+        learned = dict(
+            old, observations="netflow:10.0.0.1:Eth1/1>Eth1/2", encapsulation="vxlan"
+        )
+        state = {"source": [old], "retained": [old]}
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "v1-churn-test",
+            "interface_sha256": migration._interface()[1],
+            "created_at": 900_000,
+            "v1_pre_pause": {"index_bounds": [999_000, 999_300]},
+            "rollback": {
+                "state": "recovering",
+                "v1_recovery": {"resume_activation_epoch": 999_600},
+            },
+            "cutover": {"started_at": 999_000},
+            "jobs": [],
+        }
+        migration._write_journal(journal)
+        migration._verify_v1_raw_retention = lambda *_args: {
+            "indexes": {"netflow": 1000}
+        }
+        migration._scheduled_writer_cycles = lambda *_args, **_kwargs: [
+            {
+                "sid": "scheduler__v1_resume",
+                "index_bounds": [999_300, 999_600],
+                "event_bounds": {"earliest_time": "913500", "latest_time": "1000800"},
+                "anchor": 999_900,
+            }
+        ]
+        migration._v1_expected_rows = lambda *_args, **_kwargs: (
+            migration._v1_record_map(state["source"])
+        )
+        migration._v1_persisted_rows = lambda *_args, **_kwargs: (
+            migration._v1_record_map(state["retained"])
+        )
+        migration._query = lambda *_args, **_kwargs: state["retained"]
+
+        first = migration._v1_recovery_window(journal, 999_600)
+        self.assertEqual(first["state"], "verified")
+
+        state["source"] = [learned]
+        rerun = migration._v1_recovery_window(self.journal.read(), 999_600)
+        self.assertEqual(rerun["state"], "verified")
+
+        state["source"] = [dict(learned, bytes_c2s="5")]
+        with self.assertRaises(Refused):
+            migration._v1_recovery_window(self.journal.read(), 999_600)
+
+    def test_catalog_output_change_within_generation_starts_a_new_build(self):
+        api = FakeApi(catalog_rows=[self.catalog_row()])
+        migration = self.migration(api)
+        journal = migration.prepare(900_000, 900_300)
+        migration._stage_catalog(journal)
+        first = self.journal.read()["catalog"]
+        api.catalog_rows = [{**self.catalog_row(), "peers": 2}]
+
+        migration._stage_catalog(self.journal.read())
+
+        second = self.journal.read()["catalog"]
+        self.assertEqual(second["state"], "verified")
+        self.assertEqual(second["build_generation"], first["build_generation"] + 1)
+        self.assertEqual(second["input_fingerprint"], first["input_fingerprint"])
+        self.assertEqual(
+            second["superseded_generations"][0]["expected_fingerprint"],
+            first["expected_fingerprint"],
+        )
+        self.assertEqual(
+            len(
+                [
+                    job
+                    for job in self.journal.read()["jobs"]
+                    if job.get("label") == "ADM - Application catalog v2"
+                ]
+            ),
+            2,
+        )
+
+    def _unsettled_catalog_writer(self, *, state, keep_sid):
+        api = FakeApi(catalog_rows=[self.catalog_row()])
+        migration = self.migration(api)
+        journal = migration.prepare(900_000, 900_300)
+        migration._stage_catalog(journal)
+        journal = self.journal.read()
+        writer = next(
+            job
+            for job in journal["jobs"]
+            if job.get("label") == "ADM - Application catalog v2"
+        )
+        writer["state"] = state
+        if not keep_sid:
+            writer.pop("sid")
+        migration._write_journal(journal)
+        api.catalog_rows = [{**self.catalog_row(), "peers": 2}]
+        return api, migration, writer
+
+    def test_catalog_output_change_settles_prior_writer_with_a_sid(self):
+        _, migration, writer = self._unsettled_catalog_writer(
+            state="running", keep_sid=True
+        )
+
+        migration._stage_catalog(self.journal.read())
+
+        journal = self.journal.read()
+        self.assertEqual(journal["catalog"]["state"], "verified")
+        settled = next(job for job in journal["jobs"] if job["id"] == writer["id"])
+        self.assertEqual(settled["state"], "complete")
+        self.assertEqual(len(journal["catalog"]["superseded_generations"]), 1)
+
+    def test_catalog_output_change_refuses_prior_writer_without_a_sid(self):
+        for state in ("dispatch_unknown", "dispatch_pending"):
+            with self.subTest(state=state):
+                _, migration, _ = self._unsettled_catalog_writer(
+                    state=state, keep_sid=False
+                )
+                with self.assertRaisesRegex(
+                    Refused, "unknown outcome and no recorded SID"
+                ):
+                    migration._stage_catalog(self.journal.read())
+                self.assertNotIn(
+                    "superseded_generations", self.journal.read()["catalog"]
+                )
+                self.journal.path.unlink()
 
     def test_competing_active_staged_writer_refuses_before_dispatch(self):
         api = FakeApi()
@@ -3509,6 +4661,7 @@ class ContractMigrationTest(unittest.TestCase):
         second_start, second_end = 999_600, 999_900
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "two-cycle-bridge",
             "interface_sha256": migration._interface()[1],
             "created_at": 900_000,
@@ -3584,6 +4737,7 @@ class ContractMigrationTest(unittest.TestCase):
         second_start, second_end = 999_600, 999_900
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "bridge-resume-test",
             "interface_sha256": migration._interface()[1],
             "phase": "cutover_in_progress",
@@ -3684,6 +4838,7 @@ class ContractMigrationTest(unittest.TestCase):
         first_start, first_end = 999_300, 999_600
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "bridge-gap-resume",
             "interface_sha256": migration._interface()[1],
             "phase": "cutover_in_progress",
@@ -3956,6 +5111,7 @@ class ContractMigrationTest(unittest.TestCase):
         expected = migration._v1_record_map([row])
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "v1-resume-test",
             "interface_sha256": migration._interface()[1],
             "created_at": 900_000,
@@ -4046,6 +5202,7 @@ class ContractMigrationTest(unittest.TestCase):
                 )
                 journal = {
                     "schema": JOURNAL_SCHEMA,
+                    "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
                     "migration_id": "v1-empty-retry-test",
                     "interface_sha256": migration._interface()[1],
                     "created_at": 900_000,
@@ -4075,6 +5232,7 @@ class ContractMigrationTest(unittest.TestCase):
                     "cutover": {"started_at": 999_000},
                     "jobs": [
                         {
+                            "id": "manual-gap-job",
                             "kind": "saved_search",
                             "label": "ADM - Conversation rollup",
                             "sid": "manual-gap-sid",
@@ -4150,6 +5308,7 @@ class ContractMigrationTest(unittest.TestCase):
         origin = migration.snapshot(allow_activation=True)
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "v1-gap-no-sid-test",
             "interface_sha256": migration._interface()[1],
             "phase": "rollback_in_progress",
@@ -4392,6 +5551,7 @@ class ContractMigrationTest(unittest.TestCase):
         mutations = migration._build_cutover_mutations({"origin": origin}, interface)
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "partial-cutover-test",
             "interface_sha256": interface_hash,
             "origin": origin,
@@ -4427,6 +5587,7 @@ class ContractMigrationTest(unittest.TestCase):
             api.macros[selector["name"]] = selector["after"]
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "rollback-needs-v1-recovery",
             "interface_sha256": interface_hash,
             "origin": origin,
@@ -4482,6 +5643,7 @@ class ContractMigrationTest(unittest.TestCase):
                 api.searches[mutation["name"]][mutation["field"]] = mutation["after"]
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "rollback-fresh-resume-epoch",
             "interface_sha256": interface_hash,
             "origin": origin,
@@ -4545,6 +5707,7 @@ class ContractMigrationTest(unittest.TestCase):
         mutations = migration._build_cutover_mutations({"origin": origin}, interface)
         journal = {
             "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
             "migration_id": "rollback-drift-test",
             "interface_sha256": interface_hash,
             "origin": origin,

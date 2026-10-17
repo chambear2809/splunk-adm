@@ -29,8 +29,11 @@ It is not installed as an executable inside the Splunk app archive. Keep that
 checkout available with the durable migration evidence throughout rollback.
 
 The helper calls the package's deployment qualifier before REST access that
-can mutate state. The observed target is standalone Splunk Enterprise
-10.6.0.5 with Search Head Clustering explicitly disabled and no remote peers.
+can mutate state. It accepts a standalone Splunk Enterprise 10.6.x patch
+release (`10.6` followed by one or two numeric components) with Search Head
+Clustering explicitly disabled and no remote peers. Live qualification was
+performed only on 10.6.0.5; other 10.6 patch releases are accepted by the gate
+but were not separately tested.
 The qualifier refuses Cloud, Search Head Cluster, indexer clustering, unknown
 deployment shape, and missing/incomplete evidence. This local shape check does
 not qualify SHC, Cloud, a customer environment, or an exporter deployment.
@@ -44,7 +47,23 @@ history hash keys, and migration state. Some bounded V1 recovery evidence and
 origin lookup snapshots include normalized client or deployment values such as
 IP addresses and network identifiers. The journal does not contain raw source
 events or the session key. Keep it on owner-only durable storage with the
-migration record, and do not edit it by hand.
+migration record, and do not edit it by hand. The helper creates a missing
+journal directory, and each missing parent, as `0700` but never changes the mode
+of an existing one. It refuses an existing directory that is a non-root symlink,
+is owned by another non-root user, or is group/world-writable without the sticky
+bit; a sticky shared directory such as `/tmp` is accepted unchanged, with the
+journal, lock, and artifacts kept `0600`. A root-owned symlink is accepted so
+macOS `/tmp` (a link to `/private/tmp`) works; the target must still pass the
+same checks. Each directory the helper creates is created exclusively and
+re-verified as owned by the effective user and owner-only; one that appears
+concurrently is validated like an existing directory. Pre-existing ancestors above
+the first directory created are trusted as given, so pass a path under a parent you
+control. The journal is opened without following symlinks and is refused
+unless it is a regular file owned by the effective user, mode `0600`, and at
+most 16 MiB, so a file pre-created by another user is never
+trusted. The lock file must also be owned by the effective user: a journal first
+used under `sudo` cannot be resumed without it, so run every action, including
+resume, as the same user. Prefer a private directory you own.
 
 Completed query results are stored beside the journal in owner-only,
 checksummed `.result-*.json` artifacts. Each artifact binds its migration ID,
@@ -53,14 +72,30 @@ migration directory for resume and rollback: missing, changed, or unsafe files
 stop recovery without redispatch. The journal remains limited to 16 MiB;
 each result artifact is limited to 16 MiB and aggregate result evidence to
 256 MiB, including orphan files from an interrupted journal replacement.
+The validated cutover candidate (`<journal>.candidate.json`, always read from
+beside the journal) is limited to 32 MiB; `validate` refuses a larger one with
+"validate a shorter range". Evidence written after rollback starts (`.result-recovery-*.json`) is counted
+against its own 256 MiB budget, so forward-path evidence cannot stop a started
+rollback from recording the results it must read back on resume.
 Existing inline results are moved into this format on the next durable write.
 Artifact durability precedes the journal reference, and an interrupted write
 reuses the same recorded SID and immutable artifact. These bounds limit the
 supported backfill volume; split larger qualification work into independently
-reviewed windows rather than raising the limits without measurement.
+reviewed windows rather than raising the limits without measurement. Each
+stream also accepts at most 10,000 rollup IDs cumulatively across pre-existing
+V2 rows, every staged slice, and observed scheduled cycles. That bound is
+checked as slices are verified, not at preparation, so size the range from the
+expected five-minute conversation volume before preparing.
 
+Only V1 rollback-recovery writer jobs keep their rows in these artifacts,
+because resume compares them with the raw-source expectation. Every other
+completed writer job (staged conversation and traffic slices, history, catalog)
+records its result count and a result digest and is never re-read once complete,
+so resuming after its Splunk job has expired does not need the job.
 Splunk's scheduled-job artifacts must also remain available throughout the
-cutover audit, including any interruption. The helper does not automatically
+cutover audit and enabled-origin rollback, including any interruption: the
+first resumed V1 scheduler cycle must still be listed when rollback reruns, or
+rollback refuses permanently. The helper does not automatically
 extend their TTL. Before an artifact expires, an operator may extend the TTL
 of the exact verified scheduler SID using Splunk's job-control `setttl` action;
 record the request and verify the same SID and TTL on readback. Allow enough
@@ -192,9 +227,50 @@ preparation, resume is refused. Start a separately reviewed migration after
 resolving the state; do not edit journal fingerprints to bypass drift checks.
 The journal binds the target Splunk GUID/version, effective macro and
 transform inventories, writer definitions and schedules, observer/source
-profiles, Cilium cluster settings, IP identity rows, interfaces, and the
-authenticated principal. Before each staged writer dispatch, the helper
-rechecks these inputs and refuses an unjournaled active v2 writer job.
+profiles, Cilium cluster settings, and the authenticated principal. Before each
+staged writer dispatch, the helper rechecks these inputs and refuses an
+unjournaled active v2 writer job.
+
+`ADM - Identity builder` (every five minutes) and `ADM - Interface inventory`
+(hourly) may stay enabled during the migration. They rewrite `adm_ip_identity`
+and `adm_interfaces` on every run, so the helper binds only that those
+collections remain readable and that their lookup definitions are unchanged
+(transform inventory); it does not bind their row contents.
+
+Output columns that Splunk resolves against those collections cannot be
+compared exactly, because a builder run between the source read and the summary
+write (or between backfill and a later validate or rollback rerun) changes them
+and the summary-index rows are immutable. The parity audits therefore exclude
+exactly these, for both the source-derived expectation and the retained rows:
+
+- `encapsulation` (resolved from `adm_ip_identity` node addresses) on V1 and V2
+  conversation rows.
+- On V1 rollback rows only, the NetFlow interface names in `observations`
+  (the `netflow:` entries are reduced to their presence) and the `interface`
+  key inside each `vlan_observations` context (when that list is truncated at
+  32, only its length is compared). V2 reads raw exporter interface names and
+  does not use `adm_interfaces`.
+
+Everything else keeps exact comparison: rollup IDs, physical copy counts,
+record counts, scope and cluster, client/server/port/transport, direction,
+byte/packet/ACL counters, timestamps, non-NetFlow observations, and every
+traffic-stream column. A change to the source events themselves (late or
+altered raw data) or to operator-managed mappings, observer scope, Cilium
+settings, writer definitions or the lookup definitions still refuses. The
+application catalog is a rewritable derived collection built from live workload
+state: if its computed output changes while the staged input is unchanged, the
+helper starts a new journaled build generation and rewrites it. Before it does,
+it settles any earlier-generation catalog writer job that has a recorded SID by
+reading that job to completion; a prior dispatch with an unknown outcome and no
+SID still refuses until you find its SID and run `reconcile --sid` (see
+"Interrupted and failed operations"). NetFlow observations keep their exporter
+(only the looked-up interface names are excluded) and VLAN contexts that differ
+only by interface name are merged; a truncated VLAN list (32 contexts) is
+compared by its truncation flag alone, so a truncation mismatch between the V1
+row and its recomputation refuses. Parity digests use canonicalizer version 3,
+which the journal records at `prepare`. Any journal with a different (or no)
+recorded version is refused up front, on load or rollback, with a message naming
+the version mismatch; finish or roll it back with the helper that created it.
 
 The opt-in local qualification harness deliberately retains its journal and live
 state after a failed or interrupted migration. It reports the journal location;
@@ -247,12 +323,41 @@ resumed boundary does it restore the remaining selectors and V2 writer states
 and rerun V1 public wrapper queries. If the real resumed scheduler boundary
 has not arrived yet, rollback returns `awaiting_v1_recovery`; rerun the same
 command with the same journal. A V1 writer that was originally disabled
-remains disabled and does not need this recovery path. Rollback keeps
+remains disabled and does not need this recovery path. Enabled-origin recovery
+must cover the paused V1 window and finish within seven days of its pre-pause
+boundary. The scheduler end the helper checks tracks the wall clock on every
+rerun, and the gap is written one slice (5 minutes) at a time, so the time
+needed grows with the gap. Before resuming V1 or changing the journal, the
+helper therefore refuses unless `gap + slices x 154 s + 1 h` fits in seven days,
+where 154 s is a conservative planning budget per slice (up to 8 searches at
+15 s each, the readback sleeps and the 30 s job-metadata wait), not a Splunk
+guarantee and not enforced as a job timeout. With these constants rollback must
+start within about 4.6 days of the pause; the trade-off is that a rollback which
+might have finished on a fast system is refused early rather than risking a
+half-finished one. Re-measure the per-slice time on the target before relying on
+the margin. The same refusal is raised on a rerun of a journal already in
+`rollback_in_progress` whose V1 resume has not been attempted (it then says V1
+stays paused and V2 stays public). That decision uses the live V1 schedule
+`disabled` value, not the journaled request state alone: a V1 resume that was
+requested but not confirmed (`request_pending`, `request_unknown`,
+`readback_failed`), or whose request was rejected or not started while the live
+schedule is already enabled, skips the refusal and goes through the normal
+reconcile instead, because V1 may already be running. Rollback keeps
 `adm_summary_v2` and staged V2 collections for inspection and never changes
 the legacy summary index macro. Restoring
 effective REST values preserves the prior effective local overrides; it does
 not recreate their exact app bundle/local-file placement. Exact file-layout
 restoration requires a separate backup of the original app files.
+
+If rollback refuses on the seven-day bound, no further helper run can rebuild
+exact V1 coverage, and the helper has no option to waive the bound. Do not edit
+the journal. Decide under change control between (a) fixing forward: leave V2
+public and its writers enabled, archive the journal and artifacts as evidence,
+and record that the migration was not rolled back; or (b) restoring V1 through
+the approved Splunk administration process and accepting that V1 summary rows
+for the unrecovered window are absent until a separately reviewed rebuild from
+the raw index. In both cases verify the effective macros and writer states
+afterward, because the journal will still read `rollback_in_progress`.
 
 The helper never grants or broadens ACLs. If an update changes an ACL, later
 steps stop; restore the recorded permission state through the approved

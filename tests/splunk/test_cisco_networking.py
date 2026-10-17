@@ -5,6 +5,7 @@ from __future__ import annotations
 import configparser
 import hashlib
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -358,6 +359,26 @@ class CiscoNetworkingContractTest(unittest.TestCase):
             '"correlated"',
             self.macros.get("adm_graph_traffic_context_v2(4)", "definition"),
         )
+
+    def test_traffic_evidence_reader_maps_stored_summary_field_names(self):
+        evidence = self.macros.get("adm_traffic_evidence_v2(4)", "definition")
+        writer = self.macros.get("adm_traffic_observations_v2", "definition")
+        stored_fields = set(re.findall(r"\| fields (?!-)([^|]*)", writer)[-1].split())
+        for column, stored in (
+            ("source", "adm_scope_source"),
+            ("source_authority", "adm_scope_authority"),
+            ("observation_domain_present", "adm_scope_observation_domain_present"),
+            ("observation_domain_id", "adm_scope_observation_domain_id"),
+            ("vpn_id", "adm_scope_vpn_id"),
+            ("mapping_status", "adm_profile_status"),
+        ):
+            self.assertIn(f"{column}={stored}", evidence)
+            self.assertIn(stored, stored_fields)
+        self.assertIn("adm_traffic_observation", stored_fields)
+        self.assertIn(
+            'profile=json_extract(adm_traffic_observation, "profile")', evidence
+        )
+        self.assertLess(evidence.index("| eval "), evidence.index("| fields "))
 
     def test_invalid_traffic_is_retained_with_quality_but_never_correlated(self):
         observations = self.macros.get("adm_traffic_observations_v2", "definition")
