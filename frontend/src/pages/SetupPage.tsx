@@ -330,6 +330,231 @@ export function SetupPage({
                   </Table>
                 </>
               )}
+              <h2>Cisco integration status</h2>
+              <p>
+                {snapshot.ciscoIntegration.state === "staged"
+                  ? "All requested Cisco settings were read. Cisco v2 remains staged and does not change the active v1 reader or writer."
+                  : snapshot.ciscoIntegration.state === "incomplete"
+                    ? "Cisco integration configuration is incomplete or needs operator review. No v2 readiness is claimed."
+                    : "Cisco integration state is unavailable. Check administrator permissions and the operator guide. No v2 readiness is claimed."}
+              </p>
+              {!!snapshot.ciscoIntegration.reasons.length && (
+                <ul>
+                  {snapshot.ciscoIntegration.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              )}
+              <p>
+                This section only reads configuration. Review exact source
+                profiles and cluster rows through the{" "}
+                <a
+                  href="https://github.com/chambear2809/splunk-adm/blob/main/docs/operators/cisco-enterprise-networking.md"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Cisco networking operator handout
+                </a>
+                . The documented migration and bounded validation steps are
+                required before any reader or scheduled writer cutover.
+              </p>
+              <h3>Contract and v2 reader/writer</h3>
+              <Table
+                horizontalOverflow="scroll"
+                aria-label="Cisco integration macros"
+              >
+                <Table.Head>
+                  <Table.HeadCell>Setting</Table.HeadCell>
+                  <Table.HeadCell>Current value</Table.HeadCell>
+                  <Table.HeadCell>Access</Table.HeadCell>
+                </Table.Head>
+                <Table.Body>
+                  {snapshot.ciscoIntegration.macros.map((macro) => (
+                    <Table.Row key={macro.name}>
+                      <Table.Cell>{macro.name}</Table.Cell>
+                      <Table.Cell>
+                        {macro.error ?? macro.definition ?? "Unknown"}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {macro.error
+                          ? "Unavailable"
+                          : macro.canWrite
+                            ? "Readable; writable by this role"
+                            : "Readable; read-only for this role"}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                  <Table.Row>
+                    <Table.Cell>
+                      adm_index_summary_v2 / adm_summary_index_v2_name
+                    </Table.Cell>
+                    <Table.Cell>
+                      {snapshot.ciscoIntegration.summaryIndex.error ??
+                        snapshot.ciscoIntegration.summaryIndex.name ??
+                        "Unknown"}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {snapshot.ciscoIntegration.summaryIndex.exists === true
+                        ? "Index available"
+                        : "Unavailable"}
+                    </Table.Cell>
+                  </Table.Row>
+                </Table.Body>
+              </Table>
+              <h3>Source scope profiles</h3>
+              {!snapshot.ciscoIntegration.sourceProfiles.complete && (
+                <p role="alert">
+                  {snapshot.ciscoIntegration.sourceProfiles.error ??
+                    "The complete source-profile collection could not be read."}
+                </p>
+              )}
+              {snapshot.ciscoIntegration.sourceProfiles.complete && (
+                <p>
+                  {snapshot.ciscoIntegration.sourceProfiles.rows.length} source
+                  scope profile
+                  {snapshot.ciscoIntegration.sourceProfiles.rows.length === 1
+                    ? ""
+                    : "s"}{" "}
+                  read across the full collection.
+                </p>
+              )}
+              {snapshot.ciscoIntegration.sourceProfiles.complete &&
+              snapshot.ciscoIntegration.sourceProfiles.rows.length === 0 ? (
+                <p>No source scope profiles are configured.</p>
+              ) : (
+                !!snapshot.ciscoIntegration.sourceProfiles.rows.length && (
+                  <Table
+                    horizontalOverflow="scroll"
+                    aria-label="Cisco source scope profiles"
+                  >
+                    <Table.Head>
+                      <Table.HeadCell>Source / authority</Table.HeadCell>
+                      <Table.HeadCell>
+                        Domain / observation domain
+                      </Table.HeadCell>
+                      <Table.HeadCell>VPN / routing domain</Table.HeadCell>
+                      <Table.HeadCell>Scope / cluster</Table.HeadCell>
+                      <Table.HeadCell>
+                        Profile / mapping candidates
+                      </Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {snapshot.ciscoIntegration.sourceProfiles.rows.map(
+                        (row) => (
+                          <Table.Row key={row._key}>
+                            <Table.Cell>
+                              {row.source} / {row.source_authority}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {row.domain_kind} /{" "}
+                              {row.observation_domain_present === "1"
+                                ? row.observation_domain_id
+                                : "absent"}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {row.vpn_id || "Not set"} / {row.routing_domain}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {row.scope} / {row.cluster}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {row.profile} / {row.mapping_status} /{" "}
+                              {row.duplicate_count} candidate
+                              {row.duplicate_count === 1 ? "" : "s"}
+                            </Table.Cell>
+                          </Table.Row>
+                        ),
+                      )}
+                    </Table.Body>
+                  </Table>
+                )
+              )}
+              <h3>Cilium cluster settings</h3>
+              {!snapshot.ciscoIntegration.clusterSettings.complete && (
+                <p role="alert">
+                  {snapshot.ciscoIntegration.clusterSettings.error ??
+                    "The complete cluster-settings collection could not be read."}
+                </p>
+              )}
+              {snapshot.ciscoIntegration.clusterSettings.complete && (
+                <p>
+                  {snapshot.ciscoIntegration.clusterSettings.rows.length}{" "}
+                  cluster setting
+                  {snapshot.ciscoIntegration.clusterSettings.rows.length === 1
+                    ? ""
+                    : "s"}{" "}
+                  read across the full collection.
+                </p>
+              )}
+              {snapshot.ciscoIntegration.clusterSettings.complete &&
+              snapshot.ciscoIntegration.clusterSettings.rows.length === 0 ? (
+                <p>No cluster settings are configured.</p>
+              ) : (
+                !!snapshot.ciscoIntegration.clusterSettings.rows.length && (
+                  <Table
+                    horizontalOverflow="scroll"
+                    aria-label="Cilium cluster settings"
+                  >
+                    <Table.Head>
+                      <Table.HeadCell>Cluster</Table.HeadCell>
+                      <Table.HeadCell>LB mode</Table.HeadCell>
+                      <Table.HeadCell>Ingress mode</Table.HeadCell>
+                      <Table.HeadCell>L2 announcements</Table.HeadCell>
+                      <Table.HeadCell>Mapping</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {snapshot.ciscoIntegration.clusterSettings.rows.map(
+                        (row) => (
+                          <Table.Row key={row._key}>
+                            <Table.Cell>{row.cluster}</Table.Cell>
+                            <Table.Cell>{row.lb_mode}</Table.Cell>
+                            <Table.Cell>{row.ingress_mode}</Table.Cell>
+                            <Table.Cell>
+                              {row.l2announcements_enabled}
+                            </Table.Cell>
+                            <Table.Cell>{row.mapping_status}</Table.Cell>
+                          </Table.Row>
+                        ),
+                      )}
+                    </Table.Body>
+                  </Table>
+                )
+              )}
+              <h3>Client history and v2 rollup schedules</h3>
+              <Table
+                horizontalOverflow="scroll"
+                aria-label="Cisco staged builder schedules"
+              >
+                <Table.Head>
+                  <Table.HeadCell>Saved search</Table.HeadCell>
+                  <Table.HeadCell>State</Table.HeadCell>
+                  <Table.HeadCell>Access</Table.HeadCell>
+                </Table.Head>
+                <Table.Body>
+                  {snapshot.ciscoIntegration.searches.map((job) => (
+                    <Table.Row key={job.name}>
+                      <Table.Cell>{job.name}</Table.Cell>
+                      <Table.Cell>
+                        {job.error ??
+                          (job.disabled === true && job.scheduled === false
+                            ? "Disabled; no schedule configured"
+                            : job.disabled === true && job.scheduled === true
+                              ? "Disabled; schedule configured (staged)"
+                              : job.disabled === false && job.scheduled === true
+                                ? "Enabled and scheduled; operator review required"
+                                : "Unknown")}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {job.error
+                          ? "Unavailable"
+                          : job.canWrite
+                            ? "Readable; writable by this role"
+                            : "Readable; read-only for this role"}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
               <h2>Builder schedules</h2>
               {!prerequisites && (
                 <p>

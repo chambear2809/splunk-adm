@@ -32,6 +32,12 @@ for (const file of [
   "demo-rows-aci-prev.json",
   "demo-topology.json",
   "demo-topology-aci.json",
+  "demo-networking-aci.json",
+  "demo-networking-nxos.json",
+  "demo-networking-topology.json",
+  "demo-networking-scopes.json",
+  "demo-networking-catalog.json",
+  "demo-networking-find.json",
 ])
   await copyFile(`fixtures/${file}`, `${app}/appserver/static/demo/${file}`);
 
@@ -66,6 +72,19 @@ await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
 await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
+await copyFile(
+  "docs/CISCO_CONTRACT_MIGRATION.md",
+  `${stage}/docs/CISCO_CONTRACT_MIGRATION.md`,
+);
+await copyFile(
+  "docs/CISCO_NETWORKING_QUALIFICATION.md",
+  `${stage}/docs/CISCO_NETWORKING_QUALIFICATION.md`,
+);
+await mkdir(`${stage}/docs/operators`, { recursive: true });
+await copyFile(
+  "docs/operators/cisco-enterprise-networking.md",
+  `${stage}/docs/operators/cisco-enterprise-networking.md`,
+);
 await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 

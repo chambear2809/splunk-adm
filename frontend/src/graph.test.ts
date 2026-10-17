@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { directionLabel } from "./glossary";
-import { indexGraph, matchesQuery, parseGraph, type Graph } from "./graph";
+import {
+  indexGraph,
+  matchesQuery,
+  parseGraph,
+  validTrafficObservation,
+  type Graph,
+} from "./graph";
 import { demoGraph } from "./provider";
 
 const demo = demoGraph("nxos");
 const clone = (): Record<string, any> => structuredClone(demo);
+const handoffClone = (): Record<string, any> =>
+  structuredClone(demoGraph("nxos"));
 const kindOf = (g: Record<string, any>, id: string) =>
   g.nodes.find((n: { id: string }) => n.id === id).kind;
 const edgeOf = (g: Record<string, any>, relationship: string) =>
@@ -17,6 +25,250 @@ describe("parseGraph", () => {
     const g = parseGraph(clone());
     expect(g.boundary.root_node_id).toBe(demo.boundary.root_node_id);
     expect(g.nodes.length).toBeGreaterThan(0);
+  });
+
+  it("validates complete client handoff metadata against same-cluster pods", () => {
+    const g = handoffClone();
+    const cluster = g.boundary.cluster;
+    const service = {
+      id: "endpoint:k8s_service:test-service",
+      label: "test-service",
+      kind: "endpoint",
+      endpoint_kind: "k8s_service",
+      cluster,
+    };
+    const pod = {
+      id: `pod:${cluster}/handoff/backend-a`,
+      label: "backend-a",
+      kind: "workload",
+      cluster,
+    };
+    const client = {
+      id: "network_client:test-client",
+      label: "test-client",
+      kind: "client",
+      endpoint_kind: "network_client",
+      addresses: ["192.0.2.40"],
+    };
+    g.nodes.push(pod, client, service);
+    const edge = {
+      id: "client-edge:tcp-443",
+      source: client.id,
+      target: service.id,
+      relationship: "communicates_with",
+      evidence: ["test"],
+      confidence: "correlated",
+      count: 1,
+      server_port: 443,
+      transport: "tcp",
+      client_handoff_coverage: "complete",
+      client_handoff_connections: 2,
+      client_handoff_determined: 2,
+      client_handoff_unresolved: 0,
+      client_handoffs: [
+        {
+          target: pod.id,
+          basis: "hubble_client_tuple",
+          connections: 2,
+          receiving_nodes: ["node-a"],
+          observers: ["hubble:node-a"],
+        },
+      ],
+    };
+    g.edges.push(edge);
+    expect(parseGraph(g).edges.at(-1)).toMatchObject(edge);
+
+    edge.client_handoff_connections = 1;
+    expect(() => parseGraph(g)).toThrow(/client handoff metadata/);
+    edge.client_handoff_connections = 2;
+    edge.client_handoff_coverage = "unknown";
+    expect(() => parseGraph(g)).toThrow();
+  });
+
+  it("accepts pipeline client source kinds and rejects Service sources", () => {
+    const make = () => {
+      const g = handoffClone();
+      const cluster = g.boundary.cluster;
+      const service = {
+        id: "endpoint:k8s_service:test-service",
+        label: "test-service",
+        kind: "endpoint",
+        endpoint_kind: "k8s_service",
+        cluster,
+      };
+      const pod = {
+        id: `pod:${cluster}/handoff/backend-a`,
+        label: "backend-a",
+        kind: "workload",
+        cluster,
+      };
+      const vm = {
+        id: "vm:test-client",
+        label: "test-client",
+        kind: "endpoint",
+        endpoint_kind: "vm",
+      };
+      const edge = {
+        id: "vm-client-edge:tcp-443",
+        source: vm.id,
+        target: service.id,
+        relationship: "communicates_with",
+        evidence: ["test"],
+        confidence: "correlated",
+        count: 1,
+        client_handoff_coverage: "complete",
+        client_handoff_connections: 1,
+        client_handoff_determined: 1,
+        client_handoff_unresolved: 0,
+        client_handoffs: [
+          {
+            target: pod.id,
+            basis: "hubble_client_tuple",
+            connections: 1,
+            receiving_nodes: [],
+            observers: [],
+          },
+        ],
+      };
+      g.nodes.push(pod, vm, service);
+      g.edges.push(edge);
+      return { g, edge, vm };
+    };
+
+    const validVm = make();
+    expect(parseGraph(validVm.g).edges.at(-1)).toMatchObject(validVm.edge);
+
+    for (const endpointKind of [
+      "k8s_node",
+      "k8s_node_proxy",
+      "ambiguous",
+      "unresolved",
+      "external",
+    ]) {
+      const sourceCase = make();
+      sourceCase.vm.endpoint_kind = endpointKind;
+      expect(parseGraph(sourceCase.g).edges.at(-1)).toMatchObject(
+        sourceCase.edge,
+      );
+    }
+
+    const networkClientSource = make();
+    networkClientSource.vm.kind = "client";
+    networkClientSource.vm.endpoint_kind = "network_client";
+    expect(parseGraph(networkClientSource.g).edges.at(-1)).toMatchObject(
+      networkClientSource.edge,
+    );
+
+    const workloadSource = make();
+    workloadSource.vm.kind = "workload";
+    (workloadSource.vm as { endpoint_kind?: string }).endpoint_kind = undefined;
+    expect(parseGraph(workloadSource.g).edges.at(-1)).toMatchObject(
+      workloadSource.edge,
+    );
+
+    const serviceSource = make();
+    serviceSource.vm.endpoint_kind = "k8s_service";
+    expect(() => parseGraph(serviceSource.g)).toThrow(
+      /invalid client handoff metadata/,
+    );
+  });
+
+  it("accepts the captured unresolved IP handoff without promoting its identity", () => {
+    const g = demoGraph("catalyst-aci");
+    const sourceId = "ip:campus-aci/10.61.0.20";
+    const edge = g.edges.find(
+      (candidate) =>
+        candidate.relationship === "communicates_with" &&
+        candidate.source === sourceId &&
+        candidate.target ===
+          "k8s_service:cilium-aci-east/shop/checkout-api/10.50.0.20:8080",
+    );
+    expect(edge?.client_handoff_coverage).toBe("complete");
+    const parsed = parseGraph(g);
+    expect(parsed.nodes.find((node) => node.id === sourceId)).toMatchObject({
+      kind: "endpoint",
+      endpoint_kind: "unresolved",
+    });
+    expect(parsed.edges.find((candidate) => candidate.id === edge?.id)).toBe(
+      edge,
+    );
+  });
+
+  it("rejects duplicate, cross-cluster, oversized, and falsely empty handoff metadata", () => {
+    const make = () => {
+      const g = handoffClone();
+      const cluster = g.boundary.cluster;
+      const service = {
+        id: "endpoint:k8s_service:test-service",
+        label: "test-service",
+        kind: "endpoint",
+        endpoint_kind: "k8s_service",
+        cluster,
+      };
+      const pod = {
+        id: `pod:${cluster}/handoff/backend-a`,
+        label: "backend-a",
+        kind: "workload",
+        cluster,
+      };
+      const client = {
+        id: "network_client:test-client",
+        label: "test-client",
+        kind: "client",
+        endpoint_kind: "network_client",
+      };
+      g.nodes.push(pod, client, service);
+      const edge = {
+        id: "client-edge:tcp-443",
+        source: client.id,
+        target: service.id,
+        relationship: "communicates_with",
+        evidence: ["test"],
+        confidence: "correlated",
+        count: 1,
+        client_handoff_coverage: "complete",
+        client_handoff_connections: 1,
+        client_handoff_determined: 1,
+        client_handoff_unresolved: 0,
+        client_handoffs: [
+          {
+            target: pod.id,
+            basis: "hubble_client_tuple",
+            connections: 1,
+            receiving_nodes: [],
+            observers: [] as string[],
+          },
+        ],
+      };
+      g.edges.push(edge);
+      return { g, edge, pod, cluster };
+    };
+    const duplicate = make();
+    duplicate.edge.client_handoffs.push({
+      ...duplicate.edge.client_handoffs[0],
+      connections: 1,
+    });
+    duplicate.edge.client_handoff_connections = 2;
+    duplicate.edge.client_handoff_determined = 2;
+    expect(() => parseGraph(duplicate.g)).toThrow();
+
+    const foreign = make();
+    foreign.edge.client_handoffs[0].target =
+      "pod:other-cluster/handoff/backend-a";
+    expect(() => parseGraph(foreign.g)).toThrow();
+
+    const oversized = make();
+    oversized.edge.client_handoffs[0].observers =
+      Array(65).fill("hubble:node-a");
+    expect(() => parseGraph(oversized.g)).toThrow();
+
+    const emptyPartial = make();
+    emptyPartial.edge.client_handoff_coverage = "partial";
+    emptyPartial.edge.client_handoff_determined = 0;
+    emptyPartial.edge.client_handoff_unresolved = 1;
+    emptyPartial.edge.client_handoff_connections = 1;
+    emptyPartial.edge.client_handoffs = [];
+    expect(() => parseGraph(emptyPartial.g)).toThrow();
   });
 
   it("accepts an optional evidence_truncated flag and rejects non-booleans", () => {
@@ -47,6 +299,38 @@ describe("parseGraph", () => {
       parseGraph(g).edges.find((e) => e.id === edge.id)?.vlan_observations,
     ).toHaveLength(1);
     edge.vlan_observations[0].vlan = 4095;
+    expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+
+  it("accepts only documented attachment evidence text and finite scalar fields", () => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    edge.attachment_evidence = [
+      {
+        device_id: "meraki:serial-hash",
+        client_authority: "org/network",
+        event_time: 1_700_000_000,
+        received_time: "1700000001.5",
+        ssid_number: 7,
+      },
+    ];
+    expect(() => parseGraph(g)).not.toThrow();
+
+    edge.attachment_evidence[0].device_id = 42;
+    expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+
+  it.each([
+    ["numeric authority", { client_authority: 42 }],
+    ["invalid event time", { event_time: "yesterday" }],
+    ["non-finite receive time", { received_time: Number.POSITIVE_INFINITY }],
+    ["non-finite SSID", { ssid_number: Number.NaN }],
+  ])("rejects attachment evidence with %s", (_label, invalidField) => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    edge.attachment_evidence = [
+      { device_id: "meraki:serial-hash", ...invalidField },
+    ];
     expect(() => parseGraph(g)).toThrow(/invalid relationships/);
   });
 
@@ -109,6 +393,12 @@ describe("parseGraph", () => {
       "unknown direction_basis",
       (g: any) => {
         edgeOf(g, "communicates_with").direction_basis = "guess";
+      },
+    ],
+    [
+      "array direction_basis",
+      (g: any) => {
+        edgeOf(g, "communicates_with").direction_basis = ["unknown"];
       },
     ],
     [
@@ -217,6 +507,22 @@ describe("parseGraph", () => {
     const g = clone();
     g.edges[0].target = "workload:missing";
     expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+});
+
+describe("traffic observation scalar metadata", () => {
+  it("accepts finite numeric or textual raw sampling values and rejects non-finite numbers", () => {
+    const base = { source: "stream_ipfix", raw_sampling: 100 };
+    expect(validTrafficObservation(base)).toBe(true);
+    expect(validTrafficObservation({ ...base, raw_sampling: "100" })).toBe(
+      true,
+    );
+    expect(
+      validTrafficObservation({
+        ...base,
+        raw_sampling: Number.POSITIVE_INFINITY,
+      }),
+    ).toBe(false);
   });
 });
 

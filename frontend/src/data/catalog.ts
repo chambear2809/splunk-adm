@@ -19,6 +19,36 @@ export type FindRow = Pick<
   CatalogRow,
   "_key" | "service" | "environment" | "cluster" | "namespace"
 > & { scopeError?: string };
+export interface NetworkClientFindRow {
+  _key: string;
+  native_id?: string;
+  client_mac?: string;
+  client_ip?: string;
+  source: string;
+  contract_version?: string;
+  access_platform?: string;
+  source_authority?: string;
+  routing_domain?: string;
+  scope?: string;
+  cluster?: string;
+  source_time?: number;
+  received_time?: number;
+  latest_received_time?: number;
+  event_type?: string;
+  attachment_event_time?: number;
+  attachment_received_time?: number;
+  attachment_collected_time?: number;
+  attachment_status: string;
+  mapping_status?: string;
+  attachment_basis?: string;
+  attachment_device_id?: string;
+  attachment_device_name?: string;
+  attachment_device_mac?: string;
+  device_serial?: string;
+  ssid_number?: string;
+  quality_reason?: string;
+  warning?: string;
+}
 
 const fields = ["service", "environment", "cluster", "namespace"] as const;
 const metricFields = [
@@ -147,17 +177,103 @@ export function createScopeCatalogRows(
 export function parseFindRows(
   rows: readonly Record<string, unknown>[],
 ): FindRow[] {
-  return rows.map((row) => {
+  const byKey = new Map<string, FindRow>();
+  for (const row of rows) {
     if (typeof row.warnings === "string" && row.warnings)
       throw new Error(row.warnings);
     if (!validKey(row._key)) throw new Error("Find field _key is invalid.");
     const dimensions = scope(row);
     const invalidScope = scopeError(dimensions);
-    return {
+    const parsed = {
       _key: row._key,
       ...dimensions,
       ...(invalidScope ? { scopeError: invalidScope } : {}),
     };
+    const existing = byKey.get(parsed._key);
+    if (existing) {
+      if (
+        fields.some((field) => existing[field] !== parsed[field]) ||
+        existing.scopeError !== parsed.scopeError
+      )
+        throw new Error(
+          "Find returned conflicting scope dimensions for one key.",
+        );
+      continue;
+    }
+    byKey.set(parsed._key, parsed);
+  }
+  return [...byKey.values()];
+}
+
+export function parseNetworkClientFindRows(
+  rows: readonly Record<string, unknown>[],
+): NetworkClientFindRow[] {
+  const textFields = [
+    "contract_version",
+    "native_id",
+    "client_mac",
+    "client_ip",
+    "access_platform",
+    "source_authority",
+    "routing_domain",
+    "scope",
+    "cluster",
+    "event_type",
+    "mapping_status",
+    "attachment_basis",
+    "attachment_device_id",
+    "attachment_device_name",
+    "attachment_device_mac",
+    "device_serial",
+    "ssid_number",
+    "quality_reason",
+    "warning",
+  ] as const;
+  const numericFields = [
+    "source_time",
+    "received_time",
+    "latest_received_time",
+    "attachment_event_time",
+    "attachment_received_time",
+    "attachment_collected_time",
+  ] as const;
+  return rows.map((row) => {
+    if (
+      row.row_type !== "network_client" ||
+      typeof row._key !== "string" ||
+      !row._key ||
+      typeof row.source !== "string" ||
+      typeof row.attachment_status !== "string"
+    )
+      throw new Error(
+        "Network client Find row has invalid identity or status.",
+      );
+    const result: NetworkClientFindRow = {
+      _key: row._key,
+      source: row.source,
+      attachment_status: row.attachment_status,
+    };
+    for (const field of textFields) {
+      if (row[field] === undefined || row[field] === null || row[field] === "")
+        continue;
+      if (typeof row[field] !== "string")
+        throw new Error(`Network client Find field ${field} is invalid.`);
+      result[field] = row[field] as never;
+    }
+    for (const field of numericFields) {
+      if (row[field] === undefined || row[field] === null || row[field] === "")
+        continue;
+      const value =
+        typeof row[field] === "number"
+          ? row[field]
+          : typeof row[field] === "string" && /^\d+(?:\.\d+)?$/.test(row[field])
+            ? Number(row[field])
+            : NaN;
+      if (!Number.isFinite(value) || value < 0)
+        throw new Error(`Network client Find field ${field} is invalid.`);
+      result[field] = value as never;
+    }
+    return result;
   });
 }
 
@@ -171,6 +287,21 @@ export function validatedBuildFindSearch(value: string): string {
   )
     throw new Error("Find value contains unsupported characters.");
   return `| \`adm_find("${value}")\``;
+}
+
+export function validatedBuildNetworkClientFindSearch(value: string): string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    !(
+      /^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test(value) ||
+      /^(?:\d{1,3}\.){3}\d{1,3}$/.test(value)
+    )
+  )
+    throw new Error(
+      "Enter an exact IPv4 address or colon-separated MAC address for network client evidence.",
+    );
+  return `| \`adm_find_network_client("${value}")\``;
 }
 
 export const catalogLimitMessage = (maxRows = 5000) =>

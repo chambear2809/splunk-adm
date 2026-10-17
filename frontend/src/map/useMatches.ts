@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { matchesQuery, type Graph } from "../graph";
+import { indexGraph, matchesQuery, type Graph } from "../graph";
 import { edgeMatches, type indexTopology } from "../topology";
 import type { computeLayout } from "../layout";
 export function useMatches(
@@ -8,6 +8,7 @@ export function useMatches(
   layout: ReturnType<typeof computeLayout>,
   q: string,
 ) {
+  const graphIndex = useMemo(() => indexGraph(graph), [graph]);
   const matchNodes = useMemo(
     () =>
       q
@@ -21,10 +22,12 @@ export function useMatches(
     () =>
       q
         ? new Set(
-            graph.edges.filter((e) => edgeMatches(e, q, topo)).map((e) => e.id),
+            graph.edges
+              .filter((e) => edgeMatches(e, q, topo, graphIndex))
+              .map((e) => e.id),
           )
         : undefined,
-    [q, graph, topo],
+    [q, graph, graphIndex, topo],
   );
   const matchList = useMemo(() => {
     if (!matchNodes || !matchEdges) return [];

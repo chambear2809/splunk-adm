@@ -13,6 +13,8 @@ npm run dev
 
 Open the localhost URL printed by Vite. Demo mode replays the rows that the app's `adm_graph` and `adm_topology` searches returned in the lab for a synthetic scenario (October 7, 2026, 11:45–12:00 UTC). By default that's the ACI pilot scenario in `fixtures/raw-aci/scenario.json`. The NX-OS fabric scenario in `fixtures/raw/scenario.json` is available from **Settings**. It is clearly marked synthetic and never substitutes for a failed live search.
 
+Settings also offers **Catalyst → ACI** and **Meraki wireless → NX-OS**. These are two views of the combined dataset in `fixtures/raw-networking/`, captured from the V2 searches with their own recorded time window and provenance. Both preserve the separation between attachment evidence and observed traffic. Read the [Cisco qualification status](CISCO_NETWORKING_QUALIFICATION.md) and [operator handout](operators/cisco-enterprise-networking.md) before enabling V2 readers or writers in a deployment.
+
 ## Build and test
 
 ```sh
@@ -28,7 +30,7 @@ Python lint: `ruff check tools tests` and `ruff format --check tools tests` (ins
 AppInspect (requires libmagic, e.g. `brew install libmagic`; install `splunk-appinspect` from PyPI in a virtual environment):
 
 ```sh
-splunk-appinspect inspect dist/splunk_adm-0.2.0.tar.gz --mode precert --included-tags cloud
+splunk-appinspect inspect dist/splunk_adm-0.3.0.tar.gz --mode precert --included-tags cloud
 ```
 
 Use Python 3.11 for AppInspect and save its JSON report (`--output-file dist/appinspect-cloud.json`). Run `python3 tools/check_appinspect.py dist/appinspect-cloud.json`; errors and failures block release. The integrated baseline has five warnings: Python script existence, custom-conf replication, `collections.conf`, Python SDK version and synthetic/documentation hostnames/IPs. No legacy SplunkJS bundle ships. See [final integration readiness](UI-PHASE-9.md) for the current evidence and Cloud qualification limits.
@@ -36,6 +38,8 @@ Use Python 3.11 for AppInspect and save its JSON report (`--output-file dist/app
 ### Synthetic fixtures and the Splunk lab
 
 `python3 tools/gen_raw_fixtures.py` regenerates `fixtures/raw/*.ndjson` (HEC envelopes per sourcetype) from `fixtures/raw/scenario.json` (NX-OS fabric). `--scenario aci` regenerates the ACI pilot in `fixtures/raw-aci/`. Every field is traced to its TA or product source in each directory's `FIELDS.md`.
+
+`--scenario networking` regenerates the combined Cisco dataset. Downloaded vendor archives and extracted source remain in ignored research directories; the distributed app includes provenance records and synthetic captures, not vendor packages. The V2 loader, capture, load, and migration tools require the repository lab lock and explicit local-lab state changes where applicable. Consult each tool's help before running it; do not run independent lab lifecycles concurrently.
 
 `tests/splunk/lab.sh` runs a local Splunk container (`splunk/splunk`, ports bound to 127.0.0.1) with only the TAs' search-time configuration, never their inputs or scripts, and runs the data-layer tests:
 

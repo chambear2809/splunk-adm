@@ -45,12 +45,19 @@ Fresh installations start with an empty KV collection; administrators populate t
 Run the live check against an already running and installed lab:
 
 ```sh
-ADM_LAB=1 ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-0.2.0.tar.gz" \
-  python3 -m unittest tests/splunk/test_upgrade.py -v
+ADM_LAB=1 ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-0.3.0.tar.gz" \
+  python3 tools/lab_lock.py --root . -- \
+  python3 -m unittest discover -s tests/splunk -p test_upgrade.py -v
 ```
 
-The test seeds an explicitly synthetic prior-version state when no released baseline is available, then sends the package to Splunk's app update endpoint. This qualifies the upgrade *mechanics* against a stand-in; it does not substitute for upgrading from an actual prior release. Once a first tagged release exists, re-run this check with `ADM_UPGRADE_PACKAGE` pointing at that release's real archive (installed first, then updated to the candidate package) instead of the synthetic seed, and keep doing so for the most recent released version on every subsequent release. It verifies a changed packaged description, exact local macro and legacy-file contents, live scope KV rows and their effective collection/lookup ACLs, and two historical identity rows. Effective read and write permissions for all shipped owner-dispatched saved searches must stay administrator-only. It also inspects a deployment-local metadata override, allowing only Splunk’s generated install-checksum bookkeeping stanza to differ. A permissive local ACL is reported as an unsafe upgrade and fails the check; it is never treated as protected merely because packaged `default.meta` is restrictive.
+Set `ADM_UPGRADE_BASELINE_PACKAGE` to an actual prior-version archive to check a real version transition. `ADM_UPGRADE_PACKAGE` always identifies the new candidate. The test installs the baseline, updates to the candidate, rolls back to the baseline, and restores the candidate. It derives each release's saved-search inventory from that archive and checks the installed versions. Record the source commit and checksum if the baseline was built from a commit instead of a published release.
+
+Without `ADM_UPGRADE_BASELINE_PACKAGE`, the test creates an explicitly synthetic old-package stand-in; that checks update mechanics only. Both paths verify exact local macro and legacy-file contents, live scope KV rows and their effective collection/lookup ACLs, and two historical identity rows. Effective read and write permissions for all shipped owner-dispatched saved searches must stay administrator-only. The test also inspects a deployment-local metadata override, allowing only Splunk’s generated install-checksum bookkeeping stanza to differ. A permissive local ACL fails the check even when packaged `default.meta` is restrictive.
 
 The check is opt-in and does not start, stop, reset, or provision the lab; it does replace the app through Splunk’s update endpoint. Build the package first with `npm run package`. In a real deployment, repeat the same checks with a package from the target release and a backup taken before the change.
 
 The harness uses Splunk’s [app update endpoint](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/9.4/application-endpoints/application-endpoint-descriptions), with `filename=true` and `update=1`, on a package copied into the disposable container.
+
+## Cisco V2 derived-data migration
+
+Installing 0.3.0 does not migrate existing summaries or activate the optional Cisco V2 readers. The [V2 migration procedure](CISCO_CONTRACT_MIGRATION.md) stages separate derived data, validates source coverage, and journals selector and writer changes. Keep its journal and captured configuration for recovery. Package rollback and derived-data rollback are separate checks; neither implies the other has passed. The [Cisco qualification record](CISCO_NETWORKING_QUALIFICATION.md) tracks their status and the remaining deployment gates.

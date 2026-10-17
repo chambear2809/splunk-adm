@@ -1,0 +1,273 @@
+{
+  "contract_version": 1,
+  "description": "Synthetic lab configuration for the exact pipeline source-scope key and legacy observer scope lookups. Values are not raw telemetry or live device configuration.",
+  "network_source_scope": [
+    {
+      "source": "catalyst_client_snapshot",
+      "source_authority": "https://catalyst-center.example.invalid",
+      "domain_kind": "controller",
+      "observation_domain_present": "0",
+      "observation_domain_id": "",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "catalyst_client_snapshot"
+    },
+    {
+      "source": "meraki_association",
+      "source_authority": "[\"org-demo\",\"network-demo\"]",
+      "domain_kind": "network",
+      "observation_domain_present": "0",
+      "observation_domain_id": "",
+      "vpn_id": "",
+      "routing_domain": "network-demo",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west",
+      "mapping_status": "mapped",
+      "profile": "meraki_association"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "10.61.255.2",
+      "domain_kind": "exporter",
+      "observation_domain_present": "1",
+      "observation_domain_id": "601",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "catalyst_campus_fnf"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "10.61.255.1",
+      "domain_kind": "exporter",
+      "observation_domain_present": "1",
+      "observation_domain_id": "701",
+      "vpn_id": "20",
+      "routing_domain": "20",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "catalyst_sdwan_ipfix"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "10.71.0.2",
+      "domain_kind": "exporter",
+      "observation_domain_present": "1",
+      "observation_domain_id": "390",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west",
+      "mapping_status": "mapped",
+      "profile": "meraki_ms390_ipfix"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "192.0.2.101",
+      "domain_kind": "exporter",
+      "observation_domain_present": "0",
+      "observation_domain_id": "",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "standard_netflow"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "192.0.2.102",
+      "domain_kind": "exporter",
+      "observation_domain_present": "0",
+      "observation_domain_id": "",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "standard_netflow"
+    },
+    {
+      "source": "stream_ipfix",
+      "source_authority": "192.0.2.103",
+      "domain_kind": "exporter",
+      "observation_domain_present": "0",
+      "observation_domain_id": "",
+      "vpn_id": "",
+      "routing_domain": "",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east",
+      "mapping_status": "mapped",
+      "profile": "standard_netflow"
+    }
+  ],
+  "legacy_observer_scope": [
+    {
+      "observer_kind": "cluster",
+      "observer": "cilium-aci-east",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "cluster",
+      "observer": "cilium-nxos-west",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "hec_source",
+      "observer": "http:isovalent-aci",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "hec_source",
+      "observer": "http:isovalent-nxos",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "fabric",
+      "observer": "aci-1",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "fabric",
+      "observer": "nxos-campus-1",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "apic",
+      "observer": "192.0.2.50",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "nd_host",
+      "observer": "192.0.2.60",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "nd_host",
+      "observer": "10.71.255.60",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "10.61.255.1",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "10.61.255.2",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "10.71.0.2",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "192.0.2.101",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "192.0.2.102",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "exporter",
+      "observer": "192.0.2.103",
+      "scope": "campus-aci",
+      "cluster": "cilium-aci-east"
+    },
+    {
+      "observer_kind": "nxos_serial",
+      "observer": "[\"splunk-hf-01\",\"fdo24411aaa\"]",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "nxos_serial",
+      "observer": "[\"splunk-hf-01\",\"fdo24411bbb\"]",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "nxos_serial",
+      "observer": "[\"splunk-hf-01\",\"fdo24411ccc\"]",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    },
+    {
+      "observer_kind": "network_authority",
+      "observer": "[\"org-demo\",\"network-demo\"]",
+      "scope": "meraki-nxos",
+      "cluster": "cilium-nxos-west"
+    }
+  ],
+  "clusters": [
+    {
+      "name": "cilium-aci-east",
+      "scope": "campus-aci",
+      "graph_args": {
+        "service": "checkout",
+        "environment": "demo",
+        "cluster": "cilium-aci-east",
+        "namespace": "shop"
+      },
+      "cilium": {
+        "clusterName": "cilium-aci-east",
+        "loadBalancerMode": "snat",
+        "ingressMode": "dedicated",
+        "l2announcementsEnabled": false,
+        "checkoutService": "shop/checkout-api",
+        "applicationService": "shop/checkout",
+        "checkoutServiceExternalTrafficPolicy": "Local"
+      }
+    },
+    {
+      "name": "cilium-nxos-west",
+      "scope": "meraki-nxos",
+      "graph_args": {
+        "service": "checkout",
+        "environment": "demo",
+        "cluster": "cilium-nxos-west",
+        "namespace": "shop"
+      },
+      "cilium": {
+        "clusterName": "cilium-nxos-west",
+        "loadBalancerMode": "snat",
+        "ingressMode": "dedicated",
+        "l2announcementsEnabled": false,
+        "checkoutService": "shop/checkout-api",
+        "applicationService": "shop/checkout",
+        "checkoutServiceExternalTrafficPolicy": "Local"
+      }
+    }
+  ],
+  "scope_provenance": {
+    "catalyst_client_snapshot": "Operator maps the authenticated controller authority and selected campus site/VRF to campus-aci; the snapshot response does not prove a VRF.",
+    "meraki_association": "Meraki organization and network define the source authority; operator maps network-demo to meraki-nxos.",
+    "stream_ipfix": "Synthetic exporter addresses and observation-domain/VPN values illustrate exact profile lookup. The standard_netflow profiles for 192.0.2.101/.102/.103 correspond to the existing TA-shaped ACI Stream exporter fixtures. Real IPFIX templates and scope values require live qualification.",
+    "legacy_observer_scope": "Maps legacy Hubble cluster and Cisco Data Center fabric observers so existing identity/ND evidence resolves in the intended demo scope.",
+    "topology_device_authority": "NX-OS `host` is the explicitly registered collector authority and `proc_board_id` is the native device identity. The exact nxos_serial observer key is JSON [collector host, proc_board_id]. Device endpoint IP:port is only a within-collector alias for joining version to CDP records. Peer serials must have one same-scope mapping; names and Nexus Dashboard fabric labels do not establish identity. Meraki inventory uses the exact [organizationId, networkId] network-authority profile."
+  }
+}

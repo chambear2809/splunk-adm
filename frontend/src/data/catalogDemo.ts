@@ -1,4 +1,5 @@
 import { createStaticURL } from "@splunk/splunk-utils/url";
+import type { DemoScenario } from "./demoClient";
 
 export interface CatalogCapture {
   search: string;
@@ -17,12 +18,13 @@ export interface FindCapture {
   latest: string;
   provenance: Record<string, unknown>;
   queries: FindQueryCapture[];
+  network_client_queries?: FindQueryCapture[];
 }
 export interface CatalogDemo {
   catalog: CatalogCapture;
   find: FindCapture;
 }
-let pending: Promise<CatalogDemo> | undefined;
+const pending = new Map<DemoScenario, Promise<CatalogDemo>>();
 const production =
   typeof __ADM_SPLUNK_BUILD__ !== "undefined" && __ADM_SPLUNK_BUILD__;
 const url = (name: string) =>
@@ -73,24 +75,37 @@ const find = (value: unknown): FindCapture => {
     !Array.isArray(value.queries)
   )
     throw new Error("Find fixture has invalid shape.");
-  const queries = value.queries.map((query) => {
-    if (
-      !object(query) ||
-      typeof query.query !== "string" ||
-      typeof query.search !== "string"
-    )
-      throw new Error("Find fixture has invalid query.");
-    return {
-      query: query.query,
-      search: query.search,
-      rows: rows(query.rows, "Find query"),
-    };
-  });
+  const parseQueries = (items: unknown[]) =>
+    items.map((query) => {
+      if (
+        !object(query) ||
+        typeof query.query !== "string" ||
+        typeof query.search !== "string"
+      )
+        throw new Error("Find fixture has invalid query.");
+      return {
+        query: query.query,
+        search: query.search,
+        rows: rows(query.rows, "Find query"),
+      };
+    });
+  const queries = parseQueries(value.queries);
+  const networkClientQueries =
+    value.network_client_queries === undefined
+      ? undefined
+      : Array.isArray(value.network_client_queries)
+        ? parseQueries(value.network_client_queries)
+        : (() => {
+            throw new Error("Find fixture has invalid network-client queries.");
+          })();
   return {
     earliest: value.earliest,
     latest: value.latest,
     provenance: value.provenance,
     queries,
+    ...(networkClientQueries
+      ? { network_client_queries: networkClientQueries }
+      : {}),
   };
 };
 async function load(name: string, signal: AbortSignal): Promise<unknown> {
@@ -99,15 +114,22 @@ async function load(name: string, signal: AbortSignal): Promise<unknown> {
     throw new Error(`Catalog fixture request failed (${response.status}).`);
   return response.json();
 }
-export function loadCatalogDemo(): Promise<CatalogDemo> {
-  if (pending) return pending;
-  pending = (async () => {
+export function loadCatalogDemo(
+  scenario: DemoScenario = "aci",
+): Promise<CatalogDemo> {
+  const network = scenario === "catalyst-aci" || scenario === "meraki-nxos";
+  const files = network
+    ? ["demo-networking-catalog.json", "demo-networking-find.json"]
+    : ["demo-catalog.json", "demo-find.json"];
+  const existing = pending.get(scenario);
+  if (existing) return existing;
+  const request = (async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 10000);
     try {
       const [catalogPayload, findPayload] = await Promise.all([
-        load("demo-catalog.json", controller.signal),
-        load("demo-find.json", controller.signal),
+        load(files[0], controller.signal),
+        load(files[1], controller.signal),
       ]);
       return { catalog: catalog(catalogPayload), find: find(findPayload) };
     } finally {
@@ -115,9 +137,10 @@ export function loadCatalogDemo(): Promise<CatalogDemo> {
       clearTimeout(timer);
     }
   })().catch((error) => {
-    pending = undefined;
+    pending.delete(scenario);
     throw error;
   });
-  return pending;
+  pending.set(scenario, request);
+  return request;
 }
 export const prepareCatalogDemo = loadCatalogDemo;

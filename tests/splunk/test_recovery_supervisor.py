@@ -25,11 +25,20 @@ class RecoverySupervisorLiveTest(unittest.TestCase):
 
     def setUp(self):
         self.path = APP + "/saved/searches/" + quote(ALERT, safe="")
-        # Enable only manual dispatch while exercising the shipped alert.
-        self.lab._json("POST", self.path, {"disabled": "0", "is_scheduled": "0"})
+        # Enable only manual dispatch while exercising the shipped alert, then
+        # restore the captured state (registered first: the POST may apply even
+        # if its response is lost).
+        original = self.lab._json("GET", self.path)["entry"][0]["content"]
         self.addCleanup(
-            self.lab._json, "POST", self.path, {"disabled": "1", "is_scheduled": "1"}
+            self.lab._json,
+            "POST",
+            self.path,
+            {
+                "disabled": str(int(original["disabled"] in (True, 1, "1"))),
+                "is_scheduled": str(int(original["is_scheduled"] in (True, 1, "1"))),
+            },
         )
+        self.lab._json("POST", self.path, {"disabled": "0", "is_scheduled": "0"})
 
     def test_abandoned_target_after_50000_recovered_slots_is_visible(self):
         api = support.RecoveryActionLiveTest.rest()

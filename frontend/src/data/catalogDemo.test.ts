@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import catalog from "../../../fixtures/demo-catalog.json";
 import find from "../../../fixtures/demo-find.json";
+import networkingCatalog from "../../../fixtures/demo-networking-catalog.json";
+import networkingFind from "../../../fixtures/demo-networking-find.json";
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -23,6 +25,34 @@ it("loads only on demand, keeps actual capture rows, and memoizes success", asyn
   expect(data.find.queries).toEqual(find.queries);
   expect(await loader.loadCatalogDemo()).toBe(data);
   expect(fetcher).toHaveBeenCalledTimes(2);
+});
+it("loads both captured networking flows and their separate client Find evidence", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(response(networkingCatalog))
+    .mockResolvedValueOnce(response(networkingFind));
+  vi.stubGlobal("fetch", fetcher);
+  const loader = await import("./catalogDemo");
+  const data = await loader.loadCatalogDemo("meraki-nxos");
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+    "/fixtures/demo-networking-catalog.json",
+    "/fixtures/demo-networking-find.json",
+  ]);
+  expect(data.catalog.rows).toEqual(networkingCatalog.rows);
+  expect(data.find.queries).toEqual(
+    networkingFind.queries.map(({ query, search, rows }) => ({
+      query,
+      search,
+      rows,
+    })),
+  );
+  expect(data.find.network_client_queries).toEqual(
+    networkingFind.network_client_queries.map(({ query, search, rows }) => ({
+      query,
+      search,
+      rows,
+    })),
+  );
 });
 it("rejects malformed capture shape and retries after rejection", async () => {
   const fetcher = vi

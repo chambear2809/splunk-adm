@@ -154,13 +154,17 @@ function NodeIcon({ node, x, y }: { node?: GraphNode; x: number; y: number }) {
   if (node.endpoint_kind === "k8s_node_proxy") return <Split {...props} />;
   if (node.endpoint_kind === "vm") return <HardDrive {...props} />;
   if (node.endpoint_kind === "ambiguous") return <Users {...props} />;
+  if (node.endpoint_kind === "network_client") return <Users {...props} />;
   if (node.endpoint_kind === "unresolved") return <CircleHelp {...props} />;
   return <Globe {...props} />;
 }
 
 const CHIP_W = 74;
 /** Secondary text shown with a row: node, IP, attachment leaf, Service type. */
-function rowMeta(n: GraphNode, deviceLabel: (raw: string) => string) {
+function rowMeta(
+  n: GraphNode,
+  deviceLabel: (raw: string, node?: GraphNode) => string,
+) {
   if (n.kind === "workload") return n.attributes?.node;
   if (n.endpoint_kind === "k8s_service")
     return n.attributes?.type === "LoadBalancer"
@@ -169,14 +173,14 @@ function rowMeta(n: GraphNode, deviceLabel: (raw: string) => string) {
   if (n.endpoint_kind === "k8s_node_proxy" || n.endpoint_kind === "vm")
     return n.addresses?.[0];
   if (n.endpoint_kind === "k8s_node" && n.attributes?.attach_device)
-    return deviceLabel(n.attributes.attach_device);
+    return deviceLabel(n.attributes.attach_device, n);
   return undefined;
 }
 /** Everything a card shows as text, and how its name was fitted. */
 export function itemText(
   it: Item,
   n: GraphNode | undefined,
-  deviceLabel: (raw: string) => string,
+  deviceLabel: (raw: string, node?: GraphNode) => string,
   displayTitle?: string,
 ) {
   const header = it.role === "header";
@@ -369,7 +373,7 @@ export function MapView({
   focusRequest?: { id: string; nonce: number };
   onFitScale?: (raw: number) => void;
   onExpand: (groupId: string) => void;
-  deviceLabel: (raw: string) => string;
+  deviceLabel: (raw: string, node?: GraphNode) => string;
   describeEdge: (edge: GraphEdge) => EdgeDescription;
   label: string;
   emphasisReason?: string;
@@ -552,6 +556,7 @@ export function MapView({
   );
   const node = (id: string) => index.node.get(id);
   const edgeClass = (e: GraphEdge) => {
+    if (e.relationship === "traffic_observation") return "traffic-observation";
     if (e.relationship === "calls") return "call";
     if (e.relationship === "forwards_to")
       return e.confidence === "inferred" ? "forward inferred" : "forward";

@@ -4,6 +4,8 @@ Application Atlas maps which systems a Kubernetes application talks to, over whi
 
 Pilot scope: one Cisco ACI fabric (with Nexus Dashboard), one Kubernetes cluster running Cilium, Splunk Enterprise 10.6. Splunk Cloud and NX-OS standalone fabrics come later.
 
+The optional Cisco networking integration adds a separate local qualification scenario with Catalyst clients reaching an ACI application and Meraki wireless clients reaching an NX-OS application. Both applications use distinct Cilium clusters. The [Cisco networking handout](cisco-enterprise-networking.md) describes source requirements and field limitations; the [qualification record](../CISCO_NETWORKING_QUALIFICATION.md) lists the open collector, distributed Enterprise, and Cloud gates.
+
 ## Data flow
 
 ```text
@@ -27,6 +29,7 @@ Hubble flow log file on each node ──Splunk OTel Collector──► index cil
 | Splunk platform         | [splunk-platform.md](splunk-platform.md), step by step in [splunk-setup-guide.md](splunk-setup-guide.md) | Indexes, HEC tokens, add-on placement, app install and configuration, roles                                                | Everything else (other teams send data here) |
 | ACI / network           | [aci-network.md](aci-network.md)                                                                         | Read-only APIC and Nexus Dashboard accounts, extra ACI object classes, LLDP, ACI NetFlow export, optional contract logging | Pilot start                                  |
 | Splunk Stream / NetFlow | [network-stream.md](network-stream.md)                                                                   | Stream forwarder with a NetFlow receiver, NetFlow stream enabled                                                           | ACI NetFlow export                           |
+| Campus / Meraki networking | [cisco-enterprise-networking.md](cisco-enterprise-networking.md) | Catalyst Center client inventory, Meraki association and inventory events, supported flow exporters, and explicit source scope profiles | Optional Cisco integration qualification |
 | Kubernetes platform     | [kubernetes-platform.md](kubernetes-platform.md)                                                         | Splunk OTel Collector Helm values, RBAC, Hubble file tail, LLDP on nodes                                                   | Pilot start                                  |
 | Cilium / Isovalent      | [cilium-isovalent.md](cilium-isovalent.md)                                                               | Hubble flow export, load-balancing facts, Isovalent HEC export, Enterprise export sample                                   | Pilot start                                  |
 | Firewall / security     | [firewall-security.md](firewall-security.md)                                                             | FTD connection events via eStreamer, NAT sample                                                                            | Only if traffic crosses the FTD              |

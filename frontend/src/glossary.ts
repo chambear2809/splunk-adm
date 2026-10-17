@@ -62,6 +62,7 @@ export const relationshipLabel: Record<Relationship, string> = {
   communicates_with: "Network conversation",
   runs_on: "Runs on",
   forwards_to: "Forwarded to backend",
+  traffic_observation: "Traffic observation",
 };
 
 export const confidenceLabel: Record<GraphEdge["confidence"], string> = {
@@ -79,6 +80,7 @@ export const endpointKindLabel: Record<EndpointKind, string> = {
   ambiguous: "Multiple owners",
   k8s_service: "Kubernetes Service",
   k8s_node_proxy: "Cilium Envoy",
+  network_client: "Network client",
 };
 
 export const sourceLabel = (source: string): string =>
@@ -93,6 +95,11 @@ export const sourceLabel = (source: string): string =>
     aci: "ACI",
     aci_acllog: "ACI ACL log",
     lldp: "LLDP",
+    catalyst_center: "Catalyst Center",
+    cisco_catalyst: "Catalyst Center",
+    meraki: "Meraki",
+    cisco_meraki: "Meraki",
+    cisco_sdwan_ipfix: "Catalyst SD-WAN IPFIX",
   })[source] ?? source;
 
 /** Short name of a node's kind, e.g. "Service", "Pod", "VM". */
@@ -107,6 +114,30 @@ export function kindLabel(node: GraphNode): string {
 /** True when the node's identity could not be established uniquely. */
 export const isUnknown = (node: GraphNode) =>
   node.endpoint_kind === "unresolved" || node.endpoint_kind === "ambiguous";
+
+/** Attachment evidence wording fails closed for stale, conflicting, or unmapped clients. */
+export function networkClientAttachmentMessage(
+  attrs: Record<string, string>,
+): string {
+  if (
+    attrs.attachment_basis === "meraki_association_flow" &&
+    attrs.attachment_status === "associated"
+  )
+    return "Correlated from association and flow evidence. This identifies a compatible observation; it does not prove a packet route.";
+  if (attrs.attachment_status === "conflict")
+    return "Conflicting client attachment evidence; ownership is unresolved.";
+  if (attrs.attachment_status === "stale")
+    return "Client attachment evidence is stale; current attachment is not established.";
+  if (attrs.attachment_status === "unmapped")
+    return "Client evidence has no unambiguous routing scope; it is not correlated.";
+  if (attrs.attachment_status === "unresolved")
+    return "Client attachment could not be uniquely resolved.";
+  if (attrs.attachment_status === "varied")
+    return "Attachment observations vary across this time range; no single access device is selected.";
+  if (attrs.attachment_basis === "catalyst_client_snapshot")
+    return "Current Catalyst client snapshot. Attachment is observed from receipt time onward; lastUpdatedTime is freshness only.";
+  return "Association event is a point observation, not proof of ongoing presence.";
+}
 
 export function directionLabel(edge: GraphEdge): string | undefined {
   const basis: DirectionBasis | undefined = edge.direction_basis;

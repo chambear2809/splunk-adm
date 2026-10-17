@@ -1,0 +1,140 @@
+{
+  "title": "Cisco Meraki Splunk TA 3.5.0 static evidence",
+  "package": "Cisco Meraki Add-on for Splunk 3.5.0",
+  "package_root": "research/extracted/cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki",
+  "method": "Static source and configuration inspection only; no package scripts, tests, or live API calls were run.",
+  "supported_scenario": {
+    "claim": "The dedicated Access Points input collects the network event feed for wireless product-type networks, without a configured event-type filter. It can therefore carry association-family events returned by the Dashboard API, subject to event retention, account access, and optional properties in each response.",
+    "source_contract": {
+      "input": "cisco_meraki_accesspoints://<name>",
+      "sourcetype": "meraki:accesspoints",
+      "source": "Input stanza name with '://' replaced by '::'.",
+      "host": "Event deviceName/deviceSerial when present; otherwise organization Dashboard hostname; normalized lowercase.",
+      "organization_context": "organizationId is added only when missing; networkId remains whatever the API event supplied.",
+      "time": "occurredAt is retained in raw JSON and props.conf uses it as the timestamp prefix in UTC fractional-second format.",
+      "serialization": "The API event dictionary is JSON-serialized as received, with organizationId setdefault; no association-specific field remapping occurs."
+    },
+    "collection": "The TA maps meraki:accesspoints to productType=wireless; calls getNetworkEvents once per organization network containing wireless in productTypes; requests perPage=1000, all pages, direction=next, event_log_end_time=current collection UTC, and startingAfter=max(saved cursor, now minus 30 days). The call does not pass includedEventTypes, excludedEventTypes, clientMac, or clientIp.",
+    "association_visibility": "No event-type allowlist exists in the TA collector, so association records returned by the endpoint pass through. The current Cisco Meraki Dashboard API v1.74.0 documentation, dated 2026-09-02, includes an official `getNetworkEvents` example with type `association`, description `802.11 association`, and the fields listed below. Disassociation is not included in this example; no disassociation event is synthesized.",
+    "fields": {
+      "networkId": "Expected as API network context when returned; the TA does not add it itself.",
+      "organizationId": "Added from the configured organization if absent.",
+      "occurredAt": "Timestamp used for indexed event time by meraki:accesspoints props.",
+      "clientMac": "Retained if returned by API, but not guaranteed on every event; there is no generic clientMac alias to src_mac.",
+      "eventData.client_mac": "Retained if returned; src_mac alias is only defined for 8021x_auth, 8021x_eap_success, and 8021x_eap_failure, not association events.",
+      "eventData.client_ip": "Retained if returned; src_ip alias is only defined for 8021x_eap_success and 8021x_eap_failure, not association events.",
+      "deviceSerial": "Retained if returned; can be selected for host fallback.",
+      "ssidNumber": "Retained if returned as raw JSON; no TA alias or validation guarantees it for each event."
+    }
+  },
+  "limits_and_failure_behavior": {
+    "initial_cursor": "If no checkpoint exists and no start_from_days_ago is configured, the generic collector initializes start_time to one day before collection. The network-events query additionally clamps startingAfter to no earlier than 30 days before now.",
+    "checkpoint": "Access Points is not a NOT_TS sourcetype or INCLUDE_TS sourcetype. It uses current collection time as its checkpoint and advances it after full stream consumption; checkpoint is not based on latest event occurredAt.",
+    "duplicates": "If a stream fails after emitting some events, the final checkpoint update is skipped; the next run can repeat already written events from the prior cursor. Deduplication is not performed by this collector.",
+    "late_events": "A successfully completed run advances the cursor to collection time, without an event-time overlap. A late-arriving event with occurredAt before that cursor may not be fetched in a later run; the 30-day lower bound only caps old cursors, it does not create a replay overlap.",
+    "pagination": "The packaged SDK uses the Dashboard API pagination links for total_pages=-1. The TA streams these pages. A pagination/API exception after partial writes fails the run and prevents the final checkpoint update; partial records cannot be rolled back.",
+    "api_errors": "Network-event API exceptions are logged and raised as collector errors; OAuth may refresh once and retry that network. The organization request limiter is shared across TA worker processes and honors the configured max_api_calls_per_second. Other API failures can fail the input; no event is synthesized on failure.",
+    "input_interval_issue": "default/inputs.conf sets cisco_meraki_accesspoints interval=86400, while accesspoints input validation uses range(360,86400), which excludes 86400. Treat the packaged default as a concrete configuration defect/gate; choose a permitted interval below 86400 and verify via actual TA input validation before qualification."
+  },
+  "inventory_and_topology": {
+    "device_inventory": "Dedicated cisco_meraki_devices input calls getOrganizationDevices with total_pages=-1 and emits meraki:devices; props marks this as a snapshot with DATETIME_CONFIG=NONE. It is current inventory, not client association history.",
+    "organization_networks": "Dedicated cisco_meraki_organization_networks input calls getOrganizationNetworks and emits meraki:organizationsnetworks; this sourcetype is also a DATETIME_CONFIG=NONE snapshot.",
+    "lldp_cdp_topology": "The packaged Custom API catalog includes getOrganizationSwitchPortsTopologyDiscoveryByDevice at /organizations/{organizationId}/switch/ports/topology/discovery/byDevice. Its catalog summary explicitly says most recently seen LLDP/CDP discovery/topology per switch port; it is paginated and allows t0/timespan, but is not a dedicated input and is not historical association data.",
+    "custom_api_contract": "The generic custom input can collect cataloged organization GET endpoints and emits meraki:custom, decorating each API item with organizationId, endpoint_name, endpoint_path, operation_id, and collection_time. meraki:custom uses DATETIME_CONFIG=NONE, so event time is ingestion/snapshot time unless searches explicitly parse a retained payload timestamp. The endpoint must be selected/configured; mere catalog presence does not mean it is being collected."
+  },
+  "requirements_and_gates": {
+    "account": "A configured Meraki organization account is required; the TA supports API key or OAuth2 auth configuration. The endpoint must be permitted for the organization and the API credential must have access to that org/network's read endpoint.",
+    "deployment": "The Access Points input requires its modular input to be configured for the organization and an index; the input scheme's only user-defined argument is name. TA default configuration declares Python 3.13. Check the installed Splunk/Python runtime and TA deployment placement for the actual target before enabling collection.",
+    "permissions": "Static package source does not establish the tenant's effective API role, licensing entitlement, or event retention. These remain environment gates; the Custom API save flow performs a bounded endpoint availability probe, but Access Points validation does not prove association event availability.",
+    "archive_gate": "This ledger establishes source behavior only. It does not prove that the selected org returns association records, that optional client IP/MAC/SSID fields are populated, or that SHC/Cloud deployment and checkpoint persistence are qualified."
+  },
+  "synthetic_raw_contract": {
+    "safe_fixture_rule": "Use only a captured or official-schema-backed response shape, with unique documentation-only identifiers and a fixed UTC occurredAt. Include optional client/AP/SSID fields only when present in the captured/schema-backed example. Do not synthesize client IP, association state, DHCP/NAT state, AP serial, SSID, or event end time from assumptions.",
+    "allowed_ta_envelope": "For a TA serialization unit fixture, the confirmed outer event envelope is one JSON object with API-returned event keys plus organizationId if absent. Do not add TA-invented start/end time or client fields.",
+    "unresolved_shape": "The archive contains no dedicated Access Points sample fixture or event-type catalog. The current official API reference supplies an association example suitable for a synthetic shape. It does not supply an evidenced disassociation example/type in that operation example, so no disassociation fixture is authorized by this evidence."
+  },
+  "official_primary_sources_verified_2026_10_16": [
+    {
+      "url": "https://developer.cisco.com/meraki/api-v1/get-network-events/",
+      "document": "Get Network Events - Meraki Dashboard API v1 (API v1.74.0, dated 2026-09-02)",
+      "supports": "Current operation schema and example: occurredAt UTC ISO8601; networkId; type=association; clientMac; deviceSerial/deviceName only shown if device is an AP; ssidNumber; eventData.client_mac and eventData.client_ip. This is the example's field availability, not a guarantee that all real events contain every optional property."
+    },
+    {
+      "url": "https://developer.cisco.com/meraki/api-v1/get-organization-devices/",
+      "document": "Get Organization Devices - Meraki Dashboard API v1 (API v1.74.0, dated 2026-09-02)",
+      "supports": "Current device inventory schema/example including name, serial, model, mac, networkId, productType and lanIp; paginated endpoint."
+    },
+    {
+      "url": "https://developer.cisco.com/meraki/api-v1/get-organization-switch-ports-topology-discovery-by-device/",
+      "document": "Get Organization Switch Ports Topology Discovery By Device - Meraki Dashboard API v1 (API v1.74.0, dated 2026-09-02)",
+      "supports": "Current paginated API schema/example: switch item name/serial/mac/network/model, portId, lastUpdatedAt, and LLDP/CDP name/value TLVs; API summary says most-recently-seen discovery per switch port. This endpoint is listed in the TA's Custom API catalog, but custom input configuration and tenant permission are still required."
+    }
+  ],
+  "evidence": [
+    {
+      "file": "bin/cisco_meraki_accesspoints.py",
+      "lines": "16-43",
+      "supports": "Access Points sourcetype, input scheme, only name argument, and interval validation range."
+    },
+    {
+      "file": "default/inputs.conf",
+      "lines": "1-4",
+      "supports": "Access Points default Python runtime requirement and interval 86400."
+    },
+    {
+      "file": "bin/cisco_meraki_connect.py",
+      "lines": "30-36, 255-304, 583-599, 1397-1422",
+      "supports": "Wireless product mapping, default/30-day cursor handling, exact getNetworkEvents call, network-product filter, OAuth retry and error behavior."
+    },
+    {
+      "file": "lib/meraki/api/networks.py",
+      "lines": "925-1014",
+      "supports": "Packaged SDK's documented getNetworkEvents filter semantics, pagination and supported parameters; TA call omits event/client filters."
+    },
+    {
+      "file": "bin/cisco_meraki_connect.py",
+      "lines": "507-530, 1455-1502, 1567-1585, 1588-1670",
+      "supports": "Host fallback, organizationId enrichment, raw event processing, streaming checkpoint updates after completion."
+    },
+    {
+      "file": "bin/cisco_meraki_utils.py",
+      "lines": "22-25, 73-98, 511-541",
+      "supports": "Sourcetype constants, snapshot/time-series classification, raw JSON serialization and Splunk metadata."
+    },
+    {
+      "file": "default/props.conf",
+      "lines": "20-49, 463-476, 176-188",
+      "supports": "Access Points occurredAt timestamp parsing and JSON KV mode; narrow aliases; device/custom snapshot ingest-time behavior."
+    },
+    {
+      "file": "bin/cisco_meraki_connect.py",
+      "lines": "532-540, 947-957, 1242-1269",
+      "supports": "Organization network and device inventory APIs / sourcetype dispatch."
+    },
+    {
+      "file": "bin/meraki_custom_endpoints.json",
+      "lines": "3071-3105, 4521-4559",
+      "supports": "Cataloged getOrganizationDevices and LLDP/CDP topology endpoint path, summary, pagination, and parameters."
+    },
+    {
+      "file": "bin/cisco_meraki_custom_api.py",
+      "lines": "17-31, 48-118",
+      "supports": "Custom API input sourcetype and catalog/availability validation."
+    },
+    {
+      "file": "bin/cisco_meraki_custom_api_helper.py",
+      "lines": "20-53, 555-595, 598-715",
+      "supports": "Custom input poll bounds/limits, metadata decoration, pagination and collection limits."
+    },
+    {
+      "file": "README/meraki_custom_api.md",
+      "lines": "1-16, 46-47, 127-140, 209-226",
+      "supports": "Catalog-constrained read-only endpoint selection, 3600–86400-second interval, pagination controls, verification probe, duplicate and partial-page replay behavior."
+    },
+    {
+      "file": "bin/cisco_meraki_rate_limiter.py",
+      "lines": "26-67",
+      "supports": "Organization-scoped cross-process request pacing mechanism."
+    }
+  ]
+}

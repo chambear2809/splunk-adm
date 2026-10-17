@@ -1,0 +1,168 @@
+{
+  "scenario_id": "campus-meraki-two-cluster",
+  "description": "Combined synthetic source events for a wired Catalyst Center client traversing Catalyst SD-WAN to a Cilium app on ACI and a bridged Meraki MR client observed by an MS390 exporting IPFIX to a separate Cilium app on NX-OS. Values are illustrative; no exporter or API collection is being asserted.",
+  "template_scenario": "../raw-aci/scenario.json",
+  "window_anchor": "CLI --base-time anchors the source scenario's window.start; omitted means current UTC.",
+  "clusters": [
+    {
+      "id": "aci",
+      "name": "cilium-aci-east",
+      "logical_scope": "campus-aci",
+      "fabric": "aci-1",
+      "application": "checkout",
+      "observation_source": "catalyst_sdwan"
+    },
+    {
+      "id": "nxos",
+      "name": "cilium-nxos-west",
+      "logical_scope": "meraki-nxos",
+      "fabric": "nxos-campus-1",
+      "application": "checkout",
+      "observation_source": "meraki_ms390_ipfix"
+    }
+  ],
+  "clients": {
+    "catalyst_wired": {
+      "id": "02:61:00:00:00:20",
+      "controller_host": "https://catalyst-center.example.invalid",
+      "mac": "02:61:00:00:00:20",
+      "ip": "10.61.0.20",
+      "type": "Wired",
+      "connection_status": "connected",
+      "connected_device_name": "CAMPUS-SW-01",
+      "connected_device_management_ip": "10.61.0.2",
+      "connected_device_mac": "02:61:00:00:00:02",
+      "connected_device_type": "Switch",
+      "interface_name": "GigabitEthernet1/0/24",
+      "campus_fnf_exporter_ip": "10.61.255.2",
+      "campus_fnf_observation_domain_id": 601,
+      "scope_profile": "campus-aci"
+    },
+    "meraki_bridged_wireless": {
+      "organization_id": "org-demo",
+      "network_id": "network-demo",
+      "client_id": "demo-client-71-20",
+      "mac": "02:71:00:00:00:20",
+      "ip": "10.71.0.20",
+      "description": "Synthetic bridged wireless client",
+      "ssid_number": 1,
+      "access_points": [
+        {
+          "name": "MR-NXOS-01",
+          "serial": "Q2XX-DEMO-0001",
+          "mac": "02:71:00:00:10:01",
+          "model": "MR46",
+          "lan_ip": "10.71.0.11"
+        },
+        {
+          "name": "MR-NXOS-02",
+          "serial": "Q2XX-DEMO-0002",
+          "mac": "02:71:00:00:10:02",
+          "model": "MR46",
+          "lan_ip": "10.71.0.12"
+        }
+      ],
+      "switch": {
+        "name": "MS390-NXOS-01",
+        "serial": "Q2XX-DEMO-0390",
+        "mac": "02:71:00:00:39:00",
+        "model": "MS390",
+        "lan_ip": "10.71.0.2",
+        "exporter_ip": "10.71.0.2",
+        "observation_domain_id": 390,
+        "port_id": "10",
+        "lldp_neighbor_name": "MR-NXOS-01"
+      },
+      "scope_profile": "meraki-nxos"
+    }
+  },
+  "connections": [
+    {
+      "id": "wired-client-to-aci-checkout",
+      "cluster_id": "aci",
+      "client_id": "catalyst_wired",
+      "source_ip": "10.61.0.20",
+      "source_port": 54120,
+      "destination_ip": "10.50.0.20",
+      "destination_port": 8080,
+      "backend_ip": "10.42.1.20",
+      "backend_port": 8080,
+      "start_offset_seconds": 120,
+      "duration_ms": 220,
+      "bytes": 1540,
+      "packets": 5,
+      "tcp_flags": 27,
+      "sdwan": {
+        "exporter_ip": "10.61.255.1",
+        "observation_domain_id": 701,
+        "flow_id": 47001,
+        "vpn_id": 20,
+        "ingress_overlay_session_id": 90101,
+        "egress_overlay_session_id": 90201
+      }
+    },
+    {
+      "id": "meraki-client-to-nxos-checkout",
+      "cluster_id": "nxos",
+      "client_id": "meraki_bridged_wireless",
+      "source_ip": "10.71.0.20",
+      "source_port": 55220,
+      "destination_ip": "10.50.0.20",
+      "destination_port": 8080,
+      "backend_ip": "10.42.1.20",
+      "backend_port": 8080,
+      "start_offset_seconds": 180,
+      "duration_ms": 180,
+      "bytes": 1280,
+      "packets": 4,
+      "tcp_flags": 27
+    }
+  ],
+  "negative_cases": [
+    {
+      "id": "missing-association",
+      "meaning": "A flow without a matching Meraki association event stays an unresolved network client; no AP/SSID is filled in."
+    },
+    {
+      "id": "stale-association",
+      "meaning": "An association older than the configured evidence-age bound does not attach later flow."
+    },
+    {
+      "id": "conflicting-association",
+      "meaning": "Two simultaneously valid claims for one client MAC with incompatible IPs/scopes remain conflict evidence."
+    },
+    {
+      "id": "wireless-roaming",
+      "meaning": "Two sequential type=association records for one client on AP-01 then AP-02 represent observed AP movement; no disassociation event is fabricated."
+    },
+    {
+      "id": "dhcp-and-ip-reuse",
+      "meaning": "The same IP can be associated to different MAC identities at different observed event times; correlation is time bounded."
+    },
+    {
+      "id": "api-replay",
+      "meaning": "An identical raw association event may be received twice; event identity is based on stable raw evidence, not generated event IDs."
+    },
+    {
+      "id": "counter-and-sampling-gap",
+      "meaning": "MS390 collection fields are best-effort and its documented record does not establish exporter sampling metadata; absent counters or sampling data stay unknown."
+    },
+    {
+      "id": "direction-and-duplicate-observations",
+      "meaning": "MS390 documents both input and output interface collection; records are observations, not independent connection counts, and counters from both views must not be summed blindly."
+    },
+    {
+      "id": "nat-proxy-tunnel-boundary",
+      "meaning": "Without observed translated tuples or proxy/XFF/backend evidence, do not bridge client IP to a post-NAT, proxy-source, or tunneled inner tuple."
+    }
+  ],
+  "qualification_limits": [
+    "Both cluster instances intentionally reuse Kubernetes display names and private service/pod addresses; cluster identity must remain in every Kubernetes/Hubble/OTel record.",
+    "Catalyst lastUpdatedTime is a controller snapshot-update timestamp; normalized attachment validity begins at Splunk receipt (_indextime). No synthetic collection timestamp is added.",
+    "Meraki association occurredAt is event time. The official example documents optional AP/client fields, but tenant responses and retention are not validated by this synthetic fixture.",
+    "MS390 flow values are a synthetic template-shaped example, not a captured exporter packet or validated Stream decoder output.",
+    "Catalyst SD-WAN fields are limited to names present in the verified 4.0.0 ipfixmap and Stream field definition; values and template activation are not live-validated.",
+    "The standard campus, SD-WAN, ACI, and MS390 flow records are distinct exporter observations of related traffic; they are not independent application connections or counters to add together.",
+    "The MS390 +180 second flow follows the +150 second association to MR-NXOS-02; the synthetic LLDP topology row places MR-NXOS-02 on switch port 11."
+  ]
+}

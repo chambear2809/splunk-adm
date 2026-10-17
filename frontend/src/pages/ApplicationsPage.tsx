@@ -7,7 +7,9 @@ import { TimePicker } from "../map/TimePicker";
 import {
   SearchResultLimitError,
   type SearchClient,
+  requireNoSearchErrors,
 } from "../data/searchClient";
+import { settledFindResults } from "../data/findResults";
 import {
   createScopeCatalogRows,
   parseCatalogRows,
@@ -15,16 +17,31 @@ import {
   catalogLimitMessage,
   validatedBuildCatalogSearch,
   validatedBuildFindSearch,
+  validatedBuildNetworkClientFindSearch,
+  parseNetworkClientFindRows,
   type CatalogRow,
   type FindRow,
+  type NetworkClientFindRow,
 } from "../data/catalog";
-import { demoArgs, DEMO_WINDOW } from "../data/demoClient";
+import {
+  DEMO_WINDOW,
+  DEMO_SCENARIOS,
+  demoArgs as defaultDemoArgs,
+  demoArgsFor,
+  demoScenarioForArgs,
+  demoWindowFor,
+  type DemoScenario,
+} from "../data/demoClient";
 import { loadCatalogDemo, type FindQueryCapture } from "../data/catalogDemo";
 import { toolkitDefault } from "../app/interop";
 import { pageURL, stateParams, type UrlState } from "../app/urlState";
 import { argError } from "../provider";
 import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
+import {
+  applicationDemoEntryTarget,
+  applicationMapTarget,
+} from "./applicationMapTarget";
 
 const Button = toolkitDefault(ButtonExport);
 const Table = toolkitDefault(TableExport);
@@ -67,25 +84,51 @@ export function ApplicationsPage({
   timezone?: string;
   inSplunk?: boolean;
 }) {
+  // The demo bundle is loaded on demand in Splunk builds. Do not resolve demo
+  // fixtures while rendering a live catalog route, where they are not prepared.
+  const demoArgs =
+    state.mode === "demo" ? demoArgsFor(state.scenario) : state.args;
+  const demoWindow =
+    state.mode === "demo"
+      ? demoWindowFor(state.scenario)
+      : { earliest: state.earliest, latest: state.latest };
+  const demoEntryTarget = applicationDemoEntryTarget(
+    state.mode,
+    demoArgs,
+    demoWindow.earliest,
+    demoWindow.latest,
+    {
+      args: defaultDemoArgs,
+      earliest: DEMO_WINDOW.earliest,
+      latest: DEMO_WINDOW.latest,
+    },
+  );
   const [args, setArgs] = useState(
-    state.mode === "demo" ? demoArgs : state.args,
+    state.mode === "demo" ? demoArgsFor(state.scenario) : state.args,
   );
   const [earliest, setEarliest] = useState(
-    state.mode === "demo" ? DEMO_WINDOW.earliest : state.earliest,
+    state.mode === "demo" ? demoWindow.earliest : state.earliest,
   );
   const [latest, setLatest] = useState(
-    state.mode === "demo" ? DEMO_WINDOW.latest : state.latest,
+    state.mode === "demo" ? demoWindow.latest : state.latest,
   );
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [findRows, setFindRows] = useState<FindRow[]>([]);
+  const [networkClientRows, setNetworkClientRows] = useState<
+    NetworkClientFindRow[]
+  >([]);
   const [findValue, setFindValue] = useState("");
   const [error, setError] = useState<string>();
   const [findError, setFindError] = useState<string>();
+  const [networkClientError, setNetworkClientError] = useState<string>();
   const [warning, setWarning] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [findLoading, setFindLoading] = useState(false);
   const [findRan, setFindRan] = useState(false);
   const [demoQueries, setDemoQueries] = useState<FindQueryCapture[]>([]);
+  const [demoNetworkClientQueries, setDemoNetworkClientQueries] = useState<
+    FindQueryCapture[]
+  >([]);
   const [demoRetry, setDemoRetry] = useState(0);
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({
     key: "service",
@@ -119,10 +162,11 @@ export function ApplicationsPage({
       })
       .then((result) => {
         if (controller.signal.aborted || current !== revision.current) return;
+        requireNoSearchErrors(result, "Application catalog search");
         const parsed = parseCatalogRows(result.rows);
         if (parsed.length) {
           setCatalog(parsed);
-          setWarning(result.warnings[0]);
+          setWarning(result.warnings.join(" ") || undefined);
           return;
         }
         throw new Error("No application catalog rows were returned.");
@@ -146,6 +190,7 @@ export function ApplicationsPage({
             });
             if (controller.signal.aborted || current !== revision.current)
               return;
+            requireNoSearchErrors(narrowed, "Narrowed catalog search");
             if (narrowed.rows.length) {
               setCatalog(parseCatalogRows(narrowed.rows));
               setWarning(
@@ -182,6 +227,7 @@ export function ApplicationsPage({
             allowEmpty: true,
           });
           if (controller.signal.aborted || current !== revision.current) return;
+          requireNoSearchErrors(fallback, "Scope options search");
           setCatalog(createScopeCatalogRows(fallback.rows));
           setWarning(
             fallback.rows.length
@@ -209,24 +255,31 @@ export function ApplicationsPage({
     findController.current?.abort();
     findRevision.current++;
     setFindRows([]);
+    setNetworkClientRows([]);
     setFindLoading(false);
     setFindRan(false);
     setFindError(undefined);
+    setNetworkClientError(undefined);
     if (state.mode === "live") loadCatalog();
     else {
       catalogController.current?.abort();
       findController.current?.abort();
       setCatalog([]);
       setFindRows([]);
+      setNetworkClientRows([]);
       setFindError(undefined);
+      setNetworkClientError(undefined);
       setError(undefined);
       const current = ++revision.current;
       setLoading(true);
-      void loadCatalogDemo()
+      void loadCatalogDemo(state.scenario)
         .then((capture) => {
           if (current !== revision.current) return;
           setCatalog(parseCatalogRows(capture.catalog.rows));
           setDemoQueries(capture.find.queries);
+          setDemoNetworkClientQueries(
+            capture.find.network_client_queries ?? [],
+          );
           setEarliest(capture.find.earliest);
           setLatest(capture.find.latest);
           setWarning(
@@ -251,7 +304,7 @@ export function ApplicationsPage({
       catalogController.current?.abort();
       findController.current?.abort();
     };
-  }, [demoRetry, loadCatalog, state.mode]);
+  }, [demoRetry, loadCatalog, state.mode, state.scenario]);
 
   useEffect(
     () => () => {
@@ -282,25 +335,40 @@ export function ApplicationsPage({
   ].filter(Boolean);
   const mapReason = (row: FindRow) =>
     row.scopeError ??
-    (state.mode === "demo" && keys.some((key) => row[key] !== demoArgs[key])
+    (state.mode === "demo" && !demoScenarioForArgs(row)
       ? "No captured map is available for this scope."
       : undefined);
   const open = (row: FindRow) => {
     if (mapReason(row)) return;
+    const target = applicationMapTarget(
+      state.mode,
+      state.scenario,
+      earliest,
+      latest,
+      () => {
+        const rowScenario = demoScenarioForArgs(row) ?? state.scenario;
+        const rowWindow = demoWindowFor(rowScenario);
+        return {
+          scenario: rowScenario,
+          earliest: rowWindow.earliest,
+          latest: rowWindow.latest,
+        };
+      },
+    );
     location.assign(
       pageURL(
         "map",
         stateParams({
           ...state,
-          scenario: state.mode === "demo" ? "aci" : state.scenario,
+          scenario: target.scenario,
           args: {
             service: row.service,
             environment: row.environment,
             cluster: row.cluster,
             namespace: row.namespace,
           },
-          earliest: state.mode === "demo" ? DEMO_WINDOW.earliest : earliest,
-          latest: state.mode === "demo" ? DEMO_WINDOW.latest : latest,
+          earliest: target.earliest,
+          latest: target.latest,
           tab: "network",
           query: "",
         }),
@@ -329,19 +397,37 @@ export function ApplicationsPage({
   }
   const uncaptured =
     state.mode === "demo" &&
-    !demoQueries.some((query) => query.query === findValue);
+    !demoQueries.some((query) => query.query === findValue) &&
+    !demoNetworkClientQueries.some((query) => query.query === findValue);
   const runFind = () => {
     if (state.mode === "demo") {
       const match = demoQueries.find((query) => query.query === findValue);
-      if (!match) return;
-      setFindRows(parseFindRows(match.rows));
-      setFindError(undefined);
-      setFindRan(true);
-      setWarning(
-        match
-          ? "Captured Find result."
-          : "This Find query is not in the captured evidence.",
+      const clientMatch = demoNetworkClientQueries.find(
+        (query) => query.query === findValue,
       );
+      if (!match && !clientMatch) return;
+      setFindRows(
+        parseFindRows(
+          (match?.rows ?? []).filter(
+            (row) =>
+              row.row_type !== "network_client" && row.row_type !== "warning",
+          ),
+        ),
+      );
+      setNetworkClientRows(
+        parseNetworkClientFindRows([
+          ...(match?.rows ?? []).filter(
+            (row) => row.row_type === "network_client",
+          ),
+          ...(clientMatch?.rows ?? []).filter(
+            (row) => row.row_type === "network_client",
+          ),
+        ]),
+      );
+      setFindError(undefined);
+      setNetworkClientError(undefined);
+      setFindRan(true);
+      setWarning("Captured Find result.");
       return;
     }
     if (!client) return;
@@ -359,30 +445,100 @@ export function ApplicationsPage({
     findController.current = controller;
     const current = ++findRevision.current;
     setFindRows([]);
+    setNetworkClientRows([]);
     setFindError(undefined);
+    setNetworkClientError(undefined);
     setFindRan(true);
     setFindLoading(true);
     setError(undefined);
-    void client
-      .search({
-        search,
-        earliest,
-        latest,
-        timezone,
-        maxRows: 5000,
-        signal: controller.signal,
-        allowEmpty: true,
-      })
-      .then((result) => {
-        if (!controller.signal.aborted && current === findRevision.current) {
-          setFindRows(parseFindRows(result.rows));
-          setWarning(result.warnings[0]);
+    setWarning(undefined);
+    let networkSearch: string | undefined;
+    try {
+      networkSearch = validatedBuildNetworkClientFindSearch(findValue);
+    } catch {
+      /* Network-client Find is restricted to exact IP or MAC; app Find still runs. */
+    }
+    void Promise.allSettled([
+      client
+        .search({
+          search,
+          earliest,
+          latest,
+          timezone,
+          maxRows: 5000,
+          signal: controller.signal,
+          allowEmpty: true,
+        })
+        .then((result) =>
+          requireNoSearchErrors(result, "Application Find search"),
+        ),
+      ...(networkSearch
+        ? [
+            client
+              .search({
+                search: networkSearch,
+                earliest,
+                latest,
+                timezone,
+                maxRows: 5000,
+                signal: controller.signal,
+                allowEmpty: true,
+              })
+              .then((result) =>
+                requireNoSearchErrors(result, "Network-client Find search"),
+              ),
+          ]
+        : []),
+    ])
+      .then((results) => {
+        if (controller.signal.aborted || current !== findRevision.current)
+          return;
+        const settled = settledFindResults(results[0], results[1]);
+        const warnings = [
+          ...(settled.applications?.warnings ?? []),
+          ...(settled.networkClients?.warnings ?? []),
+        ];
+        setFindRows([]);
+        setNetworkClientRows([]);
+        setFindError(settled.applicationError);
+        setNetworkClientError(settled.networkClientError);
+        if (settled.applications) {
+          try {
+            setFindRows(parseFindRows(settled.applications.rows));
+          } catch (reason) {
+            setFindError(
+              `Application Find unavailable: ${reason instanceof Error ? reason.message : "Invalid search results."}`,
+            );
+          }
         }
+        if (settled.networkClients) {
+          const rows = settled.networkClients.rows;
+          const warningRows = rows.filter((row) => row.row_type === "warning");
+          try {
+            setNetworkClientRows(
+              parseNetworkClientFindRows(
+                rows.filter((row) => row.row_type === "network_client"),
+              ),
+            );
+          } catch (reason) {
+            setNetworkClientError(
+              `Network-client Find unavailable: ${reason instanceof Error ? reason.message : "Invalid search results."}`,
+            );
+          }
+          warnings.push(
+            ...warningRows.map((row) =>
+              String(row.warning ?? "Network client evidence is incomplete."),
+            ),
+          );
+        }
+        setWarning(
+          [...new Set(warnings.filter(Boolean))].join(" ") || undefined,
+        );
       })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted && current === findRevision.current)
           setFindError(
-            reason instanceof Error ? reason.message : "Find failed.",
+            `Application Find unavailable: ${reason instanceof Error ? reason.message : "Find failed."}`,
           );
       })
       .finally(() => {
@@ -393,18 +549,57 @@ export function ApplicationsPage({
   return (
     <main className="atlas-page">
       <h1>Applications</h1>
-      {state.mode === "demo" && demoQueries.length > 0 && (
-        <p>
-          Captured Find window: {utc(earliest)}–{utc(latest)}. Map links use the
-          captured map window: {utc(DEMO_WINDOW.earliest)}–
-          {utc(DEMO_WINDOW.latest)}.
+      {state.mode === "demo" && (
+        <label className="scenario">
+          <span>Demo scenario</span>
+          <select
+            aria-label="Demo scenario"
+            value={state.scenario}
+            onChange={(event) => {
+              const scenario = event.target.value as DemoScenario;
+              const nextWindow = demoWindowFor(scenario);
+              location.assign(
+                pageURL(
+                  "applications",
+                  stateParams({
+                    ...state,
+                    scenario,
+                    args: demoArgsFor(scenario),
+                    earliest: nextWindow.earliest,
+                    latest: nextWindow.latest,
+                  }),
+                ),
+              );
+            }}
+          >
+            {DEMO_SCENARIOS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {state.mode === "demo" && state.scenario === "meraki-nxos" && (
+        <p className="muted">
+          Wireless attribution is correlated from Meraki association and MS390
+          IPFIX flow evidence; it does not establish a packet route.
         </p>
       )}
+      {state.mode === "demo" &&
+        (demoQueries.length > 0 || demoNetworkClientQueries.length > 0) && (
+          <p>
+            Captured Find window: {utc(earliest)}–{utc(latest)}. Map links use
+            the selected captured map window: {utc(demoWindow.earliest)}–
+            {utc(demoWindow.latest)}.
+          </p>
+        )}
       <p>
         Find returns applications bound to a matching pod or observed
-        communicating with the matching endpoint. Bound pods reflect retained
-        bindings; counts describe distinct direct conversations in the displayed
-        window.
+        communicating with the matching endpoint. Exact IPv4 or MAC searches
+        also return source-qualified client attachment evidence when available.
+        Bound pods reflect retained bindings; counts describe distinct direct
+        conversations in the displayed window.
       </p>
       <p>
         Choose an application scope to explore its services and network
@@ -430,9 +625,11 @@ export function ApplicationsPage({
                   findController.current?.abort();
                   setFindValue(value);
                   setFindRows([]);
+                  setNetworkClientRows([]);
                   setFindRan(false);
                   setFindLoading(false);
                   setFindError(undefined);
+                  setNetworkClientError(undefined);
                 }}
               />
               <Button
@@ -451,8 +648,13 @@ export function ApplicationsPage({
           {uncaptured && (
             <p>
               Choose a captured query:{" "}
-              {demoQueries.map((query) => query.query).join(", ")}. Other values
-              have no captured Find evidence.
+              {[...demoQueries, ...demoNetworkClientQueries]
+                .map((query) => query.query)
+                .filter(
+                  (query, index, values) => values.indexOf(query) === index,
+                )
+                .join(", ")}
+              . Other values have no captured Find evidence.
             </p>
           )}
           {state.mode === "live" && findValidation && <p>{findValidation}</p>}
@@ -462,13 +664,24 @@ export function ApplicationsPage({
               {findError} <Button label="Retry Find" onClick={runFind} />
             </p>
           )}
-          {findRan && !findLoading && !findError && !findRows.length && (
-            <p>
-              {state.mode === "demo"
-                ? "This Find query is not included in the captured evidence."
-                : "No matching applications found."}
+          {networkClientError && (
+            <p role="alert">
+              {networkClientError}{" "}
+              <Button label="Retry Find" onClick={runFind} />
             </p>
           )}
+          {findRan &&
+            !findLoading &&
+            !findError &&
+            !networkClientError &&
+            !findRows.length &&
+            !networkClientRows.length && (
+              <p>
+                {state.mode === "demo"
+                  ? "This Find query is not included in the captured evidence."
+                  : "No matching applications found."}
+              </p>
+            )}
           {findRows.length > 0 && (
             <Table aria-label="Find results" horizontalOverflow="scroll">
               <Table.Head>
@@ -486,6 +699,98 @@ export function ApplicationsPage({
                     <Table.Cell>{scopeLabel(row.environment)}</Table.Cell>
                     <Table.Cell>{scopeLabel(row.cluster)}</Table.Cell>
                     <Table.Cell>{scopeLabel(row.namespace)}</Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table>
+          )}
+          {networkClientRows.length > 0 && (
+            <Table
+              aria-label="Network client evidence"
+              horizontalOverflow="scroll"
+            >
+              <Table.Head>
+                <Table.HeadCell>Client</Table.HeadCell>
+                <Table.HeadCell>Source and authority</Table.HeadCell>
+                <Table.HeadCell>Routing scope</Table.HeadCell>
+                <Table.HeadCell>Attachment evidence</Table.HeadCell>
+                <Table.HeadCell>SSID</Table.HeadCell>
+                <Table.HeadCell>Source and collection times</Table.HeadCell>
+              </Table.Head>
+              <Table.Body>
+                {networkClientRows.map((row) => (
+                  <Table.Row key={row._key}>
+                    <Table.Cell>
+                      {row.client_mac ??
+                        row.client_ip ??
+                        row.native_id ??
+                        row._key}
+                      {row.attachment_device_name && (
+                        <small>
+                          <br />
+                          Observed device: {row.attachment_device_name}
+                          {row.attachment_device_id
+                            ? ` · ${row.attachment_device_id}`
+                            : ""}
+                        </small>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {row.access_platform ?? row.source}
+                      {row.source_authority ? ` · ${row.source_authority}` : ""}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {row.scope ?? "Unmapped"}
+                      {row.routing_domain ? ` · ${row.routing_domain}` : ""}
+                      {row.cluster ? ` · ${row.cluster}` : ""}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {row.attachment_status}
+                      {row.mapping_status &&
+                      row.mapping_status !== row.attachment_status
+                        ? ` · mapping ${row.mapping_status}`
+                        : ""}
+                      {row.attachment_basis ? ` · ${row.attachment_basis}` : ""}
+                      {row.quality_reason || row.warning ? (
+                        <small>
+                          <br />
+                          {row.quality_reason ?? row.warning}
+                        </small>
+                      ) : null}
+                    </Table.Cell>
+                    <Table.Cell>{row.ssid_number ?? "—"}</Table.Cell>
+                    <Table.Cell>
+                      {row.source_time !== undefined
+                        ? utc(row.source_time)
+                        : "Source time unavailable"}
+                      {row.attachment_event_time !== undefined && (
+                        <small>
+                          <br />
+                          Attachment event {utc(row.attachment_event_time)}
+                        </small>
+                      )}
+                      <small>
+                        <br />
+                        Received{" "}
+                        {row.attachment_received_time !== undefined ||
+                        row.received_time !== undefined
+                          ? utc(
+                              row.attachment_received_time ??
+                                row.received_time!,
+                            )
+                          : "time unavailable"}
+                        {row.attachment_collected_time !== undefined
+                          ? ` · collected ${utc(row.attachment_collected_time)}`
+                          : ""}
+                        {row.latest_received_time !== undefined &&
+                        row.latest_received_time !== row.received_time
+                          ? ` · latest ${utc(row.latest_received_time)}`
+                          : ""}
+                        {row.attachment_collected_time !== undefined
+                          ? ` · source collection ${utc(row.attachment_collected_time)}`
+                          : ""}
+                      </small>
+                    </Table.Cell>
                   </Table.Row>
                 ))}
               </Table.Body>
@@ -583,10 +888,10 @@ export function ApplicationsPage({
                 stateParams({
                   ...state,
                   args,
-                  scenario: state.mode === "demo" ? "aci" : state.scenario,
+                  scenario: state.scenario,
                   earliest:
-                    state.mode === "demo" ? DEMO_WINDOW.earliest : earliest,
-                  latest: state.mode === "demo" ? DEMO_WINDOW.latest : latest,
+                    state.mode === "demo" ? demoWindow.earliest : earliest,
+                  latest: state.mode === "demo" ? demoWindow.latest : latest,
                 }),
               ),
             );
@@ -598,6 +903,7 @@ export function ApplicationsPage({
           live={state.mode === "live"}
           client={client}
           demoArgs={state.mode === "demo" ? demoArgs : undefined}
+          scenario={state.scenario}
         />
         <TimePicker
           earliest={earliest}
@@ -610,9 +916,11 @@ export function ApplicationsPage({
             setEarliest(start);
             setLatest(end);
             setFindRows([]);
+            setNetworkClientRows([]);
             setFindRan(false);
             setFindLoading(false);
             setFindError(undefined);
+            setNetworkClientError(undefined);
           }}
         />
         <Button
@@ -629,9 +937,9 @@ export function ApplicationsPage({
             stateParams({
               ...state,
               mode: "demo",
-              args: demoArgs,
-              earliest: DEMO_WINDOW.earliest,
-              latest: DEMO_WINDOW.latest,
+              args: demoEntryTarget.args,
+              earliest: demoEntryTarget.earliest,
+              latest: demoEntryTarget.latest,
             }),
           )}
         >

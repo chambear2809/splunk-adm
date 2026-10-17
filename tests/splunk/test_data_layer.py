@@ -92,12 +92,23 @@ class DataLayerTest(unittest.TestCase):
             f'| makeresults format=csv data="{csv}" | eval observer_kind=lower(observer_kind), observer=lower(observer), _key=sha256(json_array(observer_kind, observer)) | fields _key observer_kind observer scope cluster | outputlookup adm_observer_scope'
         )
         for name in SAVED:
-            lab._mgmt(
-                "POST",
-                "/servicesNS/nobody/splunk_adm/saved/searches/"
-                + urllib.parse.quote(name, safe=""),
-                {"disabled": "0", "is_scheduled": "0"},
+            path = "/servicesNS/nobody/splunk_adm/saved/searches/" + urllib.parse.quote(
+                name, safe=""
             )
+            original = lab._json("GET", path)["entry"][0]["content"]
+            # Register before the POST: it could take effect even if its response is lost.
+            cls.addClassCleanup(
+                lab._json,
+                "POST",
+                path,
+                {
+                    "disabled": str(int(original["disabled"] in (True, 1, "1"))),
+                    "is_scheduled": str(
+                        int(original["is_scheduled"] in (True, 1, "1"))
+                    ),
+                },
+            )
+            lab._mgmt("POST", path, {"disabled": "0", "is_scheduled": "0"})
 
         # Batch 1: everything except the late NetFlow segments, rolled up in its own index-time slice.
         start = int(time.time()) - 5

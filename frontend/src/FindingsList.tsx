@@ -87,7 +87,9 @@ export function EvidenceActions({
         <p className="muted small">
           {edge.relationship === "calls"
             ? "Opens the first collected trace in this window."
-            : "Search includes this tuple across visible observation scopes."}
+            : edge.relationship === "traffic_observation"
+              ? "Opens this exact source observation with its tuple and provenance."
+              : "Search includes this tuple across visible observation scopes."}
         </p>
       )}
       {!live && (

@@ -24,6 +24,7 @@ APP = "/servicesNS/nobody/splunk_adm"
 STATE = APP + "/storage/collections/data/adm_recovery_state"
 AUDIT = APP + "/storage/collections/data/adm_recovery_audit"
 ROLLUP = "ADM - Conversation rollup"
+SUPPORTED_VERSION = re.compile(r"10\.6(\.[0-9]+){1,2}")
 FIELDS = (
     "search",
     "cron_schedule",
@@ -217,6 +218,61 @@ class Recovery:
             )
         )
 
+    def qualify_deployment(self):
+        """Require the observed standalone shape before any recovery mutation.
+
+        A version match and a missing SHC flag alone are insufficient: a Cloud
+        search head or a standalone search head with remote peers is not the
+        qualified single-instance deployment. Unknown fields fail closed.
+        """
+
+        def content(path):
+            response = self.request("GET", path)
+            entries = response.get("entry")
+            if not isinstance(entries, list) or len(entries) != 1:
+                raise Refused("deployment evidence is incomplete")
+            value = entries[0].get("content")
+            if not isinstance(value, dict):
+                raise Refused("deployment evidence is incomplete")
+            return value
+
+        server = content("/services/server/info")
+        version = server.get("version")
+        if not isinstance(version, str) or not SUPPORTED_VERSION.fullmatch(version):
+            raise Refused("only standalone Splunk Enterprise 10.6.x is qualified")
+        # instance_type=cloud is the discriminator used by Splunk's solnlib.
+        # The qualified Enterprise instance omits it. Any new value requires
+        # qualification rather than being treated as Enterprise by default.
+        roles = server.get("server_roles")
+        qualified_roles = {"indexer", "license_master", "license_manager", "kv_store"}
+        if (
+            server.get("product_type") != "enterprise"
+            or server.get("instance_type") not in (None, "")
+            or server.get("mode") != "normal"
+            or server.get("isForwarding") not in (False, "0", 0)
+            or not isinstance(roles, list)
+            or set(roles) != qualified_roles
+        ):
+            raise Refused(
+                "deployment is not a qualified standalone Enterprise instance"
+            )
+        shc = content("/servicesNS/nobody/system/configs/conf-server/shclustering")
+        if shc.get("disabled") not in (True, "1", 1):
+            raise Refused("SHC or unknown SHC configuration is not qualified")
+        clustering = content("/servicesNS/nobody/system/configs/conf-server/clustering")
+        if clustering.get("mode") != "disabled":
+            raise Refused(
+                "indexer clustering or unknown clustering mode is not qualified"
+            )
+        peers = self.request("GET", "/services/search/distributed/peers?count=0")
+        if peers.get("entry") != [] or peers.get("paging", {}).get("total") not in (
+            0,
+            "0",
+        ):
+            raise Refused(
+                "remote search peers or incomplete peer evidence is not qualified"
+            )
+
     def preflight(self, name):
         self.settings.validate()
         if not self.settings.enabled:
@@ -231,14 +287,7 @@ class Recovery:
         required = {"search", "schedule_search", "run_collect", "output_file"}
         if not required.issubset(who.get("capabilities", [])):
             raise Refused("owner lacks required capabilities")
-        server = self.request("GET", "/services/server/info")["entry"][0]["content"]
-        if server.get("version") != "10.6.0.5":
-            raise Refused("only standalone Splunk 10.6.0.5 is qualified")
-        cluster = self.request(
-            "GET", "/servicesNS/nobody/system/configs/conf-server/shclustering"
-        )["entry"][0]["content"]
-        if not truth(cluster.get("disabled", "1")):
-            raise Refused("SHC is not qualified")
+        self.qualify_deployment()
         entry = self.target(name)
         for kind in ("read", "write"):
             roles = set(entry.get("acl", {}).get("perms", {}).get(kind, []))

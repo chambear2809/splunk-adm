@@ -1,6 +1,6 @@
 {
-  "research_date": "2026-10-07",
-  "scope": "Static TA package inspection for a VM and Kubernetes application/network dependency map",
+  "research_date": "2026-10-16",
+  "scope": "Static package inspection for datacenter and enterprise networking application dependency mapping",
   "packages": [
     {
       "title": "Stream Wire Data",
@@ -187,17 +187,139 @@
       "installed": false,
       "executed": false,
       "download_method": "gh release download from publisher GitHub release"
-    }
-  ],
-  "pending": [
+    },
+    {
+      "title": "Cisco Enterprise Networking App for Splunk",
+      "splunkbase_id": "7539",
+      "version": "4.0.20",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-enterprise-networking-app-for-splunk_4020.tgz",
+      "extracted_path": "research/extracted/cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7539/releases/4.0.20/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/7539",
+      "sha256": "0d9a8d85a50a408f6cfd1044425dfea28c4b2cb94d3ab570c073b296f8cc0382",
+      "bytes": 711274,
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "SHA-256 displayed by the authenticated Splunkbase download confirmation",
+      "acquired_at": "2026-10-16",
+      "app_conf_versions": {
+        "launcher": "4.0.20",
+        "id": "4.0.20"
+      },
+      "extraction_scope": "All regular files; traversal, links, special files, duplicate paths and oversized entries rejected; file execute permissions removed",
+      "extracted_files": 88,
+      "license_acceptance": "Cisco EULA and Splunk terms/privacy explicitly approved by the user on 2026-10-16",
+      "download_method": "Authenticated Splunkbase browser download",
+      "installed": true,
+      "executed": false,
+      "inspection_evidence": "research/cisco-catalyst-evidence.json",
+      "qualification": "Official package downloaded and inspected; local synthetic search/parsing coexistence only. Actual collection, exporter decoding, distributed/SHC and Cloud qualification remain outstanding.",
+      "lab_installation": {
+        "target": "Disposable standalone Splunk Enterprise 10.6.0.5 on localhost",
+        "scope": "Full separate vendor app with all saved searches disabled",
+        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
+        "collector_scripts_executed": false
+      }
+    },
     {
       "title": "Cisco Enterprise Networking Add-on for Splunk",
       "splunkbase_id": "7538",
-      "version": "4.0.35",
-      "expected_filename": "cisco-enterprise-networking-add-on-for-splunk_4035.tgz",
-      "expected_sha256": "61d04492c62d73dfac18b78b85eb42ffae6595c2570a5028c782fe524499a0e9",
-      "status": "out_of_scope_nexus_only_pilot",
-      "source_url": "https://splunkbase.splunk.com/app/7538"
+      "version": "4.0.50",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-enterprise-networking-add-on-for-splunk_4050.tgz",
+      "extracted_path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7538/releases/4.0.50/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/7538",
+      "sha256": "deae4c416a61a6cc0366398a1f2c32463a070af7e797640cb15ddce8efeba783",
+      "bytes": 49695910,
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "SHA-256 displayed by the authenticated Splunkbase download confirmation",
+      "acquired_at": "2026-10-16",
+      "app_conf_versions": {
+        "launcher": "4.0.50",
+        "id": "4.0.50"
+      },
+      "extraction_scope": "All regular files; traversal, links, special files, duplicate paths and oversized entries rejected; file execute permissions removed",
+      "extracted_files": 2663,
+      "license_acceptance": "Cisco EULA and Splunk terms/privacy explicitly approved by the user on 2026-10-16",
+      "download_method": "Authenticated Splunkbase browser download",
+      "installed": true,
+      "executed": false,
+      "inspection_evidence": "research/cisco-catalyst-evidence.json",
+      "qualification": "Official package downloaded and inspected; local synthetic search/parsing coexistence only. Actual collection, exporter decoding, distributed/SHC and Cloud qualification remain outstanding.",
+      "lab_installation": {
+        "target": "Disposable standalone Splunk Enterprise 10.6.0.5 on localhost",
+        "scope": "Search/parsing configuration only; no input scripts or configured collectors",
+        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
+        "collector_scripts_executed": false
+      }
+    },
+    {
+      "title": "Cisco Enterprise Networking NetFlow Add-on for Splunk",
+      "splunkbase_id": "6872",
+      "version": "4.0.0",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-enterprise-networking-netflow-add-on-for-splunk_400.tgz",
+      "extracted_path": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/6872/releases/4.0.0/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/6872",
+      "sha256": "94722579e0f120e0b5c93c9eac2873fb94f4749134b08652f578bb398803fc52",
+      "bytes": 40511,
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "SHA-256 displayed by the authenticated Splunkbase download confirmation",
+      "acquired_at": "2026-10-16",
+      "app_conf_versions": {
+        "launcher": "4.0.0",
+        "id": "4.0.0"
+      },
+      "extraction_scope": "All regular files; traversal, links, special files, duplicate paths and oversized entries rejected; file execute permissions removed",
+      "extracted_files": 16,
+      "license_acceptance": "Cisco EULA and Splunk terms/privacy explicitly approved by the user on 2026-10-16",
+      "download_method": "Authenticated Splunkbase browser download",
+      "installed": true,
+      "executed": false,
+      "inspection_evidence": "research/cisco-catalyst-evidence.json",
+      "qualification": "Official package downloaded and inspected; local synthetic search/parsing coexistence only. Actual collection, exporter decoding, distributed/SHC and Cloud qualification remain outstanding.",
+      "lab_installation": {
+        "target": "Disposable standalone Splunk Enterprise 10.6.0.5 on localhost",
+        "scope": "Search/parsing configuration only; no input scripts or configured collectors",
+        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
+        "collector_scripts_executed": false
+      }
+    },
+    {
+      "title": "Cisco Meraki Add-on for Splunk",
+      "splunkbase_id": "5580",
+      "version": "3.5.0",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-meraki-add-on-for-splunk_350.tgz",
+      "extracted_path": "research/extracted/cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/5580/releases/3.5.0/download/?origin=sb&lead=true",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/5580",
+      "sha256": "edd12274203a367e73c8f3ae2115ad18008b6f20f46614602b724fc7758ac8e8",
+      "bytes": 28854766,
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "SHA-256 displayed by the authenticated Splunkbase download confirmation",
+      "acquired_at": "2026-10-16",
+      "app_conf_versions": {
+        "launcher": "3.5.0",
+        "id": "3.5.0"
+      },
+      "extraction_scope": "All regular files; traversal, links, special files, duplicate paths and oversized entries rejected; file execute permissions removed",
+      "extracted_files": 1708,
+      "license_acceptance": "Cisco EULA and Splunk terms/privacy explicitly approved by the user on 2026-10-16",
+      "download_method": "Authenticated Splunkbase browser download",
+      "installed": true,
+      "executed": false,
+      "inspection_evidence": "research/cisco-meraki-evidence.json",
+      "qualification": "Official package downloaded and inspected; local synthetic search/parsing coexistence only. Actual collection, exporter decoding, distributed/SHC and Cloud qualification remain outstanding.",
+      "lab_installation": {
+        "target": "Disposable standalone Splunk Enterprise 10.6.0.5 on localhost",
+        "scope": "Search/parsing configuration only; no input scripts or configured collectors",
+        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
+        "collector_scripts_executed": false
+      }
     }
-  ]
+  ],
+  "pending": []
 }

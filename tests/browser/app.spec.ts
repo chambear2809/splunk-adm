@@ -2,6 +2,141 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test.describe("Application Atlas browser regressions", () => {
+  test("selects the captured Catalyst and Meraki demo flows on the map", async ({
+    page,
+  }) => {
+    for (const [scenario, cluster, attachmentDevice] of [
+      ["catalyst-aci", "cilium-aci-east", "CAMPUS-SW-01"],
+      ["meraki-nxos", "cilium-nxos-west", "MR-NXOS-01"],
+    ]) {
+      await page.goto(`/tests/browser/browser.html?scenario=${scenario}`);
+      await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+      await expect(page.locator(".scope-service")).toHaveText("checkout");
+      await expect(page.locator(".scope-dims")).toContainText(cluster);
+      await page.getByRole("button", { name: "Map settings" }).click();
+      await expect(page.getByLabel("Demo scenario")).toHaveValue(scenario);
+      await page.getByRole("button", { name: "Close settings" }).click();
+      await expect(page.locator(".adm")).toHaveAttribute(
+        "data-edge-count",
+        /[1-9]/,
+      );
+      await page.getByRole("button", { name: "Devices", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Client attachment devices" }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByRole("region", { name: "Client attachment devices" })
+          .getByText(attachmentDevice, { exact: false }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Export", exact: true }).click();
+      const download = page.waitForEvent("download");
+      await page
+        .getByRole("button", { name: /Context evidence \(CSV\)/ })
+        .click();
+      const artifact = await download;
+      const csv = await readFile((await artifact.path())!, "utf8");
+      expect(csv).toContain("attachment_evidence");
+      expect(csv).toContain("traffic_observation");
+      expect(csv).toContain("evidence_json");
+      expect(csv).toContain("scope");
+    }
+  });
+
+  test("runs captured Meraki client Find and labels unresolved association evidence", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/tests/browser/browser.html?page=applications&scenario=meraki-nxos",
+    );
+    await expect(page.getByLabel("Demo scenario")).toHaveValue("meraki-nxos");
+    await expect(
+      page.getByText(/correlated from Meraki association/),
+    ).toBeVisible();
+    await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+    await expect(
+      page
+        .locator("table")
+        .first()
+        .getByRole("button", { name: "Open map for checkout" }),
+    ).toBeEnabled();
+    const clients = page.locator("table").nth(1);
+    await expect(clients).toBeVisible();
+    await expect(clients).toContainText("MR-NXOS-01");
+    await expect(clients).toContainText("MR-NXOS-02");
+    await expect(clients).toContainText("meraki_association_event");
+    await expect(clients).toContainText("unresolved");
+  });
+
+  test("reports a failed network-client Find without claiming there are no matches", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/tests/browser/browser.html?page=applications&mode=live&fault=find-client-fails",
+    );
+    await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+
+    await expect(page.getByRole("alert")).toContainText(
+      "Network-client Find unavailable: network-client search was truncated",
+    );
+    await expect(page.getByText("No matching applications found.")).toHaveCount(
+      0,
+    );
+  });
+
+  test("preserves application matches when network-client Find fails", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/tests/browser/browser.html?page=applications&mode=live&fault=find-client-fails",
+    );
+    await page.getByLabel("Find an address, EPG, or device").fill("10.42.0.15");
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+
+    await expect(page.locator('[aria-label="Find results"]')).toContainText(
+      "checkout",
+    );
+    await expect(page.getByRole("alert")).toContainText(
+      "Network-client Find unavailable",
+    );
+  });
+
+  test("preserves client matches and warnings when application Find fails", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/tests/browser/browser.html?page=applications&mode=live&fault=find-app-fails",
+    );
+    await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+
+    await expect(
+      page.locator('[aria-label="Network client evidence"]'),
+    ).toContainText("00:11:22:33:44:55");
+    await expect(page.getByRole("alert")).toContainText(
+      "Application Find unavailable: application search permission denied",
+    );
+  });
+
+  test("shows warnings returned by the network-client Find source", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/tests/browser/browser.html?page=applications&mode=live&fault=find-client-warning",
+    );
+    await page.getByLabel("Find an address, EPG, or device").fill("10.42.0.15");
+    await page.getByRole("button", { name: "Find", exact: true }).click();
+
+    await expect(page.locator('p[role="status"]')).toContainText(
+      "Network-client evidence may be incomplete.",
+    );
+    await expect(page.locator('[aria-label="Find results"]')).toContainText(
+      "checkout",
+    );
+  });
+
   test("filters the map and opens endpoint inspection", async ({ page }) => {
     await page.goto("/tests/browser/browser.html");
     await expect(
@@ -76,17 +211,35 @@ test.describe("Application Atlas browser regressions", () => {
     await expect(page.getByRole("alert")).toContainText("permission denied");
   });
 
-  test("surfaces an incomplete result warning", async ({ page }) => {
+  test("shows WARN job messages as search warnings without failing the map", async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/browser.html?scenario=graph-warning");
+    await page.getByRole("button", { name: "Map settings" }).click();
+    await page.getByRole("button", { name: "Splunk" }).click();
+    await page.getByRole("button", { name: "Build map" }).click();
+    await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+    await page.getByRole("button", { name: /1 warning/ }).click();
+    await expect(
+      page.getByRole("region", { name: "Search warnings" }),
+    ).toContainText("Peer indexer-3 was unreachable.");
+  });
+
+  test("fails closed when a live graph result is incomplete", async ({
+    page,
+  }) => {
     await page.goto("/tests/browser/browser.html?scenario=incomplete");
     await page.getByRole("button", { name: "Map settings" }).click();
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
-    const warnings = page.getByRole("button", { name: /warning/ });
-    await expect(warnings).toBeVisible();
-    await warnings.click();
+    await expect(page.getByRole("alert")).toContainText(
+      "finalized this job before all results were available",
+    );
+    await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "false");
+    await expect(page.locator(".adm")).toHaveAttribute("data-node-count", "0");
     await expect(
-      page.getByRole("region", { name: "Search warnings" }),
-    ).toContainText("incomplete");
+      page.locator('svg[aria-label="frontend dependency map"]'),
+    ).toHaveCount(0);
   });
 });
 
@@ -126,6 +279,33 @@ test("loads each foundation page", async ({ page }) => {
       page.getByRole("heading", { name: title, exact: true }),
     ).toBeVisible();
   }
+});
+
+test("Find shows source-qualified network client evidence without implying attachment", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=applications&mode=live");
+  await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__ADM_REQUESTS__ ?? []))
+    .toContainEqual(
+      expect.objectContaining({
+        spl: expect.stringContaining("adm_find_network_client"),
+      }),
+    );
+  const results = page.locator("table").first();
+  await expect(results).toBeVisible();
+  await expect(results).toContainText("00:11:22:33:44:55");
+  await expect(results).toContainText("Meraki · org-a/network-a");
+  await expect(results).toContainText("unmapped");
+  await expect(results).toContainText("No exact routing scope mapping");
+  const requests = await page.evaluate(() => window.__ADM_REQUESTS__ ?? []);
+  expect(
+    requests.some((request) =>
+      request.spl.includes('adm_find_network_client("10.71.0.20")'),
+    ),
+  ).toBe(true);
 });
 
 test("setup checklist reads live configuration and gates safe actions", async ({
@@ -816,6 +996,109 @@ test("inferred backend findings open their collected candidate path", async ({
   await expect(finding).toBeVisible();
 });
 
+test("partial client handoff keeps its selected path unresolved and labels aggregate backend", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=partial-shared-handoff",
+  );
+  await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  const conversations = page.locator(".table-view table").first();
+  const selectedClient = conversations
+    .locator("tbody button")
+    .filter({ hasText: "win-client-01" })
+    .filter({ hasText: "checkout-api" });
+  await expect(selectedClient).toHaveCount(1);
+  await selectedClient.click();
+
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details).toContainText(
+    "Client handoff coverage is partial (1 of 2 connections determined; 1 unresolved).",
+  );
+  await expect(details).not.toContainText("checkout-5f8b9c7d6-m4n7q");
+  await expect(details.getByText("Received on", { exact: true })).toHaveCount(
+    0,
+  );
+
+  await details
+    .getByRole("button", { name: "Show candidate path", exact: true })
+    .click();
+  const path = page.getByRole("region", { name: /^Candidate path:/ });
+  await expect(path).toContainText("Client handoff coverage is partial");
+  await expect(path).toContainText("Not determined");
+  await expect(path).not.toContainText("checkout-5f8b9c7d6-m4n7q");
+  await expect(path).not.toContainText(
+    "Kubernetes node · received the traffic",
+  );
+  await path.getByRole("button", { name: "Close path", exact: true }).click();
+
+  await page.getByRole("button", { name: "Network", exact: true }).click();
+  const checkoutFrontend = page.getByRole("button", {
+    name: /Kubernetes Service.*checkout-api/,
+  });
+  await expect(checkoutFrontend).toBeVisible();
+  await checkoutFrontend.click();
+  await expect(details).toContainText(
+    "Any backend links shown here summarize only connections with determined handoffs.",
+  );
+  await expect(details).toContainText(
+    "1 aggregate backends for determined connections",
+  );
+});
+
+test("complete aggregate handoff cannot replace missing selected-client metadata", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=missing-client-handoff",
+  );
+  await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
+
+  await page.getByRole("button", { name: "Table", exact: true }).click();
+  const selectedClient = page
+    .locator(".table-view table")
+    .first()
+    .locator("tbody button")
+    .filter({ hasText: "win-client-01" })
+    .filter({ hasText: "checkout-api" });
+  await expect(selectedClient).toHaveCount(1);
+  await selectedClient.click();
+
+  const details = page.getByRole("complementary", { name: "Details" });
+  await expect(details).toContainText(
+    "Client-specific handoff evidence is unavailable or invalid.",
+  );
+  await expect(details).not.toContainText("checkout-5f8b9c7d6-m4n7q");
+  await expect(details.getByText("Received on", { exact: true })).toHaveCount(
+    0,
+  );
+  await details
+    .getByRole("button", { name: "Show candidate path", exact: true })
+    .click();
+  const path = page.getByRole("region", { name: /^Candidate path:/ });
+  await expect(path).toContainText(
+    "Client-specific handoff evidence is unavailable or invalid.",
+  );
+  await expect(path).not.toContainText("checkout-5f8b9c7d6-m4n7q");
+  await expect(path).not.toContainText(
+    "Kubernetes node · received the traffic",
+  );
+  await path.getByRole("button", { name: "Close path", exact: true }).click();
+
+  await page.getByRole("button", { name: "Network", exact: true }).click();
+  const checkoutFrontend = page.getByRole("button", {
+    name: /Kubernetes Service.*checkout-api/,
+  });
+  await expect(checkoutFrontend).toBeVisible();
+  await checkoutFrontend.click();
+  await expect(details).toContainText("1 identified");
+  await expect(details).not.toContainText(
+    "Client-specific handoff evidence is unavailable or invalid.",
+  );
+});
+
 test("findings remain reachable below the map on narrow screens", async ({
   page,
 }) => {
@@ -879,6 +1162,12 @@ test("Setup inputs keep Toolkit surfaces under classic dashboard CSS", async ({
   });
   const input = page.getByLabel("Index for adm_index_hubble", { exact: true });
   await expect(input).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Cisco integration status" }),
+  ).toBeVisible();
+  await expect(page.getByText(/Cisco v2 remains staged/)).toBeVisible();
+  await expect(page.getByText("catalyst_sdwan_ipfix")).toBeVisible();
+  await expect(page.getByRole("button", { name: /v2|Cisco/i })).toHaveCount(0);
   expect(
     await input.evaluate((element) => {
       const style = getComputedStyle(element);

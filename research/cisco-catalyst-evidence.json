@@ -1,0 +1,183 @@
+{
+  "title": "Cisco Catalyst Center and SD-WAN NetFlow package evidence",
+  "audit_scope": {
+    "method": "Static inspection of publisher-SHA256-verified, already-extracted package contents. No vendor scripts were executed or imported.",
+    "packages": [
+      {
+        "name": "Cisco Enterprise Networking Add-on for Splunk",
+        "package_version": "4.0.50",
+        "path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst"
+      },
+      {
+        "name": "Cisco Enterprise Networking NetFlow Add-on for Splunk",
+        "package_version": "4.0.0",
+        "path": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl"
+      },
+      {
+        "name": "Cisco Enterprise Networking App for Splunk",
+        "package_version": "4.0.20",
+        "path": "research/extracted/cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app"
+      }
+    ],
+    "evidence_policy": "Facts are limited to the checked-in package contents and their bundled guides. Shapes below are schematic projections of fields the package names or preserves, not captured live records. A documented API endpoint is not evidence that a dedicated collector exists or that its output has been production-qualified."
+  },
+  "findings": {
+    "wired_campus_client_attachment": {
+      "verdict": "Supported as a Catalyst Center client observation with an optional connected-network-device reference; not a full physical attachment proof.",
+      "source": "Dedicated modular input cisco_catalyst_dnac_client polls GET /dna/data/api/v1/clients and emits each returned client as JSON under cisco:dnac:client. Default poll interval is 3600 seconds and the input is disabled in packaged defaults. The API catalog lists client filters including site hierarchy/site ID, IP/MAC, and connectedNetworkDeviceName.",
+      "event_shape": {
+        "kind": "Schematic projection; actual response has other optional and nested fields.",
+        "example": {
+          "id": "<client MAC address, when supplied>",
+          "macAddress": "<client MAC>",
+          "ipv4Address": "<client IPv4, when supplied>",
+          "name": "<client name, when supplied>",
+          "username": "<username, when supplied>",
+          "type": "<Wired or Wireless>",
+          "lastUpdatedTime": "<epoch milliseconds>",
+          "connectionStatus": "<connected, disconnected, connecting, or unknown>",
+          "connectedNetworkDevice": {
+            "connectedNetworkDeviceId": "<controller device ID, when supplied>",
+            "connectedNetworkDeviceName": "<switch name, when supplied>",
+            "connectedNetworkDeviceManagementIp": "<management IP, when supplied>",
+            "connectedNetworkDeviceMac": "<device MAC, when supplied>",
+            "connectedNetworkDeviceType": "<Switch or Access Point, when supplied>",
+            "interfaceName": "<wired attached interface, when supplied>"
+          },
+          "connection": {
+            "vlanId": "<VLAN, when supplied>",
+            "sessionDuration": "<milliseconds, when supplied>"
+          },
+          "cisco_catalyst_host": "<controller host added by input>"
+        }
+      },
+      "time_and_paging": "The input queries a moving interval-derived window ending at the last fully completed minute, with up to 300 seconds overlap. It pages by one-based offset/limit, requests stable MAC sorting where supported, validates page metadata and bounds record/byte/page counts, and reports partial completeness when a bounded walk cannot prove completeness. This is overlap-based polling, not a durable cursor/checkpoint contract. Splunk _time for this sourcetype is parsed from lastUpdatedTime; that is controller record-update time, not a guaranteed client association start time.",
+      "field_limits": "The official Catalyst Center API schema defines top-level type as Wired or Wireless and connectionStatus as connected, disconnected, connecting, or unknown; connecting applies only to wireless clients. In connectedNetworkDevice, connectedNetworkDeviceType can be Switch or Access Point. The API defines connectedNetworkDevice.interfaceName, interfaceSpeed and duplexMode as wired-only attached-device properties, so a returned Wired record with the documented interface field can support a client-to-device-port attachment observation. It remains a controller client observation, not a complete switch adjacency graph or historical proof. The TA emits the raw API client object unchanged (plus cisco_catalyst_host and partial-snapshot metadata when relevant), so these API fields are retained in indexed JSON; KV_MODE=json extracts them. The TA aliases ipv4Address to src_ip, name to src_nt_host, username to user, and nested connectedNetworkDevice name/MAC/management IP to device/destination fields. No alias independently validates the switch port or fabric path.",
+      "official_schema_evidence": {
+        "current_product_docs": {
+          "product_version": "Catalyst Center API 3.1.6",
+          "endpoint": "GET /dna/data/api/v1/clients",
+          "url": "https://developer.cisco.com/docs/catalyst-center/retrieves-the-list-of-clients-while-also-offering-basic-filtering-and-sorting-capabilities/",
+          "supports": "Current API reference identifies the list-clients endpoint and response contract; the schema-level field detail below is cross-checked against Cisco's resolved OpenAPI specification."
+        },
+        "resolved_openapi": {
+          "title": "OpenAPI specification for Assurance Clients",
+          "version": "1.0.0",
+          "url": "https://raw.githubusercontent.com/cisco-en-programmability/catalyst-center-api-specs/main/Assurance/CE_Cat_Center_Org-clients1-1.0.0-resolved.yaml",
+          "lines": {
+            "28-34": "GET /dna/data/api/v1/clients and list operation description.",
+            "53-67": "Limit maximum 500 and one-based offset pagination.",
+            "82-94": "Client `type` query enum Wired/Wireless.",
+            "1981-1997": "ClientBasic.id is the client MAC address; top-level type enum Wired/Wireless.",
+            "2046-2059": "lastUpdatedTime is epoch milliseconds; connectionStatus enum is connected/disconnected/connecting/unknown and connecting applies only to wireless.",
+            "2130-2168": "Connected device identity/type enums and wired-only interfaceName/interfaceSpeed/duplexMode schema.",
+            "2169-2201": "Common connection and wired-only VLAN/VN/SGT/linkSpeed fields."
+          },
+          "interpretation_limit": "Schema proves fields and documented semantics, not that every response includes them, that the deployed controller version returns them, or that the TA separately maps them. TA raw-payload passthrough is independently evidenced above."
+        }
+      },
+      "sources": [
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/inputs.conf", "lines": "67-74", "supports": "Sourcetype, interval, disabled default." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "3422-3455", "supports": "Client list API and available filters." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/consts.py", "lines": "40-45", "supports": "Client page-size, sort, interval, overlap and readiness bounds." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py", "lines": "23-40,67-112,192-233,270-353,450-481", "supports": "Time window, page validation and bounded pagination, endpoint client, raw JSON event emission and host selection." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "644-681", "supports": "lastUpdatedTime indexing, raw JSON search-time extraction, wired-client caveat and available aliases." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "202-229", "supports": "Account/input setup fields; service identity configured at the add-on." }
+      ]
+    },
+    "inventory_and_physical_adjacency": {
+      "verdict": "Inventory and site hierarchy are available; the dedicated Site Topology input is not a physical device-link feed. A separate physical-topology API exists in the catalog but is generic, single-request, and not evidenced here as a supported complete adjacency snapshot.",
+      "supported_contracts": [
+        {
+          "dataset": "Network-device inventory",
+          "facts": "The endpoint catalog describes GET /dna/intent/api/v1/network-device as a paginated inventory API with offset/limit, one-based offsets, up to 500 records per page, and a count endpoint. The bounded setup inventory projects device id, name, management IP, family/type, model, site path, reachability/management status, and interface count. That compact setup projection is not itself an indexed modular-input event schema.",
+          "sources": [
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2137-2153", "supports": "Endpoint path and documented offset/limit inventory contract." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_interface_inventory.py", "lines": "1-81", "supports": "Read-only bounded inventory projection and one-based pages." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "149", "supports": "Dedicated inventory page-size, drift and fail-closed limitations." }
+          ]
+        },
+        {
+          "dataset": "Site Topology",
+          "facts": "The dedicated input pages GET /dna/intent/api/v1/topology/site-topology (default 3600 seconds, disabled) and serializes each site record with snapshot_id, snapshot_sequence and snapshot_expected_records. Its hierarchy enrichment types only explicitly identified geography/campus/area/building/floor nodes; it preserves the raw path and does not guess missing levels. This describes site hierarchy, not switch-to-switch physical edges or endpoint-to-port attachment.",
+          "sources": [
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/inputs.conf", "lines": "155-162", "supports": "Dedicated site-topology sourcetype/cadence/default state." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_site_topology.py", "lines": "23-52,134-171", "supports": "Paged site topology, snapshot metadata and raw JSON output." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_site_hierarchy.py", "lines": "4-12,30-45,70-101,134-144", "supports": "Typed hierarchy fields only from explicit topology node types." }
+          ]
+        },
+        {
+          "dataset": "Physical topology / adjacency",
+          "facts": "The curated API catalog lists GET /dna/intent/api/v1/topology/physical-topology and calls it raw physical topology. The dedicated-endpoint coverage map does not name a dedicated physical-topology input. The generic API collector supports allow-listed Catalyst Center GET paths, but only exact profiled paths are paginated; physical-topology is not in the pagination profile, so it keeps one bounded GET and does not prove a complete multi-page graph. Treat as exploratory pending controller permissions, schema, size, and completeness qualification.",
+          "sources": [
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2318-2330", "supports": "Physical-topology endpoint catalog entry." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_dedicated_endpoint_coverage.json", "lines": "1-105", "supports": "Dedicated input-to-endpoint inventory; no physical-topology collector is listed." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_api.py", "lines": "108-132,133-164,606-665,776-814", "supports": "Generic path allow-list, exact pagination profiles, single-GET fallback for unprofiled endpoints, and input registration." }
+          ]
+        },
+        {
+          "dataset": "Device-neighbor syslog extractions",
+          "facts": "The TA has search-time CDP neighbor added/removed and routing adjacency log extractions. These are event observations from device syslog when that feed exists, not a canonical inventory snapshot or a substitute for validated physical-topology records.",
+          "sources": [
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "3084-3106,3115-3116", "supports": "BGP/ISIS adjacency and CDP neighbor log extractions." }
+          ]
+        }
+      ]
+    },
+    "sdwan_enhanced_ipfix_hsl": {
+      "verdict": "Supports flow-level traffic observations and selected SD-WAN exporter context after Stream collection and field mapping. It does not by itself provide a route/path proof or full Manager enrichment.",
+      "wire_to_search_contract": "Catalyst SD-WAN edges export NetFlow v9 or IPFIX v10 over UDP directly to a Splunk Stream collector. Stream Forwarder (5238) receives/parses templates; the Cisco NetFlow add-on maps Cisco enterprise information elements and its Stream definition selects output fields; App for Stream (1809) manages the definition; Stream Wire Data (5234) supports indexing/search. Enabled production events use stream:netflow. The Cisco decoder package itself does not collect/listen, choose an index, enable the definition, join option records, or reproduce Manager enrichment. The Stream definition is disabled by default.",
+      "fields_when_exported_in_template": {
+        "flow_tuple": ["src_ip", "dest_ip", "src_port", "dest_port", "src_mac", "dest_mac", "protoid"],
+        "observation_identity_and_exporter": ["flow_id", "observation_domain_id", "exporter_ip", "export_process_id", "exporter_engine_id", "exporter_engine_type", "seqnumber"],
+        "flow_time": ["flow_start_time", "flow_end_time", "flow_start_time_milli", "flow_end_time_milli", "flow_start_rel", "flow_end_rel", "exporter_time", "exporter_uptime"],
+        "volume_and_direction": ["bytes", "packets", "bytes_in", "bytes_out", "packets_in", "packets_out", "flow_dir", "biflow_direction"],
+        "interfaces_and_sampling": ["ingress_interface", "egress_interface", "interface_name", "input_snmpidx", "output_snmpidx", "exporter_sampling_mode", "exporter_sampling_interval", "sampling_pkt_interval"],
+        "sdwan_context": ["vpn_id", "ingress_overlay_session_id", "egress_overlay_session_id", "tloc_overlay_session_id", "tloc_local_system_ip", "tloc_local_color", "tloc_remote_system_ip", "tloc_remote_color", "tloc_tunnel_proto"],
+        "counter_and_context_caveat": "The named output fields are in the packaged Stream definition, but an exporter only emits information elements/templates configured for that flow. Treat absent values as unavailable. `flow_id` and observation_domain_id are identifiers, not documented globally unique event IDs; combine exporter/domain, time, tuple and sequence context only under a validated correlation policy."
+      },
+      "important_distinctions": [
+        "flow_start_time/flow_end_time are unsigned integer epoch seconds in Stream's time vocabulary. flow_start_time_milli/flow_end_time_milli are integer epoch milliseconds (IANA 152/153) and are used in the positive fixture. flow_start_rel/flow_end_rel are milliseconds since exporter reinitialization; exporter_time is exporter device time; Splunk event _time handling belongs to Stream. Do not substitute relative uptime or assume all four clocks agree.",
+        "TLOC addresses, colors, protocol and tloc_overlay_session_id are separate option-table records. The packaged home.xml describes correlating ingress_overlay_session_id/egress_overlay_session_id with that dictionary; the decoder does not perform the join. Available package evidence does not establish the complete decoded option timestamp/exporter/domain envelope. Atlas therefore preserves flow session references without deriving TLOC inventory, tunnel attribution or route evidence. The positive fixture omits all TLOC option attributes.",
+        "flow_dir/biflow_direction and in/out counters describe flow observation/direction. ingress/egress interface, VPN ID and TLOC session/system-IP/color/protocol are contextual fields; they do not constitute an end-to-end forwarding route or prove which underlay path carried every packet.",
+        "The bundled 251-field reference explicitly distinguishes Stream-defined, Cisco-documentation/capture-validated, provisional, unresolved and no-direct-CIM fields. It warns that a CIM-compatible field name alone does not make the event data-model compliant; separate search-time normalization may be needed."
+      ],
+      "sources": [
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/ipfixmap.conf", "lines": "58-79,301-357", "supports": "Cisco PEN 9 and PEN 41916 extension mappings for VPN/flow ID, application-family and TLOC/BFD context." },
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/cisco.hsl.json", "lines": "108-175,178-225,234-305,328-354,458-490,630-669", "supports": "Selected Stream output names, flow tuple, bytes/packets, exporter/sample, observation domain, flow time, direction and interface terms." },
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/cisco.hsl.xml", "lines": "82-92,309-333", "supports": "Typed VPN and TLOC vocabulary." },
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/lookups/cisco_sdwan_netflow_field_reference.csv", "lines": "18-21,55-83,87-98,121-129", "supports": "Field/CIM evidence labels and flow tuple, time, interface, direction, counters and sampling reference." },
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/data/ui/views/home.xml", "lines": "84,300-347,351-360", "supports": "Separate TLOC option dictionary requiring an explicit session join; integer millisecond IANA flow times; data path, dependencies, disabled definition, package responsibility boundaries and explicit CIM caveat." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "3255-3292", "supports": "Stream-owned sourcetype is retained; bounded search-time CIM aliases/evaluations for direction, interfaces, exporter and flow fields." }
+      ]
+    },
+    "deployment_dependencies_and_permissions": {
+      "catalyst_center": "The add-on owns Catalyst Center modular inputs; package defaults are disabled. Its guide says to use a dedicated API user and custom read-oriented role, version-specific feature permission names, and Global access Group for controller-wide reads; authentication does not establish access to each dataset. Validate the installed controller release and selected inputs. The detailed permission matrix is in the bundled minified User Guide, so provenance is the guide asset itself rather than line-addressable prose.",
+      "netflow": "Stream Forwarders on flow collector/Heavy Forwarder; Cisco mapping add-on where Cisco fields are decoded; Stream Wire Data on required index/search tiers; App for Stream on search heads. NetFlow/Cisco decoder and visualization app are distinct packages and package responsibilities. Select an index and enable the intended Stream definition explicitly.",
+      "cim": "The TA owns Stream search-time field aliases/eventtype and documents Splunk_SA_CIM 8.6 for its Network Traffic knowledge. Its client comments cite Network Sessions model in Splunk_SA_CIM 8.5. Confirm the installed CIM version/schema before data-model acceleration; the Cisco NetFlow decoder alone does not add CIM tags/eventtypes/aliases.",
+      "visualization_app": "Cisco Enterprise Networking App for Splunk is a separate visualization package that consumes add-on data (its app.conf describes its purpose as dashboards/visualization). Keep it co-installed/compatible as a separate app package, not embedded in the Atlas package.",
+      "sources": [
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/appserver/static/js/build/user_guide.js", "lines": "1", "supports": "Bundled User Guide: Catalyst Center permissions/setup and required account/input guidance; file is minified." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "10,28-46,55-63", "supports": "Dependency and distributed-tier placement for TA, visualization app and managed Stream collection." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "665-681,3269-3272", "supports": "CIM version notes and field knowledge scope." },
+        { "file": "research/extracted/cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app/default/app.conf", "lines": "5-22", "supports": "App identity and visualization/data-consumer role." },
+        { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/README.md", "lines": "94-122", "supports": "Managed Stream requirements and placement." }
+      ]
+    }
+  },
+  "minimal_supported_contracts_for_wired_to_sdwan_to_aci_cilium_flow": {
+    "catalyst_wired_observation": "Use `cisco:dnac:client` only when raw event contains the client identity and useful connectedNetworkDevice context; keep controller host, client MAC/IP and nested device name/MAC/management IP as observed. Treat `lastUpdatedTime` as record freshness. Port attachment is conditional on the API actually returning an interface value. Mark unresolved clients instead of fabricating port or endpoint state.",
+    "catalyst_inventory_and_hierarchy": "Use network-device inventory for device identity/site attributes and Site Topology for typed site hierarchy; neither alone establishes physical device adjacency. Physical-topology API output is an unqualified generic response until pagination/completeness/schema are demonstrated. A separate syslog-derived CDP/BGP/ISIS adjacency signal must retain its source and event time.",
+    "sdwan_observation": "Use `stream:netflow` records as time-bounded flow observations keyed by exporter/domain + flow ID/sequence + tuple/time under a validated key policy; carry observed tuple, flow times, available counters/direction, VPN/VRF, TLOC and interface fields plus sampling context. Do not call a BGP next hop, TLOC or tunnel-health/inventory record a complete packet route.",
+    "aci_cilium_boundary": "This package audit establishes no ACI or Cilium schema, identifiers, or join key. Match across domains only on explicitly shared, observed identifiers (e.g. normalized IP/MAC/time plus scoped VRF/site/device context) and retain source timestamp and provenance. Unknown/no-match is a valid result; no identity, route, policy, or ownership inference is supported by this evidence alone.",
+    "co_install_and_compatibility": "Treat the Cisco visualization app as a separate optional co-installed package; keep Atlas package boundaries independent. Preserve existing sourcetypes and historical searches; any new contract should be additive and version/CIM-validated in the target Splunk deployment."
+  },
+  "gating_issues": [
+    "Client feed is interval polling of controller state/last update, not event-stream association history; real endpoint field presence and whether an interface port is returned require representative events from the target Catalyst Center release.",
+    "Site Topology is hierarchy metadata. Physical topology is available as a catalog endpoint but lacks a dedicated input, pagination profile, and evidence of graph-edge semantics in this audit.",
+    "NetFlow/IPFIX values are template- and exporter-dependent. No live packet capture or controller-specific enabled-template test was performed; validate field presence, timestamps/clocks, counters, sampling, exporter identity and loss on a canary.",
+    "NetFlow decoder and Stream definition do not enable themselves; destination index, listener, exporter, UDP path/ACLs, required Stream packages and correct tier placement must be configured separately.",
+    "Controller permissions are per dataset and controller version. Successful authentication is not proof of read access to client, device or topology datasets.",
+    "Splunk release, CIM version, TA/App package compatibility, data model constraints, and deployment topology must be checked in the actual target. No production, SHC, Cloud or live collector acceptance was carried out in this static audit."
+  ]
+}

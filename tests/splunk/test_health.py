@@ -30,7 +30,7 @@ class HealthSearchTest(unittest.TestCase):
             "| makeresults | where false()",
             query,
         )
-        self.assertEqual(replacements, 8)
+        self.assertEqual(replacements, 10)
         rows = self.lab.search(query, "0", "1")
         self.assertEqual({row.get("kind") for row in rows}, {"source"})
         self.assertEqual(
@@ -44,6 +44,8 @@ class HealthSearchTest(unittest.TestCase):
                 "Traces",
                 "Hubble",
                 "Summary",
+                "Catalyst Center",
+                "Meraki",
             },
         )
         for row in rows:
@@ -183,7 +185,9 @@ class HealthSearchTest(unittest.TestCase):
             if row["reason"] == "missed_slot":
                 self.assertGreaterEqual(int(row["late_seconds"]), 595)
 
-    def missed_slots_fixture_query(self, scheduler_search):
+    def missed_slots_fixture_query(
+        self, scheduler_search, target="ADM - Identity builder"
+    ):
         """Replace evidence sources, retaining the detector's filtering SPL."""
         import re
 
@@ -199,7 +203,7 @@ class HealthSearchTest(unittest.TestCase):
         query, count = re.subn(
             r"rest /servicesNS/-/splunk_adm/saved/searches "
             r"splunk_server=local count=0",
-            '| makeresults | eval title="ADM - Identity builder", '
+            "| makeresults | eval title=" + json.dumps(target) + ", "
             "disabled=0, is_scheduled=1",
             query,
         )
@@ -436,6 +440,108 @@ class HealthSearchTest(unittest.TestCase):
         )
         self.assertEqual(history[0]["count"], "1")
 
+    def test_saved_alert_uses_preceding_hourly_catalog_checkpoint(self):
+        """The real alert range must retain the hourly catalog's prior checkpoint."""
+        import time
+        import urllib.parse
+        import uuid
+        from datetime import datetime
+
+        target = "ADM - Application catalog v2"
+        token = uuid.uuid4().hex
+        end = int(time.time()) // 60 * 60
+        old_start = end - 24 * 60 * 60
+        # Catalog slots run hourly at :15 (cron "15 * * * *"). The checkpoint is
+        # the latest slot strictly before the old 24-hour boundary, so it always
+        # lies inside the alert's fixed 25-hour window. Both dispatches below pin
+        # "now" to `end`, so the bounds do not drift with the wall clock.
+        prior = old_start - 1 - (old_start - 1 - 900) % 3600
+        early = old_start + (900 - old_start) % 3600
+        later = early + 3600
+        self.assertLess(prior, old_start)
+        self.assertGreaterEqual(prior, end - 1500 * 60)
+        self.assertGreaterEqual(early, old_start)
+        self.assertLess(later, end - 600)
+
+        events = [
+            {
+                "index": "adm",
+                "sourcetype": "adm:health:scheduler",
+                "time": slot,
+                "event": {
+                    "health_token": token,
+                    "app": "splunk_adm",
+                    "savedsearch_name": target,
+                    "scheduled_time": slot,
+                    "status": "success",
+                    "sid": f"scheduler__health_{token}_{slot}",
+                },
+            }
+            for slot in (prior, later)
+        ]
+        self.lab._hec_post("\n".join(json.dumps(event) for event in events).encode())
+        fixture_search = (
+            f'index=adm sourcetype="adm:health:scheduler" health_token="{token}"'
+        )
+        deadline = time.monotonic() + 30
+        while True:
+            visible = self.lab.search(fixture_search + " | stats count", "-26h", "now")
+            if visible and visible[0]["count"] == str(len(events)):
+                break
+            self.assertLess(time.monotonic(), deadline, "catalog fixtures not indexed")
+            time.sleep(1)
+
+        query = self.missed_slots_fixture_query(
+            "search "
+            + fixture_search
+            + ' app="splunk_adm" savedsearch_name="ADM -*" status=success',
+            target=target,
+        ).replace("floor(now()/60)*60", str(end))
+        macro_path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_health_missed_slots"
+        )
+        self.change_live_config(macro_path, {"definition": query.removeprefix("| ")})
+
+        path = "/servicesNS/nobody/splunk_adm/saved/searches/" + urllib.parse.quote(
+            "ADM - Scheduler missed-slot alert", safe=""
+        )
+        self.change_live_config(path, {"disabled": "0", "is_scheduled": "0"})
+
+        def dispatch_with(earliest):
+            self.change_live_config(path, {"dispatch.earliest_time": earliest})
+            sid = self.lab._json(
+                "POST", path + "/dispatch", {"trigger_actions": "0", "now": str(end)}
+            )["sid"]
+            job = self.lab._wait_job(sid)
+            rows = self.lab._results(sid)
+            matching = {
+                int(row["scheduled_time"])
+                for row in rows
+                if row.get("name") == target and row.get("reason") == "missed_slot"
+            }
+            return job, matching
+
+        old_job, old_missing = dispatch_with("-1440m@m")
+        new_job, new_missing = dispatch_with("-1500m@m")
+        self.assertNotIn(early, old_missing)
+        self.assertIn(early, new_missing)
+        self.assertNotIn(later, new_missing)
+        old_lower = int(
+            datetime.fromisoformat(
+                old_job["earliestTime"].replace("Z", "+00:00")
+            ).timestamp()
+        )
+        new_lower = int(
+            datetime.fromisoformat(
+                new_job["earliestTime"].replace("Z", "+00:00")
+            ).timestamp()
+        )
+        # Exact bounds prove Splunk applied the pinned "now".
+        self.assertEqual(old_lower, old_start)
+        self.assertEqual(new_lower, end - 1500 * 60)
+        self.assertLess(prior, old_lower)
+        self.assertLessEqual(new_lower, prior)
+
     @staticmethod
     def definition(name):
         import configparser
@@ -465,6 +571,42 @@ class HealthSearchTest(unittest.TestCase):
         self.assertEqual(netflow["latest_event"], "300")
         self.assertEqual(netflow["latest_indexed"], "320")
         self.assertEqual(netflow["records"], "2")
+
+    def test_v2_source_health_keeps_legacy_lag_and_status_vocabulary(self):
+        import re
+
+        query = self.definition("adm_health_sources_v2").replace(
+            "`adm_health_sources_v1_impl`",
+            self.definition("adm_health_sources_v1_impl").lstrip("| "),
+        )
+        seed = (
+            '| makeresults | eval samples=split("100@200;300@320", ";") '
+            '| mvexpand samples | eval parts=split(samples, "@") '
+            "| eval _time=tonumber(mvindex(parts, 0)), _indextime=tonumber(mvindex(parts, 1)) "
+        )
+        summary_seed = "| makeresults | eval _time=500, _indextime=530 "
+        query = re.sub(r"search `adm_index_netflow`[^|]*", lambda _: seed, query)
+        query = re.sub(
+            r"search `adm_index_summary_v2` source=\"adm:conversation\"[^|]*",
+            lambda _: summary_seed,
+            query,
+        )
+        query = re.sub(
+            r"search `adm_index_[a-z0-9_]+`[^|]*",
+            "| makeresults | where false()",
+            query,
+        )
+        rows = {row["name"]: row for row in self.lab.search(query, "0", "1")}
+        netflow = rows["NetFlow"]
+        self.assertEqual(netflow["max_ingest_lag"], "100")
+        self.assertEqual(netflow["records"], "2")
+        self.assertEqual(netflow["status"], "ok")
+        self.assertEqual(rows["Catalyst Center"]["status"], "no_visible_records")
+        self.assertEqual(rows["Meraki"]["status"], "no_visible_records")
+        v2 = rows["Conversation summary v2"]
+        self.assertEqual(v2["status"], "visible")
+        self.assertEqual(v2["max_ingest_lag"], "30")
+        self.assertEqual(v2["contract_version"], "2")
 
     def test_source_window_uses_ingestion_time_for_old_events(self):
         import time

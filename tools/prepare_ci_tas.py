@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import tarfile
 import tempfile
 from pathlib import Path
@@ -23,6 +24,22 @@ REQUIRED = {
     "Cisco DC Networking": (
         "cisco-dc-networking_122.tar.gz",
         "cisco-dc-networking_122",
+    ),
+    "Cisco Enterprise Networking App for Splunk": (
+        "cisco-enterprise-networking-app-for-splunk_4020.tgz",
+        "cisco-enterprise-networking-app-for-splunk_4020",
+    ),
+    "Cisco Enterprise Networking Add-on for Splunk": (
+        "cisco-enterprise-networking-add-on-for-splunk_4050.tgz",
+        "cisco-enterprise-networking-add-on-for-splunk_4050",
+    ),
+    "Cisco Enterprise Networking NetFlow Add-on for Splunk": (
+        "cisco-enterprise-networking-netflow-add-on-for-splunk_400.tgz",
+        "cisco-enterprise-networking-netflow-add-on-for-splunk_400",
+    ),
+    "Cisco Meraki Add-on for Splunk": (
+        "cisco-meraki-add-on-for-splunk_350.tgz",
+        "cisco-meraki-add-on-for-splunk_350",
     ),
 }
 
@@ -51,20 +68,51 @@ def _verify(path: Path, expected: str) -> None:
 def _safe_extract(archive: Path, destination: Path) -> set[str]:
     with tarfile.open(archive) as tar:
         members = tar.getmembers()
+        if len(members) > 20000:
+            raise ValueError(f"too many archive members in {archive}")
+        paths = set()
+        total_size = 0
         for member in members:
             target = Path(member.name)
-            if target.is_absolute() or ".." in target.parts:
+            if (
+                target.is_absolute()
+                or ".." in target.parts
+                or not target.parts
+                or "\\" in member.name
+                or ":" in target.parts[0]
+            ):
                 raise ValueError(f"unsafe archive member in {archive}: {member.name}")
+            if target in paths:
+                raise ValueError(f"duplicate archive path in {archive}: {member.name}")
+            paths.add(target)
             if member.issym() or member.islnk():
                 raise ValueError(f"links are not allowed in {archive}: {member.name}")
             if not member.isdir() and not member.isfile():
                 raise ValueError(
                     f"special files are not allowed in {archive}: {member.name}"
                 )
-        try:
-            tar.extractall(destination, members=members, filter="data")
-        except TypeError:  # Python 3.11 compatibility for local tooling.
-            tar.extractall(destination, members=members)
+            total_size += member.size
+            if (
+                member.size < 0
+                or member.size > 256 * 1024 * 1024
+                or total_size > 2 * 1024**3
+            ):
+                raise ValueError(f"archive exceeds extraction size limits: {archive}")
+        # Extract as research data. Do not honor vendor ownership, special modes,
+        # timestamps, or execute permissions. All paths are validated before any
+        # file is written, and the caller supplies a fresh staging directory.
+        for member in members:
+            target = destination / member.name
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True, mode=0o700)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                source = tar.extractfile(member)
+                if source is None:
+                    raise ValueError(f"archive file content is missing: {member.name}")
+                with source, target.open("xb") as output:
+                    shutil.copyfileobj(source, output)
+                target.chmod(0o600)
         return {Path(member.name).parts[0] for member in members if member.name}
 
 

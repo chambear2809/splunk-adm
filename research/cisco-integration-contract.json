@@ -1,0 +1,105 @@
+{
+  "contract_version": 1,
+  "base_commit": "0a816823558ce7fa18d2964e71dcdf5826ff1468",
+  "qualification": {
+    "authorized_execution": "Isolated local Splunk Enterprise lab and TA-grounded synthetic events",
+    "not_established_by_synthetic_testing": [
+      "Actual API collection",
+      "Exporter template decoding",
+      "Distributed Enterprise/SHC",
+      "Splunk Cloud",
+      "Production capacity"
+    ],
+    "release": "Draft PR until required deployment qualification and independent Astra review pass"
+  },
+  "source_indices": {
+    "adm_index_catalyst": "cisco_catalyst",
+    "adm_index_meraki": "cisco_meraki"
+  },
+  "identity": {
+    "new_endpoint_kind": "network_client",
+    "meraki_authority": "organizationId plus networkId; native client key is canonical MAC",
+    "catalyst_authority": "Verified controller/account authority; native client identifier or canonical MAC",
+    "event_time": "Explicit source timestamp; never substitute collection time for historical attachment",
+    "collection_time": "Preserve separately when supplied; indexed receipt time is separately identified",
+    "attachment": "Time-bounded source evidence; Catalyst snapshot validity begins at first indexed receipt, never at controller lastUpdatedTime; Meraki association correlation requires compatible MAC/IP, scope and time. Missing, stale, simultaneous conflicting or capped history remains unresolved.",
+    "history": "Stable event identity for replay; preserve event ordering and moves; never silently bridge unavailable history or capped intervals",
+    "persistence": "New sources use source-qualified keys and versioned records; preserve existing source keys and optional network_history contract; stage incompatible derived changes in new collections/indexes before cutover",
+    "replay": "Collapse identical Catalyst payloads to earliest receipt; later receipts update health only and cannot renew attachment validity. Without a source poll ID or collector timestamp, a repeated unchanged poll cannot be distinguished from replay. Meraki event identity uses only observed fields."
+  },
+  "routing": {
+    "rule": "Explicit unambiguous source-to-scope mapping is required for new source correlation",
+    "domain": "Preserve actual exporter domain/VPN/VRF when present; one exporter with multiple domains requires distinct mappings",
+    "unmapped": "Expose incomplete evidence; do not correlate through shared default scope",
+    "kubernetes": "Retain cluster identity in observers and hosts; per-cluster forwarding settings; no new cluster silently inherits a conflicting fleet-wide setting",
+    "registration_key": "SHA-256 of a JSON array of source, source_authority, domain_kind, observation_domain_present, observation_domain_id, vpn_id and routing_domain. Cast each dimension inline with tostring(coalesce(field, empty string)) inside json_array. Missing domain differs from zero. Exactly one explicit mapped row with duplicate_count=1, scope, cluster and a supported profile is required; ambiguity and missing fields fail closed."
+  },
+  "topology": {
+    "new_device_kinds": [
+      "access_point",
+      "router",
+      "host"
+    ],
+    "device_key": "Source authority plus native device identifier; names and addresses are aliases with ambiguity detection",
+    "link_kinds": [
+      "physical",
+      "wireless_association",
+      "overlay_context",
+      "traffic_observation"
+    ],
+    "rule": "Physical adjacency is not a packet route; inventory shortest paths and tunnel availability cannot assert connection transit; missing links stay gaps"
+  },
+  "traffic": {
+    "campus_and_meraki": "Standard FNF/IPFIX only; never apply Catalyst SD-WAN proprietary fields indiscriminately",
+    "sdwan": "Only fields verified in the 4.0.0 mapping and selected exporter template",
+    "counters": "Keep exporter, interfaces, direction, observation point, domain and counter/sampling semantics; unknown metrics are not authoritative; ingress/egress views cannot be summed as independent traffic",
+    "records": "Flow record counts are distinct from connection counts",
+    "nat": "Without actual translation/backend evidence, keep an unresolved boundary"
+  },
+  "presentation": {
+    "graph_schema": "Keep old schema_version 1 snapshots readable; optional typed additions only unless a dual reader is implemented",
+    "client_attributes": [
+      "source_authority",
+      "routing_domain",
+      "client_mac",
+      "access_platform",
+      "attachment_basis",
+      "attachment_event_time",
+      "attachment_collected_time",
+      "attachment_received_time",
+      "attachment_device_id",
+      "attachment_device_name",
+      "ssid_number",
+      "attachment_status"
+    ],
+    "wireless_label": "Correlated from association and flow evidence",
+    "surfaces": [
+      "Setup",
+      "Data health",
+      "Readiness",
+      "Applications",
+      "Find",
+      "Map",
+      "Inspectors",
+      "Exports",
+      "Evidence drilldown"
+    ]
+  },
+  "demo": {
+    "catalyst": "Wired Catalyst client, separate SD-WAN traffic observation, Cilium application on ACI",
+    "meraki": "Bridged MR wireless client, supported MS390 IPFIX observation, distinct Cilium application on NX-OS",
+    "applications": "Distinct clusters and scoped service identities; collected Pod/Node/Service/EndpointSlice and OTel spans; Hubble TO_ENDPOINT for inbound backend attribution",
+    "reference_forwarding": "Source-preserving LoadBalancer externalTrafficPolicy Local, native routing/BGP, L2 announcements disabled; no fabricated inbound Tetragon processConnect",
+    "fixtures": "Combined dataset plus existing scenarios; capture normalized graph/topology/catalog/scope/Find fixtures from implemented Splunk searches"
+  },
+  "ownership": {
+    "root": "Architecture, package manifest, lab harness/lifecycle, integration/capture, migration/recovery coordination, release qualification and final verification",
+    "shared_splunk_configuration": "Single assigned pipeline worker",
+    "vendor_packages": "Downloaded archives remain static research data; lab installs only explicitly selected configuration plus the separate vendor app. Never rebundle into Atlas or execute downloaded input scripts during research."
+  },
+  "persistence": {
+    "legacy": "Existing v1 writers, rollup IDs and historical records stay in adm_summary. Existing KV keys are preserved.",
+    "staging": "New network client history version1 is additive. Changed flow semantics write contract_version2 to separately provisioned adm_summary_v2 via a disabled-by-default v2 writer.",
+    "cutover": "Explicit, validated reader/writer transition with configuration backup and bounded handoff; never point the legacy v1 writer at the v2 index. Restore both reader configuration and writer states for rollback; retain original data."
+  }
+}

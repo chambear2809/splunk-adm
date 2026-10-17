@@ -4,6 +4,7 @@ import type { Graph, GraphEdge } from "./graph";
 import { loadLive } from "./provider";
 import type { SearchClient } from "./data/searchClient";
 import { previousDemoGraph } from "./data/demoClient";
+import type { DemoScenario } from "./data/demoClient";
 import { formatInZone } from "./time";
 
 /** Anchor to the loaded snapshot, never to the editable picker or a new 'now'. */
@@ -29,7 +30,7 @@ export function ChangePanel({
   graph: Graph;
   client?: SearchClient;
   timezone?: string;
-  scenario: "aci" | "nxos";
+  scenario: DemoScenario;
 }) {
   const [result, setResult] = useState<{ previous: Graph; diff: GraphDiff }>();
   const [busy, setBusy] = useState(false);
