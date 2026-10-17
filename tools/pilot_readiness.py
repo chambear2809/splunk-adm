@@ -16,7 +16,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = "splunk_adm"
-EXPECTED_VERSION = "0.2.0"
+EXPECTED_VERSION = "0.3.0"
 
 SOURCES: dict[str, dict[str, Any]] = {
     "netflow": {
@@ -89,6 +89,22 @@ SOURCES: dict[str, dict[str, Any]] = {
         "index": "adm_index_summary",
         "quality": "summary",
         "fields": ("adm_record", "client_ip", "server_ip"),
+    },
+    "catalyst": {
+        "label": "Catalyst client observations",
+        "health_names": ("Catalyst Center", "Catalyst client observations"),
+        "index": "adm_index_catalyst",
+        "quality": (),
+        "fields": ("macAddress", "lastUpdatedTime"),
+        "source_id": "catalyst_client_snapshot",
+    },
+    "meraki": {
+        "label": "Meraki wireless associations",
+        "health_names": ("Meraki", "Meraki wireless associations"),
+        "index": "adm_index_meraki",
+        "quality": (),
+        "fields": ("occurredAt", "networkId", "organizationId", "type"),
+        "source_id": "meraki_association",
     },
 }
 BUILDER_JOBS = (
@@ -164,7 +180,8 @@ PRUNE_JOBS = tuple(
     )
 )
 ALL_JOBS = set(BUILDER_JOBS + PRUNE_JOBS)
-NONFLOW = {"k8s", "traces", "summary"}
+NONFLOW = {"k8s", "traces", "summary", "catalyst", "meraki"}
+NETWORK_CLIENT_SOURCES = {"catalyst", "meraki"}
 
 
 def analyze(snapshot, selected_sources=()):
@@ -175,12 +192,25 @@ def analyze(snapshot, selected_sources=()):
     def add(check, status, message, source=None, evidence=None):
         findings.append(_finding(check, status, message, source, evidence))
 
+    def source_evidence_check(name, check, data, messages, states):
+        """Report a narrow, explicit evidence status without treating absence as success."""
+        row = data.get(name) if isinstance(data, dict) else None
+        if not isinstance(row, dict):
+            add(check, "unknown", messages["unavailable"], name)
+            return
+        state = str(row.get("status", "")).lower()
+        status = states.get(state, "unknown")
+        evidence = {k: v for k, v in row.items() if k != "status"}
+        add(check, status, messages.get(state, messages["unavailable"]), name, evidence)
+
     for unknown in sorted(selected - SOURCES.keys()):
         add("source_selection", "blocked", f"unknown source: {unknown}")
     if not selected:
         add("source_selection", "unknown", "no sources selected")
     for name, spec in SOURCES.items():
         if name not in selected:
+            if name in NETWORK_CLIENT_SOURCES:
+                continue
             add("source_selection", "not_selected", "source was not selected", name)
             continue
         macro = snapshot.get("macros", {}).get(spec["index"])
@@ -192,11 +222,12 @@ def analyze(snapshot, selected_sources=()):
             add("macro", "pass", "index macro is configured", name)
         aliases = spec["quality"]
         aliases = (aliases,) if isinstance(aliases, str) else aliases
+        accepted_health_names = set(spec.get("health_names", ())) | {spec["label"]}
         health = next(
             (
                 r
                 for r in _rows(snapshot, "source_health")
-                if r.get("name") == spec["label"] or r.get("source") in aliases
+                if r.get("name") in accepted_health_names or r.get("source") in aliases
             ),
             {},
         )
@@ -209,6 +240,92 @@ def analyze(snapshot, selected_sources=()):
             else "visibility is unavailable or no records are visible",
             name,
         )
+        if name in NETWORK_CLIENT_SOURCES:
+            source_evidence_check(
+                name,
+                "source_permissions",
+                snapshot.get("source_permissions", {}),
+                {
+                    "complete": "source permissions are configured and verified",
+                    "partial": "source permissions are incomplete",
+                    "unavailable": "source permission evidence is unavailable",
+                },
+                {"complete": "pass", "partial": "blocked", "unavailable": "unknown"},
+            )
+            schemas = snapshot.get("raw_schema")
+            schema = schemas.get(name, {}) if isinstance(schemas, dict) else {}
+            if isinstance(schema, dict) and schema.get("status") in {
+                "complete",
+                "partial",
+            }:
+                total, valid = (
+                    _count(schema.get("records")),
+                    _count(schema.get("valid")),
+                )
+                if total is None or valid is None or total == 0 or valid > total:
+                    schema_status = "unknown"
+                    schema_message = "raw schema evidence is unavailable or invalid"
+                elif valid != total or schema.get("status") == "partial":
+                    schema_status = "blocked"
+                    schema_message = (
+                        "raw records do not satisfy the source field contract"
+                    )
+                else:
+                    schema_status = "pass"
+                    schema_message = "raw records satisfy the source field contract"
+                add(
+                    "raw_schema",
+                    schema_status,
+                    schema_message,
+                    name,
+                    {
+                        "records": total,
+                        "valid": valid,
+                        "required_fields": spec["fields"],
+                    },
+                )
+            else:
+                add("raw_schema", "unknown", "raw schema evidence is unavailable", name)
+            source_evidence_check(
+                name,
+                "source_mapping",
+                snapshot.get("source_scope", {}),
+                {
+                    "mapped": "source-to-scope mapping is explicit and unambiguous",
+                    "ambiguous": "source-to-scope mapping is ambiguous",
+                    "unmapped": "source-to-scope mapping is not configured",
+                    "unavailable": "source mapping evidence is unavailable",
+                },
+                {
+                    "mapped": "pass",
+                    "ambiguous": "blocked",
+                    "unmapped": "warning",
+                    "unavailable": "unknown",
+                },
+            )
+            source_evidence_check(
+                name,
+                "source_history",
+                snapshot.get("source_history", {}),
+                {
+                    "complete": "source history coverage is verified for the qualification window",
+                    "partial": "source history has gaps or capped intervals",
+                    "unavailable": "source history coverage is unavailable",
+                },
+                {"complete": "pass", "partial": "warning", "unavailable": "unknown"},
+            )
+            source_evidence_check(
+                name,
+                "collection_evidence",
+                snapshot.get("collection_evidence", {}),
+                {
+                    "actual": "actual source collection is verified",
+                    "synthetic": "only synthetic test events are present; actual collection is unverified",
+                    "unavailable": "actual source collection evidence is unavailable",
+                },
+                {"actual": "pass", "synthetic": "warning", "unavailable": "unknown"},
+            )
+            continue
         if name in NONFLOW:
             raw = (snapshot.get("raw_fields") or {}).get(name, {})
             total, valid = _count(raw.get("records")), _count(raw.get("valid"))

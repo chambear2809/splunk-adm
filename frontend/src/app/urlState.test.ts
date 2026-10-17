@@ -40,6 +40,15 @@ describe("Atlas deep links", () => {
     expect(parseUrlState(new URLSearchParams(), true).mode).toBe("live");
     expect(parseUrlState(new URLSearchParams()).mode).toBe("demo");
   });
+  it.each(["catalyst-aci", "meraki-nxos"])(
+    "round trips the %s synthetic networking demo",
+    (scenario) => {
+      const state = parseUrlState(
+        new URLSearchParams(`mode=demo&scenario=${scenario}`),
+      );
+      expect(parseUrlState(stateParams(state)).scenario).toBe(scenario);
+    },
+  );
   it("allows only implemented views including legacy redirect", () => {
     expect(pageFromPath("/en-US/app/splunk_adm/applications")).toBe(
       "applications",

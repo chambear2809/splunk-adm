@@ -17,10 +17,13 @@ import {
 import { IdentityBadge } from "./Inspector";
 import {
   deviceSummaries,
+  deviceKindLabel,
   fabricLabel,
   type DeviceSummary,
   type TopologyIndex,
 } from "./topology";
+
+export const MAX_ATTACHMENT_REFERENCES = 32;
 
 const ROLE_LABEL: Record<DeviceSummary["role"], string> = {
   firewall: "Firewall",
@@ -37,6 +40,58 @@ function RoleIcon({ role }: { role: DeviceSummary["role"] }) {
   return <Network {...p} />;
 }
 
+function inventoryDetails(
+  device: NonNullable<DeviceSummary["device"]>,
+): string {
+  const fields = [
+    device.sources.length ? `Source ${device.sources.join(", ")}` : undefined,
+    device.mapping_status ? `Mapping ${device.mapping_status}` : undefined,
+    device.scope ? `Scope ${device.scope}` : undefined,
+    device.routing_domain
+      ? `Routing domain ${device.routing_domain}`
+      : undefined,
+    device.access_platform ? `Access ${device.access_platform}` : undefined,
+    device.client_mac ? `Client MAC ${device.client_mac}` : undefined,
+    device.client_ip ? `Client IP ${device.client_ip}` : undefined,
+    device.attachment_status
+      ? `Attachment ${device.attachment_status}`
+      : undefined,
+    device.evidence_kind ? `Evidence ${device.evidence_kind}` : undefined,
+    device.attachment_basis ? `Basis ${device.attachment_basis}` : undefined,
+    device.source_time
+      ? `Source time/freshness ${device.source_time}`
+      : undefined,
+    device.received_time ? `Received ${device.received_time}` : undefined,
+    device.latest_received_time
+      ? `Latest received ${device.latest_received_time}`
+      : undefined,
+    device.collected_time
+      ? `Collector time ${device.collected_time}`
+      : undefined,
+    device.attachment_event_time
+      ? `Attachment event ${device.attachment_event_time}`
+      : undefined,
+    device.attachment_received_time
+      ? `Attachment received ${device.attachment_received_time}`
+      : undefined,
+    device.attachment_collected_time
+      ? `Attachment collector time ${device.attachment_collected_time}`
+      : undefined,
+    device.attachment_device_name
+      ? `Attached device ${device.attachment_device_name}`
+      : undefined,
+    device.attachment_interface
+      ? `Attachment interface ${device.attachment_interface}`
+      : undefined,
+    device.ssid_number ? `SSID number ${device.ssid_number}` : undefined,
+    device.overlay_peer_system_ip
+      ? `Overlay peer ${device.overlay_peer_system_ip}${device.overlay_peer_color ? ` (${device.overlay_peer_color})` : ""}`
+      : undefined,
+    device.overlay_protocol ? `Tunnel ${device.overlay_protocol}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+  return fields.join(" · ");
+}
+
 function Conversations({
   edges,
   index,
@@ -50,7 +105,10 @@ function Conversations({
 }) {
   const node = (id: string) => index.node.get(id);
   const sorted = [...edges].sort(
-    (a, b) => (b.bytes ?? -1) - (a.bytes ?? -1) || a.id.localeCompare(b.id),
+    (a, b) =>
+      (a.traffic_observations?.length || b.traffic_observations?.length
+        ? 0
+        : (b.bytes ?? -1) - (a.bytes ?? -1)) || a.id.localeCompare(b.id),
   );
   return (
     <table>
@@ -82,7 +140,11 @@ function Conversations({
             <td>{portLabel(e)}</td>
             <td>{contractCell(e)}</td>
             <td className="num">
-              {e.bytes !== undefined ? prettyBytes(e.bytes) : "—"}
+              {e.traffic_observations?.length
+                ? "See observations"
+                : e.bytes !== undefined
+                  ? prettyBytes(e.bytes)
+                  : "—"}
             </td>
             <td>
               {e.acl_action === "drop" ? (
@@ -111,9 +173,9 @@ export function DevicesView({
   selected?: string;
   onSelect: (id: string) => void;
 }) {
-  const { devices, unseenByFabric, idle } = useMemo(
-    () => deviceSummaries(graph.edges, topo),
-    [graph, topo],
+  const { devices, unseenByFabric, idle, attachmentReferences } = useMemo(
+    () => deviceSummaries(graph.edges, topo, index),
+    [graph, index, topo],
   );
   return (
     <div className="devices-view">
@@ -179,6 +241,89 @@ export function DevicesView({
           />
         </section>
       ))}
+      {attachmentReferences.length > 0 && (
+        <section
+          className="device-card attachment-references"
+          aria-label="Client attachment devices"
+        >
+          <header>
+            <Waypoints size={16} aria-hidden />
+            <div>
+              <h3>Client attachment devices</h3>
+              <p className="muted small">
+                Source-qualified client evidence is shown alongside compatible
+                flow observations. It does not prove a packet route.
+              </p>
+            </div>
+          </header>
+          <ul className="seen-list">
+            {attachmentReferences
+              .slice(0, MAX_ATTACHMENT_REFERENCES)
+              .map((reference) => (
+                <li key={reference.key}>
+                  <b>
+                    {reference.device
+                      ? `${reference.device.name} (${deviceKindLabel(
+                          reference.device.kind,
+                          reference.device.cluster,
+                        )})`
+                      : "Unresolved attachment device"}
+                  </b>
+                  <small>
+                    {reference.device
+                      ? [
+                          reference.device.id,
+                          reference.device.device_authority,
+                          reference.device.scope,
+                          reference.device.cluster,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")
+                      : [
+                          reference.unresolvedReason,
+                          reference.evidence.device_id,
+                          reference.evidence.device_name,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                    <br />
+                    {[
+                      reference.client
+                        ? `Client ${reference.client}`
+                        : undefined,
+                      reference.evidence.status,
+                      reference.evidence.basis,
+                      reference.evidence.device_serial,
+                      reference.evidence.ssid_number
+                        ? `SSID ${reference.evidence.ssid_number}`
+                        : undefined,
+                      ...reference.exporterContext,
+                      `${reference.flowEdges.length} correlated flow ${
+                        reference.flowEdges.length === 1
+                          ? "observation"
+                          : "observations"
+                      }`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </small>
+                </li>
+              ))}
+          </ul>
+          {attachmentReferences.length > MAX_ATTACHMENT_REFERENCES && (
+            <p className="muted small">
+              {plural(
+                attachmentReferences.length - MAX_ATTACHMENT_REFERENCES,
+                "additional attachment reference",
+              )}{" "}
+              {attachmentReferences.length - MAX_ATTACHMENT_REFERENCES === 1
+                ? "was"
+                : "were"}{" "}
+              omitted because the list is capped at {MAX_ATTACHMENT_REFERENCES}.
+            </p>
+          )}
+        </section>
+      )}
       <section className="device-card quiet">
         <header>
           <Waypoints size={16} aria-hidden />
@@ -205,7 +350,13 @@ export function DevicesView({
       {idle.length > 0 && (
         <p className="muted small">
           In inventory but not reporting these conversations:{" "}
-          {idle.map((d) => d.name).join(", ")}.
+          {idle
+            .map((d) => {
+              const details = inventoryDetails(d);
+              return `${d.name} (${deviceKindLabel(d.kind, d.cluster)})${details ? ` — ${details}` : ""}`;
+            })
+            .join(", ")}
+          .
         </p>
       )}
     </div>

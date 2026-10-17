@@ -1,0 +1,461 @@
+{
+  "scope": "Raw ingestion, scheduled history/v2 retention, and observed scheduler latency/capacity only; does not qualify client attachment or end-to-end path correlation.",
+  "qualification": "local synthetic workload only",
+  "operation_id": "1792187003-fbd3505db50e481ea54dee63e72a7192",
+  "started_at": 1792187003,
+  "finished_at": 1792188316,
+  "configuration": {
+    "duration_seconds": 900,
+    "events_per_second": 5
+  },
+  "production_duration_seconds": 900.006,
+  "observed_events_per_second": 4.983,
+  "producer_counts": {
+    "by_index": {
+      "cilium_hubble": 144,
+      "cisco_catalyst": 5,
+      "cisco_dc": 3464,
+      "cisco_isovalent": 32,
+      "cisco_meraki": 55,
+      "k8s": 488,
+      "netflow": 161,
+      "otel_traces": 136
+    },
+    "by_index_source": {
+      "cilium_hubble": {
+        "cilium:hubble:flow": 144
+      },
+      "cisco_catalyst": {
+        "cisco:dnac:client": 5
+      },
+      "cisco_dc": {
+        "cisco:dc:aci:class": 2836,
+        "cisco:dc:aci:stats": 140,
+        "cisco:dc:nd:endpoints": 28,
+        "cisco:dc:nd:flows": 40,
+        "cisco:dc:nexus9k": 420
+      },
+      "cisco_isovalent": {
+        "cisco:isovalent:processConnect": 32
+      },
+      "cisco_meraki": {
+        "meraki:accesspoints": 35,
+        "meraki:custom": 5,
+        "meraki:devices": 15
+      },
+      "k8s": {
+        "kube:object:endpointslices": 72,
+        "kube:object:gateways": 8,
+        "kube:object:httproutes": 8,
+        "kube:object:ingresses": 8,
+        "kube:object:nodes": 168,
+        "kube:object:pods": 112,
+        "kube:object:services": 112
+      },
+      "netflow": {
+        "stream:netflow": 161
+      },
+      "otel_traces": {
+        "otel:traces": 136
+      }
+    },
+    "by_source": {
+      "cilium:hubble:flow": 144,
+      "cisco:dc:aci:class": 2836,
+      "cisco:dc:aci:stats": 140,
+      "cisco:dc:nd:endpoints": 28,
+      "cisco:dc:nd:flows": 40,
+      "cisco:dc:nexus9k": 420,
+      "cisco:dnac:client": 5,
+      "cisco:isovalent:processConnect": 32,
+      "kube:object:endpointslices": 72,
+      "kube:object:gateways": 8,
+      "kube:object:httproutes": 8,
+      "kube:object:ingresses": 8,
+      "kube:object:nodes": 168,
+      "kube:object:pods": 112,
+      "kube:object:services": 112,
+      "meraki:accesspoints": 35,
+      "meraki:custom": 5,
+      "meraki:devices": 15,
+      "otel:traces": 136,
+      "stream:netflow": 161
+    },
+    "raw": 4485
+  },
+  "assessment": {
+    "complete": true,
+    "cycle_counts": {
+      "ADM - Conversation rollup v2": 5,
+      "ADM - Network client history builder": 4,
+      "ADM - Traffic observation rollup v2": 5
+    },
+    "cycle_failures": {},
+    "cycle_gaps_seconds": [],
+    "issues": [],
+    "max_run_duration_seconds": 1.605,
+    "missing_cycles": [],
+    "pending_input_count": 0,
+    "raw_count_first_last": [
+      3,
+      4485
+    ],
+    "raw_unique_count_first_last": [
+      0,
+      0
+    ],
+    "retained_unique_history_first_last": [
+      0,
+      7
+    ],
+    "retained_unique_traffic_first_last": [
+      0,
+      200
+    ],
+    "run_duration_seconds": {
+      "max": 1.605,
+      "p50": 0.365,
+      "p95": 0.946,
+      "samples": 14
+    },
+    "samples": 80,
+    "schedule_latency_seconds": {
+      "max": 0.0,
+      "p50": 0.0,
+      "p95": 0.0,
+      "samples": 14
+    },
+    "scheduled_input_coverage": true,
+    "unknown_job_states": [],
+    "unprocessed_backlog_available": true,
+    "unprocessed_backlog_first_last": [
+      0,
+      0
+    ]
+  },
+  "final_evidence": {
+    "active_jobs": [],
+    "conversation_conflicting_rollup_ids": 0,
+    "conversation_content_mismatch": 0,
+    "conversation_duplicate_rollup_ids": 0,
+    "conversation_expected_duplicate_rollup_ids": 9,
+    "conversation_expected_unique": 227,
+    "conversation_identity_mismatch_count": 0,
+    "conversation_invalid_identity_count": 0,
+    "conversation_unique_count": 227,
+    "conversation_window_coverage": true,
+    "final_drain": true,
+    "history_content_mismatch": 0,
+    "history_count": 7,
+    "history_expected_unique": 7,
+    "history_receipt_mismatch": 0,
+    "history_unique_count": 7,
+    "history_window_coverage": true,
+    "mapped_client_count": 5,
+    "mapped_traffic_expected_unique": 156,
+    "mapped_traffic_retained_unique": 156,
+    "max_run_duration_seconds": 1.605,
+    "observed_at": 1792188316.240298,
+    "pending_history_count": 0,
+    "pending_input_count": 0,
+    "pending_traffic_count": 0,
+    "producer_stop_index_time": 1792187904,
+    "raw_count": 4485,
+    "raw_counts_match": true,
+    "raw_expected_count": 4485,
+    "raw_source_counts_match": true,
+    "raw_unique_count": 0,
+    "required_jobs": [
+      "ADM - Network client history builder",
+      "ADM - Conversation rollup v2",
+      "ADM - Traffic observation rollup v2"
+    ],
+    "scheduled_input_coverage": true,
+    "traffic_conflicting_rollup_ids": 0,
+    "traffic_content_mismatch": 0,
+    "traffic_count": 200,
+    "traffic_duplicate_rollup_ids": 0,
+    "traffic_expected_duplicate_rollup_ids": 0,
+    "traffic_expected_unique": 200,
+    "traffic_identity_mismatch_count": 0,
+    "traffic_invalid_identity_count": 0,
+    "traffic_unique_count": 200,
+    "traffic_window_coverage": true,
+    "unprocessed_backlog": 0
+  },
+  "job_cycles": {
+    "ADM - Conversation rollup v2": [
+      {
+        "input_window": [
+          1792187700,
+          1792188000
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.879,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792188300.0,
+        "search_window": [
+          1792101900,
+          1792189200
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792188300_22",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792187400,
+          1792187700
+        ],
+        "reason": null,
+        "run_duration_seconds": 1.605,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792188000.0,
+        "search_window": [
+          1792101600,
+          1792188900
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792188000_19",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792187100,
+          1792187400
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.946,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187700.0,
+        "search_window": [
+          1792101300,
+          1792188600
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792187700_16",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186800,
+          1792187100
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.872,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187400.0,
+        "search_window": [
+          1792101000,
+          1792188300
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792187400_13",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186500,
+          1792186800
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.882,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187100.0,
+        "search_window": [
+          1792100700,
+          1792188000
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792187100_9",
+        "status": "success",
+        "window_metadata_complete": true
+      }
+    ],
+    "ADM - Network client history builder": [
+      {
+        "input_window": [
+          1792187460,
+          1792188060
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.365,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792188060.0,
+        "search_window": [
+          0,
+          1792188960
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792188060_20",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792187160,
+          1792187760
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.329,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187760.0,
+        "search_window": [
+          0,
+          1792188660
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792187760_17",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186860,
+          1792187460
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.352,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187460.0,
+        "search_window": [
+          0,
+          1792188360
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792187460_14",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186560,
+          1792187160
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.384,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187160.0,
+        "search_window": [
+          0,
+          1792188060
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792187160_11",
+        "status": "success",
+        "window_metadata_complete": true
+      }
+    ],
+    "ADM - Traffic observation rollup v2": [
+      {
+        "input_window": [
+          1792187700,
+          1792188000
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.304,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792188300.0,
+        "search_window": [
+          1792101900,
+          1792189200
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792188300_21",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792187400,
+          1792187700
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.267,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792188000.0,
+        "search_window": [
+          1792101600,
+          1792188900
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792188000_18",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792187100,
+          1792187400
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.281,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187700.0,
+        "search_window": [
+          1792101300,
+          1792188600
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792187700_15",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186800,
+          1792187100
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.267,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187400.0,
+        "search_window": [
+          1792101000,
+          1792188300
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792187400_12",
+        "status": "success",
+        "window_metadata_complete": true
+      },
+      {
+        "input_window": [
+          1792186500,
+          1792186800
+        ],
+        "reason": null,
+        "run_duration_seconds": 0.661,
+        "schedule_latency_seconds": 0.0,
+        "scheduled_time": 1792187100.0,
+        "search_window": [
+          1792100700,
+          1792188000
+        ],
+        "sid": "scheduler__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792187100_10",
+        "status": "success",
+        "window_metadata_complete": true
+      }
+    ]
+  },
+  "raw_journal_sha256": "85ae9415fbc9d8496cb0085caccf6a08f7cbee4d87c8a1beb591b6fed774e676",
+  "measured_source_sha256": {
+    "splunk_app/splunk_adm/default/macros.conf": "178ccaa1daf42fa0321dae285096de35a177c0821331a008a033db54f34c9068",
+    "splunk_app/splunk_adm/default/savedsearches.conf": "d7574bffdd1817e24d7c625c9c34677be3e3f4422ae84e8cf5820d66fa8e25df",
+    "tools/cisco_load_probe.py": "3e39af406e36c6ddf6f5bc19b6c89e306353cdff7ccfd474f17b4374996d30b9",
+    "tools/gen_raw_fixtures.py": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
+    "research/cisco-pipeline-interface.json": "3bee874bfa172b252194e85d761c35f130c53cdfaba173591c6d0957de04a697"
+  },
+  "writer_macro_definition_sha256": {
+    "adm_network_client_history_build": "e9e3044df38d8d1ac6e91648692ab041a6c72a28ce586466f8fff3836f0b75d7",
+    "adm_conversation_rollup_v2": "3d90084e99bbd483babb0c6c78c965fae15d0c969d58adf05bc3f259bd32b976",
+    "adm_traffic_observations_v2": "752bf36ae2f0f9d4d45b23df4ab9d008cb0903e143c37168fcb713881ce4f744"
+  },
+  "resources": {
+    "host_architecture": "arm64",
+    "host_memory_bytes": 19327352832,
+    "host_physical_cores": 12,
+    "docker_memory_bytes": 8214585344,
+    "docker_logical_cpus": 12,
+    "docker_architecture": "aarch64",
+    "docker_server_version": "29.8.0",
+    "container_memory_limit_bytes": 0,
+    "container_cpu_limit_nano_cpus": 0,
+    "container_cpuset": "",
+    "container_image": "splunk/splunk:10.6.0.5",
+    "container_image_architecture": "amd64",
+    "unrestricted_container_limits_note": "Zero container resource limits mean no explicit limit within the Docker VM, not unlimited host capacity."
+  },
+  "limitation": "Not a saturation test, collector/exporter validation, distributed/SHC/Cloud qualification, or end-to-end graph latency measurement. Graph-only source and UI changes after this run require their own functional checks; measured writers were unchanged."
+}

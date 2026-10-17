@@ -5,7 +5,7 @@ Recovery runs are administrator operations. Keep the original raw data and recor
 ## Missed runs during an outage
 
 Do not assume that continuous scheduling automatically replays an outage. The
-[exclusive local scheduler rehearsal](benchmarks/2026-10-13-pipeline.md) resumed
+[exclusive local scheduler rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-13-pipeline.md) resumed
 future jobs but did not recover a missed slice, despite a 24-hour lookback.
 Compare expected scheduled slots with successful executions after restart and
 verify raw-versus-summary counts. Recover each affected closed slice using the
@@ -17,14 +17,14 @@ behavior in the tested environment, not a qualification of other deployments.
 The lab now waits for both KV Store readiness and a successful collection data
 read after restart; that readiness check alone does not restore missed slots.
 
-The [assisted lab rehearsal](SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
+The [assisted lab rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/SCHEDULER_TESTS.md#assisted-recovery-rehearsal)
 exercises the absolute-slice procedure and records replay jobs separately from
 native scheduler activity. The shipped action is **automated assisted
 recovery**: it is administrator-only and separately opt-in. The accepted KV
-claim gate covers standalone Splunk only. The [core milestone live tests](benchmarks/2026-10-14-recovery-core.md)
-passed on standalone Splunk 10.6.0.5. The separate abandoned-lease supervisor
+claim gate covers standalone Splunk only. The [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
+passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts any 10.6.x patch release. The separate abandoned-lease supervisor
 adds detection; it never takes over a recovery. SHC and failover behavior are not qualified. The action
-refuses other versions or an enabled SHC, and remains disabled until local
+refuses versions other than 10.6.x, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
 overrides explicitly enable both the saved-search action and
 `local/adm_recovery.conf`. Native scheduler catch-up remains a failed
 qualification; the manual absolute-slice fallback remains required when the
@@ -34,7 +34,7 @@ action refuses or becomes uncertain.
 *latest* scheduler.log status per saved search, so a missed slot followed by
 a successful later slot still reads `status="ok"`. `ADM - Scheduler
 missed-slot alert` (search `adm_health_missed_slots`) closes that gap by
-diffing expected five-minute cron slots against `scheduler.log` successes
+diffing expected five-minute writer slots and hourly V2 catalog slots against `scheduler.log` successes
 whose SID starts with `scheduler__`, with a 10-minute grace period before a
 slot counts as missed. Only slots strictly after a target's earliest visible
 scheduler success are expected: gaps have `reason=missed_slot`, while slots
@@ -44,8 +44,8 @@ row without `scheduled_time`; investigate its configuration and scheduler
 history instead of treating the row as a replayable slice. Disabled and
 explicitly unscheduled targets are excluded. A successful run after a pause
 does not reset an earlier checkpoint or clear the intervening gaps.
-The saved alert searches from `-1445m@m` (24 hours plus the preceding
-five-minute checkpoint); if `adm_missed_slot_lookback` is increased, extend
+The saved alert searches from `-1500m@m` (24 hours plus the preceding
+hourly checkpoint); if `adm_missed_slot_lookback` is increased, extend
 the alert's `dispatch.earliest_time` accordingly. It ships
 **disabled**, like every other saved search in this app. Enabling it requires
 three separate steps: (1) enable the saved search itself; (2) configure
@@ -96,6 +96,14 @@ Splunk Cloud review; this milestone does not qualify recovery for Cloud.
 
 ## Automated assisted recovery core action
 
+The action's allowlist covers the existing V1 identity, service-binding,
+service-backend and conversation writers. The Cisco client-history builder,
+V2 conversation and traffic writers, and V2 catalog are monitored by missed-slot
+detection but are outside that allowlist. A detected V2 gap requires an
+administrator's bounded replay and readback evidence; it is not automatically
+recovered by enabling the action. V2 outage recovery on distributed Enterprise,
+SHC and Cloud remains an open [qualification gate](CISCO_NETWORKING_QUALIFICATION.md).
+
 The core action handles one target at a time. Before pausing, it reads and
 durably records the target's saved-search state, configuration fingerprint and
 owner claim. The record is written before the REST pause, so a process failure
@@ -141,7 +149,7 @@ inconclusive, the slot remains uncertain and the manual fallback applies.
 ## Abandoned recovery claims
 
 `ADM - Recovery abandoned-lease alert` ships disabled. On qualified standalone
-Splunk 10.6.0.5, an administrator can enable it independently of the recovery
+Splunk 10.6.x (live-tested on 10.6.0.5), an administrator can enable it independently of the recovery
 action. It pages through the recovery-state lookup every five minutes,
 including targets that are paused and claims older than the missed-slot
 history window. It reuses `adm_kv_read_all` (20 pages of 10,000 rows) and
@@ -207,9 +215,9 @@ Builders upsert deterministic KV keys. Replay their original closed slices in ch
 
 ## Pruning and maintenance
 
-All five prune searches ship with scheduling disabled, and `adm_prune_maintenance=0` makes them read-only reports. Enabling a prune saved search alone cannot authorize its collection rewrite. The gate is an explicit operator assertion of a maintenance window, **not a lock**. Scheduling prunes between normal builder start times cannot prevent a long or delayed builder from overlapping.
+All prune searches, including the additional Cisco client-history prune, ship with scheduling disabled, and `adm_prune_maintenance=0` makes them read-only reports. Enabling a prune saved search alone cannot authorize its collection rewrite. The gate is an explicit operator assertion of a maintenance window, **not a lock**. Scheduling prunes between normal builder start times cannot prevent a long or delayed builder from overlapping.
 
-1. Pause **all** ADM builder and prune schedules and prevent manual dispatches. Drain or cancel every active builder/prune job. This includes service binding, service backends/routes, identity and ACI policy writers.
+1. Pause **all** ADM builder and prune schedules and prevent manual dispatches. Drain or cancel every active builder/prune job. This includes service binding, service backends/routes, identity, Cisco client history and ACI policy writers.
 2. Back up each affected collection and record row counts. Confirm the backup is complete and recoverable before pruning.
 3. Temporarily set the local `adm_prune_maintenance` macro to `1`. Run one prune at a time and inspect `complete`, `rows_expired`, `rows_pruned`, and `warnings`. Incomplete reads never rewrite the collection. The empty-write safeguard also retains an entirely expired collection for separate administrator cleanup.
 4. Verify surviving rows and counts. Restore `adm_prune_maintenance=0` **before** resuming builders. Keep prune schedules disabled.
@@ -231,4 +239,4 @@ Splunk documents the underlying bucket and event-address fields in [Use default 
 
 ## Clean restore rehearsal
 
-The [backup/restore rehearsal](BACKUP_RESTORE.md) recreates the disposable lab, restores all six app collections and deployment-local files, rebuilds summaries from retained synthetic fixtures, and compares the resulting map. It does not substitute for a production raw-index or platform backup.
+The [backup/restore rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/BACKUP_RESTORE.md) recreates the disposable lab, restores all six app collections and deployment-local files, rebuilds summaries from retained synthetic fixtures, and compares the resulting map. It does not substitute for a production raw-index or platform backup.

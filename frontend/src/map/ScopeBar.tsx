@@ -7,6 +7,7 @@ import { SCOPE_FIELDS, scopeValues, cascadeScope } from "../data/scopes";
 import { useScopeOptions } from "../data/useScopeOptions";
 import type { GraphArgs } from "../rows";
 import type { SearchClient } from "../data/searchClient";
+import type { DemoScenario } from "../data/demoClient";
 const ComboBox = toolkitDefault(ComboBoxExport);
 const Button = toolkitDefault(ButtonExport);
 export function ScopeBar({
@@ -15,6 +16,7 @@ export function ScopeBar({
   live,
   client,
   demoArgs,
+  scenario = "aci",
   autoSelectSingle = false,
 }: {
   args: GraphArgs;
@@ -22,10 +24,11 @@ export function ScopeBar({
   live: boolean;
   client?: SearchClient;
   demoArgs?: GraphArgs;
+  scenario?: DemoScenario;
   autoSelectSingle?: boolean;
 }) {
   const id = useId();
-  const options = useScopeOptions(live, client);
+  const options = useScopeOptions(live, client, scenario);
   const selectedSingle = useRef(false);
   useEffect(() => {
     if (!autoSelectSingle || !live || selectedSingle.current || options.loading)

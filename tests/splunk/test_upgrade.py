@@ -13,6 +13,7 @@ import os
 import re
 import ssl
 import subprocess
+import sys
 import tarfile
 import tempfile
 import time
@@ -22,6 +23,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 APP = "splunk_adm"
@@ -76,7 +78,199 @@ def state_fingerprint(
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
+def archive_version(path: Path) -> str:
+    """Read the packaged app version without extracting or executing it."""
+    with tarfile.open(path, "r:gz") as archive:
+        matches = [
+            member
+            for member in archive.getmembers()
+            if member.name.removeprefix("./") == f"{APP}/default/app.conf"
+        ]
+        if len(matches) != 1 or not matches[0].isfile():
+            raise ValueError("package must contain exactly one regular app.conf")
+        if matches[0].size > 1024 * 1024:
+            raise ValueError("packaged app.conf exceeds the inspection limit")
+        source = archive.extractfile(matches[0])
+        if source is None:
+            raise ValueError("packaged app.conf cannot be read")
+        config = configparser.RawConfigParser()
+        config.read_string(source.read().decode("utf-8"))
+        value = config.get("launcher", "version", fallback="")
+        if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", value):
+            raise ValueError("packaged app version is missing or invalid")
+        return value
+
+
+def archive_savedsearches(path: Path) -> tuple[bytes, set[str]]:
+    """Inspect the installed release's shipped search inventory."""
+    with tarfile.open(path, "r:gz") as archive:
+        matches = [
+            member
+            for member in archive.getmembers()
+            if member.name.removeprefix("./") == f"{APP}/default/savedsearches.conf"
+        ]
+        if (
+            len(matches) != 1
+            or not matches[0].isfile()
+            or matches[0].size > 2 * 1024 * 1024
+        ):
+            raise ValueError("package requires one bounded regular savedsearches.conf")
+        source = archive.extractfile(matches[0])
+        if source is None:
+            raise ValueError("packaged savedsearches.conf cannot be read")
+        payload = source.read()
+    config = configparser.RawConfigParser()
+    config.read_string(payload.decode("utf-8").replace("\\\n", ""))
+    return payload, set(config.sections())
+
+
+def local_savedsearch_names(payload: bytes) -> set[str]:
+    """Return local stanzas that define executable saved searches."""
+    config = configparser.RawConfigParser()
+    config.read_string(payload.decode("utf-8").replace("\\\n", ""))
+    return {
+        name
+        for name in config.sections()
+        if config.get(name, "search", fallback="").strip()
+    }
+
+
 class UpgradeUnitTest(unittest.TestCase):
+    def _exercise_upload(self, package, request, subprocess_run, wait_ready):
+        integration = UpgradeIntegrationTest
+        saved = {
+            name: getattr(integration, name, mock.sentinel.missing)
+            for name in (
+                "package",
+                "password",
+                "lab",
+                "active_archive",
+                "upgrade_restore_needed",
+            )
+        }
+        integration.package = Path("/tmp/candidate.tar.gz")
+        integration.password = "test-password"
+        integration.lab = mock.Mock()
+        integration.lab.wait_ready.side_effect = wait_ready
+        integration.active_archive = integration.package
+        integration.upgrade_restore_needed = False
+        observed = None
+        try:
+            with (
+                mock.patch.object(
+                    sys.modules[__name__], "_request", side_effect=request
+                ),
+                mock.patch.object(subprocess, "run", side_effect=subprocess_run),
+            ):
+                integration._upload_update(package)
+                observed = (
+                    integration.active_archive,
+                    integration.upgrade_restore_needed,
+                )
+        finally:
+            self._last_upload_state = (
+                integration.active_archive,
+                integration.upgrade_restore_needed,
+            )
+            for name, value in saved.items():
+                if value is mock.sentinel.missing:
+                    delattr(integration, name)
+                else:
+                    setattr(integration, name, value)
+        return observed
+
+    def test_upload_marks_accepted_baseline_before_temp_cleanup_failure(self):
+        baseline = Path("/tmp/baseline.tar.gz")
+
+        def run(*args, **kwargs):
+            if "rm" in args[0]:
+                raise subprocess.CalledProcessError(1, args[0])
+            return mock.Mock()
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            self._exercise_upload(baseline, lambda *args: (200, b""), run, None)
+        self.assertEqual(self._last_upload_state[0], baseline)
+        self.assertTrue(self._last_upload_state[1])
+
+    def test_upload_retains_restore_flag_when_readiness_fails(self):
+        baseline = Path("/tmp/baseline.tar.gz")
+        with self.assertRaises(RuntimeError):
+            self._exercise_upload(
+                baseline,
+                lambda *args: (200, b""),
+                lambda *args, **kwargs: mock.Mock(),
+                RuntimeError("readiness failed"),
+            )
+        self.assertEqual(self._last_upload_state[0], baseline)
+        self.assertTrue(self._last_upload_state[1])
+
+    def test_upload_request_exception_marks_restore_needed(self):
+        candidate = Path("/tmp/candidate.tar.gz")
+        with self.assertRaises(RuntimeError):
+            self._exercise_upload(
+                candidate,
+                lambda *args: (_ for _ in ()).throw(RuntimeError("unknown outcome")),
+                lambda *args, **kwargs: mock.Mock(),
+                None,
+            )
+        self.assertTrue(self._last_upload_state[1])
+
+    def test_successful_candidate_upload_clears_restore_flag(self):
+        candidate = Path("/tmp/candidate.tar.gz")
+        observed = self._exercise_upload(
+            candidate,
+            lambda *args: (200, b""),
+            lambda *args, **kwargs: mock.Mock(),
+            None,
+        )
+        self.assertEqual(observed[0], Path("/tmp/candidate.tar.gz"))
+        self.assertFalse(observed[1])
+
+    def test_local_savedsearch_inventory_ignores_override_only_stanzas(self):
+        payload = (
+            b"[vendor-only override]\n"
+            b"disabled = 1\n"
+            b"\n"
+            b"[local search]\n"
+            b"search = | makeresults\n"
+        )
+        self.assertEqual(local_savedsearch_names(payload), {"local search"})
+
+    def test_savedsearch_inventory_comes_from_each_release_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name, searches in (
+                ("old", ["Old writer"]),
+                ("new", ["Old writer", "New writer"]),
+            ):
+                path = Path(directory) / (name + ".tar.gz")
+                content = "".join(
+                    f"[{search}]\nsearch = | makeresults\n" for search in searches
+                ).encode()
+                with tarfile.open(path, "w:gz") as archive:
+                    member = tarfile.TarInfo(f"{APP}/default/savedsearches.conf")
+                    member.size = len(content)
+                    archive.addfile(member, io.BytesIO(content))
+                self.assertEqual(archive_savedsearches(path), (content, set(searches)))
+
+    def test_archive_version_requires_one_regular_app_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "app.tar.gz"
+            for contents, expected in (
+                ([b"[launcher]\nversion = 0.2.0\n"], "0.2.0"),
+                ([b"[launcher]\nversion = unknown\n"], None),
+                ([b"[launcher]\nversion = 0.2.0\n"] * 2, None),
+            ):
+                with tarfile.open(path, "w:gz") as archive:
+                    for content in contents:
+                        member = tarfile.TarInfo(f"{APP}/default/app.conf")
+                        member.size = len(content)
+                        archive.addfile(member, io.BytesIO(content))
+                if expected is None:
+                    with self.assertRaises(ValueError):
+                        archive_version(path)
+                else:
+                    self.assertEqual(archive_version(path), expected)
+
     def test_permissive_local_metadata_is_reported_unsafe(self):
         self.assertEqual(
             metadata_risk("[savedsearches]\naccess = read : [ * ], write : [ * ]\n"),
@@ -293,20 +487,65 @@ class UpgradeIntegrationTest(unittest.TestCase):
         cls.original_scope_file = cls._docker_file(
             "/opt/splunk/etc/apps/splunk_adm/lookups/adm_observer_scope.csv"
         )
+        cls.original_savedsearch_file = cls._docker_file(
+            "/opt/splunk/etc/apps/splunk_adm/local/savedsearches.conf"
+        )
+        cls.preserved_local_search_names = (
+            local_savedsearch_names(cls.original_savedsearch_file[1])
+            if cls.original_savedsearch_file[0]
+            else set()
+        )
+        cls.active_archive = cls.package
         cls.addClassCleanup(cls._cleanup)
         cls._seed_state()
-        cls.before = cls._snapshot()
-        cls.baseline = cls._make_baseline()
+        cls.seeded = cls._snapshot()
+        real_baseline = os.environ.get("ADM_UPGRADE_BASELINE_PACKAGE")
+        cls.baseline = (
+            Path(real_baseline).resolve() if real_baseline else cls._make_baseline()
+        )
+        cls.real_baseline = bool(real_baseline)
+        cls.candidate_version = archive_version(cls.package)
+        cls.baseline_version = archive_version(cls.baseline)
+        if cls.real_baseline and cls.baseline_version == cls.candidate_version:
+            raise AssertionError("real baseline must have a distinct release version")
         cls._upload_update(cls.baseline)
         baseline_app = cls.lab._json("GET", f"/services/apps/local/{APP}")
         baseline_text = json.dumps(baseline_app)
-        if "Synthetic-old-baseline" not in baseline_text:
+        if cls.real_baseline:
+            cls._assert_installed_version(cls.baseline_version)
+        elif "Synthetic-old-baseline" not in baseline_text:
             raise AssertionError("synthetic baseline marker was not installed")
+        # The comparison begins with the actual installed baseline. Local
+        # disabled lab overrides are separately identified and preserved.
+        cls.before = cls._snapshot()
         cls._upload_update(cls.package)
+        cls._assert_installed_version(cls.candidate_version)
         current_app = cls.lab._json("GET", f"/services/apps/local/{APP}")
         if "Synthetic-old-baseline" in json.dumps(current_app):
             raise AssertionError("current package did not replace synthetic baseline")
         cls.after = cls._snapshot()
+        # Exercise a real release rollback, then restore the candidate for the
+        # remaining integration checks. The migration test independently covers
+        # public selector/writer rollback and retained versioned summary data.
+        cls.rolled_back = None
+        if cls.real_baseline:
+            try:
+                cls._upload_update(cls.baseline)
+                cls._assert_installed_version(cls.baseline_version)
+                cls.rolled_back = cls._snapshot()
+            finally:
+                cls._upload_update(cls.package)
+                cls._assert_installed_version(cls.candidate_version)
+
+    @classmethod
+    def _assert_installed_version(cls, expected):
+        response = cls.lab._json("GET", f"/services/apps/local/{APP}")
+        entries = response.get("entry", [])
+        if (
+            len(entries) != 1
+            or entries[0].get("content", {}).get("version") != expected
+        ):
+            raise AssertionError("installed app version does not match package")
 
     @classmethod
     def _cleanup(cls):
@@ -336,6 +575,16 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "/opt/splunk/etc/apps/splunk_adm/lookups/adm_observer_scope.csv",
             *cls.original_scope_file,
         )
+        cls._restore_docker_file(
+            "/opt/splunk/etc/apps/splunk_adm/local/savedsearches.conf",
+            *cls.original_savedsearch_file,
+        )
+        if getattr(cls, "package", None) is not None and (
+            getattr(cls, "active_archive", None) != cls.package
+            or getattr(cls, "upgrade_restore_needed", False)
+        ):
+            cls._upload_update(cls.package)
+            cls._assert_installed_version(cls.candidate_version)
         cls.lab._mgmt("GET", f"/servicesNS/nobody/{APP}/admin/macros/_reload").close()
 
     @classmethod
@@ -530,10 +779,16 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "metadata": metadata,
             "metadata_risk": risks,
             "acl": acl,
+            "shipped_search_inventory": sorted(
+                archive_savedsearches(cls.active_archive)[1]
+            ),
             "protected_acl": protected_acl,
             "scope_acl": cls._scope_acl(),
             "macro_file": macro_file,
             "scope_file": scope_file,
+            "savedsearch_file": cls._docker_file(
+                "/opt/splunk/etc/apps/splunk_adm/local/savedsearches.conf"
+            ),
         }
 
     @classmethod
@@ -555,14 +810,32 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "GET", f"/servicesNS/nobody/{APP}/saved/searches?count=0"
         )
         entries = result.get("entry", [])
-        expected = cls._packaged_savedsearch_names()
-        actual = {entry.get("name", "") for entry in entries}
-        if actual != expected:
+        shipped, expected = archive_savedsearches(cls.active_archive)
+        installed = cls._docker_file(
+            "/opt/splunk/etc/apps/splunk_adm/default/savedsearches.conf"
+        )
+        if installed != (True, shipped):
             raise AssertionError(
-                f"expected shipped saved-search ACLs {sorted(expected)!r}, got {sorted(actual)!r}"
+                "installed saved-search defaults differ from the release archive"
+            )
+        actual = {entry.get("name", "") for entry in entries}
+        expected_names = expected | cls.preserved_local_search_names
+        if actual != expected_names:
+            raise AssertionError(
+                "saved-search inventory mismatch: "
+                f"expected={sorted(expected_names)!r}, actual={sorted(actual)!r}, "
+                f"local_extras={sorted(cls.preserved_local_search_names - expected)!r}"
             )
         out = {}
         for entry in entries:
+            name = entry.get("name", "")
+            if name not in expected:
+                content = entry.get("content", {})
+                if content.get("disabled") is not True:
+                    raise AssertionError(
+                        "retained local search is not disabled after rollback"
+                    )
+                continue
             acl = entry.get("acl", {})
             out[entry.get("name", "")] = {
                 "permissions": cls._safe_acl(acl),
@@ -570,17 +843,6 @@ class UpgradeIntegrationTest(unittest.TestCase):
                 "sharing": acl.get("sharing"),
             }
         return out
-
-    @classmethod
-    def _packaged_savedsearch_names(cls) -> set[str]:
-        """Read the manifest from the checked-in package, not a count literal."""
-        path = HERE.parents[1] / "splunk_app" / APP / "default" / "savedsearches.conf"
-        names = set()
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line.startswith("[") and line.endswith("]"):
-                names.add(line[1:-1])
-        return names
 
     @classmethod
     def _scope_acl(cls) -> dict:
@@ -654,6 +916,10 @@ class UpgradeIntegrationTest(unittest.TestCase):
 
     @classmethod
     def _upload_update(cls, package):
+        # A request can succeed while cleanup of the upload or readiness polling
+        # fails. Mark the state before dispatch so class cleanup still retries
+        # the candidate package after an ambiguous outcome.
+        cls.upgrade_restore_needed = True
         remote = f"/tmp/adm-upgrade-{uuid.uuid4().hex}.tar.gz"
         subprocess.run(
             ["docker", "cp", str(package), f"{CONTAINER}:{remote}"],
@@ -678,6 +944,10 @@ class UpgradeIntegrationTest(unittest.TestCase):
             {"name": remote, "filename": "true", "update": "1"}
         ).encode()
         status, response = _request("POST", "/services/apps/local", cls.password, data)
+        if status in (200, 201, 202):
+            # Record the accepted archive before any fallible cleanup/readiness
+            # work, so setup failure cannot leave the baseline installed.
+            cls.active_archive = package
         subprocess.run(
             ["docker", "exec", "-u", "root", CONTAINER, "rm", "-f", remote],
             check=True,
@@ -688,8 +958,18 @@ class UpgradeIntegrationTest(unittest.TestCase):
                 f"Splunk package update failed HTTP {status}: {response[:1000]!r}"
             )
         cls.lab.wait_ready(300)
+        cls.upgrade_restore_needed = package != cls.package
 
     def test_local_state_survives_update(self):
+        for key in (
+            "macro",
+            "scope",
+            "identities",
+            "macro_file",
+            "scope_file",
+            "savedsearch_file",
+        ):
+            self.assertEqual(self.seeded[key], self.before[key], key)
         self.assertEqual(self.before["macro"], self.after["macro"])
         self.assertEqual(self.before["scope"], self.after["scope"])
         self.assertEqual(self.before["identities"], self.after["identities"])
@@ -699,11 +979,41 @@ class UpgradeIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(self.before["metadata_risk"], [])
         self.assertEqual(self.after["metadata_risk"], [])
-        self.assertEqual(self.before["acl"], self.after["acl"])
+        self.assertTrue(set(self.before["acl"]) <= set(self.after["acl"]))
+        for name, acl in self.before["acl"].items():
+            self.assertEqual(acl, self.after["acl"][name], name)
         self.assertEqual(self.before["protected_acl"], self.after["protected_acl"])
         self.assertEqual(self.before["scope_acl"], self.after["scope_acl"])
         self.assertEqual(self.before["macro_file"], self.after["macro_file"])
         self.assertEqual(self.before["scope_file"], self.after["scope_file"])
+        self.assertEqual(
+            self.before["savedsearch_file"], self.after["savedsearch_file"]
+        )
+
+    def test_real_release_rollback_preserves_local_state(self):
+        if not self.real_baseline:
+            self.skipTest(
+                "set ADM_UPGRADE_BASELINE_PACKAGE for a real release rollback"
+            )
+        self.assertIsNotNone(self.rolled_back)
+        for key in (
+            "macro",
+            "scope",
+            "identities",
+            "metadata_risk",
+            "acl",
+            "protected_acl",
+            "scope_acl",
+            "macro_file",
+            "scope_file",
+            "savedsearch_file",
+            "shipped_search_inventory",
+        ):
+            self.assertEqual(self.before[key], self.rolled_back[key], key)
+        self.assertEqual(
+            operator_metadata(self.before["metadata"]),
+            operator_metadata(self.rolled_back["metadata"]),
+        )
 
     def test_populated_csv_survives_update_and_migrates_to_kv(self):
         self.assertEqual(self.before["scope_file"], (True, self.legacy_scope_csv))

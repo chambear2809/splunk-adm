@@ -10,7 +10,17 @@ export const SOURCE_NAMES = [
   "Traces",
   "Hubble",
   "Summary",
+  "Catalyst client observations",
+  "Meraki wireless associations",
+  "Catalyst SD-WAN IPFIX",
 ] as const;
+const SOURCE_ROW_NAMES: Record<string, string[]> = {
+  "Catalyst client observations": [
+    "Catalyst client observations",
+    "Catalyst Center",
+  ],
+  "Meraki wireless associations": ["Meraki wireless associations", "Meraki"],
+};
 export const JOB_NAMES = [
   "Identity builder",
   "Service binding",
@@ -31,6 +41,9 @@ export interface SourceHealth {
   latestEvent?: number;
   latestIndexed?: number;
   maxIngestLag?: number;
+  unmapped?: number;
+  unresolved?: number;
+  warning?: string;
 }
 export interface JobHealth {
   name: string;
@@ -122,14 +135,20 @@ const text = (value: unknown) =>
   typeof value === "string" ? value.slice(0, 300) : undefined;
 export function sourceRows(rows: Row[]): SourceHealth[] {
   return SOURCE_NAMES.map((name) => {
+    const names = SOURCE_ROW_NAMES[name] ?? [name];
     const r =
-      rows.find((row) => row.kind === "source" && row.name === name) ?? {};
+      rows.find(
+        (row) => row.kind === "source" && names.includes(String(row.name)),
+      ) ?? {};
     return {
       name,
       records: numeric(r.records),
       latestEvent: timestamp(r.latest_event),
       latestIndexed: timestamp(r.latest_indexed),
       maxIngestLag: numeric(r.max_ingest_lag),
+      unmapped: numeric(r.unmapped),
+      unresolved: numeric(r.unresolved),
+      warning: text(r.warning),
     };
   });
 }
@@ -202,6 +221,12 @@ export async function loadHealth(
   if (signal.aborted) throw new Error("Health check cancelled.");
   const warnings: string[] = [];
   const rows = results.map((result, i) => {
+    if (result.status === "fulfilled" && result.value.errors.length) {
+      warnings.push(
+        `${searches[i]} health unavailable. ${result.value.errors[0].slice(0, 300)}`,
+      );
+      return [];
+    }
     if (result.status === "fulfilled") {
       warnings.push(
         ...result.value.warnings.map((w) => `${searches[i]}: ${w}`),

@@ -39,7 +39,7 @@ def snapshot():
                 for n in ALL_JOBS
             ],
         },
-        "app": {"version": "0.2.0"},
+        "app": {"version": "0.3.0"},
     }
 
 
@@ -252,6 +252,79 @@ class PilotReadinessTest(unittest.TestCase):
         self.assertEqual(
             sum(f["status"] == "not_selected" for f in result["findings"]), 7
         )
+
+    def test_unselected_cisco_sources_do_not_change_existing_readiness(self):
+        baseline = analyze(snapshot(), ["netflow"])
+        self.assertEqual(baseline["summary"]["not_selected"], 7)
+        self.assertFalse(
+            any(f.get("source") in {"catalyst", "meraki"} for f in baseline["findings"])
+        )
+
+    def test_cisco_source_evidence_distinguishes_gates(self):
+        data = snapshot()
+        data["macros"] = {"adm_index_catalyst": "index=cisco_catalyst"}
+        data["source_health"] = [
+            {"name": "Catalyst Center", "records": 2, "status": "ok"}
+        ]
+        data["source_permissions"] = {
+            "catalyst": {"status": "partial", "missing": ["client read"]}
+        }
+        data["raw_schema"] = {
+            "catalyst": {"status": "partial", "records": 2, "valid": 1}
+        }
+        data["source_scope"] = {
+            "catalyst": {"status": "ambiguous", "profiles": ["campus-a", "campus-b"]}
+        }
+        data["source_history"] = {"catalyst": {"status": "partial", "gaps": 1}}
+        data["collection_evidence"] = {
+            "catalyst": {"status": "synthetic", "records": 2}
+        }
+        findings = analyze(data, ["catalyst"])["findings"]
+        statuses = {
+            f["check"]: f["status"] for f in findings if f.get("source") == "catalyst"
+        }
+        self.assertEqual(statuses["source_permissions"], "blocked")
+        self.assertEqual(statuses["raw_schema"], "blocked")
+        self.assertEqual(statuses["source_mapping"], "blocked")
+        self.assertEqual(statuses["source_history"], "warning")
+        self.assertEqual(statuses["collection_evidence"], "warning")
+
+    def test_meraki_missing_permission_and_history_evidence_stays_unknown(self):
+        data = snapshot()
+        data["macros"] = {"adm_index_meraki": "index=cisco_meraki"}
+        data["source_health"] = [{"name": "Meraki", "records": 4, "status": "ok"}]
+        findings = analyze(data, ["meraki"])["findings"]
+        statuses = {
+            f["check"]: f["status"] for f in findings if f.get("source") == "meraki"
+        }
+        self.assertEqual(statuses["visibility"], "pass")
+        self.assertEqual(statuses["source_permissions"], "unknown")
+        self.assertEqual(statuses["raw_schema"], "unknown")
+        self.assertEqual(statuses["source_history"], "unknown")
+        self.assertEqual(statuses["collection_evidence"], "unknown")
+
+    def test_meraki_actual_collection_requires_each_evidence_gate(self):
+        data = snapshot()
+        data["macros"] = {"adm_index_meraki": "index=cisco_meraki"}
+        data["source_health"] = [{"name": "Meraki", "records": 4, "status": "ok"}]
+        data["source_permissions"] = {"meraki": {"status": "complete"}}
+        data["raw_schema"] = {
+            "meraki": {"status": "complete", "records": 4, "valid": 4}
+        }
+        data["source_scope"] = {
+            "meraki": {"status": "mapped", "profile": "org-network"}
+        }
+        data["source_history"] = {"meraki": {"status": "complete", "gaps": 0}}
+        data["collection_evidence"] = {"meraki": {"status": "actual", "records": 4}}
+        findings = analyze(data, ["meraki"])["findings"]
+        statuses = {
+            f["check"]: f["status"] for f in findings if f.get("source") == "meraki"
+        }
+        self.assertEqual(statuses["source_permissions"], "pass")
+        self.assertEqual(statuses["raw_schema"], "pass")
+        self.assertEqual(statuses["source_mapping"], "pass")
+        self.assertEqual(statuses["source_history"], "pass")
+        self.assertEqual(statuses["collection_evidence"], "pass")
 
 
 if __name__ == "__main__":

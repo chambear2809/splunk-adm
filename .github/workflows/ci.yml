@@ -77,6 +77,14 @@ jobs:
       - run: npm run typecheck:browser
       - run: npm run build
       - run: npm run test:browser
+      - name: Retain failed browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
 
   python:
     name: Python checks

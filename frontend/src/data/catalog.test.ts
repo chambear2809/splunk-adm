@@ -3,9 +3,11 @@ import {
   createScopeCatalogRows,
   parseCatalogRows,
   parseFindRows,
+  parseNetworkClientFindRows,
   catalogLimitMessage,
   validatedBuildCatalogSearch,
   validatedBuildFindSearch,
+  validatedBuildNetworkClientFindSearch,
 } from "./catalog";
 
 const key = "a".repeat(64);
@@ -112,6 +114,51 @@ describe("catalog parsing", () => {
       "x".repeat(256),
     ])
       expect(() => validatedBuildFindSearch(value)).toThrow();
+  });
+  it("collapses repeated Find identities and rejects conflicting duplicate keys", () => {
+    expect(parseFindRows([row, row])).toHaveLength(1);
+    expect(() =>
+      parseFindRows([row, { ...row, service: "another-service" }]),
+    ).toThrow("Find returned conflicting scope dimensions for one key.");
+  });
+  it("keeps source-qualified client Find evidence and rejects unsupported identities", () => {
+    const parsed = parseNetworkClientFindRows([
+      {
+        row_type: "network_client",
+        _key: "meraki:org-a/network-a:00:11:22:33:44:55",
+        client_mac: "00:11:22:33:44:55",
+        source: "meraki",
+        source_authority: "org-a/network-a",
+        routing_domain: "vrf-a",
+        scope: "prod",
+        cluster: "c1",
+        source_time: 100,
+        received_time: 101,
+        attachment_status: "unmapped",
+        quality_reason: "No exact scope mapping",
+      },
+    ]);
+    expect(parsed[0]).toMatchObject({
+      attachment_status: "unmapped",
+      source_time: 100,
+      received_time: 101,
+      routing_domain: "vrf-a",
+    });
+    expect(
+      validatedBuildNetworkClientFindSearch("00:11:22:33:44:55"),
+    ).toContain("adm_find_network_client");
+    expect(() => validatedBuildNetworkClientFindSearch("ap-name")).toThrow();
+    expect(() =>
+      parseNetworkClientFindRows([
+        {
+          row_type: "network_client",
+          _key: "x",
+          source: "meraki",
+          attachment_status: "associated",
+          received_time: "NaN",
+        },
+      ]),
+    ).toThrow();
   });
 
   it("keeps valid scopes visible beside unsupported binding dimensions", () => {

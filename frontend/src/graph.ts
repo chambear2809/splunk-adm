@@ -1,7 +1,11 @@
 import { isoTime } from "./time";
-export type NodeKind = "service" | "workload" | "endpoint";
+export type NodeKind = "service" | "workload" | "endpoint" | "client";
 export type Relationship =
-  "calls" | "communicates_with" | "runs_on" | "forwards_to";
+  | "calls"
+  | "communicates_with"
+  | "runs_on"
+  | "forwards_to"
+  | "traffic_observation";
 export type EndpointKind =
   | "k8s_node"
   | "vm"
@@ -9,7 +13,80 @@ export type EndpointKind =
   | "unresolved"
   | "ambiguous"
   | "k8s_service"
-  | "k8s_node_proxy";
+  | "k8s_node_proxy"
+  | "network_client";
+export type TrafficObservation = {
+  source?: string;
+  source_authority?: string;
+  routing_domain?: string;
+  observation_domain_id?: string;
+  exporter_ip?: string;
+  flow_id?: string;
+  record_fingerprint?: string;
+  sequence?: string;
+  first_seen?: number;
+  last_seen?: number;
+  collected_time?: number;
+  direction?: string;
+  observation_point?: string;
+  ingress_interface?: string;
+  egress_interface?: string;
+  bytes_in?: number;
+  bytes_out?: number;
+  packets_in?: number;
+  packets_out?: number;
+  exporter_sampling_mode?: string;
+  exporter_sampling_interval?: number;
+  vpn_id?: string;
+  ingress_overlay_session_id?: string;
+  egress_overlay_session_id?: string;
+  quality_status?: "accepted" | "accepted_with_warning" | "excluded";
+  quality_errors?: string;
+  quality_warnings?: string;
+  counter_semantics?: string;
+  metrics_authoritative?: boolean;
+  records?: number;
+  observation_domain_present?: number | string;
+  received_time?: number | string;
+  source_mac?: string;
+  destination_mac?: string;
+  source_port?: number;
+  destination_port?: number;
+  raw_bytes?: number;
+  raw_packets?: number;
+  raw_sampling?: string | number;
+  interface_in?: string;
+  interface_out?: string;
+  raw_bytes_in?: number;
+  raw_bytes_out?: number;
+  raw_packets_in?: number;
+  raw_packets_out?: number;
+  domain_kind?: string;
+  scope?: string;
+  cluster?: string;
+  profile?: string;
+  mapping_status?: string;
+  source_ip?: string;
+  destination_ip?: string;
+  server_port?: number;
+  transport?: string;
+  event_identity_status?: string;
+};
+export interface AttachmentEvidence {
+  basis?: string;
+  status?: string;
+  event_time?: number | string;
+  received_time?: number | string;
+  collected_time?: number | string;
+  device_id?: string;
+  device_name?: string;
+  device_mac?: string;
+  device_serial?: string;
+  ssid_number?: string | number;
+  client_source?: string;
+  client_authority?: string;
+  client_native_id?: string;
+}
 /** How a Service frontend was linked to the backend pod that served it. */
 export type HandoffBasis =
   "hubble_client_tuple" | "hubble_xlate" | "time_inferred" | "l7_forwarded_for";
@@ -19,6 +96,21 @@ export const HANDOFF_BASES: readonly HandoffBasis[] = [
   "time_inferred",
   "l7_forwarded_for",
 ];
+export type ClientHandoffCoverage =
+  "complete" | "partial" | "unresolved" | "incomplete";
+export const CLIENT_HANDOFF_COVERAGES: readonly ClientHandoffCoverage[] = [
+  "complete",
+  "partial",
+  "unresolved",
+  "incomplete",
+];
+export interface ClientHandoffRecord {
+  target: string;
+  basis: HandoffBasis;
+  connections: number;
+  receiving_nodes: string[];
+  observers: string[];
+}
 export type ContractBasis = "intent" | "intra_epg" | "not_evaluated" | "none";
 export const CONTRACT_BASES: readonly ContractBasis[] = [
   "intent",
@@ -59,6 +151,12 @@ export interface GraphEdge {
   evidence_truncated?: boolean;
   /** forwards_to only. */
   handoff_basis?: HandoffBasis;
+  /** V2 per-client handoff evidence; aggregate Service edges are not a substitute. */
+  client_handoff_coverage?: ClientHandoffCoverage;
+  client_handoff_connections?: number;
+  client_handoff_determined?: number;
+  client_handoff_unresolved?: number;
+  client_handoffs?: ClientHandoffRecord[];
   /** Kubernetes node that received the frontend traffic, when known. */
   /** Kubernetes nodes that received the frontend traffic (one or several). */
   via_node?: string[];
@@ -78,6 +176,26 @@ export interface GraphEdge {
   vlan_observations?: VlanObservation[];
   /** NetFlow discarded additional VLAN contexts for this edge. */
   vlan_observations_truncated?: boolean;
+  /** Flow observations are evidence at observation points, not adjacency or packet routes. */
+  traffic_observations?: TrafficObservation[];
+  attachment_evidence?: AttachmentEvidence[];
+  counter_semantics?: string;
+  metrics_authoritative?: boolean;
+  raw_bytes?: number;
+  raw_packets?: number;
+  records?: number;
+  source_port?: number;
+  destination_port?: number;
+  source_mac?: string;
+  source_ip?: string;
+  destination_ip?: string;
+  traffic_observation_id?: string;
+  link_kind?: string;
+  link_source?: string;
+  /** Explicit routing scope carried by edge-level collection evidence. */
+  scope?: string;
+  cluster?: string;
+  source_authority?: string;
 }
 export interface VlanObservation {
   vlan: number;
@@ -130,12 +248,14 @@ export const ENDPOINT_KINDS: readonly EndpointKind[] = [
   "ambiguous",
   "k8s_service",
   "k8s_node_proxy",
+  "network_client",
 ];
 export const RELATIONSHIPS: readonly Relationship[] = [
   "calls",
   "communicates_with",
   "runs_on",
   "forwards_to",
+  "traffic_observation",
 ];
 const object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
@@ -150,13 +270,68 @@ const allowedEdges: Record<Relationship, [NodeKind[], NodeKind[]]> = {
   calls: [["service"], ["service"]],
   runs_on: [["service"], ["workload"]],
   communicates_with: [
-    ["workload", "endpoint"],
+    ["workload", "endpoint", "client"],
     ["workload", "endpoint"],
   ],
   forwards_to: [["endpoint"], ["workload"]],
+  traffic_observation: [
+    ["client", "endpoint"],
+    ["endpoint", "workload"],
+  ],
 };
 const optionalText = (v: unknown) => v === undefined || typeof v === "string";
 const optionalCount = (v: unknown) => v === undefined || number(v);
+const ATTACHMENT_TEXT_FIELDS = [
+  "basis",
+  "status",
+  "device_id",
+  "device_name",
+  "device_mac",
+  "device_serial",
+  "client_source",
+  "client_authority",
+  "client_native_id",
+] as const;
+const ATTACHMENT_TIME_FIELDS = [
+  "event_time",
+  "received_time",
+  "collected_time",
+] as const;
+const ATTACHMENT_FIELDS = [
+  ...ATTACHMENT_TEXT_FIELDS,
+  ...ATTACHMENT_TIME_FIELDS,
+  "ssid_number",
+] as const;
+const validAttachmentTime = (value: unknown) => {
+  if (typeof value === "number") return validEpochSeconds(value);
+  if (typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value)) return false;
+  return validEpochSeconds(Number(value));
+};
+export const validAttachmentEvidence = (
+  value: unknown,
+): value is AttachmentEvidence => {
+  if (!object(value)) return false;
+  if (
+    Object.keys(value).some(
+      (field) => !ATTACHMENT_FIELDS.includes(field as never),
+    )
+  )
+    return false;
+  return (
+    ATTACHMENT_TEXT_FIELDS.every(
+      (field) => value[field] === undefined || typeof value[field] === "string",
+    ) &&
+    ATTACHMENT_TIME_FIELDS.every(
+      (field) =>
+        value[field] === undefined || validAttachmentTime(value[field]),
+    ) &&
+    (value.ssid_number === undefined ||
+      typeof value.ssid_number === "string" ||
+      (typeof value.ssid_number === "number" &&
+        Number.isFinite(value.ssid_number) &&
+        value.ssid_number >= 0))
+  );
+};
 export const validVlan = (v: unknown): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 4094;
 export const validVlanString = (v: unknown): v is string =>
@@ -190,6 +365,219 @@ export const validVlanObservation = (v: unknown): v is VlanObservation => {
     v.last_seen >= v.first_seen
   );
 };
+const TRAFFIC_TEXT_FIELDS = [
+  "source",
+  "source_authority",
+  "routing_domain",
+  "observation_domain_id",
+  "exporter_ip",
+  "flow_id",
+  "record_fingerprint",
+  "sequence",
+  "direction",
+  "observation_point",
+  "ingress_interface",
+  "egress_interface",
+  "exporter_sampling_mode",
+  "vpn_id",
+  "ingress_overlay_session_id",
+  "egress_overlay_session_id",
+  "counter_semantics",
+  "source_mac",
+  "destination_mac",
+  "interface_in",
+  "interface_out",
+  "domain_kind",
+  "scope",
+  "cluster",
+  "profile",
+  "mapping_status",
+  "source_ip",
+  "destination_ip",
+  "transport",
+  "event_identity_status",
+] as const;
+const TRAFFIC_QUALITY_TEXT_FIELDS = [
+  "quality_errors",
+  "quality_warnings",
+] as const;
+const TRAFFIC_NUMBER_FIELDS = [
+  "first_seen",
+  "last_seen",
+  "collected_time",
+  "bytes_in",
+  "bytes_out",
+  "packets_in",
+  "packets_out",
+  "exporter_sampling_interval",
+  "records",
+  "source_port",
+  "destination_port",
+  "raw_bytes",
+  "raw_packets",
+  "raw_bytes_in",
+  "raw_bytes_out",
+  "raw_packets_in",
+  "raw_packets_out",
+  "server_port",
+] as const;
+const TRAFFIC_SCALAR_FIELDS = [
+  "observation_domain_present",
+  "received_time",
+  "raw_sampling",
+] as const;
+export const validTrafficObservation = (
+  v: unknown,
+): v is TrafficObservation => {
+  if (!object(v)) return false;
+  if (
+    Object.keys(v).some(
+      (k) =>
+        ![
+          ...TRAFFIC_TEXT_FIELDS,
+          ...TRAFFIC_QUALITY_TEXT_FIELDS,
+          ...TRAFFIC_NUMBER_FIELDS,
+          ...TRAFFIC_SCALAR_FIELDS,
+          "metrics_authoritative",
+          "quality_status",
+        ].includes(k as never),
+    )
+  )
+    return false;
+  if (
+    TRAFFIC_TEXT_FIELDS.some(
+      (k) => v[k] !== undefined && typeof v[k] !== "string",
+    )
+  )
+    return false;
+  if (
+    TRAFFIC_QUALITY_TEXT_FIELDS.some(
+      (k) => v[k] !== undefined && typeof v[k] !== "string",
+    ) ||
+    (v.quality_status !== undefined &&
+      (typeof v.quality_status !== "string" ||
+        !["accepted", "accepted_with_warning", "excluded"].includes(
+          v.quality_status,
+        )))
+  )
+    return false;
+  if (TRAFFIC_NUMBER_FIELDS.some((k) => v[k] !== undefined && !number(v[k])))
+    return false;
+  if (
+    v.observation_domain_present !== undefined &&
+    typeof v.observation_domain_present !== "string" &&
+    typeof v.observation_domain_present !== "number"
+  )
+    return false;
+  if (
+    v.received_time !== undefined &&
+    typeof v.received_time !== "string" &&
+    typeof v.received_time !== "number"
+  )
+    return false;
+  if (
+    v.raw_sampling !== undefined &&
+    typeof v.raw_sampling !== "string" &&
+    !number(v.raw_sampling)
+  )
+    return false;
+  if (
+    v.observation_domain_present !== undefined &&
+    typeof v.observation_domain_present !== "string" &&
+    typeof v.observation_domain_present !== "number"
+  )
+    return false;
+  if (
+    v.received_time !== undefined &&
+    typeof v.received_time !== "string" &&
+    typeof v.received_time !== "number"
+  )
+    return false;
+  if (
+    v.metrics_authoritative !== undefined &&
+    typeof v.metrics_authoritative !== "boolean"
+  )
+    return false;
+  if (
+    typeof v.first_seen === "number" &&
+    typeof v.last_seen === "number" &&
+    v.last_seen < v.first_seen
+  )
+    return false;
+  return true;
+};
+
+export function validClientHandoffRecord(v: unknown): v is ClientHandoffRecord {
+  return (
+    object(v) &&
+    Object.keys(v).every((key) =>
+      [
+        "target",
+        "basis",
+        "connections",
+        "receiving_nodes",
+        "observers",
+      ].includes(key),
+    ) &&
+    typeof v.target === "string" &&
+    /^pod:[^/]+\/.+$/.test(v.target) &&
+    HANDOFF_BASES.includes(v.basis as HandoffBasis) &&
+    Number.isSafeInteger(v.connections) &&
+    (v.connections as number) > 0 &&
+    strings(v.receiving_nodes) &&
+    v.receiving_nodes.length <= 64 &&
+    strings(v.observers) &&
+    v.observers.length <= 64
+  );
+}
+
+export function validClientHandoffMetadata(
+  edge: Partial<GraphEdge>,
+  targetIsPod?: (id: string) => boolean,
+): edge is GraphEdge & {
+  client_handoff_coverage: ClientHandoffCoverage;
+  client_handoff_connections: number;
+  client_handoff_determined: number;
+  client_handoff_unresolved: number;
+  client_handoffs: ClientHandoffRecord[];
+} {
+  if (
+    !CLIENT_HANDOFF_COVERAGES.includes(
+      edge.client_handoff_coverage as ClientHandoffCoverage,
+    ) ||
+    !Number.isSafeInteger(edge.client_handoff_connections) ||
+    !Number.isSafeInteger(edge.client_handoff_determined) ||
+    !Number.isSafeInteger(edge.client_handoff_unresolved) ||
+    (edge.client_handoff_connections as number) < 0 ||
+    (edge.client_handoff_determined as number) < 0 ||
+    (edge.client_handoff_unresolved as number) < 0 ||
+    !Array.isArray(edge.client_handoffs) ||
+    edge.client_handoffs.length > 64 ||
+    !edge.client_handoffs.every(validClientHandoffRecord)
+  )
+    return false;
+  const records = edge.client_handoffs;
+  const keys = records.map((r) => JSON.stringify([r.target, r.basis]));
+  if (new Set(keys).size !== keys.length) return false;
+  if (targetIsPod && records.some((r) => !targetIsPod(r.target))) return false;
+  const { client_handoff_coverage: coverage } = edge;
+  const total = edge.client_handoff_connections as number;
+  const determined = edge.client_handoff_determined as number;
+  const unresolved = edge.client_handoff_unresolved as number;
+  const recordConnections = records.reduce((sum, r) => sum + r.connections, 0);
+  if (!Number.isSafeInteger(recordConnections)) return false;
+  if (total !== determined + unresolved) return false;
+  if (
+    coverage === "incomplete"
+      ? records.length !== 0
+      : recordConnections !== determined
+  )
+    return false;
+  if (coverage === "partial" && (determined === 0 || unresolved === 0))
+    return false;
+  if (coverage === "unresolved" && determined !== 0) return false;
+  return coverage !== "complete" || (total > 0 && determined === total);
+}
 /**
  * Node-to-node tunnel of a conversation. Cilium DSR forwards to remote
  * backends over IPIP, which flow records report as transport `ipip`.
@@ -248,13 +636,15 @@ export function parseGraph(value: unknown): Graph {
     );
   const kinds = new Map<string, NodeKind>();
   const endpointKinds = new Map<string, unknown>();
+  const clusters = new Map<string, string | undefined>();
+  const serviceHandoffMarkers = new Map<string, boolean>();
   for (const n of value.nodes) {
     if (
       !object(n) ||
       !id(n.id) ||
       typeof n.label !== "string" ||
       typeof n.kind !== "string" ||
-      !["service", "workload", "endpoint"].includes(n.kind) ||
+      !["service", "workload", "endpoint", "client"].includes(n.kind) ||
       (n.addresses !== undefined && !strings(n.addresses)) ||
       kinds.has(n.id)
     )
@@ -264,8 +654,11 @@ export function parseGraph(value: unknown): Graph {
         throw new Error("Invalid node metadata.");
     if (
       (n.endpoint_kind !== undefined &&
-        (n.kind !== "endpoint" ||
-          !ENDPOINT_KINDS.includes(n.endpoint_kind as EndpointKind))) ||
+        !(
+          (n.kind === "endpoint" ||
+            (n.kind === "client" && n.endpoint_kind === "network_client")) &&
+          ENDPOINT_KINDS.includes(n.endpoint_kind as EndpointKind)
+        )) ||
       (n.attributes !== undefined &&
         (!object(n.attributes) ||
           !Object.values(n.attributes).every((v) => typeof v === "string")))
@@ -276,12 +669,25 @@ export function parseGraph(value: unknown): Graph {
     for (const k of ["vlan_status", "bridge_domain_status"])
       if (
         n.attributes?.[k] !== undefined &&
-        !["varies", "incomplete"].includes(String(n.attributes[k]))
+        (typeof n.attributes[k] !== "string" ||
+          !["varies", "incomplete"].includes(n.attributes[k]))
       )
         throw new Error("Invalid node network metadata.");
     kinds.set(n.id, n.kind as NodeKind);
     endpointKinds.set(n.id, n.endpoint_kind);
+    clusters.set(n.id, n.cluster as string | undefined);
+    serviceHandoffMarkers.set(
+      n.id,
+      n.attributes?.handoff_coverage !== undefined,
+    );
   }
+  const isClientHandoffSource = (nodeId: string) =>
+    kinds.get(nodeId) === "workload" ||
+    (kinds.get(nodeId) === "endpoint" &&
+      endpointKinds.get(nodeId) !== undefined &&
+      endpointKinds.get(nodeId) !== "k8s_service") ||
+    (kinds.get(nodeId) === "client" &&
+      endpointKinds.get(nodeId) === "network_client");
   if (value.nodes.length && kinds.get(String(b.root_node_id)) !== "service")
     throw new Error("Snapshot root is missing or is not a service.");
   const edgeIds = new Set<string>();
@@ -314,9 +720,10 @@ export function parseGraph(value: unknown): Graph {
         )) ||
       (e.transport !== undefined && typeof e.transport !== "string") ||
       (e.direction_basis !== undefined &&
-        !["initiator", "port_rule", "unknown"].includes(
-          String(e.direction_basis),
-        )) ||
+        (typeof e.direction_basis !== "string" ||
+          !["initiator", "port_rule", "unknown"].includes(
+            e.direction_basis,
+          ))) ||
       (e.encapsulation !== undefined && typeof e.encapsulation !== "string") ||
       (e.reason !== undefined && typeof e.reason !== "string") ||
       (e.evidence_truncated !== undefined &&
@@ -327,7 +734,56 @@ export function parseGraph(value: unknown): Graph {
           !e.vlan_observations.every(validVlanObservation))) ||
       (e.vlan_observations_truncated !== undefined &&
         typeof e.vlan_observations_truncated !== "boolean") ||
+      (e.traffic_observations !== undefined &&
+        (!Array.isArray(e.traffic_observations) ||
+          e.traffic_observations.length > 64 ||
+          !e.traffic_observations.every(validTrafficObservation))) ||
       (e.via_node !== undefined && !strings(e.via_node)) ||
+      (e.client_handoff_coverage !== undefined &&
+        !CLIENT_HANDOFF_COVERAGES.includes(
+          e.client_handoff_coverage as ClientHandoffCoverage,
+        )) ||
+      (
+        [
+          "client_handoff_connections",
+          "client_handoff_determined",
+          "client_handoff_unresolved",
+        ] as const
+      ).some(
+        (k) =>
+          e[k] !== undefined &&
+          (!Number.isSafeInteger(e[k]) || (e[k] as number) < 0),
+      ) ||
+      (e.client_handoffs !== undefined &&
+        (!Array.isArray(e.client_handoffs) ||
+          e.client_handoffs.length > 64 ||
+          !e.client_handoffs.every(validClientHandoffRecord))) ||
+      (e.counter_semantics !== undefined &&
+        typeof e.counter_semantics !== "string") ||
+      (e.metrics_authoritative !== undefined &&
+        typeof e.metrics_authoritative !== "boolean") ||
+      (
+        [
+          "raw_bytes",
+          "raw_packets",
+          "records",
+          "source_port",
+          "destination_port",
+        ] as const
+      ).some((k) => e[k] !== undefined && !number(e[k])) ||
+      (
+        [
+          "source_mac",
+          "source_ip",
+          "destination_ip",
+          "traffic_observation_id",
+          "link_kind",
+          "link_source",
+        ] as const
+      ).some((k) => e[k] !== undefined && typeof e[k] !== "string") ||
+      (e.attachment_evidence !== undefined &&
+        (!Array.isArray(e.attachment_evidence) ||
+          !e.attachment_evidence.every(validAttachmentEvidence))) ||
       !optionalText(e.contract_reason) ||
       !optionalText(e.contract) ||
       !optionalText(e.contract_subject) ||
@@ -344,6 +800,7 @@ export function parseGraph(value: unknown): Graph {
     )
       throw new Error("Snapshot contains invalid relationships.");
     const forward = e.relationship === "forwards_to";
+    const trafficObservation = e.relationship === "traffic_observation";
     if (
       forward !== (e.handoff_basis !== undefined) ||
       (forward &&
@@ -365,9 +822,48 @@ export function parseGraph(value: unknown): Graph {
       (e.contract !== undefined &&
         e.contract_basis !== "intent" &&
         e.contract_basis !== "none") ||
-      (e.contract_basis === "intent" && e.contract === undefined)
+      (e.contract_basis === "intent" && e.contract === undefined) ||
+      (trafficObservation &&
+        (e.bytes !== undefined ||
+          e.confidence === "inferred" ||
+          e.handoff_basis !== undefined)) ||
+      (e.traffic_observation_id !== undefined &&
+        (typeof e.traffic_observation_id !== "string" ||
+          !/^[0-9a-f]{64}$/.test(e.traffic_observation_id) ||
+          e.relationship !== "traffic_observation" ||
+          e.id !== `traffic-observation:${e.traffic_observation_id}`))
     )
       throw new Error("Snapshot contains an invalid handoff or policy field.");
+    const clientMetadataKeys = [
+      "client_handoff_coverage",
+      "client_handoff_connections",
+      "client_handoff_determined",
+      "client_handoff_unresolved",
+      "client_handoffs",
+    ] as const;
+    const hasClientMetadata = clientMetadataKeys.some(
+      (k) => e[k] !== undefined,
+    );
+    const clientToService =
+      e.relationship === "communicates_with" &&
+      isClientHandoffSource(e.source) &&
+      endpointKinds.get(e.target) === "k8s_service";
+    if (
+      (hasClientMetadata || clientToService) &&
+      (e.relationship !== "communicates_with" ||
+        !isClientHandoffSource(e.source) ||
+        endpointKinds.get(e.target) !== "k8s_service" ||
+        (hasClientMetadata &&
+          !validClientHandoffMetadata(
+            e as unknown as GraphEdge,
+            (target) =>
+              kinds.get(target) === "workload" &&
+              typeof clusters.get(String(e.target)) === "string" &&
+              clusters.get(target) === clusters.get(String(e.target)) &&
+              target.startsWith(`pod:${clusters.get(String(e.target))}/`),
+          )))
+    )
+      throw new Error("Snapshot contains invalid client handoff metadata.");
     const [sources, targets] = allowedEdges[e.relationship as Relationship];
     if (
       !sources.includes(kinds.get(e.source)!) ||

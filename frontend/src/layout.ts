@@ -826,7 +826,10 @@ function routeEdges(
       t = items.get(e.target);
     if (!s || !t || s === t) continue;
     const conv = e.relationship === "communicates_with";
-    const directed = !(conv && e.direction_basis === "unknown");
+    const directed =
+      e.relationship === "traffic_observation"
+        ? false
+        : !(conv && e.direction_basis === "unknown");
     const port =
       e.server_port !== undefined
         ? `${e.server_port}/${e.transport ?? "?"}`

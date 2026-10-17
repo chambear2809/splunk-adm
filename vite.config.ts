@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
-const captures = new Set(["demo-catalog.json", "demo-find.json"]);
+const captures = new Set([
+  "demo-catalog.json",
+  "demo-find.json",
+  "demo-networking-catalog.json",
+  "demo-networking-find.json",
+  "demo-networking-scopes.json",
+]);
 export default defineConfig({
   root: "frontend",
   define: { __ADM_SPLUNK_BUILD__: "false" },

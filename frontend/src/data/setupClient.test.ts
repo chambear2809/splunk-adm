@@ -33,6 +33,88 @@ const response = (body: unknown, status = 200) =>
 const record = (content: Record<string, unknown> = {}, canWrite = true) => ({
   entry: [{ content, acl: { can_write: canWrite } }],
 });
+const stagedMacroDefinitions: Record<string, string> = {
+  adm_data_contract_version: "1",
+  adm_graph_v2: "search index=adm_summary_v2",
+  adm_index_summary_v2: "index=adm_summary_v2",
+  adm_summary_index_v2_name: "adm_summary_v2",
+  adm_network_client_history_observations:
+    "search index=adm_network_client_history",
+  adm_network_client_history_build:
+    "search index=cisco_catalyst OR index=cisco_meraki",
+};
+const sourceProfile = (overrides: Record<string, unknown> = {}) => ({
+  _key: "a".repeat(64),
+  mapping_key: "c".repeat(64),
+  duplicate_count: 1,
+  source: "stream_ipfix",
+  source_authority: "192.0.2.20",
+  domain_kind: "exporter",
+  observation_domain_present: "1",
+  observation_domain_id: "0",
+  vpn_id: "42",
+  routing_domain: "42",
+  scope: "prod",
+  cluster: "checkout-east",
+  mapping_status: "mapped",
+  profile: "catalyst_sdwan_ipfix",
+  ...overrides,
+});
+const clusterSetting = (overrides: Record<string, unknown> = {}) => ({
+  _key: "b".repeat(64),
+  cluster: "checkout-east",
+  lb_mode: "snat",
+  ingress_mode: "dedicated",
+  l2announcements_enabled: "0",
+  mapping_status: "mapped",
+  ...overrides,
+});
+// Mirrors the KV Store data endpoint, which pages with limit/skip and ignores
+// count. The client must always send a positive limit.
+const pageFromURL = (url: string, rows: unknown[]) => {
+  const query = new URL(url, "https://test").searchParams;
+  const skip = Number(query.get("skip") ?? "0");
+  const limit = Number(query.get("limit"));
+  if (!Number.isInteger(limit) || limit <= 0)
+    throw new Error(`KV read without a positive limit: ${url}`);
+  return rows.slice(skip, skip + limit);
+};
+function stagedIntegrationFetcher(
+  sourceRows = [sourceProfile()],
+  clusterRows = [clusterSetting()],
+  inaccessibleCollection?: string,
+): MockedFunction<FetchMock> {
+  const request = fetcher();
+  request.mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("authentication/current-context"))
+      return response(record({ capabilities: ["admin_all_objects"] }));
+    if (url.includes("configs/conf-macros/")) {
+      const name = url.split("configs/conf-macros/")[1]?.split("?")[0] ?? "";
+      const definition =
+        stagedMacroDefinitions[name] ??
+        (name === "adm_summary_index_name"
+          ? "adm_summary"
+          : name === "adm_index_summary"
+            ? "index=adm_summary"
+            : "index=netflow");
+      return response(record({ definition }, false));
+    }
+    if (url.includes("saved/searches/"))
+      return response(record({ disabled: "1", is_scheduled: "1" }, false));
+    if (url.includes("data/indexes/"))
+      return response(record({ disabled: "0" }, false));
+    if (url.includes("adm_observer_scope")) return response([]);
+    if (inaccessibleCollection && url.includes(inaccessibleCollection))
+      return response({ message: "forbidden" }, 403);
+    if (url.includes("adm_network_source_scope"))
+      return response(pageFromURL(url, sourceRows));
+    if (url.includes("adm_cilium_cluster_settings"))
+      return response(pageFromURL(url, clusterRows));
+    return response({});
+  });
+  return request;
+}
 type FetchMock = (
   input: RequestInfo | URL,
   init?: RequestInit,
@@ -403,9 +485,13 @@ it("gates readiness on required pilot sources while reporting optional sources",
     authorized: true,
     macros: macros.filter(
       (macro) =>
-        !["adm_index_ftd", "adm_index_isovalent", "adm_index_hubble"].includes(
-          macro.name,
-        ),
+        ![
+          "adm_index_ftd",
+          "adm_index_isovalent",
+          "adm_index_hubble",
+          "adm_index_catalyst",
+          "adm_index_meraki",
+        ].includes(macro.name),
     ),
     summaryIndex: { name: "adm_summary", exists: true },
     observerScopes: {
@@ -421,14 +507,274 @@ it("gates readiness on required pilot sources while reporting optional sources",
       complete: true,
     },
     savedSearches: [],
+    ciscoIntegration: {
+      macros: [],
+      searches: [],
+      summaryIndex: {},
+      sourceProfiles: { rows: [], complete: true },
+      clusterSettings: { rows: [], complete: true },
+      state: "staged" as const,
+      reasons: [],
+    },
     warnings: [],
   };
   expect(setupReadiness(snapshot).ready).toBe(true);
-  expect(setupReadiness(snapshot).optionalWarnings).toHaveLength(3);
+  expect(setupReadiness(snapshot).optionalWarnings).toHaveLength(5);
   const blocked = {
     ...snapshot,
     macros: snapshot.macros.filter((macro) => macro.name !== "adm_index_k8s"),
   };
   expect(setupReadiness(blocked).ready).toBe(false);
   expect(setupReadiness(blocked).missingRequired).toContain("adm_index_k8s");
+});
+
+it("reads complete staged Cisco integration state without writing or activating it", async () => {
+  const request = stagedIntegrationFetcher();
+  const state = await new ToolkitSetupClient(request).read();
+  expect(state.ciscoIntegration).toMatchObject({
+    state: "staged",
+    summaryIndex: { name: "adm_summary_v2", exists: true },
+    sourceProfiles: { complete: true, rows: [sourceProfile()] },
+    clusterSettings: { complete: true, rows: [clusterSetting()] },
+    searches: [
+      {
+        name: "ADM - Network client history builder",
+        disabled: true,
+        scheduled: true,
+      },
+      {
+        name: "ADM - Conversation rollup v2",
+        disabled: true,
+        scheduled: true,
+      },
+      {
+        name: "ADM - Traffic observation rollup v2",
+        disabled: true,
+        scheduled: true,
+      },
+    ],
+  });
+  expect(state.ciscoIntegration.reasons).toEqual([]);
+  expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+    false,
+  );
+});
+
+it.each([
+  { profile: "catalyst_campus_fnf", vpn_id: "", routing_domain: "" },
+  { profile: "meraki_ms390_ipfix", vpn_id: "", routing_domain: "" },
+  {
+    profile: "standard_netflow",
+    observation_domain_present: "0",
+    observation_domain_id: "",
+    vpn_id: "",
+    routing_domain: "",
+  },
+])("accepts valid optional fields for $profile", async (fields) => {
+  const profile = sourceProfile(fields);
+  const state = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([profile]),
+  ).read();
+  expect(state.ciscoIntegration.state).toBe("staged");
+  expect(state.ciscoIntegration.sourceProfiles).toMatchObject({
+    complete: true,
+    rows: [profile],
+  });
+  expect(state.ciscoIntegration.reasons).toEqual([]);
+});
+
+it.each([
+  { source_authority: "" },
+  { scope: " " },
+  { cluster: "" },
+  { vpn_id: undefined as unknown as string },
+  { routing_domain: 42 as unknown as string },
+])("rejects malformed source profile fields %j", async (fields) => {
+  const state = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([sourceProfile(fields)]),
+  ).read();
+  expect(state.ciscoIntegration.state).toBe("incomplete");
+  expect(state.ciscoIntegration.sourceProfiles.complete).toBe(false);
+});
+
+it("fails Cisco status closed for duplicate or unknown source profiles", async () => {
+  const duplicate = sourceProfile({ _key: "c".repeat(64) });
+  const duplicateState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([sourceProfile(), duplicate]),
+  ).read();
+  expect(duplicateState.ciscoIntegration.state).toBe("incomplete");
+  expect(duplicateState.ciscoIntegration.sourceProfiles.complete).toBe(false);
+  expect(duplicateState.ciscoIntegration.reasons.join(" ")).toContain(
+    "Duplicate seven-key",
+  );
+  const duplicateMappingKeyState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([
+      sourceProfile(),
+      sourceProfile({
+        _key: "d".repeat(64),
+        source_authority: "192.0.2.21",
+      }),
+    ]),
+  ).read();
+  expect(
+    duplicateMappingKeyState.ciscoIntegration.sourceProfiles.complete,
+  ).toBe(false);
+  expect(
+    duplicateMappingKeyState.ciscoIntegration.sourceProfiles.error,
+  ).toContain("Duplicate source mapping keys");
+  const unknownState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([
+      sourceProfile({ profile: "unreviewed_source_profile" }),
+    ]),
+  ).read();
+  expect(unknownState.ciscoIntegration.state).toBe("incomplete");
+  expect(unknownState.ciscoIntegration.reasons.join(" ")).toContain(
+    "Unknown source profiles",
+  );
+  const duplicateCountState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([
+      sourceProfile({ duplicate_count: 2, mapping_status: "mapped" }),
+    ]),
+  ).read();
+  expect(duplicateCountState.ciscoIntegration.state).toBe("incomplete");
+  expect(
+    duplicateCountState.ciscoIntegration.sourceProfiles.rows[0],
+  ).toMatchObject({
+    duplicate_count: 2,
+    mapping_status: "mapped",
+  });
+  expect(duplicateCountState.ciscoIntegration.reasons.join(" ")).toContain(
+    "Duplicate source-profile candidates",
+  );
+  const missingMappingKeyState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([
+      { ...sourceProfile(), mapping_key: undefined as unknown as string },
+    ]),
+  ).read();
+  expect(missingMappingKeyState.ciscoIntegration.sourceProfiles.complete).toBe(
+    false,
+  );
+  const permissionState = await new ToolkitSetupClient(
+    stagedIntegrationFetcher(
+      [sourceProfile()],
+      [clusterSetting()],
+      "adm_network_source_scope",
+    ),
+  ).read();
+  expect(permissionState.ciscoIntegration.state).toBe("incomplete");
+  expect(permissionState.ciscoIntegration.sourceProfiles.complete).toBe(false);
+});
+
+it("walks source profile pages and marks collections at the configured cap incomplete", async () => {
+  const makeProfiles = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      sourceProfile({
+        _key: i.toString(16).padStart(64, "0"),
+        mapping_key: (i + 1).toString(16).padStart(64, "0"),
+        source_authority: "192.0.2." + i,
+      }),
+    );
+  const pagedRequest = stagedIntegrationFetcher(makeProfiles(251));
+  const paged = await new ToolkitSetupClient(pagedRequest).read();
+  expect(paged.ciscoIntegration.sourceProfiles.complete).toBe(true);
+  expect(paged.ciscoIntegration.sourceProfiles.rows).toHaveLength(251);
+  expect(
+    pagedRequest.mock.calls.some(
+      ([url]) =>
+        String(url).includes("adm_network_source_scope") &&
+        String(url).includes("skip=250"),
+    ),
+  ).toBe(true);
+
+  const capped = await new ToolkitSetupClient(
+    stagedIntegrationFetcher(makeProfiles(1001)),
+  ).read();
+  expect(capped.ciscoIntegration.sourceProfiles.complete).toBe(false);
+  expect(capped.ciscoIntegration.sourceProfiles.error).toContain("1000-row");
+  expect(capped.ciscoIntegration.state).toBe("incomplete");
+});
+
+describe("KV Store collection paging", () => {
+  const makeProfiles = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      sourceProfile({
+        _key: i.toString(16).padStart(64, "0"),
+        mapping_key: (i + 1).toString(16).padStart(64, "0"),
+        source_authority: "192.0.2." + i,
+      }),
+    );
+  const makeClusters = (count: number) =>
+    Array.from({ length: count }, (_, i) =>
+      clusterSetting({
+        _key: i.toString(16).padStart(64, "0"),
+        cluster: "cluster-" + i,
+      }),
+    );
+  const collectionURLs = (
+    request: MockedFunction<FetchMock>,
+    collection: string,
+  ) =>
+    request.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.includes(`storage/collections/data/${collection}`));
+
+  it("requests pages with limit and skip, never count", async () => {
+    const request = stagedIntegrationFetcher(makeProfiles(600));
+    await new ToolkitSetupClient(request).read();
+    for (const collection of [
+      "adm_network_source_scope",
+      "adm_cilium_cluster_settings",
+    ]) {
+      const urls = collectionURLs(request, collection);
+      expect(urls.length).toBeGreaterThan(0);
+      for (const url of urls) {
+        const query = new URL(url, "https://test").searchParams;
+        expect(query.get("limit")).toMatch(/^[1-9][0-9]*$/);
+        expect(query.has("skip")).toBe(true);
+        expect(query.has("count")).toBe(false);
+      }
+    }
+  });
+
+  it("reads a collection larger than one page completely", async () => {
+    const request = stagedIntegrationFetcher(
+      makeProfiles(600),
+      makeClusters(600),
+    );
+    const state = await new ToolkitSetupClient(request).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(true);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBeUndefined();
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(600);
+    expect(state.ciscoIntegration.clusterSettings.complete).toBe(true);
+    expect(state.ciscoIntegration.clusterSettings.rows).toHaveLength(600);
+    expect(
+      collectionURLs(request, "adm_network_source_scope").map((url) =>
+        new URL(url, "https://test").searchParams.get("skip"),
+      ),
+    ).toEqual(["0", "250", "500"]);
+  });
+
+  it("treats exactly the review limit as complete", async () => {
+    const request = stagedIntegrationFetcher(makeProfiles(1000));
+    const state = await new ToolkitSetupClient(request).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(true);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBeUndefined();
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(1000);
+    const probe = collectionURLs(request, "adm_network_source_scope").at(-1);
+    const query = new URL(probe ?? "", "https://test").searchParams;
+    expect(query.get("skip")).toBe("1000");
+    expect(query.get("limit")).toBe("1");
+  });
+
+  it("reports the review limit when the collection exceeds it", async () => {
+    const state = await new ToolkitSetupClient(
+      stagedIntegrationFetcher(makeProfiles(1001)),
+    ).read();
+    expect(state.ciscoIntegration.sourceProfiles.complete).toBe(false);
+    expect(state.ciscoIntegration.sourceProfiles.rows).toHaveLength(1000);
+    expect(state.ciscoIntegration.sourceProfiles.error).toBe(
+      "Collection exceeds the 1000-row setup review limit.",
+    );
+    expect(state.ciscoIntegration.state).toBe("incomplete");
+  });
 });

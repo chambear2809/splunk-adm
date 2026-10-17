@@ -82,6 +82,7 @@ export function HealthResults({ report }: { report: HealthReport }) {
           "Observation",
           "Latest event / received",
           "Events / max delay",
+          "Scope and identity",
         ]}
         rows={report.sources.map((s) => ({
           key: s.name,
@@ -90,6 +91,15 @@ export function HealthResults({ report }: { report: HealthReport }) {
             sourceStatus(s, report.checkedAt),
             `${time(s.latestEvent)}\n${time(s.latestIndexed)}`,
             `${s.records ?? "Unknown"} / ${s.maxIngestLag === undefined ? "Unknown" : `${Math.round(s.maxIngestLag)}s`}`,
+            [
+              s.unmapped === undefined ? undefined : `${s.unmapped} unmapped`,
+              s.unresolved === undefined
+                ? undefined
+                : `${s.unresolved} unresolved`,
+              s.warning,
+            ]
+              .filter(Boolean)
+              .join(" · ") || "—",
           ],
         }))}
       />

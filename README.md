@@ -26,6 +26,8 @@ npm run dev
 
 Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It replays the app's own search output from TA-shaped synthetic data: the ACI pilot scenario by default, or the NX-OS fabric scenario (switch in **Settings**). Build Splunk app archives with `npm run package`.
 
+The additional **Catalyst → ACI** and **Meraki wireless → NX-OS** demos use two separate Kubernetes clusters and applications. Their captured results include source-qualified client identity, attachment history, and traffic observations. Wireless attribution is correlated from Meraki association events and switch-exported flows; NetFlow alone does not establish wireless attachment. The Cisco integration is an optional V2 contract with a staged migration. See [qualification status](docs/CISCO_NETWORKING_QUALIFICATION.md) before enabling it.
+
 The same `npm run package` archive installs and updates the app; deployment-owned state lives in KV store and `local/`. See [upgrade preservation checks](docs/UPGRADES.md).
 
 **Targets:** Splunk Cloud and Splunk Enterprise 10.6+. The pilot is a single ACI fabric with Kubernetes on Cilium. Runtime validation uses a local Splunk 10.6.0.5 lab with synthetic data; Cloud runtime, formal vetting and a customer pilot remain unqualified. See [integration and release readiness](docs/UI-PHASE-9.md).
@@ -35,6 +37,7 @@ The same `npm run package` archive installs and updates the app; deployment-owne
 - `splunk_app/splunk_adm/`: app configuration, macros, saved searches, KV store collections, lookups and the Simple XML mount.
 - `frontend/src/`: React/TypeScript interface and Splunk search provider.
 - `fixtures/raw/` (NX-OS fabric) and `fixtures/raw-aci/` (ACI pilot): synthetic scenarios and TA-shaped HEC events, with per-field sources in each `FIELDS.md`.
+- `fixtures/raw-networking/`: combined Catalyst and Meraki scenario; `fixtures/demo-networking-*.json` contains captures from the implemented Splunk pipeline with provenance.
 - `fixtures/demo-*.json`: lab search output used by demo mode.
 - `tests/splunk/`: local Splunk lab and data-layer tests.
 - `tools/`: fixture generator and app packaging.
@@ -87,6 +90,9 @@ Mutating execution stays disabled in every committed registration (`SPLUNK_SKILL
 ## Documentation
 
 - [Pilot setup and prerequisites](docs/PILOT.md)
+- [Cisco networking integration and qualification](docs/CISCO_NETWORKING_QUALIFICATION.md)
+- [Cisco source setup and telemetry limits](docs/operators/cisco-enterprise-networking.md)
+- [V2 staged migration and rollback](docs/CISCO_CONTRACT_MIGRATION.md)
 - [What each team must provide](docs/operators/README.md), including the [Splunk setup guide](docs/operators/splunk-setup-guide.md)
 - [Data layer contract](docs/DATA_LAYER.md)
 - [Recovery, replay and maintenance](docs/RECOVERY.md)

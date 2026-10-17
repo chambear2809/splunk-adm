@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFlowSearch,
+  buildTrafficObservationSearch,
   buildTraceSearch,
   evidenceSearch,
   flowRequest,
@@ -115,6 +116,40 @@ describe("drilldown safety", () => {
       expect(() => buildFlowSearch({ ...validFlow, port })).toThrow();
     expect(() =>
       buildFlowSearch({ ...validFlow, transport: "icmp" }),
+    ).toThrow();
+  });
+
+  it("opens exact traffic observations through the provenance-preserving macro", () => {
+    const observationId = "a".repeat(64);
+    const observation = {
+      source_ip: "10.61.0.20",
+      destination_ip: "10.61.0.30",
+      server_port: 443,
+      transport: "tcp",
+      scope: "campus-aci",
+      source_authority: "exporter-a",
+    };
+    const search = buildTrafficObservationSearch(observation, observationId);
+    expect(search).toBe(
+      `| \`adm_traffic_evidence_v2("10.61.0.20","10.61.0.30",443,"tcp","${observationId}")\``,
+    );
+    expect(
+      new URL(
+        searchUrl(
+          search,
+          { start: "100", end: "200" },
+          { href: "https://splunk.example/en-US/app/splunk_adm/map" },
+        ),
+      ).searchParams.get("q"),
+    ).toBe(search);
+    for (const badId of ["a".repeat(63), "A".repeat(64), `"${observationId}`])
+      expect(() => buildTrafficObservationSearch(observation, badId)).toThrow();
+    expect(() =>
+      searchUrl(
+        search.replace("10.61.0.20", "10.999.0.20"),
+        { start: "100", end: "200" },
+        { href: "https://splunk.example/en-US/app/splunk_adm/map" },
+      ),
     ).toThrow();
   });
 
@@ -233,6 +268,42 @@ describe("drilldown safety", () => {
     };
     expect(() => evidenceSearch(edge, indexGraph(ambiguous))).toThrow(
       /exact tuple|Multiple/i,
+    );
+  });
+
+  it("searches only a traffic observation's exact tuple and matching identity", () => {
+    const observationId = "c".repeat(64);
+    const item = {
+      source_ip: "10.61.0.20",
+      destination_ip: "10.61.0.30",
+      server_port: 443,
+      transport: "tcp",
+      scope: "campus-aci",
+      mapping_status: "mapped",
+    };
+    const observationEdge: GraphEdge = {
+      id: `traffic-observation:${observationId}`,
+      traffic_observation_id: observationId,
+      source: "client",
+      target: "server",
+      relationship: "traffic_observation",
+      evidence: [],
+      confidence: "correlated",
+      count: 1,
+      ...item,
+      traffic_observations: [item],
+    };
+    expect(evidenceSearch(observationEdge, indexGraph(graph))).toContain(
+      `adm_traffic_evidence_v2("10.61.0.20","10.61.0.30",443,"tcp","${observationId}")`,
+    );
+    expect(() =>
+      evidenceSearch(
+        { ...observationEdge, traffic_observation_id: "d".repeat(64) },
+        indexGraph(graph),
+      ),
+    ).toThrow(/exact traffic observation identifier/i);
+    expect(() => flowRequest(observationEdge, indexGraph(graph))).toThrow(
+      /network conversation/i,
     );
   });
 });

@@ -9,12 +9,15 @@ export const DEMO_WINDOW = {
   latest: capturedLatest,
 };
 import aciTopology from "../../../fixtures/demo-topology-aci.json";
+import networkingAci from "../../../fixtures/demo-networking-aci.json";
+import networkingNxos from "../../../fixtures/demo-networking-nxos.json";
+import networkingTopology from "../../../fixtures/demo-networking-topology.json";
 import { type Graph } from "../graph";
 import { rowsToGraph, type GraphArgs } from "../rows";
 import { emptyTopology, rowsToTopology, type Topology } from "../topology";
 import { createStaticURL } from "@splunk/splunk-utils/url";
 
-export type DemoScenario = "aci" | "nxos";
+export type DemoScenario = "aci" | "nxos" | "catalyst-aci" | "meraki-nxos";
 type Scenario = {
   label: string;
   graph: { args: GraphArgs; rows: readonly Record<string, unknown>[] };
@@ -34,8 +37,19 @@ const devScenarios: Record<DemoScenario, Scenario> | undefined =
           graph: nxosRows,
           topology: nxosTopology as unknown,
         },
+        "catalyst-aci": {
+          label: "Catalyst wired → ACI",
+          graph: networkingAci,
+          topology: networkingTopology as unknown,
+        },
+        "meraki-nxos": {
+          label: "Meraki MR wireless via MS390 IPFIX → NXOS",
+          graph: networkingNxos,
+          topology: networkingTopology as unknown,
+        },
       };
-let scenarios: Record<DemoScenario, Scenario> | undefined = devScenarios;
+let scenarios: Partial<Record<DemoScenario, Scenario>> | undefined =
+  devScenarios;
 const requireScenarios = () => {
   if (!scenarios) throw new Error("Demo data is not prepared.");
   return scenarios;
@@ -57,23 +71,71 @@ export async function prepareDemo(): Promise<void> {
       clearTimeout(timer);
     }
   };
-  const [aciGraph, nxosGraph, aciTopology, nxosTopology] = await Promise.all([
+  const [
+    aciGraph,
+    nxosGraph,
+    aciTopology,
+    nxosTopology,
+    networkingAci,
+    networkingNxos,
+    networkingTopology,
+  ] = await Promise.all([
     load("demo-rows-aci.json"),
     load("demo-rows.json"),
     load("demo-topology-aci.json"),
     load("demo-topology.json"),
+    load("demo-networking-aci.json"),
+    load("demo-networking-nxos.json"),
+    load("demo-networking-topology.json"),
   ]);
   scenarios = {
     aci: { label: "ACI pilot fabric", graph: aciGraph, topology: aciTopology },
     nxos: { label: "NX-OS fabric", graph: nxosGraph, topology: nxosTopology },
+    "catalyst-aci": {
+      label: "Catalyst wired → ACI",
+      graph: networkingAci,
+      topology: networkingTopology,
+    },
+    "meraki-nxos": {
+      label: "Meraki MR wireless via MS390 IPFIX → NXOS",
+      graph: networkingNxos,
+      topology: networkingTopology,
+    },
   };
 }
 export const DEMO_SCENARIOS = [
   { id: "aci" as const, label: "ACI pilot fabric" },
   { id: "nxos" as const, label: "NX-OS fabric" },
+  { id: "catalyst-aci" as const, label: "Catalyst wired → ACI" },
+  {
+    id: "meraki-nxos" as const,
+    label: "Meraki MR wireless via MS390 IPFIX → NXOS",
+  },
 ];
+const scenarioData = (scenario: DemoScenario) => {
+  const value = requireScenarios()[scenario];
+  if (!value) throw new Error("Demo data is not prepared.");
+  return value;
+};
 export const demoArgsFor = (scenario: DemoScenario): GraphArgs =>
-  requireScenarios()[scenario].graph.args;
+  scenarioData(scenario).graph.args;
+export const demoScenarioForArgs = (
+  args: GraphArgs,
+): DemoScenario | undefined =>
+  DEMO_SCENARIOS.find(({ id }) =>
+    (["service", "environment", "cluster", "namespace"] as const).every(
+      (key) => args[key] === demoArgsFor(id)[key],
+    ),
+  )?.id;
+export const demoWindowFor = (scenario: DemoScenario) => {
+  const graph = scenarioData(scenario).graph as {
+    earliest?: string;
+    latest?: string;
+  };
+  return scenario === "catalyst-aci" || scenario === "meraki-nxos"
+    ? { earliest: graph.earliest!, latest: graph.latest! }
+    : DEMO_WINDOW;
+};
 export const demoArgs: GraphArgs = {
   service: "frontend",
   environment: "demo",
@@ -81,11 +143,11 @@ export const demoArgs: GraphArgs = {
   namespace: "shop",
 };
 export const demoGraph = (scenario: DemoScenario = "aci"): Graph =>
-  rowsToGraph(requireScenarios()[scenario].graph.rows, demoArgsFor(scenario), {
+  rowsToGraph(scenarioData(scenario).graph.rows, demoArgsFor(scenario), {
     demo: true,
   });
 export const demoTopology = (scenario: DemoScenario = "aci"): Topology => {
-  const file = requireScenarios()[scenario].topology;
+  const file = scenarioData(scenario).topology;
   if (file === undefined) return emptyTopology();
   return rowsToTopology(
     Array.isArray(file) ? file : (file as { rows?: unknown }).rows,

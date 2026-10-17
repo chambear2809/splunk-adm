@@ -87,14 +87,41 @@ describe("ToolkitSearchClient", () => {
       warnings: ["slow"],
     });
   });
-  it("adds finalized warning and rejects overflow", async () => {
-    let pending = new ToolkitSearchClient().search(request());
-    runtime.progress.next({ content: { resultCount: 1, isFinalized: "1" } });
-    runtime.result.next({ results: [{ a: 1 }] });
-    await expect(pending).resolves.toMatchObject({
-      warnings: [expect.stringMatching(/finalized/)],
+  it("reports ERROR and FATAL job messages separately", async () => {
+    const pending = new ToolkitSearchClient().search(request());
+    runtime.progress.next({
+      content: {
+        resultCount: 1,
+        messages: [
+          { type: "DEBUG", text: "trace" },
+          { type: "ERROR", text: "peer unreachable" },
+        ],
+      },
     });
-    pending = new ToolkitSearchClient().search(request());
+    runtime.result.next({
+      results: [{ row_type: "meta" }],
+      messages: [{ type: "FATAL", text: "search process ended" }],
+    });
+    const result = await pending;
+    expect(result.errors).toEqual(["peer unreachable", "search process ended"]);
+    expect(result.warnings).toEqual([
+      "peer unreachable",
+      "search process ended",
+    ]);
+  });
+  it("rejects finalized, truncated, and dropped result sets", async () => {
+    for (const [field, value, pattern] of [
+      ["isFinalized", "1", /finalized/],
+      ["resultIsTruncated", true, /truncated/],
+      ["eventIsTruncated", true, /truncated/],
+      ["dropCount", "2", /dropped/],
+    ] as const) {
+      const pending = new ToolkitSearchClient().search(request());
+      runtime.progress.next({ content: { resultCount: 1, [field]: value } });
+      runtime.result.next({ results: [{ a: 1 }] });
+      await expect(pending).rejects.toThrow(pattern);
+    }
+    const pending = new ToolkitSearchClient().search(request());
     runtime.progress.next({ content: { resultCount: 3 } });
     runtime.result.next({ results: [{ a: 1 }] });
     await expect(pending).rejects.toBeInstanceOf(SearchResultLimitError);
@@ -158,7 +185,11 @@ it("allows verified empty catalog/Find results only when explicitly requested", 
   });
   runtime.progress.next({ content: { resultCount: 0 } });
   runtime.result.next({ results: [] });
-  await expect(pending).resolves.toEqual({ rows: [], warnings: [] });
+  await expect(pending).resolves.toEqual({
+    rows: [],
+    warnings: [],
+    errors: [],
+  });
   pending = new ToolkitSearchClient().search({
     ...request(),
     allowEmpty: true,

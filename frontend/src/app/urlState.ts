@@ -1,6 +1,7 @@
 import { argError } from "../provider";
 import { isSafeTime } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
+import type { DemoScenario } from "../data/demoClient";
 
 export const PAGES = [
   "applications",
@@ -15,7 +16,7 @@ export type UrlState = {
   earliest: string;
   latest: string;
   mode: "demo" | "live";
-  scenario: "aci" | "nxos";
+  scenario: DemoScenario;
   tab: "network" | "services" | "devices" | "table";
   query: string;
 };
@@ -66,7 +67,12 @@ export function parseUrlState(
   const tab = params.get("tab") ?? "network";
   if (mode !== "demo" && mode !== "live")
     throw new Error("Unsupported data mode.");
-  if (scenario !== "aci" && scenario !== "nxos")
+  if (
+    scenario !== "aci" &&
+    scenario !== "nxos" &&
+    scenario !== "catalyst-aci" &&
+    scenario !== "meraki-nxos"
+  )
     throw new Error("Unsupported demo scenario.");
   if (!["network", "services", "devices", "table"].includes(tab))
     throw new Error("Unsupported map view.");
