@@ -27,7 +27,7 @@ import urllib.request
 import uuid
 
 import qualification_shc as client
-from qualification_shc_lab import Lab
+from qualification_shc_lab import Lab, OwnedContainerStopped
 
 BUILDERS = (
     "ADM - Identity builder",
@@ -599,10 +599,17 @@ class Driver:
         self.lab.install_candidate()
         return {"support_files": self.lab.state["support_files"]}
 
-    def _wait(self, check, timeout=1200):
+    def _wait(self, check, timeout=1200, running_roles=()):
         last = {}
 
         def attempt():
+            if running_roles:
+                statuses = [self.lab.container_status(role) for role in running_roles]
+                if any(value["status"] in ("exited", "dead") for value in statuses):
+                    self._record("startup-stopped", {"containers": statuses})
+                    raise OwnedContainerStopped(
+                        "an ID/name/label-verified startup container stopped"
+                    )
             try:
                 return check()
             except (client.Refused, client.ApiError, KeyError) as error:
@@ -619,6 +626,8 @@ class Driver:
 
         try:
             return client.wait_for(attempt, timeout=timeout, interval=5)
+        except OwnedContainerStopped:
+            raise
         except client.Refused:
             self._record(
                 "convergence-deadline",
@@ -643,7 +652,7 @@ class Driver:
                 )
             return True
 
-        self._wait(ready)
+        self._wait(ready, running_roles=client.ROLES)
         return {"all_management_tls_and_identity": "passed"}
 
     def phase_bootstrap(self):

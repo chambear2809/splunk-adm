@@ -8,6 +8,88 @@ const { chromium, expect } = require("@playwright/test");
 const { activation } = require("./research/cisco-pipeline-interface.json");
 const contractSelectors = activation.cutover_selectors.map(({ name }) => name);
 
+async function documentMetadata(
+  page,
+  targetURL,
+  metadataPaths,
+  safePath,
+  navigate,
+  timeout = 90000,
+) {
+  if (!metadataPaths.length) return [await navigate(), []];
+  const target = new URL(targetURL);
+  let committed = false;
+  let rejectObservation;
+  const interrupted = new Promise((_, reject) => {
+    rejectObservation = reject;
+  });
+  const pending = metadataPaths.map(([name, suffix]) => {
+    let capture;
+    const request = new Promise((resolve) => {
+      capture = resolve;
+    });
+    return { name, suffix, capture, request, captured: false };
+  });
+  const onCommit = (frame) => {
+    if (frame !== page.mainFrame()) return;
+    if (committed) {
+      rejectObservation(
+        new Error("Metadata document navigated before completion."),
+      );
+      return;
+    }
+    committed = frame.url() === target.href;
+  };
+  const onRequest = (request) => {
+    if (!committed || request.frame() !== page.mainFrame()) return;
+    if (request.method() !== "GET") return;
+    const url = new URL(request.url());
+    if (url.origin !== target.origin) return;
+    const path = decodeURIComponent(url.pathname);
+    const item = pending.find(
+      (candidate) =>
+        !candidate.captured &&
+        path.endsWith(`/servicesNS/nobody/splunk_adm${candidate.suffix}`),
+    );
+    if (item) {
+      item.captured = true;
+      item.capture(request);
+    }
+  };
+  // Register synchronously before navigation: the commit event selects the new
+  // document before its first request. Responses from Applications' in-flight
+  // health check belong to the outgoing document and must never be consumed.
+  page.on("framenavigated", onCommit);
+  page.on("request", onRequest);
+  const timer = setTimeout(
+    () => rejectObservation(new Error("Metadata requests timed out.")),
+    timeout,
+  );
+  try {
+    const metadata = Promise.all(
+      pending.map(async ({ name, request }) => {
+        const response = await (await request).response();
+        if (!response)
+          throw new Error(`Metadata request has no response: ${name}.`);
+        return {
+          name,
+          status: response.status(),
+          path: safePath(response.url()),
+          ...(name === "settings" ? { snapshot: await response.json() } : {}),
+        };
+      }),
+    );
+    return await Promise.race([
+      Promise.all([navigate(), metadata]),
+      interrupted,
+    ]);
+  } finally {
+    clearTimeout(timer);
+    page.off("framenavigated", onCommit);
+    page.off("request", onRequest);
+  }
+}
+
 const BASE = "http://127.0.0.1:8000";
 const { ADM_VIEWER_USER: user, ADM_VIEWER_PASS: pass } = process.env;
 const [earliest, latest, expectedNodes, timezone] = process.argv.slice(2);
@@ -898,38 +980,21 @@ try {
                 ]),
               ]
             : [];
-        // The client rejects denied metadata at response headers and can cancel
-        // the body. Exact statuses plus the settled unknown UI prove completion.
-        const metadataPromise = Promise.all(
-          metadataPaths.map(async ([metadataName, suffix]) => {
-            const response = await page.waitForResponse(
-              (candidate) =>
-                candidate.request().method() === "GET" &&
-                decodeURIComponent(new URL(candidate.url()).pathname).endsWith(
-                  `/servicesNS/nobody/splunk_adm${suffix}`,
-                ),
-              { timeout: 90000 },
-            );
-            return {
-              name: metadataName,
-              status: response.status(),
-              path: safePath(response.url()),
-              ...(metadataName === "settings"
-                ? { snapshot: await response.json() }
-                : {}),
-            };
-          }),
-        );
         if (name === "data_health") stage = "Data health metadata headers";
-        const [route, metadata] = await Promise.all([
-          routeEvidence(
-            `/en-US/app/splunk_adm/${name}`,
-            name === "data_health"
-              ? "Data health"
-              : name[0].toUpperCase() + name.slice(1),
-          ),
-          metadataPromise,
-        ]);
+        const path = `/en-US/app/splunk_adm/${name}`;
+        const [route, metadata] = await documentMetadata(
+          page,
+          `${BASE}${path}`,
+          metadataPaths,
+          safePath,
+          () =>
+            routeEvidence(
+              path,
+              name === "data_health"
+                ? "Data health"
+                : name[0].toUpperCase() + name.slice(1),
+            ),
+        );
         evidence.routes[name] = route;
         if (name === "data_health") {
           stage = "Data health unknown state";

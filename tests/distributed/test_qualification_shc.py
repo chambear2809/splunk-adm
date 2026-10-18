@@ -207,12 +207,24 @@ class SafetyTests(unittest.TestCase):
             patch.object(lab, "identity", return_value="1" * 64),
             patch.object(lifecycle, "command") as run,
         ):
-            lab.copy_files("sh1", {"etc/apps/example/bin/run.py": (b"pass\n", 0o700)})
+            lab.copy_files(
+                "sh1",
+                {
+                    "etc/apps/example/bin/run.py": (b"pass\n", 0o700),
+                    "etc/system/local/server.conf": b"private fixture\n",
+                },
+            )
         content = run.call_args.kwargs["data"]
         with tarfile.open(fileobj=io.BytesIO(content)) as archive:
             item = archive.getmember("etc/apps/example/bin/run.py")
             self.assertEqual((item.uid, item.gid, item.mode), (41812, 41812, 0o700))
             self.assertTrue(archive.getmember("etc/apps/example/bin").isdir())
+            self.assertTrue(
+                all(item.mode == 0o755 for item in archive.getmembers() if item.isdir())
+            )
+            self.assertEqual(
+                archive.getmember("etc/system/local/server.conf").mode, 0o600
+            )
 
     def test_archive_refuses_path_traversal_and_links(self):
         for name, kind in (
@@ -390,6 +402,46 @@ class DriverTests(unittest.TestCase):
             self.assertNotIn("prepare", self.driver.completed)
             self.assertEqual(self.driver.results["prepare"]["outcome"], "failed")
             cleanup.assert_not_called()
+
+    def test_startup_wait_stops_immediately_for_an_exited_owned_container(self):
+        def status(role):
+            return {
+                "role": role,
+                "id": "a" * 64,
+                "name": "adm-shc-driver-" + role,
+                "status": "exited" if role == "sh2" else "running",
+                "exit_code": 2 if role == "sh2" else 0,
+            }
+
+        with (
+            patch.object(self.lab, "container_status", side_effect=status),
+            patch.object(self.driver, "_record") as recorded,
+            patch.object(client.time, "sleep") as sleep,
+        ):
+            ready = unittest.mock.Mock(return_value=True)
+            with self.assertRaises(lifecycle.OwnedContainerStopped):
+                self.driver._wait(ready, running_roles=client.ROLES)
+            ready.assert_not_called()
+            sleep.assert_not_called()
+            self.assertEqual(recorded.call_args.args[0], "startup-stopped")
+            self.assertTrue(
+                any(
+                    row["role"] == "sh2" and row["exit_code"] == 2
+                    for row in recorded.call_args.args[1]["containers"]
+                )
+            )
+
+    def test_running_container_state_does_not_replace_actual_readiness(self):
+        with patch.object(
+            self.lab, "container_status", return_value={"status": "running"}
+        ) as status:
+            ready = unittest.mock.Mock(return_value={"verified_tls": True})
+            self.assertEqual(
+                self.driver._wait(ready, running_roles=client.ROLES),
+                {"verified_tls": True},
+            )
+            ready.assert_called_once()
+            self.assertEqual(status.call_count, len(client.ROLES))
 
     def test_phase_prerequisites_prevent_unprepared_mutations(self):
         with self.lab.locked(), patch.object(self.driver, "phase_settings") as settings:

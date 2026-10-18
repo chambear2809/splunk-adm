@@ -34,6 +34,10 @@ SPLUNK_UID = 41812
 DIAGNOSTICS = ContextVar("qualification_diagnostics", default=None)
 
 
+class OwnedContainerStopped(Refused):
+    """A requested startup stopped before authenticated readiness was reached."""
+
+
 def command(args, *, data=None, timeout=300):
     """Never emit command output: docker/Splunk can echo credentials or config."""
     started = time.monotonic()
@@ -395,7 +399,7 @@ class Lab:
             self.save()  # Register each ID before any later action can fail.
             self._copy_config(role)
 
-    def identity(self, role):
+    def _inspect_owned(self, role):
         item = self.state["created"][role]
         require(bool(item["id"]), "container ID not recorded")
         value = json.loads(command(["docker", "inspect", item["id"]]))[0]
@@ -405,7 +409,23 @@ class Lab:
             and value["Config"].get("Labels", {}).get(LABEL) == self.task,
             "container ID/name/task label mismatch",
         )
-        return item["id"]
+        return value
+
+    def identity(self, role):
+        return self._inspect_owned(role)["Id"]
+
+    def container_status(self, role):
+        value = self._inspect_owned(role)
+        state = value["State"]
+        return {
+            "role": role,
+            "id": value["Id"],
+            "name": value["Name"].lstrip("/"),
+            "status": state["Status"],
+            "running": state.get("Running"),
+            "exit_code": state.get("ExitCode"),
+            "health": state.get("Health", {}).get("Status"),
+        }
 
     def copy_files(self, role, files):
         self._owned()
@@ -424,7 +444,10 @@ class Lab:
                 info = tarfile.TarInfo(parent)
                 info.type = tarfile.DIRTYPE
                 info.uid = info.gid = SPLUNK_UID
-                info.mode = 0o750
+                # The pinned image starts Ansible as UID 999, which must traverse
+                # native installation paths owned by Splunk UID 41812. Secret
+                # leaves remain 0600; tightening shared ancestors breaks facts.
+                info.mode = 0o755
                 output.addfile(info)
             for target, content in files.items():
                 require(

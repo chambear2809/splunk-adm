@@ -184,6 +184,21 @@ response shapes must be verified in the fresh run; the helper is not evidence
 that bootstrap passed. Preserve failures and stop for coordinator diagnosis.
 No automatic KV reset, second restart or readiness override is performed.
 
+The initial fresh harness attempt completed create/support, then all five
+containers exited with code 2 during Ansible's version fact. The reported
+missing `/opt/splunk/etc/splunk.version` was a traversal failure: the genuine
+pinned-image file already existed, mode 0444, owned by UID/GID 41812, and
+declared Enterprise 10.6.0.5. The harness's tar parent headers had changed
+`/opt/splunk/etc` to 0750 owned by 41812, while the image starts Ansible as UID
+999 without membership in that group. The corrected copy helper uses standard
+0755 parent directories, preserving 0600 secret/config leaves and explicit
+0700 executable leaves. No version marker is fabricated and the genuine image
+bootstrap sequence is unchanged. Startup waits now inspect exact owned IDs,
+names and labels and immediately retain sanitized exit-state evidence when a
+container exits or dies, instead of waiting the full readiness timeout. This
+is a harness correction, not a passing live qualification result; the failed
+attempt and fresh corrected run retain separate evidence.
+
 Apply the deployer bundle with `apply_bundle()`. Enterprise 10.6.0.5 does not
 provide `validate shcluster-bundle`; do not report a separate successful CLI
 validation. Add only the dedicated task peer to every member using

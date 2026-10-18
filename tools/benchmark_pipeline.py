@@ -14,9 +14,11 @@ import hashlib
 import json
 import os
 import platform
+import re
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import asdict
@@ -30,6 +32,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import lab  # noqa: E402
 from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import Workload, iter_events, manifest  # noqa: E402
+from stage_lab_package import stage_package  # noqa: E402
 
 CONTAINER = "adm-splunk-lab"
 COLLECTIONS = (
@@ -124,25 +127,91 @@ def validate_saved_overrides(text):
             )
 
 
+def _package_default_configs(app: Path, archive: Path) -> tuple[dict[str, bytes], str]:
+    """Bind safe archive defaults to this source, allowing only generated build."""
+    source = {
+        path.relative_to(app / "default").as_posix(): path.read_bytes()
+        for path in (app / "default").rglob("*.conf")
+    }
+    with tempfile.TemporaryDirectory(prefix="adm-benchmark-package-") as directory:
+        stage = Path(directory)
+        archive_sha256 = stage_package(archive, stage)
+        packaged = {
+            path.relative_to(stage / "splunk_adm/default").as_posix(): path.read_bytes()
+            for path in (stage / "splunk_adm/default").rglob("*.conf")
+        }
+    if source.keys() != packaged.keys():
+        raise ValueError("Provided package default config set differs from source")
+    for name, content in source.items():
+        observed = packaged[name]
+        if observed == content:
+            continue
+        # package-app.mjs prepends exactly this stanza. It does not rewrite
+        # source versions, options, whitespace or other configuration bytes.
+        build = re.match(rb"\[install\]\nbuild = [1-9][0-9]*\n", observed)
+        if name != "app.conf" or build is None or observed[build.end() :] != content:
+            raise ValueError(f"Provided package {name} differs from source")
+    return packaged, archive_sha256
+
+
 def installed_fingerprints():
     fingerprints = {}
     app = ROOT / "splunk_app/splunk_adm"
-    for path in sorted((app / "default").glob("*.conf")):
+    archive = os.environ.get("ADM_LAB_PACKAGE")
+    if archive:
+        expected, _ = _package_default_configs(app, Path(archive))
+        prefix = "/opt/splunk/etc/apps/splunk_adm/default/"
+        listing = (
+            subprocess.check_output(
+                [
+                    "docker",
+                    "exec",
+                    CONTAINER,
+                    "find",
+                    prefix.rstrip("/"),
+                    "-type",
+                    "f",
+                    "-name",
+                    "*.conf",
+                    "-print",
+                ],
+                timeout=30,
+            )
+            .decode("utf-8")
+            .splitlines()
+        )
+        if (
+            len(listing) != len(set(listing))
+            or any(not name.startswith(prefix) for name in listing)
+            or {name[len(prefix) :] for name in listing} != expected.keys()
+        ):
+            raise ValueError(
+                "Installed default config set differs from provided package"
+            )
+    else:
+        # Preserve the existing source-only, byte-exact behavior when no
+        # archive was explicitly supplied to the owned lab installation.
+        expected = {
+            path.name: path.read_bytes()
+            for path in sorted((app / "default").glob("*.conf"))
+        }
+    for name, content in sorted(expected.items()):
         installed = subprocess.check_output(
             [
                 "docker",
                 "exec",
                 CONTAINER,
                 "cat",
-                f"/opt/splunk/etc/apps/splunk_adm/default/{path.name}",
+                f"/opt/splunk/etc/apps/splunk_adm/default/{name}",
             ],
             timeout=30,
         )
-        if installed != path.read_bytes():
+        if installed != content:
+            origin = "provided package" if archive else "source"
             raise ValueError(
-                f"Installed {path.name} differs from source; run lab.sh install"
+                f"Installed {name} differs from {origin}; run lab.sh install"
             )
-        fingerprints[str(path.relative_to(ROOT))] = hashlib.sha256(
+        fingerprints[str((app / "default" / name).relative_to(ROOT))] = hashlib.sha256(
             installed
         ).hexdigest()
     # These overrides change pipeline behavior; this harness only changes schedules.

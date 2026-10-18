@@ -13,6 +13,7 @@ import configparser
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -378,8 +379,66 @@ def evidence_fingerprints(
 ) -> dict:
     """Bind capture to raw files, installed defaults, effective macros and KV state."""
     require_local_lab(lab)
-    configs = sorted((ROOT / "splunk_app/splunk_adm/default").glob("*.conf"))
-    paths = [f"/opt/splunk/etc/apps/splunk_adm/default/{path.name}" for path in configs]
+    app = ROOT / "splunk_app/splunk_adm"
+    archive = os.environ.get("ADM_LAB_PACKAGE")
+    package_sha256 = None
+    if archive:
+        # Share only safe archive/source validation. Captures intentionally
+        # record effective local overrides; benchmark's override guard does
+        # not belong at this evidence boundary.
+        from benchmark_pipeline import _package_default_configs
+
+        packaged, package_sha256 = _package_default_configs(app, Path(archive))
+        source = {
+            path.relative_to(app / "default").as_posix(): path.read_bytes()
+            for path in (app / "default").rglob("*.conf")
+        }
+        expected = {
+            name: hashlib.sha256(content).hexdigest()
+            for name, content in packaged.items()
+        }
+        prefix = "/opt/splunk/etc/apps/splunk_adm/default/"
+        listing = (
+            subprocess.check_output(
+                [
+                    "docker",
+                    "exec",
+                    "adm-splunk-lab",
+                    "find",
+                    prefix.rstrip("/"),
+                    "-type",
+                    "f",
+                    "-name",
+                    "*.conf",
+                    "-print",
+                ],
+                timeout=30,
+            )
+            .decode("utf-8")
+            .splitlines()
+        )
+        if (
+            len(listing) != len(set(listing))
+            or any(not name.startswith(prefix) for name in listing)
+            or {name[len(prefix) :] for name in listing} != expected.keys()
+        ):
+            raise RuntimeError(
+                "installed default config set differs from provided package"
+            )
+    else:
+        source = {
+            path.name: path.read_bytes()
+            for path in sorted((app / "default").glob("*.conf"))
+        }
+        expected = {
+            name: hashlib.sha256(content).hexdigest()
+            for name, content in source.items()
+        }
+    candidate = {
+        name: hashlib.sha256(content).hexdigest() for name, content in source.items()
+    }
+    prefix = "/opt/splunk/etc/apps/splunk_adm/default/"
+    paths = [prefix + name for name in sorted(expected)]
     response = subprocess.run(
         ["docker", "exec", "-u", "splunk", "adm-splunk-lab", "sha256sum", *paths],
         capture_output=True,
@@ -391,12 +450,17 @@ def evidence_fingerprints(
         digest, path = line.split(maxsplit=1)
         if not re.fullmatch(r"[0-9a-f]{64}", digest) or path not in paths:
             raise RuntimeError("installed configuration fingerprint is malformed")
-        installed[Path(path).name] = digest
-    candidate = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in configs}
-    if set(installed) != set(candidate):
+        name = path[len(prefix) :]
+        if archive and name in installed:
+            raise RuntimeError(
+                "installed configuration fingerprint contains duplicates"
+            )
+        installed[name] = digest
+    if set(installed) != set(expected):
         raise RuntimeError("installed configuration fingerprint is incomplete")
-    if require_candidate and installed != candidate:
-        raise RuntimeError("installed configuration differs from the candidate source")
+    if (archive or require_candidate) and installed != expected:
+        origin = "provided package" if archive else "candidate source"
+        raise RuntimeError(f"installed configuration differs from the {origin}")
     payload = lab._json(
         "GET", "/servicesNS/nobody/splunk_adm/configs/conf-macros?count=0"
     )
@@ -527,6 +591,14 @@ def evidence_fingerprints(
         raise RuntimeError("indexed evidence exceeds the bounded local fixture limit")
     return {
         "installed_default_sha256": installed,
+        **(
+            {
+                "source_default_sha256": candidate,
+                "package_archive_sha256": package_sha256,
+            }
+            if archive
+            else {}
+        ),
         "effective_macros_sha256": _digest(macros),
         "effective_savedsearches_sha256": _digest(writers),
         "indexed_content_sha256": _digest(indexed),

@@ -102,7 +102,8 @@ class InstalledAtomicSettingsTest(unittest.TestCase):
         )
 
     def test_viewer_reads_but_server_rejects_write(self):
-        user, password = "adm_atomic_" + secrets.token_hex(8), secrets.token_urlsafe(24)
+        user = "adm_atomic_" + secrets.token_hex(8)
+        password = secrets.token_urlsafe(24)
         self.fixture.lab._json(
             "POST",
             "/services/authentication/users",
