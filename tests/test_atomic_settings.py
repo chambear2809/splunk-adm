@@ -458,6 +458,40 @@ class ScanCompletenessTests(unittest.TestCase):
 
 
 class TopologyGateTests(unittest.TestCase):
+    def cluster(self):
+        return {
+            "captain": {
+                "id": "cluster-guid",
+                "mgmt_uri": "https://head-one:8089",
+                "initialized_flag": True,
+                "min_peers_joined_flag": True,
+                "service_ready_flag": True,
+                "stable_captain": True,
+                "rolling_restart_flag": False,
+                "rolling_upgrade_flag": False,
+                "kvstore_maintenance_status": "disabled",
+            },
+            "peers": {
+                guid: {
+                    "mgmt_uri": f"https://{guid}:8089",
+                    "status": "Up",
+                    "splunk_version": "10.6.0.5",
+                    "manual_detention": "off",
+                    "out_of_sync_node": False,
+                    "restart_required": "0",
+                }
+                for guid in ("head-one", "head-two", "head-three")
+            },
+        }
+
+    def member(self):
+        return {
+            "status": "Up",
+            "is_registered": True,
+            "maintenance_mode": False,
+            "restart_state": "NoRestart",
+        }
+
     def store(
         self,
         mode="single_namespace",
@@ -465,19 +499,26 @@ class TopologyGateTests(unittest.TestCase):
         cohosted_status="ready",
         cohosted_type="Pdl",
         service_address="https://127.0.0.1:36527/",
+        server_guid="head-one",
+        cluster=None,
+        member=None,
         **current,
     ):
         from adm_settings_lib.rest import SplunkStore
 
+        cluster = self.cluster() if cluster is None else cluster
+        member = self.member() if member is None else member
+
         class Store(SplunkStore):
             def request(self, method, path, body=None, query=None):
+                self.requests.append((method, path, query))
                 if "conf-adm_settings" in path:
                     value = {"write_mode": mode, "platform": platform}
                 elif "server/info" in path:
                     value = {
                         "version": "10.6.0.5",
                         "product_type": "enterprise",
-                        "guid": "head-one",
+                        "guid": server_guid,
                     }
                 elif "kvstore/status" in path:
                     value = {
@@ -496,27 +537,21 @@ class TopologyGateTests(unittest.TestCase):
                             "migrationStatus": "NotStarted",
                             "versionUpgradeInProgress": "0",
                             "standalone": "1",
-                            "replicaSet": "namespace",
                             **current,
                         },
-                        "members": {
-                            "0": {
-                                "replicationStatus": "KV store captain",
-                                "hostAndPort": "head-one:8191",
-                            },
-                            "1": {
-                                "replicationStatus": "Non-captain KV store member",
-                                "hostAndPort": "head-two:8191",
-                            },
-                            "2": {
-                                "replicationStatus": "Non-captain KV store member",
-                                "hostAndPort": "head-three:8191",
-                            },
-                        },
+                        "peers": None,
                     }
+                elif "shcluster/status" in path:
+                    value = cluster
+                elif "shcluster/member/info" in path:
+                    value = member
+                else:
+                    raise AssertionError(f"Unexpected request: {path}")
                 return {"entry": [{"content": value}]}
 
-        return Store("unused-test-session")
+        store = Store("unused-test-session")
+        store.requests = []
+        return store
 
     def test_single_namespace_is_stable_and_shc_is_rejected_in_single_mode(self):
         self.assertEqual(self.store().persistence(), self.store().persistence())
@@ -590,12 +625,152 @@ class TopologyGateTests(unittest.TestCase):
             self.store(service_address="https://127.0.0.1:45678/").persistence(),
         )
 
-    def test_cluster_requires_explicit_mode_and_shared_replica_set(self):
-        self.assertIsInstance(
-            self.store("qualified_shc", standalone="0").persistence(), str
+    def test_cluster_uses_pdl_shape_and_explicit_shc_health_endpoints(self):
+        store = self.store("qualified_shc", standalone=False)
+        self.assertIsInstance(store.persistence(), str)
+        self.assertIn(
+            (
+                "GET",
+                "/services/shcluster/status",
+                {"advanced": 1, "output_mode": "json"},
+            ),
+            store.requests,
+        )
+        self.assertIn(
+            ("GET", "/services/shcluster/member/info", {"output_mode": "json"}),
+            store.requests,
         )
         with self.assertRaises(SettingsError):
             self.store("qualified_shc").persistence()
+
+    def test_shc_namespace_agrees_across_members_and_captain_changes(self):
+        namespaces = set()
+        for guid in self.cluster()["peers"]:
+            cluster = self.cluster()
+            cluster["captain"]["mgmt_uri"] = cluster["peers"][guid]["mgmt_uri"]
+            namespaces.add(
+                self.store(
+                    "qualified_shc",
+                    standalone=False,
+                    guid=guid,
+                    server_guid=guid,
+                    cluster=cluster,
+                    service_address=f"https://127.0.0.1:{30000 + len(guid)}/",
+                ).persistence()
+            )
+        self.assertEqual(len(namespaces), 1)
+        original = namespaces.pop()
+        for field in ("cluster", "membership"):
+            cluster = self.cluster()
+            if field == "cluster":
+                cluster["captain"]["id"] = "another-cluster"
+            else:
+                cluster["peers"]["head-four"] = {
+                    **cluster["peers"]["head-three"],
+                    "mgmt_uri": "https://head-four:8089",
+                }
+            self.assertNotEqual(
+                original,
+                self.store(
+                    "qualified_shc", standalone=False, cluster=cluster
+                ).persistence(),
+            )
+
+    def test_shc_captain_health_evidence_is_required_and_fail_closed(self):
+        invalid = {
+            "id": (None, "", "head-one"),
+            "mgmt_uri": (None, "https://other-head:8089"),
+            "initialized_flag": (None, False),
+            "min_peers_joined_flag": (None, False),
+            "service_ready_flag": (None, False),
+            "stable_captain": (None, False),
+            "rolling_restart_flag": (None, True),
+            "rolling_upgrade_flag": (None, True),
+            "kvstore_maintenance_status": (None, "enabled"),
+        }
+        for key, values in invalid.items():
+            for value in values:
+                cluster = self.cluster()
+                cluster["captain"][key] = value
+                with (
+                    self.subTest(key=key, value=value),
+                    self.assertRaises(SettingsError),
+                ):
+                    self.store(
+                        "qualified_shc", standalone=False, cluster=cluster
+                    ).persistence()
+
+    def test_shc_local_member_binding_and_registration_are_required(self):
+        for changes in (
+            {"guid": "different"},
+            {"guid": None},
+            {"server_guid": None},
+            {"server_guid": "other", "guid": "other"},
+            {"cluster": {}},
+            {"member": {}},
+        ):
+            with self.subTest(changes=changes), self.assertRaises(SettingsError):
+                self.store("qualified_shc", standalone=False, **changes).persistence()
+        for key, values in {
+            "status": (None, "Down", "ManualDetention"),
+            "is_registered": (None, False),
+            "maintenance_mode": (None, True),
+            "restart_state": (None, "Restart"),
+        }.items():
+            for value in values:
+                member = {**self.member(), key: value}
+                with (
+                    self.subTest(key=key, value=value),
+                    self.assertRaises(SettingsError),
+                ):
+                    self.store(
+                        "qualified_shc", standalone=False, member=member
+                    ).persistence()
+
+    def test_shc_peer_identity_and_ready_state_are_required(self):
+        invalid = {
+            "status": (None, "Down"),
+            "splunk_version": (None, "10.4.0"),
+            "manual_detention": (None, "on"),
+            "out_of_sync_node": (None, True),
+            "restart_required": (None, "1"),
+            "mgmt_uri": (
+                None,
+                "",
+                "https://head-one:8089",
+                "http://head-two:8089",
+                "https://head-two",
+                "https://head-two:invalid",
+                "https://user:secret@head-two:8089",
+                "https://head-two:8089/path",
+                "https://head-two:8089?query",
+                "https://head-two:8089#fragment",
+            ),
+        }
+        for key, values in invalid.items():
+            for value in values:
+                cluster = self.cluster()
+                cluster["peers"]["head-two"][key] = value
+                with (
+                    self.subTest(key=key, value=value),
+                    self.assertRaises(SettingsError),
+                ):
+                    self.store(
+                        "qualified_shc", standalone=False, cluster=cluster
+                    ).persistence()
+        for peers in (None, [], {}, {"head-one": {}}, {"head-one": None}):
+            cluster = {**self.cluster(), "peers": peers}
+            with self.subTest(peers=peers), self.assertRaises(SettingsError):
+                self.store(
+                    "qualified_shc", standalone=False, cluster=cluster
+                ).persistence()
+        for malformed in (None, [], "peer"):
+            cluster = self.cluster()
+            cluster["peers"]["head-two"] = malformed
+            with self.subTest(malformed=malformed), self.assertRaises(SettingsError):
+                self.store(
+                    "qualified_shc", standalone=False, cluster=cluster
+                ).persistence()
 
     def test_disabled_unknown_cloud_and_unready_fail_closed(self):
         for values in (

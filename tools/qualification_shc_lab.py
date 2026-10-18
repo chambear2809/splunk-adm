@@ -761,7 +761,7 @@ class Lab:
                 "shcluster-captain",
                 "-servers_list",
                 ",".join(f"https://{self.task}-{role}:8089" for role in MEMBERS),
-                "-answer-yes",
+                "--answer-yes",
             ],
         )
 
@@ -883,7 +883,7 @@ class Lab:
                 "shcluster-bundle",
                 "-target",
                 f"https://{self.task}-sh1:8089",
-                "-answer-yes",
+                "--answer-yes",
             ],
             timeout=1200,
         )

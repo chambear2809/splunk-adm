@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from . import SettingsError, SettingsService, canonical, digest
 
@@ -221,44 +221,117 @@ class SplunkStore:
             # instance GUID identifies the namespace without inventing either.
             identity = [mode, server_guid, current_guid]
         else:
-            replica_set = current.get("replicaSet")
-            if not isinstance(replica_set, str) or not replica_set:
-                raise SettingsError(
-                    503, "unsupported", "KV Store replica-set identity is unavailable."
-                )
-            members = status.get("members", {})
-            members = list(members.values()) if isinstance(members, dict) else members
+            server_guid = server.get("guid")
             if (
-                standalone
-                or not isinstance(members, list)
-                or len(members) < 3
-                or sum(
-                    str(member.get("replicationStatus", "")).lower()
-                    == "kv store captain"
-                    for member in members
-                )
-                != 1
-                or any(
-                    str(member.get("replicationStatus", "")).lower()
-                    not in ("kv store captain", "non-captain kv store member")
-                    for member in members
-                )
+                standalone is not False
+                or not isinstance(server_guid, str)
+                or not server_guid
+                or current.get("guid") != server_guid
             ):
                 raise SettingsError(
                     503,
                     "unsupported",
-                    "qualified_shc requires a healthy qualified multi-member KV replica set.",
+                    "qualified_shc requires matching server and KV Store member identity in clustered mode.",
                 )
-            addresses = [member.get("hostAndPort") for member in members]
-            if not all(
-                isinstance(address, str) and address for address in addresses
-            ) or len(set(addresses)) != len(addresses):
+            # Cohosted 10.6 PDL reports no Mongo replicaSet/members, including
+            # when ready. SHC status supplies cluster and member identity; it
+            # does not establish per-peer KV replication or read consistency.
+            cluster = content(
+                self.request(
+                    "GET",
+                    "/services/shcluster/status",
+                    query={"advanced": 1, "output_mode": "json"},
+                )
+            )
+            member = content(
+                self.request(
+                    "GET",
+                    "/services/shcluster/member/info",
+                    query={"output_mode": "json"},
+                )
+            )
+            captain, peers = cluster.get("captain"), cluster.get("peers")
+            if (
+                not isinstance(captain, dict)
+                or not isinstance(peers, dict)
+                or len(peers) < 3
+                or server_guid not in peers
+                or not isinstance(captain.get("id"), str)
+                or not captain["id"]
+                or captain["id"] in peers
+                or any(
+                    flag(captain.get(key)) is not True
+                    for key in (
+                        "initialized_flag",
+                        "min_peers_joined_flag",
+                        "service_ready_flag",
+                        "stable_captain",
+                    )
+                )
+                or any(
+                    flag(captain.get(key)) is not False
+                    for key in ("rolling_restart_flag", "rolling_upgrade_flag")
+                )
+                or captain.get("kvstore_maintenance_status") != "disabled"
+                or member.get("status") != "Up"
+                or flag(member.get("is_registered")) is not True
+                or flag(member.get("maintenance_mode")) is not False
+                or member.get("restart_state") != "NoRestart"
+            ):
                 raise SettingsError(
                     503,
                     "unsupported",
-                    "KV Store replica membership identity is incomplete.",
+                    "qualified_shc requires healthy registered SHC members outside maintenance, restart or upgrade.",
                 )
-            identity = [mode, replica_set, sorted(addresses)]
+            addresses = []
+            for guid, peer in peers.items():
+                if (
+                    not isinstance(guid, str)
+                    or not guid
+                    or not isinstance(peer, dict)
+                    or peer.get("status") != "Up"
+                    or peer.get("splunk_version") != server["version"]
+                    or peer.get("manual_detention") != "off"
+                    or flag(peer.get("out_of_sync_node")) is not False
+                    or flag(peer.get("restart_required")) is not False
+                ):
+                    raise SettingsError(
+                        503, "unsupported", "SHC peer readiness evidence is incomplete."
+                    )
+                uri = peer.get("mgmt_uri")
+                try:
+                    parsed = urlsplit(uri) if isinstance(uri, str) else None
+                    valid = (
+                        parsed is not None
+                        and parsed.scheme == "https"
+                        and parsed.hostname
+                        and parsed.port is not None
+                        and 0 < parsed.port < 65536
+                        and parsed.username is None
+                        and parsed.password is None
+                        and parsed.path in ("", "/")
+                        and not parsed.query
+                        and not parsed.fragment
+                    )
+                except ValueError:
+                    valid = False
+                if not valid:
+                    raise SettingsError(
+                        503, "unsupported", "SHC peer management identity is invalid."
+                    )
+                addresses.append(uri)
+            if (
+                len(set(addresses)) != len(addresses)
+                or addresses.count(captain.get("mgmt_uri")) != 1
+            ):
+                raise SettingsError(
+                    503,
+                    "unsupported",
+                    "SHC captain and peer management identities do not agree.",
+                )
+            # captain.id is the stable CLUSTER GUID, not the elected member's
+            # GUID. Captain changes do not change namespace; membership does.
+            identity = [mode, captain["id"], sorted(zip(peers, addresses))]
         return digest(identity)
 
 

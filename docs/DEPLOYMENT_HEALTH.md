@@ -51,11 +51,27 @@ do not enable this mode to represent them as shared settings. The client binds a
 save to the namespace observed on GET, derived from matching search-head and KV current-member GUIDs, and rejects a POST routed to another namespace.
 
 `qualified_shc` is reserved for a coordinated, qualified SHC deployment using one
-shared KV replica set. It requires at least three members and one KV captain.
-The request namespace uses the shared KV replica-set identity and sorted member
-addresses; changes of membership require a fresh client session. SHC's configuration
-captain is distinct from the KV Store captain; app/configuration distribution
-does not prove shared persistence. The app calls the supported KV REST endpoint
+shared KV namespace. The captured ready 10.6.0.5 cohosted PDL response has
+`standalone = false` and no Mongo `replicaSet` or `members` fields; its `peers`
+value is null. The endpoint instead checks `/shcluster/status?advanced=1` and
+`/shcluster/member/info` with the caller's token. These require the caller's
+existing administrator permission or `list_search_head_clustering` capability;
+an authorization failure leaves writes unavailable without escalating access.
+It requires at least three distinct Up peers with unique HTTPS management URIs,
+the qualified version on each peer, no detention, pending restart or out-of-sync
+state, a registered Up local member outside maintenance/restart, and an
+initialized, stable, service-ready captain outside KV maintenance and rolling
+restart/upgrade. The captain management URI must identify exactly one peer.
+The current KV GUID must match the server GUID and an SHC peer GUID.
+
+The request namespace uses the documented SHC **cluster GUID** (`captain.id`,
+which is distinct from every member GUID), plus sorted member GUIDs and management
+URIs. It excludes the elected captain URI and ephemeral PDL port, so captain
+changes do not change the namespace. Membership changes require a fresh client
+session; this protocol binding does not change ledger keys or discard existing
+settings. SHC's configuration captain is distinct from the KV Store captain;
+app/configuration distribution does not prove shared persistence. The app calls
+the supported KV REST endpoint
 on the current member. Splunk delegates SHC writes to the KV captain and keeps
 reads local, as documented for the 10.6 cohosted KV store. Qualify competing requests through different members
 before enabling this mode, and stop writes for mixed-version upgrades, KV
@@ -66,8 +82,12 @@ GUIDs for standalone mode, no version upgrade, and the captured non-migrating
 `Pdl`; unknown or unready backend status is rejected. Its dynamically allocated
 local service URL is never used for routing or namespace identity. Standalone
 10.6 status omits `replicaSet`/`members`; it does not
-need invented replica-set metadata. The SHC mode still requires validated shared
-replica-set and member identity evidence. The runtime gate is pinned to Enterprise
+need invented replica-set metadata. Neither the captured PDL status nor SHC Up
+membership establishes each peer's KV replication readiness. The local readiness
+and SHC identity checks are deployment guards, not proof of distributed write
+arbitration. Operator attestation still requires all-member KV readiness and
+coordinated cross-member duplicate-key/concurrency qualification before enabling
+writes; local snapshots can remain stale. The runtime gate is pinned to Enterprise
 10.6.0.5, the qualification target. Other versions remain read-only until their
 installed endpoint/concurrency behavior is qualified. These guards do not replace
 deployment qualification. The persistent endpoint explicitly selects
@@ -166,6 +186,9 @@ The primitive and authentication behavior are documented in Splunk's
 [capability prerequisites](https://help.splunk.com/en/splunk-enterprise/search/search-manual/9.1/run-federated-searches-across-multiple-splunk-deployments/define-a-federated-provider), and
 [SHC architecture](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/9.4/overview-of-search-head-clustering/search-head-clustering-architecture), and
 [10.6 KV write routing/local reads](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/administer-the-app-key-value-store/about-the-app-key-value-store).
+SHC gate fields and cluster identity are documented in the
+[10.6 cluster endpoint reference](https://help.splunk.com/en/splunk-enterprise/rest-api-reference/10.6/cluster-endpoints/cluster-endpoint-descriptions)
+and [SHC status guidance](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/10.6/troubleshoot-search-head-clustering/use-the-cli-to-view-information-about-a-search-head-cluster).
 
 No settings is a supported upgrade state: existing maps/searches still work,
 while deployment health is **unknown**, with an invitation to configure intent.

@@ -40,6 +40,28 @@ class SafetyTests(unittest.TestCase):
             },
         }
 
+    def test_bootstrap_and_bundle_use_supported_global_confirmation_flag(self):
+        lab = lifecycle.Lab(
+            self.directory, self.task, lock_file=self.directory / "lock"
+        )
+        with (
+            lab.locked(),
+            patch.object(lab, "login") as login,
+            patch.object(lab, "cli") as cli,
+        ):
+            lab.bootstrap()
+            lab.apply_bundle()
+        self.assertEqual(
+            [call.args[0] for call in login.call_args_list], ["sh1", "deployer"]
+        )
+        self.assertEqual(cli.call_count, 2)
+        for call in cli.call_args_list:
+            with self.subTest(role=call.args[0]):
+                arguments = call.args[1]
+                self.assertEqual(arguments.count("--answer-yes"), 1)
+                self.assertNotIn("-answer-yes", arguments)
+                self.assertNotIn("-auth", arguments)
+
     def state_file(self, value):
         path = self.directory / "state.json"
         path.write_text(json.dumps(value))
@@ -259,6 +281,177 @@ class SafetyTests(unittest.TestCase):
         )
         with self.assertRaises(FileExistsError):
             client.write_evidence(self.directory, "result", {})
+
+
+class ShcReadinessTests(unittest.TestCase):
+    def setUp(self):
+        self.state = {
+            "created": {
+                role: {"name": "adm-shc-readiness-" + role} for role in client.MEMBERS
+            }
+        }
+        self.uris = {
+            role: "https://" + item["name"] + ":8089"
+            for role, item in self.state["created"].items()
+        }
+        flags = {
+            "initialized_flag": True,
+            "min_peers_joined_flag": True,
+            "service_ready_flag": True,
+        }
+        self.responses = {
+            role: {
+                "/services/shcluster/member/info": {
+                    "status": "Up",
+                    "is_registered": True,
+                    "maintenance_mode": False,
+                },
+                "/services/shcluster/status?advanced=1": {
+                    "captain": {
+                        "mgmt_uri": self.uris["sh1"],
+                        "id": "cluster-guid",
+                        "stable_captain": True,
+                        "rolling_restart_flag": False,
+                        "rolling_upgrade_flag": False,
+                        "kvstore_maintenance_status": "disabled",
+                        **flags,
+                    },
+                    "peers": {
+                        "guid-" + member: {
+                            "mgmt_uri": uri,
+                            "status": "Up",
+                            "out_of_sync_node": False,
+                            "manual_detention": "off",
+                            "restart_required": "0",
+                        }
+                        for member, uri in self.uris.items()
+                    },
+                },
+                "/services/shcluster/captain/info": dict(flags),
+            }
+            for role in client.MEMBERS
+        }
+
+    def check_ready(self, responses, *, kv=True):
+        def api(role):
+            return SimpleNamespace(
+                json=lambda method, path: {
+                    "entry": [{"content": responses[role][path]}]
+                }
+            )
+
+        with (
+            patch.object(client, "STATE", self.state),
+            patch.object(client, "Api", side_effect=api),
+            patch.object(client, "kv_ready", return_value=kv),
+        ):
+            return client.verify_shc_ready()
+
+    def test_native_status_schema_requires_no_captain_field_in_member_info(self):
+        result = self.check_ready(self.responses)
+        self.assertEqual(result["captain"]["role"], "sh1")
+        self.assertEqual(result["captain"]["id"], "cluster-guid")
+        for role in client.MEMBERS:
+            self.assertEqual(result[role]["captain_uri"], self.uris["sh1"])
+            self.assertEqual(
+                set(result[role]["members"].values()), set(self.uris.values())
+            )
+
+    def test_native_status_refuses_unready_unowned_or_disagreeing_evidence(self):
+        def member(responses):
+            return responses["sh2"]["/services/shcluster/member/info"]
+
+        def status(responses):
+            return responses["sh2"]["/services/shcluster/status?advanced=1"]
+
+        mutations = [
+            lambda r: member(r).pop("is_registered"),
+            lambda r: member(r).update(is_registered=False),
+            lambda r: member(r).update(status="Down"),
+            lambda r: member(r).update(maintenance_mode=True),
+            lambda r: member(r).pop("maintenance_mode"),
+            lambda r: status(r).update(captain=None),
+            lambda r: status(r).update(peers=[]),
+            lambda r: status(r)["peers"].pop("guid-sh3"),
+            lambda r: status(r)["peers"].update(
+                {"extra": {"mgmt_uri": "https://other:8089", "status": "Up"}}
+            ),
+            lambda r: status(r)["peers"]["guid-sh3"].update(mgmt_uri=self.uris["sh2"]),
+            lambda r: status(r)["peers"]["guid-sh3"].update(
+                mgmt_uri=self.uris["sh3"] + ".unrelated"
+            ),
+            lambda r: status(r)["peers"]["guid-sh3"].update(status="Down"),
+            lambda r: status(r)["peers"]["guid-sh3"].update(out_of_sync_node=True),
+            lambda r: status(r)["peers"]["guid-sh3"].update(manual_detention="on"),
+            lambda r: status(r)["peers"]["guid-sh3"].update(restart_required="1"),
+            lambda r: status(r)["peers"]["guid-sh3"].pop("out_of_sync_node"),
+            lambda r: status(r)["peers"].update(
+                {"different-guid": status(r)["peers"].pop("guid-sh3")}
+            ),
+            lambda r: status(r)["captain"].update(
+                mgmt_uri=self.uris["sh1"] + ".unrelated"
+            ),
+            lambda r: status(r)["captain"].update(id="different-cluster-guid"),
+            lambda r: status(r)["captain"].update(id=""),
+            lambda r: status(r)["captain"].update(mgmt_uri=self.uris["sh2"]),
+            lambda r: status(r)["captain"].update(initialized_flag=False),
+            lambda r: status(r)["captain"].update(min_peers_joined_flag=False),
+            lambda r: status(r)["captain"].update(service_ready_flag=False),
+            lambda r: status(r)["captain"].update(stable_captain=False),
+            lambda r: status(r)["captain"].pop("stable_captain"),
+            lambda r: status(r)["captain"].update(rolling_restart_flag=True),
+            lambda r: status(r)["captain"].update(rolling_upgrade_flag=True),
+            lambda r: status(r)["captain"].update(kvstore_maintenance_status="enabled"),
+            lambda r: r["sh1"]["/services/shcluster/captain/info"].update(
+                service_ready_flag=False
+            ),
+        ]
+        for index, mutate in enumerate(mutations):
+            with self.subTest(case=index):
+                responses = json.loads(json.dumps(self.responses))
+                mutate(responses)
+                with self.assertRaises(client.Refused):
+                    self.check_ready(responses)
+        with self.assertRaisesRegex(client.Refused, "KV Store is not ready"):
+            self.check_ready(self.responses, kv=False)
+
+    def test_pdl_kv_ready_accepts_native_cohosted_schema_without_mongo_peers(self):
+        value = {
+            "current": {"status": "ready", "disabled": False, "standalone": False},
+            "cohosted": {"status": "ready", "serviceInfo": {"type": "Pdl"}},
+            "peers": None,
+        }
+        with patch.object(client, "Api") as api:
+            api.return_value.json.return_value = {"entry": [{"content": value}]}
+            self.assertTrue(client.kv_ready("sh1"))
+
+    def test_pdl_kv_ready_refuses_missing_or_unready_cohosted_even_if_current_ready(
+        self,
+    ):
+        base = {
+            "current": {"status": "ready", "disabled": False, "standalone": False},
+            "cohosted": {"status": "ready", "serviceInfo": {"type": "Pdl"}},
+            "peers": None,
+        }
+        mutations = [
+            lambda v: v.pop("cohosted"),
+            lambda v: v.update(cohosted=None),
+            lambda v: v["cohosted"].update(status="failed"),
+            lambda v: v["cohosted"].update(status="starting"),
+            lambda v: v["cohosted"].pop("serviceInfo"),
+            lambda v: v["cohosted"]["serviceInfo"].update(type="Mongo"),
+            lambda v: v["current"].update(status="starting"),
+            lambda v: v["current"].update(disabled=True),
+            lambda v: v["current"].pop("disabled"),
+            lambda v: v["current"].update(standalone=True),
+            lambda v: v["current"].pop("standalone"),
+        ]
+        for index, mutate in enumerate(mutations):
+            with self.subTest(case=index), patch.object(client, "Api") as api:
+                value = json.loads(json.dumps(base))
+                mutate(value)
+                api.return_value.json.return_value = {"entry": [{"content": value}]}
+                self.assertFalse(client.kv_ready("sh1"))
 
 
 class ConcurrencyTests(unittest.TestCase):

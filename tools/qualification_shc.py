@@ -283,54 +283,156 @@ def verify_shc_ready():
     """Require member/KV readiness and captain evidence, never relax RF flags."""
     results = {}
     captains = set()
+    memberships = set()
+    expected = {
+        "https://" + STATE["created"][role]["name"] + ":8089": role for role in MEMBERS
+    }
+    flags = ("initialized_flag", "service_ready_flag", "min_peers_joined_flag")
+
+    def content(api, path):
+        value = api.json("GET", path)
+        entries = value.get("entry") if isinstance(value, dict) else None
+        require(
+            isinstance(entries, list)
+            and len(entries) == 1
+            and isinstance(entries[0], dict)
+            and isinstance(entries[0].get("content"), dict),
+            "SHC status response is malformed",
+        )
+        return entries[0]["content"]
+
     for role in MEMBERS:
         api = Api(role)
         require(kv_ready(role), "member KV Store is not ready")
-        value = api.json("GET", "/services/shcluster/member/info")["entry"][0][
-            "content"
-        ]
+        value = content(api, "/services/shcluster/member/info")
         require(value.get("status") == "Up", "SHC member is not Up")
-        captain = value.get("captain_uri")
         require(
-            isinstance(captain, str) and bool(captain),
-            "member captain evidence missing",
+            value.get("is_registered") in (True, 1, "1"),
+            "SHC member is not registered",
         )
-        captains.add(captain)
+        require(value.get("maintenance_mode") is False, "SHC member is in maintenance")
+        status = content(api, "/services/shcluster/status?advanced=1")
+        captain, peers = status.get("captain"), status.get("peers")
+        require(isinstance(captain, dict), "SHC captain evidence missing")
+        captain_uri, captain_id = captain.get("mgmt_uri"), captain.get("id")
+        require(
+            isinstance(captain_uri, str)
+            and captain_uri in expected
+            and isinstance(captain_id, str)
+            and bool(captain_id),
+            "captain is not an identified task member",
+        )
+        require(
+            all(captain.get(flag) in (True, 1, "1") for flag in flags),
+            "captain service readiness incomplete",
+        )
+        stability = {
+            "stable_captain": True,
+            "rolling_restart_flag": False,
+            "rolling_upgrade_flag": False,
+            "kvstore_maintenance_status": "disabled",
+        }
+        require(
+            all(
+                captain.get(key) is expected_value
+                if isinstance(expected_value, bool)
+                else captain.get(key) == expected_value
+                for key, expected_value in stability.items()
+            ),
+            "SHC captain is unstable or a maintenance operation is active",
+        )
+        require(
+            isinstance(peers, dict) and len(peers) == len(MEMBERS),
+            "SHC must report exactly the owned members",
+        )
+        members = {}
+        for identity, peer in peers.items():
+            require(
+                isinstance(identity, str)
+                and bool(identity)
+                and isinstance(peer, dict)
+                and isinstance(peer.get("mgmt_uri"), str)
+                and peer["mgmt_uri"] in expected
+                and peer.get("status") == "Up",
+                "SHC peer identity or readiness is invalid",
+            )
+            require(
+                peer.get("out_of_sync_node") is False
+                and peer.get("manual_detention") == "off"
+                and peer.get("restart_required") == "0",
+                "SHC peer is out of sync, detained or awaiting restart",
+            )
+            members[identity] = peer["mgmt_uri"]
+        require(
+            set(members.values()) == set(expected),
+            "SHC peer set differs from owned members",
+        )
+        # captain.id is the cluster GUID, not the captain member's server GUID.
+        captains.add((captain_uri, captain_id))
+        memberships.add(tuple(sorted(members.items())))
         results[role] = {
-            key: value.get(key) for key in ("status", "captain_uri", "label")
+            "status": value["status"],
+            "is_registered": value["is_registered"],
+            "maintenance_mode": value["maintenance_mode"],
+            "captain_uri": captain_uri,
+            "captain_id": captain_id,
+            "members": members,
+            "peer_readiness": {
+                identity: {
+                    key: peer[key]
+                    for key in (
+                        "out_of_sync_node",
+                        "manual_detention",
+                        "restart_required",
+                    )
+                }
+                for identity, peer in peers.items()
+            },
+            **{key: captain[key] for key in stability},
+            **{flag: captain[flag] for flag in flags},
         }
     require(len(captains) == 1, "members disagree about captain")
-    captain_uri = next(iter(captains))
-    matches = [
-        role for role in MEMBERS if STATE["created"][role]["name"] in captain_uri
-    ]
-    require(len(matches) == 1, "captain is not an identified task member")
-    content = Api(matches[0]).json("GET", "/services/shcluster/captain/info")["entry"][
-        0
-    ]["content"]
-    for flag in ("initialized_flag", "service_ready_flag", "min_peers_joined_flag"):
+    require(len(memberships) == 1, "members disagree about peer identities")
+    captain_uri, captain_id = next(iter(captains))
+    captain_role = expected[captain_uri]
+    captain_content = content(Api(captain_role), "/services/shcluster/captain/info")
+    for flag in flags:
         require(
-            content.get(flag) in (True, 1, "1"), "captain service readiness incomplete"
+            captain_content.get(flag) in (True, 1, "1"),
+            "captain service readiness incomplete",
         )
     results["captain"] = {
-        "role": matches[0],
-        **{
-            key: content.get(key)
-            for key in (
-                "initialized_flag",
-                "service_ready_flag",
-                "min_peers_joined_flag",
-            )
-        },
+        "role": captain_role,
+        "mgmt_uri": captain_uri,
+        "id": captain_id,
+        **{flag: captain_content[flag] for flag in flags},
     }
     return results
 
 
 def kv_ready(role):
-    value = Api(role).json("GET", "/services/kvstore/status")["entry"][0]["content"]
-    current = value.get("current", value)
-    require(isinstance(current, dict), "KV status evidence incomplete")
-    return current.get("status") == "ready"
+    response = Api(role).json("GET", "/services/kvstore/status")
+    entries = response.get("entry") if isinstance(response, dict) else None
+    require(
+        isinstance(entries, list)
+        and len(entries) == 1
+        and isinstance(entries[0], dict)
+        and isinstance(entries[0].get("content"), dict),
+        "KV status evidence incomplete",
+    )
+    value = entries[0]["content"]
+    current, cohosted = value.get("current"), value.get("cohosted")
+    if not isinstance(current, dict) or not isinstance(cohosted, dict):
+        return False
+    service = cohosted.get("serviceInfo")
+    return (
+        current.get("status") == "ready"
+        and current.get("disabled") is False
+        and (role not in MEMBERS or current.get("standalone") is False)
+        and cohosted.get("status") == "ready"
+        and isinstance(service, dict)
+        and service.get("type") == "Pdl"
+    )
 
 
 def collection_convergence(collections):
