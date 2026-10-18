@@ -645,6 +645,26 @@ def settings_race(expected_revision, payloads, namespace):
         "same-revision writes did not produce one success and one conflict",
     )
     winner = next(i for i, result in enumerate(results) if result["status"] == 200)
+    winning_request = requests[winner]
+    expected_settings = json.loads(canonical(winning_request["settings"]))
+    # The endpoint replaces the draft revision. Derive its committed revision
+    # independently from the immutable operation contract, never from the reply.
+    operation_fingerprint = digest(
+        [
+            expected_revision,
+            winning_request["requestId"],
+            expected_settings["schemaVersion"],
+            expected_settings["sources"],
+        ]
+    )
+    expected_settings["revision"] = digest(["revision", operation_fingerprint])
+
+    def exact_settings(value):
+        require(
+            observed_revision(value) == expected_settings["revision"]
+            and canonical(value["settings"]) == canonical(expected_settings),
+            "settings differ from the exact winning operation",
+        )
 
     def committed_identity(value):
         require(
@@ -658,18 +678,26 @@ def settings_race(expected_revision, payloads, namespace):
         return value["committedRevision"]
 
     committed_revision = committed_identity(results[winner]["response"])
+    require(
+        committed_revision == expected_settings["revision"],
+        "settings commit revision differs from the winning operation",
+    )
+    exact_settings(results[winner]["response"])
     # A duplicate after a simulated lost response must recover the same result.
     retry = Api("sh3").json("POST", SETTINGS, raw=canonical(requests[winner]))
     require(
         committed_identity(retry) == committed_revision,
         "retry changed the winning commit identity",
     )
+    exact_settings(retry)
 
     def converged():
-        return all(
-            observed_revision(Api(role).json("GET", SETTINGS)) == committed_revision
-            for role in MEMBERS
-        )
+        for role in MEMBERS:
+            observed = Api(role).json("GET", SETTINGS)
+            if observed_revision(observed) != committed_revision:
+                return False
+            exact_settings(observed)
+        return True
 
     wait_for(converged)
     return {
@@ -677,6 +705,12 @@ def settings_race(expected_revision, payloads, namespace):
         "winner": winner,
         "retry_identical": True,
         "request_ids": [request["requestId"] for request in requests],
+        "committed_revision": committed_revision,
+        "submitted_settings_sha256": digest(winning_request["settings"]),
+        "expected_committed_settings_sha256": digest(expected_settings),
+        "operation_fingerprint": operation_fingerprint,
+        "revision_proof": "independently derived from expectedRevision, requestId, schemaVersion and sources",
+        "all_member_settings_agree": True,
     }
 
 

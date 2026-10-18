@@ -756,9 +756,11 @@ class ConcurrencyTests(unittest.TestCase):
             "settings": None if revision is None else {"revision": revision},
         }
 
-    def race_with_convergence_reads(self, reads, response_mutator=None):
+    def race_with_convergence_reads(
+        self, reads, response_mutator=None, expected_revision=None
+    ):
         pending = list(reads)
-        state = {"winner": None, "retried": False, "reads": 0}
+        state = {"winner": None, "retried": False, "reads": 0, "requests": []}
         self.race_state = state
         lock = __import__("threading").Lock()
         snapshot = self.settings_read
@@ -770,18 +772,42 @@ class ConcurrencyTests(unittest.TestCase):
             def json(self, method, path, raw=None):
                 if method == "GET":
                     if not state["retried"]:
-                        return snapshot(None)
+                        return snapshot(expected_revision)
                     state["reads"] += 1
-                    return pending.pop(0) if pending else snapshot("winner")
+                    if pending:
+                        value = pending.pop(0)
+                        return value(state) if callable(value) else value
+                    return {
+                        **snapshot(state["settings"]["revision"]),
+                        "settings": state["settings"],
+                    }
                 request = json.loads(raw)
                 with lock:
+                    state["requests"].append(request)
                     if state["winner"] is None:
                         state["winner"] = request["requestId"]
+                        state["winning_request"] = request
+                        settings = json.loads(client.canonical(request["settings"]))
+                        fingerprint = client.digest(
+                            [
+                                request["expectedRevision"],
+                                request["requestId"],
+                                settings["schemaVersion"],
+                                settings["sources"],
+                            ]
+                        )
+                        settings["revision"] = client.digest(["revision", fingerprint])
+                        state["settings"] = settings
                     elif state["winner"] != request["requestId"]:
                         raise client.ApiError(409)
                     else:
                         state["retried"] = True
-                response = {"committedRevision": "winner", "requestId": state["winner"]}
+                response = {
+                    **snapshot(state["settings"]["revision"]),
+                    "settings": json.loads(client.canonical(state["settings"])),
+                    "committedRevision": state["settings"]["revision"],
+                    "requestId": state["winner"],
+                }
                 return (
                     response_mutator(response, state["retried"])
                     if response_mutator
@@ -797,7 +823,34 @@ class ConcurrencyTests(unittest.TestCase):
                 side_effect=lambda check: wait(check, timeout=0.2, interval=0.001),
             ),
         ):
-            result = client.settings_race(None, [{}, {}], "namespace")
+            result = client.settings_race(
+                expected_revision,
+                [
+                    {
+                        "schemaVersion": 1,
+                        "revision": "draft-a",
+                        "sources": {
+                            "netflow": {
+                                "state": "active",
+                                "cadenceSeconds": 300,
+                                "staleAfterSeconds": 1200,
+                            }
+                        },
+                    },
+                    {
+                        "schemaVersion": 1,
+                        "revision": "draft-b",
+                        "sources": {
+                            "netflow": {
+                                "state": "staged",
+                                "cadenceSeconds": 300,
+                                "staleAfterSeconds": 1200,
+                            }
+                        },
+                    },
+                ],
+                "namespace",
+            )
         return result, state
 
     def test_settings_race_waits_through_null_and_old_revision_for_exact_winner(self):
@@ -874,39 +927,115 @@ class ConcurrencyTests(unittest.TestCase):
                 ),
             )
 
+    def test_original_commit_cannot_choose_a_different_valid_revision(self):
+        with self.assertRaisesRegex(client.Refused, "commit revision differs"):
+            self.race_with_convergence_reads(
+                [],
+                response_mutator=lambda value, retry: {
+                    **value,
+                    "committedRevision": "unrequested-valid-revision",
+                },
+            )
+        self.assertFalse(self.race_state["retried"])
+
+    def test_original_and_retry_must_return_exact_expected_committed_payload(self):
+        def wrong_sources(value):
+            settings = json.loads(client.canonical(value["settings"]))
+            settings["sources"]["netflow"]["cadenceSeconds"] = 600
+            return {**value, "settings": settings}
+
+        mutations = [
+            wrong_sources,
+            lambda value: {
+                **value,
+                "settings": {**value["settings"], "schemaVersion": True},
+            },
+            lambda value: {
+                **value,
+                "settings": {**value["settings"], "extra": "unrequested"},
+            },
+            lambda value: {
+                **value,
+                "settings": {
+                    **value["settings"],
+                    "revision": "different-valid-revision",
+                },
+            },
+        ]
+        for retry in (False, True):
+            for index, mutate in enumerate(mutations):
+                with (
+                    self.subTest(retry=retry, case=index),
+                    self.assertRaises(client.Refused),
+                ):
+                    self.race_with_convergence_reads(
+                        [],
+                        response_mutator=lambda value, is_retry: (
+                            mutate(value) if is_retry == retry else value
+                        ),
+                    )
+
+    def test_member_with_winning_revision_but_wrong_full_payload_is_rejected(self):
+        def response(state, wrong=False):
+            settings = json.loads(client.canonical(state["settings"]))
+            if wrong:
+                settings["sources"]["netflow"]["state"] = "not_selected"
+            return {**self.settings_read(settings["revision"]), "settings": settings}
+
+        with self.assertRaisesRegex(client.Refused, "exact winning operation"):
+            self.race_with_convergence_reads(
+                [response, lambda state: response(state, True)]
+            )
+        self.assertEqual(self.race_state["reads"], 2)
+
     def test_members_race_then_retry_winning_commit(self):
-        response = {"committedRevision": "winner", "requestId": "winning-request"}
-        calls = []
-        lock = __import__("threading").Lock()
-
-        class FakeApi:
-            def __init__(self, role):
-                self.role = role
-
-            def json(self, method, path, raw=None):
-                if method == "GET":
-                    return {
-                        "canWrite": True,
-                        "namespace": "namespace",
-                        "state": "configured" if calls else "absent",
-                        "settings": {"revision": "winner"} if calls else None,
-                    }
-                with lock:
-                    request = json.loads(raw)
-                    if calls and request["requestId"] == calls[0]["requestId"]:
-                        return {**response, "requestId": request["requestId"]}
-                    calls.append(request)
-                    if len(calls) == 1:
-                        return {**response, "requestId": request["requestId"]}
-                    raise client.ApiError(409)
-
-        with patch.object(client, "Api", FakeApi):
-            result = client.settings_race(None, [{"a": 1}, {"a": 2}], "namespace")
+        result, state = self.race_with_convergence_reads([])
         self.assertEqual(sorted(result["statuses"]), [200, 409])
         self.assertTrue(result["retry_identical"])
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(state["requests"]), 3)
         self.assertTrue(
-            all("settings" in request and "payload" not in request for request in calls)
+            all(
+                "settings" in request and "payload" not in request
+                for request in state["requests"]
+            )
+        )
+        self.assertNotEqual(
+            result["committed_revision"],
+            state["winning_request"]["settings"]["revision"],
+        )
+        self.assertEqual(result["committed_revision"], state["settings"]["revision"])
+        self.assertEqual(
+            result["submitted_settings_sha256"],
+            client.digest(state["winning_request"]["settings"]),
+        )
+        self.assertEqual(
+            result["expected_committed_settings_sha256"],
+            client.digest(state["settings"]),
+        )
+        self.assertTrue(result["all_member_settings_agree"])
+
+    def test_server_revision_derivation_binds_nonempty_prior_revision(self):
+        result, state = self.race_with_convergence_reads(
+            [], expected_revision="prior-revision"
+        )
+        request = state["winning_request"]
+        operation = [
+            "prior-revision",
+            request["requestId"],
+            request["settings"]["schemaVersion"],
+            request["settings"]["sources"],
+        ]
+
+        def sha(value):
+            return hashlib.sha256(
+                json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+
+        fingerprint = sha(operation)
+        self.assertEqual(result["operation_fingerprint"], fingerprint)
+        self.assertEqual(result["committed_revision"], sha(["revision", fingerprint]))
+        self.assertNotEqual(
+            result["committed_revision"], sha(["revision", sha([None, *operation[1:]])])
         )
 
     def test_settings_race_refuses_different_namespaces_before_writes(self):

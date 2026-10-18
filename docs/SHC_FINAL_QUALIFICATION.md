@@ -401,6 +401,15 @@ revision. Refusal or uncertainty is a failed prerequisite requiring evidence,
 not permission to relax namespace/KV/version checks. This run cannot establish
 Cloud or unrelated independent search-head persistence behavior.
 
+The endpoint replaces the caller's draft revision with a deterministic revision
+derived from the expected revision, request ID, schema and source settings.
+The race helper independently computes that expected revision and requires the
+full winning settings in the commit response, retry response and every member
+read. Its evidence records the operation fingerprint, submitted/committed
+payload hashes and all-member agreement. Equal server-reported revisions alone
+are insufficient. The 69 distributed tooling tests include wrong revision,
+wrong commit/retry payload and same-revision/wrong-member-payload regressions.
+
 The deployer's documented default push mode is `merge_to_default`: settings in
 an app's deployer `local/` files override the corresponding settings in its
 `default/` files and are delivered to members' `default/` files. An app-specific
@@ -459,6 +468,15 @@ diagnosis and owned cleanup, were credential-scanned and hash-verified in
 `dist/final-qualification/shc-attempt-06-failure-final/`; archive SHA-256 is
 `8d633d31bf4719d552314d82fbe8225e2c0aaaac8a99853ecd1fa7ded5e94e17`.
 Fresh full SHC execution with the reviewed client is still required.
+
+Attempt07 completed preparation, container creation, support installation and
+strict management TLS/identity checks. It was stopped before cluster bootstrap
+to strengthen the settings payload assertions described above. Its 15 exported
+files and owned cleanup were verified in
+`dist/final-qualification/shc-attempt-07-superseded-final/`; archive SHA-256 is
+`b11161b9e19d7ee61dda5708923c431599cec5f127540c24aad3697258126dae`.
+This superseded preparation is not application acceptance evidence. Independent
+review found no actionable defect in the strengthened settings assertions.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.
