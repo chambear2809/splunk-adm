@@ -25,13 +25,163 @@ import tarfile
 import time
 import uuid
 
-from qualification_shc import MEMBERS, ROLES, TASK_RE, Refused, canonical, require
+from qualification_shc import (
+    MEMBERS,
+    ROLES,
+    TASK_RE,
+    Refused,
+    canonical,
+    protected_file,
+    require,
+)
 
 IMAGE = "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
 LABEL = "com.splunk-adm.qualification.task"
 SPLUNK = "/opt/splunk/bin/splunk"
 SPLUNK_UID = 41812
 DIAGNOSTICS = ContextVar("qualification_diagnostics", default=None)
+
+# Static code executed by the pinned container's trusted bundled interpreter.
+# Credentials enter only via stdin. PTY output is never returned or persisted.
+LOGIN_PTY_HELPER = r"""
+import errno
+import json
+import os
+import pty
+import re
+import selectors
+import signal
+import sys
+import termios
+import time
+
+def login_pty(username, password, argv=("/opt/splunk/bin/splunk", "login"), timeout=60):
+    result = {"status": "helper_error", "exit_code": None, "username_prompt": False,
+              "password_prompt": False, "child_reaped": False}
+    if (not isinstance(username, str) or not isinstance(password, str)
+        or not username or not password or len(username.encode()) > 128
+        or len(password.encode()) > 1024 or any(c in username + password for c in "\r\n\x00")
+        or not 0 < timeout <= 60):
+        result["status"] = "invalid_input"
+        return result
+    child, master, reaped, terminal = None, None, False, None
+    deadline = time.monotonic() + timeout
+    def echo_off(fd):
+        attrs = termios.tcgetattr(fd)
+        attrs[3] &= ~(termios.ECHO | termios.ECHONL)
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+    def send(value):
+        echo_off(master)
+        pending = (value + "\n").encode()
+        while pending:
+            if time.monotonic() >= deadline:
+                raise TimeoutError
+            try:
+                pending = pending[os.write(master, pending):]
+            except BlockingIOError:
+                time.sleep(.005)
+    try:
+        child, master = pty.fork()
+        if child == 0:
+            try:
+                echo_off(0)
+                os.execv(argv[0], list(argv))
+            except BaseException:
+                os._exit(127)
+        os.set_blocking(master, False)
+        echo_off(master)
+        transcript, total = b"", 0
+        with selectors.DefaultSelector() as selector:
+            selector.register(master, selectors.EVENT_READ)
+            while True:
+                found, status = os.waitpid(child, os.WNOHANG)
+                if found == child:
+                    reaped = True
+                    result["exit_code"] = os.waitstatus_to_exitcode(status)
+                    if result["exit_code"] != 0:
+                        terminal = "rejected"
+                    elif result["username_prompt"] != result["password_prompt"]:
+                        terminal = "incomplete_prompt"
+                    else:
+                        # Zero prompts is valid for a successful cached login.
+                        terminal = "completed"
+                    break
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    terminal = "timeout"
+                    break
+                if not selector.select(min(.1, remaining)):
+                    continue
+                try:
+                    chunk = os.read(master, 4096)
+                except BlockingIOError:
+                    continue
+                except OSError as exc:
+                    if exc.errno == errno.EIO:
+                        time.sleep(min(.005, remaining))
+                        continue
+                    raise
+                if not chunk:
+                    time.sleep(min(.005, remaining))
+                    continue
+                total += len(chunk)
+                if total > 65536:
+                    terminal = "output_limit"
+                    break
+                transcript = (transcript + chunk)[-4096:]
+                if re.search(rb"(?:^|[\r\n])(?:Splunk\s+)?username\s*:\s*$", transcript, re.I):
+                    if result["username_prompt"] or result["password_prompt"]:
+                        terminal = "unexpected_prompt"
+                        break
+                    send(username)
+                    result["username_prompt"] = True
+                    transcript = b""
+                elif re.search(rb"(?:^|[\r\n])password\s*:\s*$", transcript, re.I):
+                    if not result["username_prompt"] or result["password_prompt"]:
+                        terminal = "unexpected_prompt"
+                        break
+                    send(password)
+                    result["password_prompt"] = True
+                    transcript = b""
+    except TimeoutError:
+        terminal = "timeout"
+    except BaseException:
+        terminal = "helper_error"
+    finally:
+        if child not in (None, 0) and not reaped:
+            try:
+                os.killpg(child, signal.SIGKILL)
+            except ProcessLookupError:
+                try:
+                    os.kill(child, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            try:
+                _, status = os.waitpid(child, 0)
+                result["exit_code"] = os.waitstatus_to_exitcode(status)
+                reaped = True
+            except ChildProcessError:
+                reaped = True
+        if master is not None:
+            os.close(master)
+        result["child_reaped"] = reaped
+    result["status"] = terminal or "helper_error"
+    return result
+
+if __name__ == "__main__":
+    try:
+        raw = sys.stdin.buffer.read(4097)
+        if len(raw) > 4096:
+            raise ValueError
+        value = json.loads(raw)
+        if not isinstance(value, dict) or set(value) != {"username", "password"}:
+            raise ValueError
+        result = login_pty(value["username"], value["password"])
+    except BaseException:
+        result = {"status": "invalid_input", "exit_code": None, "username_prompt": False,
+                  "password_prompt": False, "child_reaped": False}
+    print(json.dumps(result, sort_keys=True), flush=True)
+"""
 
 
 class OwnedContainerStopped(Refused):
@@ -472,6 +622,7 @@ class Lab:
             f"[general]\nserverName = {name}\n\n[sslConfig]\n"
             "serverCert = /opt/splunk/etc/auth/adm_qualification/server.pem\n"
             "sslRootCAPath = /opt/splunk/etc/auth/adm_qualification/ca.pem\nsslPassword =\n"
+            "cliVerifyServerName = true\n"
         )
         if role in MEMBERS or role == "deployer":
             conf += "\n[shclustering]\npass4SymmKey = " + secret + "\n"
@@ -502,8 +653,8 @@ class Lab:
 
     def login(self, role):
         self._owned()
-        admin = json.loads((self.directory / "admin.json").read_text())
-        command(
+        admin = json.loads(protected_file(self.directory / "admin.json").read_text())
+        value = command(
             [
                 "docker",
                 "exec",
@@ -511,11 +662,63 @@ class Lab:
                 "-u",
                 "splunk",
                 self.identity(role),
-                SPLUNK,
-                "login",
+                "/opt/splunk/bin/python3.13",
+                "-c",
+                LOGIN_PTY_HELPER,
             ],
-            data=(admin["username"] + "\n" + admin["password"] + "\n").encode(),
+            data=canonical(
+                {"username": admin["username"], "password": admin["password"]}
+            ),
+            timeout=70,
         )
+        try:
+            result = json.loads(value)
+        except (TypeError, ValueError):
+            raise Refused("CLI PTY helper returned invalid metadata") from None
+        allowed = {
+            "status",
+            "exit_code",
+            "username_prompt",
+            "password_prompt",
+            "child_reaped",
+        }
+        require(
+            isinstance(result, dict)
+            and set(result) == allowed
+            and result["status"]
+            in {
+                "completed",
+                "rejected",
+                "incomplete_prompt",
+                "unexpected_prompt",
+                "timeout",
+                "output_limit",
+                "helper_error",
+                "invalid_input",
+            }
+            and (result["exit_code"] is None or type(result["exit_code"]) is int)
+            and all(
+                type(result[key]) is bool
+                for key in ("username_prompt", "password_prompt", "child_reaped")
+            ),
+            "CLI PTY helper returned unexpected metadata",
+        )
+        evidence = {"role": role, **result}
+        directory = self.directory / "evidence"
+        require(directory.is_dir(), "owned evidence directory is missing")
+        private_write(
+            directory / ("cli-login-" + uuid.uuid4().hex + ".json"),
+            canonical(evidence) + b"\n",
+        )
+        self.state.setdefault("cli_login_evidence", []).append(evidence)
+        self.save()
+        require(
+            result["status"] == "completed"
+            and result["exit_code"] == 0
+            and result["child_reaped"] is True,
+            "bounded interactive CLI login failed; inspect sanitized login metadata",
+        )
+        return result
 
     def cli(self, role, arguments, *, timeout=900):
         self._owned()

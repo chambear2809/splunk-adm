@@ -129,6 +129,12 @@ class SafetyTests(unittest.TestCase):
         self.assertEqual(config["replication_port://9887"]["disabled"], "0")
         self.assertNotIn("replication_port", config["shclustering"])
         self.assertEqual(config["shclustering"]["replication_factor"], "3")
+        self.assertEqual(config["sslConfig"]["cliVerifyServerName"], "true")
+        self.assertEqual(
+            config["sslConfig"]["sslRootCAPath"],
+            "/opt/splunk/etc/auth/adm_qualification/ca.pem",
+        )
+        self.assertNotIn("sslVerifyServerCert", config["sslConfig"])
 
     def test_error_does_not_echo_server_body(self):
         self.assertEqual(
@@ -370,6 +376,189 @@ class CollectionScanTests(unittest.TestCase):
                 runner.complete_collection_rows(
                     self.api(documents), "/services/collection", limit=3
                 )
+
+
+class PtyLoginTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        namespace = {"__name__": "qualification_offline_test"}
+        exec(
+            compile(lifecycle.LOGIN_PTY_HELPER, "qualification_cli_pty", "exec"),
+            namespace,
+        )
+        self.login = namespace["login_pty"]
+
+    def program(self, source):
+        path = self.directory / "fake_cli.py"
+        path.write_text(source)
+        return (sys.executable, str(path))
+
+    def interactive_program(self, ending):
+        return self.program(
+            """import os, sys, termios
+assert all(os.isatty(fd) for fd in (0,1,2))
+os.close(os.open("/dev/tty", os.O_RDWR))
+print("Splunk username: ", end="", flush=True)
+username = sys.stdin.readline().strip()
+print("Password: ", end="", flush=True)
+password = sys.stdin.readline().strip()
+assert not termios.tcgetattr(0)[3] & (termios.ECHO | termios.ECHONL)
+assert username == "fixture-admin" and password == "fixture-password"
+"""
+            + ending
+        )
+
+    def test_real_controlling_tty_prompt_flow_has_no_transcript_or_secret_output(self):
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.interactive_program(
+                'print(username, password, "private-transcript-marker", flush=True)\n'
+            ),
+            timeout=2,
+        )
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(
+            result["username_prompt"]
+            and result["password_prompt"]
+            and result["child_reaped"]
+        )
+        self.assertNotIn("fixture-password", json.dumps(result))
+        self.assertNotIn("private-transcript-marker", json.dumps(result))
+
+    def test_successful_cached_login_needs_no_prompts(self):
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.program('print("cached session accepted")\n'),
+            timeout=2,
+        )
+        self.assertEqual(result["status"], "completed")
+        self.assertFalse(result["username_prompt"] or result["password_prompt"])
+        self.assertTrue(result["child_reaped"])
+
+    def test_partial_out_of_order_and_repeated_prompt_flows_fail_closed(self):
+        cases = [
+            (
+                'print("Splunk username: ",end="",flush=True)\nsys.stdin.readline()\n',
+                "incomplete_prompt",
+            ),
+            (
+                'print("Password: ",end="",flush=True)\nsys.stdin.readline()\n',
+                "unexpected_prompt",
+            ),
+        ]
+        for source, status in cases:
+            with self.subTest(status=status):
+                result = self.login(
+                    "fixture-admin",
+                    "fixture-password",
+                    argv=self.program("import sys\n" + source),
+                    timeout=2,
+                )
+                self.assertEqual(result["status"], status)
+                self.assertFalse(result["password_prompt"])
+                self.assertTrue(result["child_reaped"])
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.interactive_program(
+                'print("Password: ",end="",flush=True)\nsys.stdin.readline()\n'
+            ),
+            timeout=2,
+        )
+        self.assertEqual(result["status"], "unexpected_prompt")
+        self.assertTrue(result["child_reaped"])
+
+    def test_rejected_login_is_not_retried(self):
+        marker = self.directory / "invocations"
+        ending = (
+            "from pathlib import Path\np=Path("
+            + repr(str(marker))
+            + ")\n"
+            + 'p.write_text(p.read_text()+"x" if p.exists() else "x")\nsys.exit(3)\n'
+        )
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.interactive_program(ending),
+            timeout=2,
+        )
+        self.assertEqual((result["status"], result["exit_code"]), ("rejected", 3))
+        self.assertEqual(marker.read_text(), "x")
+        self.assertTrue(result["child_reaped"])
+
+    def test_timeout_and_output_overflow_kill_and_reap_child(self):
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.program("import time\ntime.sleep(10)\n"),
+            timeout=0.15,
+        )
+        self.assertEqual((result["status"], result["exit_code"]), ("timeout", -9))
+        self.assertTrue(result["child_reaped"])
+        result = self.login(
+            "fixture-admin",
+            "fixture-password",
+            argv=self.program(
+                'import sys,time\nsys.stdout.write("x"*70000)\nsys.stdout.flush()\ntime.sleep(10)\n'
+            ),
+            timeout=2,
+        )
+        self.assertEqual(result["status"], "output_limit")
+        self.assertTrue(result["child_reaped"])
+
+    def test_docker_login_keeps_credentials_in_stdin_only(self):
+        (self.directory / "evidence").mkdir()
+        credentials = {"username": "fixture-admin", "password": "fixture-cli-secret"}
+        lifecycle.private_write(
+            self.directory / "admin.json", client.canonical(credentials)
+        )
+        lab = lifecycle.Lab(
+            self.directory, "adm-shc-pty-test", lock_file=self.directory / "lock"
+        )
+        metadata = {
+            "status": "completed",
+            "exit_code": 0,
+            "username_prompt": False,
+            "password_prompt": False,
+            "child_reaped": True,
+        }
+        with (
+            lab.locked(),
+            patch.object(lab, "identity", return_value="a" * 64),
+            patch.object(
+                lifecycle, "command", return_value=client.canonical(metadata)
+            ) as command,
+        ):
+            self.assertEqual(lab.login("sh1"), metadata)
+        args = command.call_args.args[0]
+        self.assertIn("/opt/splunk/bin/python3.13", args)
+        self.assertNotIn(credentials["password"], " ".join(args))
+        self.assertEqual(json.loads(command.call_args.kwargs["data"]), credentials)
+        self.assertEqual(command.call_args.kwargs["timeout"], 70)
+        self.assertNotIn(
+            credentials["password"], (self.directory / "state.json").read_text()
+        )
+        metadata["status"], metadata["exit_code"] = "rejected", 3
+        with (
+            lab.locked(),
+            patch.object(lab, "identity", return_value="a" * 64),
+            patch.object(lifecycle, "command", return_value=client.canonical(metadata)),
+        ):
+            with self.assertRaisesRegex(client.Refused, "interactive CLI login failed"):
+                lab.login("sh1")
+        records = list((self.directory / "evidence").glob("cli-login-*.json"))
+        self.assertEqual(len(records), 2)
+        self.assertEqual(
+            {json.loads(path.read_text())["status"] for path in records},
+            {"completed", "rejected"},
+        )
+        for path in records:
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertNotIn(credentials["password"], path.read_text())
 
 
 class DriverTests(unittest.TestCase):

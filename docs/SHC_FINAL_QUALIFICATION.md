@@ -199,6 +199,29 @@ container exits or dies, instead of waiting the full readiness timeout. This
 is a harness correction, not a passing live qualification result; the failed
 attempt and fresh corrected run retain separate evidence.
 
+In the next attempt all five strict-CA management/identity startup checks passed,
+but piping username/password lines to `splunk login` failed before captain
+bootstrap. The native 10.6 CLI requires an interactive terminal. The corrected
+helper runs the actual CLI under a controlling PTY inside the container, using
+the pinned bundled Python 3.13. Credentials enter that helper only through
+protected-file-derived stdin JSON and are sent once, only after recognized
+username/password prompts, with terminal echo disabled before each write.
+A successful cached-session exit with no prompts is accepted; partial,
+out-of-order, repeated or rejected prompt flows fail without a retry. A
+60-second deadline and 64-KiB output bound trigger process-group termination,
+child reaping and PTY closure. Only status, exit code, prompt flags and reap
+status are retained in an exclusive mode-0600 `evidence/cli-login-*.json` file
+before rejecting a failed login, and in lifecycle state; no terminal transcript
+leaves the helper.
+
+CLI TLS verification is explicit and separate from the REST client's strict
+TLS checks: the task's `[sslConfig] cliVerifyServerName = true` uses the existing
+`sslRootCAPath` and hostname/IP SANs for local and remote CLI connections, as
+specified in the [Enterprise 10.6 server.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/server.conf).
+No hostname-check bypass or broader `sslVerifyServerCert` change is applied.
+The failed piped-login attempt remains distinct from the subsequent PTY run;
+these source corrections do not establish successful SHC bootstrap.
+
 Apply the deployer bundle with `apply_bundle()`. Enterprise 10.6.0.5 does not
 provide `validate shcluster-bundle`; do not report a separate successful CLI
 validation. Add only the dedicated task peer to every member using
