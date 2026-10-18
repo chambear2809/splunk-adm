@@ -29,8 +29,10 @@ export function filterGraph(graph: Graph, facets: Facets): Graph {
   const index = indexGraph(graph);
   const matched = graph.edges.filter((edge) => {
     if (!edgeFacetsActive(facets)) return true;
+    const conversation = edge.relationship === "communicates_with";
+    const observation = edge.relationship === "traffic_observation";
     return (
-      edge.relationship === "communicates_with" &&
+      (conversation || observation) &&
       identityMatches(
         edgeIdentity(edge, (id) => index.node.get(id)),
         facets.identity,
@@ -39,7 +41,7 @@ export function filterGraph(graph: Graph, facets: Facets): Graph {
       (facets.source === undefined ||
         facets.source.length === 0 ||
         edge.sources?.includes(facets.source) === true) &&
-      (facets.blocked !== true || isBlocked(edge))
+      (facets.blocked !== true || (conversation && isBlocked(edge)))
     );
   });
   const keptEdges = new Map(matched.map((edge) => [edge.id, edge]));

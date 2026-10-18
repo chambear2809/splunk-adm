@@ -159,6 +159,17 @@ describe("catalog parsing", () => {
         },
       ]),
     ).toThrow();
+    expect(() =>
+      parseNetworkClientFindRows([
+        {
+          row_type: "network_client",
+          _key: "x",
+          source: "meraki",
+          attachment_status: "associated",
+          source_time: 1e15,
+        },
+      ]),
+    ).toThrow("outside the epoch range");
   });
 
   it("keeps valid scopes visible beside unsupported binding dimensions", () => {

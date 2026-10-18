@@ -1,6 +1,20 @@
 # Cisco networking qualification status
 
-## Current qualification record
+## Enterprise remediation candidate (2026-10-17)
+
+The uncommitted remediation candidate starts from `origin/main` revision `510754c17391e548309dd68ddac3f8b99e0b75c6`. It corrects observer-scope isolation, legacy identity provenance, temporal NodePort/ACI attribution, Service frontend history, raw ACI action provenance, migration safeguards, frontend diagnostics, and package validation. It has received independent static review. Candidate-specific logs and the final archive checksums belong in `dist/remediation-evidence.json`; historical release hashes below do not identify this candidate.
+
+Exact installed default configuration hashes and effective macro definitions were compared with the source before the final ACI run. This matters because the ACI harness intentionally removes temporary local macro overrides. Earlier remediation ACI attempts against stale installed defaults do not qualify the final correction. The final installed-source run passed all 40 ACI tests, including historical policy refusal and late events. Two separate live raw-action regressions passed against the Cisco add-on's actual extraction behavior. The revised Service history suite passed 14 live checks, including 20 frontends across 1,002 snapshots and unchanged replay intervals; seven backend-history regressions also passed.
+
+The first broad live run was not clean: 346 tests reported 12 failures, four errors and four opt-in skips. It combined stale ACI expectations with inconclusive permission/recovery checks during repeated host sleep. Corrected ACI expectations passed the installed-source run above; permission (9), recovery replay (9), claim-gate (1, 25 trials), and supervisor (3) focused reruns passed with a temporary sleep inhibitor. Do not describe that original broad run as passing, or claim that every live test was rerun on the final archive. The final evidence manifest distinguishes unit, static, live, browser, upgrade and AppInspect results.
+
+The final unit suite passed all 458 tests after fixing test-only ownership-environment leakage in the lock tests. The seven scope/temporal boundary checks and five legacy-provenance checks passed against the installed candidate. Demo ACI, preceding-window, catalog/Find and networking captures were regenerated through live searches. A relative raw-directory capture failure was corrected and covered by a regression; the capture retained its configuration, input and derived-state fingerprint checks.
+
+This remains a synthetic standalone Enterprise 10.6.0.5 qualification. Other patches, distributed search, search head clustering, Cloud runtime, actual vendor API collection, production capacity and disaster recovery require their own evidence. Local AppInspect success is not hosted Cloud acceptance. Scope mappings provide attribution, not tenant authorization; all viewers of the shared derived data must be entitled to the same dataset. Upgrade adoption requires staged reconstruction and effective-local-override review as documented in [Upgrades](UPGRADES.md).
+
+## Historical qualification records
+
+Each record below qualifies only its named source revision and archive. It does not qualify subsequent commits or an uncommitted remediation candidate.
 
 The Catalyst Center and Meraki integration is an optional, source-scoped enrichment for Application Atlas. The authorized execution boundary for this work is the isolated local Splunk Enterprise lab with TA-grounded synthetic events. Vendor packages were downloaded, checksummed, and inspected statically; no vendor input scripts were executed as part of that inspection.
 

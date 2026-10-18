@@ -1,28 +1,28 @@
 {
   "search": "| search `adm_graph_v2(\"checkout\",\"demo\",\"cilium-nxos-west\",\"shop\")`",
-  "earliest": "1792253100",
-  "latest": "1792254300",
+  "earliest": "1792294500",
+  "latest": "1792295700",
   "provenance": {
     "dataset": "campus-meraki-two-cluster",
     "method": "Complete Splunk search jobs against TA-shaped synthetic HEC events in the isolated local lab",
     "qualification": "Synthetic parsing and application behavior; actual API collection/exporter decoding not established",
-    "captured_at": 1792253467,
+    "captured_at": 1792294881,
     "generated_input_manifest": {
       "scenario_id": "campus-meraki-two-cluster",
       "fixture_kind": "synthetic_raw_only",
-      "base_time": "2026-10-17T16:09:46.000Z",
+      "base_time": "2026-10-18T03:38:34.000Z",
       "graph_window": {
-        "start": "2026-10-17T16:09:46.000Z",
-        "end": "2026-10-17T16:24:46.000Z",
+        "start": "2026-10-18T03:38:34.000Z",
+        "end": "2026-10-18T03:53:34.000Z",
         "description": "Intended 15-minute scenario window; this is distinct from the wider HEC ingestion range."
       },
       "ingestion_window": {
-        "start": "2026-10-17T13:24:46.000Z",
-        "end": "2026-10-17T16:25:00.000Z",
+        "start": "2026-10-18T00:53:34.000Z",
+        "end": "2026-10-18T03:55:00.000Z",
         "basis": "Minimum and maximum HEC event time across every generated raw file, including deliberately stale and inventory records."
       },
-      "window_start": "2026-10-17T16:09:46.000Z",
-      "window_end": "2026-10-17T16:24:46.000Z",
+      "window_start": "2026-10-18T03:38:34.000Z",
+      "window_end": "2026-10-18T03:53:34.000Z",
       "source_profiles": {
         "file": "source-profiles.json",
         "sha256": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467"
@@ -85,16 +85,16 @@
     "initialization": {
       "qualification": "local synthetic parsing/pipeline only",
       "window": {
-        "earliest": "1792253100",
-        "latest": "1792254300"
+        "earliest": "1792294500",
+        "latest": "1792295700"
       },
       "scenario_window": {
-        "earliest": "1792253386",
-        "latest": "1792254286"
+        "earliest": "1792294714",
+        "latest": "1792295614"
       },
       "build_window": {
-        "earliest": "1792243486",
-        "latest": "1792254301"
+        "earliest": "1792284814",
+        "latest": "1792295701"
       },
       "indexed_counts": {
         "cilium_hubble": 36,
@@ -107,95 +107,95 @@
         "otel_traces": 34
       },
       "index_window": [
-        1792253416,
-        1792253434
+        1792294744,
+        1792294762
       ],
       "builders": [
         {
           "name": "ADM - Identity builder",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1792253435_1",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD59815a1701f37c8f9_at_1792294763_1",
           "result_count": 1,
-          "duration_seconds": 0.965,
+          "duration_seconds": 1.04,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Service binding",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1792253437_2",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD543c271163503966a_at_1792294766_2",
           "result_count": 1,
-          "duration_seconds": 0.679,
+          "duration_seconds": 0.654,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Interface inventory",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD536696c018fd9e6c6_at_1792253439_3",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD536696c018fd9e6c6_at_1792294767_3",
           "result_count": 1,
-          "duration_seconds": 0.667,
+          "duration_seconds": 0.649,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Service backends",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1792253440_4",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD552a663e35f79aae0_at_1792294768_4",
           "result_count": 1,
-          "duration_seconds": 0.682,
+          "duration_seconds": 0.678,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - ACI policy",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD5838543575283eb75_at_1792253441_5",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD5838543575283eb75_at_1792294769_5",
           "result_count": 1,
-          "duration_seconds": 0.657,
+          "duration_seconds": 0.661,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Network client history builder",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792253442_6",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD5484c3093be5bfc85_at_1792294770_6",
           "result_count": 1,
-          "duration_seconds": 0.769,
+          "duration_seconds": 0.787,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Conversation rollup v2",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792253443_7",
-          "result_count": 59,
-          "duration_seconds": 1.389,
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD578f8d649d63a46ad_at_1792294771_7",
+          "result_count": 62,
+          "duration_seconds": 1.3760000000000001,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         },
         {
           "name": "ADM - Traffic observation rollup v2",
-          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792253459_8",
+          "sid": "admin__nobody_c3BsdW5rX2FkbQ__RMD575d517b2a3987aaa_at_1792294774_8",
           "result_count": 39,
-          "duration_seconds": 0.683,
+          "duration_seconds": 0.86,
           "index_window": [
-            1792253416,
-            1792253434
+            1792294744,
+            1792294762
           ],
           "warnings": []
         }
@@ -206,92 +206,92 @@
         "adm_recovery.conf": "93aac9c21c6e2bae10f4c5ea60d90e3fa7fd74dd387464e6b2c51af26dd5151c",
         "alert_actions.conf": "7c0456c431cef60a7e3ba825005f9b5801b630a2e81818e11f00200163adbb89",
         "app.conf": "927fea22bfbeefa4f9b0ee06a371a41d0eea46e77e9a872347a49a5686032452",
-        "collections.conf": "f14de5a4cc07088b5a70066bf2d1aba4c60c6aab41d34feddeda48403da865eb",
-        "macros.conf": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
+        "collections.conf": "c4c3df7f66abdc4863aaeb05f82e073396e6880dffd9ecf8e5d9690f14b2a15d",
+        "macros.conf": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
         "savedsearches.conf": "5e9e50746aaa5c296f8f626eb6efe68b07772c945f25231a3f823bb5c2a6d6ee",
-        "transforms.conf": "c55f10cb324fc7d42c4f809d1320a0862f77c459b2613936d06eeaf6419d7b57"
+        "transforms.conf": "e60c3efaf4b6bbd14f2e3402c0be597b00d0d578e7f32f247969bd136bc2126a"
       },
-      "effective_macros_sha256": "651a438b4800adbbb0ad685be494097052c71d46070594af5f0b18dc092ddaac",
-      "effective_savedsearches_sha256": "ec4746cf961241916e41744cbca7a14a0cb56066e1e1f82d8d3c9fb37ae43bec",
-      "indexed_content_sha256": "ed1b4011848306732d6d19304fd88726870a7e6c730a21727177cc39ace8543b",
-      "indexed_record_count": 1187,
+      "effective_macros_sha256": "c06a9df1f6ca8446d46b9881c664e57dc615797384e5953038a0d09f9f168756",
+      "effective_savedsearches_sha256": "603fe365338d0a312bf9a342fef4bfce5a70ad71dfbc744f7e58328199cc5844",
+      "indexed_content_sha256": "b4c9232b315aa554850925db5c4b54d4abf0ab0aa4ec8659b2f87b85347d95a5",
+      "indexed_record_count": 1190,
       "state_sha256": {
-        "adm_network_source_scope": "06dfd12a584b2054a9c427aea0d2d3a34f0205c52fe26cef67d92728cef2582d",
-        "adm_cilium_cluster_settings": "5ed3b16a6558571c2f35a43a9c2e67168367b1a37c4e08620f85e348b7a4af5b",
-        "adm_observer_scope": "df91adff2fd268a5d61c9c666ec67020d92a70b44fb37bef098f253eaebf1d9a",
-        "adm_ip_identity": "9f497bcfbcc9cb513f5cbbb32ba8b085505817be5b08dc320b233fd57b6a612e",
-        "adm_network_client_history": "be2b0370b452cf2870068a1046ff2ec1d25937bbcc810b5e74ca1f18b8d088eb",
-        "adm_service_workload": "45b6d4a090987ccca8724dcda72e0dd714a4a4d66209cd01961b19db8452e423",
-        "adm_service_backends": "c233b6b5f920f55c26816188869af68dda197df4ddaac142c21450f9f2272f43",
-        "adm_service_routes": "9ffd389acf41ce4fa9177cfc77172fb4c5921304ca13d9200dd521c4d5d61562",
-        "adm_interfaces": "a9974533e0678e56f8981aad3b2c8156bf487f1e63854fc3bfd9f27c5e65f979",
-        "adm_aci_policy": "62fbf8c0e5e170fab84bf13dafeaebb992f08be086b30ca11e8be8c422869346"
+        "adm_network_source_scope": "84ab43089ddce6040419a06a974c215f4f64c50322271e84a9762883a6024046",
+        "adm_cilium_cluster_settings": "c621eeab3dd333e6aa3d6b9d1e281430e3d6f4d6c08e99c55c6d2dd480569c88",
+        "adm_observer_scope": "588d8f98c2649a38c10f86e5a12d10b97ddbadcb9be74da4b6d042af4ed98d09",
+        "adm_ip_identity": "126065ba0269389e684a032a7ce819e310cf05325e33cd26672ba79ba662540c",
+        "adm_network_client_history": "1a22f98289a8755dcd6ee1cb379fa0c3b3648449aee9c387c9e0672eaf9b656a",
+        "adm_service_workload": "6ec73808f5c74564e80ade9e9280565c65746c622e65bc96794943aee7fa94bc",
+        "adm_service_backends": "e3af071f37687cbb3ee38a505b4213e6a729094ebe3d6aa014b0c5d9785f1f52",
+        "adm_service_routes": "9db09ab3603b760cf0fbe204d1457a1d9a40490697e72aa753caaa7a34f95540",
+        "adm_interfaces": "2c1ba4260795c5cd8bc8e227aca314e4c96386a545ea2a2f62608e7b2d0ec2ca",
+        "adm_aci_policy": "7ace4f7d19ea67576d5ea83caea00b1b4420d1ed5d2edb98074ed5cb9f52136c"
       },
       "raw_sha256": {
-        "aci_class.ndjson": "45e5abbc75fb5e42d04025c329c513cad1c578539bfb2cc7eb589102078f7b2a",
-        "aci_nd_endpoints.ndjson": "765cd3ab3d2c99896d739ce973d920aeb3ed7734f3c1fec9067b6ebe41f05a07",
-        "aci_nd_flows.ndjson": "acdf52903202d65320c69a8bd13efc16e67b6c741277839b9400a66ea92884c5",
-        "aci_netflow.ndjson": "9a87ed6975506c799f63b67a81910466f4563dc84756b9ae27bd4dd9d3c7630a",
-        "aci_stats.ndjson": "42e359d1b91f88c30b6bc0490799d87c3fee1da66d5f4d125721e72ff0491ad8",
-        "campus_netflow.ndjson": "a42bed6b44117680e56f7ad4076c82429fb0d5b72befaae3d364354db564a2cb",
-        "catalyst_clients.ndjson": "d3dc83e9366f1ac41cb9df8c22867082abc20aeb76275be51a732fcafcd1d3f1",
-        "hubble_flows.ndjson": "5a0de93ccc12509665520d76502b399bb75bba5cba87d8e20a3e75586ba038e9",
-        "isovalent.ndjson": "e3b16945346e1811e7e8a8e2724ed6c406030ecb3b4adb909b3d81b638cbfd8c",
-        "kube_objects.ndjson": "ae2d33bb0822d50071f1946dfd435bf686da15cedb0cf6b999a097746969143d",
-        "meraki_associations.ndjson": "9768c8dcd9604cf08fafb466b65525832a5eddd40587bda500b00c8e96562294",
-        "meraki_inventory.ndjson": "2080565d05e04ce35ab5f633d923263fe482978792bf0087c6e2df79db58dae8",
-        "meraki_ms390_ipfix.ndjson": "70fee253c4f91a4d2bf082bc9b2a245e8b1950780fdab6f13aa6e7f6e90a8742",
-        "meraki_topology.ndjson": "b24d7c276f1d3362cbb1431ff4c12a14bd2fcf55974faf6be5ad8cdb02f7643c",
-        "nxos_inventory.ndjson": "2384ff360c3e02308a6062b05ca808d0ba2257f769f9a88eb86415654aa12b2d",
-        "nxos_nd_endpoints.ndjson": "e95e422a3f579231f24c35d98e5d88d7571bcd2748b7ab9b9091c39944713635",
-        "nxos_nd_flows.ndjson": "4fb223561f4dca9e50d4ca35dd3dbb9404050afb72b85e5ebfcfa683b6db282c",
-        "otel_traces.ndjson": "0aeba50d3077355df8acf455367bf1a85c38dca546554e0be094a04262e141dd",
-        "sdwan_netflow.ndjson": "a352efc357bdc6488a8d3335ae5d5ed70f618a956554cda71d491b0dc155aa7a",
+        "aci_class.ndjson": "d0a002dc0e2c1921845f8eb0a06c20263da5e4e38d38b7d7842fe689df404159",
+        "aci_nd_endpoints.ndjson": "d53542a1a41e14706a77c1e351aa1e445fe8d565f8b37d190ee86a011c9c33bd",
+        "aci_nd_flows.ndjson": "f71e69c4204e312d3ff3b24ca90bff5fa58b638fc25bfb06e4ce9e8f2f77787c",
+        "aci_netflow.ndjson": "c95e067dcf72ae6509d4db12620c77afecd7cf485a77284bc6740ce82b751751",
+        "aci_stats.ndjson": "8c5d0a7a329a6d0465f6a4044f092446878ccfdd4c09f5a6d2750862cf874551",
+        "campus_netflow.ndjson": "259fa5a309f380cfc9be79ce5e4bd7b2e411fa85db363845757c3cd039b26198",
+        "catalyst_clients.ndjson": "d40cc7a2940d620add6c3bf2c680468f2af155ab6da914b8b3260d4311cb2a47",
+        "hubble_flows.ndjson": "080ab002f0b30c1d63fe8c7dd7bfdb2ef477b8ef29a9c14b1c7cf8f519a2f43e",
+        "isovalent.ndjson": "5f28600074fa49fb61d7093e44c59588eab45246b547dc0072405926253080d5",
+        "kube_objects.ndjson": "4b961d95805ec55bbebd674769f6875f40c45f18b82599df5c830c209463b565",
+        "meraki_associations.ndjson": "8bbaba3ed2e41c7fa3570cbe43a624c0acd4d8bda0a43df9be0082ae784dbf4a",
+        "meraki_inventory.ndjson": "f88ee823a919f5af114611ee6ed63651c80eef88c2c249e1e2d4dcb155f5b1e2",
+        "meraki_ms390_ipfix.ndjson": "760c7e0ebf53a73368af82fcdf3c8965cb1754e875634cfe8ba5dbf25de3beb4",
+        "meraki_topology.ndjson": "c78e6ae4f4cc75546062a306493d96dae4d87481aa24839074a9a4b48ae43c59",
+        "nxos_inventory.ndjson": "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062",
+        "nxos_nd_endpoints.ndjson": "acc5f5986fe37b5df6792c248fdfe9f3839e223d0b4f0be72828c0c85aedc06b",
+        "nxos_nd_flows.ndjson": "2cd090fef61c1543e3b9333fa309fa6e380defd90e5304a4c03eef107d1ad360",
+        "otel_traces.ndjson": "a1f18648eddc7b97d33747d2eba7d98764574dfe456e07ab79a39414c3610c5d",
+        "sdwan_netflow.ndjson": "81f0899ffc3a28b48a039293c7bc6d682a5449b4d1076b3bc27b26d93960b456",
         "scenario.json": "8f0ab2a8012b7ed36c353354fd22c2886c84a0a1435cb5f7c56264f4e8afdafc",
         "source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467",
-        "capture-manifest.json": "ce36a3035c2e443fcbdb370534d046eb443ba3879103a6bf60624e061e60c10c"
+        "capture-manifest.json": "2c08cc5f0fcb1df2d9b826f97697352d9c7b91dc3cab85312cea7b9680423752"
       },
       "generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b"
     },
-    "initialization_sha256": "23ec7e8a0b26db817753918698a0d59ae3fb5b603baa6317692e1cef88fc82aa",
+    "initialization_sha256": "c22f01ca37f8e8ed53b24ff3f84e9d2f3763c5444fce15d61931ad1d934cff4d",
     "sha256": {
       "tools/gen_raw_fixtures.py": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
       "fixtures/raw-networking/scenario.json": "8f0ab2a8012b7ed36c353354fd22c2886c84a0a1435cb5f7c56264f4e8afdafc",
       "fixtures/raw-networking/source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467",
-      "fixtures/raw-networking/capture-manifest.json": "ce36a3035c2e443fcbdb370534d046eb443ba3879103a6bf60624e061e60c10c",
-      "fixtures/raw-networking/aci_class.ndjson": "45e5abbc75fb5e42d04025c329c513cad1c578539bfb2cc7eb589102078f7b2a",
-      "fixtures/raw-networking/aci_nd_endpoints.ndjson": "765cd3ab3d2c99896d739ce973d920aeb3ed7734f3c1fec9067b6ebe41f05a07",
-      "fixtures/raw-networking/aci_nd_flows.ndjson": "acdf52903202d65320c69a8bd13efc16e67b6c741277839b9400a66ea92884c5",
-      "fixtures/raw-networking/aci_netflow.ndjson": "9a87ed6975506c799f63b67a81910466f4563dc84756b9ae27bd4dd9d3c7630a",
-      "fixtures/raw-networking/aci_stats.ndjson": "42e359d1b91f88c30b6bc0490799d87c3fee1da66d5f4d125721e72ff0491ad8",
-      "fixtures/raw-networking/campus_netflow.ndjson": "a42bed6b44117680e56f7ad4076c82429fb0d5b72befaae3d364354db564a2cb",
-      "fixtures/raw-networking/catalyst_clients.ndjson": "d3dc83e9366f1ac41cb9df8c22867082abc20aeb76275be51a732fcafcd1d3f1",
-      "fixtures/raw-networking/hubble_flows.ndjson": "5a0de93ccc12509665520d76502b399bb75bba5cba87d8e20a3e75586ba038e9",
-      "fixtures/raw-networking/isovalent.ndjson": "e3b16945346e1811e7e8a8e2724ed6c406030ecb3b4adb909b3d81b638cbfd8c",
-      "fixtures/raw-networking/kube_objects.ndjson": "ae2d33bb0822d50071f1946dfd435bf686da15cedb0cf6b999a097746969143d",
-      "fixtures/raw-networking/meraki_associations.ndjson": "9768c8dcd9604cf08fafb466b65525832a5eddd40587bda500b00c8e96562294",
-      "fixtures/raw-networking/meraki_inventory.ndjson": "2080565d05e04ce35ab5f633d923263fe482978792bf0087c6e2df79db58dae8",
-      "fixtures/raw-networking/meraki_ms390_ipfix.ndjson": "70fee253c4f91a4d2bf082bc9b2a245e8b1950780fdab6f13aa6e7f6e90a8742",
-      "fixtures/raw-networking/meraki_topology.ndjson": "b24d7c276f1d3362cbb1431ff4c12a14bd2fcf55974faf6be5ad8cdb02f7643c",
-      "fixtures/raw-networking/nxos_inventory.ndjson": "2384ff360c3e02308a6062b05ca808d0ba2257f769f9a88eb86415654aa12b2d",
-      "fixtures/raw-networking/nxos_nd_endpoints.ndjson": "e95e422a3f579231f24c35d98e5d88d7571bcd2748b7ab9b9091c39944713635",
-      "fixtures/raw-networking/nxos_nd_flows.ndjson": "4fb223561f4dca9e50d4ca35dd3dbb9404050afb72b85e5ebfcfa683b6db282c",
-      "fixtures/raw-networking/otel_traces.ndjson": "0aeba50d3077355df8acf455367bf1a85c38dca546554e0be094a04262e141dd",
-      "fixtures/raw-networking/sdwan_netflow.ndjson": "a352efc357bdc6488a8d3335ae5d5ed70f618a956554cda71d491b0dc155aa7a",
+      "fixtures/raw-networking/capture-manifest.json": "2c08cc5f0fcb1df2d9b826f97697352d9c7b91dc3cab85312cea7b9680423752",
+      "fixtures/raw-networking/aci_class.ndjson": "d0a002dc0e2c1921845f8eb0a06c20263da5e4e38d38b7d7842fe689df404159",
+      "fixtures/raw-networking/aci_nd_endpoints.ndjson": "d53542a1a41e14706a77c1e351aa1e445fe8d565f8b37d190ee86a011c9c33bd",
+      "fixtures/raw-networking/aci_nd_flows.ndjson": "f71e69c4204e312d3ff3b24ca90bff5fa58b638fc25bfb06e4ce9e8f2f77787c",
+      "fixtures/raw-networking/aci_netflow.ndjson": "c95e067dcf72ae6509d4db12620c77afecd7cf485a77284bc6740ce82b751751",
+      "fixtures/raw-networking/aci_stats.ndjson": "8c5d0a7a329a6d0465f6a4044f092446878ccfdd4c09f5a6d2750862cf874551",
+      "fixtures/raw-networking/campus_netflow.ndjson": "259fa5a309f380cfc9be79ce5e4bd7b2e411fa85db363845757c3cd039b26198",
+      "fixtures/raw-networking/catalyst_clients.ndjson": "d40cc7a2940d620add6c3bf2c680468f2af155ab6da914b8b3260d4311cb2a47",
+      "fixtures/raw-networking/hubble_flows.ndjson": "080ab002f0b30c1d63fe8c7dd7bfdb2ef477b8ef29a9c14b1c7cf8f519a2f43e",
+      "fixtures/raw-networking/isovalent.ndjson": "5f28600074fa49fb61d7093e44c59588eab45246b547dc0072405926253080d5",
+      "fixtures/raw-networking/kube_objects.ndjson": "4b961d95805ec55bbebd674769f6875f40c45f18b82599df5c830c209463b565",
+      "fixtures/raw-networking/meraki_associations.ndjson": "8bbaba3ed2e41c7fa3570cbe43a624c0acd4d8bda0a43df9be0082ae784dbf4a",
+      "fixtures/raw-networking/meraki_inventory.ndjson": "f88ee823a919f5af114611ee6ed63651c80eef88c2c249e1e2d4dcb155f5b1e2",
+      "fixtures/raw-networking/meraki_ms390_ipfix.ndjson": "760c7e0ebf53a73368af82fcdf3c8965cb1754e875634cfe8ba5dbf25de3beb4",
+      "fixtures/raw-networking/meraki_topology.ndjson": "c78e6ae4f4cc75546062a306493d96dae4d87481aa24839074a9a4b48ae43c59",
+      "fixtures/raw-networking/nxos_inventory.ndjson": "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062",
+      "fixtures/raw-networking/nxos_nd_endpoints.ndjson": "acc5f5986fe37b5df6792c248fdfe9f3839e223d0b4f0be72828c0c85aedc06b",
+      "fixtures/raw-networking/nxos_nd_flows.ndjson": "2cd090fef61c1543e3b9333fa309fa6e380defd90e5304a4c03eef107d1ad360",
+      "fixtures/raw-networking/otel_traces.ndjson": "a1f18648eddc7b97d33747d2eba7d98764574dfe456e07ab79a39414c3610c5d",
+      "fixtures/raw-networking/sdwan_netflow.ndjson": "81f0899ffc3a28b48a039293c7bc6d682a5449b4d1076b3bc27b26d93960b456",
       "splunk_app/splunk_adm/default/adm_recovery.conf": "93aac9c21c6e2bae10f4c5ea60d90e3fa7fd74dd387464e6b2c51af26dd5151c",
       "splunk_app/splunk_adm/default/alert_actions.conf": "7c0456c431cef60a7e3ba825005f9b5801b630a2e81818e11f00200163adbb89",
       "splunk_app/splunk_adm/default/app.conf": "927fea22bfbeefa4f9b0ee06a371a41d0eea46e77e9a872347a49a5686032452",
-      "splunk_app/splunk_adm/default/collections.conf": "f14de5a4cc07088b5a70066bf2d1aba4c60c6aab41d34feddeda48403da865eb",
-      "splunk_app/splunk_adm/default/macros.conf": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
+      "splunk_app/splunk_adm/default/collections.conf": "c4c3df7f66abdc4863aaeb05f82e073396e6880dffd9ecf8e5d9690f14b2a15d",
+      "splunk_app/splunk_adm/default/macros.conf": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
       "splunk_app/splunk_adm/default/savedsearches.conf": "5e9e50746aaa5c296f8f626eb6efe68b07772c945f25231a3f823bb5c2a6d6ee",
-      "splunk_app/splunk_adm/default/transforms.conf": "c55f10cb324fc7d42c4f809d1320a0862f77c459b2613936d06eeaf6419d7b57"
+      "splunk_app/splunk_adm/default/transforms.conf": "e60c3efaf4b6bbd14f2e3402c0be597b00d0d578e7f32f247969bd136bc2126a"
     },
     "job": {
-      "sid": "1792253470.25",
+      "sid": "1792294884.21",
       "dispatch_state": "DONE",
       "results": 45,
-      "scan_count": 93,
-      "run_duration_seconds": 1.464,
+      "scan_count": 96,
+      "run_duration_seconds": 1.484,
       "warnings": []
     }
   },
@@ -407,8 +407,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "not_evaluated"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -424,8 +423,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "not_evaluated"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -441,8 +439,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "not_evaluated"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -458,8 +455,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "not_evaluated"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -491,8 +487,7 @@
       "client_handoff_connections": "1",
       "client_handoff_determined": "1",
       "client_handoff_unresolved": "0",
-      "client_handoffs": "[{\"target\":\"pod:cilium-nxos-west/999151a5-7418-5939-b573-6de8631b4ffc\",\"basis\":\"hubble_client_tuple\",\"connections\":1,\"receiving_nodes\":[\"node-b\"],\"observers\":[\"hubble:node-b\"]}]",
-      "contract_basis": "not_evaluated"
+      "client_handoffs": "[{\"target\":\"pod:cilium-nxos-west/999151a5-7418-5939-b573-6de8631b4ffc\",\"basis\":\"hubble_client_tuple\",\"connections\":1,\"receiving_nodes\":[\"node-b\"],\"observers\":[\"hubble:node-b\"]}]"
     },
     {
       "row_type": "edge",
@@ -508,8 +503,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "intra_epg"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -557,8 +551,7 @@
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
-      "vlan_observations_truncated": "0",
-      "contract_basis": "not_evaluated"
+      "vlan_observations_truncated": "0"
     },
     {
       "row_type": "edge",
@@ -605,8 +598,7 @@
       "transport": "tcp",
       "direction_basis": "initiator",
       "vlan_observations_truncated": "0",
-      "span_ids": "5e5d77088c2a7ae9",
-      "contract_basis": "not_evaluated"
+      "span_ids": "5e5d77088c2a7ae9"
     },
     {
       "row_type": "edge",
@@ -633,8 +625,7 @@
       "transport": "tcp",
       "direction_basis": "initiator",
       "vlan_observations_truncated": "0",
-      "span_ids": "171c3e6947f94c0f",
-      "contract_basis": "intra_epg"
+      "span_ids": "171c3e6947f94c0f"
     },
     {
       "row_type": "edge",
@@ -654,8 +645,7 @@
       "transport": "tcp",
       "direction_basis": "initiator",
       "vlan_observations_truncated": "0",
-      "span_ids": "3083d969d0ded76d",
-      "contract_basis": "not_evaluated"
+      "span_ids": "3083d969d0ded76d"
     },
     {
       "row_type": "node",
@@ -893,10 +883,10 @@
     },
     {
       "row_type": "meta",
-      "window_start": "1792253100",
-      "window_end": "1792254300",
+      "window_start": "1792294500",
+      "window_end": "1792295700",
       "spans": "17",
-      "conversations": "38",
+      "conversations": "41",
       "conversations_in_scope": "13",
       "matched_conversations": "6",
       "unresolved_conversations": "7",
@@ -905,11 +895,11 @@
       "root_present": "1",
       "nodes": "19",
       "edges": "21",
-      "generated_at": "1792253470"
+      "generated_at": "1792294884"
     },
     {
       "row_type": "edge",
-      "id": "traffic-observation:8d67edf95f367dfdb3bc6a61da519e2c359b756d8815c08cac6975b9fff76ebf",
+      "id": "traffic-observation:922a27f6c4c5ef71c4dcf8ae7186c87c48486b580c3192bd3d6db388279a910d",
       "cluster": "cilium-nxos-west",
       "source": "network_client:3f001ce13c2ba54733e7451f9d12213a77a6ebe69133d53e92afb6af6d57a9bb",
       "target": "k8s_service:cilium-nxos-west/shop/checkout-api/10.50.0.20:8080",
@@ -918,29 +908,29 @@
       "count": "1",
       "server_port": "8080",
       "transport": "tcp",
-      "attachment_evidence": "[{\"basis\":\"meraki_association_flow\",\"status\":\"associated\",\"event_time\":1792253536,\"received_time\":1792253417,\"collected_time\":null,\"device_id\":\"meraki:4ed268593908b037a27c18b1738b01a6724820a54dae4abffe41ccc75da3d362\",\"device_name\":\"MR-NXOS-02\",\"device_mac\":null,\"device_serial\":\"Q2XX-DEMO-0002\",\"ssid_number\":1,\"client_source\":\"meraki_association\",\"client_authority\":\"[\\\"org-demo\\\",\\\"network-demo\\\"]\",\"client_native_id\":\"02:71:00:00:00:20\"}]",
+      "attachment_evidence": "[{\"basis\":\"meraki_association_flow\",\"status\":\"associated\",\"event_time\":1792294864,\"received_time\":1792294745,\"collected_time\":null,\"device_id\":\"meraki:4ed268593908b037a27c18b1738b01a6724820a54dae4abffe41ccc75da3d362\",\"device_name\":\"MR-NXOS-02\",\"device_mac\":null,\"device_serial\":\"Q2XX-DEMO-0002\",\"ssid_number\":1,\"client_source\":\"meraki_association\",\"client_authority\":\"[\\\"org-demo\\\",\\\"network-demo\\\"]\",\"client_native_id\":\"02:71:00:00:00:20\"}]",
       "counter_semantics": "unknown",
       "destination_ip": "10.50.0.20",
       "destination_port": "8080",
-      "first_seen": "1792253566.000000",
-      "last_seen": "1792253566.180000",
+      "first_seen": "1792294894.000000",
+      "last_seen": "1792294894.180000",
       "link_kind": "traffic_observation",
       "link_source": "stream_ipfix",
       "metrics_authoritative": "0",
       "raw_bytes": "1280",
       "raw_packets": "4",
-      "received_time": "1792253417",
+      "received_time": "1792294745",
       "records": "1",
       "scope": "meraki-nxos",
       "source_ip": "10.71.0.20",
       "source_mac": "02:71:00:00:00:20",
       "source_port": "55220",
-      "traffic_observation_id": "8d67edf95f367dfdb3bc6a61da519e2c359b756d8815c08cac6975b9fff76ebf",
-      "traffic_observations": "[{\"source\":\"stream_ipfix\",\"source_authority\":\"10.71.0.2\",\"observation_domain_present\":1,\"observation_domain_id\":390,\"routing_domain\":\"\",\"source_mac\":\"02:71:00:00:00:20\",\"destination_mac\":null,\"source_port\":55220,\"destination_port\":8080,\"raw_bytes\":1280,\"raw_packets\":4,\"raw_sampling\":null,\"exporter_ip\":\"10.71.0.2\",\"flow_id\":null,\"sequence\":null,\"first_seen\":1792253566,\"last_seen\":1792253566.18,\"received_time\":1792253417,\"direction\":\"unknown\",\"observation_point\":\"\",\"interface_in\":null,\"interface_out\":null,\"raw_bytes_in\":null,\"raw_bytes_out\":null,\"raw_packets_in\":null,\"raw_packets_out\":null,\"vpn_id\":\"\",\"ingress_overlay_session_id\":null,\"egress_overlay_session_id\":null,\"records\":1,\"counter_semantics\":\"unknown\",\"metrics_authoritative\":\"0\",\"record_fingerprint\":\"70bbf75a4b403397787907e237c488a9d37389e419c7aa31bf13d09b4ced272b\",\"domain_kind\":\"exporter\",\"scope\":\"meraki-nxos\",\"cluster\":\"cilium-nxos-west\",\"profile\":\"meraki_ms390_ipfix\",\"mapping_status\":\"mapped\",\"source_ip\":\"10.71.0.20\",\"destination_ip\":\"10.50.0.20\",\"server_port\":8080,\"transport\":\"tcp\",\"quality_status\":\"accepted_with_warning\",\"quality_errors\":null,\"quality_warnings\":\"unknown_sampling\",\"event_identity_status\":\"stable\"}]"
+      "traffic_observation_id": "922a27f6c4c5ef71c4dcf8ae7186c87c48486b580c3192bd3d6db388279a910d",
+      "traffic_observations": "[{\"source\":\"stream_ipfix\",\"source_authority\":\"10.71.0.2\",\"observation_domain_present\":1,\"observation_domain_id\":390,\"routing_domain\":\"\",\"source_mac\":\"02:71:00:00:00:20\",\"destination_mac\":null,\"source_port\":55220,\"destination_port\":8080,\"raw_bytes\":1280,\"raw_packets\":4,\"raw_sampling\":null,\"exporter_ip\":\"10.71.0.2\",\"flow_id\":null,\"sequence\":null,\"first_seen\":1792294894,\"last_seen\":1792294894.18,\"received_time\":1792294745,\"direction\":\"unknown\",\"observation_point\":\"\",\"interface_in\":null,\"interface_out\":null,\"raw_bytes_in\":null,\"raw_bytes_out\":null,\"raw_packets_in\":null,\"raw_packets_out\":null,\"vpn_id\":\"\",\"ingress_overlay_session_id\":null,\"egress_overlay_session_id\":null,\"records\":1,\"counter_semantics\":\"unknown\",\"metrics_authoritative\":\"0\",\"record_fingerprint\":\"979f6b564b25ea60c1dd0a5e58d4c75fbd533fbb4dd7056732b7dfa571867d70\",\"domain_kind\":\"exporter\",\"scope\":\"meraki-nxos\",\"cluster\":\"cilium-nxos-west\",\"profile\":\"meraki_ms390_ipfix\",\"mapping_status\":\"mapped\",\"source_ip\":\"10.71.0.20\",\"destination_ip\":\"10.50.0.20\",\"server_port\":8080,\"transport\":\"tcp\",\"quality_status\":\"accepted_with_warning\",\"quality_errors\":null,\"quality_warnings\":\"unknown_sampling\",\"event_identity_status\":\"stable\"}]"
     },
     {
       "row_type": "edge",
-      "id": "traffic-observation:f753a552755507b7b67a92c8f1e6f8fdc03c88ae3a31432a9d116329990c6762",
+      "id": "traffic-observation:eb61d188205567c8f95121c270141075a0e937e11c6e323f43e9938102a9d114",
       "cluster": "cilium-nxos-west",
       "source": "network_client:6ba4e292a03fd966dba345ac16f8f30d33fe002f3381c922ffd552532543946f",
       "target": "k8s_service:cilium-nxos-west/shop/checkout-api/10.50.0.20:8080",
@@ -949,25 +939,25 @@
       "count": "1",
       "server_port": "8080",
       "transport": "tcp",
-      "attachment_evidence": "[{\"basis\":\"meraki_association_flow\",\"status\":\"associated\",\"event_time\":1792253626,\"received_time\":1792253417,\"collected_time\":null,\"device_id\":\"meraki:e3cda4e5a1a7df4dd850e675aa615a45de012f04153e8cfb1efae754ef8469e9\",\"device_name\":\"MR-NXOS-01\",\"device_mac\":null,\"device_serial\":\"Q2XX-DEMO-0001\",\"ssid_number\":1,\"client_source\":\"meraki_association\",\"client_authority\":\"[\\\"org-demo\\\",\\\"network-demo\\\"]\",\"client_native_id\":\"02:71:00:00:00:21\"}]",
+      "attachment_evidence": "[{\"basis\":\"meraki_association_flow\",\"status\":\"associated\",\"event_time\":1792294954,\"received_time\":1792294745,\"collected_time\":null,\"device_id\":\"meraki:e3cda4e5a1a7df4dd850e675aa615a45de012f04153e8cfb1efae754ef8469e9\",\"device_name\":\"MR-NXOS-01\",\"device_mac\":null,\"device_serial\":\"Q2XX-DEMO-0001\",\"ssid_number\":1,\"client_source\":\"meraki_association\",\"client_authority\":\"[\\\"org-demo\\\",\\\"network-demo\\\"]\",\"client_native_id\":\"02:71:00:00:00:21\"}]",
       "counter_semantics": "unknown",
       "destination_ip": "10.50.0.20",
       "destination_port": "8080",
-      "first_seen": "1792253656.000000",
-      "last_seen": "1792253656.110000",
+      "first_seen": "1792294984.000000",
+      "last_seen": "1792294984.110000",
       "link_kind": "traffic_observation",
       "link_source": "stream_ipfix",
       "metrics_authoritative": "0",
       "raw_bytes": "860",
       "raw_packets": "3",
-      "received_time": "1792253417",
+      "received_time": "1792294745",
       "records": "1",
       "scope": "meraki-nxos",
       "source_ip": "10.71.0.20",
       "source_mac": "02:71:00:00:00:21",
       "source_port": "55221",
-      "traffic_observation_id": "f753a552755507b7b67a92c8f1e6f8fdc03c88ae3a31432a9d116329990c6762",
-      "traffic_observations": "[{\"source\":\"stream_ipfix\",\"source_authority\":\"10.71.0.2\",\"observation_domain_present\":1,\"observation_domain_id\":390,\"routing_domain\":\"\",\"source_mac\":\"02:71:00:00:00:21\",\"destination_mac\":null,\"source_port\":55221,\"destination_port\":8080,\"raw_bytes\":860,\"raw_packets\":3,\"raw_sampling\":null,\"exporter_ip\":\"10.71.0.2\",\"flow_id\":null,\"sequence\":null,\"first_seen\":1792253656,\"last_seen\":1792253656.11,\"received_time\":1792253417,\"direction\":\"unknown\",\"observation_point\":\"\",\"interface_in\":null,\"interface_out\":null,\"raw_bytes_in\":null,\"raw_bytes_out\":null,\"raw_packets_in\":null,\"raw_packets_out\":null,\"vpn_id\":\"\",\"ingress_overlay_session_id\":null,\"egress_overlay_session_id\":null,\"records\":1,\"counter_semantics\":\"unknown\",\"metrics_authoritative\":\"0\",\"record_fingerprint\":\"b7fc969d30802ad197df341f35ffcb1d0d0c701bfbdfe71298a8665a9b1fedf4\",\"domain_kind\":\"exporter\",\"scope\":\"meraki-nxos\",\"cluster\":\"cilium-nxos-west\",\"profile\":\"meraki_ms390_ipfix\",\"mapping_status\":\"mapped\",\"source_ip\":\"10.71.0.20\",\"destination_ip\":\"10.50.0.20\",\"server_port\":8080,\"transport\":\"tcp\",\"quality_status\":\"accepted_with_warning\",\"quality_errors\":null,\"quality_warnings\":\"unknown_sampling\",\"event_identity_status\":\"stable\"}]"
+      "traffic_observation_id": "eb61d188205567c8f95121c270141075a0e937e11c6e323f43e9938102a9d114",
+      "traffic_observations": "[{\"source\":\"stream_ipfix\",\"source_authority\":\"10.71.0.2\",\"observation_domain_present\":1,\"observation_domain_id\":390,\"routing_domain\":\"\",\"source_mac\":\"02:71:00:00:00:21\",\"destination_mac\":null,\"source_port\":55221,\"destination_port\":8080,\"raw_bytes\":860,\"raw_packets\":3,\"raw_sampling\":null,\"exporter_ip\":\"10.71.0.2\",\"flow_id\":null,\"sequence\":null,\"first_seen\":1792294984,\"last_seen\":1792294984.11,\"received_time\":1792294745,\"direction\":\"unknown\",\"observation_point\":\"\",\"interface_in\":null,\"interface_out\":null,\"raw_bytes_in\":null,\"raw_bytes_out\":null,\"raw_packets_in\":null,\"raw_packets_out\":null,\"vpn_id\":\"\",\"ingress_overlay_session_id\":null,\"egress_overlay_session_id\":null,\"records\":1,\"counter_semantics\":\"unknown\",\"metrics_authoritative\":\"0\",\"record_fingerprint\":\"9cc68c3637880e2bb84f85d045e9f13d50be9b90bc7295c565cdd47684319b64\",\"domain_kind\":\"exporter\",\"scope\":\"meraki-nxos\",\"cluster\":\"cilium-nxos-west\",\"profile\":\"meraki_ms390_ipfix\",\"mapping_status\":\"mapped\",\"source_ip\":\"10.71.0.20\",\"destination_ip\":\"10.50.0.20\",\"server_port\":8080,\"transport\":\"tcp\",\"quality_status\":\"accepted_with_warning\",\"quality_errors\":null,\"quality_warnings\":\"unknown_sampling\",\"event_identity_status\":\"stable\"}]"
     },
     {
       "row_type": "node",
@@ -981,8 +971,8 @@
       "attr_attachment_basis": "meraki_association_flow",
       "attr_attachment_device_id": "meraki:4ed268593908b037a27c18b1738b01a6724820a54dae4abffe41ccc75da3d362",
       "attr_attachment_device_name": "MR-NXOS-02",
-      "attr_attachment_event_time": "1792253536",
-      "attr_attachment_received_time": "1792253417",
+      "attr_attachment_event_time": "1792294864",
+      "attr_attachment_received_time": "1792294745",
       "attr_attachment_status": "associated",
       "attr_client_mac": "02:71:00:00:00:20",
       "attr_device_serial": "Q2XX-DEMO-0002",
@@ -990,11 +980,11 @@
       "attr_mapping_status": "mapped",
       "attr_native_id": "02:71:00:00:00:20",
       "attr_profile": "meraki_association",
-      "attr_received_time": "1792253417",
+      "attr_received_time": "1792294745",
       "attr_scope": "meraki-nxos",
       "attr_source": "meraki_association",
       "attr_source_authority": "[\"org-demo\",\"network-demo\"]",
-      "attr_source_time": "1792253536",
+      "attr_source_time": "1792294864",
       "attr_ssid_number": "1"
     },
     {
@@ -1009,8 +999,8 @@
       "attr_attachment_basis": "meraki_association_flow",
       "attr_attachment_device_id": "meraki:e3cda4e5a1a7df4dd850e675aa615a45de012f04153e8cfb1efae754ef8469e9",
       "attr_attachment_device_name": "MR-NXOS-01",
-      "attr_attachment_event_time": "1792253626",
-      "attr_attachment_received_time": "1792253417",
+      "attr_attachment_event_time": "1792294954",
+      "attr_attachment_received_time": "1792294745",
       "attr_attachment_status": "associated",
       "attr_client_mac": "02:71:00:00:00:21",
       "attr_device_serial": "Q2XX-DEMO-0001",
@@ -1018,22 +1008,22 @@
       "attr_mapping_status": "mapped",
       "attr_native_id": "02:71:00:00:00:21",
       "attr_profile": "meraki_association",
-      "attr_received_time": "1792253417",
+      "attr_received_time": "1792294745",
       "attr_scope": "meraki-nxos",
       "attr_source": "meraki_association",
       "attr_source_authority": "[\"org-demo\",\"network-demo\"]",
-      "attr_source_time": "1792253626",
+      "attr_source_time": "1792294954",
       "attr_ssid_number": "1"
     }
   ],
   "client_handoff_verification": {
     "search": "| search `adm_graph_inputs_v2(\"checkout\",\"demo\",\"cilium-nxos-west\",\"shop\")` | `adm_graph_cluster_settings_v2(\"cilium-nxos-west\")` | `adm_graph_resolve(\"checkout\",\"demo\",\"cilium-nxos-west\",\"shop\")` | `adm_graph_cluster_settings_v2(\"cilium-nxos-west\")` | `adm_graph_handoffs(\"checkout\",\"demo\",\"cilium-nxos-west\",\"shop\")` | where adm_row=\"hconn\" AND client_ip=\"10.71.0.20\" AND scope=\"meraki-nxos\" | table client_ip scope adm_cport adm_ct adm_cend adm_fe_id adm_targets handoff_basis server_port transport",
     "job": {
-      "sid": "1792253472.26",
+      "sid": "1792294885.22",
       "dispatch_state": "DONE",
       "results": 1,
-      "scan_count": 93,
-      "run_duration_seconds": 1.0150000000000001,
+      "scan_count": 96,
+      "run_duration_seconds": 0.914,
       "warnings": []
     },
     "rows": [
@@ -1041,8 +1031,8 @@
         "client_ip": "10.71.0.20",
         "scope": "meraki-nxos",
         "adm_cport": "55220",
-        "adm_ct": "1792253566.000000",
-        "adm_cend": "1792253566.000000",
+        "adm_ct": "1792294894.000000",
+        "adm_cend": "1792294894.000000",
         "adm_fe_id": "k8s_service:cilium-nxos-west/shop/checkout-api/10.50.0.20:8080",
         "adm_targets": "pod:cilium-nxos-west/999151a5-7418-5939-b573-6de8631b4ffc",
         "handoff_basis": "hubble_client_tuple",

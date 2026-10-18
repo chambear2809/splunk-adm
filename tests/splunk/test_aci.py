@@ -28,6 +28,13 @@ EDGE_CASES = json.loads((RAW / "edge-cases.json").read_text("utf-8"))
 EDGE_WINDOW = ("1791375300", "1791376200")  # 12:15-12:30Z, the edge-case window
 EXPECTED = json.loads((HERE / "expected" / "aci_graph.json").read_text("utf-8"))
 TOPOLOGY = json.loads((HERE / "expected" / "aci_topology.json").read_text("utf-8"))
+POLICY_FIELDS = {
+    "contract",
+    "contract_basis",
+    "contract_subject",
+    "contract_filter",
+    "contract_entry",
+}
 CONTAINER = "adm-splunk-lab"
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 ARGS = EXPECTED["args"]
@@ -324,6 +331,16 @@ class AciDataLayerTest(unittest.TestCase):
             and all(e.get(k) == v for k, v in match.items())
         ]
 
+    def find_in(self, rows, relationship, source, target, **match) -> list[dict]:
+        return [
+            e
+            for e in self.edges(rows)
+            if e["relationship"] == relationship
+            and e["source"] == source
+            and e["target"] == target
+            and all(e.get(k) == v for k, v in match.items())
+        ]
+
     def meta(self) -> dict:
         meta = [r for r in self.rows if r.get("row_type") == "meta"]
         self.assertEqual(len(meta), 1)
@@ -361,19 +378,38 @@ class AciDataLayerTest(unittest.TestCase):
             )
             self.assertEqual(len(found), 1, f"{want}: {found}")
             got = found[0]
+            baseline = self.find_in(
+                self.rows_first,
+                want["relationship"],
+                want["source"],
+                want["target"],
+                **keys,
+            )
+            self.assertEqual(len(baseline), 1, f"base {want}: {baseline}")
+            base = baseline[0]
             for key, value in want.items():
                 if key in ("relationship", "source", "target"):
                     continue
+                # A later ACI policy snapshot is newer than this historical
+                # graph window.  Structural and ACL evidence remains tested
+                # against the final graph, while policy metadata is anchored
+                # to the base capture and checked for explicit refusal below.
+                check = base if key in POLICY_FIELDS else got
                 if value is None:
-                    self.assertNotIn(key, got, f"{got['id']}.{key} should be absent")
+                    self.assertNotIn(
+                        key, check, f"{check['id']}.{key} should be absent"
+                    )
                 elif isinstance(value, list):
                     self.assertEqual(
-                        sorted(as_list(got.get(key))),
+                        sorted(as_list(check.get(key))),
                         sorted(value),
-                        f"{got['id']}.{key}",
+                        f"{check['id']}.{key}",
                     )
                 else:
-                    self.assertEqual(got.get(key), value, f"{got['id']}.{key}")
+                    self.assertEqual(check.get(key), value, f"{check['id']}.{key}")
+            if base.get("contract_basis") in ("intent", "none"):
+                self.assertEqual(got.get("contract_basis"), "not_evaluated", got)
+                self.assertNotIn("contract", got, got)
 
     def test_edge_counts_and_endpoints(self):
         counts: dict[str, int] = {}
@@ -470,13 +506,22 @@ class AciDataLayerTest(unittest.TestCase):
             with self.subTest(conv=conv["id"]):
                 found = [
                     e
-                    for e in self.edges()
+                    for e in self.edges(self.rows_first)
                     if e["relationship"] == "communicates_with"
                     and e["target"] == self.frontend_id(conv)
                 ]
                 self.assertEqual(len(found), 1)
                 self.assertEqual(found[0].get("contract"), cls["contract"])
                 self.assertEqual(found[0].get("contract_basis"), "intent")
+                final = [
+                    e
+                    for e in self.edges()
+                    if e["relationship"] == "communicates_with"
+                    and e["target"] == self.frontend_id(conv)
+                ]
+                self.assertEqual(len(final), 1)
+                self.assertEqual(final[0].get("contract_basis"), "not_evaluated")
+                self.assertNotIn("contract", final[0])
 
     def test_same_node_traffic_has_no_contract(self):
         fe_b, checkout = (
@@ -495,7 +540,7 @@ class AciDataLayerTest(unittest.TestCase):
             for p in c["expected"]["backend_pods"]
         }
         vm = "vm:prod/10.30.40.25"
-        for e in self.edges():
+        for e in self.edges(self.rows):
             if e["relationship"] != "communicates_with":
                 continue
             self.assertFalse(
@@ -504,8 +549,15 @@ class AciDataLayerTest(unittest.TestCase):
             )
             if e["source"] == vm and e["target"] in backends:
                 # Only the direct pod-IP conversation (c7) may connect the VM to a pod.
-                self.assertEqual(e["target"], self.pod_id("frontend-7d9c6b5f4-q4m9z"))
-                self.assertEqual(e["contract"], "win-to-pods")
+                target = self.pod_id("frontend-7d9c6b5f4-q4m9z")
+                self.assertEqual(e["target"], target)
+                baseline = self.find_in(
+                    self.rows_first, "communicates_with", vm, target
+                )
+                self.assertEqual(len(baseline), 1)
+                self.assertEqual(baseline[0]["contract"], "win-to-pods")
+                self.assertEqual(e.get("contract_basis"), "not_evaluated")
+                self.assertNotIn("contract", e)
 
     def test_dsr_dispatch_is_node_to_node_only(self):
         (edge,) = [e for e in self.edges() if e.get("transport") == "ipip"]
@@ -533,7 +585,7 @@ class AciDataLayerTest(unittest.TestCase):
             "communicates_with", "vm:prod/10.30.40.25", "vm:prod/10.20.30.40"
         )
         self.assertEqual(edge["acl_action"], "drop")
-        self.assertEqual(edge["contract_basis"], "none")
+        self.assertEqual(edge["contract_basis"], "not_evaluated")
         self.assertEqual(as_list(edge["sources"]), ["aci_acllog"])
 
     # ---- identity, backends, routes, policy ----
@@ -745,7 +797,6 @@ class AciDataLayerTest(unittest.TestCase):
                 e["target"],
                 e.get("handoff_basis"),
                 e.get("count"),
-                e.get("contract_basis"),
             )
             for e in self.edges(rows)
         )
@@ -753,6 +804,30 @@ class AciDataLayerTest(unittest.TestCase):
     def test_c1_base_graph_is_unchanged_by_later_batches(self):
         self.assertEqual(self.edge_ids(self.rows), self.edge_ids(self.rows_first))
         self.assertEqual(set(self.nodes(self.rows)), set(self.nodes(self.rows_first)))
+
+    def test_later_policy_batch_refuses_historical_contract_classification(self):
+        """The final graph keeps structure while refusing newer policy evidence."""
+        for baseline in self.edges(self.rows_first):
+            basis = baseline.get("contract_basis")
+            if baseline["relationship"] != "communicates_with" or basis not in (
+                "intent",
+                "none",
+            ):
+                continue
+            final = self.find_in(
+                self.rows,
+                baseline["relationship"],
+                baseline["source"],
+                baseline["target"],
+                **{
+                    key: baseline[key]
+                    for key in ("server_port", "transport")
+                    if key in baseline
+                },
+            )
+            self.assertEqual(len(final), 1, baseline)
+            self.assertEqual(final[0].get("contract_basis"), "not_evaluated")
+            self.assertNotIn("contract", final[0])
 
     def backend_rows(self, service: str) -> list[dict]:
         return self.lab.search(
@@ -893,15 +968,6 @@ class AciDataLayerTest(unittest.TestCase):
         )
         left = {c.split("@")[0] for r in rows for c in as_list(r.get("adm_conns"))}
         self.assertEqual(left, {"43402", "43901", "43902"})
-
-    def find_in(self, rows, relationship, source, target):
-        return [
-            e
-            for e in self.edges(rows)
-            if e["relationship"] == relationship
-            and e["source"] == source
-            and e["target"] == target
-        ]
 
     def test_m3_long_flow_is_one_connection(self):
         co = self.frontend_id(

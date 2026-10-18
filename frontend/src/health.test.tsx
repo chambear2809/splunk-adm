@@ -24,7 +24,7 @@ const client: SearchClient = { search };
 describe("pipeline health", () => {
   it("preserves unknown values instead of inventing successful empty results", () => {
     expect(sourceRows([])).toHaveLength(11);
-    expect(jobRows([])).toHaveLength(12);
+    expect(jobRows([])).toHaveLength(16);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
     const source = sourceRows([
@@ -116,6 +116,16 @@ describe("pipeline health", () => {
     expect(
       jobStatus(
         { ...job, name: "ADM - Interface inventory", lastSuccess: now - 3600 },
+        now,
+      ),
+    ).toBe("Recent successful run");
+    expect(
+      jobStatus(
+        {
+          ...job,
+          name: "ADM - Application catalog v2",
+          lastSuccess: now - 3600,
+        },
         now,
       ),
     ).toBe("Recent successful run");
@@ -243,6 +253,52 @@ describe("pipeline health", () => {
         },
       ]).evaluated,
     ).toBeUndefined();
+  });
+  it("retains V2 diagnostic reasons without double-counting population", () => {
+    const quality = qualityRows([
+      {
+        kind: "quality",
+        source: "all",
+        status: "checked",
+        reason: "evaluated",
+        records: 4,
+      },
+      {
+        kind: "quality",
+        source: "stream_ipfix_v2",
+        status: "unmapped",
+        reason: "new_contract_reason",
+        records: 2,
+      },
+      {
+        kind: "quality",
+        source: "stream_ipfix_v2",
+        status: "mapped",
+        reason: "counter_semantics_unknown",
+        records: 1,
+      },
+    ]);
+    expect(quality.evaluated).toBe(4);
+    expect(quality.issues.map((issue) => issue.reason)).toEqual(
+      expect.arrayContaining([
+        "new_contract_reason",
+        "counter_semantics_unknown",
+      ]),
+    );
+  });
+  it("labels unmapped scope as isolated authority", () => {
+    const quality = qualityRows([
+      {
+        kind: "quality",
+        source: "netflow",
+        status: "accepted",
+        reason: "unmapped_scope",
+        records: 1,
+      },
+    ]);
+    expect(quality.issues[0]?.reason).toBe(
+      "No observer mapping; source authority remains isolated",
+    );
   });
   it("does not publish a cancelled check", async () => {
     search

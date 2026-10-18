@@ -64,3 +64,8 @@ access = read : [ * ], write : [ admin, sc_admin ]
 
 [transforms/adm_app_catalog_v2]
 access = read : [ * ], write : [ admin, sc_admin ]
+
+# Unfiltered identity maintenance inventory; public identity readers quarantine
+# legacy default-scope rows without explicit-mapping provenance.
+[transforms/adm_ip_identity_all]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]

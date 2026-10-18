@@ -196,6 +196,30 @@ describe("graph facets", () => {
     expect(result.nodes).toEqual([]);
     expect(graph.edges.length).toBeGreaterThan(0);
   });
+  it("applies port and source facets to traffic observations", () => {
+    const withObservation = {
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: "observation",
+          source: "pod-a",
+          target: "external",
+          relationship: "traffic_observation",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+          server_port: 8080,
+          sources: ["meraki"],
+        },
+      ],
+    } as unknown as Graph;
+    const result = filterGraph(withObservation, {
+      port: 8080,
+      source: "meraki",
+    });
+    expect(result.edges.map((edge) => edge.id)).toContain("observation");
+  });
   it("handles dense service and port sets without dangling endpoints", () => {
     const dense = {
       ...graph,
