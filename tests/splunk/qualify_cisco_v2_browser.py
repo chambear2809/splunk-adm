@@ -36,6 +36,19 @@ def _normal(value):
     return re.sub(r"\s+", " ", value.replace("\\\n", " ")).strip()
 
 
+def _evidence_records(value):
+    """Match the graph parser's omission of absent optional JSON fields."""
+    records = json.loads(value) if isinstance(value, str) else value
+    if not isinstance(records, list) or not records:
+        raise AssertionError("selected MAC evidence records are missing")
+    if any(not isinstance(record, dict) for record in records):
+        raise AssertionError("selected MAC evidence records are malformed")
+    return [
+        {name: field for name, field in record.items() if field is not None}
+        for record in records
+    ]
+
+
 def _content(path):
     return lab._json("GET", path)["entry"][0]["content"]
 
@@ -222,8 +235,15 @@ def main():
                 *Browser.window,
             )
             require_client(rows, platform)
-            handoffs, _ = search(lab, handoff_query(platform), *Browser.window)
+            # Preserve the exact per-connection receiver/observer proof before
+            # graph aggregation. It remains separate from MAC attachment.
+            handoffs, _ = search(
+                lab,
+                handoff_query(platform) + " via_node adm_mT adm_cid adm_cands",
+                *Browser.window,
+            )
             require_handoff(rows, handoffs, platform)
+            scenario["handoffRows"] = handoffs
             client = next(
                 row
                 for row in rows
@@ -233,6 +253,18 @@ def main():
             scenario["clientId"] = client["id"]
             scenario["sourceTime"] = client.get("attr_source_time")
             scenario["receivedTime"] = client.get("attr_received_time")
+            scenario["observationRecords"] = [
+                {
+                    "id": row["id"],
+                    "target": row["target"],
+                    "traffic": _evidence_records(row.get("traffic_observations")),
+                    "attachments": _evidence_records(row.get("attachment_evidence")),
+                }
+                for row in rows
+                if row.get("row_type") == "edge"
+                and row.get("source") == client["id"]
+                and row.get("relationship") == "traffic_observation"
+            ]
         stage = "native post-cutover browser"
         output = args.output.resolve()
         output.parent.mkdir(parents=True, exist_ok=True)

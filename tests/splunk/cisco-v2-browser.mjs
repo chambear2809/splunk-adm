@@ -4,6 +4,11 @@ import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  selectScenarioEvidence,
+  assertScenarioCsv,
+  expectedBackendText,
+} from "./cisco-v2-evidence.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
 let input = "";
@@ -157,30 +162,9 @@ try {
     );
     expect(client.attributes.collected_time).toBeUndefined();
     expect(client.attributes.attachment_collected_time).toBeUndefined();
-    const clientEdges = graph.edges.filter(
-      (edge) =>
-        edge.source === client.id && edge.relationship === "communicates_with",
-    );
-    expect(
-      clientEdges.length,
-      "selected client has no conversation edge",
-    ).toBeGreaterThan(0);
-    const connection = clientEdges.find(
-      (edge) => edge.client_handoff_coverage === "complete",
-    );
-    expect(
-      connection,
-      "selected-client handoff must be complete in this positive raw fixture",
-    ).toBeTruthy();
-    expect(connection.client_handoff_unresolved).toBe(0);
-    expect(connection.client_handoffs.length).toBeGreaterThan(0);
+    const selected = selectScenarioEvidence(graph, scenario);
+    const { observations, connection, ipClient, bindings } = selected;
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-    for (const record of connection.client_handoffs) {
-      expect(record.basis).toBe("hubble_client_tuple");
-      expect(record.connections).toBeGreaterThan(0);
-      expect(byId.get(record.target)).toBeTruthy();
-      expect(record.receiving_nodes.length).toBeGreaterThan(0);
-    }
     await page.keyboard.press("Escape");
     stage = `${scenario.cluster}: client Inspector provenance`;
     const card = adm
@@ -195,33 +179,90 @@ try {
     await expect(details).toContainText("Received time");
     const sourceTime = client.attributes.source_time_status;
     if (sourceTime) await expect(details).toContainText(sourceTime);
-    stage = `${scenario.cluster}: selected-client backend and receiving-node path`;
+    const trafficDetails = details.getByRole("region", {
+      name: "Traffic observations",
+      exact: true,
+    });
+    await expect(trafficDetails).toContainText(scenario.clientIp);
+    await expect(trafficDetails).toContainText(scenario.scope);
+    for (const observation of observations)
+      for (const record of observation.traffic_observations)
+        await expect(trafficDetails).toContainText(record.source_authority);
+    stage = `${scenario.cluster}: separate unresolved IP identity and tuple-bound path`;
+    const ipCard = adm.getByRole("button", {
+      name: `Unknown IP ${scenario.clientIp}, identity unknown`,
+      exact: true,
+    });
+    await expect(ipCard).toHaveCount(1);
+    await ipCard.click();
+    await expect(details).toContainText(
+      "No identity record covers this address",
+    );
+    await expect(details).toContainText(scenario.clientIp);
     await adm.getByRole("button", { name: "Table", exact: true }).click();
     const row = adm
       .locator(".table-view tbody tr")
-      .filter({ hasText: scenario.clientMac })
+      .filter({ hasText: scenario.clientIp })
       .filter({ hasText: byId.get(connection.target).label });
     await expect(row).toHaveCount(1);
     await row.locator("button").first().click();
-    await expect(details).toContainText("Backend");
-    await expect(details).toContainText("Received on");
-    for (const record of connection.client_handoffs) {
-      await expect(details).toContainText(byId.get(record.target).label);
-      for (const receiver of record.receiving_nodes)
-        await expect(details).toContainText(
-          byId.get(receiver)?.label || receiver,
-        );
-    }
+    const fact = (name) =>
+      details
+        .locator(".facts dt")
+        .filter({ hasText: new RegExp(`^${name}$`) })
+        .locator("xpath=following-sibling::dd[1]");
+    await expect(fact("Identity")).toHaveText("Unknown IP");
+    await expect(fact("Backend")).toHaveText(
+      expectedBackendText(connection, graph, ", "),
+    );
+    const receivers = [
+      ...new Set(
+        connection.client_handoffs.flatMap((record) => record.receiving_nodes),
+      ),
+    ];
+    await expect(fact("Received on")).toHaveText(
+      receivers.length === 1 ? receivers[0] : `one of ${receivers.join(", ")}`,
+    );
     await details
       .getByRole("button", { name: "Show candidate path", exact: true })
       .click();
     const path = page.locator(".path-strip");
     await expect(path).toBeVisible();
-    const pathText = await path.innerText();
-    for (const record of connection.client_handoffs) {
-      expect(pathText).toContain(byId.get(record.target).label);
-      for (const receiver of record.receiving_nodes)
-        expect(pathText).toContain(byId.get(receiver)?.label || receiver);
+    const targets = [
+      ...new Set(connection.client_handoffs.map((record) => record.target)),
+    ];
+    const chooser = path.getByRole("combobox", {
+      name: "Backend",
+      exact: true,
+    });
+    if (targets.length > 1) {
+      expect(
+        await chooser
+          .locator("option")
+          .evaluateAll((options) =>
+            options.map((option) => option.value).sort(),
+          ),
+      ).toEqual([...targets].sort());
+    } else await expect(chooser).toHaveCount(0);
+    const stageTitles = (kind) =>
+      path
+        .locator(`.stage.${kind} .stage-card`)
+        .evaluateAll((cards) =>
+          cards.map((card) => card.getAttribute("title").split("\n")[0]).sort(),
+        );
+    for (const target of targets) {
+      if (targets.length > 1) await chooser.selectOption(target);
+      const expectedReceivers = [
+        ...new Set(
+          connection.client_handoffs
+            .filter((record) => record.target === target)
+            .flatMap((record) => record.receiving_nodes),
+        ),
+      ].sort();
+      await expect
+        .poll(() => stageTitles("entity"))
+        .toEqual([ipClient.label, byId.get(target).label].sort());
+      await expect.poll(() => stageTitles("host")).toEqual(expectedReceivers);
     }
     stage = `${scenario.cluster}: physical attachment inventory`;
     await adm.getByRole("button", { name: "Devices", exact: true }).click();
@@ -254,10 +295,7 @@ try {
       /Required flows \(CSV\)/,
       prefix + "-flows.csv",
     );
-    expect(flows).toContain(scenario.clientMac);
-    expect(flows).toContain(scenario.sourceAuthority);
-    for (const record of connection.client_handoffs)
-      expect(flows).toContain(byId.get(record.target).label);
+    assertScenarioCsv(csv, flows, selected, graph, scenario);
     adm = await map(scenario);
     stage = `${scenario.cluster}: absolute comparison`;
     const beforeComparison = searches.length;
@@ -279,11 +317,25 @@ try {
     const compared = JSON.parse(
       await download(/Map data \(JSON\)/, prefix + "-comparison-map.json"),
     );
-    expect(compared.nodes.find((node) => node.id === client.id)).toEqual(
-      client,
+    const comparedSelected = selectScenarioEvidence(compared, scenario);
+    expect(comparedSelected.client).toEqual(client);
+    expect(comparedSelected.ipClient).toEqual(ipClient);
+    expect(comparedSelected.observations).toEqual(observations);
+    expect(comparedSelected.connection).toEqual(connection);
+    const comparisonContext = await download(
+      /Context evidence \(CSV\)/,
+      prefix + "-comparison-context.csv",
     );
-    expect(compared.edges.find((edge) => edge.id === connection.id)).toEqual(
-      connection,
+    const comparisonFlows = await download(
+      /Required flows \(CSV\)/,
+      prefix + "-comparison-flows.csv",
+    );
+    assertScenarioCsv(
+      comparisonContext,
+      comparisonFlows,
+      comparedSelected,
+      compared,
+      scenario,
     );
     stage = `${scenario.cluster}: public and network-client Find`;
     const args = new URLSearchParams({
@@ -320,11 +372,50 @@ try {
       edges: graph.edges.length,
       publicGraph: true,
       inspectorProvenance: true,
-      selectedClientHandoff: true,
-      candidatePath: true,
+      networkClient: {
+        id: client.id,
+        mac: scenario.clientMac,
+        authority: scenario.sourceAuthority,
+        attachmentDeviceId: scenario.attachmentDeviceId,
+        attachmentBasis: scenario.attachmentBasis,
+        trafficObservationIds: observations.map((edge) => edge.id),
+        inspectorObservationProvenance: true,
+        contextExportRecords: true,
+      },
+      scopedIpConversation: {
+        nodeId: ipClient.id,
+        edgeId: connection.id,
+        scope: scenario.scope,
+        clientIp: scenario.clientIp,
+        serviceId: connection.target,
+        identity: ipClient.endpoint_kind,
+        unresolvedReason: ipClient.reason,
+        handoffBasis: "hubble_client_tuple",
+        handoffs: connection.client_handoffs,
+        candidatePath: true,
+        requiredFlowsExport: true,
+      },
+      observedTupleAgreement: bindings.map((binding) => ({
+        observationId: binding.observationId,
+        recordFingerprint: binding.recordFingerprint,
+        connections: binding.matches.map((row) => ({
+          id: row.adm_cid,
+          sourcePort: row.adm_cport,
+          firstSeen: row.adm_ct,
+          lastSeen: row.adm_cend,
+          serviceCandidates: row.adm_cands,
+        })),
+      })),
+      macIpIdentityContinuity: "not established by tuple agreement",
       attachmentInventory: true,
       reload: true,
-      absoluteComparison: previous,
+      absoluteComparison: {
+        query: previous,
+        networkClientObservationsPreserved: true,
+        scopedIpConversationAndUnresolvedIdentityPreserved: true,
+        contextCsvSha256: digest(comparisonContext),
+        requiredFlowsCsvSha256: digest(comparisonFlows),
+      },
       publicFind: true,
       networkClientFind: true,
       json: { sha256: digest(text), bytes: Buffer.byteLength(text) },

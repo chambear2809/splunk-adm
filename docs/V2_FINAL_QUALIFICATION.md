@@ -254,10 +254,20 @@ reset/selector-override setup. It separately checks all eight installed public
 selectors, disabled V1 rollup, enabled/scheduled V2 writers, complete raw-fixture
 selected-client/backend handoffs, configured deployment expectations and index
 metadata. It then exercises the native packaged application through public
-searches: both recorded graphs, client Inspector provenance, this client's own
-backend and receiving-node evidence, candidate path, physical attachment
+searches: both recorded graphs, MAC Inspector provenance, the exact scoped IP
+conversation's backend and receiving-node evidence, candidate path, physical attachment
 inventory, reload, Find, preceding-window comparison, JSON and context CSV
 exports, Setup and Data health. Missing required behavior fails the run.
+
+The MAC network-client node's traffic observations and the scoped IP
+conversation are distinct evidence paths. Matching observed source/destination
+addresses, ports, transport, scope, cluster and overlapping times can verify
+their tuple evidence; this does not establish continuous MAC/IP identity.
+The qualifier preserves the IP node's unresolved identity reason, checks the
+original Hubble tuple and the conversation's own backend/receiver attribution,
+and checks both paths in comparisons and exports. Aggregate service backends
+cannot replace those records. A missing direct conversation edge from the MAC
+node is not itself missing Hubble handoff evidence.
 
 Before running, an administrator must already have saved expectations matching
 the initialized workload in Setup. Select at least NetFlow, DC Networking,

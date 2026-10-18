@@ -193,7 +193,15 @@ V1 checkpoint allowed the unchanged product guards to complete. The harness now
 waits for that checkpoint automatically and recaptures stale preactivation
 checkpoints; both changes have pure regressions and independent review.
 The active-V2 browser check failed its selected-client conversation-edge
-assertion and is under investigation; it is not a passing browser result.
+assertion. Investigation identified an incorrect qualifier assumption: the
+export contains the MAC node's traffic observations and a separate scoped IP
+conversation with its own Hubble handoff. The qualifier must check both paths
+without inventing MAC/IP continuity or substituting aggregate service backends.
+The correction verifies original tuple payloads, time-qualified Service backend
+socket mappings, exact CSV/Inspector attribution and the two distinct evidence
+paths in comparisons. Its 44 targeted cases and independent review pass;
+final-package native execution remains pending. The earlier failure is not a
+passing browser result.
 Evidence already
 exported under `dist/final-qualification/native-08-migration/` contains 53
 hash-verified files for the failed first-history attempt and 107 for the
@@ -217,7 +225,7 @@ pruning defaults remain disabled.
 | Frontend unit tests                     | 45 files / 574 tests passed on candidate-09 source                                                                                    |
 | Ordinary browser regression             | 94 passed in CI at candidate-09 source 6ebbf0d                                                                                        |
 | Python lint and formatting              | Passed                                                                                                                                |
-| Python unit tests                       | 569 passed after restoration-checkpoint regressions                                                                                   |
+| Python unit tests                       | 574 passed after restoration-checkpoint and browser-evidence regressions                                                              |
 | Distributed tooling tests               | 61 passed; offline only                                                                                                               |
 | Build/package and release validation    | Passed for retained candidate 09                                                                                                      |
 | Installed package bytes                 | Package 08: all 85 files byte-exact before the suite; 84 exact afterward, with only documented generated install checksum in app.conf |
@@ -316,6 +324,16 @@ The final combined-source review found the additional stale settings-read
 race described above. It was fixed in candidate 09 and independently reviewed
 with no new actionable findings. Renewed runtime acceptance is required for
 the new package.
+
+Review also closed stale preactivation restoration-checkpoint reuse and
+verified the renewed performance distributions, 33 new artifacts and unchanged
+prior evidence. All 364 enabled-origin export files, their persisted-result
+references and 400 source fingerprints were independently checked. Review of
+the revised browser qualifier found incomplete Hubble payload validation,
+acceptance of extra CSV backend attribution and incomplete backend-port
+validation. All were corrected and follow-up review closed them, including
+independent wrong-port, valid port-translation and validity-boundary checks.
+Final native acceptance remains separate.
 
 Commit, PR, CI and post-merge identifiers will be recorded after qualification
 and the final independent review. No overall Cloud qualification is claimed.
