@@ -120,6 +120,30 @@ reported SIDs/configuration. An ambiguous dispatch is not automatically retried;
 use the existing `reconcile --sid` procedure. Do not delete the journal or
 reset the lab to make a failure disappear.
 
+A missing first scheduled cycle is a different condition from a cycle that has
+not yet completed. Inspect the recorded enablement time, expected scheduler
+anchor, actual job metadata and `scheduler.log`. A later successful cycle does
+not prove that the required first cycle ran. If the expected dispatch was
+missed, retain that failed attempt and use the supported rollback operation:
+
+```sh
+python3 tools/cisco_contract_migration.py \
+  --journal "$ADM_CISCO_MIGRATION_JOURNAL" \
+  --ca-file "$ADM_CISCO_MIGRATION_CA_FILE" rollback \
+  < "$ADM_CISCO_MIGRATION_SESSION_FILE"
+```
+
+Complete any requested recovery, verify `rolled_back` and the exact original
+selectors/writer states, then use a new journal for a fresh attempt. Leave time
+for scheduling to initialize before the next expected slot; no fixed lead time
+is a platform guarantee. Do not edit the expected anchor, substitute manual
+dispatch for scheduled evidence, or treat a failed attempt's rollback as a
+successful cutover. `candidate_cutover_eligible=true` records staging
+eligibility and can also be present in a failed attempt. Terminal success must
+additionally prove completed cutover and the verified mutations, scheduled
+cycles and public-selector checks. A failed attempt cannot be reused by that
+terminal-success branch of the qualification harness.
+
 ## Pruning disposable history
 
 Run this only after migration/rollback/restoration has reached a known state:

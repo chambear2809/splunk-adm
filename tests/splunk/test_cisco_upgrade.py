@@ -78,6 +78,117 @@ def _upgrade_resume_route(journal: dict | None) -> str:
     return routes[phase]
 
 
+def _assert_completed_cutover_evidence(migration, journal: dict) -> None:
+    """Check durable activation success independently of staging eligibility.
+
+    This only reads the interface and immutable journal origin; it performs no
+    target requests. A partial activation may be safely rolled back without ever
+    having qualified the candidate's activated behavior.
+    """
+    cutover = journal.get("cutover") or {}
+
+    def epoch(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    started, completed = cutover.get("started_at"), cutover.get("completed_at")
+    if (
+        cutover.get("state") != "complete"
+        or not epoch(started)
+        or not epoch(completed)
+        or completed < started
+    ):
+        raise AssertionError("journal lacks durable completed cutover evidence")
+    interface, _ = migration._interface()
+    expected = migration._build_cutover_mutations(journal, interface)
+    mutations = cutover.get("mutations")
+    if (
+        not isinstance(mutations, list)
+        or not expected
+        or any(not isinstance(item, dict) for item in mutations)
+    ):
+        raise AssertionError("completed cutover lacks its intended mutation plan")
+    if [item.get("id") for item in mutations] != [item["id"] for item in expected]:
+        raise AssertionError("completed cutover mutation plan is incomplete or changed")
+    for recorded, intended in zip(mutations, expected):
+        if any(
+            recorded.get(field) != intended.get(field)
+            for field in ("kind", "name", "field", "rest_target", "acl")
+        ) or any(
+            not migration._mutation_equal(
+                intended, recorded.get(field), intended[field]
+            )
+            for field in ("before", "after")
+        ):
+            raise AssertionError(
+                "completed cutover mutation differs from its origin plan"
+            )
+        if intended["kind"] == "macro_definition" and not migration._macro_args_equal(
+            intended["name"], recorded.get("args", ""), intended.get("args", "")
+        ):
+            raise AssertionError("completed cutover macro arguments changed")
+        verified = recorded.get("verified_at")
+        if (
+            recorded.get("state") != "applied"
+            or not epoch(verified)
+            or not started <= verified <= completed
+        ):
+            raise AssertionError(
+                "completed cutover has an unverified intended mutation"
+            )
+    bounds = cutover.get("scheduled_cycle_bounds") or {}
+    lower, upper = bounds.get("index_earliest"), bounds.get("index_latest")
+    watermark = cutover.get("scheduled_watermark_at")
+    if (
+        not epoch(lower)
+        or not epoch(upper)
+        or lower >= upper
+        or lower % 300
+        or upper % 300
+        or not epoch(watermark)
+        or not started <= watermark <= completed
+        or upper > watermark
+    ):
+        raise AssertionError("completed cutover lacks validated scheduled cycle bounds")
+    required = set()
+    for surface in interface["public_surfaces"]:
+        if surface.get("surface") == "writers":
+            continue
+        for version in ("v2", "network_client_v2", "traffic_v2"):
+            spec = surface.get(version)
+            if isinstance(spec, dict) and (
+                spec.get("public_after_invoke")
+                or version in {"network_client_v2", "traffic_v2"}
+                and spec.get("invoke")
+            ):
+                required.add((surface["surface"], version))
+    evidence = cutover.get("public_selector_evidence")
+    if not isinstance(evidence, list) or any(
+        not isinstance(item, dict) for item in evidence
+    ):
+        raise AssertionError("completed cutover lacks public selector evidence")
+    observed = [(item.get("surface"), item.get("version")) for item in evidence]
+    if not required or len(observed) != len(required) or set(observed) != required:
+        raise AssertionError("completed cutover public selector evidence is incomplete")
+    last_mutation = max(item["verified_at"] for item in mutations)
+    for item in evidence:
+        validated = item.get("validated_at")
+        count = item.get("row_count")
+        if (
+            item.get("phase") != "public_after_invoke"
+            or not epoch(validated)
+            or not last_mutation <= validated <= completed
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+            or any(
+                not isinstance(item.get(field), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", item[field])
+                for field in ("query_sha256", "rows_sha256")
+            )
+        ):
+            raise AssertionError("completed cutover public selector proof is malformed")
+
+
 def _gap_injection_resume_action(journal: dict, evidence: dict | None) -> str:
     """Return reuse, inject, or fail-closed reconciliation for a gap marker."""
     if evidence is not None:
@@ -747,6 +858,7 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                         self.fail(
                             "rolled-back journal lacks a completed eligible candidate"
                         )
+                    _assert_completed_cutover_evidence(migration, journal)
                     if (journal.get("rollback") or {}).get("state") != "complete":
                         self.fail(
                             "rolled-back journal lacks completed rollback evidence"

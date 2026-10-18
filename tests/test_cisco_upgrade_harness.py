@@ -1,7 +1,9 @@
 """Pure resume and duplicate-injection guards for the Cisco upgrade harness."""
 
+import copy
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +11,7 @@ from pathlib import Path
 from tools.cisco_contract_migration import Migration
 
 from tests.splunk.test_cisco_upgrade import (
+    _assert_completed_cutover_evidence,
     _gap_injection_resume_action,
     _read_gap_evidence,
     _resume_staging,
@@ -56,6 +59,159 @@ class CiscoUpgradeHarnessResumeTest(unittest.TestCase):
         def validate(self, scenario):
             self.calls.append("validate")
             return {"cutover_eligible": True, "status": "coverage_validated"}
+
+    @staticmethod
+    def _completed_cutover():
+        # Compact shape of retained native disabled-pass evidence. Configuration
+        # identities come from the actual interface, without copying lab data.
+        migration = Migration(None, None)
+        interface, _ = migration._interface()
+        acl = {"app": "splunk_adm", "owner": "nobody", "sharing": "app"}
+        journal = {
+            "phase": "rolled_back",
+            "candidate_cutover_eligible": True,
+            "rollback": {"state": "complete"},
+            "origin": {
+                "saved_searches": {
+                    writer["name"]: {"content": {"disabled": True}, "acl": acl}
+                    for writer in interface["activation"]["writer_contracts"]
+                },
+                "macros": {
+                    selector["name"]: {
+                        "definition": selector["before"],
+                        "args": ",".join(
+                            f"argument{index}"
+                            for index in range(
+                                int(re.search(r"\((\d+)\)$", selector["name"])[1])
+                                if "(" in selector["name"]
+                                else 0
+                            )
+                        ),
+                        "acl": acl,
+                    }
+                    for selector in interface["activation"]["cutover_selectors"]
+                },
+            },
+            "cutover": {
+                "state": "complete",
+                "started_at": 1792353737,
+                "completed_at": 1792354038,
+                "scheduled_cycle_bounds": {
+                    "index_earliest": 1792353300,
+                    "index_latest": 1792353600,
+                },
+                "scheduled_watermark_at": 1792354023,
+                "public_selector_evidence": [],
+            },
+        }
+        mutations = migration._build_cutover_mutations(journal, interface)
+        for mutation in mutations:
+            mutation.update(state="applied", verified_at=1792354026)
+        journal["cutover"]["mutations"] = mutations
+        for surface in interface["public_surfaces"]:
+            if surface.get("surface") == "writers":
+                continue
+            for version in ("v2", "network_client_v2", "traffic_v2"):
+                spec = surface.get(version)
+                if isinstance(spec, dict) and (
+                    spec.get("public_after_invoke")
+                    or version in {"network_client_v2", "traffic_v2"}
+                    and spec.get("invoke")
+                ):
+                    journal["cutover"]["public_selector_evidence"].append(
+                        {
+                            "surface": surface["surface"],
+                            "version": version,
+                            "phase": "public_after_invoke",
+                            "validated_at": 1792354038,
+                            "row_count": 1,
+                            "query_sha256": "a" * 64,
+                            "rows_sha256": "b" * 64,
+                        }
+                    )
+        return migration, journal
+
+    def test_completed_activation_survives_terminal_rollback(self):
+        migration, journal = self._completed_cutover()
+        self.assertEqual(_upgrade_resume_route(journal), "terminal")
+        _assert_completed_cutover_evidence(migration, journal)
+
+    def test_failed_first_history_rollback_is_not_successful_activation(self):
+        migration, journal = self._completed_cutover()
+        # Actual retained failed-first-history journal: staging was eligible,
+        # rollback succeeded, but all eight public selectors remained pending.
+        cutover = journal["cutover"]
+        cutover.update(state="awaiting_first_scheduled_cycle", started_at=1792353040)
+        for field in (
+            "completed_at",
+            "scheduled_cycle_bounds",
+            "scheduled_watermark_at",
+            "public_selector_evidence",
+        ):
+            cutover.pop(field)
+        for mutation in cutover["mutations"]:
+            if mutation["kind"] == "macro_definition":
+                mutation["state"] = "pending"
+                mutation.pop("verified_at")
+        self.assertTrue(journal["candidate_cutover_eligible"])
+        self.assertEqual(journal["rollback"]["state"], "complete")
+        self.assertEqual(_upgrade_resume_route(journal), "terminal")
+        with self.assertRaisesRegex(AssertionError, "durable completed cutover"):
+            _assert_completed_cutover_evidence(migration, journal)
+        # A completion label alone must not launder the pending selector plan.
+        cutover.update(state="complete", completed_at=1792354038)
+        with self.assertRaisesRegex(AssertionError, "unverified intended mutation"):
+            _assert_completed_cutover_evidence(migration, journal)
+
+    def test_terminal_activation_requires_exact_applied_plan_and_readbacks(self):
+        migration, baseline = self._completed_cutover()
+        for change_index, change in enumerate(
+            (
+                lambda c: c["mutations"].pop(),
+                lambda c: c["mutations"].append(copy.deepcopy(c["mutations"][0])),
+                lambda c: c["mutations"][0].update(state="request_unknown"),
+                lambda c: c["mutations"][0].pop("verified_at"),
+                lambda c: c["mutations"][0].update(verified_at=True),
+                lambda c: c["mutations"][0].update(verified_at=c["completed_at"] + 1),
+                lambda c: c["mutations"][-1].update(after="1"),
+                lambda c: c["mutations"][-1].update(rest_target="/different"),
+            )
+        ):
+            journal = copy.deepcopy(baseline)
+            change(journal["cutover"])
+            with (
+                self.subTest(change=change_index),
+                self.assertRaises(AssertionError),
+            ):
+                _assert_completed_cutover_evidence(migration, journal)
+
+    def test_terminal_activation_requires_cycle_and_public_smoke_proof(self):
+        migration, baseline = self._completed_cutover()
+        for change_index, change in enumerate(
+            (
+                lambda c: c.update(completed_at=None),
+                lambda c: c.update(completed_at=True),
+                lambda c: c.update(completed_at=c["started_at"] - 1),
+                lambda c: c.pop("scheduled_cycle_bounds"),
+                lambda c: c["scheduled_cycle_bounds"].update(index_latest=1792353601),
+                lambda c: c.update(scheduled_watermark_at=c["completed_at"] + 1),
+                lambda c: c["public_selector_evidence"].pop(),
+                lambda c: c["public_selector_evidence"][0].update(
+                    phase="rollback_before_invoke"
+                ),
+                lambda c: c["public_selector_evidence"][0].update(
+                    validated_at=1792353000
+                ),
+                lambda c: c["public_selector_evidence"][0].update(rows_sha256=""),
+            )
+        ):
+            journal = copy.deepcopy(baseline)
+            change(journal["cutover"])
+            with (
+                self.subTest(change=change_index),
+                self.assertRaises(AssertionError),
+            ):
+                _assert_completed_cutover_evidence(migration, journal)
 
     def test_phase_routes_do_not_repeat_staging(self):
         self.assertEqual(_upgrade_resume_route(None), "fresh")
