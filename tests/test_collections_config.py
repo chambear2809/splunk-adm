@@ -16,6 +16,17 @@ def _collections() -> configparser.RawConfigParser:
 
 
 class CollectionsConfigTest(unittest.TestCase):
+    def test_shared_deployment_intent_has_administrator_write_acl(self):
+        self.assertIn("adm_deployment_settings", _collections())
+        metadata = configparser.RawConfigParser()
+        metadata.read_string(
+            (APP / "metadata/default.meta").read_text().replace("[]", "[app]", 1)
+        )
+        self.assertEqual(
+            metadata["collections/adm_deployment_settings"]["access"],
+            "read : [ * ], write : [ admin, sc_admin ]",
+        )
+
     def test_v1_and_v2_catalogs_keep_boundary_acceleration(self):
         collections = _collections()
         for name in ("adm_app_catalog", "adm_app_catalog_v2"):

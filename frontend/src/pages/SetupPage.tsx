@@ -3,7 +3,16 @@ import ButtonExport from "@splunk/react-ui/Button";
 import TableExport from "@splunk/react-ui/Table";
 import TextExport from "@splunk/react-ui/Text";
 import { toolkitDefault } from "../app/interop";
+import { jobRunAssessment } from "../health";
 import { useHealthStatus } from "../data/healthStatus";
+import {
+  SOURCE_DEFINITIONS,
+  defaultExpectations,
+  validateExpectations,
+  type DeploymentExpectations,
+  type DeploymentSnapshot,
+} from "../data/deploymentHealth";
+import type { DeploymentClient } from "../data/deploymentHealth";
 import {
   indexName,
   indexNames,
@@ -21,6 +30,16 @@ const recoveryURL =
   "https://github.com/chambear2809/splunk-adm/blob/main/docs/RECOVERY.md";
 const acsURL =
   "https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.2.2510/administer-splunk-cloud-platform-using-the-admin-config-service-acs-api/manage-indexes-in-splunk-cloud-platform";
+const editableExpectations = (
+  saved?: DeploymentExpectations,
+): DeploymentExpectations => {
+  const defaults = defaultExpectations();
+  return {
+    ...defaults,
+    ...saved,
+    sources: { ...defaults.sources, ...saved?.sources },
+  };
+};
 function MacroEditor({
   macro,
   disabled,
@@ -76,9 +95,11 @@ function MacroEditor({
 export function SetupPage({
   client,
   live,
+  deploymentClient,
 }: {
   client?: SetupClient;
   live: boolean;
+  deploymentClient?: DeploymentClient;
 }) {
   const [snapshot, setSnapshot] = useState<SetupSnapshot>();
   const [busy, setBusy] = useState(false);
@@ -88,16 +109,59 @@ export function SetupPage({
   const mutation = useRef(false);
   const controller = useRef<AbortController>();
   const health = useHealthStatus();
+  const [deployment, setDeployment] = useState<DeploymentSnapshot>();
+  const [settings, setSettings] = useState<DeploymentExpectations>();
+  const dirtyDraft = useRef(false);
+  const draftRevision = useRef<string>();
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [draftConflict, setDraftConflict] = useState<string>();
+  const receiveDeployment = (
+    next: DeploymentSnapshot,
+    discardDraft = false,
+  ) => {
+    setDeployment(next);
+    if (dirtyDraft.current && !discardDraft) {
+      if (next.state === "configured" || next.state === "absent")
+        setDraftConflict(
+          next.settings?.revision !== draftRevision.current
+            ? "Deployment settings changed since this draft began. Discard the draft and reload before saving."
+            : undefined,
+        );
+      return;
+    }
+    dirtyDraft.current = false;
+    setDraftDirty(false);
+    draftRevision.current = next.settings?.revision;
+    setDraftConflict(undefined);
+    setSettings(editableExpectations(next.settings));
+  };
+  useEffect(() => {
+    if (health?.deployment) receiveDeployment(health.deployment);
+  }, [health?.deployment]);
   useEffect(() => {
     setSnapshot(undefined);
     setError(undefined);
     if (!client || !live) {
       setBusy(false);
+      setDeployment(undefined);
+      if (!dirtyDraft.current) setSettings(undefined);
       return;
     }
     const request = new AbortController();
     controller.current = request;
     setBusy(true);
+    if (deploymentClient && !health)
+      void deploymentClient
+        .read(request.signal)
+        .then((result) => {
+          if (!request.signal.aborted) {
+            receiveDeployment(result);
+          }
+        })
+        .catch(() => {
+          if (!request.signal.aborted)
+            setDeployment({ state: "unavailable", canWrite: false });
+        });
     client
       .read(request.signal)
       .then((result) => {
@@ -113,7 +177,7 @@ export function SetupPage({
         if (!request.signal.aborted) setBusy(false);
       });
     return () => request.abort();
-  }, [client, live, revision]);
+  }, [client, live, revision, deploymentClient, health === undefined]);
   const perform = async (
     action: () => Promise<void>,
     verified: (state: SetupSnapshot) => boolean,
@@ -170,8 +234,23 @@ export function SetupPage({
     (row) =>
       !row.observer.trim() || !row.observer_kind.trim() || !row.scope.trim(),
   );
-  const readiness = snapshot ? setupReadiness(snapshot) : undefined;
+  const readiness = snapshot
+    ? setupReadiness(
+        snapshot,
+        deployment ?? { state: "unavailable", canWrite: false },
+      )
+    : undefined;
   const prerequisites = readiness?.ready === true;
+  let settingsError: string | undefined;
+  if (settings)
+    try {
+      validateExpectations(settings);
+    } catch (reason) {
+      settingsError =
+        reason instanceof Error
+          ? reason.message
+          : "Invalid deployment expectations.";
+    }
   return (
     <main className="atlas-page" aria-labelledby="setup-title">
       <h1 id="setup-title">Setup</h1>
@@ -188,7 +267,10 @@ export function SetupPage({
         <>
           <Button
             disabled={busy}
-            onClick={() => setRevision((value) => value + 1)}
+            onClick={() => {
+              setRevision((value) => value + 1);
+              health?.refresh();
+            }}
           >
             Refresh checklist
           </Button>
@@ -213,6 +295,192 @@ export function SetupPage({
                   {warning}
                 </p>
               ))}
+              <h2>Deployment expectations</h2>
+              <p>
+                Choose the sources this deployment collects. Cadence is the
+                expected collection interval; freshness is the longest allowed
+                receipt age. These settings do not activate a data contract or a
+                scheduled writer.
+              </p>
+              <p>
+                {deployment?.state === "configured"
+                  ? `Saved expectations; active data contract: ${deployment.activeContract ?? "unknown"}.`
+                  : deployment?.state === "absent"
+                    ? "No deployment expectations have been saved."
+                    : "Deployment expectations are unavailable."}
+              </p>
+              {deployment?.error && <p role="alert">{deployment.error}</p>}
+              {settings && (
+                <>
+                  <Table
+                    horizontalOverflow="scroll"
+                    aria-label="Deployment sources"
+                  >
+                    <Table.Head>
+                      <Table.HeadCell>Source</Table.HeadCell>
+                      <Table.HeadCell>Expectation</Table.HeadCell>
+                      <Table.HeadCell>Cadence (seconds)</Table.HeadCell>
+                      <Table.HeadCell>Freshness (seconds)</Table.HeadCell>
+                    </Table.Head>
+                    <Table.Body>
+                      {SOURCE_DEFINITIONS.filter(
+                        (source) => source.selectable,
+                      ).map((source) => {
+                        const expectation = settings.sources[source.id];
+                        if (!expectation) return null;
+                        const disabled =
+                          busy || !snapshot.authorized || !deployment?.canWrite;
+                        const update = (
+                          change: Partial<typeof expectation>,
+                        ) => {
+                          dirtyDraft.current = true;
+                          setDraftDirty(true);
+                          setSettings({
+                            ...settings,
+                            sources: {
+                              ...settings.sources,
+                              [source.id]: { ...expectation, ...change },
+                            },
+                          });
+                        };
+                        return (
+                          <Table.Row key={source.id}>
+                            <Table.Cell>{source.label}</Table.Cell>
+                            <Table.Cell>
+                              <select
+                                aria-label={`Expectation for ${source.label}`}
+                                value={expectation.state}
+                                disabled={disabled}
+                                onChange={(event) =>
+                                  update({
+                                    state: event.target
+                                      .value as typeof expectation.state,
+                                  })
+                                }
+                              >
+                                <option value="not_selected">
+                                  Not selected
+                                </option>
+                                <option value="staged">Staged</option>
+                                <option value="active">Active</option>
+                              </select>
+                            </Table.Cell>
+                            <Table.Cell>
+                              <input
+                                aria-label={`Cadence for ${source.label}`}
+                                type="number"
+                                min={60}
+                                max={604800}
+                                value={expectation.cadenceSeconds}
+                                disabled={disabled}
+                                onChange={(event) =>
+                                  update({
+                                    cadenceSeconds: Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </Table.Cell>
+                            <Table.Cell>
+                              <input
+                                aria-label={`Freshness for ${source.label}`}
+                                type="number"
+                                min={expectation.cadenceSeconds}
+                                max={604800}
+                                value={expectation.staleAfterSeconds}
+                                disabled={disabled}
+                                onChange={(event) =>
+                                  update({
+                                    staleAfterSeconds: Number(
+                                      event.target.value,
+                                    ),
+                                  })
+                                }
+                              />
+                            </Table.Cell>
+                          </Table.Row>
+                        );
+                      })}
+                    </Table.Body>
+                  </Table>
+                  {draftDirty && (
+                    <p role="status">
+                      Unsaved deployment changes are preserved across background
+                      checks.
+                    </p>
+                  )}
+                  {draftConflict && <p role="alert">{draftConflict}</p>}
+                  {settingsError && <p role="alert">{settingsError}</p>}
+                  <Button
+                    disabled={busy || !draftDirty || !deploymentClient}
+                    onClick={() => {
+                      if (!deploymentClient || mutation.current) return;
+                      const signal = controller.current?.signal;
+                      mutation.current = true;
+                      setBusy(true);
+                      setError(undefined);
+                      void deploymentClient
+                        .read(signal)
+                        .then((result) => {
+                          if (!signal?.aborted) receiveDeployment(result, true);
+                        })
+                        .catch(() => {
+                          if (!signal?.aborted)
+                            setError(
+                              "Deployment settings could not be reloaded. The draft was preserved.",
+                            );
+                        })
+                        .finally(() => {
+                          mutation.current = false;
+                          if (!signal?.aborted) setBusy(false);
+                        });
+                    }}
+                  >
+                    Discard draft and reload
+                  </Button>
+                  <Button
+                    disabled={
+                      busy ||
+                      !!settingsError ||
+                      !!draftConflict ||
+                      !snapshot.authorized ||
+                      !deployment?.canWrite ||
+                      !deploymentClient
+                    }
+                    onClick={() => {
+                      if (!deploymentClient || mutation.current) return;
+                      const signal = controller.current?.signal;
+                      mutation.current = true;
+                      setBusy(true);
+                      setError(undefined);
+                      setNotice(undefined);
+                      void deploymentClient
+                        .write(settings, draftRevision.current, signal)
+                        .then((result) => {
+                          if (signal?.aborted) return;
+                          receiveDeployment(result, true);
+                          setNotice(
+                            "Deployment expectations saved and verified.",
+                          );
+                          health?.refresh();
+                        })
+                        .catch((reason: unknown) => {
+                          if (!signal?.aborted)
+                            setError(
+                              reason instanceof Error
+                                ? reason.message
+                                : "Deployment expectations could not be saved.",
+                            );
+                        })
+                        .finally(() => {
+                          mutation.current = false;
+                          if (!signal?.aborted) setBusy(false);
+                        });
+                    }}
+                  >
+                    Save deployment expectations
+                  </Button>
+                </>
+              )}
               <h2>Index macros</h2>
               <p>
                 Enter one lowercase index name per macro. Existing definitions
@@ -332,11 +600,13 @@ export function SetupPage({
               )}
               <h2>Cisco integration status</h2>
               <p>
-                {snapshot.ciscoIntegration.state === "staged"
-                  ? "All requested Cisco settings were read. Cisco v2 remains staged and does not change the active v1 reader or writer."
-                  : snapshot.ciscoIntegration.state === "incomplete"
-                    ? "Cisco integration configuration is incomplete or needs operator review. No v2 readiness is claimed."
-                    : "Cisco integration state is unavailable. Check administrator permissions and the operator guide. No v2 readiness is claimed."}
+                {snapshot.ciscoIntegration.state === "active"
+                  ? "Version 2 selectors and scheduled writer configuration were observed. This is a read-only configuration check; review Data health for receipt and run evidence."
+                  : snapshot.ciscoIntegration.state === "staged"
+                    ? "All requested Cisco settings were read. Cisco v2 remains staged and does not change the active v1 reader or writer."
+                    : snapshot.ciscoIntegration.state === "incomplete"
+                      ? "Cisco integration configuration is incomplete or needs operator review. No v2 readiness is claimed."
+                      : "Cisco integration state is unavailable. Check administrator permissions and the operator guide. No v2 readiness is claimed."}
               </p>
               {!!snapshot.ciscoIntegration.reasons.length && (
                 <ul>
@@ -520,7 +790,7 @@ export function SetupPage({
                   </Table>
                 )
               )}
-              <h3>Client history and v2 rollup schedules</h3>
+              <h3>Client history and v2 writer schedules</h3>
               <Table
                 horizontalOverflow="scroll"
                 aria-label="Cisco staged builder schedules"
@@ -541,7 +811,9 @@ export function SetupPage({
                             : job.disabled === true && job.scheduled === true
                               ? "Disabled; schedule configured (staged)"
                               : job.disabled === false && job.scheduled === true
-                                ? "Enabled and scheduled; operator review required"
+                                ? snapshot.ciscoIntegration.state === "active"
+                                  ? "Enabled and scheduled"
+                                  : "Enabled and scheduled; operator review required"
                                 : "Unknown")}
                       </Table.Cell>
                       <Table.Cell>
@@ -556,11 +828,21 @@ export function SetupPage({
                 </Table.Body>
               </Table>
               <h2>Builder schedules</h2>
+              {health?.busy && (
+                <p role="status">Checking scheduled run evidence…</p>
+              )}
+              {health?.error && <p role="alert">{health.error}</p>}
+              {health?.report?.warnings.map((warning) => (
+                <p role="alert" key={warning}>
+                  {warning}
+                </p>
+              ))}
               {!prerequisites && (
                 <p>
-                  Enable actions require valid index macros, an available
-                  matching summary index, and a complete, nonempty observer
-                  mapping check with lowercase keys.
+                  Enable actions require saved deployment expectations and each
+                  builder’s selected source macros and dependencies. Observer
+                  mappings and summary index checks apply to builders that use
+                  them.
                 </p>
               )}
               <p>
@@ -571,14 +853,32 @@ export function SetupPage({
                 <Table.Head>
                   <Table.HeadCell>Saved search</Table.HeadCell>
                   <Table.HeadCell>Schedule</Table.HeadCell>
-                  <Table.HeadCell>Last run (UTC)</Table.HeadCell>
+                  <Table.HeadCell>Run observation</Table.HeadCell>
+                  <Table.HeadCell>Last run / success (UTC)</Table.HeadCell>
                   <Table.HeadCell>Action</Table.HeadCell>
                 </Table.Head>
                 <Table.Body>
                   {snapshot.savedSearches.map((job) => {
-                    const lastRun = health?.report?.jobs.find(
+                    const run = health?.report?.jobs.find(
                       (row) => row.name === job.name,
-                    )?.lastRun;
+                    );
+                    const runStatus = health?.busy
+                      ? "Checking scheduled run evidence…"
+                      : run
+                        ? jobRunAssessment(
+                            run,
+                            health?.report?.checkedAt ?? Date.now() / 1000,
+                          ).label
+                        : "Run evidence unavailable";
+                    const runTime = (value?: number) =>
+                      value !== undefined && Number.isFinite(value)
+                        ? new Date(value * 1000).toISOString()
+                        : "Unknown";
+                    const jobReady = setupReadiness(
+                      snapshot,
+                      deployment ?? { state: "unavailable", canWrite: false },
+                      job.name,
+                    );
                     const active =
                       job.disabled === false && job.scheduled === true;
                     return (
@@ -594,16 +894,18 @@ export function SetupPage({
                                   ? "Not scheduled"
                                   : "Unknown")}
                         </Table.Cell>
+                        <Table.Cell>{runStatus}</Table.Cell>
                         <Table.Cell>
-                          {lastRun !== undefined && Number.isFinite(lastRun)
-                            ? new Date(lastRun * 1000).toISOString()
-                            : "Unknown"}
+                          {runTime(run?.lastRun)} / {runTime(run?.lastSuccess)}
                         </Table.Cell>
                         <Table.Cell>
+                          {!jobReady.ready && (
+                            <small>{jobReady.missingRequired.join(", ")}</small>
+                          )}
                           <Button
                             disabled={
                               busy ||
-                              !prerequisites ||
+                              !jobReady.ready ||
                               !snapshot.authorized ||
                               !job.canWrite ||
                               active ||

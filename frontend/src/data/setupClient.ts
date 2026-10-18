@@ -1,5 +1,19 @@
 import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
 import { createRESTURL } from "@splunk/splunk-utils/url";
+import {
+  SOURCE_DEFINITIONS,
+  DATA_CONTRACT_SELECTORS,
+  normalizeDefinition,
+  JOB_DEFINITIONS,
+  applicableJobs,
+  expectationFor,
+  validateIndexName,
+  indexNames,
+  indexName,
+  type DeploymentClient,
+  type DeploymentSnapshot,
+} from "./deploymentHealth";
+import { ToolkitDeploymentClient } from "./deploymentClient";
 
 export const INDEX_MACROS = [
   "adm_index_netflow",
@@ -23,6 +37,7 @@ export const BUILDER_SEARCHES = [
   "ADM - Conversation rollup",
   "ADM - Application catalog",
 ] as const;
+export { CISCO_V2_SELECTORS } from "./deploymentHealth";
 export const CISCO_READ_MACROS = [
   "adm_data_contract_version",
   "adm_graph(4)",
@@ -31,11 +46,18 @@ export const CISCO_READ_MACROS = [
   "adm_summary_index_v2_name",
   "adm_network_client_history_observations",
   "adm_network_client_history_build",
+  "adm_catalog_build",
+  "adm_find(1)",
+  "adm_health_sources",
+  "adm_flow_evidence(4)",
+  "adm_health_quality",
+  "adm_topology",
 ] as const;
 export const CISCO_STAGED_SEARCHES = [
   "ADM - Network client history builder",
   "ADM - Conversation rollup v2",
   "ADM - Traffic observation rollup v2",
+  "ADM - Application catalog v2",
 ] as const;
 export type IndexMacro = (typeof INDEX_MACROS)[number];
 export type BuilderSearch = (typeof BUILDER_SEARCHES)[number];
@@ -115,7 +137,7 @@ export interface CiscoIntegrationStatus {
   summaryIndex: SummaryIndex;
   sourceProfiles: ReadonlyCollection<NetworkSourceProfile>;
   clusterSettings: ReadonlyCollection<CiliumClusterSetting>;
-  state: "unavailable" | "incomplete" | "staged";
+  state: "unavailable" | "incomplete" | "staged" | "active";
   reasons: string[];
 }
 export interface SetupReadiness {
@@ -171,35 +193,7 @@ function entry(payload: unknown): {
       : {};
   return { content, writable: flag(acl.can_write) === true };
 }
-export function validateIndexName(value: string): string | undefined {
-  return typeof value === "string" &&
-    value.length <= 80 &&
-    /^[a-z][a-z0-9_-]*$/.exec(value)?.[0] === value
-    ? undefined
-    : "Use a lowercase index name beginning with a letter (up to 80 letters, numbers, underscores or hyphens).";
-}
-const indexTerm = /^index=([a-z][a-z0-9_-]{0,79})$/;
-export function indexNames(macro: SetupMacro): string[] {
-  const definition = macro.definition;
-  if (!definition) return [];
-  if (macro.name === "adm_summary_index_name")
-    return !validateIndexName(definition) ? [definition] : [];
-  const single = indexTerm.exec(definition);
-  if (single && single[0] === definition) return [single[1]];
-  const group =
-    /^\((index=[a-z][a-z0-9_-]*(?:\s+OR\s+index=[a-z][a-z0-9_-]*)+)\)$/.exec(
-      definition,
-    );
-  if (!group || group[0] !== definition) return [];
-  const terms = group[1].split(/\s+OR\s+/);
-  return terms.every((term) => indexTerm.test(term))
-    ? terms.map((term) => term.slice("index=".length))
-    : [];
-}
-export function indexName(macro: SetupMacro): string | undefined {
-  const names = indexNames(macro);
-  return names.length === 1 ? names[0] : undefined;
-}
+export { validateIndexName, indexNames, indexName } from "./deploymentHealth";
 const REQUIRED_MACROS: readonly IndexMacro[] = [
   "adm_index_dcn",
   "adm_index_netflow",
@@ -215,12 +209,16 @@ const OPTIONAL_MACROS: readonly [IndexMacro, string][] = [
   ["adm_index_catalyst", "Catalyst Center and SD-WAN"],
   ["adm_index_meraki", "Meraki wireless"],
 ];
-const EXPECTED_SOURCE_PROFILES = new Set([
-  "standard_netflow",
-  "catalyst_campus_fnf",
-  "catalyst_sdwan_ipfix",
-  "meraki_ms390_ipfix",
-]);
+const EXPECTED_SOURCE_PROFILES: Record<string, ReadonlySet<string>> = {
+  stream_ipfix: new Set([
+    "standard_netflow",
+    "catalyst_campus_fnf",
+    "catalyst_sdwan_ipfix",
+    "meraki_ms390_ipfix",
+  ]),
+  catalyst_client_snapshot: new Set(["catalyst_client_snapshot"]),
+  meraki_association: new Set(["meraki_association"]),
+};
 const SOURCE_PROFILE_FIELDS = [
   "source",
   "source_authority",
@@ -241,41 +239,156 @@ const CLUSTER_SETTING_FIELDS = [
   "l2announcements_enabled",
   "mapping_status",
 ] as const;
-export function setupReadiness(snapshot: SetupSnapshot): SetupReadiness {
-  const missingRequired: string[] = REQUIRED_MACROS.filter((name) => {
-    const macro = snapshot.macros.find((row) => row.name === name);
-    return !macro || !!macro.error || indexNames(macro).length === 0;
-  }).map((name) => name);
-  const reader = snapshot.macros.find(
-    (row) => row.name === "adm_index_summary",
-  );
-  const writer = snapshot.macros.find(
-    (row) => row.name === "adm_summary_index_name",
+export function setupReadiness(
+  snapshot: SetupSnapshot,
+  deployment?: DeploymentSnapshot,
+  jobName?: string,
+): SetupReadiness {
+  const definition = JOB_DEFINITIONS.find((job) => job.name === jobName);
+  const applicable = applicableJobs(deployment);
+  const jobsToCheck = definition
+    ? [definition]
+    : applicable.filter((job) => job.required);
+  const selected =
+    deployment?.state === "configured" && deployment.activeContract
+      ? SOURCE_DEFINITIONS.filter(
+          (source) =>
+            source.selectable &&
+            expectationFor(deployment, source.id) === "active" &&
+            (!definition || definition.sourceIds.includes(source.id)),
+        )
+      : [];
+  const summaryContract =
+    deployment === undefined
+      ? 1
+      : jobsToCheck.some((job) =>
+            ["rollup_v2", "traffic_v2"].includes(job.id),
+          ) && deployment.activeContract === 2
+        ? 2
+        : jobsToCheck.some((job) => job.id === "rollup_v1") &&
+            deployment.activeContract === 1
+          ? 1
+          : undefined;
+  const summaryNames =
+    summaryContract === 2
+      ? ["adm_index_summary_v2", "adm_summary_index_v2_name"]
+      : summaryContract === 1
+        ? ["adm_index_summary", "adm_summary_index_name"]
+        : [];
+  const requiredMacros: readonly string[] = deployment
+    ? [
+        ...new Set([
+          ...selected.flatMap((source) => source.indexMacros),
+          ...summaryNames,
+        ]),
+      ]
+    : REQUIRED_MACROS;
+  const macroRecords = [
+    ...snapshot.macros,
+    ...snapshot.ciscoIntegration.macros,
+  ];
+  const namesFor = (name: string): string[] => {
+    const macro = macroRecords.find((row) => row.name === name);
+    if (!macro || macro.error) return [];
+    if (name === "adm_summary_index_v2_name")
+      return macro.definition && !validateIndexName(macro.definition)
+        ? [macro.definition]
+        : [];
+    return indexNames({ ...macro, name: name as IndexMacro });
+  };
+  const missingRequired: string[] = requiredMacros.filter(
+    (name) => namesFor(name).length === 0,
   );
   if (
-    !reader ||
-    !writer ||
-    indexNames(reader).length !== 1 ||
-    indexNames(writer).length !== 1 ||
-    indexNames(reader)[0] !== indexNames(writer)[0]
+    deployment &&
+    (deployment.state !== "configured" || !deployment.activeContract)
   )
-    missingRequired.push("summary reader/writer match");
-  if (snapshot.summaryIndex.exists !== true)
-    missingRequired.push("summary index");
-  const scopes = snapshot.observerScopes;
+    missingRequired.push("deployment expectations and active contract");
+  if (jobName !== undefined && !definition)
+    missingRequired.push("saved search is not registered");
   if (
-    !scopes.complete ||
-    !scopes.rows.length ||
-    scopes.rows.some(
-      (row) =>
-        !row.observer.trim() ||
-        !row.observer_kind.trim() ||
-        !row.scope.trim() ||
-        row.observer !== row.observer.toLowerCase() ||
-        row.observer_kind !== row.observer_kind.toLowerCase(),
-    )
+    deployment &&
+    definition &&
+    !applicable.some((job) => job.name === definition.name)
+  )
+    missingRequired.push("job is not required by the active deployment");
+  if (summaryContract !== undefined) {
+    const [reader, writer] = summaryNames.map(namesFor);
+    if (reader.length !== 1 || writer.length !== 1 || reader[0] !== writer[0])
+      missingRequired.push("summary reader/writer match");
+    const summaryIndex =
+      summaryContract === 2
+        ? snapshot.ciscoIntegration.summaryIndex
+        : snapshot.summaryIndex;
+    if (summaryIndex.exists !== true) missingRequired.push("summary index");
+  }
+  const scopes = snapshot.observerScopes;
+  const mappingRequirements = deployment
+    ? jobsToCheck.flatMap((job) =>
+        selected
+          .filter((source) => job.sourceIds.includes(source.id))
+          .map((source) => ({
+            source,
+            kinds: source.observerKindsByJob?.[job.id] ?? source.observerKinds,
+          })),
+      )
+    : selected.map((source) => ({ source, kinds: source.observerKinds }));
+  const requiredKinds = mappingRequirements.flatMap(
+    (requirement) => requirement.kinds,
+  );
+  const relevantRows = deployment
+    ? scopes.rows.filter((row) =>
+        requiredKinds.includes(row.observer_kind.toLowerCase()),
+      )
+    : scopes.rows;
+  if (
+    (deployment === undefined || requiredKinds.length > 0) &&
+    (!scopes.complete ||
+      !relevantRows.length ||
+      relevantRows.some(
+        (row) =>
+          !row.observer.trim() ||
+          !row.observer_kind.trim() ||
+          !row.scope.trim() ||
+          row.observer !== row.observer.toLowerCase() ||
+          row.observer_kind !== row.observer_kind.toLowerCase(),
+      ))
   )
     missingRequired.push("observer mappings");
+  if (deployment && scopes.complete)
+    for (const { source, kinds } of mappingRequirements) {
+      if (
+        kinds.length &&
+        !relevantRows.some(
+          (row) =>
+            kinds.some((kind) => kind === row.observer_kind) &&
+            !!row.observer.trim() &&
+            !!row.scope.trim(),
+        )
+      )
+        missingRequired.push(`observer mapping for ${source.label}`);
+    }
+  if (deployment)
+    for (const id of new Set(
+      jobsToCheck.flatMap((job) => job.prerequisiteIds),
+    )) {
+      const prerequisite = JOB_DEFINITIONS.find((job) => job.id === id);
+      if (
+        prerequisite &&
+        applicableJobs(deployment).some((job) => job.id === id)
+      ) {
+        const state = snapshot.savedSearches.find(
+          (job) => job.name === prerequisite.name,
+        );
+        if (
+          !state ||
+          state.error ||
+          state.disabled !== false ||
+          state.scheduled !== true
+        )
+          missingRequired.push(`enable prerequisite ${prerequisite.name}`);
+      }
+    }
   const optionalWarnings = OPTIONAL_MACROS.filter(([name]) => {
     const macro = snapshot.macros.find((row) => row.name === name);
     return !macro || !!macro.error || indexNames(macro).length === 0;
@@ -299,7 +412,14 @@ class SetupHTTPError extends Error {
   }
 }
 export class ToolkitSetupClient implements SetupClient {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  private readonly deploymentClient: DeploymentClient;
+  constructor(
+    private readonly fetcher: typeof fetch = fetch,
+    deploymentClient?: DeploymentClient,
+  ) {
+    this.deploymentClient =
+      deploymentClient ?? new ToolkitDeploymentClient(fetcher);
+  }
   private async request(
     path: string,
     signal?: AbortSignal,
@@ -538,6 +658,7 @@ export class ToolkitSetupClient implements SetupClient {
               field !== "observation_domain_id" &&
               field !== "vpn_id" &&
               field !== "routing_domain" &&
+              field !== "cluster" &&
               !(value[field] as string).trim(),
           ) ||
           !["0", "1"].includes(value.observation_domain_present as string) ||
@@ -678,15 +799,14 @@ export class ToolkitSetupClient implements SetupClient {
       reasons.push("Administrator capabilities are unavailable.");
     if (macros.some((row) => row.error))
       reasons.push("One or more integration macros could not be read.");
-    if (searches.some((row) => row.error))
-      reasons.push("One or more staged builder states could not be read.");
+
     if (!sourceProfiles.complete)
       reasons.push(sourceProfiles.error ?? "Source profiles are incomplete.");
     if (!clusterSettings.complete)
       reasons.push(clusterSettings.error ?? "Cluster settings are incomplete.");
     if (
       sourceProfiles.rows.some(
-        (row) => !EXPECTED_SOURCE_PROFILES.has(row.profile),
+        (row) => !EXPECTED_SOURCE_PROFILES[row.source]?.has(row.profile),
       )
     )
       reasons.push("Unknown source profiles require operator review.");
@@ -720,24 +840,87 @@ export class ToolkitSetupClient implements SetupClient {
     const contract = macros.find(
       (row) => row.name === "adm_data_contract_version",
     );
-    if (contract?.definition !== "1")
-      reasons.push("The active data contract is not the shipped version 1.");
-    const historySearch = searches.find(
-      (row) => row.name === "ADM - Network client history builder",
-    );
-    if (historySearch?.disabled !== true || historySearch.scheduled !== true)
-      reasons.push(
-        "Client history builder is not in the expected disabled staged state.",
+    const activeV2 = contract?.definition === "2";
+    if (!activeV2 && contract?.definition !== "1")
+      reasons.push("The active data contract could not be verified.");
+    for (const selector of DATA_CONTRACT_SELECTORS.filter(
+      (item) => item.name !== "adm_data_contract_version",
+    )) {
+      const actual = macros.find((macro) => macro.name === selector.name);
+      const expected = activeV2 ? selector.after : selector.before;
+      if (
+        actual?.definition === undefined ||
+        normalizeDefinition(actual.definition) !== normalizeDefinition(expected)
+      )
+        reasons.push(
+          `${selector.name} does not match the data-contract marker.`,
+        );
+    }
+    if (activeV2) {
+      const deployment = await this.deploymentClient
+        .read(signal)
+        .catch(() => ({ state: "unavailable" as const, canWrite: false }));
+      if (deployment.state !== "configured" || deployment.activeContract !== 2)
+        reasons.push(
+          "Version-2 deployment expectations and selectors could not be verified.",
+        );
+      const requiredWriters = applicableJobs(deployment).filter(
+        (job) =>
+          job.required &&
+          job.contracts.includes(2) &&
+          !job.contracts.includes(1),
       );
-    const v2Writers = searches.filter(
-      (row) => row.name !== "ADM - Network client history builder",
-    );
-    if (
-      v2Writers.some((row) => row.disabled !== true || row.scheduled !== true)
-    )
-      reasons.push(
-        "Version-2 rollup writers are not in the expected disabled staged state.",
+      if (
+        requiredWriters.some((definition) => {
+          const job = searches.find((row) => row.name === definition.name);
+          return (
+            !job ||
+            !!job.error ||
+            job.disabled !== false ||
+            job.scheduled !== true
+          );
+        })
+      )
+        reasons.push(
+          "Required version-2 builder and catalog schedules are not confirmed enabled and scheduled.",
+        );
+      const legacyNames = [
+        ...(requiredWriters.some((job) =>
+          ["rollup_v2", "traffic_v2"].includes(job.id),
+        )
+          ? ["ADM - Conversation rollup"]
+          : []),
+        ...(requiredWriters.some((job) => job.id === "catalog_v2")
+          ? ["ADM - Application catalog"]
+          : []),
+      ];
+      const legacy = await Promise.all(
+        legacyNames.map((name) => this.readonlySearch(name, signal)),
       );
+      if (legacy.some((job) => job.error || job.disabled !== true))
+        reasons.push(
+          "Applicable legacy version-1 writers must be confirmed disabled for version 2.",
+        );
+    } else {
+      if (searches.some((row) => row.error))
+        reasons.push("One or more staged builder states could not be read.");
+      const historySearch = searches.find(
+        (row) => row.name === "ADM - Network client history builder",
+      );
+      if (historySearch?.disabled !== true || historySearch.scheduled !== true)
+        reasons.push(
+          "Client history builder is not in the expected disabled staged state.",
+        );
+      const v2Writers = searches.filter(
+        (row) => row.name !== "ADM - Network client history builder",
+      );
+      if (
+        v2Writers.some((row) => row.disabled !== true || row.scheduled !== true)
+      )
+        reasons.push(
+          "Version-2 writers are not in the expected disabled staged state.",
+        );
+    }
     const allUnreadable = !authorized || macros.every((row) => !!row.error);
     return {
       macros,
@@ -749,7 +932,9 @@ export class ToolkitSetupClient implements SetupClient {
         ? "unavailable"
         : reasons.length > 0
           ? "incomplete"
-          : "staged",
+          : activeV2
+            ? "active"
+            : "staged",
       reasons,
     };
   }
@@ -878,6 +1063,15 @@ export class ToolkitSetupClient implements SetupClient {
       throw new Error("Only enabling approved builder searches is supported.");
     if (!(await this.authorized(signal)))
       throw new Error("Administrator access is required.");
+    const [configuration, deployment] = await Promise.all([
+      this.read(signal),
+      this.deploymentClient.read(signal),
+    ]);
+    const readiness = setupReadiness(configuration, deployment, name);
+    if (!readiness.ready)
+      throw new Error(
+        `Builder prerequisites are not ready: ${readiness.missingRequired.join(", ")}.`,
+      );
     const path = `saved/searches/${encodeURIComponent(name)}`;
     if (!entry(await this.request(path, signal)).writable)
       throw new Error("This saved search is not writable by your role.");

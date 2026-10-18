@@ -24,6 +24,12 @@ import type {
   IndexMacro,
   CiscoIntegrationStatus,
 } from "../../frontend/src/data/setupClient";
+import {
+  defaultExpectations,
+  type DeploymentClient,
+  type DeploymentExpectations,
+  type DeploymentSnapshot,
+} from "../../frontend/src/data/deploymentHealth";
 import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
 import catalogCapture from "../../fixtures/demo-catalog.json";
@@ -37,6 +43,64 @@ const setupRequest = (value: string) => {
   target.__ADM_SETUP_REQUESTS__ ??= [];
   target.__ADM_SETUP_REQUESTS__.push(value);
 };
+
+class FakeDeploymentClient implements DeploymentClient {
+  private snapshot: DeploymentSnapshot;
+  private reads = 0;
+  constructor() {
+    const settings = defaultExpectations();
+    settings.sources.aci.state = "active";
+    this.snapshot = {
+      state: "configured",
+      settings,
+      activeContract: 1,
+      canWrite: faultScenario !== "setup-unknown",
+    };
+  }
+  async read(signal?: AbortSignal) {
+    if (signal?.aborted) throw new Error("Cancelled");
+    this.reads += 1;
+    if (faultScenario === "deployment-revision-change" && this.reads > 1) {
+      this.snapshot.settings = {
+        ...this.snapshot.settings!,
+        revision: "externally-updated",
+        sources: {
+          ...this.snapshot.settings!.sources,
+          netflow: {
+            ...this.snapshot.settings!.sources.netflow,
+            state: "staged",
+          },
+        },
+      };
+    }
+    if (faultScenario === "deployment-unavailable")
+      return {
+        state: "unavailable",
+        canWrite: false,
+        error: "Deployment settings permission denied.",
+      } as const;
+    return structuredClone(this.snapshot);
+  }
+  async write(
+    settings: DeploymentExpectations,
+    expectedRevision?: string,
+    signal?: AbortSignal,
+  ) {
+    if (signal?.aborted) throw new Error("Cancelled");
+    if (!this.snapshot.canWrite)
+      throw new Error("Administrator permission required.");
+    if (expectedRevision !== this.snapshot.settings?.revision)
+      throw new Error("Deployment settings changed.");
+    if (faultScenario === "deployment-write-fails")
+      throw new Error("Deployment settings readback did not match.");
+    this.snapshot.settings = {
+      ...structuredClone(settings),
+      revision: crypto.randomUUID(),
+    };
+    setupRequest("deployment:verified");
+    return this.read(signal);
+  }
+}
 
 class FakeSetupClient implements SetupClient {
   private snapshot: SetupSnapshot;
@@ -84,7 +148,7 @@ class FakeSetupClient implements SetupClient {
             : [
                 {
                   _key: "aci:prod",
-                  observer_kind: uppercase ? "ACI" : "aci",
+                  observer_kind: uppercase ? "APIC" : "apic",
                   observer: uppercase ? "ACI-01" : "aci-01",
                   scope: "prod",
                   cluster: "cluster-a",
@@ -223,6 +287,36 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (request.search.includes("adm_health_jobs")) {
+      if (faultScenario === "health-permission")
+        throw new Error("Scheduler evidence permission denied.");
+      const runFault = [
+        "health-failed",
+        "health-skipped",
+        "health-overdue",
+      ].includes(faultScenario ?? "");
+      const now = Math.floor(Date.now() / 1000);
+      return {
+        rows: [
+          {
+            kind: "job",
+            name: "ADM - Identity builder",
+            disabled: 1,
+            is_scheduled: 1,
+            last_run: runFault ? now - 60 : 1700000000,
+            last_success: runFault ? now - 3600 : 1700000000,
+            last_status:
+              faultScenario === "health-failed"
+                ? "failed"
+                : faultScenario === "health-skipped"
+                  ? "skipped"
+                  : "success",
+          },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    }
     if (request.search.startsWith("| inputlookup adm_app_catalog")) {
       if (
         faultScenario === "catalog-overlimit-narrowed" &&
@@ -485,6 +579,7 @@ try {
         state={state}
         client={new FakeSearchClient()}
         setupClient={new FakeSetupClient()}
+        deploymentClient={new FakeDeploymentClient()}
         theme={dark ? "dark" : "light"}
       />
     </ThemeProvider>,

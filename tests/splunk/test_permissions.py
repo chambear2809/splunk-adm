@@ -616,6 +616,35 @@ class RestrictedViewerTest(unittest.TestCase):
         )
         self.assertEqual(self.lab._json("GET", collection), before)
 
+    def test_shared_deployment_settings_are_readable_but_not_viewer_writable(self):
+        collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
+        key = "deployment-permission-probe-" + secrets.token_hex(8)
+        password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
+        self.addCleanup(self._delete_probe, collection, key, password)
+        document = {"_key": key, "revision": "probe", "settings_json": "{}"}
+        status, _ = _response(
+            "POST",
+            collection,
+            "admin",
+            password,
+            json.dumps(document).encode(),
+            "application/json",
+        )
+        self.assertIn(status, (200, 201))
+        status, visible = self._viewer_json("GET", f"{collection}/{key}")
+        self.assertEqual(status, 200)
+        self.assertEqual(visible["revision"], "probe")
+        self.assertDenied(
+            "POST",
+            f"{collection}/{key}",
+            json.dumps({"revision": "forged"}).encode(),
+            "application/json",
+        )
+        self.assertDenied("DELETE", f"{collection}/{key}")
+        self.assertEqual(
+            self.lab._json("GET", f"{collection}/{key}")["revision"], "probe"
+        )
+
     def test_legacy_csv_import_and_false_guard_negative_control(self):
         # Isolated legacy import file, never the deployment's retained scope CSV.
         limits = self.lab._json(

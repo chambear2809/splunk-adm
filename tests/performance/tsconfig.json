@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "@playwright/test"],
+    "baseUrl": "../..",
+    "paths": { "@atlas/*": ["frontend/src/*"], "@fixtures/*": ["fixtures/*"] },
+    "ignoreDeprecations": "6.0"
+  },
+  "include": ["./**/*.ts", "./**/*.tsx", "../../frontend/src/**/*.d.ts"]
+}

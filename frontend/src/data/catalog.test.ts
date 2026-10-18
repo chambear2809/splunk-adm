@@ -172,6 +172,37 @@ describe("catalog parsing", () => {
     ).toThrow("outside the epoch range");
   });
 
+  it("preserves client diagnostics without inventing optional identity or attachment", () => {
+    const rows = parseNetworkClientFindRows([
+      {
+        row_type: "network_client",
+        _key: "synthetic-observation",
+        source: "meraki_association",
+        client_ip: "192.0.2.10",
+        attachment_status: "unresolved",
+        diagnostic_status: "incomplete",
+        diagnostic_reason:
+          "A valid client MAC is unavailable; no AP is inferred.",
+        history_rows: "2",
+        simultaneous_claims: "1",
+      },
+    ]);
+    expect(rows[0]).toMatchObject({
+      diagnostic_status: "incomplete",
+      history_rows: 2,
+      simultaneous_claims: 1,
+    });
+    expect(rows[0].client_mac).toBeUndefined();
+    expect(rows[0].native_id).toBeUndefined();
+    expect(rows[0].attachment_device_id).toBeUndefined();
+    expect(rows[0].ssid_number).toBeUndefined();
+    expect(() =>
+      parseNetworkClientFindRows([
+        { ...rows[0], row_type: "network_client", history_rows: "NaN" },
+      ]),
+    ).toThrow("Network client Find field history_rows is invalid.");
+  });
+
   it("keeps valid scopes visible beside unsupported binding dimensions", () => {
     const rows = parseCatalogRows([
       row,

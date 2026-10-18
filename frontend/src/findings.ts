@@ -4,7 +4,7 @@ import {
   handoffConfidence,
   isBlocked,
 } from "./glossary";
-import { sourceStatus, type HealthReport } from "./health";
+import { sourceAssessment, type HealthReport } from "./health";
 import type { Graph, GraphIndex } from "./graph";
 
 export type FindingKind =
@@ -82,13 +82,13 @@ export function deriveFindings(
   }
   if (health) {
     for (const source of health.sources) {
-      const status = sourceStatus(source, health.checkedAt);
-      if (status === "Data received within 20 minutes") continue;
+      const observation = sourceAssessment(source, health.checkedAt);
+      if (["healthy", "not_required"].includes(observation.state)) continue;
       findings.push({
         id: `source:${source.name}`,
         kind: "stale_source",
         title: `${source.name} source evidence needs review`,
-        detail: status,
+        detail: observation.label,
       });
     }
   }

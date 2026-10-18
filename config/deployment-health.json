@@ -1,0 +1,998 @@
+{
+  "schemaVersion": 1,
+  "probeLookbackSeconds": 604800,
+  "sources": [
+    {
+      "id": "netflow",
+      "label": "NetFlow",
+      "healthNames": [
+        "NetFlow"
+      ],
+      "indexMacros": [
+        "adm_index_netflow"
+      ],
+      "qualitySources": [
+        "netflow",
+        "stream_ipfix_v2"
+      ],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "exporter"
+      ],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "timestamp",
+        "endtime",
+        "protoid",
+        "exporter_ip"
+      ],
+      "qualitySourcesByContract": {
+        "1": [
+          "netflow"
+        ],
+        "2": [
+          "stream_ipfix_v2",
+          "stream_ipfix_unclassified_v2"
+        ]
+      },
+      "probeMacro": "adm_health_source_netflow"
+    },
+    {
+      "id": "dcn",
+      "label": "DC Networking",
+      "healthNames": [
+        "DC Networking"
+      ],
+      "indexMacros": [
+        "adm_index_dcn"
+      ],
+      "qualitySources": [
+        "nd",
+        "aci_acllog"
+      ],
+      "evidence": [
+        "inventory",
+        "discovery",
+        "traffic"
+      ],
+      "cadenceSeconds": 600,
+      "staleAfterSeconds": 1800,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "apic",
+        "nd_host",
+        "fabric",
+        "nxos_serial"
+      ],
+      "requiredFields": [
+        "srcIp",
+        "dstIp",
+        "ts",
+        "protocolName",
+        "fabricName"
+      ],
+      "probeMacro": "adm_health_source_dcn"
+    },
+    {
+      "id": "aci",
+      "label": "ACI",
+      "healthNames": [
+        "ACI"
+      ],
+      "indexMacros": [
+        "adm_index_dcn"
+      ],
+      "qualitySources": [
+        "aci_acllog"
+      ],
+      "evidence": [
+        "inventory",
+        "association",
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "apic"
+      ],
+      "requiredFields": [],
+      "probeMacro": "adm_health_source_aci"
+    },
+    {
+      "id": "nd",
+      "label": "Nexus Dashboard",
+      "healthNames": [
+        "Nexus Dashboard"
+      ],
+      "indexMacros": [
+        "adm_index_dcn"
+      ],
+      "qualitySources": [
+        "nd"
+      ],
+      "evidence": [
+        "discovery",
+        "traffic"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 10800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "fabric",
+        "nd_host"
+      ],
+      "requiredFields": [],
+      "observerKindsByJob": {
+        "identity": [
+          "nd_host"
+        ],
+        "rollup_v1": [
+          "fabric"
+        ],
+        "rollup_v2": [
+          "fabric"
+        ],
+        "traffic_v2": [
+          "fabric"
+        ]
+      },
+      "probeMacro": "adm_health_source_nd"
+    },
+    {
+      "id": "nxos",
+      "label": "NX-OS",
+      "healthNames": [
+        "NX-OS"
+      ],
+      "indexMacros": [
+        "adm_index_dcn"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "inventory",
+        "discovery"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 10800,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "nxos_serial"
+      ],
+      "requiredFields": [],
+      "probeMacro": "adm_health_source_nxos"
+    },
+    {
+      "id": "ftd",
+      "label": "FTD",
+      "healthNames": [
+        "FTD"
+      ],
+      "indexMacros": [
+        "adm_index_ftd"
+      ],
+      "qualitySources": [
+        "ftd"
+      ],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "firewall"
+      ],
+      "requiredFields": [
+        "InitiatorIP",
+        "ResponderIP",
+        "FirstPacketSecond",
+        "Protocol",
+        "DeviceIP"
+      ],
+      "probeMacro": "adm_health_source_ftd"
+    },
+    {
+      "id": "isovalent",
+      "label": "Isovalent",
+      "healthNames": [
+        "Isovalent"
+      ],
+      "indexMacros": [
+        "adm_index_isovalent"
+      ],
+      "qualitySources": [
+        "isovalent"
+      ],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "hec_source"
+      ],
+      "requiredFields": [
+        "process_connect.source_ip",
+        "process_connect.destination_ip",
+        "time",
+        "node_name"
+      ],
+      "probeMacro": "adm_health_source_isovalent"
+    },
+    {
+      "id": "k8s",
+      "label": "Kubernetes",
+      "healthNames": [
+        "Kubernetes"
+      ],
+      "indexMacros": [
+        "adm_index_k8s"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "inventory"
+      ],
+      "cadenceSeconds": 600,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "cluster"
+      ],
+      "requiredFields": [
+        "k8s.cluster.name",
+        "k8s.namespace.name",
+        "object"
+      ],
+      "probeMacro": "adm_health_source_k8s"
+    },
+    {
+      "id": "traces",
+      "label": "Traces",
+      "healthNames": [
+        "Traces"
+      ],
+      "indexMacros": [
+        "adm_index_traces"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "trace"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "trace_id",
+        "k8s.cluster.name",
+        "k8s.namespace.name"
+      ],
+      "probeMacro": "adm_health_source_traces"
+    },
+    {
+      "id": "hubble",
+      "label": "Hubble",
+      "healthNames": [
+        "Hubble"
+      ],
+      "indexMacros": [
+        "adm_index_hubble"
+      ],
+      "qualitySources": [
+        "hubble",
+        "hubble_l7",
+        "hubble_xlate"
+      ],
+      "evidence": [
+        "traffic",
+        "translation",
+        "trace"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "cluster"
+      ],
+      "requiredFields": [
+        "flow.Type",
+        "flow.trace_observation_point",
+        "flow.IP.source",
+        "flow.IP.destination"
+      ],
+      "probeMacro": "adm_health_source_hubble"
+    },
+    {
+      "id": "catalyst",
+      "label": "Catalyst client observations",
+      "healthNames": [
+        "Catalyst client observations",
+        "Catalyst Center"
+      ],
+      "indexMacros": [
+        "adm_index_catalyst"
+      ],
+      "qualitySources": [
+        "catalyst_client_snapshot"
+      ],
+      "evidence": [
+        "association"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 10800,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "macAddress",
+        "lastUpdatedTime"
+      ],
+      "probeMacro": "adm_health_source_catalyst"
+    },
+    {
+      "id": "meraki",
+      "label": "Meraki wireless associations",
+      "healthNames": [
+        "Meraki wireless associations",
+        "Meraki"
+      ],
+      "indexMacros": [
+        "adm_index_meraki"
+      ],
+      "qualitySources": [
+        "meraki_association"
+      ],
+      "evidence": [
+        "association"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 10800,
+      "quiet": true,
+      "minimumContract": 2,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "occurredAt",
+        "networkId",
+        "organizationId",
+        "type"
+      ],
+      "probeMacro": "adm_health_source_meraki"
+    },
+    {
+      "id": "sdwan",
+      "label": "Catalyst SD-WAN IPFIX",
+      "healthNames": [
+        "Catalyst SD-WAN IPFIX"
+      ],
+      "indexMacros": [
+        "adm_index_netflow"
+      ],
+      "qualitySources": [
+        "sdwan_ipfix_v2",
+        "stream_ipfix_unclassified_v2"
+      ],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "exporter_ip",
+        "observation_domain_id",
+        "vpn_id"
+      ],
+      "probeMacro": "adm_health_source_sdwan"
+    },
+    {
+      "id": "summary",
+      "label": "Summary",
+      "healthNames": [
+        "Summary"
+      ],
+      "indexMacros": [
+        "adm_index_summary",
+        "adm_summary_index_name"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "derived_traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 1,
+      "selectable": false,
+      "derivedFrom": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contract": 1,
+      "observerKinds": [],
+      "requiredFields": [
+        "adm_record",
+        "client_ip",
+        "server_ip"
+      ],
+      "probeMacro": "adm_health_source_summary"
+    },
+    {
+      "id": "summary_v2",
+      "label": "Conversation summary v2",
+      "healthNames": [
+        "Conversation summary v2"
+      ],
+      "indexMacros": [
+        "adm_index_summary_v2",
+        "adm_summary_index_v2_name"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "derived_traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_source_summary_v2"
+    },
+    {
+      "id": "traffic_v2",
+      "label": "Traffic observation summary v2",
+      "healthNames": [
+        "Traffic observation summary v2"
+      ],
+      "indexMacros": [
+        "adm_index_summary_v2",
+        "adm_summary_index_v2_name"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "derived_traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_source_traffic_v2"
+    },
+    {
+      "id": "profiles",
+      "label": "Version 2 source scope profiles",
+      "healthNames": [
+        "Version 2 source scope profiles"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "configuration"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_network_profile_rows"
+    },
+    {
+      "id": "profiles_catalyst",
+      "label": "Catalyst source scope profiles",
+      "healthNames": [
+        "Catalyst source scope profiles"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "configuration"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "catalyst"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_network_profile_rows"
+    },
+    {
+      "id": "profiles_meraki",
+      "label": "Meraki source scope profiles",
+      "healthNames": [
+        "Meraki source scope profiles"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "configuration"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "meraki"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_network_profile_rows"
+    },
+    {
+      "id": "profiles_stream",
+      "label": "Stream source scope profiles",
+      "healthNames": [
+        "Stream source scope profiles"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "configuration"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "netflow"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_network_profile_rows"
+    },
+    {
+      "id": "profiles_sdwan",
+      "label": "SD-WAN source scope profiles",
+      "healthNames": [
+        "SD-WAN source scope profiles"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "configuration"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": false,
+      "minimumContract": 2,
+      "selectable": false,
+      "derivedFrom": [
+        "sdwan"
+      ],
+      "contract": 2,
+      "observerKinds": [],
+      "requiredFields": [],
+      "probeMacro": "adm_health_network_profile_rows"
+    }
+  ],
+  "jobs": [
+    {
+      "id": "identity",
+      "name": "ADM - Identity builder",
+      "sourceIds": [
+        "k8s",
+        "dcn",
+        "aci",
+        "nd"
+      ],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "binding",
+      "name": "ADM - Service binding",
+      "sourceIds": [
+        "traces"
+      ],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "backends",
+      "name": "ADM - Service backends",
+      "sourceIds": [
+        "k8s"
+      ],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": [
+        "identity"
+      ]
+    },
+    {
+      "id": "aci_policy",
+      "name": "ADM - ACI policy",
+      "sourceIds": [
+        "aci"
+      ],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "interfaces",
+      "name": "ADM - Interface inventory",
+      "sourceIds": [
+        "dcn",
+        "nxos"
+      ],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 3600,
+      "graceSeconds": 1800,
+      "required": false,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "rollup_v1",
+      "name": "ADM - Conversation rollup",
+      "sourceIds": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contracts": [
+        1
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "catalog_v1",
+      "name": "ADM - Application catalog",
+      "sourceIds": [
+        "traces",
+        "k8s"
+      ],
+      "contracts": [
+        1
+      ],
+      "cadenceSeconds": 3600,
+      "graceSeconds": 1800,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "history",
+      "name": "ADM - Network client history builder",
+      "sourceIds": [
+        "catalyst",
+        "meraki"
+      ],
+      "contracts": [
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "rollup_v2",
+      "name": "ADM - Conversation rollup v2",
+      "sourceIds": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contracts": [
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "traffic_v2",
+      "name": "ADM - Traffic observation rollup v2",
+      "sourceIds": [
+        "netflow",
+        "dcn",
+        "aci",
+        "nd",
+        "ftd",
+        "isovalent",
+        "hubble",
+        "sdwan"
+      ],
+      "contracts": [
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "catalog_v2",
+      "name": "ADM - Application catalog v2",
+      "sourceIds": [
+        "traces",
+        "k8s"
+      ],
+      "contracts": [
+        2
+      ],
+      "cadenceSeconds": 3600,
+      "graceSeconds": 1800,
+      "required": true,
+      "stage": "active",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "identity_prune",
+      "name": "ADM - Identity prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "binding_prune",
+      "name": "ADM - Service binding prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "backends_prune",
+      "name": "ADM - Service backends prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "routes_prune",
+      "name": "ADM - Service routes prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "aci_policy_prune",
+      "name": "ADM - ACI policy prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "history_prune",
+      "name": "ADM - Network client history prune",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 86400,
+      "graceSeconds": 0,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "missed_slots",
+      "name": "ADM - Scheduler missed-slot alert",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    },
+    {
+      "id": "recovery",
+      "name": "ADM - Recovery abandoned-lease alert",
+      "sourceIds": [],
+      "contracts": [
+        1,
+        2
+      ],
+      "cadenceSeconds": 300,
+      "graceSeconds": 900,
+      "required": false,
+      "stage": "maintenance",
+      "prerequisiteIds": []
+    }
+  ],
+  "qualityProbes": {
+    "netflow": "adm_health_quality_netflow",
+    "nd": "adm_health_quality_nd",
+    "aci_acllog": "adm_health_quality_aci_acllog",
+    "ftd": "adm_health_quality_ftd",
+    "isovalent": "adm_health_quality_isovalent",
+    "hubble": "adm_health_quality_hubble",
+    "stream_ipfix_v2": "adm_health_quality_stream_v2",
+    "sdwan_ipfix_v2": "adm_health_quality_stream_v2",
+    "stream_ipfix_unclassified_v2": "adm_health_quality_stream_v2",
+    "catalyst_client_snapshot": "adm_health_quality_catalyst",
+    "meraki_association": "adm_health_quality_meraki"
+  }
+}

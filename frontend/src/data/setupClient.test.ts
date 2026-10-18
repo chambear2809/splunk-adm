@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, type MockedFunction } from "vitest";
+import networkingProfiles from "../../../fixtures/raw-networking/source-profiles.json";
 
 const { createRESTURLMock } = vi.hoisted(() => ({
   createRESTURLMock: vi.fn(
@@ -16,6 +17,7 @@ vi.mock("@splunk/splunk-utils/fetch", () => ({
 }));
 import {
   BUILDER_SEARCHES,
+  CISCO_V2_SELECTORS,
   INDEX_MACROS,
   ToolkitSetupClient,
   validateIndexName,
@@ -24,6 +26,26 @@ import {
   setupReadiness,
 } from "./setupClient";
 
+import {
+  defaultExpectations,
+  DATA_CONTRACT_SELECTORS,
+  type DeploymentSnapshot,
+  type DeploymentClient,
+} from "./deploymentHealth";
+const expectedDeployment = (
+  source: string,
+  activeContract: 1 | 2 = 1,
+): DeploymentSnapshot => {
+  const settings = defaultExpectations();
+  settings.sources[source].state = "active";
+  return { state: "configured", settings, activeContract, canWrite: true };
+};
+const deploymentClient = (
+  snapshot = expectedDeployment("k8s"),
+): DeploymentClient => ({
+  read: async () => snapshot,
+  write: async () => snapshot,
+});
 const response = (body: unknown, status = 200) =>
   ({
     ok: status >= 200 && status < 300,
@@ -35,7 +57,9 @@ const record = (content: Record<string, unknown> = {}, canWrite = true) => ({
 });
 const stagedMacroDefinitions: Record<string, string> = {
   adm_data_contract_version: "1",
-  "adm_graph(4)": "search index=adm_summary",
+  ...Object.fromEntries(
+    DATA_CONTRACT_SELECTORS.map((selector) => [selector.name, selector.before]),
+  ),
   "adm_graph_v2(4)": "search index=adm_summary_v2",
   adm_index_summary_v2: "index=adm_summary_v2",
   adm_summary_index_v2_name: "adm_summary_v2",
@@ -161,7 +185,6 @@ describe("ToolkitSetupClient", () => {
       indexName({
         name: "adm_index_summary",
         definition: "index=adm_summary\n",
-        canWrite: true,
       }),
     ).toBeUndefined();
     for (const value of ["", "Index", "a/b", "a b", "a\n", "a".repeat(81)])
@@ -328,10 +351,13 @@ describe("ToolkitSetupClient", () => {
   });
   it("uses CSRF and exact mutation payloads, with writer macro special case", async () => {
     const request = fetcher();
-    const client = new ToolkitSetupClient(request);
+    const client = new ToolkitSetupClient(
+      request,
+      deploymentClient(expectedDeployment("traces")),
+    );
     await client.setIndexMacro("adm_summary_index_name", "adm_summary");
     await client.setIndexMacro("adm_index_summary", "other_index");
-    await client.setBuilderEnabled("ADM - Identity builder", true);
+    await client.setBuilderEnabled("ADM - Service binding", true);
     const posts = request.mock.calls.filter(
       ([, init]) => init?.method === "POST",
     );
@@ -557,6 +583,7 @@ it("reads complete staged Cisco integration state without writing or activating 
         disabled: true,
         scheduled: true,
       },
+      { name: "ADM - Application catalog v2", disabled: true, scheduled: true },
     ],
   });
   expect(state.ciscoIntegration.reasons).toEqual([]);
@@ -591,7 +618,7 @@ it.each([
 it.each([
   { source_authority: "" },
   { scope: " " },
-  { cluster: "" },
+  { cluster: undefined },
   { vpn_id: undefined as unknown as string },
   { routing_domain: 42 as unknown as string },
 ])("rejects malformed source profile fields %j", async (fields) => {
@@ -783,3 +810,304 @@ describe("KV Store collection paging", () => {
     expect(state.ciscoIntegration.state).toBe("incomplete");
   });
 });
+
+describe("deployment dependent builder readiness", () => {
+  it("allows Kubernetes identity with its mapping without unrelated source requirements", async () => {
+    const snapshot = await new ToolkitSetupClient(fetcher()).read();
+    snapshot.observerScopes = {
+      complete: true,
+      rows: [
+        {
+          _key: "k8s",
+          observer_kind: "cluster",
+          observer: "cluster-a",
+          scope: "prod",
+          cluster: "cluster-a",
+        },
+      ],
+    };
+    const readiness = setupReadiness(
+      snapshot,
+      expectedDeployment("k8s"),
+      "ADM - Identity builder",
+    );
+    expect(readiness.ready).toBe(true);
+    snapshot.observerScopes.rows.push({
+      _key: "unrelated",
+      observer_kind: "APIC",
+      observer: "UPPERCASE",
+      scope: "prod",
+      cluster: "",
+    });
+    expect(
+      setupReadiness(
+        snapshot,
+        expectedDeployment("k8s"),
+        "ADM - Identity builder",
+      ).ready,
+    ).toBe(true);
+    expect(
+      setupReadiness(snapshot, expectedDeployment("k8s"), "ADM - ACI policy")
+        .ready,
+    ).toBe(false);
+    expect(
+      setupReadiness(
+        snapshot,
+        expectedDeployment("k8s"),
+        "ADM - Service backends",
+      ).missingRequired,
+    ).toContain("enable prerequisite ADM - Identity builder");
+  });
+  it("preflights saved expectations before changing a schedule", async () => {
+    const request = fetcher();
+    const client = new ToolkitSetupClient(
+      request,
+      deploymentClient({ state: "unavailable", canWrite: false }),
+    );
+    await expect(
+      client.setBuilderEnabled("ADM - Identity builder", true),
+    ).rejects.toThrow("deployment expectations");
+    expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+      false,
+    );
+  });
+  it("requires actual selected-source macros and blocks unrelated builder activation", async () => {
+    const request = fetcher();
+    const client = new ToolkitSetupClient(
+      request,
+      deploymentClient(expectedDeployment("traces")),
+    );
+    await expect(
+      client.setBuilderEnabled("ADM - Identity builder", true),
+    ).rejects.toThrow("job is not required");
+    const snapshot = await client.read();
+    snapshot.macros = snapshot.macros.filter(
+      (macro) => macro.name !== "adm_index_traces",
+    );
+    expect(
+      setupReadiness(
+        snapshot,
+        expectedDeployment("traces"),
+        "ADM - Service binding",
+      ).missingRequired,
+    ).toContain("adm_index_traces");
+  });
+});
+
+it("accepts a standalone mapped source profile with an explicit empty cluster", async () => {
+  const state = await new ToolkitSetupClient(
+    stagedIntegrationFetcher([sourceProfile({ cluster: "" })]),
+  ).read();
+  expect(state.ciscoIntegration.sourceProfiles.complete).toBe(true);
+  expect(state.ciscoIntegration.state).toBe("staged");
+});
+
+it("uses ND identity and traffic observer keys for their own builders", async () => {
+  const snapshot = await new ToolkitSetupClient(fetcher()).read();
+  snapshot.observerScopes = {
+    complete: true,
+    rows: [
+      {
+        _key: "fabric",
+        observer_kind: "fabric",
+        observer: "fabric-a",
+        scope: "prod",
+        cluster: "",
+      },
+    ],
+  };
+  const config = expectedDeployment("nd");
+  expect(
+    setupReadiness(snapshot, config, "ADM - Identity builder").missingRequired,
+  ).toContain("observer mapping for Nexus Dashboard");
+  expect(
+    setupReadiness(snapshot, config, "ADM - Conversation rollup")
+      .missingRequired,
+  ).not.toContain("observer mapping for Nexus Dashboard");
+});
+
+it("observes active version 2 only when marker, selectors and writer schedules agree", async () => {
+  const request = stagedIntegrationFetcher();
+  const staged = stagedIntegrationFetcher();
+  request.mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.includes("configs/conf-macros/")) {
+      const name = decodeURIComponent(
+        url.split("configs/conf-macros/")[1].split("?")[0],
+      );
+      if (name === "adm_data_contract_version")
+        return response(record({ definition: "2" }, false));
+      if (CISCO_V2_SELECTORS[name])
+        return response(
+          record({ definition: CISCO_V2_SELECTORS[name] }, false),
+        );
+    }
+    if (url.includes("saved/searches/")) {
+      const name = decodeURIComponent(
+        url.split("saved/searches/")[1].split("?")[0],
+      );
+      return response(
+        record(
+          {
+            disabled:
+              name === "ADM - Conversation rollup" ||
+              name === "ADM - Application catalog"
+                ? 1
+                : 0,
+            is_scheduled: 1,
+          },
+          false,
+        ),
+      );
+    }
+    return staged(input, init);
+  });
+  const result = await new ToolkitSetupClient(
+    request,
+    deploymentClient(expectedDeployment("netflow", 2)),
+  ).read();
+  expect(result.ciscoIntegration.state).toBe("active");
+  expect(result.ciscoIntegration.reasons).toEqual([]);
+  const active = request.getMockImplementation()!;
+  request.mockImplementation(async (input, init) => {
+    const url = decodeURIComponent(String(input));
+    if (
+      url.includes("saved/searches/ADM - Network client history builder") ||
+      url.includes("saved/searches/ADM - Application catalog v2")
+    )
+      return response(record({ disabled: 1, is_scheduled: 1 }, false));
+    return active(input, init);
+  });
+  expect(
+    (
+      await new ToolkitSetupClient(
+        request,
+        deploymentClient(expectedDeployment("netflow", 2)),
+      ).read()
+    ).ciscoIntegration.state,
+  ).toBe("active");
+  request.mockImplementation(async (input, init) => {
+    const url = decodeURIComponent(String(input));
+    if (
+      url.includes("saved/searches/ADM - Network client history builder") ||
+      url.includes("saved/searches/ADM - Conversation rollup v2") ||
+      url.includes("saved/searches/ADM - Traffic observation rollup v2")
+    )
+      return response(record({ disabled: 1, is_scheduled: 1 }, false));
+    return active(input, init);
+  });
+  expect(
+    (
+      await new ToolkitSetupClient(
+        request,
+        deploymentClient(expectedDeployment("traces", 2)),
+      ).read()
+    ).ciscoIntegration.state,
+  ).toBe("active");
+  request.mockImplementation(async (input, init) =>
+    String(input).includes("configs/conf-macros/adm_health_sources")
+      ? response(record({ definition: "`adm_health_sources_v1_impl`" }, false))
+      : active(input, init),
+  );
+  const mismatch = await new ToolkitSetupClient(
+    request,
+    deploymentClient(expectedDeployment("netflow", 2)),
+  ).read();
+  expect(mismatch.ciscoIntegration.state).toBe("incomplete");
+  expect(mismatch.ciscoIntegration.reasons).toContain(
+    "adm_health_sources does not match the data-contract marker.",
+  );
+});
+
+it("rejects arbitrary readable version-1 selector drift", async () => {
+  const request = stagedIntegrationFetcher();
+  const original = stagedIntegrationFetcher();
+  request.mockImplementation(async (input, init) =>
+    String(input).includes("configs/conf-macros/adm_health_sources")
+      ? response(record({ definition: "search index=wrong" }, false))
+      : original(input, init),
+  );
+  const result = await new ToolkitSetupClient(request).read();
+  expect(result.ciscoIntegration.state).toBe("incomplete");
+  expect(result.ciscoIntegration.reasons).toContain(
+    "adm_health_sources does not match the data-contract marker.",
+  );
+});
+it("checks general readiness against selected jobs and the active summary contract", async () => {
+  const snapshot = await new ToolkitSetupClient(
+    stagedIntegrationFetcher(),
+  ).read();
+  snapshot.summaryIndex = { exists: false };
+  snapshot.macros = snapshot.macros.filter(
+    (macro) =>
+      !["adm_index_summary", "adm_summary_index_name"].includes(macro.name),
+  );
+  expect(setupReadiness(snapshot, expectedDeployment("nxos")).ready).toBe(true);
+  expect(setupReadiness(snapshot, expectedDeployment("traces")).ready).toBe(
+    true,
+  );
+  expect(setupReadiness(snapshot, expectedDeployment("traces", 2)).ready).toBe(
+    true,
+  );
+  snapshot.observerScopes = {
+    complete: true,
+    rows: [
+      {
+        _key: "exporter",
+        observer_kind: "exporter",
+        observer: "192.0.2.20",
+        scope: "prod",
+        cluster: "",
+      },
+    ],
+  };
+  expect(setupReadiness(snapshot, expectedDeployment("netflow", 2)).ready).toBe(
+    true,
+  );
+  snapshot.ciscoIntegration.summaryIndex.exists = false;
+  expect(
+    setupReadiness(snapshot, expectedDeployment("netflow", 2)).missingRequired,
+  ).toContain("summary index");
+});
+
+it("accepts every reviewed networking fixture source/profile pair without changing cluster dimensions", async () => {
+  const profiles = networkingProfiles.network_source_scope.map((row, index) =>
+    sourceProfile({
+      ...row,
+      _key: (index + 1).toString(16).padStart(64, "0"),
+      mapping_key: (index + 1).toString(16).padStart(64, "0"),
+    }),
+  );
+  const clusters = networkingProfiles.clusters.map((row, index) =>
+    clusterSetting({
+      _key: (index + 100).toString(16).padStart(64, "0"),
+      cluster: row.name,
+      lb_mode: row.cilium.loadBalancerMode,
+      ingress_mode: row.cilium.ingressMode,
+      l2announcements_enabled: row.cilium.l2announcementsEnabled ? "1" : "0",
+    }),
+  );
+  const result = await new ToolkitSetupClient(
+    stagedIntegrationFetcher(profiles, clusters),
+  ).read();
+  expect(result.ciscoIntegration.state).toBe("staged");
+  expect(result.ciscoIntegration.reasons).toEqual([]);
+  expect(result.ciscoIntegration.sourceProfiles.rows).toEqual(profiles);
+  expect(result.ciscoIntegration.clusterSettings.rows).toEqual(clusters);
+});
+it.each([
+  { source: "catalyst_client_snapshot", profile: "standard_netflow" },
+  { source: "meraki_association", profile: "catalyst_client_snapshot" },
+  { source: "stream_ipfix", profile: "meraki_association" },
+])(
+  "rejects a reviewed profile used with the wrong source family %j",
+  async (pair) => {
+    const result = await new ToolkitSetupClient(
+      stagedIntegrationFetcher([sourceProfile(pair)]),
+    ).read();
+    expect(result.ciscoIntegration.state).toBe("incomplete");
+    expect(result.ciscoIntegration.reasons).toContain(
+      "Unknown source profiles require operator review.",
+    );
+  },
+);

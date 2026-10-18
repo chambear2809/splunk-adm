@@ -1,0 +1,49 @@
+# Atlas browser measurement environment
+
+Historical source pair: the completed current accepted-main comparison uses the
+[d686 environment record](atlas-browser-d686-environment.json) and
+[corrected results](atlas-browser-d686-results.md). Conditions below belong to
+the superseded `510754c`/`7999d3a` evidence.
+
+The exploratory run (`dist/performance/atlas-browser-exploratory.json`) passed all 14 workload
+cases and retained 140 measured samples. It overlapped other focused checks,
+browser tests and local Splunk lab startup. Those values are diagnostic evidence,
+not the baseline used to assess the candidate.
+
+The first controlled attempt (`dist/performance/atlas-browser-interrupted-baseline.json`) was
+stopped after 74 completed samples to address independent review: its synthetic
+graphs scaled generic nodes/edges while Cisco client evidence and topology stayed
+at captured cardinality. Its report retains `complete: false` and the interrupted
+case. The revised workloads scale authority-qualified identities, attachment and
+traffic records, client handoff coverage and topology/association inventory. The
+exploratory and interrupted runs use the earlier harness hash and are excluded
+from the revised comparison.
+
+`atlas-browser-evidence-index.json` records retained raw paths and SHA-256 checksums.
+Large obsolete raw artifacts stay under ignored `dist/performance`; they remain
+available locally without increasing the repository diff.
+
+For the retained comparison, the coordinator completed integrated checks, froze
+frontend/fixture sources and paused other agent browser/build/test work. The
+coordinator gracefully stopped its own local Splunk lab through its exclusive
+lock session before both runs; the performance harness neither starts nor
+operates it. Unrelated OTel containers remain untouched. Baseline and candidate
+run sequentially under this same arrangement. OS services and unrelated desktop
+activity remain uncontrolled; this is a developer workstation, not a dedicated
+benchmark host.
+
+The accepted baseline is commit `510754c17391e548309dd68ddac3f8b99e0b75c6` in
+its isolated checkout. The coordinator committed the frozen candidate bytes as
+`7999d3a8b27ee3c786f5bb43345b06273966a675` while the isolated baseline ran;
+the sequential candidate run uses that commit. Remote CI ran independently;
+local build, browser, package and Splunk checks remained paused throughout both
+measurements. The supplemental imported-source manifest binds configuration and
+research dependencies outside the harness's primary source-tree hash to these
+commits.
+
+Both retained comparison runs use the same production profiling harness, all four
+captured scenarios, both controlled graph sizes, both partial client handoff
+variants, five cold-context samples and five warm-context samples, with one
+discarded full warmup per warm context. Source, harness, workload, lockfile,
+runtime and hardware fingerprints accompany every raw report. See
+`../BROWSER_PERFORMANCE.md` for timing boundaries and limitations.

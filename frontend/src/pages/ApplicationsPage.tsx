@@ -755,10 +755,15 @@ export function ApplicationsPage({
                         ? ` · mapping ${row.mapping_status}`
                         : ""}
                       {row.attachment_basis ? ` · ${row.attachment_basis}` : ""}
-                      {row.quality_reason || row.warning ? (
+                      {row.diagnostic_status && ` · ${row.diagnostic_status}`}
+                      {row.diagnostic_reason ||
+                      row.quality_reason ||
+                      row.warning ? (
                         <small>
                           <br />
-                          {row.quality_reason ?? row.warning}
+                          {row.diagnostic_reason ??
+                            row.quality_reason ??
+                            row.warning}
                         </small>
                       ) : null}
                     </Table.Cell>

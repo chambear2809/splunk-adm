@@ -90,9 +90,9 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "9cbd9e6c946353e17352a3df1dd97c395e924beeedfdae46b155f72453f4b223",
+      "reviewed_macro_file_sha256": "004137af45ec5bc259d9d2bca6d414d4199c9ef8352e871be5721d051d7c8640",
       "method": "static review only; no recapture",
-      "reason": "The only macro-file changes since this capture are local=true on the two adm_interfaces lookups in V1 flow enrichment. Graph reader definitions, stored-summary processing and complete-input standalone lookup semantics are unchanged. This preserves the original capture hash and rows; it does not assert a new previous-window live capture."
+      "reason": "Static compatibility review preserves the accepted PR #11 previous-window rows and original capture hash. Since capture, the two V1 adm_interfaces lookups gained local=true; coordinated changes add health probes and V2 client normalization, Find and topology diagnostics. V1 graph reader definitions, stored-summary processing and complete-input standalone lookup semantics remain unchanged. No new previous-window live capture is asserted."
     }
   },
   "rows": [
@@ -232,10 +232,7 @@
         "span:0af7651916cd43dd8448eb211c80319c/a1a1a1a1a1a1a103",
         "span:b9c7c989f97918e1d8c1f4a2e7a8b301/b2b2b2b2b2b2b203"
       ],
-      "span_ids": [
-        "a1a1a1a1a1a1a103",
-        "b2b2b2b2b2b2b203"
-      ]
+      "span_ids": ["a1a1a1a1a1a1a103", "b2b2b2b2b2b2b203"]
     },
     {
       "row_type": "edge",
@@ -306,22 +303,14 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "8800",
-      "evidence": [
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "evidence": ["hubble", "nd", "netflow"],
       "observers": [
         "hubble:node-b",
         "nd:aci-1:leaf-101:eth1/11>leaf-102:eth1/12",
         "netflow:192.0.2.101:ifIndex 436248576>?",
         "netflow:192.0.2.102:ifIndex 436252672>?"
       ],
-      "sources": [
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["hubble", "nd", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -395,19 +384,9 @@
       "relationship": "communicates_with",
       "confidence": "correlated",
       "count": "1",
-      "evidence": [
-        "hubble",
-        "isovalent",
-        "span_peer"
-      ],
-      "observers": [
-        "hubble:node-b",
-        "isovalent:node-b"
-      ],
-      "sources": [
-        "hubble",
-        "isovalent"
-      ],
+      "evidence": ["hubble", "isovalent", "span_peer"],
+      "observers": ["hubble:node-b", "isovalent:node-b"],
+      "sources": ["hubble", "isovalent"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -423,23 +402,14 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "20100",
-      "evidence": [
-        "isovalent",
-        "nd",
-        "netflow",
-        "span_peer"
-      ],
+      "evidence": ["isovalent", "nd", "netflow", "span_peer"],
       "observers": [
         "isovalent:node-b",
         "nd:aci-1:leaf-102:eth1/12>leaf-102:eth1/6",
         "netflow:192.0.2.102:ifIndex 436228096>?",
         "netflow:192.0.2.102:ifIndex 436252672>?"
       ],
-      "sources": [
-        "isovalent",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["isovalent", "nd", "netflow"],
       "server_port": "5432",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -461,13 +431,7 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "1300",
-      "evidence": [
-        "hubble",
-        "isovalent",
-        "nd",
-        "netflow",
-        "span_peer"
-      ],
+      "evidence": ["hubble", "isovalent", "nd", "netflow", "span_peer"],
       "observers": [
         "hubble:node-b",
         "isovalent:node-a",
@@ -475,12 +439,7 @@
         "netflow:192.0.2.101:ifIndex 436248576>?",
         "netflow:192.0.2.102:ifIndex 436252672>?"
       ],
-      "sources": [
-        "hubble",
-        "isovalent",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["hubble", "isovalent", "nd", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -501,10 +460,7 @@
       "relationship": "communicates_with",
       "confidence": "unresolved",
       "count": "1",
-      "evidence": [
-        "isovalent",
-        "span_peer"
-      ],
+      "evidence": ["isovalent", "span_peer"],
       "observers": "isovalent:node-a",
       "sources": "isovalent",
       "server_port": "443",
@@ -527,12 +483,7 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "4200",
-      "evidence": [
-        "aci_acllog",
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "hubble", "nd", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "hubble:node-c",
@@ -540,12 +491,7 @@
         "netflow:192.0.2.103:ifIndex 436224000>?",
         "netflow:192.0.2.103:ifIndex 436256768>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "hubble", "nd", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -570,19 +516,13 @@
       "confidence": "correlated",
       "count": "2",
       "bytes": "14700",
-      "evidence": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "netflow:192.0.2.101:ifIndex 436248576>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "port_rule",
@@ -607,19 +547,13 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "7500",
-      "evidence": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "netflow:192.0.2.102:ifIndex 436252672>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "netflow"],
       "server_port": "30081",
       "transport": "tcp",
       "direction_basis": "port_rule",
@@ -644,12 +578,7 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "6200",
-      "evidence": [
-        "aci_acllog",
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "hubble", "nd", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "hubble:node-b",
@@ -657,12 +586,7 @@
         "netflow:192.0.2.102:ifIndex 436252672>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "hubble", "nd", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -687,22 +611,14 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "18400",
-      "evidence": [
-        "aci_acllog",
-        "nd",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "nd", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "nd:aci-1:leaf-103:eth1/5>leaf-101:eth1/11",
         "netflow:192.0.2.101:ifIndex 436248576>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "nd", "netflow"],
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "port_rule",
@@ -727,19 +643,13 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "8300",
-      "evidence": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "netflow:192.0.2.102:ifIndex 436252672>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "netflow"],
       "server_port": "443",
       "transport": "tcp",
       "direction_basis": "port_rule",
@@ -764,22 +674,14 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "2900",
-      "evidence": [
-        "aci_acllog",
-        "hubble",
-        "netflow"
-      ],
+      "evidence": ["aci_acllog", "hubble", "netflow"],
       "observers": [
         "aci_acllog:pod-1/node-103",
         "hubble:node-a",
         "netflow:192.0.2.101:ifIndex 436248576>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "aci_acllog",
-        "hubble",
-        "netflow"
-      ],
+      "sources": ["aci_acllog", "hubble", "netflow"],
       "server_port": "30080",
       "transport": "tcp",
       "direction_basis": "initiator",
@@ -804,22 +706,14 @@
       "confidence": "correlated",
       "count": "1",
       "bytes": "4100",
-      "evidence": [
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "evidence": ["hubble", "nd", "netflow"],
       "observers": [
         "hubble:node-b",
         "nd:aci-1:leaf-103:eth1/5>leaf-102:eth1/12",
         "netflow:192.0.2.102:ifIndex 436252672>?",
         "netflow:192.0.2.103:ifIndex 436224000>?"
       ],
-      "sources": [
-        "hubble",
-        "nd",
-        "netflow"
-      ],
+      "sources": ["hubble", "nd", "netflow"],
       "server_port": "8080",
       "transport": "tcp",
       "direction_basis": "initiator",

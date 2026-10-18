@@ -135,3 +135,49 @@ describe("deriveFindings", () => {
     ).toEqual(["source:NetFlow", "source:Traces"]);
   });
 });
+
+it("ignores healthy cadence and nonrequired sources while retaining unknown and overdue partial-deployment evidence", () => {
+  const graph = { ...demoGraph("aci"), edges: [] };
+  const report: HealthReport = {
+    sources: [
+      {
+        name: "NetFlow",
+        expectation: "active",
+        records: 1,
+        latestIndexed: 1900,
+        staleAfterSeconds: 1200,
+        probeLookbackSeconds: 604800,
+      },
+      { name: "Catalyst", expectation: "staged" },
+      { name: "Meraki", expectation: "not_selected" },
+      {
+        name: "Traces",
+        expectation: "active",
+        records: 1,
+        staleAfterSeconds: 1200,
+        probeLookbackSeconds: 604800,
+      },
+      {
+        name: "FTD",
+        expectation: "active",
+        records: 1,
+        latestIndexed: 700,
+        staleAfterSeconds: 1200,
+        probeLookbackSeconds: 604800,
+      },
+    ],
+    jobs: [],
+    quality: { issues: [] },
+    warnings: [],
+    checkedAt: 2000,
+  };
+  expect(
+    deriveFindings(graph, indexGraph(graph), report).map((finding) => ({
+      id: finding.id,
+      detail: finding.detail,
+    })),
+  ).toEqual([
+    { id: "source:FTD", detail: "Expected receipt is overdue" },
+    { id: "source:Traces", detail: "Receipt time unavailable" },
+  ]);
+});

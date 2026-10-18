@@ -59,7 +59,8 @@ export function HealthResults({ report }: { report: HealthReport }) {
     <>
       <p className="muted small">
         Checked {time(report.checkedAt)}. App-wide evidence from the last 24
-        hours; independent of map filters.
+        hours for quality and seven days for source receipt and scheduled runs;
+        independent of map filters.
       </p>
       {report.warnings.length > 0 && (
         <div role="alert">
@@ -71,10 +72,28 @@ export function HealthResults({ report }: { report: HealthReport }) {
           </ul>
         </div>
       )}
+      {report.deployment?.state !== "configured" && (
+        <p role="status">
+          Deployment expectations are unknown. An administrator can select
+          active and staged sources in Setup.
+        </p>
+      )}
+      {report.deployment?.error && (
+        <p role="alert">{report.deployment.error}</p>
+      )}
+      {report.deployment?.state === "configured" &&
+        !report.deployment.activeContract && (
+          <p role="status">
+            The active data contract could not be verified. Health remains
+            unknown.
+          </p>
+        )}
       <h3>Data sources</h3>
       <p className="muted small">
-        Quiet or optional sources may have no recent events. Missing results can
-        also mean missing index permissions; they do not confirm an outage.
+        Source receipt is evaluated against administrator expectations. Quiet
+        sources can have no recent events; collection health remains unknown.
+        Missing results can also mean missing index permissions; they do not
+        confirm an outage.
       </p>
       <HealthTable
         headers={[
@@ -88,7 +107,7 @@ export function HealthResults({ report }: { report: HealthReport }) {
           key: s.name,
           cells: [
             s.name,
-            sourceStatus(s, report.checkedAt),
+            `${sourceStatus(s, report.checkedAt)}${s.staleAfterSeconds ? ` (freshness ${s.staleAfterSeconds}s)` : ""}`,
             `${time(s.latestEvent)}\n${time(s.latestIndexed)}`,
             `${s.records ?? "Unknown"} / ${s.maxIngestLag === undefined ? "Unknown" : `${Math.round(s.maxIngestLag)}s`}`,
             [
@@ -107,15 +126,27 @@ export function HealthResults({ report }: { report: HealthReport }) {
         Delay is the largest nonnegative difference between event time and index
         time in this window. It includes exporter delay and clock differences.
       </p>
-      <h3>Flow data quality</h3>
       <p className="muted small">
-        {report.quality.evaluated === undefined
-          ? "Quality information is unavailable."
-          : report.quality.evaluated === 0
-            ? "No candidate flows are visible in this check."
-            : `${report.quality.evaluated} candidate flow records checked; ${report.quality.excluded ?? "unknown"} excluded from rollup.`}{" "}
-        This checks visible flow candidates received in 24 hours, after
+        Source receipt does not verify API permissions, collector process
+        health, or ingestion checkpoints. Those checks remain unknown until an
+        operator verifies them.
+      </p>
+      <h3>Data quality</h3>
+      <p className="muted small">
+        {report.qualityRequired === false
+          ? "No active source requires candidate quality checks."
+          : report.quality.evaluated === undefined || report.quality.incomplete
+            ? "Quality information is unavailable."
+            : report.quality.evaluated === 0
+              ? "No candidate records are visible in this check."
+              : `${report.quality.evaluated} candidate records evaluated; ${report.quality.excluded ?? "unknown"} excluded.`}{" "}
+        This checks visible source candidates received in 24 hours, after
         source-specific eligibility filters. Missing index access can hide data.
+      </p>
+      <p className="muted small">
+        Quality totals include evaluated rows for the active selected source
+        families and active data contract. Missing evaluation evidence remains
+        unknown.
       </p>
       {report.quality.issues.length > 0 && (
         <HealthTable
@@ -129,7 +160,8 @@ export function HealthResults({ report }: { report: HealthReport }) {
       <p className="muted small">
         A record can have several reasons, so reason counts overlap. Missing
         measurements and assumed sampling are not proof of zero traffic or exact
-        volume. Excluded records remain in the source indexes for investigation.
+        volume. Original evidence remains in the source indexes for
+        investigation.
       </p>
       <h3>Scheduled searches</h3>
       <p className="muted small">

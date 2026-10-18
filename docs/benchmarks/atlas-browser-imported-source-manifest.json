@@ -1,0 +1,36 @@
+{
+  "description": "Supplemental browser source dependencies outside frontend/src, fixtures and package-lock.json; file bytes are bound to each Git revision.",
+  "sources": {
+    "baseline": {
+      "revision": "510754c17391e548309dd68ddac3f8b99e0b75c6",
+      "files": {
+        "config/deployment-health.json": {
+          "present": false
+        },
+        "research/cisco-pipeline-interface.json": {
+          "present": true,
+          "sha256": "026b2394ba355f419dd25d471fecaa1a3bd9de218a85ee6f47eecedaa8a97620",
+          "bytes": 140456,
+          "matches_revision": true
+        }
+      }
+    },
+    "candidate": {
+      "revision": "7999d3a8b27ee3c786f5bb43345b06273966a675",
+      "files": {
+        "config/deployment-health.json": {
+          "present": true,
+          "sha256": "807e7dba0caa0d44adcab36d3a07963691f2fea323470471a721fa4fa3b1833c",
+          "bytes": 21564,
+          "matches_revision": true
+        },
+        "research/cisco-pipeline-interface.json": {
+          "present": true,
+          "sha256": "d7af376ca2d2b0b24f3288b09cf183ff8dbf92d15bc9e3760d315a56c6a2b374",
+          "bytes": 132712,
+          "matches_revision": true
+        }
+      }
+    }
+  }
+}

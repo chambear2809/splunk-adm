@@ -5,6 +5,8 @@ import { createInterface } from "node:readline";
 
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
+const { activation } = require("./research/cisco-pipeline-interface.json");
+const contractSelectors = activation.cutover_selectors.map(({ name }) => name);
 
 const BASE = "http://127.0.0.1:8000";
 const { ADM_VIEWER_USER: user, ADM_VIEWER_PASS: pass } = process.env;
@@ -27,6 +29,7 @@ try {
   const failures = [];
   const searchRequests = [];
   const searchPayloads = [];
+  const searchDispatches = [];
   const atlasScripts = [];
   page.on("console", (message) => {
     if (message.type() === "error")
@@ -37,6 +40,15 @@ try {
       `pageerror: ${(error.stack || String(error)).slice(0, 1200)}`,
     ),
   );
+  page.on("request", (request) => {
+    if (
+      /\/search\/(v2\/)?jobs\/?$/.test(new URL(request.url()).pathname) &&
+      request.method() === "POST"
+    ) {
+      const params = new URLSearchParams(request.postData() || "");
+      searchDispatches.push({ search: params.get("search") || "" });
+    }
+  });
   page.on("response", (response) => {
     const url = response.url();
     if (response.status() >= 400)
@@ -875,13 +887,66 @@ try {
       evidence.routes = {};
       for (const name of ["applications", "data_health", "help"]) {
         stage = `view ${name}`;
-        evidence.routes[name] = await routeEvidence(
-          `/en-US/app/splunk_adm/${name}`,
+        const healthSearchStart = searchDispatches.length;
+        const metadataPaths =
           name === "data_health"
-            ? "Data health"
-            : name[0].toUpperCase() + name.slice(1),
+            ? [
+                [
+                  "settings",
+                  "/storage/collections/data/adm_deployment_settings/deployment",
+                ],
+                ...contractSelectors.map((selector) => [
+                  selector,
+                  `/configs/conf-macros/${selector}`,
+                ]),
+              ]
+            : [];
+        // The client rejects denied metadata at response headers and can cancel
+        // the body. Exact statuses plus the settled unknown UI prove completion.
+        const metadataPromise = Promise.all(
+          metadataPaths.map(async ([metadataName, suffix]) => {
+            const response = await page.waitForResponse(
+              (candidate) =>
+                candidate.request().method() === "GET" &&
+                decodeURIComponent(
+                  new URL(candidate.url()).pathname,
+                ).endsWith(`/servicesNS/nobody/splunk_adm${suffix}`),
+              { timeout: 90000 },
+            );
+            return {
+              name: metadataName,
+              status: response.status(),
+              path: safePath(response.url()),
+            };
+          }),
         );
+        if (name === "data_health") stage = "Data health metadata headers";
+        const [route, metadata] = await Promise.all([
+          routeEvidence(
+            `/en-US/app/splunk_adm/${name}`,
+            name === "data_health"
+              ? "Data health"
+              : name[0].toUpperCase() + name.slice(1),
+          ),
+          metadataPromise,
+        ]);
+        evidence.routes[name] = route;
         if (name === "data_health") {
+          stage = "Data health unknown state";
+          const settings = metadata.find((item) => item.name === "settings");
+          const contractMetadata = metadata.filter(
+            (item) => item.name !== "settings",
+          );
+          expect(settings.status).toBe(404);
+          expect(contractMetadata).toHaveLength(contractSelectors.length);
+          for (const item of contractMetadata) expect(item.status).toBe(403);
+          const unknownStatus = page.getByRole("status").filter({
+            hasText: "Deployment expectations are unknown.",
+          });
+          await expect(unknownStatus).toBeVisible({ timeout: 90000 });
+          await expect(
+            page.getByRole("button", { name: "Check again", exact: true }),
+          ).toBeEnabled();
           await page
             .getByRole("heading", { name: "Data sources", exact: true })
             .waitFor({ state: "visible", timeout: 90000 });
@@ -896,6 +961,20 @@ try {
               .getByRole("heading", { name: "Scheduled searches", exact: true })
               .count(),
           };
+          const probeRequests = searchDispatches
+            .slice(healthSearchStart)
+            .filter((item) => item.search.includes("adm_health_")).length;
+          expect(probeRequests).toBe(0);
+          evidence.healthUnknown = {
+            visible: true,
+            metadataHeadersObserved: true,
+            healthCompleted: true,
+            settingsStatus: settings.status,
+            contractMetadata,
+            probeCounter: "request",
+            probeRequests,
+          };
+          evidence.healthRequests = probeRequests;
         }
       }
       stage = "setup view";
@@ -910,9 +989,6 @@ try {
       evidence.searchRequests = [...searchRequests];
       evidence.graphRequests = searchPayloads.filter((item) =>
         item.search.includes("adm_graph"),
-      ).length;
-      evidence.healthRequests = searchPayloads.filter((item) =>
-        item.search.includes("adm_health_"),
       ).length;
       evidence.atlasScripts = [...atlasScripts];
       evidence.consoleErrorCount = consoleErrors.length;

@@ -2,6 +2,16 @@ import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  // The preview routes are served by middleware, and the lifecycle harness has
+  // its own React entry. Scan them all before serving concurrent browser tests
+  // so a later route cannot invalidate dependency URLs or reload active pages.
+  optimizeDeps: {
+    entries: [
+      "frontend/src/main.tsx",
+      "tests/browser/harness.tsx",
+      "tests/browser/map-lifecycle-harness.tsx",
+    ],
+  },
   plugins: [
     {
       name: "atlas-preview-host",

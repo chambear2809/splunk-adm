@@ -4,7 +4,7 @@ import type { SearchClient } from "./searchClient";
 import rows from "../../../fixtures/demo-rows-aci.json";
 
 describe("graph query coordination", () => {
-  it("reports required graph failure immediately and cancels hanging topology", async () => {
+  it("reports required graph failure immediately without dispatching topology", async () => {
     const controller = new AbortController();
     const client: SearchClient = {
       search: (request) =>
@@ -102,4 +102,67 @@ it("sends the signed-in timezone and latest bound to both searches", async () =>
         request.timezone === "Pacific/Honolulu",
     ),
   ).toBe(true);
+});
+
+it("anchors topology to the graph's returned absolute bounds for relative requests", async () => {
+  const requests: Array<{
+    search: string;
+    earliest: string;
+    latest?: string;
+    timezone?: string;
+  }> = [];
+  const client: SearchClient = {
+    search: async (request) => {
+      requests.push(request);
+      return {
+        rows: request.search.includes("adm_graph") ? rows.rows : [],
+        warnings: [],
+        errors: [],
+      };
+    },
+  };
+  const result = await queryGraph(
+    client,
+    {
+      ...rows.args,
+      earliest: "-1h",
+      latest: "now",
+      timezone: "America/New_York",
+    },
+    new AbortController(),
+  );
+  expect(requests[0]).toMatchObject({ earliest: "-1h", latest: "now" });
+  expect(requests[1]).toMatchObject({
+    earliest: String(Date.parse(result.graph.window.start) / 1000),
+    latest: String(Date.parse(result.graph.window.end) / 1000),
+    timezone: "America/New_York",
+  });
+});
+it("does not dispatch inventory after an aborted graph returns", async () => {
+  const controller = new AbortController();
+  const requests: string[] = [];
+  const client: SearchClient = {
+    search: async (request) => {
+      requests.push(request.search);
+      controller.abort();
+      return { rows: rows.rows, warnings: [], errors: [] };
+    },
+  };
+  await expect(
+    queryGraph(client, { ...rows.args, earliest: "-1h" }, controller),
+  ).rejects.toThrow("cancelled");
+  expect(requests).toHaveLength(1);
+});
+it("cannot publish a valid graph after inventory completes following cancellation", async () => {
+  const controller = new AbortController();
+  const client: SearchClient = {
+    search: async (request) => {
+      const graph = request.search.includes("adm_graph");
+      if (!graph) controller.abort();
+      return { rows: graph ? rows.rows : [], warnings: [], errors: [] };
+    },
+  };
+  await expect(
+    queryGraph(client, { ...rows.args, earliest: "-1h" }, controller),
+  ).rejects.toThrow("cancelled");
 });
