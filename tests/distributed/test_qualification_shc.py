@@ -3,6 +3,7 @@
 import configparser
 import hashlib
 import io
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -355,6 +356,120 @@ class SafetyTests(unittest.TestCase):
             self.candidate_check(
                 declared.replace(b"a" * 40, b"b" * 40), baseline=declared
             )
+
+
+class ApiResponseTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        secret = Path(self.temp.name) / "fixture-account.json"
+        lifecycle.private_write(
+            secret,
+            client.canonical(
+                {"username": "fixture-user", "password": "fixture-password"}
+            ),
+        )
+        self.api = object.__new__(client.Api)
+        self.api.state = {"account_files": {"admin": str(secret)}}
+        self.api.account = "admin"
+        self.api.url = "https://localhost:22009"
+        self.api.opener = Mock()
+
+    def respond(self, body, status=200):
+        response = io.BytesIO(body)
+        response.status = status
+        self.api.opener.open.return_value = response
+
+    def test_empty_successful_delete_and_json_responses_are_supported(self):
+        for status in (200, 204):
+            with self.subTest(status=status):
+                self.respond(b"", status)
+                self.assertEqual(self.api.json("DELETE", "/services/fixture"), {})
+        for method in ("GET", "POST", "DELETE"):
+            with self.subTest(method=method):
+                self.respond(b'{"result":"fixture"}')
+                self.assertEqual(
+                    self.api.json(method, "/services/fixture"), {"result": "fixture"}
+                )
+
+    def test_empty_get_post_and_malformed_nonempty_delete_fail_closed(self):
+        for method, body, status in (
+            ("GET", b"", 200),
+            ("POST", b"", 200),
+            ("DELETE", b" ", 200),
+            ("DELETE", b"not JSON", 200),
+            ("DELETE", b"", 500),
+        ):
+            with self.subTest(method=method, body=body, status=status):
+                self.respond(body, status)
+                with self.assertRaises(client.Refused):
+                    self.api.json(method, "/services/fixture")
+
+    def test_delete_http_errors_retain_status_and_close_response(self):
+        for status in (403, 404, 500):
+            with self.subTest(status=status):
+                body = io.BytesIO(b"private server response")
+                self.api.opener.open.side_effect = client.urllib.error.HTTPError(
+                    "https://localhost:22009/services/fixture",
+                    status,
+                    "fixture",
+                    {},
+                    body,
+                )
+                with self.assertRaises(client.ApiError) as caught:
+                    self.api.json("DELETE", "/services/fixture")
+                self.assertEqual(caught.exception.status, status)
+                self.assertTrue(body.closed)
+                self.assertNotIn("private server response", str(caught.exception))
+
+    def test_original_interface_cleanup_continues_after_empty_success_then_404s(self):
+        path = TOOLS.parent / "tests/splunk/test_distributed_interfaces.py"
+        spec = importlib.util.spec_from_file_location(
+            "offline_distributed_interfaces", path
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        test = module.DistributedInterfacesTest(
+            "test_02_populated_inventory_resolves_interface_name"
+        )
+        test.client = SimpleNamespace(Api=Mock(return_value=self.api))
+        self.respond(b"", 200)
+        response = self.api.opener.open.return_value
+        self.api.opener.open.side_effect = [
+            response,
+            client.urllib.error.HTTPError(
+                "https://localhost:22009/services/fixture",
+                404,
+                "fixture",
+                {},
+                io.BytesIO(),
+            ),
+            client.urllib.error.HTTPError(
+                "https://localhost:22009/services/fixture",
+                404,
+                "fixture",
+                {},
+                io.BytesIO(),
+            ),
+        ]
+        test.remove_probe("fixture-owned-key")
+        self.assertEqual(
+            [call.args[0] for call in test.client.Api.call_args_list],
+            list(client.MEMBERS),
+        )
+        self.assertEqual(self.api.opener.open.call_count, 3)
+        for call in self.api.opener.open.call_args_list:
+            request = call.args[0]
+            self.assertEqual(request.get_method(), "DELETE")
+            self.assertIn("/adm_interfaces/fixture-owned-key?", request.full_url)
+        self.api.opener.open.reset_mock()
+        self.api.opener.open.side_effect = client.urllib.error.HTTPError(
+            "https://localhost:22009/services/fixture", 403, "fixture", {}, io.BytesIO()
+        )
+        with self.assertRaises(client.ApiError) as caught:
+            test.remove_probe("fixture-owned-key")
+        self.assertEqual(caught.exception.status, 403)
+        self.api.opener.open.assert_called_once()
 
 
 class SettingsDefaultVerificationTests(unittest.TestCase):

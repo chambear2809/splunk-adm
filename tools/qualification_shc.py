@@ -158,7 +158,10 @@ class Api:
         )
         try:
             with self.opener.open(request, timeout=timeout) as response:
-                return json.loads(response.read())
+                value = response.read()
+                if method == "DELETE" and not value and 200 <= response.status < 300:
+                    return {}
+                return json.loads(value)
         except urllib.error.HTTPError as error:
             error.close()
             raise ApiError(error.code) from None

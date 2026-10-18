@@ -406,7 +406,7 @@ an app's deployer `local/` files override the corresponding settings in its
 `default/` files and are delivered to members' `default/` files. An app-specific
 or global mode can change that behavior; see the [Enterprise 10.6 deployer push-mode reference](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/10.6/update-search-head-cluster-members/use-the-deployer-to-distribute-apps-and-configuration-updates).
 The harness does not change the mode or infer its effective value from package
-identity. Initial candidate08 has no `local/` files, and support-app configuration
+identity. Initial candidate09 has no `local/` files, and support-app configuration
 is staged under the support apps' own names; neither establishes a settings
 merge into the candidate during its initial bundle.
 
@@ -442,6 +442,23 @@ Do not turn an assisted restart into an unassisted result. A same-host loss test
 still cannot establish supported production failure-domain behavior.
 
 ## Evidence export, cleanup and unavailable boundaries
+
+Attempt06 deployed candidate09 to all three members and verified every archived
+file after unassisted cluster/KV readiness. Both original interface cases ran:
+all six member searches completed, but cleanup of the populated-inventory case
+failed. Splunk returned HTTP 200 with zero response bytes for the successful
+KV item DELETE; the qualification client incorrectly required JSON. The client
+now accepts an empty body only for a successful 2xx DELETE. Empty GET/POST,
+nonempty malformed JSON and HTTP errors still fail. The original interface
+assertions remain unchanged. All 65 distributed tooling tests pass, including
+the original cleanup path with a successful empty DELETE followed by replicated
+404 responses. Independent review found no actionable defect in the correction.
+
+Attempt06 remains failed. Its 30 exported files, including the failure,
+diagnosis and owned cleanup, were credential-scanned and hash-verified in
+`dist/final-qualification/shc-attempt-06-failure-final/`; archive SHA-256 is
+`8d633d31bf4719d552314d82fbe8225e2c0aaaac8a99853ecd1fa7ded5e94e17`.
+Fresh full SHC execution with the reviewed client is still required.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.
