@@ -72,14 +72,18 @@ test.describe("health polling lifecycle", () => {
       );
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await page.waitForTimeout(300);
-      expect(
-        await page.evaluate(
+      await expect
+        .poll(
           () =>
-            (window.__ADM_REQUESTS__ ?? []).filter((request) =>
-              request.spl.includes("adm_health"),
-            ).length,
-        ),
-      ).toBe(0);
+            page.evaluate(
+              () =>
+                (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+                  request.spl.includes("adm_health"),
+                ).length,
+            ),
+          { timeout: 2000 },
+        )
+        .toBe(0);
     }
   });
 });
@@ -308,11 +312,9 @@ test("Setup keeps a dirty draft and blocks save when a passive read finds a newe
 }) => {
   await draftSetup(page, "deployment-revision-change");
   await expect(
-    page
-      .getByRole("alert")
-      .filter({
-        hasText: "Deployment settings changed since this draft began.",
-      }),
+    page.getByRole("alert").filter({
+      hasText: "Deployment settings changed since this draft began.",
+    }),
   ).toBeVisible();
   await expect(
     page.getByLabel("Expectation for NetFlow", { exact: true }),

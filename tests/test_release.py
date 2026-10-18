@@ -6,7 +6,11 @@ from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from tools.check_release import MAX_ATLAS_GZIP_BYTES, check_release
+from tools.check_release import (
+    BUNDLED_RUNTIME_FILES,
+    MAX_ATLAS_GZIP_BYTES,
+    check_release,
+)
 
 
 def _incompressible(size: int) -> bytes:
@@ -52,6 +56,12 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"[triggers]\nreload.adm_recovery = simple\n"
         )
         return {
+            **{
+                name: b"#!/usr/bin/env python3\n"
+                if name.endswith("adm_recovery.py")
+                else b"runtime\n"
+                for name in BUNDLED_RUNTIME_FILES
+            },
             "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle",
             **{
                 f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
@@ -78,10 +88,12 @@ class ReleaseArchiveTests(unittest.TestCase):
             },
             "splunk_adm/appserver/static/adm.css": b"css",
             "splunk_adm/default/app.conf": config,
+            "splunk_adm/default/alert_actions.conf": b"[adm_recovery]\nalert.execute.cmd = adm_recovery.py\n",
             "splunk_adm/LICENSE": b"license",
             "splunk_adm/NOTICE": b"notice",
             "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
             "splunk_adm/docs/DATA_LAYER.md": b"docs",
+            "splunk_adm/docs/RECOVERY.md": b"# Recovery and replay\n",
             "splunk_adm/docs/UPGRADES.md": b"migration docs",
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
@@ -105,6 +117,17 @@ class ReleaseArchiveTests(unittest.TestCase):
     def test_accepts_valid_pair(self):
         self._write_pair()
         check_release(self.root / "dist", self.root / "package.json")
+
+    def test_runtime_inventory_matches_source_files(self):
+        source_root = Path(__file__).parents[1] / "splunk_app/splunk_adm/bin"
+        source_files = {
+            "splunk_adm/" + path.relative_to(source_root.parent).as_posix()
+            for path in source_root.rglob("*")
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.suffix not in {".pyc", ".pyo"}
+        }
+        self.assertEqual(BUNDLED_RUNTIME_FILES, source_files)
 
     def test_rejects_atlas_bundle_over_gzip_limit(self):
         install = self._files()
@@ -141,6 +164,24 @@ class ReleaseArchiveTests(unittest.TestCase):
         del install["splunk_adm/default/macros.conf"]
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "missing required files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_recovery_runtime_dependency(self):
+        install = self._files()
+        del install["splunk_adm/bin/adm_recovery_lib/core.py"]
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "missing required files.*core.py"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_recovery_registration_to_unshipped_entrypoint(self):
+        install = self._files()
+        install["splunk_adm/default/alert_actions.conf"] = (
+            b"[adm_recovery]\nalert.execute.cmd = missing_recovery.py\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(
+            ValueError, "registration.*shipped adm_recovery.py"
+        ):
             check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_packaged_limits_conf(self):

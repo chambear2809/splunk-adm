@@ -4,6 +4,7 @@ import { toolkitDefault } from "../../frontend/src/app/interop";
 import { MapPage } from "../../frontend/src/pages/MapPage";
 import {
   lifecycleArgs,
+  lifecycleWindow,
   lifecycleGraphRows,
   lifecycleTopologyRows,
 } from "./map-lifecycle-fixtures";
@@ -42,7 +43,7 @@ const complete = (index: number, version = 1) => {
   const item = pending[index];
   const graph = item.request.search.includes("adm_graph");
   const previous =
-    graph && item.request.latest === "1792253100"
+    graph && item.request.latest === lifecycleWindow.earliest
       ? { earliest: item.request.earliest, latest: item.request.latest }
       : undefined;
   item.resolve({
@@ -63,7 +64,9 @@ const clientFor = (client: string): SearchClient => ({
       !request.search.includes("adm_topology")
     )
       return Promise.resolve({
-        rows: [{ ...lifecycleArgs, pods: "1", last_seen: "1792254300" }],
+        rows: [
+          { ...lifecycleArgs, pods: "1", last_seen: lifecycleWindow.latest },
+        ],
         warnings: [],
         errors: [],
       });

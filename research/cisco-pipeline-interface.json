@@ -142,9 +142,7 @@
     "rest_targets": {
       "macro_definitions": "/servicesNS/nobody/splunk_adm/configs/conf-macros/{stanza}",
       "saved_searches": "/servicesNS/nobody/splunk_adm/saved/searches/{urlencoded_title}",
-      "saved_search_mutable_fields": [
-        "disabled"
-      ],
+      "saved_search_mutable_fields": ["disabled"],
       "macro_mutable_field": "definition",
       "restore_policy": "Restore captured values exactly; do not write saved search search/cron/dispatch fields or collection data during cutover."
     },
@@ -386,9 +384,7 @@
     "sources": {
       "meraki_association": {
         "sourcetype": "meraki:accesspoints",
-        "allowlist": [
-          "association"
-        ],
+        "allowlist": ["association"],
         "authority": "JSON array [organizationId, networkId]",
         "native_id": "canonical client MAC",
         "source_time": "occurredAt",
@@ -523,18 +519,8 @@
       "v2": "adm_topology_v2; source-qualified device IDs and exact scope/cluster mapping. Flow session references do not create TLOC inventory, tunnel attribution or route links; separate option records require a verified scoped decoder envelope before support."
     },
     "client_handoff": {
-      "key": [
-        "source",
-        "target",
-        "server_port",
-        "transport"
-      ],
-      "coverage": [
-        "complete",
-        "partial",
-        "unresolved",
-        "incomplete"
-      ],
+      "key": ["source", "target", "server_port", "transport"],
+      "coverage": ["complete", "partial", "unresolved", "incomplete"],
       "fields": [
         "client_handoff_coverage",
         "client_handoff_connections",
@@ -579,9 +565,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_graph(4)]",
         "invoke": "| search `adm_graph(\"{{service}}\",\"{{environment}}\",\"{{cluster}}\",\"{{namespace}}\")`",
         "read_only": true,
-        "required_fields": [
-          "row_type"
-        ],
+        "required_fields": ["row_type"],
         "predicates": [
           {
             "field": "row_type",
@@ -591,11 +575,7 @@
           {
             "field": "row_type",
             "operator": "allowed_values",
-            "value": [
-              "meta",
-              "node",
-              "edge"
-            ]
+            "value": ["meta", "node", "edge"]
           },
           {
             "field": "schema_version",
@@ -607,21 +587,9 @@
         "definition": "`adm_graph_inputs(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")` | `adm_graph_resolve(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")` | `adm_graph_handoffs(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")` | `adm_graph_edges(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")` | `adm_graph_contracts(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")` | `adm_graph_output(\"$service$\", \"$environment$\", \"$cluster$\", \"$namespace$\")`",
         "definition_sha256": "e00c4f92bb00650ba4398757c39924ec03d42a8100d0473498bb89783bd862e4",
         "required_fields_by_row_type": {
-          "meta": [
-            "row_type"
-          ],
-          "node": [
-            "row_type",
-            "id",
-            "label",
-            "kind"
-          ],
-          "edge": [
-            "row_type",
-            "id",
-            "source",
-            "target"
-          ]
+          "meta": ["row_type"],
+          "node": ["row_type", "id", "label", "kind"],
+          "edge": ["row_type", "id", "source", "target"]
         }
       },
       "v2": {
@@ -629,9 +597,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_graph_v2(4)]",
         "invoke": "| search `adm_graph_v2(\"{{service}}\",\"{{environment}}\",\"{{cluster}}\",\"{{namespace}}\")`",
         "read_only": true,
-        "required_fields": [
-          "row_type"
-        ],
+        "required_fields": ["row_type"],
         "predicates": [
           {
             "field": "row_type",
@@ -667,30 +633,13 @@
         "public_selector": "adm_graph(4)",
         "rollback_selector": "adm_graph(4)",
         "required_fields_by_row_type": {
-          "meta": [
-            "row_type"
-          ],
-          "node": [
-            "row_type",
-            "id",
-            "label",
-            "kind"
-          ],
-          "edge": [
-            "row_type",
-            "id",
-            "source",
-            "target"
-          ]
+          "meta": ["row_type"],
+          "node": ["row_type", "id", "label", "kind"],
+          "edge": ["row_type", "id", "source", "target"]
         }
       },
       "cutover": "Only switch the public graph reader after V2 topology and per-cluster settings gates are validated.",
-      "scenario_fields": [
-        "service",
-        "environment",
-        "cluster",
-        "namespace"
-      ]
+      "scenario_fields": ["service", "environment", "cluster", "namespace"]
     },
     {
       "surface": "catalog",
@@ -700,12 +649,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_catalog_build]",
         "invoke": "| `adm_catalog_build`",
         "read_only": true,
-        "required_fields": [
-          "service",
-          "environment",
-          "cluster",
-          "namespace"
-        ],
+        "required_fields": ["service", "environment", "cluster", "namespace"],
         "predicates": [
           {
             "field": "service",
@@ -727,12 +671,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_catalog_build_v2]",
         "invoke": "| `adm_catalog_build_v2`",
         "read_only": true,
-        "required_fields": [
-          "service",
-          "environment",
-          "cluster",
-          "namespace"
-        ],
+        "required_fields": ["service", "environment", "cluster", "namespace"],
         "predicates": [
           {
             "field": "service",
@@ -754,12 +693,7 @@
         "rollback_selector": "adm_catalog_build"
       },
       "cutover": "Select V2 catalog reads and collection only after the V2 writer completes a validated staged build.",
-      "scenario_fields": [
-        "service",
-        "environment",
-        "cluster",
-        "namespace"
-      ]
+      "scenario_fields": ["service", "environment", "cluster", "namespace"]
     },
     {
       "surface": "find",
@@ -769,12 +703,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_find(1)]",
         "invoke": "| `adm_find(\"{{query}}\")`",
         "read_only": true,
-        "required_fields": [
-          "service",
-          "environment",
-          "cluster",
-          "namespace"
-        ],
+        "required_fields": ["service", "environment", "cluster", "namespace"],
         "predicates": [],
         "index_macro": "adm_index_summary",
         "definition": "`adm_catalog_edges` | eval adm_match=if(client_ip==lower(\"$query$\") OR server_ip==lower(\"$query$\") OR `adm_pick(c, epg)`==\"$query$\" OR `adm_pick(s, epg)`==\"$query$\"     OR `adm_pick(c, dev)`==\"$query$\" OR `adm_pick(s, dev)`==\"$query$\" OR adm_c_aciepg==\"$query$\" OR adm_s_aciepg==\"$query$\", 1, 0),     adm_pkey=if(adm_match==1, mvdedup(mvappend(adm_c_pkey, adm_s_pkey)), null()), adm_kind=\"candidate\" | fields adm_pkey adm_catalog_invalid adm_kind | appendpipe [| stats max(adm_catalog_invalid) AS adm_catalog_invalid | eval adm_pkey=\"adm-status\", adm_kind=\"status\"] | `adm_catalog_append_kv(adm_ip_identity)` | eval adm_kind=coalesce(adm_kind, \"identity\") | `adm_identity_desc` | addinfo | eval adm_match=if(adm_kind==\"identity\" AND valid_from<info_max_time AND (isnull(valid_end) OR valid_end>info_min_time)     AND (ip==lower(\"$query$\") OR epg==\"$query$\" OR attach_device==\"$query$\" OR \"uni/tn-\".tenant.\"/ap-\".app_profile.\"/epg-\".epg==\"$query$\"), 1, 0),     adm_pkey=if(adm_kind==\"identity\", if(entity_kind==\"pod\" AND adm_match==1, json_array(cluster, namespace, entity_id), null()), adm_pkey) | fields adm_pkey adm_kind adm_catalog_invalid | `adm_catalog_append_kv(adm_service_workload)` | eval adm_kind=coalesce(adm_kind, \"binding\"),     adm_pkey=if(adm_kind==\"binding\", json_array(cluster, namespace, pod_uid), adm_pkey),     adm_ref=if(adm_kind==\"binding\", json_object(\"service\", service, \"environment\", coalesce(environment, \"\"), \"cluster\", coalesce(cluster, \"\"), \"namespace\", coalesce(namespace, \"\"), \"last\", tonumber(last_seen)), null()),     adm_binding_last=if(adm_kind==\"binding\", last_seen, null()), adm_binding_pod=if(adm_kind==\"binding\", pod_uid, null()) | fields adm_pkey adm_ref adm_binding_last adm_binding_pod adm_kind adm_catalog_invalid | where isnotnull(adm_pkey) | eventstats sum(eval(mvcount(adm_pkey))) AS adm_expand_expected | mvexpand adm_pkey | eventstats count AS adm_expand_actual max(adm_expand_expected) AS adm_expand_expected max(adm_catalog_invalid) AS adm_catalog_invalid | eval adm_catalog_invalid=if(isnull(adm_expand_expected) OR adm_expand_actual!=adm_expand_expected OR adm_catalog_invalid==1, 1, 0) | stats values(adm_ref) AS adm_refs values(adm_binding_pod) AS adm_binding_pods max(adm_binding_last) AS adm_binding_last     max(eval(if(adm_kind==\"candidate\" OR adm_kind==\"identity\", 1, 0))) AS adm_found max(adm_catalog_invalid) AS adm_catalog_invalid by adm_pkey | eventstats max(adm_catalog_invalid) AS adm_invalid | appendpipe [| where coalesce(adm_invalid, 0)==0 AND adm_found==1 AND isnotnull(adm_refs)     | eventstats sum(eval(mvcount(adm_refs))) AS adm_refs_expected     | mvexpand adm_refs | eventstats count AS adm_refs_actual max(adm_refs_expected) AS adm_refs_expected     | where adm_refs_actual==adm_refs_expected     | eval service=json_extract(adm_refs, \"service\"), environment=json_extract(adm_refs, \"environment\"), cluster=json_extract(adm_refs, \"cluster\"), namespace=json_extract(adm_refs, \"namespace\"), adm_binding_last=json_extract(adm_refs, \"last\")     | stats dc(adm_binding_pods) AS pods max(adm_binding_last) AS last_seen by service environment cluster namespace     | eval _key=sha256(json_array(service, environment, cluster, namespace)), last_seen=floor(last_seen), adm_kind=\"result\"] | eventstats count(eval(adm_kind==\"result\")) AS adm_results | appendpipe [| where adm_invalid==1 OR (adm_found==1 AND isnotnull(adm_refs) AND adm_results==0)     | stats count | where count>0 | eval adm_kind=\"warning\", warnings=\"Find could not read complete identity, binding or conversation evidence. Narrow the window or ask an administrator to check lookup/result limits.\"] | where adm_kind==\"result\" OR adm_kind==\"warning\" | fields _key service environment cluster namespace pods last_seen warnings | sort 0 service environment cluster namespace",
@@ -785,12 +714,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_find_v2(1)]",
         "invoke": "| `adm_find_v2(\"{{query}}\")`",
         "read_only": true,
-        "required_fields": [
-          "service",
-          "environment",
-          "cluster",
-          "namespace"
-        ],
+        "required_fields": ["service", "environment", "cluster", "namespace"],
         "predicates": [],
         "index_macro": "adm_index_summary_v2",
         "definition": "`adm_catalog_edges_v2` | eval adm_match=if(client_ip==lower(\"$query$\") OR server_ip==lower(\"$query$\") OR `adm_pick(c, epg)`==\"$query$\" OR `adm_pick(s, epg)`==\"$query$\"     OR `adm_pick(c, dev)`==\"$query$\" OR `adm_pick(s, dev)`==\"$query$\" OR adm_c_aciepg==\"$query$\" OR adm_s_aciepg==\"$query$\", 1, 0),     adm_pkey=if(adm_match==1, mvdedup(mvappend(adm_c_pkey, adm_s_pkey)), null()), adm_kind=\"candidate\" | fields adm_pkey adm_catalog_invalid adm_kind | appendpipe [| stats max(adm_catalog_invalid) AS adm_catalog_invalid | eval adm_pkey=\"adm-status\", adm_kind=\"status\"] | `adm_catalog_append_kv(adm_ip_identity)` | eval adm_kind=coalesce(adm_kind, \"identity\") | `adm_identity_desc` | addinfo | eval adm_match=if(adm_kind==\"identity\" AND valid_from<info_max_time AND (isnull(valid_end) OR valid_end>info_min_time)     AND (ip==lower(\"$query$\") OR epg==\"$query$\" OR attach_device==\"$query$\" OR \"uni/tn-\".tenant.\"/ap-\".app_profile.\"/epg-\".epg==\"$query$\"), 1, 0),     adm_pkey=if(adm_kind==\"identity\", if(entity_kind==\"pod\" AND adm_match==1, json_array(cluster, namespace, entity_id), null()), adm_pkey) | fields adm_pkey adm_kind adm_catalog_invalid | `adm_catalog_append_kv(adm_service_workload)` | eval adm_kind=coalesce(adm_kind, \"binding\"),     adm_pkey=if(adm_kind==\"binding\", json_array(cluster, namespace, pod_uid), adm_pkey),     adm_ref=if(adm_kind==\"binding\", json_object(\"service\", service, \"environment\", coalesce(environment, \"\"), \"cluster\", coalesce(cluster, \"\"), \"namespace\", coalesce(namespace, \"\"), \"last\", tonumber(last_seen)), null()),     adm_binding_last=if(adm_kind==\"binding\", last_seen, null()), adm_binding_pod=if(adm_kind==\"binding\", pod_uid, null()) | fields adm_pkey adm_ref adm_binding_last adm_binding_pod adm_kind adm_catalog_invalid | where isnotnull(adm_pkey) | eventstats sum(eval(mvcount(adm_pkey))) AS adm_expand_expected | mvexpand adm_pkey | eventstats count AS adm_expand_actual max(adm_expand_expected) AS adm_expand_expected max(adm_catalog_invalid) AS adm_catalog_invalid | eval adm_catalog_invalid=if(isnull(adm_expand_expected) OR adm_expand_actual!=adm_expand_expected OR adm_catalog_invalid==1, 1, 0) | stats values(adm_ref) AS adm_refs values(adm_binding_pod) AS adm_binding_pods max(adm_binding_last) AS adm_binding_last     max(eval(if(adm_kind==\"candidate\" OR adm_kind==\"identity\", 1, 0))) AS adm_found max(adm_catalog_invalid) AS adm_catalog_invalid by adm_pkey | eventstats max(adm_catalog_invalid) AS adm_invalid | appendpipe [| where coalesce(adm_invalid, 0)==0 AND adm_found==1 AND isnotnull(adm_refs)     | eventstats sum(eval(mvcount(adm_refs))) AS adm_refs_expected     | mvexpand adm_refs | eventstats count AS adm_refs_actual max(adm_refs_expected) AS adm_refs_expected     | where adm_refs_actual==adm_refs_expected     | eval service=json_extract(adm_refs, \"service\"), environment=json_extract(adm_refs, \"environment\"), cluster=json_extract(adm_refs, \"cluster\"), namespace=json_extract(adm_refs, \"namespace\"), adm_binding_last=json_extract(adm_refs, \"last\")     | stats dc(adm_binding_pods) AS pods max(adm_binding_last) AS last_seen by service environment cluster namespace     | eval _key=sha256(json_array(service, environment, cluster, namespace)), last_seen=floor(last_seen), adm_kind=\"result\"] | eventstats count(eval(adm_kind==\"result\")) AS adm_results | appendpipe [| where adm_invalid==1 OR (adm_found==1 AND isnotnull(adm_refs) AND adm_results==0)     | stats count | where count>0 | eval adm_kind=\"warning\", warnings=\"Find could not read complete identity, binding or conversation evidence. Narrow the window or ask an administrator to check lookup/result limits.\"] | where adm_kind==\"result\" OR adm_kind==\"warning\" | fields _key service environment cluster namespace pods last_seen warnings | sort 0 service environment cluster namespace",
@@ -832,9 +756,7 @@
         "definition": "`adm_kv_read_all(adm_network_client_history)` | where adm_page>=1 | addinfo | eval adm_identity_group=if(len(trim(coalesce(native_id,\"\")))>0,json_array(source,source_authority,native_id),_key), adm_evidence_time=if(source==\"catalyst_client_snapshot\",tonumber(received_time),tonumber(source_time)), adm_reference_time=min(now(),info_max_time) | eventstats count AS history_rows BY adm_identity_group | eventstats dc(event_fingerprint) AS simultaneous_claims BY adm_identity_group adm_evidence_time | eval diagnostic_status=case(adm_complete!=1,\"incomplete\",history_rows>=`adm_identity_max_matches`,\"incomplete\",isnull(client_mac) OR isnull(source_time) OR isnull(received_time) OR mapping_status!=\"mapped\" OR isnull(client_ip),\"incomplete\",simultaneous_claims>1,\"conflict\",source==\"catalyst_client_snapshot\" AND (source_time<received_time-3600 OR source_time>received_time+300),\"stale\",adm_evidence_time>adm_reference_time,\"outside_window\",adm_reference_time>adm_evidence_time+if(source==\"meraki_association\",900,3600),\"stale\",true(),\"evidence_only\"),   diagnostic_reason=mvjoin(mvappend(if(adm_complete!=1,\"History collection read is incomplete; matching observations may be omitted.\",null()),if(history_rows>=`adm_identity_max_matches`,\"Client history reaches the correlation lookup cap; narrow retention through administrator maintenance.\",null()),if(mapping_status!=\"mapped\",\"Configure one explicit source authority and routing-domain profile; this evidence has no correlation scope.\",null()),if(isnull(client_mac),\"A valid client MAC is unavailable; client identity cannot be correlated.\",null()),if(isnull(source_time),\"Source event time is unavailable.\",null()),if(isnull(received_time),\"Indexed receipt time is unavailable; snapshot eligibility cannot be established.\",null()),if(isnull(client_ip),\"Optional client IP is unavailable; this observation cannot attach an IP flow.\",null()),if(simultaneous_claims>1,\"Different observations claim the same client at the same effective time; attachment is unresolved.\",null()),if(source==\"catalyst_client_snapshot\" AND (source_time<received_time-3600 OR source_time>received_time+300),\"Catalyst source time is stale or ahead of indexed receipt.\",null()),if(adm_evidence_time>adm_reference_time,\"Observation is later than the selected window; Catalyst eligibility begins at indexed receipt.\",null()),if(adm_reference_time>adm_evidence_time+if(source==\"meraki_association\",900,3600),\"Evidence has expired at the selected window end; continuity across the gap is not established.\",null()),if(isnull(attachment_device_id),\"Optional attachment device identity is unavailable; no device or AP is inferred.\",null()),if(source==\"meraki_association\" AND isnull(ssid_number),\"Optional SSID number is unavailable; no SSID name is inferred.\",null())),\" \") | appendpipe [| stats min(adm_complete) AS complete | where complete==0 | eval row_type=\"warning\", warning=\"Network client history could not be read completely; Find results may omit matching observations. Ask an administrator to inspect collection/query limits.\"] | where row_type==\"warning\" OR lower(coalesce(client_ip, \"\"))==lower(\"$query$\") OR lower(coalesce(client_mac, \"\"))==lower(\"$query$\") OR tostring(native_id)==\"$query$\" | eval row_type=coalesce(row_type,\"network_client\"), access_platform=case(source==\"meraki_association\", \"wireless\", source==\"catalyst_client_snapshot\", \"wired\", true(), \"unknown\"),   attachment_event_time=if(source==\"meraki_association\", source_time, null()), attachment_received_time=received_time,   attachment_collected_time=collected_time, warning=coalesce(warning,if(mapping_status!=\"mapped\", \"Source routing domain is unmapped or ambiguous; this observation is not correlated.\", null())) | fields row_type _key contract_version source source_authority native_id client_mac client_ip access_platform routing_domain scope cluster source_time received_time latest_received_time collected_time attachment_basis attachment_event_time attachment_received_time attachment_collected_time attachment_device_id attachment_device_name attachment_device_mac device_serial ssid_number attachment_status mapping_status quality_reason diagnostic_status diagnostic_reason history_rows simultaneous_claims warning | sort 0 - source_time - received_time",
         "definition_sha256": "3ba4a6c067b8d4803cfb4536d5c9ad9a0e7cbdcf71c95a86f21e3ac204d88d77"
       },
-      "scenario_fields": [
-        "query"
-      ]
+      "scenario_fields": ["query"]
     },
     {
       "surface": "health",
@@ -844,20 +766,12 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_health_sources]",
         "invoke": "| `adm_health_sources`",
         "read_only": true,
-        "required_fields": [
-          "kind",
-          "name",
-          "status"
-        ],
+        "required_fields": ["kind", "name", "status"],
         "predicates": [
           {
             "field": "status",
             "operator": "allowed_values",
-            "value": [
-              "unavailable",
-              "no_visible_records",
-              "ok"
-            ]
+            "value": ["unavailable", "no_visible_records", "ok"]
           }
         ],
         "definition": "`adm_health_source_netflow` | append [| `adm_health_source_dcn`] | append [| `adm_health_source_ftd`] | append [| `adm_health_source_isovalent`] | append [| `adm_health_source_k8s`] | append [| `adm_health_source_traces`] | append [| `adm_health_source_hubble`] | append [| `adm_health_source_catalyst`] | append [| `adm_health_source_meraki`] | append [| `adm_health_source_summary`] | append [| `adm_health_source_aci`] | append [| `adm_health_source_nd`] | append [| `adm_health_source_nxos`]",
@@ -868,18 +782,12 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_health_sources_v2]",
         "invoke": "| `adm_health_sources_v2`",
         "read_only": true,
-        "required_fields": [
-          "kind",
-          "name",
-          "status"
-        ],
+        "required_fields": ["kind", "name", "status"],
         "predicates": [
           {
             "field": "name",
             "operator": "contains_all",
-            "value": [
-              "Version 2 source scope profiles"
-            ]
+            "value": ["Version 2 source scope profiles"]
           },
           {
             "field": "status",
@@ -899,15 +807,9 @@
           "invoke": "| `adm_health_quality_v2`",
           "public_after_invoke": "| `adm_health_quality_v2`",
           "rollback_before_invoke": "| `adm_health_quality`",
-          "definition": "`adm_health_quality_v1_impl` | append [ search earliest=0 latest=+10y _index_earliest=-24h _index_latest=now `adm_flows_netflow_v2` | `adm_flow_enrich_v2`     | eval adm_reason=mvappend(\"evaluated\", \"profile_\".coalesce(adm_profile_status,\"unknown\"), if(isnull(adm_event_id),\"missing_stable_event_identity\",null()), if(isnull(adm_start),\"missing_source_time\",null()), if(isnull(adm_source_mac),\"missing_source_mac\",null()), if(isnull(adm_destination_mac),\"missing_destination_mac\",null()), if(isnull(adm_raw_bytes) AND isnull(adm_raw_packets),\"missing_counters\",null()), if(isnull(adm_raw_sampling),\"missing_sampling_metadata\",null()), if(adm_profile_status==\"mapped\",\"counter_semantics_unknown\",null()))     | mvexpand adm_reason | stats count AS records by adm_profile_status adm_reason     | eval source=\"stream_ipfix_v2\", status=adm_profile_status, reason=adm_reason, kind=\"quality\" | fields kind source status reason records ] | append [ search `adm_network_client_history_observations`     | eval adm_reason=coalesce(quality_reason,\"history_observation_valid\"), status=case(mapping_status==\"mapped\" AND isnull(quality_reason),\"mapped\", mapping_status==\"ambiguous\",\"ambiguous\", true(),\"incomplete\")     | stats count AS records by source status adm_reason     | rename adm_reason AS reason | eval kind=\"quality\" | fields kind source status reason records ]",
-          "definition_sha256": "4d3480a6a67d68ed6572a8248eed13c463b79eaed3888899d17a61bb2f776cd1",
-          "required_fields": [
-            "kind",
-            "source",
-            "status",
-            "reason",
-            "records"
-          ],
+          "definition": "`adm_health_quality_v1_impl` | append [| `adm_health_quality_stream_v2`] | append [| `adm_health_quality_catalyst`] | append [| `adm_health_quality_meraki`]",
+          "definition_sha256": "dd37920c81a8333f9c6fd70b3d570945009c23f0655f2047f6e08d84ca361c8f",
+          "required_fields": ["kind", "source", "status", "reason", "records"],
           "predicates": [
             {
               "field": "kind",
@@ -931,13 +833,7 @@
         "invoke": "| `adm_health_quality`",
         "v2_after": "`adm_health_quality_v2`",
         "read_only": true,
-        "required_fields": [
-          "kind",
-          "source",
-          "status",
-          "reason",
-          "records"
-        ],
+        "required_fields": ["kind", "source", "status", "reason", "records"],
         "v2_required_reasons": [
           "profile_mapped",
           "profile_unmapped",
@@ -1059,12 +955,7 @@
         "definition": "search `adm_index_summary_v2` source=\"adm:traffic_observation\" source_ip=\"$client$\" destination_ip=\"$server$\" server_port=$port$ transport=\"$transport$\" | eval source=adm_scope_source, source_authority=adm_scope_authority, observation_domain_present=adm_scope_observation_domain_present, observation_domain_id=adm_scope_observation_domain_id, vpn_id=adm_scope_vpn_id, profile=json_extract(adm_traffic_observation, \"profile\"), mapping_status=adm_profile_status | fields _time scope cluster source source_authority routing_domain observation_domain_present observation_domain_id vpn_id profile mapping_status source_ip destination_ip source_port destination_port source_mac destination_mac server_port transport direction first_seen last_seen received_time raw_bytes raw_packets raw_sampling records counter_semantics metrics_authoritative traffic_observations rollup_id replay_protected",
         "definition_sha256": "60aaa2f6d6e72f49ff056eefc13bc83086a602fea6188fdf28afb7e82b9034e3"
       },
-      "scenario_fields": [
-        "client_ip",
-        "server_ip",
-        "server_port",
-        "transport"
-      ]
+      "scenario_fields": ["client_ip", "server_ip", "server_port", "transport"]
     },
     {
       "surface": "topology",
@@ -1074,53 +965,26 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_topology]",
         "invoke": "| search `adm_topology`",
         "read_only": true,
-        "required_fields": [
-          "row_type"
-        ],
+        "required_fields": ["row_type"],
         "predicates": [
           {
             "field": "row_type",
             "operator": "allowed_values",
-            "value": [
-              "device",
-              "link",
-              "interface",
-              "meta"
-            ]
+            "value": ["device", "link", "interface", "meta"]
           },
           {
             "field": "physical_adjacency",
             "operator": "legacy_explicit_physical_links",
-            "value": [
-              "aci",
-              "lldp",
-              "cdp"
-            ]
+            "value": ["aci", "lldp", "cdp"]
           }
         ],
         "definition": "(`adm_index_dcn` sourcetype=\"cisco:dc:nexus9k\" (component=\"nxhostname\" OR component=\"nxversion\" OR component=\"nxneighbor\" OR component=\"nxinterface\"))   OR (`adm_index_dcn` sourcetype=\"cisco:dc:aci:class\" (component=\"topSystem\" OR component=\"fabricLink\" OR component=\"lldpAdjEp\")) | append [search `adm_index_ftd` sourcetype=\"cisco:sfw:estreamer\" EventType=\"ConnectionEvent\" | head `adm_topology_sample`     | stats latest(Device) AS Device latest(DeviceSerialNumber) AS DeviceSerialNumber max(_time) AS _time by DeviceIP | eval adm_kind=\"ftd\"] | append [search `adm_index_dcn` sourcetype=\"cisco:dc:nd:flows\" | head `adm_topology_sample`     | eval adm_nodes='stats{}.nodeNames{}' | mvexpand adm_nodes     | stats latest(fabricName) AS adm_fabric max(_time) AS _time by adm_nodes | eval adm_kind=\"ndfabric\"] | eval adm_kind=coalesce(adm_kind, component),   adm_aci_pod=if(adm_kind==\"topSystem\" OR adm_kind==\"fabricLink\" OR adm_kind==\"lldpAdjEp\", replace(dn, \"^topology/(pod-\\d+)/.*$\", \"\\1\"), null()),   adm_aci_key=if(adm_kind==\"topSystem\", replace(dn, \"^topology/(pod-\\d+)/(node-\\d+)/sys$\", \"\\1/\\2\"), null()) | eventstats values(eval(if(adm_kind==\"topSystem\", apic_host.\"|\".adm_aci_key.\"=\".name, null()))) AS adm_aci_names | eval adm_lldp_local=if(adm_kind==\"lldpAdjEp\", apic_host.\"|\".replace(dn, \"^topology/(pod-\\d+)/(node-\\d+)/.*$\", \"\\1/\\2\"), null()),   adm_lldp_if=if(adm_kind==\"lldpAdjEp\", replace(dn, \"^.*/if-\\[([^\\]]+)\\]/.*$\", \"\\1\"), null()),   adm_lldp_fabric=if(adm_kind==\"lldpAdjEp\" AND match(sysDesc, \"^topology/pod-\\d+/node-\\d+$\"), 1, 0),   adm_lldp_rif=if(adm_kind==\"lldpAdjEp\", if(match(portDesc, \"pathep-\\[\"), replace(portDesc, \"^.*pathep-\\[([^\\]]+)\\].*$\", \"\\1\"), portDesc), null()),   adm_fl_a=if(adm_kind==\"fabricLink\", apic_host.\"|\".adm_aci_pod.\"/node-\".n1, null()), adm_fl_b=if(adm_kind==\"fabricLink\", apic_host.\"|\".adm_aci_pod.\"/node-\".n2, null()),   adm_aci_a=mvindex(mvmap(adm_aci_names, if(mvindex(split(adm_aci_names, \"=\"), 0)==coalesce(adm_fl_a, adm_lldp_local), mvindex(split(adm_aci_names, \"=\"), 1), null())), 0),   adm_aci_b=mvindex(mvmap(adm_aci_names, if(mvindex(split(adm_aci_names, \"=\"), 0)==adm_fl_b, mvindex(split(adm_aci_names, \"=\"), 1), null())), 0) | eval adm_kind=case(adm_kind==\"topSystem\", \"topSystem\", adm_kind==\"fabricLink\", \"aciLink\", adm_kind==\"lldpAdjEp\" AND adm_lldp_fabric==1, \"aciLink\", adm_kind==\"lldpAdjEp\", \"lldpHost\", true(), adm_kind),   adm_l_ai_raw=case(component==\"fabricLink\", \"eth\".s1.\"/\".p1, component==\"lldpAdjEp\", adm_lldp_if),   adm_l_bi_raw=case(component==\"fabricLink\", \"eth\".s2.\"/\".p2, component==\"lldpAdjEp\", adm_lldp_rif),   adm_dev_ip=case(adm_kind==\"ftd\", `adm_ip(DeviceIP)`, adm_kind==\"topSystem\", if(oobMgmtAddr==\"0.0.0.0\", null(), oobMgmtAddr), adm_kind==\"ndfabric\", null(), true(), replace(device, \":\\d+$\", \"\")),   adm_hostname=if(adm_kind==\"nxhostname\", mvindex('Row_info{}.hostname', 0), null()),   adm_version=if(adm_kind==\"nxversion\", mvindex('Row_info{}.nxos_ver_str', 0), null()),   adm_peer_ip=if(adm_kind==\"nxneighbor\", 'Row_info.v4mgmtaddr', null()),   adm_ipkey=if(adm_kind==\"nxneighbor\", adm_peer_ip, adm_dev_ip) | eventstats latest(adm_hostname) AS adm_local_name latest(adm_version) AS adm_local_version by adm_dev_ip | eventstats latest(adm_hostname) AS adm_peer_name by adm_ipkey | eval adm_cdp_name=if(adm_kind==\"nxneighbor\", coalesce(adm_peer_name, replace('Row_info.device_id', \"\\([^)]*\\)$\", \"\")), null()),   adm_local=coalesce(adm_local_name, adm_dev_ip) | appendpipe [| where isnull(row_type) AND adm_kind!=\"nxinterface\" AND adm_kind!=\"aciLink\" AND adm_kind!=\"lldpHost\"     | eval d_self=case(adm_kind==\"nxhostname\" OR adm_kind==\"nxversion\", adm_local_name, adm_kind==\"topSystem\", name, adm_kind==\"ftd\", Device),       d_name=coalesce(d_self, adm_cdp_name, adm_nodes), d_lname=lower(d_name),       d_ip=if(adm_kind==\"nxneighbor\", adm_peer_ip, adm_dev_ip),       d_platform=if(adm_kind==\"nxneighbor\", 'Row_info.platform_id', null()),       d_version=if(adm_kind==\"nxhostname\" OR adm_kind==\"nxversion\", adm_local_version, null()),       d_serial=case(adm_kind==\"nxneighbor\" AND match('Row_info.device_id', \"\\([^)]+\\)$\"), replace('Row_info.device_id', \"^.*\\(([^)]+)\\)$\", \"\\1\"), adm_kind==\"topSystem\", serial, adm_kind==\"ftd\", DeviceSerialNumber),       d_kind=case(adm_kind==\"ftd\", \"firewall\", adm_kind==\"topSystem\" AND role==\"controller\", \"controller\", true(), \"switch\"),       d_fabric=case(adm_kind==\"topSystem\", \"apic:\".apic_host, adm_kind==\"ndfabric\", adm_fabric),       d_aci_node=if(adm_kind==\"topSystem\", replace(dn, \"^topology/(pod-\\d+)/(node-\\d+)/sys$\", \"\\1/\\2\"), null()),       d_role=if(adm_kind==\"topSystem\", role, null()),       d_src=case(adm_kind==\"nxneighbor\", \"cdp\", adm_kind==\"topSystem\", \"aci\", adm_kind==\"ftd\", \"ftd\", adm_kind==\"ndfabric\", \"nd\", true(), \"nxos\")     | where isnotnull(d_lname) AND d_lname!=\"\"     | stats latest(d_self) AS d_self latest(d_name) AS d_name latest(d_ip) AS mgmt_ip latest(d_platform) AS platform latest(d_version) AS os_version         latest(d_serial) AS serial latest(d_kind) AS device_kind latest(eval(if(d_src==\"aci\", d_fabric, null()))) AS adm_aci_fabric latest(d_fabric) AS fabric         latest(d_aci_node) AS aci_node latest(d_role) AS role values(d_src) AS sources by d_lname     | eval row_type=\"device\", name=coalesce(d_self, d_name), device_id=name, fabric=coalesce(adm_aci_fabric, fabric)     | fields row_type device_id name mgmt_ip device_kind platform os_version serial fabric aci_node role sources] | appendpipe [| where isnull(row_type) AND adm_kind==\"aciLink\" AND isnotnull(adm_aci_a)     | eval l_a=adm_aci_a, l_ai=`adm_if_norm(adm_l_ai_raw)`, l_b=coalesce(adm_aci_b, sysName), l_bi=`adm_if_norm(adm_l_bi_raw)`,       l_ae=lower(l_a).\"|\".l_ai, l_be=lower(l_b).\"|\".l_bi, l_fwd=if(l_ae<=l_be, 1, 0),       a_device=if(l_fwd==1, l_a, l_b), a_interface=if(l_fwd==1, l_ai, l_bi), b_device=if(l_fwd==1, l_b, l_a), b_interface=if(l_fwd==1, l_bi, l_ai),       l_key=if(l_fwd==1, l_ae.\"#\".l_be, l_be.\"#\".l_ae)     | where isnotnull(l_key) AND isnotnull(l_b)     | stats latest(a_device) AS a_device latest(a_interface) AS a_interface latest(b_device) AS b_device latest(b_interface) AS b_interface max(_time) AS last_seen by l_key     | eval row_type=\"link\", link_source=\"aci\"     | fields row_type a_device a_interface b_device b_interface link_source last_seen] | appendpipe [| where isnull(row_type) AND adm_kind==\"lldpHost\" AND isnotnull(adm_aci_a) AND isnotnull(sysName) AND sysName!=\"\"     | eval a_device=adm_aci_a, a_interface=`adm_if_norm(adm_lldp_if)`, b_device=sysName, b_interface=adm_lldp_rif     | stats latest(b_interface) AS b_interface max(_time) AS last_seen by a_device a_interface b_device     | eval row_type=\"link\", link_source=\"lldp\"     | fields row_type a_device a_interface b_device b_interface link_source last_seen] | appendpipe [| where isnull(row_type) AND adm_kind==\"nxneighbor\"     | eval l_a=adm_local, l_ai=`adm_if_norm('Row_info.intf_id')`, l_b=adm_cdp_name, l_bi=`adm_if_norm('Row_info.port_id')`,       l_ae=lower(l_a).\"|\".l_ai, l_be=lower(l_b).\"|\".l_bi, l_fwd=if(l_ae<=l_be, 1, 0),       a_device=if(l_fwd==1, l_a, l_b), a_interface=if(l_fwd==1, l_ai, l_bi), b_device=if(l_fwd==1, l_b, l_a), b_interface=if(l_fwd==1, l_bi, l_ai),       l_key=if(l_fwd==1, l_ae.\"#\".l_be, l_be.\"#\".l_ae)     | where isnotnull(l_key)     | stats latest(a_device) AS a_device latest(a_interface) AS a_interface latest(b_device) AS b_device latest(b_interface) AS b_interface max(_time) AS last_seen by l_key     | eval row_type=\"link\", link_source=\"cdp\"     | fields row_type a_device a_interface b_device b_interface link_source last_seen] | appendpipe [| where isnull(row_type) AND (adm_kind==\"nxinterface\" OR adm_kind==\"nxneighbor\")     | eval i_raw=if(adm_kind==\"nxinterface\", 'Row_info.interface', 'Row_info.intf_id')     | eval i_if=`adm_if_norm(i_raw)`,       i_ifindex=if(adm_kind==\"nxneighbor\", 'Row_info.ifindex', null()),       i_desc=if(adm_kind==\"nxinterface\", 'Row_info.desc', null()), i_state=if(adm_kind==\"nxinterface\", 'Row_info.state', null()),       i_dev=adm_local, i_key=lower(adm_local).\"|\".i_if     | where isnotnull(i_if) AND i_if!=\"\"     | stats latest(i_dev) AS device_id latest(i_if) AS interface latest(i_ifindex) AS ifindex latest(i_desc) AS description latest(i_state) AS state by i_key     | eval row_type=\"interface\"     | fields row_type device_id interface ifindex description state] | where isnotnull(row_type) | appendpipe [| stats count(eval(row_type==\"device\")) AS devices count(eval(row_type==\"link\")) AS links count(eval(row_type==\"interface\")) AS interfaces       count(eval(row_type==\"interface\" AND isnotnull(ifindex))) AS adm_indexed count(eval(row_type==\"link\" AND link_source!=\"lldp\")) AS adm_switch_links       count(eval(row_type==\"device\" AND role==\"leaf\")) AS adm_aci_leaves count(eval(row_type==\"link\" AND link_source==\"aci\")) AS adm_aci_links     | eval row_type=\"meta\", generated_at=now(),       warnings=mvappend(if(devices==0, \"No network inventory was found in the selected time range. Enable the DC Networking NX-OS inputs (show hostname, show cdp neighbors detail, show interface) or the ACI inputs (topSystem, and fabricLink and lldpAdjEp in a classInfo input), and set adm_index_dcn.\", null()),         if(devices>0 AND adm_switch_links==0, \"No switch-to-switch links (CDP, ACI fabricLink or fabric LLDP) were collected, so candidate paths between switches cannot be drawn.\", null()),         if(adm_aci_leaves>0 AND adm_aci_links==0, \"ACI leaves were found but no fabricLink or lldpAdjEp objects; add them to a DC Networking classInfo input to draw leaf-spine paths.\", null()),         if(interfaces>adm_indexed, \"SNMP ifIndex is known only for CDP-connected ports. NetFlow interfaces on other ports are shown by ifIndex unless 'show interface snmp-ifindex' output is collected.\", null()))     | fields row_type devices links interfaces warnings generated_at] | fields row_type device_id name mgmt_ip device_kind platform os_version serial fabric aci_node role sources a_device a_interface b_device b_interface link_source last_seen interface ifindex description state devices links interfaces warnings generated_at | fields - _*",
         "definition_sha256": "7f51012807d7a73099eca1da90f64b4c4b2b9f0752e645d118dd63ef70c9850c",
         "required_fields_by_row_type": {
-          "meta": [
-            "row_type"
-          ],
-          "device": [
-            "row_type",
-            "device_id",
-            "name",
-            "device_kind"
-          ],
-          "interface": [
-            "row_type",
-            "device_id",
-            "interface"
-          ],
-          "link": [
-            "row_type",
-            "a_device",
-            "b_device",
-            "link_source"
-          ]
+          "meta": ["row_type"],
+          "device": ["row_type", "device_id", "name", "device_kind"],
+          "interface": ["row_type", "device_id", "interface"],
+          "link": ["row_type", "a_device", "b_device", "link_source"]
         }
       },
       "v2": {
@@ -1128,9 +992,7 @@
         "definition_ref": "splunk_app/splunk_adm/default/macros.conf:[adm_topology_v2]",
         "invoke": "| search `adm_topology_v2`",
         "read_only": true,
-        "required_fields": [
-          "row_type"
-        ],
+        "required_fields": ["row_type"],
         "predicates": [
           {
             "field": "device_id",
@@ -1187,19 +1049,9 @@
         "rollback_selector": "adm_topology",
         "qualification_scope": "Local standalone Splunk Enterprise 10.6.0.5 with TA-grounded synthetic events; 16 source-qualified topology checks passed. This does not qualify live collection, distributed Enterprise/SHC, or Splunk Cloud.",
         "required_fields_by_row_type": {
-          "meta": [
-            "row_type"
-          ],
-          "device": [
-            "row_type",
-            "device_id",
-            "device_kind"
-          ],
-          "interface": [
-            "row_type",
-            "device_id",
-            "interface"
-          ],
+          "meta": ["row_type"],
+          "device": ["row_type", "device_id", "device_kind"],
+          "interface": ["row_type", "device_id", "interface"],
           "link": [
             "row_type",
             "a_device",
@@ -1312,17 +1164,9 @@
         "unique_key": "_key",
         "require_every_expected_key": true,
         "allow_incomplete_mapping_rows": true,
-        "require_mapping_status": [
-          "mapped",
-          "unmapped",
-          "ambiguous"
-        ],
+        "require_mapping_status": ["mapped", "unmapped", "ambiguous"],
         "fail_on_missing_or_duplicate_keys": true,
-        "allowed_mapping_statuses": [
-          "mapped",
-          "unmapped",
-          "ambiguous"
-        ],
+        "allowed_mapping_statuses": ["mapped", "unmapped", "ambiguous"],
         "expected_key_coverage": "expected_row_query result _key set equals collection _key set for the closed source index-time slice; compare all expected_row_fields, excluding merge-only receipt fields according to receipt_semantics"
       },
       "receipt_semantics": "The observations query emits received_time from _indextime. For duplicate event keys within a bounded slice, the migration validator computes the expected minimum and maximum from those per-record received_time values. The history builder persists received_time as the minimum of prior and current receipts and latest_received_time as the maximum of prior and current receipts. latest_received_time is builder-generated, not an observations field. No collected_time is inferred; it is absent unless a source documents and emits an actual collector timestamp.",

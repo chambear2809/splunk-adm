@@ -2817,6 +2817,7 @@ class Migration:
 
     def reconcile(self, sid: str) -> dict[str, Any]:
         """Adopt an operator-discovered SID for a pending unknown dispatch, never resend it."""
+        self.qualify()
         journal = self._load()
         if journal.get("phase") in {
             "cutover_in_progress",
@@ -6442,10 +6443,17 @@ class Migration:
                 }
                 and job.get("intent_fingerprint") == writer_intent
             ]
+            dispatch_jobs = [
+                job
+                for job in matching_jobs
+                if job.get("sid")
+                or job.get("state")
+                not in {"rejected", "configuration_pending", "preparation_aborted"}
+            ]
             if expected:
-                if len(matching_jobs) > 1:
+                if len(dispatch_jobs) > 1:
                     raise Refused("V1 recovery slice has ambiguous writer intents")
-                if already == expected_with_current and not matching_jobs:
+                if already == expected_with_current and not dispatch_jobs:
                     raise Refused(
                         "V1 recovery retained rows have no exact journaled writer SID"
                     )
@@ -7557,7 +7565,9 @@ def _api_from_stdin(uri: str, ca_file: str | None):
         token = getpass.getpass("Splunk session key: ")
     if not token or "\n" in token or "\r" in token:
         raise Refused("session key must be supplied via stdin")
-    sys.path.insert(0, str(ROOT / "splunk_app" / "splunk_adm" / "bin"))
+    bin_root = ROOT / "splunk_app" / "splunk_adm" / "bin"
+    sys.path.insert(0, str(bin_root))
+    sys.path.insert(0, str(bin_root / "lib"))
     from adm_recovery_lib.rest import Rest
 
     return Rest(token, uri=uri, ca_file=ca_file)

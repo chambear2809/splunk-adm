@@ -35,6 +35,7 @@ export interface SourceHealth {
 }
 export interface JobHealth {
   name: string;
+  contractConflict?: boolean;
   disabled?: boolean;
   scheduled?: boolean;
   required?: boolean;
@@ -73,7 +74,7 @@ export const QUALITY_REASONS: Record<string, string> = {
   invalid_sampling: "Invalid sampling interval",
   missing_counters: "Byte or packet measurements are missing",
   unknown_sampling: "Sampling interval missing; assuming 1:1",
-  unmapped_scope: "No observer mapping; using the default scope",
+  unmapped_scope: "No observer mapping; source authority remains isolated",
 };
 export function qualityRows(rows: Row[]): QualityHealth {
   const summaries = rows.filter(
@@ -89,7 +90,7 @@ export function qualityRows(rows: Row[]): QualityHealth {
     (r) =>
       r.kind === "quality" &&
       r.reason === "evaluated" &&
-      r.status === "excluded",
+      (r.status === "excluded" || r.status === "excluded_uncorrelated"),
   );
   const excluded =
     evaluated === undefined ||
@@ -115,6 +116,8 @@ export function qualityRows(rows: Row[]): QualityHealth {
                 "accepted",
                 "accepted_with_warning",
                 "excluded",
+                "excluded_uncorrelated",
+                "context_only",
                 "mapped",
                 "unmapped",
                 "ambiguous",
@@ -151,13 +154,19 @@ export function qualityRows(rows: Row[]): QualityHealth {
             : (QUALITY_REASONS[String(r.reason)] ??
               String(r.reason).slice(0, 300)),
         status:
-          r.status === "excluded"
+          r.status === "excluded" || r.status === "excluded_uncorrelated"
             ? "Excluded"
-            : r.status === "accepted" ||
-                r.status === "warning" ||
-                r.status === "accepted_with_warning"
-              ? "Accepted with warning"
-              : `Disposition: ${text(r.status) ?? "unknown"}`,
+            : r.status === "checked"
+              ? "Checked"
+              : r.status === "context_only"
+                ? "Context only"
+                : r.status === "mapped"
+                  ? "Diagnostic"
+                  : r.status === "accepted" ||
+                      r.status === "warning" ||
+                      r.status === "accepted_with_warning"
+                    ? "Accepted with warning"
+                    : `Disposition: ${text(r.status) ?? "unknown"}`,
         records: count(r.records)!,
       })),
   };
@@ -251,6 +260,10 @@ export function jobRows(
             required:
               expected.find((job) => job.id === definition.id)?.required ??
               false,
+            contractConflict:
+              flag(r.disabled) === false &&
+              definition.stage === "active" &&
+              !definition.contracts.includes(deployment.activeContract),
           }
         : {}),
       staleAfterSeconds: definition.cadenceSeconds + definition.graceSeconds,
@@ -265,6 +278,7 @@ export function jobRows(
   });
 }
 export interface HealthAssessment {
+  reason?: "contract_conflict";
   state: "healthy" | "unknown" | "attention" | "not_required";
   label: string;
 }
@@ -371,6 +385,13 @@ export function sourceAssessment(
 export const sourceStatus = (source: SourceHealth, now: number): string =>
   sourceAssessment(source, now).label;
 export function jobAssessment(job: JobHealth, now: number): HealthAssessment {
+  if (job.contractConflict)
+    return {
+      state: "attention",
+      reason: "contract_conflict",
+      label:
+        "Enabled writer conflicts with the active data contract. Ask an administrator to disable it or complete the reviewed migration.",
+    };
   if (job.required === false)
     return assessment("not_required", "Not required for this deployment");
   if (job.disabled === undefined)
@@ -398,7 +419,8 @@ export function jobRunAssessment(
     (job.name.endsWith("prune")
       ? 26 * 3600
       : job.name.endsWith("Interface inventory") ||
-          job.name.endsWith("Application catalog")
+          job.name.endsWith("Application catalog") ||
+          job.name.endsWith("Application catalog v2")
         ? 2 * 3600
         : 1200);
   if (!job.lastSuccess)

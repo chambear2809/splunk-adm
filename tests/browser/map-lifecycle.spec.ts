@@ -13,6 +13,7 @@ import {
   CONFLICT_ATTACHMENT_LABEL,
   CLIENT_EDGE,
   CLIENT_BACKEND,
+  lifecycleWindow,
 } from "./map-lifecycle-fixtures";
 import type { LifecycleControl } from "./map-lifecycle-harness";
 
@@ -334,9 +335,11 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
     .getByRole("button", { name: "Compare previous window", exact: true })
     .click();
   await count(page, 5);
+  const currentStart = Number(lifecycleWindow.earliest);
+  const currentDuration = Number(lifecycleWindow.latest) - currentStart;
   expect((await requests(page))[4]).toMatchObject({
-    earliest: "1792251900",
-    latest: "1792253100",
+    earliest: String(currentStart - currentDuration),
+    latest: lifecycleWindow.earliest,
   });
   await resolve(page, 4, 1);
   await expect(page.locator(".atlas-changes")).toContainText(

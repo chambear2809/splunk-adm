@@ -5,9 +5,20 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tools import scheduler_pipeline as scheduler
+import lab_lock
 
 
 class SchedulerPipelineTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_scheduler_evidence_excludes_manual_saved_search_dispatches(self):
         scheduled = {"status": "success", "sid": "scheduler__nobody_job"}
         manual = {"status": "success", "sid": "admin__nobody_job"}
@@ -160,6 +171,16 @@ class SchedulerPipelineTest(unittest.TestCase):
 
 
 class SchedulerFinalEvidenceTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_expired_catchup_deadline_records_new_target(self):
         report = {"observed_flow_records": 6, "expected_flow_records": 6}
         with (
@@ -197,6 +218,16 @@ class SchedulerFinalEvidenceTest(unittest.TestCase):
 
 
 class RecoveryExecutionTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_only_verified_empty_binding_warning_is_accepted(self):
         note = "WARN: Found no results to write to collection 'internal_collection'."
         record = {

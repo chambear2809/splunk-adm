@@ -131,6 +131,16 @@ describe("pipeline health", () => {
     ).toBe("Recent successful run");
     expect(
       jobStatus(
+        {
+          ...job,
+          name: "ADM - Application catalog v2",
+          lastSuccess: now - 3600,
+        },
+        now,
+      ),
+    ).toBe("Recent successful run");
+    expect(
+      jobStatus(
         { ...job, name: "ADM - Identity prune", lastSuccess: now - 23 * 3600 },
         now,
       ),
@@ -268,6 +278,52 @@ describe("pipeline health", () => {
         },
       ]).evaluated,
     ).toBeUndefined();
+  });
+  it("retains V2 diagnostic reasons without double-counting population", () => {
+    const quality = qualityRows([
+      {
+        kind: "quality",
+        source: "all",
+        status: "checked",
+        reason: "evaluated",
+        records: 4,
+      },
+      {
+        kind: "quality",
+        source: "stream_ipfix_v2",
+        status: "unmapped",
+        reason: "new_contract_reason",
+        records: 2,
+      },
+      {
+        kind: "quality",
+        source: "stream_ipfix_v2",
+        status: "mapped",
+        reason: "counter_semantics_unknown",
+        records: 1,
+      },
+    ]);
+    expect(quality.evaluated).toBe(4);
+    expect(quality.issues.map((issue) => issue.reason)).toEqual(
+      expect.arrayContaining([
+        "new_contract_reason",
+        "counter_semantics_unknown",
+      ]),
+    );
+  });
+  it("labels unmapped scope as isolated authority", () => {
+    const quality = qualityRows([
+      {
+        kind: "quality",
+        source: "netflow",
+        status: "accepted",
+        reason: "unmapped_scope",
+        records: 1,
+      },
+    ]);
+    expect(quality.issues[0]?.reason).toBe(
+      "No observer mapping; source authority remains isolated",
+    );
   });
   it("does not publish a cancelled check", async () => {
     search
@@ -768,3 +824,109 @@ it.each(["unmapped", "ambiguous", "unsupported", "incomplete"])(
     expect(html).not.toContain("excluded from rollup");
   },
 );
+
+it("retains PR11 excluded-uncorrelated accounting and context-only diagnostics", () => {
+  const quality = qualityRows([
+    {
+      kind: "quality",
+      source: "all",
+      status: "checked",
+      reason: "evaluated",
+      records: 4,
+    },
+    {
+      kind: "quality",
+      source: "stream_ipfix_v2",
+      status: "excluded_uncorrelated",
+      reason: "evaluated",
+      records: 2,
+    },
+    {
+      kind: "quality",
+      source: "stream_ipfix_v2",
+      status: "excluded_uncorrelated",
+      reason: "unmapped_profile",
+      records: 2,
+    },
+    {
+      kind: "quality",
+      source: "meraki_association",
+      status: "context_only",
+      reason: "evaluated",
+      records: 2,
+    },
+    {
+      kind: "quality",
+      source: "meraki_association",
+      status: "context_only",
+      reason: "client_observation",
+      records: 2,
+    },
+    {
+      kind: "quality",
+      source: "stream_ipfix_v2",
+      status: "checked",
+      reason: "profile_checked",
+      records: 2,
+    },
+  ]);
+  expect(quality.evaluated).toBe(4);
+  expect(quality.excluded).toBe(2);
+  expect(quality.incomplete).toBe(false);
+  expect(quality.issues.map((issue) => issue.status)).toEqual([
+    "Excluded",
+    "Context only",
+    "Checked",
+  ]);
+});
+
+describe("active contract writer conflicts", () => {
+  it.each([
+    ["ADM - Conversation rollup v2", 1],
+    ["ADM - Conversation rollup", 2],
+  ] as const)(
+    "flags observed enabled %s on contract %s without inventing schedule evidence",
+    (name, contract) => {
+      const config = deployment("netflow", contract);
+      const job = jobRows([{ kind: "job", name, disabled: 0 }], config).find(
+        (row) => row.name === name,
+      )!;
+      expect(job.scheduled).toBeUndefined();
+      expect(jobAssessment(job, now)).toMatchObject({
+        state: "attention",
+        reason: "contract_conflict",
+      });
+      expect(jobStatus(job, now)).toContain("Ask an administrator");
+      const html = renderToStaticMarkup(
+        <HealthResults
+          report={{ ...report, deployment: config, jobs: [job] }}
+        />,
+      );
+      expect(html).toContain(
+        "Enabled writer conflicts with the active data contract",
+      );
+      expect(html).not.toContain("Enabled and scheduled");
+    },
+  );
+  it("keeps disabled staged, maintenance, unknown flags and compatible unselected jobs outside operational failures", () => {
+    const config = deployment("netflow");
+    const scenarios = [
+      { name: "ADM - Conversation rollup v2", disabled: 1 },
+      { name: "ADM - Conversation rollup v2" },
+      { name: "ADM - Network client history prune", disabled: 0 },
+      { name: "ADM - Service binding", disabled: 0, last_status: "failed" },
+    ];
+    for (const scenario of scenarios) {
+      const job = jobRows([{ kind: "job", ...scenario }], config).find(
+        (row) => row.name === scenario.name,
+      )!;
+      expect(job.contractConflict).toBe(false);
+      expect(jobAssessment(job, now).state).toBe("not_required");
+    }
+    const unknown = jobRows(
+      [{ kind: "job", name: "ADM - Conversation rollup v2", disabled: 0 }],
+      { ...config, activeContract: undefined },
+    ).find((job) => job.name === "ADM - Conversation rollup v2")!;
+    expect(unknown.contractConflict).toBeUndefined();
+  });
+});

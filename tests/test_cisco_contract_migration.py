@@ -6,7 +6,9 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import subprocess
 import stat
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -678,6 +680,58 @@ class ContractMigrationTest(unittest.TestCase):
                 with self.assertRaisesRegex(Refused, "deployment qualification failed"):
                     getattr(migration, action)()
                 self.assertFalse(self.journal.path.exists())
+
+    def test_reconcile_qualifies_before_loading_or_writing(self):
+        api = FakeApi()
+        migration = self.migration(api)
+        journal = {
+            "schema": JOURNAL_SCHEMA,
+            "canonicalizer_version": SUMMARY_CANONICALIZER_VERSION,
+            "migration_id": "reconcile-qualification",
+            "interface_sha256": migration._interface()[1],
+            "phase": "cutover_in_progress",
+            "jobs": [{"kind": "search", "state": "dispatch_unknown", "id": "pending"}],
+            "temporary_manual_executions": [
+                {"name": "ADM - Conversation rollup", "state": "configuration_prepared"}
+            ],
+        }
+        migration._write_journal(journal)
+        before = self.journal.path.read_bytes()
+        with patch.object(
+            Migration,
+            "_assert_cutover_origin_compatible",
+            side_effect=AssertionError("compatibility check ran before qualification"),
+        ):
+            migration.qualifier = lambda: (_ for _ in ()).throw(
+                RuntimeError("remote search peer added")
+            )
+            with self.assertRaisesRegex(Refused, "deployment qualification failed"):
+                migration.reconcile("sid")
+        self.assertEqual(self.journal.path.read_bytes(), before)
+        self.assertEqual(api.calls, [])
+
+    def test_api_from_stdin_bootstraps_vendored_sdk_in_clean_process(self):
+        script = """
+import io
+import sys
+from unittest.mock import patch
+from tools.cisco_contract_migration import _api_from_stdin
+sys.path[:] = [entry for entry in sys.path if not entry.endswith('/splunk_adm/bin/lib')]
+with patch.object(sys, 'stdin', io.StringIO('token\\n')):
+    api = _api_from_stdin('https://localhost:8089', None)
+assert api.token == 'token'
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                key: value for key, value in os.environ.items() if key != "PYTHONPATH"
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_summary_readback_wait_is_exponential_capped_and_bounded(self):
         self.assertEqual(SUMMARY_INDEX_WAIT_DELAYS[:4], (1.0, 2.0, 4.0, 8.0))
@@ -5315,6 +5369,26 @@ class ContractMigrationTest(unittest.TestCase):
                     "cutover": {"started_at": 999_000},
                     "jobs": [
                         {
+                            "id": "retired-rejected-attempt",
+                            "kind": "saved_search",
+                            "label": "ADM - Conversation rollup",
+                            "state": "rejected",
+                            "request_bounds": {
+                                "index_earliest": "999000",
+                                "index_latest": "999300",
+                                "earliest_time": "913200",
+                                "latest_time": "1000500",
+                            },
+                            "intent_fingerprint": fingerprint(
+                                {
+                                    "migration_id": "v1-empty-retry-test",
+                                    "rollback_resume_epoch": 999_600,
+                                    "slice": gap_bounds,
+                                    "expected": fingerprint(expected),
+                                }
+                            ),
+                        },
+                        {
                             "id": "manual-gap-job",
                             "kind": "saved_search",
                             "label": "ADM - Conversation rollup",
@@ -5347,7 +5421,7 @@ class ContractMigrationTest(unittest.TestCase):
                                 "resultCount": "1",
                                 "messages": [],
                             },
-                        }
+                        },
                     ],
                 }
                 api.jobs["manual-gap-sid"] = {

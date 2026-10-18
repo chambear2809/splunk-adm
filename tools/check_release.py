@@ -20,6 +20,56 @@ MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 MAX_ATLAS_GZIP_BYTES = 650 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
+ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
+RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
+BUNDLED_RUNTIME_FILES = frozenset(
+    {
+        "splunk_adm/bin/adm_recovery.py",
+        "splunk_adm/bin/adm_recovery_lib/__init__.py",
+        "splunk_adm/bin/adm_recovery_lib/core.py",
+        "splunk_adm/bin/adm_recovery_lib/planner.py",
+        "splunk_adm/bin/adm_recovery_lib/rest.py",
+        "splunk_adm/bin/lib/SPLUNK_SDK_LICENSE.txt",
+        "splunk_adm/bin/lib/SPLUNK_SDK_PROVENANCE.md",
+        "splunk_adm/bin/lib/splunklib/__init__.py",
+        "splunk_adm/bin/lib/splunklib/binding.py",
+        "splunk_adm/bin/lib/splunklib/client.py",
+        "splunk_adm/bin/lib/splunklib/data.py",
+        "splunk_adm/bin/lib/splunklib/results.py",
+        "splunk_adm/bin/lib/splunklib/six.py",
+        "splunk_adm/bin/lib/splunklib/utils.py",
+        *{
+            f"splunk_adm/bin/lib/splunklib/{pkg}/{name}.py"
+            for pkg, names in {
+                "modularinput": (
+                    "__init__",
+                    "argument",
+                    "event",
+                    "event_writer",
+                    "input_definition",
+                    "scheme",
+                    "script",
+                    "utils",
+                    "validation_definition",
+                ),
+                "searchcommands": (
+                    "__init__",
+                    "decorators",
+                    "environment",
+                    "eventing_command",
+                    "external_search_command",
+                    "generating_command",
+                    "internals",
+                    "reporting_command",
+                    "search_command",
+                    "streaming_command",
+                    "validators",
+                ),
+            }.items()
+            for name in names
+        },
+    }
+)
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
 FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
 # Custom Mako templates are deprecated as of Splunk Enterprise 10.4.
@@ -198,14 +248,17 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md",
         "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md",
         "splunk_adm/docs/operators/cisco-enterprise-networking.md",
+        RECOVERY_DOC_PATH,
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",
+        ALERT_ACTIONS_PATH,
         "splunk_adm/default/macros.conf",
         "splunk_adm/default/savedsearches.conf",
         "splunk_adm/default/transforms.conf",
         "splunk_adm/default/data/ui/nav/default.xml",
         "splunk_adm/default/data/ui/views/dependency_map.xml",
         "splunk_adm/metadata/default.meta",
+        *BUNDLED_RUNTIME_FILES,
     }
     missing = sorted(required - files.keys())
     if missing:
@@ -235,6 +288,21 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         raise ValueError("app.conf [package] id does not match splunk_adm")
     if config.get("triggers", "reload.adm_recovery", fallback=None) != "simple":
         raise ValueError("app.conf [triggers] reload.adm_recovery must be simple")
+    actions = configparser.RawConfigParser(strict=True)
+    try:
+        actions.read_string(files[ALERT_ACTIONS_PATH].decode("utf-8"))
+    except (configparser.Error, UnicodeDecodeError) as exc:
+        raise ValueError("invalid packaged alert_actions.conf") from exc
+    if not actions.has_section("adm_recovery"):
+        raise ValueError("packaged alert_actions.conf is missing [adm_recovery]")
+    command = actions.get("adm_recovery", "alert.execute.cmd", fallback="").strip()
+    entrypoint = "splunk_adm/bin/adm_recovery.py"
+    if command != "adm_recovery.py" or entrypoint not in files:
+        raise ValueError(
+            "adm_recovery alert registration must reference shipped adm_recovery.py"
+        )
+    if not files[entrypoint].startswith(b"#!"):
+        raise ValueError("shipped adm_recovery.py is not an executable script")
     if not config.has_section("install"):
         raise ValueError("packaged app.conf is missing [install]")
     build = config.get("install", "build", fallback=None)

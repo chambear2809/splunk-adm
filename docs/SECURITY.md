@@ -44,3 +44,7 @@ The sections above cover the coding-agent sandbox. The shipped `splunk_adm` app 
 - Scope credentials to one repository and short duration; do not expose production secrets to coding agents.
 - Require protected-branch checks and human review in the hosting platform.
 - Log identity, model, task, tool activity, changed paths, check results, and approval decisions in an approved audit system.
+
+## Shared-data viewer boundary
+
+The shipped derived KV lookups and catalogs grant shared read access. Routing scopes prevent attribution joins across domains; they do not filter data by the viewer's tenant or source-index entitlements. Deployment owners must ensure every app viewer is entitled to the complete configured dataset. Tenant-separated viewer access needs an additional reviewed authorization design and target-specific tests before adoption.

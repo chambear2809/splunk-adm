@@ -2,14 +2,19 @@
 
 ## Accepted base and ownership
 
-Base: `510754c17391e548309dd68ddac3f8b99e0b75c6`, the remote default `main`
-when selected. PR #6 includes the accepted PR #7/#8 fixes. The historical local
-`0a81682` checkout was stale and was not used. PR #9 was closed without merging;
-separate enterprise-remediation worktrees were inspected as dependencies, not
-imported. Existing primary-checkout changes and other worktrees were preserved.
+Initial accepted base: `510754c17391e548309dd68ddac3f8b99e0b75c6`, the remote
+default `main` when selected. PR #6 includes the accepted PR #7/#8 fixes. The
+historical local `0a81682` checkout was stale and was not used. PR #9 was closed
+without merging. During verification, PR #11 was accepted into `main` at
+`d6863dd326099acb892e1eebaa6c43d4f4410947` (2026-10-18 06:18:21 UTC). The
+implementation incorporates that accepted commit, including its provenance
+isolation, Service history, raw ACI action and distributed lookup corrections.
+No uncommitted enterprise-remediation work was imported. Existing primary-checkout
+changes and other chats' worktrees were preserved.
 
 Work is isolated in `atlas-coordinated/splunk-adm`; an untouched checkout of the
-same base supplies the browser baseline. User authorization was subsequently
+accepted `d6863dd` revision supplies the final browser baseline. Earlier measurements
+against `510754c` are retained as historical evidence only. User authorization was subsequently
 expanded to commits, pushes, PRs and merges, plus operations in test environments.
 No production collection, vendor API access, contract activation or pruning is
 part of this change.
@@ -94,8 +99,10 @@ follow-ups. No P0/P1 finding was reported. The reviewer is a separate Astra/max
 session and performed no edits, tests, builds, commits or lab operations. Final
 evidence approval remains pending the completed live suite and performance runs.
 
-Current integrated evidence: frontend lint/type checks, 551 unit tests, 92 browser
-tests, package/release checks and AppInspect Cloud precert pass. AppInspect 4.3.1
+Historical evidence before incorporating PR #11: frontend lint/type checks,
+551 unit tests, 92 browser tests, package/release checks and AppInspect Cloud
+precert passed. These results do not establish a pass for the later integrated
+source or package. AppInspect 4.3.1
 on Python 3.9 reported zero errors/failures, five warnings, one skipped check and
 127 not-applicable checks. Python 3.14 produced fourteen analyzer initialization
 errors and was not counted as a successful scan. Existing warnings include the
@@ -111,3 +118,14 @@ by timestamp serialization and moving-clock comparison issues. These were fixed
 without weakening evidence assertions; the two final focused cases passed. A
 complete final-source live-suite result is still pending and is not inferred from
 those focused reruns.
+
+### Accepted-main integration
+
+The original full live run was interrupted when `main` advanced; it was not a
+complete suite pass. Two ACI assertions had failed on the old base. PR #11 changes
+the affected ACI action handling and acceptance tests; final validation must use
+those accepted definitions. The old package and logs are retained under
+`dist/pre-main-integration-7999d3a/`. The interruption also ended the lock wrapper;
+the coordinator reacquired the exclusive lab lock before any further lab action,
+without contention. The owned lab was then stopped while integrating and
+remeasuring. The final integrated validation record will be added below.

@@ -645,6 +645,18 @@ def analyze(snapshot, selected_sources=()):
     for name in BUILDER_JOBS:
         definition = JOB_DEFINITIONS[name]
         if (
+            contract is not None
+            and contract not in definition["contracts"]
+            and _boolean(jobs.get(name, {}).get("disabled")) is False
+        ):
+            add(
+                "contract_job_conflict",
+                "blocked",
+                "enabled builder is incompatible with the verified active contract; "
+                "an administrator must reconcile its enabled state with the contract",
+                evidence={"name": name, "active_contract": contract},
+            )
+        if (
             contract is None
             or contract not in definition["contracts"]
             or not JOB_SOURCES[name] & active_sources

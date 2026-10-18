@@ -149,12 +149,20 @@ export function healthIndicator(
   if (!live) return "unknown";
   if (loading) return "loading";
   if (error) return "error";
-  if (!report || report.scope === "jobs") return "unknown";
+  if (!report) return "unknown";
   if (
     report.deployment?.state !== "configured" ||
     !report.deployment.activeContract
   )
     return "unknown";
+  if (
+    report.jobs.some(
+      (job) =>
+        jobAssessment(job, report.checkedAt).reason === "contract_conflict",
+    )
+  )
+    return "attention";
+  if (report.scope === "jobs") return "unknown";
   const sources = report.sources.filter(
     (source) =>
       source.id !== undefined &&

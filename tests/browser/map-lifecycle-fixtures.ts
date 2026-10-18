@@ -5,6 +5,13 @@ import type { Row } from "../../frontend/src/rows";
 // Controlled mutations of the captured normalized search output. These names
 // deliberately identify the regression inputs, not additional demo scenarios.
 export const lifecycleArgs = capture.args;
+const capturedWindow = (capture.rows as Row[]).find(
+  (row) => row.row_type === "meta",
+)!;
+export const lifecycleWindow = {
+  earliest: String(capturedWindow.window_start),
+  latest: String(capturedWindow.window_end),
+};
 export const OLD_CLIENT =
   "network_client:c9d76c4af4c2fbff1499498fa9f86a5395b5c850787bbe9cf81ece79de41e0c5";
 export const NEW_CLIENT = `network_client:${"f".repeat(64)}`;

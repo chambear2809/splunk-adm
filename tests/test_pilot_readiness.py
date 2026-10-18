@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from tools.pilot_readiness import (
     ALL_JOBS,
+    JOB_DEFINITIONS,
     SOURCES,
     NETWORK_CLIENT_SOURCES,
     analyze,
@@ -52,8 +53,14 @@ def snapshot():
         "jobs": [
             {
                 "name": n,
-                "disabled": 1 if n.endswith("prune") else 0,
-                "is_scheduled": 0 if n.endswith("prune") else 1,
+                "disabled": int(
+                    JOB_DEFINITIONS.get(n, {}).get("stage") != "active"
+                    or 1 not in JOB_DEFINITIONS.get(n, {}).get("contracts", [])
+                ),
+                "is_scheduled": int(
+                    JOB_DEFINITIONS.get(n, {}).get("stage") == "active"
+                    and 1 in JOB_DEFINITIONS.get(n, {}).get("contracts", [])
+                ),
                 "last_success": 1799999900,
                 "last_run": 1799999900,
                 "last_status": "success",
@@ -78,6 +85,45 @@ def snapshot():
 
 
 class PilotReadinessTest(unittest.TestCase):
+    def test_wrong_contract_enabled_writer_is_a_configuration_conflict(self):
+        for contract, name in (
+            (1, "ADM - Conversation rollup v2"),
+            (2, "ADM - Conversation rollup"),
+        ):
+            with self.subTest(contract=contract):
+                data = snapshot()
+                data["active_contract"] = contract
+                for job in data["jobs"]:
+                    job["disabled"] = 1
+                    job["is_scheduled"] = 0
+                writer = next(job for job in data["jobs"] if job["name"] == name)
+                # Enabled is the conflict; this does not assert that it is scheduled.
+                writer["disabled"] = 0
+                findings = analyze(data, ["netflow"])["findings"]
+                conflicts = [
+                    f for f in findings if f["check"] == "contract_job_conflict"
+                ]
+                self.assertEqual(len(conflicts), 1)
+                self.assertEqual(conflicts[0]["status"], "blocked")
+                self.assertEqual(conflicts[0]["evidence"]["name"], name)
+                for flag in (1, None):
+                    writer["disabled"] = flag
+                    self.assertFalse(
+                        any(
+                            f["check"] == "contract_job_conflict"
+                            for f in analyze(data, ["netflow"])["findings"]
+                        )
+                    )
+
+    def test_unselected_compatible_and_disabled_staged_jobs_are_not_conflicts(self):
+        data = snapshot()
+        findings = analyze(data, ["netflow"])["findings"]
+        self.assertFalse(any(f["check"] == "contract_job_conflict" for f in findings))
+        self.assertNotIn(
+            "ADM - Identity builder",
+            {f.get("evidence") for f in findings if f["check"] == "schedule"},
+        )
+
     def test_lab_snapshot_timestamps_completion_after_new_receipts(self):
         clock = [1800000000]
         searches = []

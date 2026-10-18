@@ -5,10 +5,12 @@ from unittest.mock import patch
 from types import SimpleNamespace
 import hashlib
 import json
+import os
 from pathlib import Path
 import tempfile
 
 from tools.capture_networking_fixtures import (
+    capture,
     require_client,
     require_complete,
     require_handoff,
@@ -20,6 +22,39 @@ from tools.capture_networking_fixtures import (
 
 
 class CaptureNetworkingTest(unittest.TestCase):
+    def test_relative_raw_directory_reaches_capture_with_bound_provenance(self):
+        root = Path(__file__).resolve().parents[1]
+        raw = Path(os.path.relpath(root / "fixtures/raw-networking"))
+        with tempfile.TemporaryDirectory() as directory:
+            initialization = Path(directory) / "initialization.json"
+            initialization.write_text(
+                json.dumps(
+                    {
+                        "fingerprints": {},
+                        "window": {"earliest": "1", "latest": "2"},
+                        "qualification": "synthetic",
+                        "scenario_window": {},
+                        "build_window": {},
+                        "indexed_counts": {},
+                        "index_window": [],
+                        "builders": [],
+                    }
+                )
+            )
+            with (
+                patch.dict("sys.modules", {"lab": SimpleNamespace()}),
+                patch(
+                    "tools.capture_networking_fixtures.evidence_fingerprints",
+                    return_value={},
+                ),
+                patch(
+                    "tools.capture_networking_fixtures.search",
+                    side_effect=RuntimeError("reached capture search"),
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "reached capture search"):
+                    capture("1", "2", raw, Path(directory), initialization)
+
     def test_topology_requires_both_observed_meraki_ap_uplinks(self):
         serials = ("Q2XX-DEMO-0390", "Q2XX-DEMO-0001", "Q2XX-DEMO-0002")
         devices = [
