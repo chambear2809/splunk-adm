@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import ssl
 import subprocess
 import sys
@@ -1422,6 +1423,604 @@ class DriverTests(unittest.TestCase):
             "a" * 40,
             [directory / "reviewed-addon"],
         )
+
+    def saved_api(
+        self, *, converge=True, dispatch_error=None, config_error=None, scheduled=False
+    ):
+        state = {
+            "reads": 0,
+            "round_reads": 0,
+            "dispatches": 0,
+            "config_posts": 0,
+            "desired": None,
+        }
+
+        class FakeApi:
+            def __init__(self, role):
+                self.role = role
+
+            def json(inner, method, path, data=None, timeout=None):
+                if path.endswith("/dispatch"):
+                    state["dispatches"] += 1
+                    if dispatch_error:
+                        raise dispatch_error
+                    return {"sid": "fixture_sid"}
+                if method == "POST":
+                    state["config_posts"] += 1
+                    if config_error:
+                        raise config_error
+                    state["desired"] = {
+                        key: value == "1" for key, value in data.items()
+                    }
+                    state["round_reads"] = 0
+                    return {}
+                state["reads"] += 1
+                if state["desired"] is None:
+                    flags = {"disabled": True, "is_scheduled": scheduled}
+                else:
+                    flags = dict(state["desired"])
+                    if inner.role == "sh2" and (
+                        not converge or state["round_reads"] < 3
+                    ):
+                        flags["disabled"] = not flags["disabled"]
+                    state["round_reads"] += 1
+                return {"entry": [{"content": flags}]}
+
+        return FakeApi, state
+
+    def virtual_saved_wait(self):
+        clock = [0.0]
+
+        def advance(seconds):
+            clock[0] += seconds
+
+        return (
+            patch.object(client.time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(client.time, "sleep", side_effect=advance),
+        )
+
+    def test_v1_dispatch_waits_for_all_member_flags_and_records_sid_before_job(self):
+        api, state = self.saved_api()
+        timing, sleeping = self.virtual_saved_wait()
+
+        def job(_api, sid):
+            self.assertEqual(state["reads"], 6)
+            record = self.lab.state["builder_dispatch"][runner.BUILDERS[1]]
+            self.assertEqual(record["sid"], sid)
+            self.assertEqual(record["state"], "dispatched")
+            return [], {"sid": sid}
+
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record") as evidence,
+            patch.object(self.driver, "_job", side_effect=job),
+        ):
+            self.driver._saved("sh2", runner.BUILDERS[1], index_window=(10, 20))
+        self.assertEqual(state["dispatches"], 1)
+        self.assertEqual(state["config_posts"], 1)
+        names = [call.args[0] for call in evidence.call_args_list]
+        self.assertIn("saved-search-predispatch", names)
+        self.assertIn("saved-search-dispatched", names)
+
+    def test_unconverged_flags_timeout_without_dispatch(self):
+        api, state = self.saved_api(converge=False)
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.driver, "_record") as evidence,
+            patch.object(self.driver, "_job") as job,
+        ):
+            with self.assertRaises(client.Refused):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["dispatches"], 0)
+        self.assertEqual(state["config_posts"], 1)
+        job.assert_not_called()
+        configs = [
+            call.args[1]
+            for call in evidence.call_args_list
+            if call.args[0] == "saved-search-config"
+        ]
+        self.assertFalse(configs[-1]["converged"])
+        self.assertEqual(configs[-1]["members"]["sh2"]["disabled"], True)
+
+    def test_failed_configuration_post_never_dispatches(self):
+        api, state = self.saved_api(config_error=client.ApiError(403))
+        with (
+            patch.object(client, "Api", api),
+            patch.object(self.driver, "_record"),
+            patch.object(self.driver, "_job") as job,
+        ):
+            with self.assertRaises(client.ApiError):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["dispatches"], 0)
+        job.assert_not_called()
+
+    def test_uncertain_dispatch_is_not_repeated_and_known_sid_is_resumable(self):
+        api, state = self.saved_api(
+            dispatch_error=client.Refused("lost dispatch response")
+        )
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+        ):
+            with self.assertRaisesRegex(client.Refused, "lost dispatch"):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+            with self.assertRaisesRegex(client.Refused, "uncertain"):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["dispatches"], 1)
+        self.assertEqual(state["config_posts"], 1)
+        self.lab.state["builder_dispatch"] = {}
+        api, state = self.saved_api()
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(
+                self.driver,
+                "_job",
+                side_effect=[
+                    client.Refused("job failed"),
+                    ([], {"sid": "fixture_sid"}),
+                ],
+            ),
+        ):
+            with self.assertRaisesRegex(client.Refused, "job failed"):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+            self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["dispatches"], 1)
+
+    def test_v2_enable_and_restore_both_wait_for_all_members(self):
+        api, state = self.saved_api()
+        self.lab.state.update(fixture_index_earliest=10, fixture_index_latest=20)
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(
+                self.driver, "_job", return_value=([], {"sid": "fixture_sid"})
+            ),
+        ):
+            self.driver._staged_v2_writer("sh2", runner.V2_WRITERS[0])
+        self.assertEqual(state["dispatches"], 1)
+        self.assertEqual(state["config_posts"], 2)
+        self.assertEqual(state["desired"], {"disabled": True, "is_scheduled": False})
+        self.assertEqual(state["round_reads"], 6)
+
+    def test_base_phase_retry_reuses_frozen_window_and_prior_sids(self):
+        self.lab.state.update(
+            fixture_index_earliest=10,
+            base_ingestion={"state": "acknowledged", "events": 1},
+        )
+        dispatches = []
+        failed = False
+
+        class Api:
+            def __init__(inner, role):
+                inner.role = role
+
+            def search(inner, *args):
+                return [{"count": "1"}], {"sid": "readback"}
+
+            def json(inner, method, path, data=None):
+                self.assertEqual(method, "POST")
+                self.assertEqual(self.lab.state["base_index_window"], [10, 101])
+                self.assertEqual(data["dispatch.index_earliest"], "10")
+                self.assertEqual(data["dispatch.index_latest"], "101")
+                dispatches.append(path)
+                return {"sid": "sid-" + str(len(dispatches))}
+
+        def job(_api, sid):
+            nonlocal failed
+            if sid == "sid-2" and not failed:
+                failed = True
+                raise client.Refused("later builder polling failed")
+            return [], {"sid": sid}
+
+        with (
+            patch.object(client, "Api", Api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(self.driver, "_wait", return_value=True),
+            patch.object(self.driver, "_set_saved_flags", return_value={}),
+            patch.object(self.driver, "_job", side_effect=job),
+            patch.object(runner.time, "sleep"),
+            patch.object(runner.time, "time", return_value=100) as clock,
+        ):
+            with self.assertRaisesRegex(client.Refused, "later builder"):
+                self.driver.phase_base()
+            clock.return_value = 1000
+            result = self.driver.phase_base()
+            count = len(dispatches)
+            with self.assertRaisesRegex(client.Refused, "arguments changed"):
+                self.driver._saved("sh1", runner.BUILDERS[0], index_window=(10, 1001))
+            self.assertEqual(len(dispatches), count)
+        self.assertEqual(result["index_window"], (10, 101))
+        self.assertEqual(self.lab.state["fixture_index_latest"], 101)
+        self.assertEqual(len(dispatches), len(runner.BUILDERS) + 1)
+        self.assertEqual(len(set(dispatches)), len(dispatches))
+        self.assertEqual(result["jobs"][runner.BUILDERS[0]]["sid"], "sid-1")
+
+    def test_v2_known_sid_retry_restores_original_true_true_after_restore_failure(self):
+        api, state = self.saved_api(scheduled=True)
+        self.lab.state.update(fixture_index_earliest=10, fixture_index_latest=20)
+        original_set = self.driver._set_saved_flags
+        restores = []
+
+        def configure(role, name, **flags):
+            if flags["disabled"]:
+                restores.append(flags)
+                if len(restores) == 1:
+                    raise client.Refused("restore timed out")
+            return original_set(role, name, **flags)
+
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(self.driver, "_set_saved_flags", side_effect=configure),
+            patch.object(
+                self.driver, "_job", return_value=([], {"sid": "fixture_sid"})
+            ),
+        ):
+            with self.assertRaisesRegex(client.Refused, "restore timed out"):
+                self.driver._staged_v2_writer("sh2", runner.V2_WRITERS[0])
+            self.assertEqual(
+                self.lab.state["v2_writer_dispatch"][runner.V2_WRITERS[0]]["state"],
+                "dispatched",
+            )
+            self.driver._staged_v2_writer("sh2", runner.V2_WRITERS[0])
+        self.assertEqual(state["dispatches"], 1)
+        self.assertEqual(restores, [{"disabled": True, "is_scheduled": True}] * 2)
+        self.assertEqual(state["desired"], restores[-1])
+        self.assertEqual(state["round_reads"], 6)
+
+    def test_v2_resume_refuses_missing_or_malformed_persisted_original_flags(self):
+        for flags in (
+            {},
+            {"original_disabled": True},
+            {"original_disabled": True, "original_scheduled": "invalid"},
+            {"original_disabled": False, "original_scheduled": True},
+        ):
+            with self.subTest(flags=flags):
+                self.lab.state["v2_writer_dispatch"] = {
+                    runner.V2_WRITERS[0]: {"sid": "known_sid", "role": "sh2", **flags}
+                }
+                with (
+                    patch.object(client, "Api"),
+                    patch.object(self.driver, "_set_saved_flags") as configure,
+                    patch.object(self.driver, "_job") as job,
+                    self.assertRaises(client.Refused),
+                ):
+                    self.driver._staged_v2_writer("sh2", runner.V2_WRITERS[0])
+                configure.assert_not_called()
+                job.assert_not_called()
+
+    def test_scheduler_enable_and_failure_restore_both_use_converged_flags(self):
+        api_class, state = self.saved_api()
+
+        def api(role):
+            value = api_class(role)
+            original_json = value.json
+
+            def json_response(method, path, **kwargs):
+                response = original_json(method, path, **kwargs)
+                if method == "GET":
+                    response["entry"][0]["content"]["cron_schedule"] = "*/5 * * * *"
+                return response
+
+            value.json = json_response
+            value.url = "https://localhost:22049"
+            value.opener = Mock()
+            value.opener.open.return_value = io.BytesIO(b'{"code":0}')
+            return value
+
+        wait = self.driver._wait
+
+        def config_only_wait(check, **kwargs):
+            if check.__name__ != "agrees":
+                raise client.Refused("stop after scheduler configuration")
+            return wait(check, **kwargs)
+
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", side_effect=api),
+            patch.object(
+                client,
+                "protected_file",
+                return_value=SimpleNamespace(read_text=lambda: "fixture-token"),
+            ),
+            patch.object(self.driver, "_record") as evidence,
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_wait", side_effect=config_only_wait),
+        ):
+            with self.assertRaisesRegex(client.Refused, "stop after scheduler"):
+                self.driver.phase_scheduler()
+        configs = [
+            call.args[1]
+            for call in evidence.call_args_list
+            if call.args[0] == "saved-search-config"
+        ]
+        self.assertEqual(
+            [row["desired"] for row in configs],
+            [
+                {"disabled": False, "is_scheduled": True},
+                {"disabled": True, "is_scheduled": False},
+            ],
+        )
+        self.assertTrue(all(row["converged"] for row in configs))
+        self.assertEqual(state["config_posts"], 2)
+        self.assertEqual(state["dispatches"], 0)
+        self.assertEqual(state["round_reads"], 6)
+
+    def test_saved_search_flag_readback_rejects_missing_and_malformed_values(self):
+        for content in (
+            None,
+            {},
+            {"disabled": False},
+            {"disabled": "unknown", "is_scheduled": False},
+            {"disabled": 0.0, "is_scheduled": False},
+        ):
+            with self.subTest(content=content), self.assertRaises(client.Refused):
+                self.driver._saved_flags(content)
+        self.assertEqual(
+            self.driver._saved_flags({"disabled": "0", "is_scheduled": 1}),
+            {"disabled": False, "is_scheduled": True},
+        )
+
+    def test_matching_last_member_response_after_deadline_cannot_converge(self):
+        clock = [0.0]
+        desired = {"disabled": False, "is_scheduled": False}
+
+        class Api:
+            def __init__(inner, role):
+                inner.role = role
+
+            def json(inner, method, path, **kwargs):
+                if method == "GET" and inner.role == "sh3":
+                    clock[0] = 125.0
+                return {"entry": [{"content": desired}]}
+
+        with (
+            patch.object(client, "Api", Api),
+            patch.object(runner.time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(self.driver, "_record") as evidence,
+            patch.object(self.driver, "_job") as job,
+            self.assertRaises(runner.SavedSearchDeadline),
+        ):
+            self.driver._saved("sh1", runner.BUILDERS[0])
+        job.assert_not_called()
+        configs = [
+            call.args[1]
+            for call in evidence.call_args_list
+            if call.args[0] == "saved-search-config"
+        ]
+        self.assertFalse(configs[-1]["converged"])
+        self.assertEqual(self.lab.state["builder_dispatch"], {})
+
+    def test_configuration_total_timer_interrupts_blocked_body_and_cleans_up(self):
+        old_handler = signal.getsignal(signal.SIGALRM)
+        old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        api = Mock()
+
+        def blocked_body(*args, **kwargs):
+            # The real timer must interrupt a response body stalled within json().
+            signal.pause()
+            self.fail("blocked body returned without a deadline")
+
+        api.json.side_effect = blocked_body
+        with (
+            patch.object(client, "Api", return_value=api),
+            patch.object(self.driver, "_record") as evidence,
+            self.assertRaises(runner.SavedSearchDeadline),
+        ):
+            self.driver._set_saved_flags(
+                "sh1",
+                runner.BUILDERS[0],
+                disabled=False,
+                is_scheduled=False,
+                timeout=0.02,
+            )
+        self.assertEqual(api.json.call_count, 1)
+        self.assertFalse(evidence.call_args.args[1]["converged"])
+        self.assertEqual(signal.getsignal(signal.SIGALRM), old_handler)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK, set()), old_mask)
+
+    def test_configuration_refuses_shared_timer_or_worker_thread_before_post(self):
+        api = Mock()
+        for condition in ("timer", "thread", "blocked"):
+            with self.subTest(condition=condition):
+                patches = {
+                    "timer": patch.object(
+                        runner.signal, "getitimer", return_value=(5.0, 0.0)
+                    ),
+                    "thread": patch.object(
+                        runner.threading, "current_thread", return_value=object()
+                    ),
+                    "blocked": patch.object(
+                        runner.signal, "pthread_sigmask", return_value={signal.SIGALRM}
+                    ),
+                }
+                with (
+                    patches[condition],
+                    patch.object(client, "Api", return_value=api),
+                    patch.object(self.driver, "_record"),
+                    self.assertRaises(client.Refused),
+                ):
+                    self.driver._set_saved_flags(
+                        "sh1", runner.BUILDERS[0], disabled=False, is_scheduled=False
+                    )
+        api.json.assert_not_called()
+
+    def test_configuration_discards_alarm_queued_during_disarm(self):
+        old_handler = signal.getsignal(signal.SIGALRM)
+        old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+        real_setitimer = signal.setitimer
+
+        def queue_on_disarm(which, delay):
+            result = real_setitimer(which, delay)
+            if delay == 0:
+                signal.raise_signal(signal.SIGALRM)
+                self.assertIn(signal.SIGALRM, signal.sigpending())
+            return result
+
+        with patch.object(runner.signal, "setitimer", side_effect=queue_on_disarm):
+            with runner.saved_search_deadline(runner.time.monotonic() + 10):
+                pass
+        self.assertNotIn(signal.SIGALRM, signal.sigpending())
+        self.assertEqual(signal.getsignal(signal.SIGALRM), old_handler)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK, set()), old_mask)
+
+    def test_configuration_timer_arming_failure_restores_signal_state(self):
+        old_handler = signal.getsignal(signal.SIGALRM)
+        old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+        real_setitimer = signal.setitimer
+        api = Mock()
+
+        def fail_arming(which, delay):
+            if delay:
+                raise OSError("timer arming failed")
+            return real_setitimer(which, delay)
+
+        with (
+            patch.object(runner.signal, "setitimer", side_effect=fail_arming),
+            patch.object(client, "Api", return_value=api),
+            patch.object(self.driver, "_record"),
+            self.assertRaisesRegex(OSError, "timer arming failed"),
+        ):
+            self.driver._set_saved_flags(
+                "sh1", runner.BUILDERS[0], disabled=False, is_scheduled=False
+            )
+        api.json.assert_not_called()
+        self.assertEqual(signal.getsignal(signal.SIGALRM), old_handler)
+        self.assertEqual(signal.getitimer(signal.ITIMER_REAL), (0.0, 0.0))
+        self.assertEqual(signal.pthread_sigmask(signal.SIG_BLOCK, set()), old_mask)
+
+    def test_scheduler_retry_restores_durable_origin_without_reingestion(self):
+        flags = {"disabled": False, "is_scheduled": False}
+        origin = dict(flags)
+        api = Mock()
+        api.url = "https://localhost:22049"
+        api.opener.open.return_value = io.BytesIO(b'{"code":0}')
+        api.json.side_effect = lambda *args, **kwargs: {
+            "entry": [{"content": {**flags, "cron_schedule": "*/5 * * * *"}}]
+        }
+        restorations = []
+
+        def configure(role, name, **desired):
+            if desired == origin:
+                restorations.append(desired)
+                if len(restorations) == 1:
+                    raise client.Refused("restore timed out")
+            flags.update(desired)
+            return {"converged": True}
+
+        with (
+            patch.object(client, "Api", return_value=api),
+            patch.object(
+                client,
+                "protected_file",
+                return_value=SimpleNamespace(read_text=lambda: "fixture-token"),
+            ),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(self.driver, "_set_saved_flags", side_effect=configure),
+            patch.object(
+                self.driver, "_wait", side_effect=client.Refused("later check failed")
+            ),
+        ):
+            with self.assertRaisesRegex(client.Refused, "restore timed out"):
+                self.driver.phase_scheduler()
+            self.assertEqual(flags, {"disabled": False, "is_scheduled": True})
+            with self.assertRaisesRegex(client.Refused, "later check failed"):
+                self.driver.phase_scheduler()
+        self.assertEqual(restorations, [origin, origin])
+        self.assertEqual(flags, origin)
+        self.assertEqual(api.opener.open.call_count, 1)
+        self.assertEqual(self.lab.state["scheduler_original_flags"], origin)
+
+    def test_scheduler_uncertain_ingestion_is_not_repeated(self):
+        api = Mock()
+        api.url = "https://localhost:22049"
+        api.json.return_value = {
+            "entry": [
+                {
+                    "content": {
+                        "disabled": False,
+                        "is_scheduled": False,
+                        "cron_schedule": "*/5 * * * *",
+                    }
+                }
+            ]
+        }
+        api.opener.open.side_effect = OSError("lost response")
+        with (
+            patch.object(client, "Api", return_value=api),
+            patch.object(
+                client,
+                "protected_file",
+                return_value=SimpleNamespace(read_text=lambda: "fixture-token"),
+            ),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(self.driver, "_set_saved_flags") as configure,
+        ):
+            with self.assertRaisesRegex(client.Refused, "ingestion failed"):
+                self.driver.phase_scheduler()
+            with self.assertRaisesRegex(client.Refused, "uncertain"):
+                self.driver.phase_scheduler()
+        configure.assert_not_called()
+        self.assertEqual(api.opener.open.call_count, 1)
+
+    def test_scheduler_missing_or_malformed_durable_origin_fails_before_ingestion(self):
+        api = Mock()
+        api.json.return_value = {
+            "entry": [
+                {
+                    "content": {
+                        "disabled": False,
+                        "is_scheduled": True,
+                        "cron_schedule": "*/5 * * * *",
+                    }
+                }
+            ]
+        }
+        for origin in (None, {}, {"disabled": False, "is_scheduled": "bad"}):
+            with self.subTest(origin=origin):
+                self.lab.state["scheduler_probe"] = {"state": "acknowledged"}
+                self.lab.state.pop("scheduler_original_flags", None)
+                if origin is not None:
+                    self.lab.state["scheduler_original_flags"] = origin
+                with (
+                    patch.object(client, "Api", return_value=api),
+                    patch.object(self.driver, "_set_saved_flags") as configure,
+                    self.assertRaises(client.Refused),
+                ):
+                    self.driver.phase_scheduler()
+                configure.assert_not_called()
+        api.opener.open.assert_not_called()
 
     def test_settings_bundle_checks_files_before_endpoint_or_ledger_writes(self):
         with (

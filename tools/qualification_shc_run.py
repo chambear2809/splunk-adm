@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
 import configparser
 from datetime import datetime, timezone
 import hashlib
@@ -19,7 +20,9 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import sys
+import threading
 import time
 import unittest
 import urllib.parse
@@ -49,6 +52,60 @@ SCOPES = (
     ("apic", "192.0.2.50", "prod", ""),
     ("nd_host", "192.0.2.60", "prod", ""),
 )
+
+
+class SavedSearchDeadline(RuntimeError):
+    """A transition exceeded its total wall-clock request/body budget."""
+
+
+@contextmanager
+def saved_search_deadline(deadline):
+    """Own one Unix process timer, including body reads and JSON parsing."""
+    client.require(
+        threading.current_thread() is threading.main_thread(),
+        "saved-search transitions require the main thread",
+    )
+    client.require(
+        signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0),
+        "saved-search transitions cannot share a process deadline timer",
+    )
+    old_handler = signal.getsignal(signal.SIGALRM)
+    old_mask = signal.pthread_sigmask(signal.SIG_BLOCK, set())
+    client.require(
+        signal.SIGALRM not in old_mask,
+        "saved-search transitions require an unblocked deadline signal",
+    )
+
+    def expired(_number, _frame):
+        # Api.json catches OSError/TimeoutError; this must propagate unchanged.
+        raise SavedSearchDeadline("saved-search configuration deadline expired")
+
+    try:
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+        signal.signal(signal.SIGALRM, expired)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            expired(None, None)
+        signal.setitimer(signal.ITIMER_REAL, remaining)
+        signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
+        yield
+        if time.monotonic() >= deadline:
+            expired(None, None)
+    finally:
+        try:
+            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+        finally:
+            try:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                # Discard pending owned alarms before restoring the caller's
+                # handler, including a signal queued during timer disarming.
+                signal.signal(signal.SIGALRM, signal.SIG_IGN)
+                signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
+            finally:
+                try:
+                    signal.signal(signal.SIGALRM, old_handler)
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, old_mask)
 
 
 def normalized(rows):
@@ -777,10 +834,81 @@ class Driver:
         )
         return client.collection_convergence(definitions.sections())
 
+    @staticmethod
+    def _saved_flags(content):
+        client.require(
+            isinstance(content, dict), "saved-search configuration is malformed"
+        )
+        result = {}
+        for key in ("disabled", "is_scheduled"):
+            value = content.get(key)
+            client.require(
+                type(value) is bool
+                or (type(value) is int and value in (0, 1))
+                or value in ("0", "1"),
+                "saved-search configuration flags are malformed",
+            )
+            result[key] = value in (True, 1, "1")
+        return result
+
+    def _set_saved_flags(self, role, name, *, disabled, is_scheduled, timeout=120):
+        client.require(
+            0 < timeout <= 120,
+            "saved-search configuration deadline is outside its bound",
+        )
+        deadline = time.monotonic() + timeout
+        desired = {"disabled": disabled, "is_scheduled": is_scheduled}
+        client.require(
+            all(type(value) is bool for value in desired.values()),
+            "saved-search target flags must be boolean",
+        )
+        path = client.APP + "/saved/searches/" + urllib.parse.quote(name, safe="")
+        evidence = {
+            "role": role,
+            "name": name,
+            "desired": desired,
+            "members": {},
+            "converged": False,
+        }
+
+        def agrees():
+            for member in client.MEMBERS:
+                remaining = deadline - time.monotonic()
+                client.require(
+                    remaining > 0, "saved-search configuration deadline expired"
+                )
+                content = client.Api(member).json(
+                    "GET", path, timeout=min(30, remaining)
+                )["entry"][0]["content"]
+                if time.monotonic() >= deadline:
+                    raise SavedSearchDeadline(
+                        "saved-search configuration deadline expired"
+                    )
+                evidence["members"][member] = self._saved_flags(content)
+            return all(value == desired for value in evidence["members"].values())
+
+        try:
+            with saved_search_deadline(deadline):
+                client.Api(role).json(
+                    "POST",
+                    path,
+                    data={key: str(int(value)) for key, value in desired.items()},
+                    timeout=min(30, timeout),
+                )
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise SavedSearchDeadline(
+                        "saved-search configuration deadline expired"
+                    )
+                self._wait(agrees, timeout=remaining)
+            evidence["converged"] = True
+            return evidence
+        finally:
+            self._record("saved-search-config", evidence)
+
     def _saved(self, role, name, *, index_window=None, earliest="0", latest="now"):
         api = client.Api(role)
         path = client.APP + "/saved/searches/" + urllib.parse.quote(name, safe="")
-        api.json("POST", path, data={"disabled": "0", "is_scheduled": "0"})
         data = {
             "trigger_actions": "1",
             "dispatch.earliest_time": earliest,
@@ -793,7 +921,33 @@ class Driver:
                     "dispatch.index_latest": str(index_window[1]),
                 }
             )
+        dispatches = self.lab.state.setdefault("builder_dispatch", {})
+        signature = client.digest({"role": role, "name": name, "dispatch": data})
+        if name in dispatches:
+            record = dispatches[name]
+            client.require(
+                record.get("signature") == signature and record.get("sid"),
+                "builder dispatch is uncertain or arguments changed; inspect before retry",
+            )
+            return self._job(api, record["sid"])
+        config = self._set_saved_flags(role, name, disabled=False, is_scheduled=False)
+        record = {
+            "role": role,
+            "name": name,
+            "signature": signature,
+            "state": "dispatching",
+            "config": config,
+        }
+        dispatches[name] = record
+        self.lab.save()
+        self._record("saved-search-predispatch", record)
         sid = api.json("POST", path + "/dispatch", data=data)["sid"]
+        client.require(
+            isinstance(sid, str) and bool(sid), "builder dispatch returned no valid SID"
+        )
+        record.update({"sid": sid, "state": "dispatched"})
+        self.lab.save()
+        self._record("saved-search-dispatched", record)
         return self._job(api, sid)
 
     def _job(self, api, sid, timeout=600):
@@ -880,9 +1034,29 @@ class Driver:
             ),
             timeout=120,
         )
-        self.slice_end = int(time.time()) + 1
+        if "base_index_window" not in self.lab.state:
+            self.lab.state["base_index_window"] = [
+                self.lab.state["fixture_index_earliest"],
+                int(time.time()) + 1,
+            ]
+            self.lab.state["fixture_index_latest"] = self.lab.state[
+                "base_index_window"
+            ][1]
+            # Freeze the receipt slice before any builder SID can be recorded.
+            self.lab.save()
+        index_window = self.lab.state["base_index_window"]
+        client.require(
+            isinstance(index_window, list)
+            and len(index_window) == 2
+            and all(type(value) is int for value in index_window)
+            and index_window[0] == self.lab.state["fixture_index_earliest"]
+            and index_window[0] < index_window[1]
+            and index_window[1] == self.lab.state["fixture_index_latest"],
+            "base builder receipt window is malformed or changed",
+        )
+        index_window = tuple(index_window)
+        self.slice_end = index_window[1]
         time.sleep(2)
-        index_window = (self.lab.state["fixture_index_earliest"], self.slice_end)
         jobs = {}
         for i, name in enumerate((*BUILDERS, ROLLUP)):
             _, jobs[name] = self._saved(
@@ -890,8 +1064,6 @@ class Driver:
             )
             if name != ROLLUP:
                 self._wait(self.collection_snapshot, timeout=120)
-        self.lab.state["fixture_index_latest"] = self.slice_end
-        self.lab.save()
         self._wait(
             lambda: bool(
                 client.Api("sh1").search(
@@ -1126,61 +1298,70 @@ class Driver:
         api = client.Api(role)
         path = client.APP + "/saved/searches/" + urllib.parse.quote(name, safe="")
         records = self.lab.state.setdefault("v2_writer_dispatch", {})
-        record = records.get(name)
-        if record:
+        if name in records:
+            record = records[name]
             client.require(
-                record.get("sid"),
+                isinstance(record, dict)
+                and record.get("role") == role
+                and isinstance(record.get("sid"), str)
+                and bool(record["sid"]),
                 "V2 writer dispatch outcome is uncertain; inspect before retry",
             )
-            return self._job(api, record["sid"])[1]
-        original = api.json("GET", path)["entry"][0]["content"]
-        client.require(
-            original.get("disabled") in (True, 1, "1"),
-            "staged V2 writer must begin disabled",
-        )
-        records[name] = {
-            "state": "preparing",
-            "role": role,
-            "original_disabled": original["disabled"],
-            "original_scheduled": original.get("is_scheduled"),
-        }
-        self.lab.save()
-        try:
-            api.json("POST", path, data={"disabled": "0", "is_scheduled": "0"})
-            records[name]["state"] = "dispatching"
-            self.lab.save()
-            sid = api.json(
-                "POST",
-                path + "/dispatch",
-                data={
-                    "trigger_actions": "1",
-                    "dispatch.earliest_time": "0",
-                    "dispatch.latest_time": "now",
-                    "dispatch.index_earliest": str(
-                        self.lab.state["fixture_index_earliest"]
-                    ),
-                    "dispatch.index_latest": str(
-                        self.lab.state["fixture_index_latest"]
-                    ),
-                },
-            )["sid"]
-            records[name].update({"sid": sid, "state": "dispatched"})
-            self.lab.save()
-            evidence = self._job(api, sid)[1]
-            records[name]["state"] = "completed"
-            self.lab.save()
-            return evidence
-        finally:
-            api.json(
-                "POST",
-                path,
-                data={
-                    "disabled": str(int(original["disabled"] in (True, 1, "1"))),
-                    "is_scheduled": str(
-                        int(original.get("is_scheduled") in (True, 1, "1"))
-                    ),
-                },
+            original_flags = self._saved_flags(
+                {
+                    "disabled": record.get("original_disabled"),
+                    "is_scheduled": record.get("original_scheduled"),
+                }
             )
+        else:
+            original = api.json("GET", path)["entry"][0]["content"]
+            original_flags = self._saved_flags(original)
+            record = {
+                "state": "preparing",
+                "role": role,
+                "original_disabled": original_flags["disabled"],
+                "original_scheduled": original_flags["is_scheduled"],
+            }
+            records[name] = record
+            self.lab.save()
+        client.require(
+            original_flags["disabled"], "staged V2 writer must begin disabled"
+        )
+        try:
+            if "sid" not in record:
+                self._set_saved_flags(role, name, disabled=False, is_scheduled=False)
+                record["state"] = "dispatching"
+                self.lab.save()
+                sid = api.json(
+                    "POST",
+                    path + "/dispatch",
+                    data={
+                        "trigger_actions": "1",
+                        "dispatch.earliest_time": "0",
+                        "dispatch.latest_time": "now",
+                        "dispatch.index_earliest": str(
+                            self.lab.state["fixture_index_earliest"]
+                        ),
+                        "dispatch.index_latest": str(
+                            self.lab.state["fixture_index_latest"]
+                        ),
+                    },
+                )["sid"]
+                client.require(
+                    isinstance(sid, str) and bool(sid),
+                    "V2 writer dispatch returned no valid SID",
+                )
+                record.update({"sid": sid, "state": "dispatched"})
+                self.lab.save()
+                self._record(
+                    "saved-search-dispatched", {"role": role, "name": name, "sid": sid}
+                )
+            evidence = self._job(api, record["sid"])[1]
+        finally:
+            self._set_saved_flags(role, name, **original_flags)
+        record["state"] = "completed"
+        self.lab.save()
+        return evidence
 
     def _v2_summaries(self, role, account):
         query = (
@@ -1483,6 +1664,14 @@ class Driver:
             original.get("cron_schedule") == "*/5 * * * *",
             "shipped scheduler cron differs",
         )
+        if "scheduler_original_flags" not in self.lab.state:
+            client.require(
+                "scheduler_probe" not in self.lab.state,
+                "scheduler original flags are missing; inspect before retry",
+            )
+            self.lab.state["scheduler_original_flags"] = self._saved_flags(original)
+            self.lab.save()
+        original_flags = self._saved_flags(self.lab.state["scheduler_original_flags"])
         now = time.time()
         marker = "adm-shc-scheduled-" + uuid.uuid4().hex
         event = json.loads(
@@ -1517,6 +1706,18 @@ class Driver:
                 "input_snmpidx": 436248576,
             }
         )
+        if "scheduler_probe" not in self.lab.state:
+            self.lab.state["scheduler_probe"] = {"state": "prepared", "event": event}
+            self.lab.save()
+        probe = self.lab.state["scheduler_probe"]
+        client.require(
+            isinstance(probe, dict)
+            and probe.get("state") in ("prepared", "acknowledged")
+            and isinstance(probe.get("event"), dict),
+            "scheduler probe ingestion is uncertain; inspect before retry",
+        )
+        event = probe["event"]
+        now, marker = event["time"], event["source"]
         self._record(
             "current-scheduler-fixture",
             {
@@ -1535,16 +1736,23 @@ class Driver:
             method="POST",
             headers={"Authorization": "Splunk " + token},
         )
+        if probe["state"] == "prepared":
+            probe["state"] = "ingesting"
+            self.lab.save()
+            try:
+                with idx.opener.open(request, timeout=30) as response:
+                    client.require(
+                        json.loads(response.read()).get("code") == 0,
+                        "current fixture rejected",
+                    )
+            except Exception:
+                raise client.Refused(
+                    "verified current fixture ingestion failed"
+                ) from None
+            probe["state"] = "acknowledged"
+            self.lab.save()
         try:
-            with idx.opener.open(request, timeout=30) as response:
-                client.require(
-                    json.loads(response.read()).get("code") == 0,
-                    "current fixture rejected",
-                )
-        except Exception:
-            raise client.Refused("verified current fixture ingestion failed") from None
-        api.json("POST", path, data={"disabled": "0", "is_scheduled": "1"})
-        try:
+            self._set_saved_flags("sh1", ROLLUP, disabled=False, is_scheduled=True)
 
             def probe_indexed():
                 rows, job = api.search(
@@ -1601,16 +1809,7 @@ class Driver:
                 **outcome,
             }
         finally:
-            api.json(
-                "POST",
-                path,
-                data={
-                    "disabled": str(int(original["disabled"] in (True, 1, "1"))),
-                    "is_scheduled": str(
-                        int(original.get("is_scheduled") in (True, 1, "1"))
-                    ),
-                },
-            )
+            self._set_saved_flags("sh1", ROLLUP, **original_flags)
 
     def phase_settings(self):
         self.lab.opt_in_settings()

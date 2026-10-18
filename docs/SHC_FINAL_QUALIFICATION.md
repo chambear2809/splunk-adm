@@ -478,6 +478,39 @@ files and owned cleanup were verified in
 This superseded preparation is not application acceptance evidence. Independent
 review found no actionable defect in the strengthened settings assertions.
 
+Attempt08 used source `c314cc89f7ea6e14f317371fd5c2d19e5b74cc6b` and the
+unchanged candidate09 archive. Unassisted bootstrap and bundle readiness passed;
+all 85 archived files were verified on each member, allowing only Splunk's
+generated install checksum. Both original interface tests passed (two tests,
+zero failures/errors/skips), followed by create/update/delete convergence for
+all 15 collections. The base phase then failed: Service binding's configuration
+POST returned 200, but a dispatch 51 milliseconds later returned 400 because
+the target member still considered the search disabled. Later reads showed the
+intended flags on all three members. Configuration acceptance is asynchronous;
+a successful POST alone does not establish dispatch readiness.
+
+The failed run remains failed. Its 36 exported files, including native refusal
+diagnostics and exact owned cleanup, were credential-scanned and verified under
+`dist/final-qualification/shc-attempt-08-failure-final/`; archive SHA-256 is
+`20690327c28d44e08b14f06d7308db2bbc8accb38d99c0b288b6e94eca99e667`.
+The corrected harness posts each intended saved-search configuration once and
+requires exact `disabled` and `is_scheduled` values on all three members before
+dispatch. Its 120-second transition budget covers response bodies and parsing,
+using an owned POSIX main-thread timer; an existing timer or blocked deadline
+signal refuses before mutation. Configuration convergence does not establish
+dispatch-engine atomicity: a remaining native rejection is still a failure.
+
+Base retries reuse the original persisted receipt window and known SIDs. V2
+writer retries restore both persisted original flags before reporting success.
+The scheduler preserves its original flags and acknowledged probe across
+failures. Unknown dispatch/ingestion outcomes require inspection; an elapsed
+slot with no proven pre-slot absence also refuses rather than becoming a
+successful retry. All 87 distributed tooling tests pass. Independent review
+identified and closed three P2s in the correction: changing retry windows,
+incomplete restoration on retry, and late responses accepted after the deadline.
+The reviewer independently ran the 11 added follow-up regressions. Fresh
+complete SHC execution remains pending.
+
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.
 Export a manifest covering every evidence record, the exact archive and the
