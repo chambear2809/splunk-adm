@@ -1,0 +1,59 @@
+{
+  "label": "Accepted-main corrected retained full matrix",
+  "acceptedBaseline": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+  "candidate": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+  "baselineCommandLogCreatedAt": "2026-10-18T07:01:49.613Z",
+  "conditions": "Coordinator reported all owned frontend/Python/build/package/AppInspect checks complete, owned Splunk lab stopped under exclusive lock, no other worker CPU checks; baseline then candidate sequential. Unrelated OTel containers untouched, OS/desktop/thermal background uncontrolled.",
+  "sourceAndHarnessFrozen": true,
+  "comparisonProtocol": "schema2 capture-started committed DOM readiness; same14cases5cold5warm plus discarded warmups",
+  "baselineRecordedAt": "2026-10-18T07:15:41.324Z",
+  "baselineLogEndedAt": "2026-10-18T07:15:41.454Z",
+  "candidateCommandLogCreatedAt": "2026-10-18T07:16:36.178Z",
+  "runtime": {
+    "node": "v26.10.0",
+    "playwright": "1.64.0",
+    "browser": "156.0.8078.4",
+    "platform": "darwin",
+    "osRelease": "27.0.0",
+    "architecture": "arm64",
+    "cpu": "Apple M3 Pro",
+    "logicalCpus": 12,
+    "memoryBytes": 19327352832,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "deviceScaleFactor": 1,
+    "headless": true,
+    "locale": "en-US",
+    "timezone": "UTC",
+    "colorScheme": "light",
+    "reactDomBuild": "Production profiling build; identical instrumentation for baseline and candidate",
+    "tracing": false
+  },
+  "baselineProvisionalBudgetsDerivedAt": "2026-10-18T07:16:58.068Z",
+  "provisionalBudgetsNote": "Derived from completed accepted baseline before candidate completion; local investigation prompts only, no approved SLO enforcement.",
+  "candidateRecordedAt": "2026-10-18T07:27:47.817Z",
+  "candidateLogEndedAt": "2026-10-18T07:27:47.940Z",
+  "runBoundNote": "Command-log birth time bounds command dispatch; raw recordedAt bounds completion of sample collection/hash verification. These are wall-clock run bounds, not browser timing phases.",
+  "sourceTrees": {
+    "baseline": {
+      "sha": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+      "dirty": "",
+      "treeSha256": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+      "treeSha256After": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+      "unchangedDuringRun": true,
+      "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+    },
+    "candidate": {
+      "sha": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+      "dirty": "",
+      "treeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "treeSha256After": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "unchangedDuringRun": true,
+      "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+    }
+  },
+  "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+  "complete": true
+}

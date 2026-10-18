@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "notes": "Retained baseline/candidate use the revised evidence-heavy deterministic matrix. Full raw artifacts and logs are local under ignored dist/performance; preserve separately when archiving the checkout. Obsolete exploratory/interrupted generic runs are excluded.",
+  "notes": "Current acceptance is the corrected d6863dd/8813eb5 pair. Earlier510754c/7999d3a pair and development smokes are preserved/superseded. Full raw artifacts/logs and historical snapshots stay local under ignored dist/performance; preserve separately when archiving this checkout.",
   "runs": [
     {
       "run": "exploratory-generic",
@@ -11,7 +11,9 @@
       "samples": 140,
       "complete": true,
       "sourceSha": "510754c17391e548309dd68ddac3f8b99e0b75c6",
-      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d"
+      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d",
+      "supersededForCurrentAcceptance": true,
+      "acceptedMainSuccessor": "d6863dd326099acb892e1eebaa6c43d4f4410947"
     },
     {
       "run": "interrupted-generic",
@@ -22,7 +24,9 @@
       "samples": 74,
       "complete": false,
       "sourceSha": "510754c17391e548309dd68ddac3f8b99e0b75c6",
-      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d"
+      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d",
+      "supersededForCurrentAcceptance": true,
+      "acceptedMainSuccessor": "d6863dd326099acb892e1eebaa6c43d4f4410947"
     },
     {
       "run": "baseline-retained-evidence-heavy",
@@ -45,7 +49,9 @@
       "harnessUnchanged": true,
       "correctnessFailures": 0,
       "comparisonGroup": "historical-schema-1-automation-inclusive",
-      "interactionProtocol": "Capture timestamp; await Playwright trigger; then invoke RAF readiness"
+      "interactionProtocol": "Capture timestamp; await Playwright trigger; then invoke RAF readiness",
+      "supersededForCurrentAcceptance": true,
+      "acceptedMainSuccessor": "d6863dd326099acb892e1eebaa6c43d4f4410947"
     },
     {
       "run": "candidate-retained-evidence-heavy",
@@ -68,15 +74,75 @@
       "harnessUnchanged": true,
       "correctnessFailures": 0,
       "comparisonGroup": "historical-schema-1-automation-inclusive",
-      "interactionProtocol": "Capture timestamp; await Playwright trigger; then invoke RAF readiness"
+      "interactionProtocol": "Capture timestamp; await Playwright trigger; then invoke RAF readiness",
+      "supersededForCurrentAcceptance": true,
+      "acceptedMainSuccessor": "d6863dd326099acb892e1eebaa6c43d4f4410947"
+    },
+    {
+      "run": "d686-baseline-retained-corrected",
+      "comparisonGroup": "accepted-main-corrected-schema-2",
+      "eligibleForComparison": true,
+      "supersededForCurrentAcceptance": false,
+      "rawPath": "dist/performance/atlas-browser-d686-baseline-retained-v2.json",
+      "sha256": "29cd2684645a1d5e0f16f23d766116d66a3973771a307027eccbeea63d6294da",
+      "bytes": 9415642,
+      "log": {
+        "path": "dist/performance/atlas-browser-d686-baseline-retained-v2.log",
+        "sha256": "b6e69a280534e652bff3deeccf4f9f9030db8507981265aaf81a48b50ab6ca07",
+        "bytes": 4028
+      },
+      "schemaVersion": 2,
+      "samples": 140,
+      "complete": true,
+      "recordedAt": "2026-10-18T07:15:41.324Z",
+      "source": {
+        "sha": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+        "dirty": "",
+        "treeSha256": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+        "treeSha256After": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+        "unchangedDuringRun": true,
+        "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+      },
+      "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+      "harnessUnchanged": true,
+      "correctnessFailures": 0
+    },
+    {
+      "run": "d686-candidate-retained-corrected",
+      "comparisonGroup": "accepted-main-corrected-schema-2",
+      "eligibleForComparison": true,
+      "supersededForCurrentAcceptance": false,
+      "rawPath": "dist/performance/atlas-browser-d686-integrated-candidate-retained-v2.json",
+      "sha256": "7c9c86aa47fb477fa7f85d9c667a1a41e27135630e9dadda7dd76f652bfb143b",
+      "bytes": 9009432,
+      "log": {
+        "path": "dist/performance/atlas-browser-d686-integrated-candidate-retained-v2.log",
+        "sha256": "1eecd7534827cd022770070c32e7648cff41517387c47f488e5b1624f2dc6956",
+        "bytes": 3864
+      },
+      "schemaVersion": 2,
+      "samples": 140,
+      "complete": true,
+      "recordedAt": "2026-10-18T07:27:47.817Z",
+      "source": {
+        "sha": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+        "dirty": "",
+        "treeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+        "treeSha256After": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+        "unchangedDuringRun": true,
+        "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+      },
+      "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+      "harnessUnchanged": true,
+      "correctnessFailures": 0
     }
   ],
   "localRoot": "/Users/alecchamberlain/.codex/worktrees/atlas-coordinated/splunk-adm",
   "publishedArtifacts": [
     {
       "path": "docs/benchmarks/atlas-browser-comparison.md",
-      "sha256": "4c2cb23ce60b4f2894062181e3a7aafad6653a874f36ca4784f6efaead02cbc0",
-      "bytes": 15399
+      "sha256": "a42b57e98a2e19be3c3dc776c0bf11c4d26d98013d2b7a6a0f018a769b2f5af0",
+      "bytes": 15543
     },
     {
       "path": "docs/benchmarks/atlas-browser-comparison.summary.json",
@@ -85,8 +151,8 @@
     },
     {
       "path": "docs/benchmarks/atlas-browser-results.md",
-      "sha256": "0bb4fd481787f3aed27dddaba45202498f23ed087cc861faa47de5b27c9fa2fb",
-      "bytes": 9909
+      "sha256": "3fd2c8278410c57ba9bb9f2e5fb2446103ff6b6bc69176536144ae1c58fb0b68",
+      "bytes": 10201
     },
     {
       "path": "docs/benchmarks/atlas-browser-imported-source-manifest.json",
@@ -95,8 +161,53 @@
     },
     {
       "path": "docs/benchmarks/atlas-browser-readiness-correction.md",
-      "sha256": "f8190a1007dabf1fb7d16c6268c36ffb91e49e99dba9716f1735c9cd8067d186",
-      "bytes": 4646
+      "sha256": "03f7b09f7c4980170f63d3936be8b7a383e2f73d5f16ff1151e9ddbfeb195846",
+      "bytes": 4892
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-preparation.md",
+      "sha256": "fce5e60f53d039311756ec2bfdc7e33a8a340d93d0262eaba78491c4251fc5fd",
+      "bytes": 4211
+    },
+    {
+      "path": "docs/BROWSER_PERFORMANCE.md",
+      "sha256": "f751c1971af276c9b9a3f2c2156eedd607d79a7ff62b042376841d7ec1329d40",
+      "bytes": 11874
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-budget-observations.json",
+      "sha256": "f3d8a0e3fa59d1987884fb51ee31fb7688889e9484f01b7b2c44a03b4973d039",
+      "bytes": 1191
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-comparison.md",
+      "sha256": "597e958390af7663911528fe1f08061f692888e5ae038b8ec734645826fe5391",
+      "bytes": 15533
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-comparison.summary.json",
+      "sha256": "c897881ced8bcd85bb497ecd38e12e07556a27e5b1d5ff40b65d2b3151174a99",
+      "bytes": 919453
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-environment.json",
+      "sha256": "9bd6d1f73d4184dc62ccb9df91f69306828b1aab10e069b314da730fe6cea23a",
+      "bytes": 2931
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-imported-source-manifest.json",
+      "sha256": "272fb1e2d8be6aba1f2e190aa560475688addcd0e2d2c57dea6670d829727083",
+      "bytes": 1266
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-results.md",
+      "sha256": "f1bc3cfc4f3311ddddd535ea264a6f543cbd5d6995f19173f52f1a1a64bf552a",
+      "bytes": 11297
+    },
+    {
+      "path": "docs/benchmarks/atlas-browser-d686-selection-telemetry.json",
+      "sha256": "13e9cfd007cd68fe8aa66ce13339f86a817c1066f00e4fe69d70a98b4f80d7aa",
+      "bytes": 24543
     }
   ],
   "diagnostics": {
@@ -199,5 +310,130 @@
         "eligibleForComparison": false
       }
     ]
+  },
+  "historicalArchive": {
+    "reason": "Original reports/index preserved before accepted-main supersession labels",
+    "artifacts": [
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-evidence-index.json",
+        "sha256": "382e4995a0aad7e41757904e3aca17bd993a399452d8dc2c115bcf24ad4ede8d",
+        "bytes": 8629,
+        "originalPath": "docs/benchmarks/atlas-browser-evidence-index.json",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      },
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-comparison.md",
+        "sha256": "4c2cb23ce60b4f2894062181e3a7aafad6653a874f36ca4784f6efaead02cbc0",
+        "bytes": 15399,
+        "originalPath": "docs/benchmarks/atlas-browser-comparison.md",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      },
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-comparison.summary.json",
+        "sha256": "43e8afa5aa6b67976139da6ca6981e49a740576b376b8966dcd922d8000dce48",
+        "bytes": 590191,
+        "originalPath": "docs/benchmarks/atlas-browser-comparison.summary.json",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      },
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-results.md",
+        "sha256": "0bb4fd481787f3aed27dddaba45202498f23ed087cc861faa47de5b27c9fa2fb",
+        "bytes": 9909,
+        "originalPath": "docs/benchmarks/atlas-browser-results.md",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      },
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-imported-source-manifest.json",
+        "sha256": "6e445d8637b15a18e232711fa48f3af7330b798c4d36f4a57e1ed0fc50e122df",
+        "bytes": 1194,
+        "originalPath": "docs/benchmarks/atlas-browser-imported-source-manifest.json",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      },
+      {
+        "path": "dist/performance/history-400c681/atlas-browser-readiness-correction.md",
+        "sha256": "f8190a1007dabf1fb7d16c6268c36ffb91e49e99dba9716f1735c9cd8067d186",
+        "bytes": 4646,
+        "originalPath": "docs/benchmarks/atlas-browser-readiness-correction.md",
+        "sourceRevision": "400c681bbc45063879287cc4bc0db4e29a7a6297"
+      }
+    ]
+  },
+  "acceptedMainPreparation": {
+    "acceptedBaseline": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+    "integratedFinalCandidate": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+    "eligibleForComparison": false,
+    "note": "Bounded correctness only; concurrent checks could run; no timing comparison.",
+    "helpers": {
+      "passed": 8,
+      "log": {
+        "path": "dist/performance/readiness-helpers-d686-preparation.log",
+        "sha256": "b367569ebb4d63b5ecf0a42a66c16d0f8ba218f1847b0fe4e0b28e66b7798572",
+        "bytes": 1218
+      }
+    },
+    "fixtureInspection": {
+      "path": "dist/performance/d686-fixture-preparation.json",
+      "sha256": "1df88eafb48fb1a7c5a63a0317fcf438e7119bca35c223a03185fab3200d1e8f",
+      "bytes": 3150
+    },
+    "smokes": [
+      {
+        "path": "dist/performance/atlas-browser-d686-baseline-preparation-smoke.json",
+        "sha256": "f9b7a84a097c36e6bad982e4c635642ef94f42d9f952e18d50c7f01d17cefb2e",
+        "bytes": 585755,
+        "log": {
+          "path": "dist/performance/atlas-browser-d686-baseline-preparation-smoke.log",
+          "sha256": "f55ff6aaf0b25c68f1339fe30283192f45cf43abead5c2fec0f2fa73cdd7ca3d",
+          "bytes": 2807
+        },
+        "complete": true,
+        "samples": 4,
+        "source": {
+          "sha": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+          "dirty": "",
+          "treeSha256": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+          "treeSha256After": "44d013c9d234acbc4e530bea6f5586af2cc32f0d16c68312311783f6dd773a93",
+          "unchangedDuringRun": true,
+          "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+        },
+        "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+        "harnessUnchanged": true
+      },
+      {
+        "path": "dist/performance/atlas-browser-d686-integrated-candidate-preparation-smoke.json",
+        "sha256": "65110491307e286de734fefa2d4e4950c1e8df84caa7598ffb028a5825ea2b9a",
+        "bytes": 572143,
+        "log": {
+          "path": "dist/performance/atlas-browser-d686-integrated-candidate-preparation-smoke.log",
+          "sha256": "6a0a57ab60ddcea970c5a883a330cffa89fbddded30b0366c43cca71dbde4181",
+          "bytes": 2644
+        },
+        "complete": true,
+        "samples": 4,
+        "source": {
+          "sha": "400c681bbc45063879287cc4bc0db4e29a7a6297",
+          "dirty": "M  fixtures/demo-catalog.json\nM  fixtures/demo-find.json\nM  fixtures/demo-networking-aci.json\nM  fixtures/demo-networking-catalog.json\nM  fixtures/demo-networking-find.json\nM  fixtures/demo-networking-nxos.json\nM  fixtures/demo-networking-scopes.json\nM  fixtures/demo-networking-topology.json\nM  fixtures/demo-rows-aci-prev.json\nM  fixtures/demo-rows-aci.json\nM  fixtures/raw-networking/aci_class.ndjson\nM  fixtures/raw-networking/aci_nd_endpoints.ndjson\nM  fixtures/raw-networking/aci_nd_flows.ndjson\nM  fixtures/raw-networking/aci_netflow.ndjson\nM  fixtures/raw-networking/aci_stats.ndjson\nM  fixtures/raw-networking/campus_netflow.ndjson\nM  fixtures/raw-networking/capture-manifest.json\nM  fixtures/raw-networking/catalyst_clients.ndjson\nM  fixtures/raw-networking/hubble_flows.ndjson\nM  fixtures/raw-networking/isovalent.ndjson\nM  fixtures/raw-networking/kube_objects.ndjson\nM  fixtures/raw-networking/meraki_associations.ndjson\nM  fixtures/raw-networking/meraki_inventory.ndjson\nM  fixtures/raw-networking/meraki_ms390_ipfix.ndjson\nM  fixtures/raw-networking/meraki_topology.ndjson\nM  fixtures/raw-networking/nxos_inventory.ndjson\nM  fixtures/raw-networking/nxos_nd_endpoints.ndjson\nM  fixtures/raw-networking/nxos_nd_flows.ndjson\nM  fixtures/raw-networking/otel_traces.ndjson\nM  fixtures/raw-networking/sdwan_netflow.ndjson\nM  frontend/src/data/catalog.test.ts\nM  frontend/src/data/catalog.ts\nM  frontend/src/data/healthStatus.test.ts\nM  frontend/src/data/healthStatus.ts\nM  frontend/src/filters.test.ts\nM  frontend/src/filters.ts\nM  frontend/src/health.test.tsx\nM  frontend/src/health.ts\nM  frontend/src/main.tsx\nM  frontend/src/pages/ApplicationsPage.tsx",
+          "treeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+          "treeSha256After": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+          "unchangedDuringRun": true,
+          "lockSha256": "bc7c8dffad05ab0bc56f545e176fc38488b8208c7891522709c1ac56949122de"
+        },
+        "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+        "harnessUnchanged": true
+      }
+    ]
+  },
+  "currentAcceptance": {
+    "status": "Complete matched corrected accepted-main comparison",
+    "baseline": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+    "candidate": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+    "harnessSha256": "95506ec1e1a812ad1629136486e6776342711549496b4e0beff9efe0bf306fb6",
+    "casesPerSource": 14,
+    "samplesPerSource": 140,
+    "allComparabilityGuardsPassed": true,
+    "results": "docs/benchmarks/atlas-browser-d686-results.md",
+    "environment": "docs/benchmarks/atlas-browser-d686-environment.json",
+    "selectionCause": "Unresolved; observed adverse readiness change retained, no attributable product/protocol cause established",
+    "budgets": "Both median and p95 checked; no browser-ready/export/startup/isolated exceedances; three automation-clock exceedances; no approved SLO enforcement"
   }
 }

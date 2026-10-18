@@ -1,0 +1,37 @@
+{
+  "description": "Supplemental imported browser source dependencies outside primary frontend/src, fixtures and lockfile tree hash; accepted-main corrected matched matrix.",
+  "sources": {
+    "baseline": {
+      "revision": "d6863dd326099acb892e1eebaa6c43d4f4410947",
+      "files": {
+        "config/deployment-health.json": {
+          "present": false
+        },
+        "research/cisco-pipeline-interface.json": {
+          "present": true,
+          "sha256": "026b2394ba355f419dd25d471fecaa1a3bd9de218a85ee6f47eecedaa8a97620",
+          "bytes": 140456,
+          "matches_revision": true
+        }
+      }
+    },
+    "candidate": {
+      "revision": "8813eb534f907ac9c95d6673ed02fdbdf1008673",
+      "files": {
+        "config/deployment-health.json": {
+          "present": true,
+          "sha256": "807e7dba0caa0d44adcab36d3a07963691f2fea323470471a721fa4fa3b1833c",
+          "bytes": 21564,
+          "matches_revision": true
+        },
+        "research/cisco-pipeline-interface.json": {
+          "present": true,
+          "sha256": "eed46b6f63cfc106e49ce10404b3fa62806161c7a090ccacf9cadb40bc04979f",
+          "bytes": 129778,
+          "matches_revision": true
+        }
+      }
+    }
+  },
+  "verifiedAfterBothRunsAt": "2026-10-18T07:31:52.710Z"
+}

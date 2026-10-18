@@ -7,12 +7,16 @@ are available. The same harness can load an untouched baseline checkout and the
 candidate checkout through `ADM_PERF_SOURCE_ROOT`. It does not require Splunk,
 credentials, Docker or a lab.
 
-The retained baseline/candidate comparison is in
-[browser results](benchmarks/atlas-browser-results.md), including the slower
-highlighted-card selection case and links to complete distributions and raw
-evidence checksums. Its original interaction intervals include automation
-completion. The corrected protocol below requires a new matched comparison;
-historical numbers must not be mixed with corrected results.
+The current retained comparison is in
+[corrected accepted-main results](benchmarks/atlas-browser-d686-results.md):
+baseline `d6863dd` versus candidate `8813eb5`, including unfavorable observations,
+median/p95 checks and raw evidence checksums. The
+[earlier comparison](benchmarks/atlas-browser-results.md) is preserved as
+historical evidence; its original interaction intervals include automation
+completion and must not be mixed with corrected results. The
+[preparation note](benchmarks/atlas-browser-d686-preparation.md) records the
+accepted-main transition. Comparative runs require the coordinator's source
+freeze and explicit measurement GO.
 
 ## Repeat a measurement
 
@@ -138,7 +142,9 @@ completion before invoking the browser's settling loop. The recorded interval
 therefore includes that automation completion wait as well as browser work and
 subsequent stable frames. It does not independently identify the earliest visual
 readiness time. A bounded follow-up trace locates the dense card-selection
-residual before settling starts; see the retained results' diagnostic section.
+residual before settling starts; see the historical results' diagnostic section.
+That diagnostic does not explain the unfavorable card-selection observations in
+the completed corrected comparison.
 
 React Profiler actual durations, CDP script/layout/style/task durations, heap/DOM
 metrics and supported browser long-task entries accompany mount timing. They
@@ -162,7 +168,7 @@ The effective tree hash covers `frontend/src`, `fixtures` and `package-lock.json
 The harness hash covers its browser entry, workload generators, specification and
 standalone build/test/TypeScript configurations. Imported configuration and
 research data outside that tree are bound separately to the measured commits in
-`benchmarks/atlas-browser-imported-source-manifest.json`. The evidence index
+`benchmarks/atlas-browser-d686-imported-source-manifest.json`. The evidence index
 records raw report locations and checksums; unchanged hashes alone do not claim
 that every repository file was measured.
 

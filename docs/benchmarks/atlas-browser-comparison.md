@@ -5,6 +5,9 @@ the readiness loop. This comparison preserves those observations; it is not a
 comparison using the corrected capture-started readiness protocol. See
 [results and diagnostic boundaries](atlas-browser-results.md).
 
+This `510754c`/`7999d3a` source pair is also superseded for current acceptance by
+accepted main `d6863dd`; preserve it as historical evidence.
+
 Baseline source: `510754c17391e548309dd68ddac3f8b99e0b75c6`; tree hash `10ac9dc39cec749ece12703d845d9872f0d6d3b28848a49f1ab480224954224e`.
 
 Harness: `7a3829bfdf2daf3f9340c5fc23a3a4f793d11c0ee4ceeb4c2d04df6aeb41b14e`. Chromium 156.0.8078.4; Node v26.10.0; Apple M3 Pro, 12 logical CPUs, 18 GiB; darwin/arm64.

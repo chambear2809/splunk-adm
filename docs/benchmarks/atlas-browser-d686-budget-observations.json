@@ -1,0 +1,36 @@
+{
+  "description": "Both candidate median and p95 checked against measured baseline p95*1.25+10ms (isolated+2ms). Investigation prompts only; no approved SLO or enforcement.",
+  "metricsChecked": 1416,
+  "observations": [
+    {
+      "workload": "nxos/captured/warm",
+      "metric": "selection.playwrightTriggerMs",
+      "baselineP95": 45.861000000004424,
+      "provisionalMs": 67.32625000000553,
+      "candidateMedian": 79.57800000000861,
+      "candidateP95": 83.02624999999534,
+      "medianExceeds": true,
+      "p95Exceeds": true
+    },
+    {
+      "workload": "nxos/captured/warm",
+      "metric": "selection.eventToTriggerObservedMs",
+      "baselineP95": 9.200000002980232,
+      "provisionalMs": 21.50000000372529,
+      "candidateMedian": 42.29999999701977,
+      "candidateP95": 46.5,
+      "medianExceeds": true,
+      "p95Exceeds": true
+    },
+    {
+      "workload": "nxos/captured/warm",
+      "metric": "devices.playwrightTriggerMs",
+      "baselineP95": 34.335542000000714,
+      "provisionalMs": 52.91942750000089,
+      "candidateMedian": 38.771833000006154,
+      "candidateP95": 57.033416999998735,
+      "medianExceeds": false,
+      "p95Exceeds": true
+    }
+  ]
+}

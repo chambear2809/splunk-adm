@@ -1,7 +1,11 @@
 # Browser interaction readiness correction
 
-Status: implemented and bounded correctness checks passed; awaiting coordinator
-review before any new controlled comparison. Existing schema 1 raw reports,
+Subsequent status: the coordinator approved this correction and the new accepted
+main was measured with it. See [corrected results](atlas-browser-d686-results.md).
+The development and bounded smoke record below is preserved.
+
+At development handoff: implementation and bounded correctness checks had passed;
+coordinator review and controlled measurement had not yet run. Existing schema 1 raw reports,
 numbers and checksum history remain preserved. Their interaction intervals
 include Playwright completion before the readiness loop. They are not replaced
 by the smoke artifacts below.

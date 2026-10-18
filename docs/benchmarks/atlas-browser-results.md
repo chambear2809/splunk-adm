@@ -1,9 +1,11 @@
 # Retained browser performance results
 
 Historical comparison: its schema 1 interaction intervals include automation
-completion. A [corrected readiness protocol](atlas-browser-readiness-correction.md)
-has passed bounded correctness smoke; a new controlled comparison remains
-pending. Original observations below are preserved.
+completion. The [corrected accepted-main comparison](atlas-browser-d686-results.md)
+is complete and is the current acceptance evidence. Accepted main advanced to
+`d6863dd326099acb892e1eebaa6c43d4f4410947`;
+the `510754c`/`7999d3a` pair below is superseded for current acceptance. Original
+observations remain preserved. See [accepted-main preparation](atlas-browser-d686-preparation.md).
 
 Accepted baseline `510754c17391e548309dd68ddac3f8b99e0b75c6` versus candidate `7999d3a8b27ee3c786f5bb43345b06273966a675`. Both runs passed 14/14 cases and retained 140 measured samples each, with no correctness failures. Source and harness hashes stayed unchanged. The comparison script verified identical runtime/hardware, harness, workload fingerprints/counts and repetition matrices. Baseline took 15.4 minutes; candidate took 12.9 minutes including assertions, warmups and artifact validation. Wall time is not a browser latency metric.
 
@@ -82,7 +84,7 @@ reported; its product/browser/protocol cause is unresolved.
 - [Full comparison tables](atlas-browser-comparison.md) and [machine-readable distributions](atlas-browser-comparison.summary.json) cover all 28 workload/cache groups and every measured operation.
 - [Evidence index](atlas-browser-evidence-index.json) records local raw JSON/log locations and SHA-256 checksums; full raws remain under ignored `dist/performance` and must be archived separately when preserving this checkout. Obsolete exploratory/interrupted generic workloads are excluded.
 - [Environment](atlas-browser-environment.md) records the idle local lab and paused local checks; OS/desktop activity and unrelated OTel containers remain uncontrolled. Production React profiling, headless Chromium and automation add overhead.
-- [Imported-source manifest](atlas-browser-imported-source-manifest.json) binds configuration/research dependencies outside the primary source-tree hash to each commit.
+- [Historical imported-source manifest](atlas-browser-imported-source-manifest.json) binds configuration/research dependencies for this superseded source pair. The [current manifest](atlas-browser-d686-imported-source-manifest.json) belongs to the completed accepted-main comparison.
 - Synthetic additions preserve captured graph rows and scale authority-qualified client identities, independent attachments/traffic observations, authority ambiguity, complete/partial/unresolved handoffs and topology associations. They are deterministic graph-contract browser workloads, not collected TA events or deployment-capacity measurements.
 - The largest Cisco cases contain 412/417 clients, 2,853/2,870 attachment records and 4,278/4,304 unique traffic records. Topology reaches 1,337/1,349 rows; the separate 20,000-row topology limit was not capacity-tested. Existing graph limits and complete evidence checks were retained.
 - Search dispatch, Splunk server execution, polling/result download and artifact filesystem reads are excluded. Mount transforms/render/script/layout overlap and must not be added together.

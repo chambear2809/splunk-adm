@@ -1,0 +1,824 @@
+{
+  "description": "Retained corrected-run near-limit card-selection evidence; no new measurements. Longtasks are unattributed full durations overlapping action, including time before click where negative offsets occur.",
+  "unavailable": [
+    "Per-action CDP layout/script phases",
+    "Individual action React commit timestamps",
+    "First committed postcondition timestamp",
+    "Per-frame readiness/signature timestamps",
+    "Longtask call stacks/attribution"
+  ],
+  "samples": [
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 360.79999999701977,
+      "reactRenderAggregateMs": 183.19999998807907,
+      "eventToTriggerCompletionObservedMs": 344.09999999403954,
+      "readyMinusTriggerObservedMs": 16.700000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.299999997019768,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 210.5,
+          "durationMs": 126
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 360.79999999701977,
+      "reactRenderAggregateMs": 181.59999997913837,
+      "eventToTriggerCompletionObservedMs": 350.5,
+      "readyMinusTriggerObservedMs": 10.299999997019768,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.200000002980232,
+          "durationMs": 231
+        },
+        {
+          "startOffsetFromClickMs": 208.79999999701977,
+          "durationMs": 132
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 360.59999999403954,
+      "reactRenderAggregateMs": 182.30000001192093,
+      "eventToTriggerCompletionObservedMs": 343.70000000298023,
+      "readyMinusTriggerObservedMs": 16.899999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.100000008940697,
+          "durationMs": 231
+        },
+        {
+          "startOffsetFromClickMs": 209.59999999403954,
+          "durationMs": 125
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 360.5,
+      "reactRenderAggregateMs": 181.50000001490116,
+      "eventToTriggerCompletionObservedMs": 345.29999999701977,
+      "readyMinusTriggerObservedMs": 15.200000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.299999997019768,
+          "durationMs": 230
+        },
+        {
+          "startOffsetFromClickMs": 208.59999999403954,
+          "durationMs": 127
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 259.8999999910593,
+      "reactRenderAggregateMs": 177.6000000089407,
+      "eventToTriggerCompletionObservedMs": 243.29999999701977,
+      "readyMinusTriggerObservedMs": 16.599999994039536,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -356.40000000596046,
+          "durationMs": 560
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 359.29999999701977,
+      "reactRenderAggregateMs": 182.6999999731779,
+      "eventToTriggerCompletionObservedMs": 336.90000000596046,
+      "readyMinusTriggerObservedMs": 22.399999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.200000002980232,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 210.1000000089407,
+          "durationMs": 116
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 358.79999999701977,
+      "reactRenderAggregateMs": 185.50000001490116,
+      "eventToTriggerCompletionObservedMs": 342.79999999701977,
+      "readyMinusTriggerObservedMs": 16,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -23.599999994039536,
+          "durationMs": 237
+        },
+        {
+          "startOffsetFromClickMs": 214,
+          "durationMs": 117
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 251,
+      "reactRenderAggregateMs": 176.99999998509884,
+      "eventToTriggerCompletionObservedMs": 244.90000000596046,
+      "readyMinusTriggerObservedMs": 6.0999999940395355,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -364.09999999403954,
+          "durationMs": 568
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 260.90000000596046,
+      "reactRenderAggregateMs": 178.89999997615814,
+      "eventToTriggerCompletionObservedMs": 245,
+      "readyMinusTriggerObservedMs": 15.900000005960464,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -371.59999999403954,
+          "durationMs": 576
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 260.40000000596046,
+      "reactRenderAggregateMs": 177.20000000298023,
+      "eventToTriggerCompletionObservedMs": 245.40000000596046,
+      "readyMinusTriggerObservedMs": 15,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -21.799999997019768,
+          "durationMs": 226
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 358.70000000298023,
+      "reactRenderAggregateMs": 182.20000004768372,
+      "eventToTriggerCompletionObservedMs": 344.5,
+      "readyMinusTriggerObservedMs": 14.200000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -23.400000005960464,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 209.5,
+          "durationMs": 126
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 376.59999999403954,
+      "reactRenderAggregateMs": 183,
+      "eventToTriggerCompletionObservedMs": 353,
+      "readyMinusTriggerObservedMs": 23.599999994039536,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.400000005960464,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 210.09999999403954,
+          "durationMs": 135
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 358.20000000298023,
+      "reactRenderAggregateMs": 185.40000000596046,
+      "eventToTriggerCompletionObservedMs": 334.8999999910593,
+      "readyMinusTriggerObservedMs": 23.30000001192093,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -23.5,
+          "durationMs": 237
+        },
+        {
+          "startOffsetFromClickMs": 214.09999999403954,
+          "durationMs": 112
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 377,
+      "reactRenderAggregateMs": 183.60000003874302,
+      "eventToTriggerCompletionObservedMs": 356.79999999701977,
+      "readyMinusTriggerObservedMs": 20.200000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22,
+          "durationMs": 233
+        },
+        {
+          "startOffsetFromClickMs": 211.1000000089407,
+          "durationMs": 136
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 263.19999998807907,
+      "reactRenderAggregateMs": 186,
+      "eventToTriggerCompletionObservedMs": 254.29999999701977,
+      "readyMinusTriggerObservedMs": 8.899999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -370.20000000298023,
+          "durationMs": 584
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 360.29999999701977,
+      "reactRenderAggregateMs": 182.99999998509884,
+      "eventToTriggerCompletionObservedMs": 340.19999998807907,
+      "readyMinusTriggerObservedMs": 20.100000008940697,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -21.900000005960464,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 210.8999999910593,
+          "durationMs": 119
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 376,
+      "reactRenderAggregateMs": 188.79999999701977,
+      "eventToTriggerCompletionObservedMs": 352.5,
+      "readyMinusTriggerObservedMs": 23.5,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -23,
+          "durationMs": 239
+        },
+        {
+          "startOffsetFromClickMs": 216.90000000596046,
+          "durationMs": 124
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 261,
+      "reactRenderAggregateMs": 179.09999999403954,
+      "eventToTriggerCompletionObservedMs": 251.5,
+      "readyMinusTriggerObservedMs": 9.5,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -371.6000000089407,
+          "durationMs": 577
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 263.5,
+      "reactRenderAggregateMs": 178.7000000178814,
+      "eventToTriggerCompletionObservedMs": 247.20000000298023,
+      "readyMinusTriggerObservedMs": 16.299999997019768,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -368.8999999910593,
+          "durationMs": 575
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "baseline",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 362,
+      "reactRenderAggregateMs": 183.00000001490116,
+      "eventToTriggerCompletionObservedMs": 349.29999999701977,
+      "readyMinusTriggerObservedMs": 12.700000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -22.200000002980232,
+          "durationMs": 232
+        },
+        {
+          "startOffsetFromClickMs": 210.6000000089407,
+          "durationMs": 126
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 368.79999999701977,
+      "reactRenderAggregateMs": 30.100000008940697,
+      "eventToTriggerCompletionObservedMs": 341.59999999403954,
+      "readyMinusTriggerObservedMs": 27.200000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -13.799999997019768,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.900000005960464,
+          "durationMs": 277
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 367.20000000298023,
+      "reactRenderAggregateMs": 31.599999994039536,
+      "eventToTriggerCompletionObservedMs": 341.40000000596046,
+      "readyMinusTriggerObservedMs": 25.799999997019768,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -15,
+          "durationMs": 75
+        },
+        {
+          "startOffsetFromClickMs": 60.20000000298023,
+          "durationMs": 273
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 368.5,
+      "reactRenderAggregateMs": 29.700000002980232,
+      "eventToTriggerCompletionObservedMs": 347.09999999403954,
+      "readyMinusTriggerObservedMs": 21.400000005960464,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -13.900000005960464,
+          "durationMs": 71
+        },
+        {
+          "startOffsetFromClickMs": 58,
+          "durationMs": 281
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 351.90000000596046,
+      "reactRenderAggregateMs": 30.5,
+      "eventToTriggerCompletionObservedMs": 337.5,
+      "readyMinusTriggerObservedMs": 14.400000005960464,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.199999988079071,
+          "durationMs": 71
+        },
+        {
+          "startOffsetFromClickMs": 57,
+          "durationMs": 270
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "cold",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 367.40000000596046,
+      "reactRenderAggregateMs": 31.200000062584877,
+      "eventToTriggerCompletionObservedMs": 351.79999999701977,
+      "readyMinusTriggerObservedMs": 15.600000008940697,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -15.099999994039536,
+          "durationMs": 74
+        },
+        {
+          "startOffsetFromClickMs": 59.79999999701977,
+          "durationMs": 282
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 366.70000000298023,
+      "reactRenderAggregateMs": 29.80000001192093,
+      "eventToTriggerCompletionObservedMs": 342.80000001192093,
+      "readyMinusTriggerObservedMs": 23.899999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.099999994039536,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.900000005960464,
+          "durationMs": 276
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 351.79999999701977,
+      "reactRenderAggregateMs": 29.599999964237213,
+      "eventToTriggerCompletionObservedMs": 329.3999999910593,
+      "readyMinusTriggerObservedMs": 22.400000005960464,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.599999994039536,
+          "durationMs": 262
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 368.70000000298023,
+      "reactRenderAggregateMs": 30.200000017881393,
+      "eventToTriggerCompletionObservedMs": 348.70000000298023,
+      "readyMinusTriggerObservedMs": 20,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.79999999701977,
+          "durationMs": 281
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 368.5,
+      "reactRenderAggregateMs": 29.799999997019768,
+      "eventToTriggerCompletionObservedMs": 345.30000001192093,
+      "readyMinusTriggerObservedMs": 23.19999998807907,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.70000000298023,
+          "durationMs": 277
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "catalyst-aci",
+      "cache": "warm",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 367.90000000596046,
+      "reactRenderAggregateMs": 32.80000001192093,
+      "eventToTriggerCompletionObservedMs": 358.29999999701977,
+      "readyMinusTriggerObservedMs": 9.600000008940697,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.599999994039536,
+          "durationMs": 74
+        },
+        {
+          "startOffsetFromClickMs": 59.79999999701977,
+          "durationMs": 286
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 385.3999999910593,
+      "reactRenderAggregateMs": 29.200000062584877,
+      "eventToTriggerCompletionObservedMs": 366.59999999403954,
+      "readyMinusTriggerObservedMs": 18.799999997019768,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.200000002980232,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.20000000298023,
+          "durationMs": 303
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 384.29999999701977,
+      "reactRenderAggregateMs": 29.899999976158142,
+      "eventToTriggerCompletionObservedMs": 359.40000000596046,
+      "readyMinusTriggerObservedMs": 24.899999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.299999997019768,
+          "durationMs": 71
+        },
+        {
+          "startOffsetFromClickMs": 56.900000005960464,
+          "durationMs": 294
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 353.1000000089407,
+      "reactRenderAggregateMs": 29.899999991059303,
+      "eventToTriggerCompletionObservedMs": 338.6000000089407,
+      "readyMinusTriggerObservedMs": 14.5,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.6000000089407,
+          "durationMs": 273
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 368,
+      "reactRenderAggregateMs": 29.899999991059303,
+      "eventToTriggerCompletionObservedMs": 348.6000000089407,
+      "readyMinusTriggerObservedMs": 19.399999991059303,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.099999994039536,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.80000001192093,
+          "durationMs": 283
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "cold",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 383.3999999910593,
+      "reactRenderAggregateMs": 31.69999997317791,
+      "eventToTriggerCompletionObservedMs": 363.3999999910593,
+      "readyMinusTriggerObservedMs": 20,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -15.5,
+          "durationMs": 76
+        },
+        {
+          "startOffsetFromClickMs": 60.79999999701977,
+          "durationMs": 291
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 0,
+      "eventToCommittedStableReadyMs": 369.1000000089407,
+      "reactRenderAggregateMs": 30.200000002980232,
+      "eventToTriggerCompletionObservedMs": 355.90000000596046,
+      "readyMinusTriggerObservedMs": 13.200000002980232,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.399999991059303,
+          "durationMs": 72
+        },
+        {
+          "startOffsetFromClickMs": 58.1000000089407,
+          "durationMs": 287
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 1,
+      "eventToCommittedStableReadyMs": 368,
+      "reactRenderAggregateMs": 30.100000023841858,
+      "eventToTriggerCompletionObservedMs": 344.80000001192093,
+      "readyMinusTriggerObservedMs": 23.19999998807907,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.199999988079071,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.70000000298023,
+          "durationMs": 277
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 2,
+      "eventToCommittedStableReadyMs": 368.19999998807907,
+      "reactRenderAggregateMs": 30.19999998807907,
+      "eventToTriggerCompletionObservedMs": 350,
+      "readyMinusTriggerObservedMs": 18.19999998807907,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.200000002980232,
+          "durationMs": 71
+        },
+        {
+          "startOffsetFromClickMs": 57,
+          "durationMs": 282
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 3,
+      "eventToCommittedStableReadyMs": 370,
+      "reactRenderAggregateMs": 30,
+      "eventToTriggerCompletionObservedMs": 356,
+      "readyMinusTriggerObservedMs": 14,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.099999994039536,
+          "durationMs": 70
+        },
+        {
+          "startOffsetFromClickMs": 56.70000000298023,
+          "durationMs": 287
+        }
+      ],
+      "committedPostcondition": true
+    },
+    {
+      "role": "candidate",
+      "scenario": "meraki-nxos",
+      "cache": "warm",
+      "repetition": 4,
+      "eventToCommittedStableReadyMs": 367.29999999701977,
+      "reactRenderAggregateMs": 30.600000023841858,
+      "eventToTriggerCompletionObservedMs": 353.8999999910593,
+      "readyMinusTriggerObservedMs": 13.400000005960464,
+      "overlappingLongTasks": [
+        {
+          "startOffsetFromClickMs": -14.900000005960464,
+          "durationMs": 76
+        },
+        {
+          "startOffsetFromClickMs": 61.19999998807907,
+          "durationMs": 280
+        }
+      ],
+      "committedPostcondition": true
+    }
+  ]
+}

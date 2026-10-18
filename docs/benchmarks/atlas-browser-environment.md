@@ -1,5 +1,10 @@
 # Atlas browser measurement environment
 
+Historical source pair: the completed current accepted-main comparison uses the
+[d686 environment record](atlas-browser-d686-environment.json) and
+[corrected results](atlas-browser-d686-results.md). Conditions below belong to
+the superseded `510754c`/`7999d3a` evidence.
+
 The exploratory run (`dist/performance/atlas-browser-exploratory.json`) passed all 14 workload
 cases and retained 140 measured samples. It overlapped other focused checks,
 browser tests and local Splunk lab startup. Those values are diagnostic evidence,

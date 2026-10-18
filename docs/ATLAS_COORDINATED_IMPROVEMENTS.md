@@ -85,6 +85,24 @@ synthetic workloads, cold/warm conditions, deterministic readiness, actual brows
 timings, repetitions and correctness assertions. Measurements do not include live
 Splunk dispatch/download and do not establish production capacity or approved SLOs.
 
+The [corrected accepted-main results](benchmarks/atlas-browser-d686-results.md)
+compare `d6863dd` with integrated source `8813eb5`: 14 workloads and 140 measured
+samples per revision, with matching runtime, harness and workload fingerprints.
+All correctness checks passed. On the 500-node/2,000-edge cold workloads, usable-map
+medians changed from 377.4 to 310.6 ms for ACI, 363.8 to 313.3 ms for NX-OS,
+1,159.2 to 389.4 ms for Catalyst and 1,159.9 to 389.0 ms for Meraki. Integrated
+transformation calls fell from sixteen to one; isolated parsing did not improve.
+Filtering, React rendering, long tasks and exports are reported separately.
+
+These gains are not universal: Catalyst near-limit warm highlighted-card selection
+increased from 260.9 to 367.9 ms median, while observed p95 changed from 359.3 to
+368.7 ms. The cause remains unknown; retained long-task entries have no stacks or
+attribution. Both statistics remain below provisional investigation thresholds,
+which does not erase the regression or establish an SLO. Five repetitions per
+cache state make p95 the observed maximum. The workstation runs used a stopped
+Splunk lab, but OS, desktop and thermal activity were uncontrolled. The separate
+20,000-row topology bound was not capacity-tested.
+
 Catalyst topology still queries the selected source-event window conservatively:
 a late receipt whose source timestamp falls outside that window can omit context;
 the code does not fabricate earlier attachment history. Collector checkpoint/API
@@ -94,10 +112,12 @@ demos are regression data, not a restriction to four application topologies.
 
 ## Verification record
 
-Source review has closed fourteen P2 findings across the initial review and
-follow-ups. No P0/P1 finding was reported. The reviewer is a separate Astra/max
+Review has closed fifteen P2 findings across the initial review and follow-ups,
+including the browser measurement correction. No P0/P1 finding was reported. The reviewer is a separate Astra/max
 session and performed no edits, tests, builds, commits or lab operations. Final
-evidence approval remains pending the completed live suite and performance runs.
+overall approval remains pending the completed live suite and installed-package
+checks. The corrected performance evidence has been independently approved within
+its documented bounds.
 
 Historical evidence before incorporating PR #11: frontend lint/type checks,
 551 unit tests, 92 browser tests, package/release checks and AppInspect Cloud
@@ -129,3 +149,81 @@ those accepted definitions. The old package and logs are retained under
 the coordinator reacquired the exclusive lab lock before any further lab action,
 without contention. The owned lab was then stopped while integrating and
 remeasuring. The final integrated validation record will be added below.
+
+### Integrated source checkpoint
+
+The integrated runtime source is `8813eb534f907ac9c95d6673ed02fdbdf1008673`,
+reviewed independently against accepted main `d6863dd`. The reviewer found no
+new actionable source defects. Fifteen prior P2 findings (fourteen source issues
+and the browser interaction timer boundary) are closed in implementation;
+corrected performance evidence is approved, and live-package evidence remains
+pending.
+
+| Check on the integrated source | Actual outcome |
+| --- | --- |
+| `npm run lint` | Pass, including ESLint, TypeScript and formatting |
+| `npm test` | 561 tests in 45 files passed |
+| `npm run test:browser` | Initial run: 91 passed, 1 stale fixture-time assertion failed. After deriving test windows from capture metadata, complete rerun: 92 passed |
+| `npm run typecheck:browser` | Passed again after the fixture-harness correction |
+| `ruff check tools tests` / `ruff format --check tools tests` | Passed; 102 files formatted |
+| `python3 -m unittest discover -s tests -v` | 472 passed, no skips |
+| `SOURCE_DATE_EPOCH=1792276353 npm run package` | Both frontend builds and packaging passed |
+| `python3 tools/check_release.py` | Passed |
+| AppInspect 4.3.1 on Python 3.9.6, Cloud precert plus `check_appinspect.py` | Both passed: 0 errors, 0 failures, 5 warnings, 1 skip, 127 not applicable, 113 successes |
+| Full corrected browser performance matrix | Baseline and candidate each passed 14 cases / 140 measured samples; 2,520 action postconditions independently verified |
+| Live Splunk integration and installed-package checks | Pending at this checkpoint; no pass inferred from historical runs |
+
+Package: `dist/splunk_adm-0.3.0.tar.gz`, SHA-256
+`e691df2369712f21fc55442064fda8d52e1c0de00aab8ee8f77780a3f7a9bb41`.
+Logs use `dist/atlas-integrated-*`; the full browser rerun is
+`dist/atlas-integrated-browser-rerun.log`. The package retains the recorded build
+epoch for reproducibility. Current documentation-only follow-ups do not change
+its executable assets; final source/package binding must still be checked.
+
+GitHub workflow `39106103577` also passed frontend, browser and Python checks
+for `8813eb5`; GitGuardian passed. Its Splunk integration job was skipped.
+CI metadata and logs are retained at `dist/atlas-ci-8813eb5.{json,log}`. This
+remote result does not replace the pending task-owned installed-app live run.
+
+### Independent review audit
+
+The separate Astra/max reviewer supplied the following disposition record. All
+items were P2; no P0/P1 finding was reported. Closure here means source inspection
+and the cited regressions, with final live/measurement qualification tracked
+separately. The reviewer performed no edits, commits, builds, tests or lab actions.
+
+| # | Affected symbol / area | Concrete failure and accepted correction |
+| --- | --- | --- |
+| 1 | `selectedHealthProbes`, `loadHealth` | Combined probes searched unselected/invalid indexes. Selected named probes now validate configuration and use a four-request queue. |
+| 2 | Catalyst/Meraki quality SPL | Broader event-time windows overstated recent client-quality evidence. Explicit source adapters apply 24-hour indexed-receipt bounds. |
+| 3 | Deployment registry | Nonexistent Kubernetes/trace/summary quality aliases created impossible requirements. Unsupported aliases were removed. |
+| 4 | `sourceAssessment`, `jobAssessment` | Missing lookback validation and string-label matching misclassified unavailable evidence. Typed assessments validate receipt and retained coverage. |
+| 5 | Deployment/Setup contract diagnostics | Inexact V1 selector checks and unconditional V2 jobs rejected valid partial deployments. Coherent selectors are verified exactly; writers follow selected dependencies. |
+| 6 | Setup scheduler table | Fetching scheduler data did not expose the target job's outcome. Run status and last-run/success evidence are shown explicitly. |
+| 7 | Map findings | Hardcoded healthy labels misclassified cadence, staged and unselected sources. Findings now use typed assessments. |
+| 8 | Readiness derived evidence | Summary/profile results were fetched but not assessed. Registry-driven checks assess required derived evidence. |
+| 9 | Readiness completion time | Collection-start timestamps made new receipts look future-dated. Assessment uses completion time. |
+| 10 | Setup source profiles | Valid Catalyst/Meraki profile pairs were rejected. Exact reviewed pairs are accepted; wrong-family cases remain rejected. |
+| 11 | Setup draft revision handling | Passive refresh overwrote unsaved expectations. Dirty drafts survive; newer revisions require explicit conflict resolution/discard. |
+| 12 | Quality parsing/presentation | Supported V2 dispositions lost totals; client history was called flows. Dispositions/reasons are retained with candidate-record terminology. |
+| 13 | Readiness raw-field probes | Unselected/empty index macros bypassed search guards. Raw dispatch now requires selected, configured probes. |
+| 14 | Readiness timestamps | Integer parsing rejected valid fractional scheduler times. Bounded finite parsing preserves precision and rejects malformed/future evidence. |
+| 15 | Browser interaction readiness | Sampling after Playwright completion inflated browser latency. Sampling starts at capture, waits for intended DOM state and stable frames, and records automation completion separately. |
+
+The sparse Cisco performance workload and metadata-only refresh checks were
+additional acceptance gaps, not additional numbered P2 findings. Evidence-heavy
+synthetic workloads and real membership/attachment refresh mutations address
+those gaps. The integrated review against `d6863dd` found no new actionable
+source defects, including in accepted PR #11 behavior or the contract-conflict
+health diagnostic.
+
+The integrated live-suite run also exposed a stale static assertion expecting
+`lookup adm_interfaces`; accepted PR #11 deliberately uses
+`lookup local=true adm_interfaces` in V1. The test now checks that accepted form
+and strengthens the V2 guard to reject every `adm_interfaces` reference. Both
+enrichment macro definitions remain byte-identical to `d6863dd`; the live
+raw-interface/ifIndex isolation regression passed unchanged. The complete static
+contract class passed all 19 tests without `ADM_LAB`, with its log retained at
+`dist/atlas-integrated-contract-rerun.log`. Independent Astra follow-up approved
+the correction with no weakened evidence. This closes that assertion only; the
+original full-run failure is retained and is not relabeled as a clean full pass.

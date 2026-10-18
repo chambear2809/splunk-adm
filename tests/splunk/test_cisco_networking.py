@@ -292,12 +292,12 @@ class CiscoNetworkingContractTest(unittest.TestCase):
 
     def test_v2_interface_identifiers_never_use_unscoped_inventory_aliases(self):
         enrichment = self.macros.get("adm_flow_enrich_v2", "definition")
-        self.assertNotIn("lookup adm_interfaces", enrichment)
+        self.assertNotIn("adm_interfaces", enrichment)
         self.assertIn("coalesce(adm_raw_ingress_interface", enrichment)
         self.assertIn("coalesce(adm_raw_egress_interface", enrichment)
         self.assertIn('"ifIndex ".adm_in_ifindex', enrichment)
         self.assertIn(
-            "lookup adm_interfaces",
+            "lookup local=true adm_interfaces",
             self.macros.get("adm_flow_enrich", "definition"),
         )
 
