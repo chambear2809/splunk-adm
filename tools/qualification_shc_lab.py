@@ -90,14 +90,22 @@ def login_pty(username, password, argv=("/opt/splunk/bin/splunk", "login"), time
                 os._exit(127)
         os.set_blocking(master, False)
         echo_off(master)
-        transcript, total = b"", 0
+        transcript, total, eof = b"", 0, False
         with selectors.DefaultSelector() as selector:
             selector.register(master, selectors.EVENT_READ)
             while True:
-                found, status = os.waitpid(child, os.WNOHANG)
-                if found == child:
-                    reaped = True
-                    result["exit_code"] = os.waitstatus_to_exitcode(status)
+                if not reaped:
+                    found, status = os.waitpid(child, os.WNOHANG)
+                    if found == child:
+                        reaped = True
+                        result["exit_code"] = os.waitstatus_to_exitcode(status)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    terminal = "timeout"
+                    break
+                # Exit alone does not establish a cached login: queued PTY output
+                # must still pass the prompt checks and byte bound through EOF.
+                if reaped and eof:
                     if result["exit_code"] != 0:
                         terminal = "rejected"
                     elif result["username_prompt"] != result["password_prompt"]:
@@ -106,10 +114,9 @@ def login_pty(username, password, argv=("/opt/splunk/bin/splunk", "login"), time
                         # Zero prompts is valid for a successful cached login.
                         terminal = "completed"
                     break
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    terminal = "timeout"
-                    break
+                if eof:
+                    time.sleep(min(.005, remaining))
+                    continue
                 if not selector.select(min(.1, remaining)):
                     continue
                 try:
@@ -118,31 +125,40 @@ def login_pty(username, password, argv=("/opt/splunk/bin/splunk", "login"), time
                     continue
                 except OSError as exc:
                     if exc.errno == errno.EIO:
-                        time.sleep(min(.005, remaining))
+                        eof = True
+                        selector.unregister(master)
                         continue
                     raise
                 if not chunk:
-                    time.sleep(min(.005, remaining))
+                    eof = True
+                    selector.unregister(master)
                     continue
                 total += len(chunk)
                 if total > 65536:
                     terminal = "output_limit"
                     break
-                transcript = (transcript + chunk)[-4096:]
-                if re.search(rb"(?:^|[\r\n])(?:Splunk\s+)?username\s*:\s*$", transcript, re.I):
-                    if result["username_prompt"] or result["password_prompt"]:
+                transcript += chunk
+                consumed = 0
+                for prompt in re.finditer(
+                    rb"(?:^|[\r\n])(?:(?:Splunk\s+)?(username)|(password))[ \t]*:[ \t]*",
+                    transcript, re.I,
+                ):
+                    is_username = prompt.group(1) is not None
+                    if ((is_username and (result["username_prompt"] or result["password_prompt"]))
+                        or (not is_username and (not result["username_prompt"] or result["password_prompt"]))):
                         terminal = "unexpected_prompt"
                         break
-                    send(username)
-                    result["username_prompt"] = True
-                    transcript = b""
-                elif re.search(rb"(?:^|[\r\n])password\s*:\s*$", transcript, re.I):
-                    if not result["username_prompt"] or result["password_prompt"]:
-                        terminal = "unexpected_prompt"
+                    if reaped:
+                        if is_username:
+                            result["username_prompt"] = True
+                        terminal = "incomplete_prompt"
                         break
-                    send(password)
-                    result["password_prompt"] = True
-                    transcript = b""
+                    send(username if is_username else password)
+                    result["username_prompt" if is_username else "password_prompt"] = True
+                    consumed = prompt.end()
+                if terminal:
+                    break
+                transcript = transcript[consumed:][-4096:]
     except TimeoutError:
         terminal = "timeout"
     except BaseException:

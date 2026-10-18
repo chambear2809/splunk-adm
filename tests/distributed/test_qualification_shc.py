@@ -10,8 +10,9 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
 sys.path.insert(0, str(TOOLS))
@@ -389,6 +390,7 @@ class PtyLoginTests(unittest.TestCase):
             namespace,
         )
         self.login = namespace["login_pty"]
+        self.namespace = namespace
 
     def program(self, source):
         path = self.directory / "fake_cli.py"
@@ -438,6 +440,81 @@ assert username == "fixture-admin" and password == "fixture-password"
         self.assertEqual(result["status"], "completed")
         self.assertFalse(result["username_prompt"] or result["password_prompt"])
         self.assertTrue(result["child_reaped"])
+
+    def exited_child(self, chunks, *, waiting=None):
+        """Deterministically expose queued output after waitpid reports exit."""
+        selector = Mock()
+        selector.__enter__ = Mock(return_value=selector)
+        selector.__exit__ = Mock(return_value=False)
+        selector.select.return_value = [True]
+        operating = SimpleNamespace(
+            WNOHANG=1,
+            waitpid=Mock(side_effect=(waiting or [(123, 0)]) + [(123, -9)]),
+            waitstatus_to_exitcode=lambda status: status,
+            set_blocking=Mock(),
+            read=Mock(side_effect=chunks),
+            write=Mock(side_effect=lambda fd, data: len(data)),
+            close=Mock(),
+            killpg=Mock(),
+        )
+        terminal = SimpleNamespace(
+            ECHO=1,
+            ECHONL=2,
+            TCSANOW=0,
+            tcgetattr=lambda fd: [0, 0, 0, 0],
+            tcsetattr=Mock(),
+        )
+        with patch.dict(
+            self.namespace,
+            {
+                "os": operating,
+                "pty": SimpleNamespace(fork=lambda: (123, 456)),
+                "termios": terminal,
+                "selectors": SimpleNamespace(
+                    DefaultSelector=lambda: selector, EVENT_READ=1
+                ),
+            },
+        ):
+            result = self.login("fixture-admin", "fixture-password", timeout=2)
+        return result, operating
+
+    def test_exit_before_drain_rejects_queued_invalid_prompts(self):
+        for chunk, status in (
+            (b"Splunk username: ", "incomplete_prompt"),
+            (b"Password: ", "unexpected_prompt"),
+            (b"Password: \r\ntrailing message", "unexpected_prompt"),
+        ):
+            with self.subTest(chunk=chunk):
+                result, operating = self.exited_child([chunk, b""])
+                self.assertEqual(result["status"], status)
+                self.assertTrue(result["child_reaped"])
+                operating.read.assert_called()
+                operating.write.assert_not_called()
+        result, operating = self.exited_child(
+            [b"Splunk username: ", b"Password: ", b"Password: \r\ntrailing message"],
+            waiting=[(0, 0), (0, 0), (123, 0)],
+        )
+        self.assertEqual(result["status"], "unexpected_prompt")
+        self.assertTrue(result["child_reaped"])
+        self.assertEqual(operating.write.call_count, 2)
+        result, operating = self.exited_child(
+            [b"Splunk username: \r\nPassword: \r\nPassword: \r\ntrailing message"],
+            waiting=[(0, 0)],
+        )
+        self.assertEqual(result["status"], "unexpected_prompt")
+        self.assertEqual(operating.write.call_count, 2)
+
+    def test_exit_before_drain_enforces_output_bound_and_eof(self):
+        result, operating = self.exited_child([b"x" * 4096] * 17 + [b""])
+        self.assertEqual(result["status"], "output_limit")
+        self.assertTrue(result["child_reaped"])
+        self.assertEqual(operating.read.call_count, 17)
+        for eof in (b"", OSError(5, "fixture EIO")):
+            with self.subTest(eof=type(eof)):
+                result, operating = self.exited_child([b"cached session accepted", eof])
+                self.assertEqual(result["status"], "completed")
+                self.assertTrue(result["child_reaped"])
+                self.assertEqual(operating.read.call_count, 2)
 
     def test_partial_out_of_order_and_repeated_prompt_flows_fail_closed(self):
         cases = [
