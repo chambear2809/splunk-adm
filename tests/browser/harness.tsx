@@ -1,3 +1,4 @@
+import { DeploymentWriteError } from "../../frontend/src/data/deploymentClient";
 import { createRoot } from "react-dom/client";
 import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
@@ -54,7 +55,15 @@ class FakeDeploymentClient implements DeploymentClient {
       state: "configured",
       settings,
       activeContract: 1,
-      canWrite: faultScenario !== "setup-unknown",
+      canWrite: !["setup-unknown", "deployment-write-disabled"].includes(
+        faultScenario ?? "",
+      ),
+      ...(faultScenario === "deployment-write-disabled"
+        ? {
+            writeUnavailableReason:
+              "Settings writes are disabled. An operator must qualify this deployment and configure adm_settings.conf write_mode.",
+          }
+        : {}),
     };
   }
   async read(signal?: AbortSignal) {
@@ -89,6 +98,23 @@ class FakeDeploymentClient implements DeploymentClient {
     if (signal?.aborted) throw new Error("Cancelled");
     if (!this.snapshot.canWrite)
       throw new Error("Administrator permission required.");
+    if (faultScenario === "deployment-server-conflict") {
+      this.snapshot.settings = {
+        ...this.snapshot.settings!,
+        revision: "server-newer-revision",
+        sources: {
+          ...this.snapshot.settings!.sources,
+          netflow: {
+            ...this.snapshot.settings!.sources.netflow,
+            state: "staged",
+          },
+        },
+      };
+      throw new DeploymentWriteError(
+        "conflict",
+        "Deployment expectations changed. Your draft is preserved; reload before saving.",
+      );
+    }
     if (expectedRevision !== this.snapshot.settings?.revision)
       throw new Error("Deployment settings changed.");
     if (faultScenario === "deployment-write-fails")

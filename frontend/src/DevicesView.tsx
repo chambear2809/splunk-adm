@@ -61,6 +61,14 @@ function inventoryDetails(
     device.source_time
       ? `Source time/freshness ${device.source_time}`
       : undefined,
+    device.source_time_status
+      ? `Source time status ${device.source_time_status}`
+      : undefined,
+    device.history_coverage === "unconfirmed"
+      ? "Retained history coverage unconfirmed"
+      : device.history_coverage === "retained_evidence"
+        ? "Retained evidence only"
+        : undefined,
     device.received_time ? `Received ${device.received_time}` : undefined,
     device.latest_received_time
       ? `Latest received ${device.latest_received_time}`

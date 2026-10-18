@@ -904,12 +904,10 @@ def _lab_snapshot(selected_sources: list[str] | None = None) -> dict[str, Any]:
     collect("active_contract", active_contract)
     collect(
         "deployment_settings",
-        lambda: json.loads(
-            lab._json(
-                "GET",
-                f"/servicesNS/nobody/{APP}/storage/collections/data/adm_deployment_settings/deployment",
-            )["settings_json"]
-        ),
+        lambda: lab._json(
+            "GET",
+            f"/servicesNS/nobody/{APP}/adm/deployment-settings",
+        )["settings"],
     )
     for key in sorted(
         {name for source in REGISTRY["sources"] for name in source["indexMacros"]}

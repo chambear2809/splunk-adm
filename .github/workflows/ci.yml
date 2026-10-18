@@ -99,6 +99,7 @@ jobs:
       - run: python -m ruff check tools tests
       - run: python -m ruff format --check tools tests
       - run: python -m unittest discover -s tests -p 'test_*.py'
+      - run: python -m unittest discover -s tests/distributed -p 'test_*.py'
       - run: python -m unittest discover -s tests/splunk -p test_upgrade.py
 
   splunk-lab:

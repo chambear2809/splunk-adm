@@ -13,6 +13,8 @@ from tests.splunk.test_cisco_upgrade import (
     _read_gap_evidence,
     _resume_staging,
     _upgrade_resume_route,
+    _qualification_cutover,
+    QualificationInterrupted,
 )
 
 
@@ -82,6 +84,42 @@ class CiscoUpgradeHarnessResumeTest(unittest.TestCase):
             migration = self._FakeMigration(journal)
             _resume_staging(migration, 1, 2, {})
             self.assertEqual(migration.calls, expected)
+
+    def test_controlled_interruption_is_durable_and_retry_does_not_rewrite(self):
+        class Controller:
+            def __init__(self):
+                self.state = {"phase": "cutover_in_progress"}
+                self.value = "1"
+                self.writes = 0
+
+            def _mutation_equal(self, mutation, first, second):
+                return first == second
+
+            def _write_journal(self, journal):
+                self.state = json.loads(json.dumps(journal))
+
+            def _apply_mutation(self, journal, mutation):
+                if self.value != mutation["after"]:
+                    self.value = mutation["after"]
+                    self.writes += 1
+                mutation["state"] = "applied"
+                self._write_journal(journal)
+
+            def cutover(self):
+                self._apply_mutation(
+                    self.state, {"id": "selector", "before": "1", "after": "2"}
+                )
+                return {"status": "cutover"}
+
+        controller = Controller()
+        with self.assertRaises(QualificationInterrupted):
+            _qualification_cutover(controller, True)
+        self.assertEqual(
+            controller.state["qualification_interrupt"]["mutation_id"], "selector"
+        )
+        self.assertEqual(controller.writes, 1)
+        self.assertEqual(_qualification_cutover(controller, True)["status"], "cutover")
+        self.assertEqual(controller.writes, 1)
 
     def test_gap_marker_fails_closed_without_evidence(self):
         for state in (

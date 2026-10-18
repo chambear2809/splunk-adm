@@ -12,13 +12,30 @@ import {
   type DeploymentSnapshot,
 } from "./deploymentHealth";
 
-const COLLECTION = "storage/collections/data/adm_deployment_settings";
-const KEY = "deployment";
+const ENDPOINT = "adm/deployment-settings";
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
-class HTTPError extends Error {
-  constructor(readonly status: number) {
-    super(`Deployment settings request failed (HTTP ${status}).`);
+export class DeploymentWriteError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+class HTTPError extends DeploymentWriteError {
+  constructor(
+    readonly status: number,
+    payload?: unknown,
+  ) {
+    super(
+      object(payload) && typeof payload.code === "string"
+        ? payload.code
+        : "unavailable",
+      object(payload) && typeof payload.error === "string"
+        ? payload.error
+        : `Deployment settings request failed (HTTP ${status}).`,
+    );
   }
 }
 function entry(payload: unknown) {
@@ -37,6 +54,9 @@ function entry(payload: unknown) {
 }
 
 export class ToolkitDeploymentClient implements DeploymentClient {
+  private pending = new Map<string, string>();
+  private observedRevision?: string;
+  private namespace?: string;
   constructor(private readonly fetcher: typeof fetch = fetch) {}
   private async request(
     path: string,
@@ -54,9 +74,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const defaults = getDefaultFetchInit();
       const headers = new Headers(defaults.headers);
       if (body !== undefined) headers.set("Content-Type", "application/json");
-      const endpoint = path.startsWith(COLLECTION)
-        ? path
-        : `${path}?output_mode=json`;
+      const endpoint = `${path}?output_mode=json`;
       const response = await this.fetcher(
         createRESTURL(
           endpoint,
@@ -70,8 +88,9 @@ export class ToolkitDeploymentClient implements DeploymentClient {
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         },
       );
-      if (!response.ok) throw new HTTPError(response.status);
-      return body === undefined ? await response.json() : undefined;
+      const payload: unknown = await response.json();
+      if (!response.ok) throw new HTTPError(response.status, payload);
+      return payload;
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", abort);
@@ -80,7 +99,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
 
   async read(signal?: AbortSignal): Promise<DeploymentSnapshot> {
     const results = await Promise.allSettled([
-      this.request(`${COLLECTION}/${KEY}`, signal),
+      this.request(ENDPOINT, signal),
       Promise.all(
         DATA_CONTRACT_SELECTORS.map((selector) =>
           this.request(
@@ -89,17 +108,11 @@ export class ToolkitDeploymentClient implements DeploymentClient {
           ),
         ),
       ),
-      this.request("authentication/current-context", signal, undefined, true),
-      this.request(
-        "storage/collections/config/adm_deployment_settings",
-        signal,
-      ),
     ]);
     if (signal?.aborted)
       throw new Error("Deployment settings request cancelled.");
     let activeContract: 1 | 2 | undefined;
-    let canWrite = false;
-    const [record, contract, context, acl] = results;
+    const [record, contract] = results;
     try {
       if (contract.status === "fulfilled") {
         const definitions = contract.value.map(
@@ -121,47 +134,66 @@ export class ToolkitDeploymentClient implements DeploymentClient {
     } catch {
       /* Missing selector evidence stays unknown. */
     }
-    try {
-      if (context.status === "fulfilled" && acl.status === "fulfilled") {
-        const capabilities = entry(context.value).content.capabilities;
-        const permissions = entry(acl.value);
-        const writable =
-          permissions.acl?.can_write ??
-          (object(permissions.content["eai:acl"])
-            ? permissions.content["eai:acl"].can_write
-            : undefined);
-        canWrite =
-          Array.isArray(capabilities) &&
-          capabilities.includes("admin_all_objects") &&
-          [true, 1, "1"].includes(writable as boolean | number | string);
-      }
-    } catch {
-      /* A failed authorization check never enables writes. */
-    }
     if (record.status === "rejected") {
-      const absent =
-        record.reason instanceof HTTPError && record.reason.status === 404;
       return {
-        state: absent ? "absent" : "unavailable",
+        state: "unavailable",
         activeContract,
-        canWrite,
-        error: absent
-          ? "Deployment expectations have not been configured."
-          : "Deployment expectations are unavailable; check permissions and KV Store availability.",
+        canWrite: false,
+        error:
+          "Deployment expectations are unavailable; check permissions and the supported settings endpoint. No direct KV write fallback is enabled.",
       };
     }
+
     try {
       if (
         !object(record.value) ||
-        record.value._key !== KEY ||
-        typeof record.value.settings_json !== "string"
+        !["configured", "absent"].includes(String(record.value.state)) ||
+        !Array.isArray(record.value.observedRevisions) ||
+        !record.value.observedRevisions.every(
+          (value) => typeof value === "string",
+        )
       )
-        throw new Error("Malformed deployment settings record.");
-      const settings = validateExpectations(
-        JSON.parse(record.value.settings_json),
-      );
-      if (record.value.revision !== settings.revision)
-        throw new Error("Deployment settings revision is inconsistent.");
+        throw new Error("Malformed deployment settings response.");
+      const backend = record.value;
+      const observedRevisions = backend.observedRevisions as string[];
+      const namespace =
+        typeof backend.namespace === "string" ? backend.namespace : undefined;
+      if (this.namespace && namespace && this.namespace !== namespace)
+        throw new Error(
+          "Deployment settings namespace changed. Reload this page after verifying the deployment routing.",
+        );
+      if (
+        this.observedRevision &&
+        !observedRevisions.includes(this.observedRevision)
+      )
+        throw new Error(
+          "Deployment settings refresh has not reached the previously observed revision. Retry after replication catches up.",
+        );
+      const persistence = {
+        namespace,
+        observedRevisions,
+        writeUnavailableReason:
+          typeof backend.writeUnavailableReason === "string"
+            ? backend.writeUnavailableReason
+            : undefined,
+      };
+      const canWrite = backend.canWrite === true && namespace !== undefined;
+      this.namespace = namespace ?? this.namespace;
+      if (backend.state === "absent")
+        return {
+          state: "absent",
+          activeContract,
+          canWrite,
+          ...persistence,
+          error: "Deployment expectations have not been configured.",
+        };
+      const settings = validateExpectations(backend.settings);
+      if (!observedRevisions.includes(settings.revision))
+        throw new Error(
+          "Deployment settings history does not verify its revision.",
+        );
+      this.observedRevision = settings.revision;
+      this.namespace = namespace ?? this.namespace;
       const preliminary: DeploymentSnapshot = {
         state: "configured",
         settings,
@@ -223,6 +255,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
         settings,
         activeContract,
         canWrite,
+        ...persistence,
         sourceConfiguration,
         ...(activeContract === undefined
           ? {
@@ -251,36 +284,54 @@ export class ToolkitDeploymentClient implements DeploymentClient {
   ): Promise<DeploymentSnapshot> {
     const validated = validateExpectations(settings);
     const before = await this.read(signal);
-    if (!before.canWrite)
-      throw new Error(
-        "Administrator capability and collection write permission are required.",
+    if (!before.canWrite || !before.namespace)
+      throw new DeploymentWriteError(
+        "forbidden",
+        before.writeUnavailableReason ??
+          "Administrator capability and collection write permission are required.",
       );
     if (before.state === "unavailable")
-      throw new Error(
+      throw new DeploymentWriteError(
+        "unavailable",
         "Read deployment expectations successfully before changing them.",
       );
-    if (before.settings?.revision !== expectedRevision)
-      throw new Error(
-        "Deployment expectations changed. Refresh before saving.",
+    const signature = JSON.stringify([
+      expectedRevision ?? null,
+      validated.sources,
+    ]);
+    // Keep the operation identity on response loss/cancellation. A retry must
+    // resolve that immutable operation even if another administrator advanced.
+    const requestId = this.pending.get(signature) ?? crypto.randomUUID();
+    this.pending.set(signature, requestId);
+    const result = await this.request(ENDPOINT, signal, {
+      settings: validated,
+      expectedRevision: expectedRevision ?? null,
+      requestId,
+      namespace: before.namespace,
+    });
+    if (
+      !object(result) ||
+      typeof result.committedRevision !== "string" ||
+      result.requestId !== requestId
+    )
+      throw new DeploymentWriteError(
+        "uncertain",
+        "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.",
       );
-    const next = { ...validated, revision: crypto.randomUUID() };
-    const document = {
-      _key: KEY,
-      revision: next.revision,
-      settings_json: JSON.stringify(next),
-    };
-    await this.request(
-      before.state === "absent" ? COLLECTION : `${COLLECTION}/${KEY}`,
-      signal,
-      document,
-    );
     const after = await this.read(signal);
     if (
       after.state !== "configured" ||
-      JSON.stringify(after.settings) !== JSON.stringify(next)
+      !after.observedRevisions?.includes(result.committedRevision)
     )
-      throw new Error(
-        "Deployment settings readback did not match. Refresh and verify the saved values before retrying.",
+      throw new DeploymentWriteError(
+        "uncertain",
+        "Saved revision has not been verified by refresh. Your draft is preserved; retry the same save.",
+      );
+    this.pending.delete(signature);
+    if (after.settings?.revision !== result.committedRevision)
+      throw new DeploymentWriteError(
+        "conflict",
+        "Your save was committed, but newer expectations are now present. Your draft is preserved; reload before saving.",
       );
     return after;
   }

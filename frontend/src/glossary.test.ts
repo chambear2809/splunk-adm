@@ -65,6 +65,32 @@ describe("glossary", () => {
     expect(prettyBytes(20100)).toBe("20.1 KB");
     expect(prettyBytes(3.2e9)).toBe("3.2 GB");
   });
+
+  it("keeps late Catalyst source age and retained-history uncertainty visible", () => {
+    const snapshot = {
+      attachment_basis: "catalyst_client_snapshot",
+      attachment_status: "observed_snapshot",
+      source_time_status: "stale",
+      history_coverage: "retained_evidence",
+    };
+    expect(networkClientAttachmentMessage(snapshot)).toContain(
+      "old source timestamp",
+    );
+    expect(networkClientAttachmentMessage(snapshot)).not.toContain(
+      "Current Catalyst",
+    );
+    expect(
+      networkClientAttachmentMessage({
+        ...snapshot,
+        history_coverage: "unconfirmed",
+      }),
+    ).toContain("Current attachment is not established");
+    for (const source_time_status of ["ahead", "missing"]) {
+      expect(
+        networkClientAttachmentMessage({ ...snapshot, source_time_status }),
+      ).toContain("Attachment remains unresolved");
+    }
+  });
   it("truncates long names in the middle, keeping the unique suffix", () => {
     const t = truncateMiddle("ingress-nginx-controller-6b9d7c8f5-q7m2z", 24);
     expect(t).toHaveLength(24);

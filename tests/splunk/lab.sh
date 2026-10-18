@@ -6,7 +6,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 IMAGE="splunk/splunk:10.6.0.5"
 NAME="adm-splunk-lab"
-SECRETS="$HERE/.lab-secrets"
+SECRETS="${ADM_LAB_SECRETS:-$HERE/.lab-secrets}"
 EXTRACTED="$ROOT/research/extracted"
 TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
@@ -106,8 +106,13 @@ local.mkdir(exist_ok=True)
     )
 )
 PY
-  # Install the source app (not a possibly stale dist/stage copy) so tests see current knowledge objects.
-  cp -R "$ROOT/splunk_app/splunk_adm" "$stage/splunk_adm"
+  # Final qualification installs the retained exact archive; source remains useful for development.
+  if [[ -n "${ADM_LAB_PACKAGE:-}" ]]; then
+    python3 "$ROOT/tools/stage_lab_package.py" "$ADM_LAB_PACKAGE" "$stage"
+  else
+    cp -R "$ROOT/splunk_app/splunk_adm" "$stage/splunk_adm"
+    cp "$ROOT/config/deployment-health.json" "$stage/splunk_adm/bin/adm_settings_registry.json"
+  fi
   cp -R "$HERE/lab_app" "$stage/adm_lab"
   token="$(sed -n 's/^HEC_TOKEN=//p' "$SECRETS")"
   sed "s/@HEC_TOKEN@/$token/" "$stage/adm_lab/default/inputs.conf.template" \

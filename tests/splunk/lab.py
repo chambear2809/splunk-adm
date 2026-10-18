@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import secrets
 import ssl
 import sys
@@ -15,7 +16,7 @@ import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SECRETS = HERE / ".lab-secrets"
+SECRETS = Path(os.environ.get("ADM_LAB_SECRETS", str(HERE / ".lab-secrets")))
 MGMT = "https://127.0.0.1:8089"
 HEC = "https://127.0.0.1:8088"
 APP = "splunk_adm"
@@ -35,10 +36,13 @@ def init_secrets() -> None:
     if SECRETS.exists():
         return
     password = "Adm-" + secrets.token_urlsafe(18)
-    SECRETS.write_text(
-        f"SPLUNK_PASSWORD={password}\nHEC_TOKEN={uuid.uuid4()}\n", encoding="utf-8"
+    descriptor = os.open(
+        SECRETS,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+        0o600,
     )
-    SECRETS.chmod(0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream.write(f"SPLUNK_PASSWORD={password}\nHEC_TOKEN={uuid.uuid4()}\n")
 
 
 def read_secrets() -> dict[str, str]:

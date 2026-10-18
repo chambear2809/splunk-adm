@@ -1,0 +1,749 @@
+"""Small offline safety/coordination tests; no Docker, SSH, or Splunk operations."""
+
+import configparser
+import hashlib
+import io
+import json
+from pathlib import Path
+import ssl
+import subprocess
+import sys
+import tarfile
+import tempfile
+import unittest
+from unittest.mock import patch
+
+TOOLS = Path(__file__).resolve().parents[2] / "tools"
+sys.path.insert(0, str(TOOLS))
+import qualification_shc as client  # noqa: E402
+import qualification_shc_lab as lifecycle  # noqa: E402
+import qualification_shc_run as runner  # noqa: E402
+
+
+class SafetyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        self.task = "adm-shc-offline"
+        self.state = {
+            "task": self.task,
+            "created": {
+                role: {
+                    "name": f"{self.task}-{role}",
+                    "url": f"https://localhost:{22009 + i * 10}",
+                    "id": str(i) * 64,
+                }
+                for i, role in enumerate(client.ROLES)
+            },
+        }
+
+    def state_file(self, value):
+        path = self.directory / "state.json"
+        path.write_text(json.dumps(value))
+        path.chmod(0o600)
+        return path
+
+    def test_valid_task_local_https_state(self):
+        self.assertEqual(client.load_state(self.state_file(self.state)), self.state)
+
+    def test_state_refuses_public_or_credential_bearing_urls(self):
+        for endpoint in (
+            "http://localhost:8089",
+            "https://customer.example:8089",
+            "https://admin:password@localhost:8089",
+            "https://localhost:8089/x",
+        ):
+            with self.subTest(endpoint=endpoint):
+                self.state["created"]["sh1"]["url"] = endpoint
+                with self.assertRaises(client.Refused):
+                    client.load_state(self.state_file(self.state))
+
+    def test_state_refuses_role_or_name_drift(self):
+        self.state["created"]["sh1"]["name"] = "unrelated-sh1"
+        with self.assertRaises(client.Refused):
+            client.load_state(self.state_file(self.state))
+
+    def test_state_refuses_world_readable_or_symlink(self):
+        path = self.state_file(self.state)
+        path.chmod(0o644)
+        with self.assertRaises(client.Refused):
+            client.load_state(path)
+        path.chmod(0o600)
+        link = self.directory / "link.json"
+        link.symlink_to(path)
+        with self.assertRaises(client.Refused):
+            client.load_state(link)
+
+    def test_api_uses_verifying_context_without_proxies(self):
+        ca = self.directory / "ca.pem"
+        ca.write_text("test placeholder")
+        ca.chmod(0o600)
+        self.state["ca_file"] = str(ca)
+        context = ssl.create_default_context()
+        with patch.object(
+            client.ssl, "create_default_context", return_value=context
+        ) as factory:
+            api = client.Api("sh1", state=self.state)
+        factory.assert_called_once_with(cafile=str(ca))
+        self.assertTrue(api.context.check_hostname)
+        self.assertEqual(api.context.verify_mode, ssl.CERT_REQUIRED)
+
+    def test_no_redirect_fallback(self):
+        with self.assertRaises(client.Refused):
+            client.NoRedirect().redirect_request(
+                None, None, 302, "", {}, "https://elsewhere"
+            )
+
+    def test_search_warnings_are_not_success(self):
+        for kind in ("WARN", "WARNING", "ERROR", "FATAL"):
+            with self.subTest(kind=kind), self.assertRaises(client.Refused):
+                client.reject_messages([{"type": kind, "text": "private detail"}])
+
+    def test_base_macro_search_normalization_preserves_generating_commands(self):
+        self.assertEqual(
+            client.search_query(" `adm_topology_v2` "), "search `adm_topology_v2`"
+        )
+        self.assertEqual(client.search_query("`adm_topology`"), "search `adm_topology`")
+        self.assertEqual(
+            client.search_query("search index=netflow"), "search index=netflow"
+        )
+        self.assertEqual(
+            client.search_query("| makeresults | eval value=1"),
+            "| makeresults | eval value=1",
+        )
+
+    def test_member_replication_listener_is_its_own_enabled_stanza(self):
+        pki = self.directory / "pki"
+        pki.mkdir()
+        (self.directory / "shc.secret").write_text("test-secret")
+        (pki / "sh1.pem").write_bytes(b"test certificate")
+        (pki / "ca.pem").write_bytes(b"test CA")
+        lab = lifecycle.Lab(self.directory, self.task)
+        lab.state = self.state
+        with patch.object(lab, "copy_files") as copied:
+            lab._copy_config("sh1")
+        rendered = copied.call_args.args[1]["etc/system/local/server.conf"].decode()
+        config = configparser.RawConfigParser()
+        config.read_string(rendered)
+        self.assertEqual(config["replication_port://9887"]["disabled"], "0")
+        self.assertNotIn("replication_port", config["shclustering"])
+        self.assertEqual(config["shclustering"]["replication_factor"], "3")
+
+    def test_error_does_not_echo_server_body(self):
+        self.assertEqual(
+            str(client.ApiError(403)), "qualification request rejected (HTTP 403)"
+        )
+
+    def test_failed_command_records_metadata_without_output_or_input(self):
+        evidence = self.directory / "evidence"
+        evidence.mkdir()
+        token = lifecycle.DIAGNOSTICS.set(evidence)
+        self.addCleanup(lifecycle.DIAGNOSTICS.reset, token)
+        result = subprocess.CompletedProcess(
+            ["docker", "exec"],
+            7,
+            b"private-secret-password",
+            b"permission denied; private-secret-password",
+        )
+        with patch.object(lifecycle.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(client.Refused, "status=7"):
+                lifecycle.command(
+                    ["docker", "exec", "task-id", "tool"], data=b"secret-input"
+                )
+        files = list(evidence.glob("*.json"))
+        self.assertEqual(len(files), 1)
+        raw = files[0].read_text()
+        self.assertNotIn("private-secret-password", raw)
+        self.assertNotIn("secret-input", raw)
+        record = json.loads(raw)
+        self.assertEqual(record["status"], 7)
+        self.assertEqual(record["categories"], ["permission denied"])
+
+    def test_mutation_requires_host_lock(self):
+        lab = lifecycle.Lab(self.directory / "task", self.task)
+        for operation in (lab.create, lab.bootstrap, lab.cleanup):
+            with (
+                self.subTest(operation=operation.__name__),
+                self.assertRaises(client.Refused),
+            ):
+                operation()
+
+    def test_lock_covers_entire_driver(self):
+        lock = self.directory / "host.lock"
+        first = lifecycle.Lab(self.directory / "first", self.task, lock_file=lock)
+        second = lifecycle.Lab(self.directory / "second", self.task, lock_file=lock)
+        with first.locked():
+            first._owned()
+            with self.assertRaises(BlockingIOError), second.locked():
+                self.fail("second lifecycle acquired the exclusive lock")
+        with second.locked():
+            second._owned()
+
+    def test_identity_mismatch_blocks_cleanup_before_any_removal(self):
+        lab = lifecycle.Lab(
+            self.directory / "task", self.task, lock_file=self.directory / "lock"
+        )
+        lab.state = self.state
+        fake = {"Id": "0" * 64, "Name": "/unrelated", "Config": {"Labels": {}}}
+        with (
+            lab.locked(),
+            patch.object(
+                lifecycle, "command", return_value=json.dumps([fake]).encode()
+            ) as run,
+        ):
+            with self.assertRaises(client.Refused):
+                lab.cleanup()
+        self.assertTrue(
+            all(call.args[0][1] == "inspect" for call in run.call_args_list)
+        )
+
+    def test_copy_archive_preserves_safe_owner_and_executable(self):
+        lab = lifecycle.Lab(
+            self.directory / "task", self.task, lock_file=self.directory / "lock"
+        )
+        with (
+            lab.locked(),
+            patch.object(lab, "identity", return_value="1" * 64),
+            patch.object(lifecycle, "command") as run,
+        ):
+            lab.copy_files("sh1", {"etc/apps/example/bin/run.py": (b"pass\n", 0o700)})
+        content = run.call_args.kwargs["data"]
+        with tarfile.open(fileobj=io.BytesIO(content)) as archive:
+            item = archive.getmember("etc/apps/example/bin/run.py")
+            self.assertEqual((item.uid, item.gid, item.mode), (41812, 41812, 0o700))
+            self.assertTrue(archive.getmember("etc/apps/example/bin").isdir())
+
+    def test_archive_refuses_path_traversal_and_links(self):
+        for name, kind in (
+            ("../escape", tarfile.REGTYPE),
+            ("splunk_adm/link", tarfile.SYMTYPE),
+            ("other/file", tarfile.REGTYPE),
+        ):
+            with self.subTest(name=name):
+                path = self.directory / "candidate.tgz"
+                with tarfile.open(path, "w:gz") as archive:
+                    item = tarfile.TarInfo(name)
+                    item.type = kind
+                    item.linkname = "/etc/passwd"
+                    archive.addfile(item)
+                with self.assertRaises(client.Refused):
+                    lifecycle.safe_extract(path, self.directory / "stage")
+
+    def test_evidence_is_exclusive_owner_only_and_hashed(self):
+        result = client.write_evidence(self.directory, "result", {"passed": True})
+        path = self.directory / result["file"]
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(
+            result["sha256"], hashlib.sha256(path.read_bytes()).hexdigest()
+        )
+        with self.assertRaises(FileExistsError):
+            client.write_evidence(self.directory, "result", {})
+
+
+class ConcurrencyTests(unittest.TestCase):
+    def test_members_race_then_retry_winning_commit(self):
+        response = {"committedRevision": "winner", "requestId": "winning-request"}
+        calls = []
+        lock = __import__("threading").Lock()
+
+        class FakeApi:
+            def __init__(self, role):
+                self.role = role
+
+            def json(self, method, path, raw=None):
+                if method == "GET":
+                    return {
+                        "canWrite": True,
+                        "namespace": "namespace",
+                        "settings": {"revision": "winner"} if calls else None,
+                    }
+                with lock:
+                    request = json.loads(raw)
+                    if calls and request["requestId"] == calls[0]["requestId"]:
+                        return {**response, "requestId": request["requestId"]}
+                    calls.append(request)
+                    if len(calls) == 1:
+                        return {**response, "requestId": request["requestId"]}
+                    raise client.ApiError(409)
+
+        with patch.object(client, "Api", FakeApi):
+            result = client.settings_race(None, [{"a": 1}, {"a": 2}], "namespace")
+        self.assertEqual(sorted(result["statuses"]), [200, 409])
+        self.assertTrue(result["retry_identical"])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(
+            all("settings" in request and "payload" not in request for request in calls)
+        )
+
+    def test_settings_race_refuses_different_namespaces_before_writes(self):
+        class FakeApi:
+            def __init__(self, role):
+                pass
+
+            def json(self, method, path):
+                self.assert_get = method == "GET"
+                return {"canWrite": True, "namespace": "different", "settings": None}
+
+        with patch.object(client, "Api", FakeApi), self.assertRaises(client.Refused):
+            client.settings_race(None, [{}, {}], "namespace")
+
+
+class CollectionScanTests(unittest.TestCase):
+    def api(self, documents, cap=None):
+        class FakeApi:
+            def __init__(self):
+                self.queries = []
+
+            def json(self, method, path):
+                self.assert_get = method == "GET"
+                query = __import__("urllib.parse", fromlist=["parse_qs"]).parse_qs(
+                    path.split("?", 1)[1]
+                )
+                self.queries.append(query)
+                skip, limit = int(query["skip"][0]), int(query["limit"][0])
+                return documents[
+                    skip : skip + min(limit, cap if cap is not None else limit)
+                ]
+
+        return FakeApi()
+
+    def test_hidden_lower_server_cap_never_becomes_a_complete_snapshot(self):
+        api = self.api([{"_key": key} for key in ("a", "b", "c", "d")], cap=2)
+        with self.assertRaisesRegex(client.Refused, "capped or unstable"):
+            runner.complete_collection_rows(api, "/services/collection")
+        self.assertEqual(len(api.queries), 4)
+        self.assertTrue(
+            all(
+                query["limit"] == ["10000"] and query["sort"] == ["_key:1"]
+                for query in api.queries
+            )
+        )
+
+    def test_complete_scan_requires_shifted_overlap_and_unchanged_confirmation(self):
+        documents = [{"_key": key, "value": key} for key in ("a", "b", "c")]
+        api = self.api(documents)
+        self.assertEqual(
+            runner.complete_collection_rows(api, "/services/collection"), documents
+        )
+        self.assertEqual(
+            [query["skip"] for query in api.queries], [["0"], ["1"], ["0"]]
+        )
+
+    def test_unstable_first_row_fails_even_when_shifted_tail_matches(self):
+        class ChangingApi:
+            def __init__(self):
+                self.calls, self.version = 0, 0
+
+            def json(self, method, path):
+                self.calls += 1
+                if "skip=1" in path:
+                    return [{"_key": "b"}]
+                self.version += 1
+                return [{"_key": "a", "value": self.version}, {"_key": "b"}]
+
+        api = ChangingApi()
+        with self.assertRaisesRegex(client.Refused, "capped or unstable"):
+            runner.complete_collection_rows(api, "/services/collection")
+        self.assertEqual(api.calls, 6)
+
+    def test_malformed_unordered_duplicate_or_bound_reaching_scan_is_refused(self):
+        for documents in (
+            [{"_key": "b"}, {"_key": "a"}],
+            [{"_key": "a"}, {"_key": "a"}],
+            [{"value": "missing key"}],
+            [{"_key": "a"}, {"_key": "b"}, {"_key": "c"}],
+        ):
+            with self.subTest(documents=documents), self.assertRaises(client.Refused):
+                runner.complete_collection_rows(
+                    self.api(documents), "/services/collection", limit=3
+                )
+
+
+class DriverTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        directory = Path(self.temp.name)
+        self.lab = lifecycle.Lab(
+            directory / "lab", "adm-shc-driver", lock_file=directory / "lock"
+        )
+        self.driver = runner.Driver(
+            self.lab,
+            TOOLS.parent,
+            directory / "candidate.tgz",
+            "a" * 40,
+            [directory / "reviewed-addon"],
+        )
+
+    def test_failed_phase_retains_lock_and_does_not_cleanup_or_complete(self):
+        with (
+            self.lab.locked(),
+            patch.object(
+                self.driver, "phase_prepare", side_effect=client.Refused("test failure")
+            ),
+            patch.object(self.lab, "cleanup") as cleanup,
+        ):
+            with self.assertRaises(client.Refused):
+                self.driver.run_phase("prepare")
+            self.lab._owned()
+            self.assertNotIn("prepare", self.driver.completed)
+            self.assertEqual(self.driver.results["prepare"]["outcome"], "failed")
+            cleanup.assert_not_called()
+
+    def test_phase_prerequisites_prevent_unprepared_mutations(self):
+        with self.lab.locked(), patch.object(self.driver, "phase_settings") as settings:
+            with self.assertRaises(client.Refused):
+                self.driver.run_phase("settings")
+            settings.assert_not_called()
+
+    def test_graph_macro_uses_base_search_shape(self):
+        self.assertTrue(self.driver.graph_query.startswith("`adm_graph("))
+        self.assertTrue(
+            client.search_query(self.driver.graph_query).startswith(
+                "search `adm_graph("
+            )
+        )
+
+    def test_rerun_invalidates_later_qualification(self):
+        self.driver.completed = list(runner.Driver.ORDER[:4])
+        with (
+            self.lab.locked(),
+            patch.object(self.driver, "phase_support", return_value={}),
+        ):
+            self.driver.run_phase("support", rerun=True)
+        self.assertEqual(self.driver.completed, ["prepare", "create", "support"])
+
+    def test_semantic_graph_rejects_missing_evidence_and_warnings(self):
+        expected = {
+            "nodes": {"a": {"kind": "service"}, "b": {"kind": "endpoint"}},
+            "edges": [
+                {"relationship": "calls", "source": "a", "target": "b", "count": "1"}
+            ],
+            "edge_counts": {"calls": 1},
+            "meta": {"status": "complete"},
+        }
+        rows = [
+            {"row_type": "node", "id": "a", "kind": "service"},
+            {"row_type": "node", "id": "b", "kind": "endpoint"},
+            {
+                "row_type": "edge",
+                "id": "e",
+                "relationship": "calls",
+                "source": "a",
+                "target": "b",
+                "count": "1",
+            },
+            {"row_type": "meta", "status": "complete"},
+        ]
+        self.assertEqual(runner.semantic_graph(rows, expected)["edges"], 1)
+        with self.assertRaises(client.Refused):
+            runner.semantic_graph(rows[:-2] + rows[-1:], expected)
+        rows[-1]["warnings"] = ["missing evidence"]
+        with self.assertRaises(client.Refused):
+            runner.semantic_graph(rows, expected)
+
+    def topology_fixture(self):
+        expected = self.driver.expected_topology
+        rows = [
+            {"row_type": "device", "device_id": name, **attributes}
+            for name, attributes in expected["devices"].items()
+        ]
+        rows += [
+            {
+                "row_type": "link",
+                "link_source": source,
+                "a_device": a,
+                "a_interface": ai,
+                "b_device": b,
+                "b_interface": bi,
+            }
+            for source, a, ai, b, bi in expected["links"]
+        ]
+        rows.append({"row_type": "meta", **expected["meta"]})
+        return rows
+
+    def test_actual_topology_client_checks_every_member_and_preserves_rows(self):
+        rows, calls = self.topology_fixture(), []
+        self.lab.state["archive_sha256"] = "a" * 64
+        drift = False
+
+        class FakeApi:
+            def __init__(self, role, account):
+                self.role, self.account = role, account
+
+            def search(self, query, *window):
+                calls.append((self.role, self.account, query, window))
+                result = json.loads(json.dumps(rows))
+                result[-1]["generated_at"] = self.role
+                if drift and self.role == "sh3":
+                    result[0]["additional_evidence"] = "member-specific"
+                return result, {"sid": "sid-" + self.role}
+
+        with (
+            patch.object(client, "Api", FakeApi),
+            patch.object(self.driver, "_record") as recorded,
+        ):
+            result, canonical_rows = self.driver._topologies()
+            self.assertEqual(set(result), set(client.MEMBERS))
+            self.assertEqual(recorded.call_count, 3)
+            self.assertTrue(
+                all(
+                    value["devices"] == 6 and value["links"] == 11
+                    for value in result.values()
+                )
+            )
+            self.assertEqual(canonical_rows, runner.normalized(rows))
+            self.assertEqual([call[0] for call in calls], list(client.MEMBERS))
+            self.assertTrue(
+                all(
+                    call[2] == "`adm_topology`"
+                    and call[3] == self.driver.topology_window
+                    for call in calls
+                )
+            )
+            drift = True
+            with self.assertRaisesRegex(
+                client.Refused, "member topology semantic rows differ"
+            ):
+                self.driver._topologies()
+
+    def test_topology_rejects_empty_or_incomplete_inventory(self):
+        expected = self.driver.expected_topology
+        rows = self.topology_fixture()
+        with self.assertRaises(client.Refused):
+            runner.semantic_topology([], expected)
+        with self.assertRaises(client.Refused):
+            runner.semantic_topology(rows[1:], expected)
+        rows[-1]["warnings"] = ["inventory incomplete"]
+        with self.assertRaises(client.Refused):
+            runner.semantic_topology(rows, expected)
+
+    def v2_graph_fixture(self):
+        expected = self.driver.expected
+        labels = {value.get("label"): key for key, value in expected["nodes"].items()}
+        same_node = (
+            labels["frontend-7d9c6b5f4-q4m9z"],
+            labels["checkout-5f8b9c7d6-m4n7q"],
+        )
+        edges = [
+            row
+            for row in expected["edges"]
+            if row["relationship"] == "calls"
+            or (
+                row["relationship"] == "communicates_with"
+                and (row["source"], row["target"]) == same_node
+            )
+        ]
+        owners = {value for row in edges for value in (row["source"], row["target"])}
+        owners.update(
+            key
+            for key, value in expected["nodes"].items()
+            if value.get("kind") == "service"
+        )
+        rows = [
+            {"row_type": "node", "id": key, **expected["nodes"][key]}
+            for key in sorted(owners)
+        ]
+        rows += [
+            {
+                "row_type": "edge",
+                "id": "edge-" + str(i),
+                **{key: value for key, value in row.items() if value is not None},
+            }
+            for i, row in enumerate(edges)
+        ]
+        rows.append(
+            {
+                "row_type": "meta",
+                "root_present": "1",
+                "spans": expected["meta"]["spans"],
+                "nodes": str(len(owners)),
+                "edges": str(len(edges)),
+            }
+        )
+        return rows
+
+    def test_v2_graph_requires_independent_span_and_owner_provenance(self):
+        rows = self.v2_graph_fixture()
+        self.assertGreaterEqual(
+            runner.semantic_v2_graph(rows, self.driver.expected)[
+                "independent_witnesses"
+            ],
+            2,
+        )
+        witness = next(
+            row for row in rows if row.get("relationship") == "communicates_with"
+        )
+        witness.pop("span_ids")
+        with self.assertRaisesRegex(client.Refused, "provenance differs"):
+            runner.semantic_v2_graph(rows, self.driver.expected)
+        with self.assertRaises(client.Refused):
+            runner.semantic_v2_graph([], self.driver.expected)
+
+    def test_v2_topology_preserves_unmapped_authority_and_suppresses_adjacency(self):
+        inventory = self.driver.v2_inventory
+        rows = [
+            {"row_type": "device", "device_id": identity, **value}
+            for identity, value in inventory.items()
+        ]
+        rows.append(
+            {
+                "row_type": "meta",
+                "devices": str(len(inventory)),
+                "links": "0",
+                "warnings": [
+                    "No retained Catalyst client history is available; fixture has none.",
+                    "Some inventory records, links, or interfaces have missing cluster evidence.",
+                    "Nexus Dashboard fabric labels are not yet correlated into V2 inventory.",
+                ],
+            }
+        )
+        result = runner.semantic_v2_topology(rows, inventory)
+        self.assertEqual(result["devices"], 9)
+        self.assertEqual(sum(key.startswith("aci:") for key in inventory), 6)
+        self.assertEqual(sum(key.startswith("host:") for key in inventory), 3)
+        aci = next(row for row in rows if row.get("device_id", "").startswith("aci:"))
+        aci["cluster"] = "invented-cluster"
+        with self.assertRaisesRegex(client.Refused, "invented a cluster"):
+            runner.semantic_v2_topology(rows, inventory)
+        aci.pop("cluster")
+        rows.append({"row_type": "link", "a_device": "a", "b_device": "b"})
+        with self.assertRaisesRegex(client.Refused, "invented adjacency"):
+            runner.semantic_v2_topology(rows, inventory)
+
+    def test_v2_traffic_requires_raw_tuple_parity_and_unknown_counters(self):
+        raw = [
+            json.loads(line)
+            for line in (TOOLS.parent / "fixtures/raw-aci/stream_netflow.ndjson")
+            .read_text()
+            .splitlines()
+        ]
+        self.driver.v2_exporters = sorted({row["event"]["exporter_ip"] for row in raw})
+        self.driver.v2_traffic_count = len(raw)
+        self.driver.v2_raw_fingerprints = runner.Counter(
+            runner.traffic_projection(row["event"], raw=True) for row in raw
+        )
+        rows = [
+            {
+                "source": "adm:conversation",
+                "contract_version": "2",
+                "rollup_id": "conversation",
+                "flow_source": "hubble",
+            }
+        ]
+        for i, envelope in enumerate(raw):
+            event = envelope["event"]
+            observation = {
+                "counter_semantics": "unknown",
+                "metrics_authoritative": "0",
+                "records": 1,
+                "profile": "standard_netflow",
+                "source": "stream_ipfix",
+                "source_authority": event["exporter_ip"],
+                "scope": "prod",
+                "cluster": "demo-cluster",
+                "observation_domain_present": "0",
+            }
+            rows.append(
+                {
+                    "source": "adm:traffic_observation",
+                    "contract_version": "2",
+                    "rollup_id": str(i),
+                    "counter_semantics": "unknown",
+                    "metrics_authoritative": "0",
+                    "records": "1",
+                    "adm_scope_source": "stream_ipfix",
+                    "adm_scope_authority": event["exporter_ip"],
+                    "adm_scope_domain_kind": "exporter",
+                    "adm_scope_observation_domain_present": "0",
+                    "adm_profile_status": "mapped",
+                    "scope": "prod",
+                    "cluster": "demo-cluster",
+                    "source_ip": event.get("src_ip"),
+                    "destination_ip": event.get("dest_ip"),
+                    "source_port": event.get("src_port"),
+                    "destination_port": event.get("dest_port"),
+                    "raw_bytes": event.get("bytes"),
+                    "raw_packets": event.get("packets"),
+                    "traffic_observations": json.dumps([observation]),
+                }
+            )
+
+        class FakeApi:
+            def __init__(self, role, account):
+                pass
+
+            def search(self, query, *window):
+                return rows, {"sid": "stored-summary-query"}
+
+        with patch.object(client, "Api", FakeApi):
+            result, _ = self.driver._v2_summaries("sh1", "admin")
+            self.assertEqual(result["traffic_rows"], len(raw))
+            rows[1]["metrics_authoritative"] = "1"
+            with self.assertRaises(client.Refused):
+                self.driver._v2_summaries("sh1", "admin")
+            rows[1]["metrics_authoritative"] = "0"
+            rows[1]["raw_bytes"] += 1
+            with self.assertRaisesRegex(client.Refused, "raw counters"):
+                self.driver._v2_summaries("sh1", "admin")
+
+    def test_v2_seed_inserts_exact_profiles_and_settings_without_scope_changes(self):
+        stores, posts = {}, []
+
+        class FakeApi:
+            def __init__(self, role):
+                pass
+
+            def json(self, method, path, raw=None):
+                base = path.split("?", 1)[0]
+                collection = next(
+                    name
+                    for name in (
+                        "adm_network_source_scope",
+                        "adm_cilium_cluster_settings",
+                    )
+                    if "/" + name in base
+                )
+                rows = stores.setdefault(collection, [])
+                if method == "POST":
+                    row = json.loads(raw)
+                    rows.append(row)
+                    posts.append((collection, row))
+                    return {"_key": row["_key"]}
+                if "?" in path:
+                    query = __import__("urllib.parse", fromlist=["parse_qs"]).parse_qs(
+                        path.split("?", 1)[1]
+                    )
+                    return sorted(rows, key=lambda row: row["_key"])[
+                        int(query["skip"][0]) :
+                    ]
+                return next(
+                    row for row in rows if row["_key"] == base.rsplit("/", 1)[1]
+                )
+
+        with (
+            patch.object(client, "Api", FakeApi),
+            patch.object(self.driver, "_wait", return_value=True),
+        ):
+            first = self.driver._v2_seed()
+            self.assertEqual(len(first["exporters"]), 3)
+            self.assertEqual(len(posts), 4)
+            self.assertTrue(
+                all(
+                    row["profile"] == "standard_netflow"
+                    and row["observation_domain_present"] == "0"
+                    and row["observation_domain_id"] == ""
+                    for name, row in posts
+                    if name == "adm_network_source_scope"
+                )
+            )
+            self.assertEqual(first["cluster_settings"]["lb_mode"], "snat")
+            self.driver._v2_seed()
+            self.assertEqual(
+                len(posts), 4, "same source seed must never be inserted twice"
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

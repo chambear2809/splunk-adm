@@ -28,11 +28,7 @@ try {
     };
     if (/\/(configs\/conf-macros|saved\/searches)\//.test(path))
       writes.push(evidence);
-    if (
-      /\/storage\/collections\/data\/adm_deployment_settings(?:\/deployment)?\/?$/.test(
-        path,
-      )
-    )
+    if (/\/adm\/deployment-settings\/?$/.test(path))
       deploymentWrites.push(evidence);
   });
   stage = "live checklist";
@@ -83,12 +79,16 @@ try {
     .selectOption("active");
   await saveExpectations.click();
   await expect(
-    root.getByText("Deployment expectations saved and verified.", { exact: true }),
+    root.getByText("Deployment expectations saved and verified.", {
+      exact: true,
+    }),
   ).toBeVisible({ timeout: 90000 });
   stage = "deployment expectations readback";
   await page.reload();
   await expect(
-    root.getByText("Saved expectations; active data contract: 1.", { exact: true }),
+    root.getByText("Saved expectations; active data contract: 1.", {
+      exact: true,
+    }),
   ).toBeVisible({ timeout: 90000 });
   await expect(
     root.getByLabel("Expectation for Traces", { exact: true }),

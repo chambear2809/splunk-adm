@@ -891,10 +891,7 @@ try {
         const metadataPaths =
           name === "data_health"
             ? [
-                [
-                  "settings",
-                  "/storage/collections/data/adm_deployment_settings/deployment",
-                ],
+                ["settings", "/adm/deployment-settings"],
                 ...contractSelectors.map((selector) => [
                   selector,
                   `/configs/conf-macros/${selector}`,
@@ -908,15 +905,18 @@ try {
             const response = await page.waitForResponse(
               (candidate) =>
                 candidate.request().method() === "GET" &&
-                decodeURIComponent(
-                  new URL(candidate.url()).pathname,
-                ).endsWith(`/servicesNS/nobody/splunk_adm${suffix}`),
+                decodeURIComponent(new URL(candidate.url()).pathname).endsWith(
+                  `/servicesNS/nobody/splunk_adm${suffix}`,
+                ),
               { timeout: 90000 },
             );
             return {
               name: metadataName,
               status: response.status(),
               path: safePath(response.url()),
+              ...(metadataName === "settings"
+                ? { snapshot: await response.json() }
+                : {}),
             };
           }),
         );
@@ -937,7 +937,9 @@ try {
           const contractMetadata = metadata.filter(
             (item) => item.name !== "settings",
           );
-          expect(settings.status).toBe(404);
+          expect(settings.status).toBe(200);
+          expect(settings.snapshot.state).toBe("absent");
+          expect(settings.snapshot.canWrite).toBe(false);
           expect(contractMetadata).toHaveLength(contractSelectors.length);
           for (const item of contractMetadata) expect(item.status).toBe(403);
           const unknownStatus = page.getByRole("status").filter({
@@ -970,6 +972,7 @@ try {
             metadataHeadersObserved: true,
             healthCompleted: true,
             settingsStatus: settings.status,
+            settingsState: settings.snapshot.state,
             contractMetadata,
             probeCounter: "request",
             probeRequests,

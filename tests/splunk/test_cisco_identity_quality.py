@@ -77,12 +77,11 @@ class CiscoIdentityQualityContractTest(unittest.TestCase):
     def test_topology_uses_indexed_receipt_without_replacing_source_time(self):
         guard = definition("adm_topology_client_observations")
         self.assertIn("received_time<info_max_time", guard)
-        self.assertIn("source_time>=received_time-3600", guard)
-        self.assertIn(
-            'if(source=="catalyst_client_snapshot",received_time,source_time)', guard
-        )
+        self.assertIn("`adm_kv_read_all(adm_network_client_history)`", guard)
+        self.assertIn('source_time_status IN ("current","stale")', guard)
+        self.assertIn("topology_observed_time=received_time", guard)
         topology = definition("adm_topology_v2")
-        self.assertEqual(topology.count("`adm_topology_client_observations`"), 3)
+        self.assertEqual(topology.count("`adm_topology_client_observations`"), 1)
         self.assertIn("link_time=topology_observed_time", topology)
 
     def test_find_exposes_bounded_history_and_unresolved_reasons(self):
@@ -215,11 +214,13 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
             },
         ]
         query = definition("adm_topology_client_observations").replace(
-            "`adm_network_client_history_observations`", seed(rows), 1
+            "`adm_kv_read_all(adm_network_client_history)`",
+            seed([dict(row, adm_page=1, adm_complete=1) for row in rows]),
+            1,
         )
         result = self.lab.search(
             query
-            + " | table native_id source_time received_time topology_observed_time",
+            + " | where isnotnull(native_id) | table native_id source_time received_time topology_observed_time",
             "1000",
             "1600",
         )
@@ -242,8 +243,20 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
             "adm_complete": 1,
         }
         rows = [
-            dict(base, _key="a", event_fingerprint="a", source_time=1900),
-            dict(base, _key="b", event_fingerprint="b", source_time=1900),
+            dict(
+                base,
+                _key="a",
+                event_fingerprint="a",
+                source_time=1900,
+                attachment_device_id="ap-a",
+            ),
+            dict(
+                base,
+                _key="b",
+                event_fingerprint="b",
+                source_time=1900,
+                attachment_device_id="ap-b",
+            ),
             dict(
                 base,
                 _key="c",

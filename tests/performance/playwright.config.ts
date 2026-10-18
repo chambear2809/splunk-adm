@@ -10,7 +10,13 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: 300000,
+  // Complete export/evidence validation is intentionally repeated per sample.
+  // Larger investigation sets need proportionally more time without changing
+  // any readiness or action timeout inside an individual sample.
+  timeout: Math.max(
+    300000,
+    Number(process.env.ADM_PERF_REPETITIONS ?? "5") * 180000,
+  ),
   reporter: "list",
   outputDir: "../../dist/performance-artifacts",
   use: {

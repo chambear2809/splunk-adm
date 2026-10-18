@@ -9,6 +9,9 @@ from tempfile import TemporaryDirectory
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
     MAX_ATLAS_GZIP_BYTES,
+    SETTINGS_CONFIG_FILES,
+    SETTINGS_REGISTRY_PATH,
+    SETTINGS_RUNTIME_FILES,
     check_release,
 )
 
@@ -27,6 +30,10 @@ class ReleaseArchiveTests(unittest.TestCase):
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
+        (self.root / "config").mkdir()
+        (self.root / "config/deployment-health.json").write_bytes(
+            b'{"schemaVersion":1,"sources":[{"id":"netflow","selectable":true}]}\n'
+        )
         (self.root / "package.json").write_text(
             '{"version": "1.2.3"}\n', encoding="utf-8"
         )
@@ -53,7 +60,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         config = (
             b"[install]\nbuild = 123\n[id]\nversion = 1.2.3\n"
             b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
-            b"[triggers]\nreload.adm_recovery = simple\n"
+            b"[triggers]\nreload.adm_recovery = simple\nreload.adm_settings = simple\n"
         )
         return {
             **{
@@ -62,6 +69,13 @@ class ReleaseArchiveTests(unittest.TestCase):
                 else b"runtime\n"
                 for name in BUNDLED_RUNTIME_FILES
             },
+            **{
+                name: (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
+                for name in SETTINGS_RUNTIME_FILES | SETTINGS_CONFIG_FILES
+            },
+            SETTINGS_REGISTRY_PATH: (
+                self.root / "config/deployment-health.json"
+            ).read_bytes(),
             "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle",
             **{
                 f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
@@ -93,12 +107,14 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/NOTICE": b"notice",
             "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
             "splunk_adm/docs/DATA_LAYER.md": b"docs",
+            "splunk_adm/docs/DEPLOYMENT_HEALTH.md": b"settings operator docs",
+            "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md": b"late receipt operator docs",
             "splunk_adm/docs/RECOVERY.md": b"# Recovery and replay\n",
             "splunk_adm/docs/UPGRADES.md": b"migration docs",
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
             "splunk_adm/docs/operators/cisco-enterprise-networking.md": b"operator docs",
-            "splunk_adm/default/collections.conf": b"[x]\n",
+            "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
             "splunk_adm/default/macros.conf": b"[x]\n",
             "splunk_adm/default/savedsearches.conf": b"[x]\n",
@@ -107,7 +123,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             ),
             "splunk_adm/default/data/ui/nav/default.xml": b"<nav />\n",
             "splunk_adm/default/data/ui/views/dependency_map.xml": b"<view />\n",
-            "splunk_adm/metadata/default.meta": b"[x]\n",
+            "splunk_adm/metadata/default.meta": b"[]\naccess = read : [ * ], write : [ admin, sc_admin ]\n[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]\n",
         }
 
     def _write_pair(self, install=None, upgrade=None):
@@ -184,6 +200,156 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             check_release(self.root / "dist", self.root / "package.json")
 
+    def test_rejects_missing_settings_runtime_configuration_or_operator_docs(self):
+        for name in (
+            SETTINGS_RUNTIME_FILES
+            | SETTINGS_CONFIG_FILES
+            | {
+                SETTINGS_REGISTRY_PATH,
+                "splunk_adm/docs/DEPLOYMENT_HEALTH.md",
+                "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md",
+            }
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                del install[name]
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "missing required files"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_unsafe_settings_authentication_or_system_elevation(self):
+        name = "splunk_adm/default/restmap.conf"
+        for before, after in (
+            (b"requireAuthentication = true", b"requireAuthentication = false"),
+            (b"capability.post = admin_all_objects", b"capability.post = search"),
+            (b"passSession = true", b"passSession = false"),
+            (b"passSystemAuth = false", b"passSystemAuth = true"),
+            (
+                b"handler = adm_settings.SettingsHandler",
+                b"handler = unshipped.UnsafeHandler",
+            ),
+            (b"script = adm_settings.py", b"script = other.py"),
+            (b"python.required = 3.13", b"python.required = 3.9"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                self.assertIn(before, install[name])
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "settings registration"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_requires_explicit_current_and_legacy_compatible_python_selectors(self):
+        for before, after in (
+            (b"python.required = 3.13\n", b""),
+            (b"python.version = python3\n", b""),
+            (b"python.version = python3\n", b"python.version = python2\n"),
+            (b"python.required = 3.13\n", b"python.required = 3.9\n"),
+        ):
+            with self.subTest(before=before, after=after):
+                install = self._files()
+                name = "splunk_adm/default/restmap.conf"
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "settings registration"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_settings_csrf_bypass_or_unsupported_browser_methods(self):
+        name = "splunk_adm/default/web.conf"
+        for before, after in (
+            (None, b"skipCSRFProtection = 1\n"),
+            (None, b"skipCSRFProtection = 0\n"),
+            (b"methods = GET,POST", b"methods = GET,POST,DELETE"),
+            (b"pattern = adm/deployment-settings", b"pattern = adm/**"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                install[name] = (
+                    install[name].replace(before, after)
+                    if before
+                    else install[name] + after
+                )
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "settings browser exposure"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_settings_enabled_or_qualified_installation_defaults(self):
+        name = "splunk_adm/default/adm_settings.conf"
+        for before, after in (
+            (b"write_mode = disabled", b"write_mode = single_namespace"),
+            (b"platform = unqualified", b"platform = enterprise"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaisesRegex(
+                    ValueError, "settings defaults.*disabled and unqualified"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_settings_reader_restriction_and_widened_writer_acl(self):
+        for name, suffix in (
+            (
+                "splunk_adm/default/restmap.conf",
+                b"capability.get = admin_all_objects\n",
+            ),
+            ("splunk_adm/metadata/default.meta", b""),
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                install[name] += suffix
+                if not suffix:
+                    install[name] = install[name].replace(
+                        b"write : [ admin, sc_admin ]", b"write : [ * ]"
+                    )
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "reader access|settings ACL"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_settings_registry_drift_and_invalid_runtime(self):
+        for name, value, error in (
+            (
+                SETTINGS_REGISTRY_PATH,
+                b'{"schemaVersion":1,"sources":[{"id":"other","selectable":true}]}',
+                "registry.*match",
+            ),
+            (SETTINGS_REGISTRY_PATH, b"invalid json", "invalid.*registry"),
+            (
+                "splunk_adm/bin/adm_settings.py",
+                b"class WrongHandler: pass\n",
+                "entrypoint.*SettingsHandler",
+            ),
+            (
+                "splunk_adm/bin/adm_settings_lib/rest.py",
+                b"def invalid(:\n",
+                "invalid.*Python runtime",
+            ),
+        ):
+            with self.subTest(name=name, value=value):
+                install = self._files()
+                install[name] = value
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, error):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_ambiguous_settings_endpoint_or_default_inheritance(self):
+        name = "splunk_adm/default/restmap.conf"
+        for suffix, error in (
+            (
+                b"\n[script:duplicate]\nmatch = /adm/deployment-settings\n",
+                "unambiguous registration",
+            ),
+            (b"\n[DEFAULT]\npassSystemAuth = false\n", "DEFAULT"),
+            (b"\nrestReplay = true\n", "REST replay"),
+        ):
+            with self.subTest(suffix=suffix):
+                install = self._files()
+                install[name] += suffix
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, error):
+                    check_release(self.root / "dist", self.root / "package.json")
+
     def test_rejects_packaged_limits_conf(self):
         install = self._files()
         install["splunk_adm/default/limits.conf"] = (
@@ -201,6 +367,20 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "reload.adm_recovery must be simple"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_or_restart_settings_reload_trigger(self):
+        for replacement in (b"", b"reload.adm_settings = never\n"):
+            with self.subTest(replacement=replacement):
+                install = self._files()
+                name = "splunk_adm/default/app.conf"
+                install[name] = install[name].replace(
+                    b"reload.adm_settings = simple\n", replacement
+                )
+                self._write_pair(install)
+                with self.assertRaisesRegex(
+                    ValueError, "reload.adm_settings must be simple"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_installed_local_csv_scope_override(self):
         self._write_pair()

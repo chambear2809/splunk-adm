@@ -225,6 +225,30 @@ describe("requiredFlowsCsv", () => {
 });
 
 describe("contextEvidenceCsv", () => {
+  it("exports late Catalyst source and receipt provenance without inventing collection time", () => {
+    const contextGraph = structuredClone(demoGraph("nxos"));
+    const edge = contextGraph.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.attachment_evidence = [
+      {
+        basis: "catalyst_client_snapshot",
+        status: "observed_snapshot",
+        client_source: "catalyst_client_snapshot",
+        client_authority: "center-a",
+        client_native_id: "client-a",
+        event_time: 100,
+        received_time: 259300,
+      },
+    ];
+    const csv = contextEvidenceCsv(contextGraph);
+    expect(csv).toContain('""event_time"":100');
+    expect(csv).toContain('""received_time"":259300');
+    expect(csv).toContain("center-a");
+    expect(csv).not.toContain("collected_time");
+    expect(edge.attachment_evidence[0].event_time).toBe(100);
+  });
+
   it("keeps original per-edge attachments and traffic observations in separate rows", () => {
     const contextGraph = structuredClone(demoGraph("nxos"));
     const edge = contextGraph.edges.find(

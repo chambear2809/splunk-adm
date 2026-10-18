@@ -150,11 +150,11 @@ class PilotReadinessTest(unittest.TestCase):
                         }
                     ]
                 }
-            if path.endswith("/deployment"):
+            if path.endswith("/adm/deployment-settings"):
                 return {
-                    "settings_json": json.dumps(
-                        {"schemaVersion": 1, "revision": "test", "sources": {}}
-                    )
+                    "state": "configured",
+                    "settings": {"schemaVersion": 1, "revision": "test", "sources": {}},
+                    "canWrite": False,
                 }
             if path.endswith("/saved/searches?count=0"):
                 return {"entry": []}

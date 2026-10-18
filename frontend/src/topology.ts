@@ -53,6 +53,8 @@ export interface Device {
   mapping_status?: string;
   evidence_kind?: string;
   source_time?: string;
+  source_time_status?: string;
+  history_coverage?: string;
   received_time?: string;
   latest_received_time?: string;
   collected_time?: string;
@@ -174,6 +176,8 @@ export function rowsToTopology(rows: unknown): Topology {
         "mapping_status",
         "evidence_kind",
         "source_time",
+        "source_time_status",
+        "history_coverage",
         "received_time",
         "latest_received_time",
         "collected_time",

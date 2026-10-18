@@ -5,7 +5,7 @@ import { indexGraph } from "./graph";
 import { demoGraph, demoTopology } from "./provider";
 import { indexTopology } from "./topology";
 
-const render = (extraClients: number) => {
+const render = (extraClients: number, lateReceipt = false) => {
   const graph = structuredClone(demoGraph("catalyst-aci"));
   const edge = graph.edges.find(
     (candidate) => candidate.attachment_evidence?.length,
@@ -13,6 +13,14 @@ const render = (extraClients: number) => {
   for (const other of graph.edges)
     if (other !== edge) delete other.attachment_evidence;
   const client = graph.nodes.find((node) => node.id === edge.source)!;
+  const topology = structuredClone(demoTopology("catalyst-aci"));
+  if (lateReceipt) {
+    const device = topology.devices[0];
+    device.source_time = "100";
+    device.received_time = "259300";
+    device.source_time_status = "stale";
+    device.history_coverage = "unconfirmed";
+  }
   for (let i = 0; i < extraClients; i++) {
     const node = structuredClone(client);
     node.id = `${client.id}-${i}`;
@@ -27,7 +35,7 @@ const render = (extraClients: number) => {
     <DevicesView
       graph={graph}
       index={indexGraph(graph)}
-      topo={indexTopology(demoTopology("catalyst-aci"))}
+      topo={indexTopology(topology)}
       onSelect={() => {}}
     />,
   );
@@ -52,5 +60,13 @@ describe("DevicesView attachment references", () => {
 
   it("shows no omission note within the cap", () => {
     expect(render(MAX_ATTACHMENT_REFERENCES - 1)).not.toContain("omitted");
+  });
+
+  it("shows source age and retained-history uncertainty alongside receipt time", () => {
+    const html = render(0, true);
+    expect(html).toContain("Source time/freshness 100");
+    expect(html).toContain("Received 259300");
+    expect(html).toContain("Source time status stale");
+    expect(html).toContain("Retained history coverage unconfirmed");
   });
 });

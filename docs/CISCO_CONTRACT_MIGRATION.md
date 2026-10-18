@@ -20,6 +20,10 @@ The shipped contract remains v1: `adm_data_contract_version=1`,
 `adm_summary_index_v2_name=adm_summary_v2`. The helper never redirects the
 legacy v1 index macro. Old summary data remains available for rollback.
 
+See [the owned final-qualification procedure](V2_FINAL_QUALIFICATION.md) for
+controlled interruption, V1 rollback, subsequent V2 restoration, pruning, and
+exact opt-in settings. Results must be recorded from the actual candidate run.
+
 ## Qualification and prerequisites
 
 Run `tools/cisco_contract_migration.py` from a checkout of the matching Atlas
@@ -61,7 +65,7 @@ the first directory created are trusted as given, so pass a path under a parent 
 control. The journal is opened without following symlinks and is refused
 unless it is a regular file owned by the effective user, mode `0600`, and at
 most 16 MiB, so a file pre-created by another user is never
-trusted. The lock file must also be owned by the effective user: a journal first
+trusted. The lock file must also be an owner-only regular file owned by the effective user: a journal first
 used under `sudo` cannot be resumed without it, so run every action, including
 resume, as the same user. Prefer a private directory you own.
 
@@ -375,6 +379,14 @@ refuses with "missing or stale keys" even when retention itself is legitimate.
 This remains a conservative migration limitation: retain the journal and
 review the staged catalog and source changes before continuing. Do not delete
 catalog data or relax the equality check to force a cutover.
+
+Mutating CLI actions additionally acquire an owner-only local target-GUID lock
+before the journal lock; different journal paths and local URI aliases for that
+GUID contend. This serializes only the same OS user/controller, not another
+machine, user, or arbitrary REST writer. Maintain exclusive operator ownership
+of the target lifecycle. Status reads the atomic owner-only journal without
+requiring credentials or waiting for a writer. Repeated completed cutover now
+revalidates effective configuration and every target selector before success.
 
 Successful local synthetic backfill and validation demonstrate only those
 bounded queries and rows in that local target. The implementation's pure

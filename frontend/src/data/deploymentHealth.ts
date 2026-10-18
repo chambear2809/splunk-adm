@@ -74,6 +74,9 @@ export interface DeploymentSnapshot {
     "configured" | "not_configured" | "unavailable"
   >;
   canWrite: boolean;
+  namespace?: string;
+  observedRevisions?: string[];
+  writeUnavailableReason?: string;
   error?: string;
 }
 export interface DeploymentClient {

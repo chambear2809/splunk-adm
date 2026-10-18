@@ -32,6 +32,8 @@ export interface NetworkClientFindRow {
   scope?: string;
   cluster?: string;
   source_time?: number;
+  source_time_status?: string;
+  history_coverage?: string;
   received_time?: number;
   latest_received_time?: number;
   event_type?: string;
@@ -233,6 +235,8 @@ export function parseNetworkClientFindRows(
     "quality_reason",
     "diagnostic_status",
     "diagnostic_reason",
+    "source_time_status",
+    "history_coverage",
     "warning",
   ] as const;
   const numericFields = [

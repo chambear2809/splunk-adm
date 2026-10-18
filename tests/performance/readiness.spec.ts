@@ -43,6 +43,36 @@ test("lost postcondition, invalid geometry and changed signatures reset frames",
   expect(end).toBe(15);
 });
 
+test("frame telemetry preserves the committed-frame boundary and records read cost", async () => {
+  let frame = 0;
+  let now = 0;
+  const frames: { at: number; readMs: number; committed: boolean }[] = [];
+  const end = await committedFrames({
+    signal: new AbortController().signal,
+    now: () => now,
+    nextFrame: async () => {
+      frame++;
+      now = frame * 16;
+    },
+    read: () => {
+      now += 2;
+      return { valid: true, signature: "selected" };
+    },
+    committed: () => frame >= 2,
+    onFrame: (snapshot) => frames.push(snapshot),
+  });
+  expect(end).toBe(82);
+  expect(
+    frames.map(({ at, readMs, committed }) => ({ at, readMs, committed })),
+  ).toEqual([
+    { at: 16, readMs: 2, committed: false },
+    { at: 32, readMs: 2, committed: true },
+    { at: 48, readMs: 2, committed: true },
+    { at: 64, readMs: 2, committed: true },
+    { at: 80, readMs: 2, committed: true },
+  ]);
+});
+
 test("readiness starts at capture and can finish before trigger completion", async () => {
   let now = 100;
   let called = 0;

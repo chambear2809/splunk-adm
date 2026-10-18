@@ -68,6 +68,11 @@ await cp(app, stage, {
   filter: (source) =>
     !/(^|\/)(\.DS_Store|\._.*|docs|__pycache__|.*\.py[co])$/.test(source),
 });
+// The endpoint validates against the same source registry as the frontend.
+await copyFile(
+  "config/deployment-health.json",
+  `${stage}/bin/adm_settings_registry.json`,
+);
 await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
 await copyFile(
@@ -75,6 +80,10 @@ await copyFile(
   `${stage}/docs/DEPLOYMENT_HEALTH.md`,
 );
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
+await copyFile(
+  "docs/LATE_CATALYST_RECEIPTS.md",
+  `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
+);
 await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
 await copyFile(
   "docs/CISCO_CONTRACT_MIGRATION.md",

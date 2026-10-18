@@ -18,15 +18,154 @@ unrelated index errors. The readiness tool uses the same probe registry and guar
 ## Shared configuration
 
 Setup administrators select each source as active, staged or not selected and
-set its expected cadence and receipt freshness in seconds. Settings are stored
-in the app's `adm_deployment_settings` KV collection, fixed key `deployment`.
-They are shared deployment state, independent of browser preferences and saved
-views. The collection permits app readers to read; writes require the effective
-`admin_all_objects` capability and collection write permission. The shipped ACL
-restricts writes to `admin` and `sc_admin`. Every write has a fresh authorization
-and revision preflight followed by a matching readback. Revision checks detect
-stale editors and readback conflicts; KV record updates do not provide an atomic
-compare-and-swap transaction, so administrators should coordinate concurrent edits.
+set its expected cadence and receipt freshness in seconds. Settings are shared
+deployment state in the app's `adm_deployment_settings` KV collection. Existing
+app readers retain read access; the collection's admin/sc_admin write ACL stays
+unchanged. The authenticated `adm/deployment-settings` server endpoint requires
+`admin_all_objects` for POST and checks the caller's effective capability and
+collection write permission again. All downstream requests use the caller's
+session token; no system token or credential escalation is used. Splunk documents
+that both `admin` and `sc_admin` have this capability by default. Browser CSRF
+protection remains enabled through the native `web.conf.spec` default
+`skipCSRFProtection = 0`. The exposure defines only `pattern` and `methods`, as
+required by AppInspect; it does not override CSRF handling. The custom
+`reload.adm_settings = simple` trigger avoids a restart because the endpoint
+fetches effective configuration on each request.
+
+### Supported write contract and deployment gate
+
+Writes are disabled by default. After installing the same candidate package on
+**every** search head serving this app, an operator must qualify the topology and
+set these app-local values in `local/adm_settings.conf`:
+
+```ini
+[persistence]
+platform = enterprise
+write_mode = single_namespace
+```
+
+`single_namespace` means one standalone search-head KV Store, including one search
+head using distributed indexers. Independent search heads with separate KV Stores
+behind a load balancer are unsupported. Their settings are separate deployments;
+do not enable this mode to represent them as shared settings. The client binds a
+save to the namespace observed on GET, derived from matching search-head and KV current-member GUIDs, and rejects a POST routed to another namespace.
+
+`qualified_shc` is reserved for a coordinated, qualified SHC deployment using one
+shared KV replica set. It requires at least three members and one KV captain.
+The request namespace uses the shared KV replica-set identity and sorted member
+addresses; changes of membership require a fresh client session. SHC's configuration
+captain is distinct from the KV Store captain; app/configuration distribution
+does not prove shared persistence. The app calls the supported KV REST endpoint
+on the current member. Splunk delegates SHC writes to the KV captain and keeps
+reads local, as documented for the 10.6 cohosted KV store. Qualify competing requests through different members
+before enabling this mode, and stop writes for mixed-version upgrades, KV
+maintenance, restoration, or replication failures. The endpoint requires ready KV
+status, explicit enabled/standalone/backup readiness evidence, matching instance
+GUIDs for standalone mode, no version upgrade, and the captured non-migrating
+`NotStarted` state. The captured cohosted backend must report `ready` and type
+`Pdl`; unknown or unready backend status is rejected. Its dynamically allocated
+local service URL is never used for routing or namespace identity. Standalone
+10.6 status omits `replicaSet`/`members`; it does not
+need invented replica-set metadata. The SHC mode still requires validated shared
+replica-set and member identity evidence. The runtime gate is pinned to Enterprise
+10.6.0.5, the qualification target. Other versions remain read-only until their
+installed endpoint/concurrency behavior is qualified. These guards do not replace
+deployment qualification. The persistent endpoint explicitly selects
+`python.required = 3.13`, supported by the target's native `restmap.conf.spec`;
+installed qualification uses Python 3.13.11. A legacy `python.version = python3`
+declaration also remains because AppInspect 4.3.1 has an older rule requiring
+that selector. Its newer rule accepts the explicit `python.required = 3.13`;
+the native specification gives `python.required` precedence, so the qualified
+runtime selects Python 3.13. This dual declaration reconciles both tool checks
+without weakening them or expanding the qualified platform boundary. Other
+Python/platform combinations remain unqualified.
+
+The custom `adm_settings.conf` qualification gate deliberately retains the
+platform's default **nonreplicated** configuration behavior. This file is an
+operator attestation for the qualified target, separate from the shared settings
+ledger. Distribute and verify its approved values on every member through the
+coordinated deployment procedure; changing one member must not automatically
+enable writes elsewhere. AppInspect's custom-conf replication warning remains
+visible for this intentional boundary. No `server.conf` replication override is
+shipped to silence it, and a missing/unqualified member gate continues to refuse
+writes. This does not change Splunk's KV data replication behavior.
+
+Splunk Cloud remains **unqualified and read-only** pending installation of this
+custom endpoint and actual authorized stack qualification. AppInspect alone does
+not establish this capability. Unknown versions, unavailable status evidence,
+unrecognized topology/configuration, and disabled modes fail closed with a
+visible write-unavailable explanation. Existing valid settings remain readable.
+There is no fallback to browser writes or unconditional KV updates. The shipped
+`platform = unqualified` must be explicitly changed as part of operator
+qualification; it is an administrative topology attestation, not automatic Cloud
+or load-balancer discovery.
+
+### Immutable successor arbitration
+
+The concurrency primitive is documented KV Store **insert with a unique `_key`**:
+POST to the collection inserts a document and duplicate keys are prohibited.
+Keyed POST overwrites and `batch_save` upserts, so neither is used. Each accepted
+operation occupies an immutable successor slot. The first save competes for
+`atomic_root`; later saves compete for `after_<SHA256(expected revision)>`.
+Consequently two different operations based on one revision cannot both insert
+a successor, including concurrent creation. Browser coordination, process mutexes,
+file locks, preflight reads, and readback do not supply this guarantee.
+
+Each inserted row contains the predecessor revision, canonical source settings,
+operation/request identity, content fingerprint, and deterministic new revision.
+A failed insert is resolved by reading the slot: the same operation is an
+idempotent retry; another operation is HTTP 409 conflict. Reusing a request ID
+with different expectations is rejected. Retrying a request after its response
+was lost still finds its exact immutable operation even after a later successor.
+No mutable head pointer, overwrite, or history deletion is needed. The contract
+assumes administrators do not bypass the endpoint to edit/delete ledger records;
+those operations are outside the concurrency contract and can invalidate history.
+
+Reads describe the observed KV snapshot, which can lag replication. They do not
+promise a linearizable distributed read. Bounded reads validate the complete
+observed chain and reject malformed, disconnected, or capped history. A sorted
+read and its one-row-shifted overlap must agree before a short result can count
+as complete; a lower server query cap cannot silently become a valid history
+prefix. One bounded rescan can settle a concurrent insertion; repeated mismatch
+is unavailable. The 1,024-record bound includes legacy and ledger records. Reaching the bound disables
+further changes and requires a separately reviewed migration; never delete old
+slots to reclaim space. A client refuses to move behind a revision it has already
+observed or silently switch namespaces. A stale first read can produce a conflict
+on save, but cannot overwrite a successor.
+
+After insertion the server must observe the exact operation in a valid chain,
+and the browser performs another refresh that must contain its committed revision.
+Unverifiable outcomes return explicit **uncertain** status, preserve the draft,
+and retain the request identity for retry. Cancellation/timeout does not undo an
+accepted operation. A retry with identical draft and expected revision resolves
+the same operation; after reloading the page, refresh and inspect stored values
+before making another edit. If a later operation already superseded the save,
+Setup preserves the draft and reports a conflict instead of announcing that its
+values remain current. Confirmed conflict requires explicit discard/reload;
+background refresh never discards an unsaved draft.
+
+### Existing settings and upgrade safety
+
+The old fixed `deployment` record remains a read-only migration anchor. Its schema
+and expectations remain valid. The first endpoint save records its canonical
+fingerprint (or explicit absence) in `atomic_root`, then inserts the new settings.
+It never rewrites the old record. Every subsequent read checks the anchor. A write
+from an older client, creation of an old-format record after an absent migration,
+or removal/change of that anchor makes persistence unavailable rather than silently
+choosing a competing configuration. Stop old clients/writers and reconcile the
+retained values before enabling saves again. Once a ledger exists, malformed or
+unavailable ledger data never falls back to legacy settings.
+
+The readiness tool reads the same endpoint. Tools that directly read the old
+`deployment` key must migrate to the endpoint before enabling this contract.
+
+The primitive and authentication behavior are documented in Splunk's
+[Enterprise KV endpoint reference](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/10.6/kv-store-endpoints/kv-store-endpoint-descriptions),
+[Cloud KV endpoint reference](https://help.splunk.com/en/splunk-cloud-platform/leverage-rest-apis/rest-api-reference/10.0.2503/kv-store-endpoints/kv-store-endpoint-descriptions),
+[REST handler configuration](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/restmap.conf),
+[capability prerequisites](https://help.splunk.com/en/splunk-enterprise/search/search-manual/9.1/run-federated-searches-across-multiple-splunk-deployments/define-a-federated-provider), and
+[SHC architecture](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/9.4/overview-of-search-head-clustering/search-head-clustering-architecture), and
+[10.6 KV write routing/local reads](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/administer-the-app-key-value-store/about-the-app-key-value-store).
 
 No settings is a supported upgrade state: existing maps/searches still work,
 while deployment health is **unknown**, with an invitation to configure intent.
