@@ -580,15 +580,38 @@ def settings_race(expected_revision, payloads, namespace):
     helper must be updated alongside it if that contract changes.
     """
     require(len(payloads) == 2, "race requires exactly two candidate payloads")
+
+    def observed_revision(observed):
+        require(
+            isinstance(observed, dict)
+            and observed.get("canWrite") is True
+            and observed.get("namespace") == namespace,
+            "all members must share a ready writable namespace",
+        )
+        require(
+            "settings" in observed
+            and observed.get("state") in ("absent", "configured"),
+            "settings read response is malformed",
+        )
+        current = observed["settings"]
+        if current is None:
+            require(
+                observed["state"] == "absent", "settings read state is inconsistent"
+            )
+            return None
+        require(
+            observed["state"] == "configured"
+            and isinstance(current, dict)
+            and isinstance(current.get("revision"), str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", current["revision"]) is not None,
+            "settings read revision or state is malformed",
+        )
+        return current["revision"]
+
     for role in MEMBERS:
         observed = Api(role).json("GET", SETTINGS)
         require(
-            observed.get("canWrite") is True and observed.get("namespace") == namespace,
-            "all members must share a ready writable namespace",
-        )
-        current = observed.get("settings")
-        require(
-            (current.get("revision") if current else None) == expected_revision,
+            observed_revision(observed) == expected_revision,
             "members have not converged on expected revision",
         )
     barrier = threading.Barrier(2)
@@ -619,19 +642,29 @@ def settings_race(expected_revision, payloads, namespace):
         "same-revision writes did not produce one success and one conflict",
     )
     winner = next(i for i, result in enumerate(results) if result["status"] == 200)
+
+    def committed_identity(value):
+        require(
+            isinstance(value, dict)
+            and isinstance(value.get("committedRevision"), str)
+            and re.fullmatch(r"[A-Za-z0-9_-]{1,80}", value["committedRevision"])
+            is not None
+            and value.get("requestId") == requests[winner]["requestId"],
+            "settings commit response identity is malformed",
+        )
+        return value["committedRevision"]
+
+    committed_revision = committed_identity(results[winner]["response"])
     # A duplicate after a simulated lost response must recover the same result.
     retry = Api("sh3").json("POST", SETTINGS, raw=canonical(requests[winner]))
-    response = results[winner]["response"]
     require(
-        retry.get("committedRevision") == response.get("committedRevision")
-        and retry.get("requestId") == requests[winner]["requestId"],
+        committed_identity(retry) == committed_revision,
         "retry changed the winning commit identity",
     )
 
     def converged():
         return all(
-            Api(role).json("GET", SETTINGS).get("settings", {}).get("revision")
-            == response["committedRevision"]
+            observed_revision(Api(role).json("GET", SETTINGS)) == committed_revision
             for role in MEMBERS
         )
 

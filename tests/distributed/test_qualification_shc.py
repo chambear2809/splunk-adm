@@ -632,6 +632,133 @@ class ShcReadinessTests(unittest.TestCase):
 
 
 class ConcurrencyTests(unittest.TestCase):
+    @staticmethod
+    def settings_read(revision):
+        return {
+            "canWrite": True,
+            "namespace": "namespace",
+            "state": "absent" if revision is None else "configured",
+            "settings": None if revision is None else {"revision": revision},
+        }
+
+    def race_with_convergence_reads(self, reads, response_mutator=None):
+        pending = list(reads)
+        state = {"winner": None, "retried": False, "reads": 0}
+        self.race_state = state
+        lock = __import__("threading").Lock()
+        snapshot = self.settings_read
+
+        class FakeApi:
+            def __init__(self, role):
+                self.role = role
+
+            def json(self, method, path, raw=None):
+                if method == "GET":
+                    if not state["retried"]:
+                        return snapshot(None)
+                    state["reads"] += 1
+                    return pending.pop(0) if pending else snapshot("winner")
+                request = json.loads(raw)
+                with lock:
+                    if state["winner"] is None:
+                        state["winner"] = request["requestId"]
+                    elif state["winner"] != request["requestId"]:
+                        raise client.ApiError(409)
+                    else:
+                        state["retried"] = True
+                response = {"committedRevision": "winner", "requestId": state["winner"]}
+                return (
+                    response_mutator(response, state["retried"])
+                    if response_mutator
+                    else response
+                )
+
+        wait = client.wait_for
+        with (
+            patch.object(client, "Api", FakeApi),
+            patch.object(
+                client,
+                "wait_for",
+                side_effect=lambda check: wait(check, timeout=0.2, interval=0.001),
+            ),
+        ):
+            result = client.settings_race(None, [{}, {}], "namespace")
+        return result, state
+
+    def test_settings_race_waits_through_null_and_old_revision_for_exact_winner(self):
+        result, state = self.race_with_convergence_reads(
+            [
+                self.settings_read(None),
+                self.settings_read("older"),
+            ]
+        )
+        self.assertEqual(sorted(result["statuses"]), [200, 409])
+        self.assertTrue(state["retried"])
+        self.assertEqual(state["reads"], 5)
+
+    def test_settings_convergence_rejects_malformed_state_settings_and_revision(self):
+        malformed = [
+            None,
+            [],
+            {},
+            {"canWrite": True, "namespace": "namespace", "state": "absent"},
+        ]
+        for settings in ([], "invalid", 1):
+            malformed.append({**self.settings_read("winner"), "settings": settings})
+        malformed.extend(
+            [
+                {**self.settings_read("winner"), "settings": None},
+                {**self.settings_read("winner"), "state": "absent"},
+                {**self.settings_read("winner"), "canWrite": False},
+                {**self.settings_read("winner"), "namespace": "other"},
+                {**self.settings_read("winner"), "settings": {}},
+            ]
+        )
+        for revision in (None, 1, [], "", " ", "bad revision", "x" * 81):
+            malformed.append(
+                {**self.settings_read("winner"), "settings": {"revision": revision}}
+            )
+        for response in malformed:
+            with self.subTest(response=response), self.assertRaises(client.Refused):
+                self.race_with_convergence_reads([response])
+
+    def test_settings_commit_and_retry_require_valid_revision_and_winning_request_id(
+        self,
+    ):
+        mutations = [
+            lambda r: None,
+            lambda r: [],
+            lambda r: {
+                key: value for key, value in r.items() if key != "committedRevision"
+            },
+            lambda r: {key: value for key, value in r.items() if key != "requestId"},
+            lambda r: {**r, "requestId": None},
+            lambda r: {**r, "requestId": "different-request"},
+        ]
+        for value in (None, 1, [], {}, "", " ", "bad revision", "x" * 81):
+            mutations.append(lambda r, value=value: {**r, "committedRevision": value})
+        for retry in (False, True):
+            for index, mutate in enumerate(mutations):
+                with self.subTest(retry=retry, case=index):
+                    with self.assertRaises(client.Refused):
+                        self.race_with_convergence_reads(
+                            [self.settings_read(None)],
+                            response_mutator=lambda r, is_retry: (
+                                mutate(r) if is_retry == retry else r
+                            ),
+                        )
+                    self.assertEqual(self.race_state["retried"], retry)
+                    self.assertEqual(self.race_state["reads"], 0)
+
+    def test_settings_retry_cannot_change_a_valid_committed_revision(self):
+        with self.assertRaisesRegex(client.Refused, "retry changed"):
+            self.race_with_convergence_reads(
+                [],
+                response_mutator=lambda r, retry: (
+                    {**r, "committedRevision": "different-revision"} if retry else r
+                ),
+            )
+
     def test_members_race_then_retry_winning_commit(self):
         response = {"committedRevision": "winner", "requestId": "winning-request"}
         calls = []
@@ -646,6 +773,7 @@ class ConcurrencyTests(unittest.TestCase):
                     return {
                         "canWrite": True,
                         "namespace": "namespace",
+                        "state": "configured" if calls else "absent",
                         "settings": {"revision": "winner"} if calls else None,
                     }
                 with lock:
