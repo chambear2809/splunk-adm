@@ -136,8 +136,16 @@ export function healthIndicator(
     )
   )
     return "attention";
+  const optionalV2 = new Set([
+    "ADM - Network client history builder",
+    "ADM - Conversation rollup v2",
+    "ADM - Traffic observation rollup v2",
+    "ADM - Application catalog v2",
+  ]);
   const builders = report.jobs.filter(
-    (job) => !job.name.toLowerCase().includes("prune"),
+    (job) =>
+      !job.name.toLowerCase().includes("prune") &&
+      !(optionalV2.has(job.name) && job.disabled === true),
   );
   if (!builders.length) return "unknown";
   if (

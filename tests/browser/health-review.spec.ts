@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("health polling lifecycle", () => {
-  test("starts hidden, pauses on hide, resumes on show, and skips Help/Setup", async ({
+  test("starts hidden, pauses on hide, resumes on show, and skips Help", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -72,14 +72,18 @@ test.describe("health polling lifecycle", () => {
       );
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await page.waitForTimeout(300);
-      expect(
-        await page.evaluate(
+      await expect
+        .poll(
           () =>
-            (window.__ADM_REQUESTS__ ?? []).filter((request) =>
-              request.spl.includes("adm_health"),
-            ).length,
-        ),
-      ).toBe(0);
+            page.evaluate(
+              () =>
+                (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+                  request.spl.includes("adm_health"),
+                ).length,
+            ),
+          { timeout: 2000 },
+        )
+        .toBe(target === "setup" ? 3 : 0);
     }
   });
 });

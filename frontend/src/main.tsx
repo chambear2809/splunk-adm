@@ -65,7 +65,8 @@ async function mount(node: HTMLElement) {
     }
     const { state, notice } = recoverUrlState(params, __ADM_SPLUNK_BUILD__);
     if (notice) writeUrlState(state);
-    if (page === "map" && state.mode === "demo") await prepareDemo();
+    if ((page === "map" || page === "applications") && state.mode === "demo")
+      await prepareDemo();
     const [preference, timezone] = await Promise.all([
       __ADM_SPLUNK_BUILD__
         ? resolveUserTheme()

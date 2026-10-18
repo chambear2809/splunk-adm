@@ -82,17 +82,17 @@
       "window_start"
     ],
     "macro_sha256": "6c48e8cd94b8734be7b9965deb1226b96dcfa1fa9da2901f76f0a4b258c8b132",
-    "macro_file_sha256": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
+    "macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
     "generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
     "scenario_sha256": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
     "raw_scenario": "dist/phase8-raw-aci-prev (derived from fixtures/raw-aci/scenario.json)",
     "method": "tests/splunk/lab.py search against initialized lab",
-    "captured_at": 1792252954,
+    "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
-      "captured_macro_file_sha256": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
-      "reviewed_macro_file_sha256": "db08bbdac5fd7f088f00a758c78653c9d307a8195e2830f635766d233109ab96",
+      "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+      "reviewed_macro_file_sha256": "9cbd9e6c946353e17352a3df1dd97c395e924beeedfdae46b155f72453f4b223",
       "method": "static review only; no recapture",
-      "reason": "The identity history expansion completeness guard suppresses incomplete writes; successful complete-input output is unchanged. The builder warning now describes affected rows. Original capture rows, method, timestamp and hashes are preserved."
+      "reason": "The only macro-file changes since this capture are local=true on the two adm_interfaces lookups in V1 flow enrichment. Graph reader definitions, stored-summary processing and complete-input standalone lookup semantics are unchanged. This preserves the original capture hash and rows; it does not assert a new previous-window live capture."
     }
   },
   "rows": [
@@ -1204,7 +1204,7 @@
       "root_present": "1",
       "nodes": "25",
       "edges": "32",
-      "generated_at": "1792252953"
+      "generated_at": "1792294644"
     }
   ]
 }

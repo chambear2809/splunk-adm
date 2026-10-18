@@ -1,12 +1,24 @@
 import json
+from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
 from tools import mixed_pipeline as mixed
+import lab_lock
 
 
 class MixedPipelineTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_cases_have_bounded_expected_flow_counts(self):
         for name, expected in (("smoke", 96), ("baseline", 16000), ("scale", 80000)):
             config = mixed.CASES[name]

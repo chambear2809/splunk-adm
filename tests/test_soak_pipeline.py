@@ -1,13 +1,26 @@
 """Pure correctness and safety checks for the local soak harness."""
 
 import json
+from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 
 from tools import soak_pipeline as soak
+import lab_lock
 
 
 class SoakPipelineTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_batch_is_deterministic_and_token_scoped(self):
         config = soak.Workload(pods=2, flow_copies=1)
         first, digest = soak.batch_events(config, "cycle-a")

@@ -271,6 +271,10 @@ export function parseNetworkClientFindRows(
             : NaN;
       if (!Number.isFinite(value) || value < 0)
         throw new Error(`Network client Find field ${field} is invalid.`);
+      if (value > MAX_EPOCH)
+        throw new Error(
+          `Network client Find field ${field} is outside the epoch range.`,
+        );
       result[field] = value as never;
     }
     return result;

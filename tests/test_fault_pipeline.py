@@ -7,9 +7,20 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from tools import fault_pipeline as fault
+import lab_lock
 
 
 class FaultPipelineTest(unittest.TestCase):
+    def setUp(self):
+        self._lock_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self._lock_directory.cleanup)
+        lock_path = Path(self._lock_directory.name) / "lab.lock"
+        self._lock_path_patch = patch.object(
+            lab_lock, "default_lock_path", return_value=lock_path
+        )
+        self._lock_path_patch.start()
+        self.addCleanup(self._lock_path_patch.stop)
+
     def test_kv_readiness_waits_for_engine_and_data(self):
         def state(value):
             return {"entry": [{"content": {"current": {"status": value}}}]}

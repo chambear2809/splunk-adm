@@ -546,6 +546,7 @@ def capture(
     earliest: str, latest: str, raw_dir: Path, output: Path, initialization: Path
 ) -> None:
     earliest, latest = validate_window(earliest, latest)
+    raw_dir = raw_dir.resolve()
     sys.path.insert(0, str(ROOT / "tests/splunk"))
     import lab
 

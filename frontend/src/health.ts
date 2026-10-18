@@ -26,6 +26,10 @@ export const JOB_NAMES = [
   "Service binding",
   "Service backends",
   "ACI policy",
+  "Network client history builder",
+  "Conversation rollup v2",
+  "Traffic observation rollup v2",
+  "Application catalog v2",
   "Interface inventory",
   "Conversation rollup",
   "Application catalog",
@@ -78,7 +82,7 @@ export const QUALITY_REASONS: Record<string, string> = {
   invalid_sampling: "Invalid sampling interval",
   missing_counters: "Byte or packet measurements are missing",
   unknown_sampling: "Sampling interval missing; assuming 1:1",
-  unmapped_scope: "No observer mapping; using the default scope",
+  unmapped_scope: "No observer mapping; source authority remains isolated",
 };
 export function qualityRows(rows: Row[]): QualityHealth {
   const summary = rows.find(
@@ -88,12 +92,15 @@ export function qualityRows(rows: Row[]): QualityHealth {
       r.status === "checked" &&
       r.reason === "evaluated",
   );
+  // V2 appends diagnostics for the same candidate stream as the legacy
+  // aggregate. Keep the aggregate as the population total; V2 rows enrich
+  // its reasons and must not be added a second time.
   const evaluated = numeric(summary?.records);
   const excludedRows = rows.filter(
     (r) =>
       r.kind === "quality" &&
       r.reason === "evaluated" &&
-      r.status === "excluded",
+      (r.status === "excluded" || r.status === "excluded_uncorrelated"),
   );
   const excluded =
     evaluated === undefined ||
@@ -111,13 +118,21 @@ export function qualityRows(rows: Row[]): QualityHealth {
         (r) =>
           r.kind === "quality" &&
           typeof r.reason === "string" &&
-          Object.hasOwn(QUALITY_REASONS, r.reason) &&
+          r.reason !== "evaluated" &&
           numeric(r.records) !== undefined,
       )
       .map((r) => ({
         source: text(r.source) ?? "Unknown",
-        reason: QUALITY_REASONS[String(r.reason)],
-        status: r.status === "excluded" ? "Excluded" : "Accepted with warning",
+        reason:
+          QUALITY_REASONS[String(r.reason)] ?? String(r.reason).slice(0, 300),
+        status:
+          r.status === "excluded" || r.status === "excluded_uncorrelated"
+            ? "Excluded"
+            : r.status === "checked"
+              ? "Checked"
+              : r.status === "context_only"
+                ? "Context only"
+                : "Diagnostic",
         records: numeric(r.records)!,
       })),
   };
@@ -194,7 +209,8 @@ export function jobStatus(job: JobHealth, now: number): string {
   const threshold = job.name.endsWith("prune")
     ? 26 * 3600
     : job.name.endsWith("Interface inventory") ||
-        job.name.endsWith("Application catalog")
+        job.name.endsWith("Application catalog") ||
+        job.name.endsWith("Application catalog v2")
       ? 2 * 3600
       : 1200;
   if (!job.lastSuccess) return "Successful run not confirmed";

@@ -6,6 +6,7 @@ import time
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from tools.lab_lock import (
     LabLock,
@@ -17,6 +18,13 @@ from tools.lab_lock import (
 
 
 class LabLockTest(unittest.TestCase):
+    def setUp(self):
+        # Stale-token cases mutate ownership variables. Restore the caller's
+        # environment so a parent-owned suite keeps its cooperative lab lock.
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
+
     def test_default_path_is_shared_across_clones(self):
         self.assertEqual(
             default_lock_path("/clone-one"), default_lock_path("/clone-two")

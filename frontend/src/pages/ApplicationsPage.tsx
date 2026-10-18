@@ -47,11 +47,15 @@ const Button = toolkitDefault(ButtonExport);
 const Table = toolkitDefault(TableExport);
 const Text = toolkitDefault(TextExport);
 type SortKey = keyof CatalogRow;
-const utc = (epoch: string | number) =>
-  new Date(Number(epoch) * 1000)
-    .toISOString()
-    .replace("T", " ")
-    .replace(":00.000Z", " UTC");
+const utc = (epoch: string | number) => {
+  const value = Number(epoch);
+  if (!Number.isFinite(value) || value < 0 || value > 253402300799)
+    return "Unknown time";
+  const date = new Date(value * 1000);
+  return Number.isNaN(date.getTime())
+    ? "Unknown time"
+    : date.toISOString().replace("T", " ").replace(":00.000Z", " UTC");
+};
 const scopeLabel = (value: string) =>
   value.length > 255 ? value.slice(0, 255) + "…" : value;
 const isSearchResultLimitError = (

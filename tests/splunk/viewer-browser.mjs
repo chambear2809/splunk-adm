@@ -633,6 +633,24 @@ try {
       await page.keyboard.press("Escape");
       await page.unroute("**/demo/*.json");
 
+      stage = "packaged demo applications";
+      await page.goto(
+        `${BASE}/en-US/app/splunk_adm/applications?mode=demo&scenario=aci`,
+        { waitUntil: "domcontentloaded" },
+      );
+      await page
+        .getByRole("heading", { name: "Applications", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      await page
+        .getByRole("button", { name: "Open map for frontend", exact: true })
+        .waitFor({ state: "visible", timeout: 60000 });
+      if (
+        (await page.locator("text=Application Atlas could not load").count()) >
+        0
+      )
+        throw new Error("Packaged Applications demo failed to load");
+      evidence.demoApplications = { loaded: true, frontend: true };
+
       stage = "demo map";
       await page.goto(
         `${BASE}/en-US/app/splunk_adm/map?mode=demo&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop`,

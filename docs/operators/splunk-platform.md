@@ -94,7 +94,7 @@ To import administrator-reviewed rows, create them as search results (for exampl
 
 Verify `| inputlookup adm_observer_scope | table observer_kind observer scope cluster`, and check the collection and lookup ACLs before granting viewer access. No system `limits.conf` override is needed.
 
-Unmapped observers fall into scope `default`. The `cluster` row is required: it also scopes Hubble flows and Service frontends (LoadBalancer IPs, NodePorts). The `apic` row also scopes ACI ACL-log records. The cluster, the ACI NetFlow exporters, Nexus Dashboard and the APIC must share one scope, or the map can't link a client's fabric conversation to the backend pod Hubble saw.
+Unmapped observers remain isolated in authority-qualified `unmapped:<hash>` scopes. The `cluster` row is required: it also scopes Hubble flows and Service frontends (LoadBalancer IPs, NodePorts). The `apic` row also scopes ACI ACL-log records. The cluster, the ACI NetFlow exporters, Nexus Dashboard and the APIC must share one scope, or the map can't link a client's fabric conversation to the backend pod Hubble saw.
 
 Leave `adm_aci_policy_complete` at `0` unless the ACI team collects the optional policy classes in [aci-network.md](aci-network.md#optional-complete-policy-evaluation). With `0`, conversations without a matching permit show "Policy not evaluated" rather than "no permitting contract".
 
