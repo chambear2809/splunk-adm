@@ -27,6 +27,15 @@ run sequentially under this same arrangement. OS services and unrelated desktop
 activity remain uncontrolled; this is a developer workstation, not a dedicated
 benchmark host.
 
+The accepted baseline is commit `510754c17391e548309dd68ddac3f8b99e0b75c6` in
+its isolated checkout. The coordinator committed the frozen candidate bytes as
+`7999d3a8b27ee3c786f5bb43345b06273966a675` while the isolated baseline ran;
+the sequential candidate run uses that commit. Remote CI ran independently;
+local build, browser, package and Splunk checks remained paused throughout both
+measurements. The supplemental imported-source manifest binds configuration and
+research dependencies outside the harness's primary source-tree hash to these
+commits.
+
 Both retained comparison runs use the same production profiling harness, all four
 captured scenarios, both controlled graph sizes, both partial client handoff
 variants, five cold-context samples and five warm-context samples, with one

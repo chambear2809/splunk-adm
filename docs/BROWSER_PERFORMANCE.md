@@ -7,6 +7,13 @@ are available. The same harness can load an untouched baseline checkout and the
 candidate checkout through `ADM_PERF_SOURCE_ROOT`. It does not require Splunk,
 credentials, Docker or a lab.
 
+The retained baseline/candidate comparison is in
+[browser results](benchmarks/atlas-browser-results.md), including the slower
+highlighted-card selection case and links to complete distributions and raw
+evidence checksums. Its original interaction intervals include automation
+completion. The corrected protocol below requires a new matched comparison;
+historical numbers must not be mixed with corrected results.
+
 ## Repeat a measurement
 
 Install dependencies from each source checkout's lockfile with `npm ci`; install
@@ -15,6 +22,7 @@ Run from the checkout containing this harness:
 
 ```sh
 npx tsc -p tests/performance/tsconfig.json --noEmit
+npx playwright test --config tests/performance/readiness.config.ts
 ADM_PERF_SOURCE_ROOT=/absolute/path/to/baseline-checkout \
   ADM_PERF_OUTPUT=dist/performance/baseline.json \
   npx playwright test --config tests/performance/playwright.config.ts
@@ -100,14 +108,37 @@ fonts ready, a loaded graph, positive SVG viewport/content geometry, rendered hi
 targets and stable counts, geometry and fit transform for three consecutive
 animation frames. This is an application settling measurement, not LCP or INP.
 
-Interaction measurements start in a capture listener on the actual input event
-and end at the same settling condition. They include highlighting, keyboard
+Corrected interaction measurements (raw schema 2) start a browser-side readiness
+promise in the capture listener on the actual input event. Each action verifies
+its precondition before dispatch and requires its intended DOM update before
+counting three unchanged frames after the first committed frame. Gates include
+the expected selected card and inspector controls, the highlight jump's match
+position, filter status, requested tab content, selected conversation row and
+partial/unresolved handoff warning. Full graph counts and geometry remain
+required. They include highlighting, keyboard
 highlight jump, card selection/clearing, filtering/clearing, summary expansion,
 table rendering and selection of an unresolved/partial conversation. Table
 settling checks loaded counts, rendered rows and inspector text without requiring
 an SVG. Export generation starts at click capture and ends when the generated
 blob link dispatches its download; Playwright's download notification and file
 reads are retained separately or performed outside that interval.
+
+The test still awaits Playwright trigger success, then retrieves the already
+running or resolved browser readiness promise. Failed triggers fail even when
+the DOM became ready; missing events/postconditions and unstable geometry time
+out. The browser's event-to-ready end is independent of trigger completion.
+`playwrightTriggerDurationMs` records Node's complete trigger wait, including
+actionability before dispatch. `triggerCompletionObservedAt` is a browser
+timestamp sampled by an evaluation after that wait, so its corresponding event
+interval is an upper bound on trigger completion. These clocks/intervals must
+not be subtracted to infer a browser phase.
+
+In the original retained interaction protocol (raw schema 1), the test awaits Playwright's trigger
+completion before invoking the browser's settling loop. The recorded interval
+therefore includes that automation completion wait as well as browser work and
+subsequent stable frames. It does not independently identify the earliest visual
+readiness time. A bounded follow-up trace locates the dense card-selection
+residual before settling starts; see the retained results' diagnostic section.
 
 React Profiler actual durations, CDP script/layout/style/task durations, heap/DOM
 metrics and supported browser long-task entries accompany mount timing. They
@@ -126,6 +157,14 @@ evidence. Raw JSON records source commit and effective tree hash, harness hash,
 input hash/bytes/counts, browser/runtime/hardware, cache state, repetitions,
 individual values, correctness outcomes and incomplete-run failures. It contains
 synthetic/captured repository data only; do not substitute customer data.
+
+The effective tree hash covers `frontend/src`, `fixtures` and `package-lock.json`.
+The harness hash covers its browser entry, workload generators, specification and
+standalone build/test/TypeScript configurations. Imported configuration and
+research data outside that tree are bound separately to the measured commits in
+`benchmarks/atlas-browser-imported-source-manifest.json`. The evidence index
+records raw report locations and checksums; unchanged hashes alone do not claim
+that every repository file was measured.
 
 ## Interpreting results
 

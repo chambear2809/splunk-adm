@@ -18,6 +18,7 @@ import { computeLayout } from "@atlas/layout";
 import { filterGraph } from "@atlas/filters";
 import { workload, type Scenario, type Size } from "./workloads";
 import "@atlas/styles.css";
+import { capturedAction, committedFrames } from "./readiness";
 
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
 type Sample = { name: string; start: number; duration: number };
@@ -77,6 +78,48 @@ HTMLAnchorElement.prototype.click = function () {
 };
 
 /** Wait for font metrics, ResizeObserver fitting and React effects to settle. */
+function readinessFrame(requireMap: boolean) {
+  const app = document.querySelector<HTMLElement>(".adm");
+  const svg = app?.querySelector<SVGSVGElement>("svg.map-svg");
+  const content = svg?.querySelector<SVGGraphicsElement>("[data-export-root]");
+  const bounds = svg?.getBoundingClientRect();
+  const b = content?.getBBox();
+  const targets = svg?.querySelectorAll("[data-hit]").length ?? 0;
+  const valid =
+    !!app &&
+    document.fonts.status === "loaded" &&
+    app.dataset.loaded === "true" &&
+    (!requireMap ||
+      !!(
+        bounds &&
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        b &&
+        b.width > 0 &&
+        b.height > 0 &&
+        [b.x, b.y, b.width, b.height].every(Number.isFinite) &&
+        targets > 0 &&
+        content?.getAttribute("transform") &&
+        !content.getAttribute("transform")?.match(/NaN|Infinity/)
+      ));
+  const signature = JSON.stringify([
+    app?.dataset.nodeCount,
+    app?.dataset.edgeCount,
+    bounds?.width,
+    bounds?.height,
+    content?.getAttribute("transform"),
+    svg?.dataset.exportWidth,
+    svg?.dataset.exportHeight,
+    targets,
+    app?.querySelectorAll(".match,.selected").length,
+    app?.querySelector(".atlas-filter-status")?.textContent,
+    app?.querySelectorAll(".table-view tr").length,
+    app?.querySelectorAll(".devices-view li, .devices-view tr").length,
+    app?.querySelector(".attachment-references")?.textContent,
+    app?.querySelector('[aria-label="Details"]')?.textContent,
+  ]);
+  return { valid, signature };
+}
 async function settle(requireMap = true) {
   await document.fonts.ready;
   let previous = "";
@@ -86,52 +129,167 @@ async function settle(requireMap = true) {
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => resolve()),
     );
-    const app = document.querySelector<HTMLElement>(".adm");
-    const svg = app?.querySelector<SVGSVGElement>("svg.map-svg");
-    const content =
-      svg?.querySelector<SVGGraphicsElement>("[data-export-root]");
-    const bounds = svg?.getBoundingClientRect();
-    const b = content?.getBBox();
-    const targets = svg?.querySelectorAll("[data-hit]").length ?? 0;
-    const valid =
-      !!app &&
-      document.fonts.status === "loaded" &&
-      app.dataset.loaded === "true" &&
-      (!requireMap ||
-        !!(
-          bounds &&
-          bounds.width > 0 &&
-          bounds.height > 0 &&
-          b &&
-          b.width > 0 &&
-          b.height > 0 &&
-          [b.x, b.y, b.width, b.height].every(Number.isFinite) &&
-          targets > 0 &&
-          content?.getAttribute("transform") &&
-          !content.getAttribute("transform")?.match(/NaN|Infinity/)
-        ));
-    const signature = JSON.stringify([
-      app?.dataset.nodeCount,
-      app?.dataset.edgeCount,
-      bounds?.width,
-      bounds?.height,
-      content?.getAttribute("transform"),
-      svg?.dataset.exportWidth,
-      svg?.dataset.exportHeight,
-      targets,
-      app?.querySelectorAll(".match,.selected").length,
-      app?.querySelector(".atlas-filter-status")?.textContent,
-      app?.querySelectorAll(".table-view tr").length,
-      app?.querySelectorAll(".devices-view li, .devices-view tr").length,
-      app?.querySelector(".attachment-references")?.textContent,
-      app?.querySelector('[aria-label="Details"]')?.textContent,
-    ]);
+    const { valid, signature } = readinessFrame(requireMap);
     same = valid && signature === previous ? same + 1 : 0;
     previous = signature;
     if (same >= 3) return performance.now();
   }
   throw new Error("Map did not reach deterministic usable readiness");
 }
+function nextFrame(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted();
+    const abort = () => {
+      cancelAnimationFrame(frame);
+      reject(signal.reason);
+    };
+    const frame = requestAnimationFrame(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    });
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+export type ActionIntent =
+  | {
+      kind:
+        | "highlight"
+        | "highlightJump"
+        | "selectCard"
+        | "clearSelection"
+        | "filterExternal"
+        | "clearFilter"
+        | "table"
+        | "devices"
+        | "network";
+    }
+  | { kind: "selectEdge"; index: number; coverage?: string };
+function actionExpectation(intent: ActionIntent) {
+  const query = <T extends Element = HTMLElement>(selector: string) =>
+    document.querySelector<T>(selector);
+  const button = (text: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (e) =>
+        e.textContent?.trim() === text || e.getAttribute("aria-label") === text,
+    );
+  const details = () => query('[aria-label="Details"]');
+  const highlight = () =>
+    query<HTMLInputElement>(
+      '[aria-label="Highlight by name, IP, EPG, port or device"]',
+    );
+  const filter = () =>
+    query<HTMLSelectElement>('[aria-label="Filter identity"]');
+  const status = () => query(".atlas-filter-status");
+  let target: Element | null | undefined;
+  let precondition: () => boolean;
+  let committed: () => boolean;
+  let requireMap = true;
+  switch (intent.kind) {
+    case "highlight":
+      target = highlight();
+      precondition = () =>
+        !!highlight() &&
+        highlight()!.value !== "checkout" &&
+        !query(".match-count");
+      committed = () =>
+        highlight()?.value === "checkout" &&
+        !!query(".match-count") &&
+        !!query(".item[data-hit].match");
+      break;
+    case "highlightJump":
+      target = highlight();
+      precondition = () =>
+        !!query(".item[data-hit].match") &&
+        !/^1 of /.test(query(".match-count")?.textContent ?? "");
+      committed = () => /^1 of /.test(query(".match-count")?.textContent ?? "");
+      break;
+    case "selectCard": {
+      target = query(".item[data-hit].match");
+      const label = target?.getAttribute("aria-label");
+      const selected = () =>
+        [...document.querySelectorAll(".item[data-hit].selected")].find(
+          (e) =>
+            e.getAttribute("aria-label") === label &&
+            e.getAttribute("aria-pressed") === "true",
+        );
+      precondition = () =>
+        !!target &&
+        target.getAttribute("aria-pressed") === "false" &&
+        !button("Clear selection");
+      committed = () =>
+        !!selected() &&
+        !!button("Clear selection") &&
+        !!details()?.textContent?.trim();
+      break;
+    }
+    case "clearSelection":
+      target = button("Clear selection");
+      precondition = () =>
+        !!button("Clear selection") &&
+        !!query(".item.selected, .table-view tr.selected");
+      committed = () =>
+        !button("Clear selection") &&
+        !query(".item.selected, .table-view tr.selected");
+      break;
+    case "filterExternal":
+      target = filter();
+      precondition = () =>
+        !!filter() && filter()!.value !== "external" && !status();
+      committed = () =>
+        filter()?.value === "external" && !!status()?.textContent?.trim();
+      break;
+    case "clearFilter":
+      target = filter();
+      precondition = () => filter()?.value === "external" && !!status();
+      committed = () => filter()?.value === "" && !status();
+      break;
+    case "selectEdge": {
+      requireMap = false;
+      const row = () =>
+        document.querySelectorAll(".table-view tbody tr")[intent.index];
+      target = row()?.querySelector("button");
+      precondition = () =>
+        !!target &&
+        !row()?.classList.contains("selected") &&
+        !button("Clear selection");
+      committed = () =>
+        !!row()?.classList.contains("selected") &&
+        !!button("Clear selection") &&
+        !!details()?.textContent?.trim() &&
+        (!(intent.coverage === "partial" || intent.coverage === "unresolved") ||
+          !!details()?.textContent?.includes(
+            `Client handoff coverage is ${intent.coverage}`,
+          ));
+      break;
+    }
+    default: {
+      const tab =
+        intent.kind === "table"
+          ? "Table"
+          : intent.kind === "devices"
+            ? "Devices"
+            : "Network";
+      target = button(tab);
+      requireMap = intent.kind === "network";
+      const content =
+        intent.kind === "table"
+          ? ".table-view tbody tr"
+          : intent.kind === "devices"
+            ? ".devices-view"
+            : ".map-svg [data-hit]";
+      precondition = () =>
+        !!target &&
+        target.getAttribute("aria-pressed") === "false" &&
+        !query(content);
+      committed = () =>
+        button(tab)?.getAttribute("aria-pressed") === "true" &&
+        !!query(content);
+    }
+  }
+  return { target, precondition, committed, requireMap };
+}
+let pendingAction: ReturnType<typeof capturedAction> | undefined;
+let removeActionListener: (() => void) | undefined;
 const read = () => {
   flushTasks();
   return {
@@ -259,7 +417,7 @@ const api = {
     performance.mark(`action:${name}`);
     return now;
   },
-  armAction(event: "click" | "input" | "change" | "keydown") {
+  armExport(event: "click" | "input" | "change" | "keydown") {
     actionStart = 0;
     downloadAt = 0;
     document.addEventListener(
@@ -270,10 +428,86 @@ const api = {
       { capture: true, once: true },
     );
   },
-  async endAction(requireMap = true) {
-    if (!actionStart)
-      throw new Error("Expected user input event was not observed");
-    return api.finishAction(actionStart, requireMap);
+  armAction(
+    event: "click" | "input" | "change" | "keydown",
+    intent: ActionIntent,
+  ) {
+    if (pendingAction) throw new Error("Previous action was not consumed");
+    const expected = actionExpectation(intent);
+    const counts = () => {
+      const app = document.querySelector<HTMLElement>(".adm");
+      return (
+        app?.dataset.nodeCount === String(prepared.nodes) &&
+        app?.dataset.edgeCount === String(prepared.edges)
+      );
+    };
+    pendingAction = capturedAction({
+      name: intent.kind,
+      precondition: expected.precondition,
+      now: () => performance.now(),
+      settle: async (signal) => {
+        await document.fonts.ready;
+        return committedFrames({
+          signal,
+          now: () => performance.now(),
+          nextFrame,
+          read: () => readinessFrame(expected.requireMap),
+          committed: () => counts() && expected.committed(),
+        });
+      },
+    });
+    const listener = (input: Event) => {
+      if (
+        !(input.target instanceof Node) ||
+        !expected.target?.contains(input.target) ||
+        (intent.kind === "highlightJump" &&
+          (input as KeyboardEvent).key !== "Enter")
+      ) {
+        pendingAction?.triggerFailed(
+          new Error(`Unexpected action event target: ${intent.kind}`),
+        );
+        return;
+      }
+      pendingAction?.capture();
+    };
+    document.addEventListener(event, listener, { capture: true, once: true });
+    removeActionListener = () =>
+      document.removeEventListener(event, listener, true);
+  },
+  actionTriggerCompleted() {
+    if (!pendingAction) throw new Error("No armed action");
+    pendingAction.triggerCompleted();
+  },
+  actionTriggerFailed(message: string) {
+    pendingAction?.triggerFailed(new Error(message));
+    removeActionListener?.();
+    removeActionListener = undefined;
+    pendingAction = undefined;
+  },
+  async endAction() {
+    if (!pendingAction) throw new Error("No armed action");
+    try {
+      const timing = await pendingAction.result();
+      flushTasks();
+      return {
+        ...timing,
+        longTasks: tasks.filter(
+          (task) =>
+            task.start < timing.end &&
+            task.start + task.duration > timing.start,
+        ),
+        renderDuration: renders
+          .filter(
+            (render) =>
+              render.start >= timing.start && render.commit <= timing.end,
+          )
+          .reduce((sum, render) => sum + render.duration, 0),
+      };
+    } finally {
+      removeActionListener?.();
+      removeActionListener = undefined;
+      pendingAction = undefined;
+    }
   },
   downloadTiming() {
     if (!actionStart || !downloadAt)

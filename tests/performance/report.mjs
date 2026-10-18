@@ -70,8 +70,15 @@ function values(sample) {
     mountLongTasks: sample.mount.longTasks.length,
     mountLongTaskMs: sum(sample.mount.longTasks, (row) => row.duration),
   };
-  for (const [name, action] of Object.entries(sample.interactions))
+  for (const [name, action] of Object.entries(sample.interactions)) {
     timing[`${name}Ms`] = action.duration;
+    if (action.playwrightTriggerDurationMs !== undefined)
+      timing[`${name}.playwrightTriggerMs`] =
+        action.playwrightTriggerDurationMs;
+    if (action.eventToTriggerCompletionObservedMs !== undefined)
+      timing[`${name}.eventToTriggerObservedMs`] =
+        action.eventToTriggerCompletionObservedMs;
+  }
   for (const item of sample.exports)
     timing[`${item.format}ExportMs`] = item.generationMs;
   for (const [name, measurements] of Object.entries(
@@ -179,6 +186,8 @@ const investigationBudgets = Object.fromEntries(
 const summary = {
   schemaVersion: 1,
   baseline: {
+    schemaVersion: baseline.schemaVersion,
+    methodology: baseline.methodology,
     source: baseline.source,
     runtime: baseline.runtime,
     harnessSha256: baseline.harnessSha256,
@@ -187,6 +196,8 @@ const summary = {
   },
   candidate: candidate
     ? {
+        schemaVersion: candidate.schemaVersion,
+        methodology: candidate.methodology,
         source: candidate.source,
         samples: candidate.results.length,
         groups: nextGroups,
@@ -205,6 +216,10 @@ const lines = [
   `${baseline.results.length} baseline samples; ${baseline.methodology.repetitionsPerCacheState} repetitions per workload/cache state. One discarded warmup per warm context. Production ReactDOM profiling build; 1440×1000, DPR 1, headless, UTC. Browser process and OS cache are reused; “cold” means a fresh browser context. OS/desktop background activity remains uncontrolled; consult the environment note for agent workload and idle-lab state.`,
   "",
   "Each cell below is median / p95 in milliseconds. With five samples, nearest-rank p95 is the maximum; these values do not estimate population tail latency. Mount usability includes fonts and three stable animation frames. Module/download startup is reported separately in raw evidence. React render, row transforms and browser script/layout overlap and must not be added together.",
+  "",
+  baseline.schemaVersion >= 2
+    ? "Interaction readiness starts in the browser at event capture. Action-specific preconditions and expected committed DOM state gate three unchanged frames after the first valid committed frame. Playwright trigger duration and the browser timestamp observed after trigger completion are separate measurements; they do not extend event-to-ready duration. Mount and export-generation boundaries retain their original definitions."
+    : "Original interaction protocol: click/input capture starts timing, then the test awaits Playwright trigger completion before starting browser settling. These automation-inclusive intervals do not independently identify earliest visual readiness. They remain historical evidence and must not be mixed with corrected interaction-readiness results.",
   "",
   "| Workload/cache | Nodes/edges | Mount | Row transforms | React render | Browser layout | PNG generation |",
   "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",

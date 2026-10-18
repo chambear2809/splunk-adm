@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { cpus, totalmem, platform, release, arch } from "node:os";
 import { resolve } from "node:path";
-import type { PerfApi } from "./harness";
+import type { PerfApi, ActionIntent } from "./harness";
 import type { Scenario, Size } from "./workloads";
 const scenarios = ["aci", "nxos", "catalyst-aci", "meraki-nxos"] as const;
 
@@ -37,6 +37,7 @@ let harnessHashBefore = "";
 const harnessFiles = [
   "browser.perf.spec.ts",
   "harness.tsx",
+  "readiness.ts",
   "workloads.ts",
   "ciscoWorkloads.ts",
   "index.html",
@@ -120,20 +121,35 @@ const deltas = (
 async function action(
   page: Page,
   event: "click" | "input" | "change" | "keydown",
+  intent: ActionIntent,
   trigger: () => Promise<unknown>,
-  requireMap = true,
 ) {
-  await page.evaluate((event) => window.__ATLAS_PERF__.armAction(event), event);
-  await trigger();
-  return page.evaluate(
-    (requireMap) => window.__ATLAS_PERF__.endAction(requireMap),
-    requireMap,
+  await page.evaluate(
+    ({ event, intent }) => window.__ATLAS_PERF__.armAction(event, intent),
+    { event, intent },
   );
+  const triggerStarted = performance.now();
+  try {
+    await trigger();
+  } catch (error) {
+    await page
+      .evaluate(
+        (message) => window.__ATLAS_PERF__.actionTriggerFailed(message),
+        String(error),
+      )
+      .catch(() => {});
+    throw error;
+  }
+  const playwrightTriggerDurationMs = performance.now() - triggerStarted;
+  await page.evaluate(() => window.__ATLAS_PERF__.actionTriggerCompleted());
+  const timing = await page.evaluate(() => window.__ATLAS_PERF__.endAction());
+  expect(timing.committedPostcondition).toBe(true);
+  return { ...timing, playwrightTriggerDurationMs };
 }
 async function download(page: Page, name: RegExp, format: string) {
   if (!(await page.getByRole("button", { name }).isVisible()))
     await page.getByRole("button", { name: "Export", exact: true }).click();
-  await page.evaluate(() => window.__ATLAS_PERF__.armAction("click"));
+  await page.evaluate(() => window.__ATLAS_PERF__.armExport("click"));
   const begin = performance.now();
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name }).click();
@@ -222,38 +238,54 @@ async function sample(
   const highlight = page.getByLabel(
     "Highlight by name, IP, EPG, port or device",
   );
-  const highlightTiming = await action(page, "input", () =>
-    highlight.fill("checkout"),
+  const highlightTiming = await action(
+    page,
+    "input",
+    { kind: "highlight" },
+    () => highlight.fill("checkout"),
   );
   await expect(page.locator(".item[data-hit].match").first()).toBeAttached();
-  const highlightJumpTiming = await action(page, "keydown", () =>
-    highlight.press("Enter"),
+  const highlightJumpTiming = await action(
+    page,
+    "keydown",
+    { kind: "highlightJump" },
+    () => highlight.press("Enter"),
   );
-  const selectionTiming = await action(page, "click", () =>
-    page.locator(".item[data-hit].match").first().click(),
+  const selectionTiming = await action(
+    page,
+    "click",
+    { kind: "selectCard" },
+    () => page.locator(".item[data-hit].match").first().click(),
   );
   await expect(
     page.getByRole("complementary", { name: "Details" }),
   ).toBeVisible();
-  const clearSelectionTiming = await action(page, "click", () =>
-    page.getByRole("button", { name: "Clear selection" }).click(),
-  );
-  await highlight.fill("");
-  const filterTiming = await action(page, "change", () =>
-    page
-      .getByLabel("Filter identity", { exact: true })
-      .selectOption("external"),
-  );
-  await expect(page.locator(".atlas-filter-status")).toBeVisible();
-  const clearFilterTiming = await action(page, "change", () =>
-    page.getByLabel("Filter identity", { exact: true }).selectOption(""),
-  );
-  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
-  const tableTiming = await action(
+  const clearSelectionTiming = await action(
     page,
     "click",
-    () => page.getByRole("button", { name: "Table", exact: true }).click(),
-    false,
+    { kind: "clearSelection" },
+    () => page.getByRole("button", { name: "Clear selection" }).click(),
+  );
+  await highlight.fill("");
+  const filterTiming = await action(
+    page,
+    "change",
+    { kind: "filterExternal" },
+    () =>
+      page
+        .getByLabel("Filter identity", { exact: true })
+        .selectOption("external"),
+  );
+  await expect(page.locator(".atlas-filter-status")).toBeVisible();
+  const clearFilterTiming = await action(
+    page,
+    "change",
+    { kind: "clearFilter" },
+    () => page.getByLabel("Filter identity", { exact: true }).selectOption(""),
+  );
+  await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
+  const tableTiming = await action(page, "click", { kind: "table" }, () =>
+    page.getByRole("button", { name: "Table", exact: true }).click(),
   );
   const selectedCase = await page.evaluate(() =>
     window.__ATLAS_PERF__.selectionCase(),
@@ -261,13 +293,17 @@ async function sample(
   const edgeSelectionTiming = await action(
     page,
     "click",
+    {
+      kind: "selectEdge",
+      index: selectedCase.index,
+      coverage: selectedCase.coverage,
+    },
     () =>
       page
         .getByRole("table", { name: "Network conversations" })
         .getByRole("button")
         .nth(selectedCase.index)
         .click(),
-    false,
   );
   const details = page.getByRole("complementary", { name: "Details" });
   await expect(details).toBeVisible();
@@ -279,17 +315,14 @@ async function sample(
       `Client handoff coverage is ${selectedCase.coverage}`,
     );
   await page.getByRole("button", { name: "Clear selection" }).click();
-  const devicesTiming = await action(
-    page,
-    "click",
-    () => page.getByRole("button", { name: "Devices", exact: true }).click(),
-    false,
+  const devicesTiming = await action(page, "click", { kind: "devices" }, () =>
+    page.getByRole("button", { name: "Devices", exact: true }).click(),
   );
   const attachmentUi = {
     visibleReferences: await page.locator(".attachment-references li").count(),
     text: await page.locator(".attachment-references").allTextContents(),
   };
-  await action(page, "click", () =>
+  await action(page, "click", { kind: "network" }, () =>
     page.getByRole("button", { name: "Network", exact: true }).click(),
   );
   const expansionTiming = await page.evaluate(() =>
@@ -492,7 +525,7 @@ test.afterAll(async () => {
     0,
   );
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     recordedAt: new Date().toISOString(),
     source: {
       sha: git("rev-parse", "HEAD"),
@@ -545,6 +578,8 @@ test.afterAll(async () => {
       tracing: false,
     },
     methodology: {
+      interactionProtocol:
+        "capture-started browser readiness promise; action-specific precondition and committed DOM postcondition; three unchanged frames after the first committed frame; Playwright trigger completion separate",
       repetitionsPerCacheState: repetitions,
       cold: "Fresh browser context and page per sample; browser process reused, OS and server caches uncontrolled",
       warm: "Same context, one discarded warmup, fresh page per measured sample",
