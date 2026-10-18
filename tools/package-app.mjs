@@ -70,6 +70,10 @@ await cp(app, stage, {
 });
 await mkdir(`${stage}/docs`, { recursive: true });
 await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
+await copyFile(
+  "docs/DEPLOYMENT_HEALTH.md",
+  `${stage}/docs/DEPLOYMENT_HEALTH.md`,
+);
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
 await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
 await copyFile(

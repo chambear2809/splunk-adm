@@ -26,11 +26,11 @@ class HealthSearchTest(unittest.TestCase):
         import re
 
         query, replacements = re.subn(
-            r"search `adm_index_[a-z0-9]+`[^|]*",
+            r"(?:\|\s*)?search `adm_index_[a-z0-9]+`[^|]*",
             "| makeresults | where false()",
             query,
         )
-        self.assertEqual(replacements, 10)
+        self.assertEqual(replacements, 13)
         rows = self.lab.search(query, "0", "1")
         self.assertEqual({row.get("kind") for row in rows}, {"source"})
         self.assertEqual(
@@ -46,12 +46,16 @@ class HealthSearchTest(unittest.TestCase):
                 "Summary",
                 "Catalyst Center",
                 "Meraki",
+                "ACI",
+                "Nexus Dashboard",
+                "NX-OS",
             },
         )
         for row in rows:
             self.assertEqual(row.get("records"), "0")
             self.assertEqual(row.get("status"), "no_visible_records")
             self.assertNotIn("max_ingest_lag", row)
+            self.assertEqual(row.get("probe_lookback_seconds"), "604800")
 
     def test_job_health_exposes_app_jobs_and_no_recent_run(self):
         rows = self.lab.search("| `adm_health_jobs`", "0", "1")
@@ -59,7 +63,10 @@ class HealthSearchTest(unittest.TestCase):
         self.assertTrue(all(row.get("kind") == "job" for row in rows))
         self.assertTrue(all(row.get("name", "").startswith("ADM - ") for row in rows))
         for row in rows:
-            self.assertIn(row.get("status"), {"disabled", "no_recent_run", "unknown"})
+            self.assertIn(
+                row.get("status"),
+                {"disabled", "unscheduled", "no_recent_run", "unknown"},
+            )
             self.assertNotIn("last_success", row)
 
     def test_missed_slots_macro_parses_and_is_empty_against_shipped_disabled_jobs(
@@ -553,7 +560,17 @@ class HealthSearchTest(unittest.TestCase):
             / "splunk_app/splunk_adm/default/macros.conf"
         )
         conf.read_string(path.read_text().replace("\\\n", ""))
-        return "| " + conf[name]["definition"]
+
+        def expand_private(value):
+            import re
+
+            return re.sub(
+                r"`(adm_health_[a-z0-9_]+)`",
+                lambda match: expand_private(conf[match.group(1)]["definition"]),
+                value,
+            )
+
+        return "| " + expand_private(conf[name]["definition"])
 
     def test_source_lag_and_latest_times_from_actual_macro(self):
         query = self.definition("adm_health_sources")
@@ -564,7 +581,9 @@ class HealthSearchTest(unittest.TestCase):
         )
         import re
 
-        query = re.sub(r"search `adm_index_netflow`[^|]*", lambda _: seed, query)
+        query = re.sub(
+            r"(?:\|\s*)?search `adm_index_netflow`[^|]*", lambda _: seed, query
+        )
         rows = self.lab.search(query, "0", "1")
         netflow = next(row for row in rows if row["name"] == "NetFlow")
         self.assertEqual(netflow["max_ingest_lag"], "100")
@@ -585,14 +604,16 @@ class HealthSearchTest(unittest.TestCase):
             "| eval _time=tonumber(mvindex(parts, 0)), _indextime=tonumber(mvindex(parts, 1)) "
         )
         summary_seed = "| makeresults | eval _time=500, _indextime=530 "
-        query = re.sub(r"search `adm_index_netflow`[^|]*", lambda _: seed, query)
         query = re.sub(
-            r"search `adm_index_summary_v2` source=\"adm:conversation\"[^|]*",
+            r"(?:\|\s*)?search `adm_index_netflow`[^|]*", lambda _: seed, query
+        )
+        query = re.sub(
+            r"(?:\|\s*)?search `adm_index_summary_v2` source=\"adm:conversation\"[^|]*",
             lambda _: summary_seed,
             query,
         )
         query = re.sub(
-            r"search `adm_index_[a-z0-9_]+`[^|]*",
+            r"(?:\|\s*)?search `adm_index_[a-z0-9_]+`[^|]*",
             "| makeresults | where false()",
             query,
         )

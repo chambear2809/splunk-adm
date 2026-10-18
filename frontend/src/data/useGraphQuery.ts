@@ -10,22 +10,23 @@ export async function queryGraph(
   controller: AbortController,
 ): Promise<{ graph: Graph; topology: Topology }> {
   try {
-    const [graph, topology] = await Promise.all([
-      loadLive(client, request, controller.signal),
-      loadTopology(
-        client,
-        request.earliest,
-        controller.signal,
-        request.latest,
-        request.timezone,
-      ).catch((error: unknown) => {
-        const unavailable = emptyTopology();
-        unavailable.warnings.push(
-          `Network inventory unavailable. ${error instanceof Error ? error.message.slice(0, 300) : "Search failed."}`,
-        );
-        return unavailable;
-      }),
-    ]);
+    const graph = await loadLive(client, request, controller.signal);
+    if (controller.signal.aborted) throw new Error("Search cancelled.");
+    // Inventory must describe the same captured window as the graph. Relative
+    // bounds (especially "now") can otherwise move between search dispatches.
+    const topology = await loadTopology(
+      client,
+      String(Date.parse(graph.window.start) / 1000),
+      controller.signal,
+      String(Date.parse(graph.window.end) / 1000),
+      request.timezone,
+    ).catch((error: unknown) => {
+      const unavailable = emptyTopology();
+      unavailable.warnings.push(
+        `Network inventory unavailable. ${error instanceof Error ? error.message.slice(0, 300) : "Search failed."}`,
+      );
+      return unavailable;
+    });
     if (controller.signal.aborted) throw new Error("Search cancelled.");
     return { graph, topology };
   } catch (error) {
@@ -49,6 +50,6 @@ export function useGraphQuery(client: SearchClient | undefined) {
     },
     [client],
   );
-  useEffect(() => abort, [abort]);
+  useEffect(() => abort, [abort, client]);
   return { queryGraph: run, abort };
 }

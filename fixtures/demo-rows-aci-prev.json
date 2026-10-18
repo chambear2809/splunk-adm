@@ -90,9 +90,9 @@
     "captured_at": 1792252954,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "c42658dbfe141d417f9aef391df7986e401513eb73e40c406dea54cdc18f4e56",
-      "reviewed_macro_file_sha256": "db08bbdac5fd7f088f00a758c78653c9d307a8195e2830f635766d233109ab96",
+      "reviewed_macro_file_sha256": "7927bc755a70d1a8176a7d1be5e175810773de3ddbda425df6417599004cbc4c",
       "method": "static review only; no recapture",
-      "reason": "The identity history expansion completeness guard suppresses incomplete writes; successful complete-input output is unchanged. The builder warning now describes affected rows. Original capture rows, method, timestamp and hashes are preserved."
+      "reason": "Static review preserves the prior complete-input ACI graph result: the existing identity completeness guard is unchanged; this patch changes health probes, V2 client identity/history diagnostics and Catalyst receipt-qualified topology. No ACI V1 graph-stage output or capture rows change. Original capture method, timestamp and hashes are preserved; this is not a new live capture."
     }
   },
   "rows": [

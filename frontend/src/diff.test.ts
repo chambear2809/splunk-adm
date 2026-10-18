@@ -194,3 +194,94 @@ it("compares the captured ACI windows and finds the new blocked conversation", a
     result.removedNodes.filter((node) => node.kind === "workload"),
   ).toEqual([]);
 });
+
+it("ignores evidence set ordering but preserves changed observation values", () => {
+  const previousEdge: GraphEdge = {
+    ...edge("context"),
+    attachment_evidence: [
+      {
+        client_source: "meraki",
+        client_authority: "org-a/network-a",
+        client_native_id: "aa",
+        event_time: 10,
+      },
+      {
+        client_source: "catalyst",
+        client_authority: "center-a",
+        client_native_id: "aa",
+        event_time: 11,
+      },
+    ],
+    traffic_observations: [
+      { source: "stream_ipfix", observation_point: "exporter-a", records: 1 },
+      { source: "hubble", observation_point: "node-a", records: 2 },
+    ],
+    via_node: ["node-a", "node-b"],
+    client_handoffs: [
+      {
+        target: "pod-a",
+        basis: "time_inferred",
+        connections: 1,
+        receiving_nodes: ["node-a", "node-b"],
+        observers: ["observer-a", "observer-b"],
+      },
+      {
+        target: "pod-b",
+        basis: "hubble_client_tuple",
+        connections: 2,
+        receiving_nodes: [],
+        observers: [],
+      },
+    ],
+  };
+  const reordered: GraphEdge = {
+    ...previousEdge,
+    attachment_evidence: [...previousEdge.attachment_evidence!].reverse(),
+    traffic_observations: [...previousEdge.traffic_observations!].reverse(),
+    via_node: [...previousEdge.via_node!].reverse(),
+    client_handoffs: previousEdge
+      .client_handoffs!.map((record) => ({
+        ...record,
+        receiving_nodes: [...record.receiving_nodes].reverse(),
+        observers: [...record.observers].reverse(),
+      }))
+      .reverse(),
+  };
+  const previous = graph([], [previousEdge]);
+  expect(diffGraphs(previous, graph([], [reordered])).changedEdges).toEqual([]);
+  for (const changed of [
+    {
+      ...reordered,
+      attachment_evidence: [
+        {
+          ...reordered.attachment_evidence![0],
+          client_authority: "other-center",
+        },
+        reordered.attachment_evidence![1],
+      ],
+    },
+    {
+      ...reordered,
+      traffic_observations: [
+        { ...reordered.traffic_observations![0], records: 3 },
+        reordered.traffic_observations![1],
+      ],
+    },
+    {
+      ...reordered,
+      client_handoffs: [
+        { ...reordered.client_handoffs![0], basis: "time_inferred" as const },
+        reordered.client_handoffs![1],
+      ],
+    },
+  ])
+    expect(
+      diffGraphs(previous, graph([], [changed])).changedEdges,
+    ).toHaveLength(1);
+  // Sorting must never rewrite the source evidence supplied by the provider.
+  expect(previousEdge.attachment_evidence![0].client_source).toBe("meraki");
+  expect(previousEdge.client_handoffs![0].receiving_nodes).toEqual([
+    "node-a",
+    "node-b",
+  ]);
+});

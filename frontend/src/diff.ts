@@ -54,7 +54,25 @@ function edgeComparable(edge: GraphEdge): unknown {
     ].sort(),
     sources: sources ? [...sources].sort() : undefined,
     observers: observers ? [...observers].sort() : undefined,
+    via_node: edge.via_node ? [...edge.via_node].sort() : undefined,
+    attachment_evidence: evidenceSet(edge.attachment_evidence),
+    traffic_observations: evidenceSet(edge.traffic_observations),
+    vlan_observations: evidenceSet(edge.vlan_observations),
+    client_handoffs: evidenceSet(
+      edge.client_handoffs?.map((record) => ({
+        ...record,
+        receiving_nodes: [...record.receiving_nodes].sort(),
+        observers: [...record.observers].sort(),
+      })),
+    ),
   };
+}
+
+/** These lists describe sets of observations, never an ordered packet path. */
+function evidenceSet<T>(values: T[] | undefined): T[] | undefined {
+  return (
+    values && [...values].sort((a, b) => stable(a).localeCompare(stable(b)))
+  );
 }
 
 const workloadKey = (node: GraphNode) => {

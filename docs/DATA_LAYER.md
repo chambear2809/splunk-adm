@@ -20,6 +20,11 @@ Span resource attributes (`k8s.cluster.name`, `k8s.namespace.name`, ...) must ar
 
 ## Configuration
 
+Administrator-selected source expectations, freshness and required-job health
+are described in [Deployment health](DEPLOYMENT_HEALTH.md). These shared settings
+do not activate V2 or change source collection. Existing installations without
+expectations retain their searches and show unknown deployment health.
+
 | Macro | Default | Meaning |
 | --- | --- | --- |
 | `adm_index_netflow` | `index=netflow` | Stream NetFlow |

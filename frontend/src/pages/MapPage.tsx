@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
   BookOpen,
@@ -17,31 +10,16 @@ import {
   TriangleAlert,
   X,
 } from "lucide-react";
-import {
-  indexGraph,
-  type Graph,
-  type GraphEdge,
-  type GraphNode,
-} from "../graph";
-import {
-  edgeIdentity,
-  handoffConfidence,
-  handoffShort,
-  plural,
-  portLabel,
-  prettyBytes,
-  summarize,
-  warningTitle,
-} from "../glossary";
-import { computeLayout, type View } from "../layout";
-import { FIT_MIN, MapView, type Selection } from "../MapView";
+import type { Graph, GraphEdge } from "../graph";
+import { plural, portLabel, warningTitle } from "../glossary";
+import type { View } from "../layout";
+import { MapView } from "../MapView";
 import { Inspector } from "../Inspector";
 import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
 import { PathStrip } from "../PathStrip";
 import { DevicesView } from "../DevicesView";
-import { contextEvidenceCsv, requiredFlowsCsv } from "../csv";
 import { formatUtc, formatInZone } from "../time";
 import { argError } from "../provider";
 import { ScopeBar } from "../map/ScopeBar";
@@ -50,21 +28,17 @@ import { timeError, isIncompleteWindow } from "../data/timeBounds";
 import {
   DEMO_SCENARIOS,
   demoArgsFor,
-  demoGraph,
-  demoTopology,
-  prepareDemo,
   type DemoScenario,
 } from "../data/demoClient";
 import type { SearchClient } from "../data/searchClient";
 import { pageURL, parseUrlState, writeUrlState } from "../app/urlState";
-import { useMatches } from "../map/useMatches";
-import { useGraphQuery } from "../data/useGraphQuery";
+import { useMapPresentation } from "../map/useMapPresentation";
+import { useMapSnapshot } from "../map/useMapSnapshot";
 import { ExportMenu } from "../map/ExportMenu";
 import { ChangePanel } from "../ChangePanel";
 import { SavedViews } from "../SavedViews";
-import { exportMapPng, printMap } from "../exportMap";
+import { useMapExports } from "../map/useMapExports";
 import "../print.css";
-import { filterGraph, focusHops, type Facets } from "../filters";
 import { FilterBar } from "../map/FilterBar";
 import {
   prefsFor,
@@ -75,41 +49,10 @@ import {
 } from "../app/prefs";
 import { Legend } from "../map/Legend";
 import { TableView } from "../map/TableView";
-import { serviceNodeId, type GraphArgs } from "../rows";
+import type { GraphArgs } from "../rows";
 import { useTheme, type Theme } from "../theme";
-import {
-  buildPath,
-  deviceName,
-  edgeDeviceContext,
-  indexTopology,
-  emptyTopology,
-  nodeDeviceContext,
-  observationsByDevice,
-  type Topology,
-} from "../topology";
+import type { Topology } from "../topology";
 
-// Loading placeholder is never displayed as evidence or exported.
-function pendingGraph(args: GraphArgs): Graph {
-  const instant = new Date(0).toISOString();
-  return {
-    schema_version: 1,
-    snapshot_id: "pending",
-    generated_at: instant,
-    demo: false,
-    window: { start: instant, end: instant },
-    boundary: { ...args, id: "pending", root_node_id: serviceNodeId(args) },
-    nodes: [],
-    edges: [],
-    coverage: {
-      spans: 0,
-      conversations: 0,
-      matched_conversations: 0,
-      unresolved_conversations: 0,
-      ambiguous_conversations: 0,
-      warnings: [],
-    },
-  };
-}
 const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["service", "Entry service", "OTel service.name"],
   ["environment", "Environment", "deployment.environment.name"],
@@ -131,14 +74,6 @@ const themeOverride = (): Theme | undefined => {
       ? new URLSearchParams(location.search).get("theme")
       : null;
   return t === "dark" || t === "light" ? t : undefined;
-};
-const download = (name: string, type: string, body: string) => {
-  const url = URL.createObjectURL(new Blob([body], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 export function MapPage({
@@ -167,18 +102,26 @@ export function MapPage({
 }) {
   const detectedTheme = useTheme(inSplunk, themeOverride());
   const theme = toolkitTheme ?? detectedTheme;
-  const [scenario, setScenario] = useState<DemoScenario>(initialState.scenario);
-  const loadDemo = (sc: DemoScenario = scenario) =>
-    demoData ? demoData.graph() : demoGraph(sc);
-  const loadDemoTopology = (sc: DemoScenario = scenario) =>
-    demoData ? demoData.topology() : demoTopology(sc);
-  const [graph, setGraph] = useState<Graph>(() =>
-    initialState.mode === "demo" ? loadDemo() : pendingGraph(initialState.args),
-  );
-  const [topology, setTopology] = useState<Topology>(() =>
-    initialState.mode === "demo" ? loadDemoTopology() : emptyTopology(),
-  );
-  const [mode, setMode] = useState<"demo" | "live">(initialState.mode);
+  const {
+    graph,
+    topology,
+    snapshot,
+    mode,
+    scenario,
+    args,
+    earliest,
+    latest,
+    busy,
+    error,
+    visible,
+    setArgs,
+    setEarliest,
+    setLatest,
+    cancelQuery,
+    refresh: refreshSnapshot,
+    showDemo: showDemoSnapshot,
+    switchLive: switchSnapshotLive,
+  } = useMapSnapshot({ client, initialState, timezone, demoData });
   const preferences = useMemo(
     () => (user ? prefsFor(user) : undefined),
     [user],
@@ -189,17 +132,58 @@ export function MapPage({
   const [tab, setTab] = useState<Tab>(
     usePersonaDefault ? saved.view : initialState.tab,
   );
-  const [facets, setFacets] = useState<Facets>({});
-  const [focus, setFocus] = useState<{ id: string; hops: number } | null>(null);
-  const clearFilters = () => {
-    setFacets({});
-    setFocus(null);
-  };
-  const changeFacets = (next: Facets) => {
-    if (tab === "services") setTab("network");
-    setFacets(next);
-    select(null);
-  };
+  const {
+    facets,
+    focus,
+    setFocus,
+    clearFilters,
+    changeFacets,
+    selection,
+    pathHidden,
+    setPathHidden,
+    query,
+    setQuery,
+    matchIdx,
+    focusTarget,
+    focusRequest,
+    select,
+    clearSelection,
+    resetView,
+    index,
+    topo,
+    node,
+    displayGraph,
+    displayIndex,
+    narrowed,
+    layout,
+    onFitScale,
+    q,
+    matchNodes,
+    matchEdges,
+    matchList,
+    cycleMatch,
+    nodeMatchCount,
+    edgeMatchCount,
+    totals,
+    warnings,
+    selectedFrontends,
+    selectedEdge,
+    pathTab,
+    path,
+    label,
+    deviceLabel,
+    describeEdge,
+    setExpanded,
+    setBackend,
+  } = useMapPresentation({
+    graph,
+    topology,
+    tab,
+    setTab,
+    mergeFrontends,
+    initialQuery: initialState.query,
+  });
+  const empty = visible && graph.nodes.length === 0;
   const savePreferences = (nextPersona: Persona, merge: boolean) => {
     preferences?.write({
       ...preferences.read(),
@@ -207,49 +191,9 @@ export function MapPage({
       mergeFrontends: merge,
     });
   };
-  const [selection, setSelection] = useState<Selection | null>(null);
-  const [pathHidden, setPathHidden] = useState(false);
   const healthReport = useHealthStatus()?.report;
   useEffect(() => onModeChange?.(mode), [mode, onModeChange]);
-  const [query, setQuery] = useState(initialState.query);
-  const [matchIdx, setMatchIdx] = useState(-1);
-  const [focusTarget, setFocusTarget] = useState<{
-    kind: "node" | "edge";
-    id: string;
-    nonce: number;
-  }>();
-  const [focusRequest, setFocusRequest] = useState<{
-    id: string;
-    nonce: number;
-  }>();
   const [panel, setPanel] = useState<Panel | null>(null);
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportError, setExportError] = useState("");
-  const [args, setArgs] = useState<GraphArgs>(
-    initialState.mode === "demo" ? loadDemo().boundary : initialState.args,
-  );
-  const [backend, setBackend] = useState<string>();
-  const [earliest, setEarliest] = useState(
-    initialState.mode === "demo"
-      ? pickerBound(loadDemo().window.start)
-      : initialState.earliest,
-  );
-  const [latest, setLatest] = useState(
-    initialState.mode === "demo"
-      ? pickerBound(loadDemo().window.end)
-      : initialState.latest,
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [hasLiveGraph, setHasLiveGraph] = useState(false);
-  const [collapse, setCollapse] = useState(false);
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const { queryGraph, abort } = useGraphQuery(client);
-  const requestRevision = useRef(0);
-  const cancelQuery = () => {
-    requestRevision.current++;
-    abort();
-  };
   const root = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   useLayoutEffect(() => {
@@ -257,324 +201,45 @@ export function MapPage({
     if (el) setTop(el.getBoundingClientRect().top + window.scrollY);
   }, []);
 
-  const select = (s: Selection | null) => {
-    setSelection(s);
-    setPathHidden(false);
-    setBackend(undefined);
-  };
-  /** Clears the selection and returns keyboard focus to its card on the map. */
-  const clearSelection = () => {
-    const prev = selection;
+  const snapshotChanged = () => {
+    resetView();
+    clearFilters();
     select(null);
-    if (!prev) return;
-    const id = prev.kind === "node" ? prev.id : index.edge.get(prev.id)?.source;
-    if (id) setFocusRequest({ id, nonce: Date.now() });
-  };
-  const resetView = () => {
-    setCollapse(false);
-    setExpanded(new Set());
+    setPanel(null);
   };
   const showDemo = async (sc: DemoScenario = scenario) => {
-    cancelQuery();
-    const revision = requestRevision.current;
-    setBusy(true);
-    setError("");
-    try {
-      await prepareDemo();
-      if (requestRevision.current !== revision) return;
-      setScenario(sc);
-      const captured = loadDemo(sc);
-      setGraph(captured);
-      setEarliest(pickerBound(captured.window.start));
-      setLatest(pickerBound(captured.window.end));
-      setTopology(loadDemoTopology(sc));
-      setMode("demo");
-      setArgs(demoArgsFor(sc));
-      setHasLiveGraph(false);
+    if (await showDemoSnapshot(sc)) {
       resetView();
       clearFilters();
       select(null);
-    } catch (error) {
-      if (requestRevision.current === revision)
-        setError(
-          error instanceof Error ? error.message : "Unable to load demo data.",
-        );
-    } finally {
-      if (requestRevision.current === revision) setBusy(false);
     }
   };
   const refresh = async () => {
-    if (mode === "demo") {
-      setGraph(loadDemo());
-      select(null);
-      return;
-    }
-    if (!client) {
-      setError("Live search is available inside the installed Splunk app.");
-      return;
-    }
-    cancelQuery();
-    const revision = requestRevision.current;
-    setBusy(true);
-    setError("");
-    try {
-      const { graph: result, topology: topo } = await queryGraph({
-        ...args,
-        earliest,
-        latest,
-        timezone,
-      });
-      if (requestRevision.current === revision) {
-        setGraph(result);
-        setTopology(topo);
-        setHasLiveGraph(true);
-        resetView();
-        clearFilters();
-        select(null);
-        setPanel(null);
-      }
-    } catch (e) {
-      if (requestRevision.current === revision) {
-        setError(e instanceof Error ? e.message : "Unable to load the map.");
-        setPanel(null);
-      }
-    } finally {
-      if (requestRevision.current === revision) setBusy(false);
-    }
+    const result = await refreshSnapshot();
+    if (result) snapshotChanged();
+    else if (result === false) setPanel(null);
   };
-  useEffect(() => {
-    if (
-      initialState.mode === "live" &&
-      client &&
-      ARG_FIELDS.every(([key]) => !argError(key, initialState.args[key]))
-    )
-      void refresh();
-    // Initial deep link is loaded once; subsequent edits use Build map.
-  }, []);
   useEffect(() => {
     writeUrlState({ args, earliest, latest, mode, scenario, tab, query });
   }, [args, earliest, latest, mode, scenario, tab, query]);
   const switchLive = () => {
-    cancelQuery();
+    switchSnapshotLive();
     clearSelection();
-    setBusy(false);
-    setMode("live");
-    setHasLiveGraph(false);
-    setError("");
     setPanel(null);
   };
   const argErrors = ARG_FIELDS.map(([key]) => argError(key, args[key])).filter(
     Boolean,
   );
-  const visible = mode === "demo" || hasLiveGraph;
 
-  const index = useMemo(() => indexGraph(graph), [graph]);
-  const topo = useMemo(() => indexTopology(topology), [topology]);
-  const node = useCallback((id: string) => index.node.get(id), [index]);
-  const view: View = tab === "services" ? "services" : "network";
-  const filtered = useMemo(() => filterGraph(graph, facets), [graph, facets]);
-  const displayGraph = useMemo(() => {
-    if (!focus) return filtered;
-    const ids = focusHops(indexGraph(filtered), focus.id, focus.hops);
-    return {
-      ...filtered,
-      nodes: filtered.nodes.filter((n) => ids.has(n.id)),
-      edges: filtered.edges.filter(
-        (e) => ids.has(e.source) && ids.has(e.target),
-      ),
-    };
-  }, [filtered, focus]);
-  const displayIndex = useMemo(() => indexGraph(displayGraph), [displayGraph]);
-  useEffect(() => {
-    if (
-      selection &&
-      !(selection.kind === "node" ? displayIndex.node : displayIndex.edge).has(
-        selection.id,
-      )
-    ) {
-      setSelection(null);
-      setBackend(undefined);
-      setPathHidden(false);
-    }
-  }, [displayIndex, selection]);
-  const narrowed = displayGraph !== graph;
-  const layout = useMemo(
-    () =>
-      computeLayout(displayGraph, displayIndex, view, {
-        collapse,
-        expanded,
-        mergeFrontends,
-      }),
-    [displayGraph, displayIndex, view, collapse, expanded, mergeFrontends],
-  );
-  useEffect(() => resetView(), [view]);
-  const onFitScale = useCallback(
-    (raw: number) => setCollapse(raw < FIT_MIN),
-    [],
-  );
-
-  const q = query.trim();
-  const { matchNodes, matchEdges, matchList } = useMatches(
-    displayGraph,
-    topo,
-    layout,
-    q,
-  );
-  useEffect(() => setMatchIdx(-1), [query, layout]);
-  // A search jump applies once; a remounted map must not replay it.
-  useEffect(() => setFocusTarget(undefined), [query, tab]);
-  const cycleMatch = (step: number) => {
-    if (!matchList.length) return;
-    const next = (matchIdx + step + matchList.length) % matchList.length;
-    setMatchIdx(next);
-    setFocusTarget({ ...matchList[next], nonce: Date.now() });
-  };
-  const nodeMatchCount = matchNodes?.size ?? 0;
-  const edgeMatchCount = matchEdges?.size ?? 0;
-
-  const totals = useMemo(
-    () => summarize(graph.nodes, graph.edges, node),
-    [graph, node],
-  );
-  const warnings = [
-    ...new Set([...graph.coverage.warnings, ...topology.warnings]),
-  ];
-  const selectedFrontends =
-    selection?.kind === "node"
-      ? layout.items
-          .get(selection.id)
-          ?.members?.filter(
-            (id) => index.node.get(id)?.endpoint_kind === "k8s_service",
-          )
-      : undefined;
-  const selectedEdge =
-    selection?.kind === "edge" ? index.edge.get(selection.id) : undefined;
-  const pathTab = tab === "network" || tab === "services";
-  const path = useMemo(
-    () =>
-      selectedEdge?.relationship === "communicates_with"
-        ? buildPath(selectedEdge, graph, index, topo, { backend })
-        : undefined,
-    [selectedEdge, graph, index, topo, backend],
-  );
-  const label = (id: string) => index.node.get(id)?.label ?? id;
-  const empty = visible && graph.nodes.length === 0;
-  const deviceLabel = useCallback(
-    (raw: string, host?: GraphNode) =>
-      deviceName(raw, topo, nodeDeviceContext(host)).name,
-    [topo],
-  );
-  const describeEdge = useCallback(
-    (e: GraphEdge) => {
-      const name = (id: string) => node(id)?.label ?? id;
-      const observation = e.relationship === "traffic_observation";
-      const title = `${name(e.source)} ${observation ? "·" : e.direction_basis === "unknown" ? "↔" : "→"} ${name(e.target)}`;
-      if (e.relationship === "calls")
-        return {
-          title,
-          lines: [`Traced call · ${plural(e.count, "span")}`],
-        };
-      if (e.relationship === "forwards_to") {
-        const all = (index.outgoing.get(e.source) ?? []).filter(
-          (f) => f.relationship === "forwards_to" && f.target === e.target,
-        );
-        return {
-          title,
-          lines: all.map(
-            (f) =>
-              `${handoffConfidence(f.confidence)} · ${handoffShort[f.handoff_basis!]} · ${plural(f.count, "connection")}`,
-          ),
-        };
-      }
-      if (observation)
-        return {
-          title,
-          lines: [
-            `Traffic observation · ${plural(e.records ?? e.count, "flow record")} · counters non-authoritative`,
-          ],
-        };
-      const seen = observationsByDevice(
-        e,
-        topo,
-        [],
-        edgeDeviceContext(e, index),
-      )
-        .map((d) => d.label)
-        .join(", ");
-      return {
-        title,
-        lines: [
-          [
-            portLabel(e),
-            e.traffic_observations?.length
-              ? "traffic observations; see inspector"
-              : e.bytes !== undefined
-                ? prettyBytes(e.bytes)
-                : "bytes not reported",
-            e.traffic_observations?.length
-              ? "connection count not inferred from flow records"
-              : plural(e.count, "connection"),
-            edgeIdentity(e, node) === "identified"
-              ? "Identified"
-              : edgeIdentity(e, node) === "external"
-                ? "External"
-                : "Unknown IP",
-          ].join(" · "),
-          seen ? `Seen by ${seen}` : "No observer recorded",
-          ...(e.acl_action === "drop"
-            ? ["Blocked by the fabric (ACL log)"]
-            : []),
-          ...(e.contract_basis === "intent" && e.contract
-            ? [`Contract ${e.contract} (intent)`]
-            : []),
-        ],
-      };
-    },
-    [topo, node, index],
-  );
-
-  const fileStem = `adm-${graph.boundary.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-  const exportCsv = () => {
-    download(
-      `${fileStem}-required-flows.csv`,
-      "text/csv;charset=utf-8",
-      requiredFlowsCsv(graph, index, topo),
-    );
-    setPanel(null);
-  };
-  const exportContextEvidenceCsv = () => {
-    download(
-      `${fileStem}-context-evidence.csv`,
-      "text/csv;charset=utf-8",
-      contextEvidenceCsv(graph),
-    );
-    setPanel(null);
-  };
-  const exportPng = async () => {
-    setExportBusy(true);
-    setExportError("");
-    try {
-      const svg =
-        root.current?.querySelector<SVGSVGElement>(".map-canvas > svg");
-      if (!svg)
-        throw new Error("Choose Network or Services to export a map image.");
-      await exportMapPng(svg, { filename: `${fileStem}.png` });
-    } catch (e) {
-      setExportError(
-        e instanceof Error ? e.message : "Map image could not be exported.",
-      );
-    } finally {
-      setExportBusy(false);
-    }
-  };
-  const exportJson = () => {
-    download(
-      `${fileStem}.json`,
-      "application/json",
-      JSON.stringify(graph, null, 2),
-    );
-    setPanel(null);
-  };
+  const {
+    exportBusy,
+    exportError,
+    exportCsv,
+    exportContextEvidenceCsv,
+    exportJson,
+    exportPng,
+    exportPrint,
+  } = useMapExports({ graph, index, topo, root, close: () => setPanel(null) });
   const togglePanel = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
   const [errorHint, errorDetail] = error.split(" Splunk reported: ");
 
@@ -644,7 +309,6 @@ export function MapPage({
           demoArgs={mode === "demo" ? demoArgsFor(scenario) : undefined}
           onChange={(next) => {
             cancelQuery();
-            setBusy(false);
             setArgs(next);
           }}
         />
@@ -656,7 +320,6 @@ export function MapPage({
           disabled={mode === "demo"}
           onChange={(start, end) => {
             cancelQuery();
-            setBusy(false);
             setEarliest(start);
             setLatest(end);
           }}
@@ -857,15 +520,7 @@ export function MapPage({
             )}
             onJson={exportJson}
             onPng={exportPng}
-            onPrint={() => {
-              const svg =
-                root.current?.querySelector<SVGSVGElement>(".map-canvas > svg");
-              if (svg)
-                printMap(
-                  svg,
-                  `Application Atlas · ${graph.boundary.service} · ${graph.window.start} – ${graph.window.end}`,
-                );
-            }}
+            onPrint={exportPrint}
             pngDisabled={
               !pathTab || exportBusy || displayGraph.nodes.length === 0
             }
@@ -885,7 +540,7 @@ export function MapPage({
             <ChangePanel
               key={`${mode}:${scenario}:${graph.snapshot_id}`}
               graph={graph}
-              client={client}
+              client={snapshot.client ?? client}
               timezone={timezone}
               scenario={scenario}
             />

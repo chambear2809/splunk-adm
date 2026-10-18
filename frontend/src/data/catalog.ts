@@ -47,6 +47,10 @@ export interface NetworkClientFindRow {
   device_serial?: string;
   ssid_number?: string;
   quality_reason?: string;
+  diagnostic_status?: string;
+  diagnostic_reason?: string;
+  history_rows?: number;
+  simultaneous_claims?: number;
   warning?: string;
 }
 
@@ -227,6 +231,8 @@ export function parseNetworkClientFindRows(
     "device_serial",
     "ssid_number",
     "quality_reason",
+    "diagnostic_status",
+    "diagnostic_reason",
     "warning",
   ] as const;
   const numericFields = [
@@ -236,6 +242,8 @@ export function parseNetworkClientFindRows(
     "attachment_event_time",
     "attachment_received_time",
     "attachment_collected_time",
+    "history_rows",
+    "simultaneous_claims",
   ] as const;
   return rows.map((row) => {
     if (

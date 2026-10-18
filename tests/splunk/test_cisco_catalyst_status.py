@@ -25,7 +25,7 @@ def _macro(text: str, name: str) -> str:
 def _attachment_status_expression() -> str:
     history = _macro(
         MACROS.read_text(encoding="utf-8"),
-        "adm_network_client_history_observations",
+        "adm_network_client_catalyst_raw",
     )
     match = re.search(
         r"attachment_status=(case\(.*?\)), attachment_basis=",

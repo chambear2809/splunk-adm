@@ -85,7 +85,7 @@ class TopologyV2ProposalTest(unittest.TestCase):
 
     def test_history_generators_have_a_pipeline_context_in_subsearches(self):
         self.assertEqual(
-            self.text.count("| append [ | `adm_network_client_history_observations`"),
+            self.text.count("| append [ | `adm_topology_client_observations`"),
             3,
         )
 
@@ -93,7 +93,7 @@ class TopologyV2ProposalTest(unittest.TestCase):
         macros = (
             ROOT / "splunk_app" / "splunk_adm" / "default" / "macros.conf"
         ).read_text("utf-8")
-        history = extract_macro(macros, "adm_network_client_history_observations")
+        history = extract_macro(macros, "adm_network_client_meraki_raw")
         device_id = '"meraki:".sha256(json_array("meraki_device", tostring(coalesce(organizationId,"")), tostring(coalesce(networkId,""))'
         self.assertIn(device_id + ", tostring(deviceSerial)))", history)
         self.assertIn(device_id + ', tostring(coalesce(serial,""))))', self.text)

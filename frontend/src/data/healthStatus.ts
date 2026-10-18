@@ -9,18 +9,26 @@ import {
   type ReactNode,
 } from "react";
 import {
-  jobStatus,
+  jobAssessment,
   loadHealth,
-  sourceStatus,
+  sourceAssessment,
   type HealthReport,
 } from "../health";
 import type { SearchClient } from "./searchClient";
+import {
+  applicableJobs,
+  expectationFor,
+  selectedQualitySources,
+  type DeploymentSnapshot,
+} from "./deploymentHealth";
+import type { DeploymentClient } from "./deploymentHealth";
 
 export type HealthIndicator =
   "unknown" | "loading" | "error" | "healthy" | "attention";
 
 export interface HealthState {
   report?: HealthReport;
+  deployment?: DeploymentSnapshot;
   error?: string;
   busy: boolean;
   refresh: () => void;
@@ -32,12 +40,17 @@ export const shouldPollHealth = (live: boolean, visible: boolean) =>
 export function HealthProvider({
   client,
   live,
+  scope = "full",
+  deploymentClient,
   children,
 }: {
   client?: SearchClient;
   live: boolean;
+  scope?: "full" | "jobs";
+  deploymentClient?: DeploymentClient;
   children: ReactNode;
 }) {
+  const [deployment, setDeployment] = useState<DeploymentSnapshot>();
   const [report, setReport] = useState<HealthReport>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -61,6 +74,7 @@ export function HealthProvider({
     if (!shouldPollHealth(live, visible) || !client) {
       active.current?.abort();
       setReport(undefined);
+      setDeployment(undefined);
       setError(undefined);
       setBusy(false);
       return;
@@ -70,7 +84,23 @@ export function HealthProvider({
     setBusy(true);
     setError(undefined);
     setReport(undefined);
-    loadHealth(client, controller.signal)
+    const load = async () => {
+      const settings: DeploymentSnapshot = deploymentClient
+        ? await deploymentClient.read(controller.signal).catch(() => ({
+            state: "unavailable" as const,
+            canWrite: false,
+            error: "Deployment settings could not be read.",
+          }))
+        : {
+            state: "unavailable",
+            canWrite: false,
+            error: "Deployment settings are unavailable.",
+          };
+      if (controller.signal.aborted) return undefined;
+      setDeployment(settings);
+      return loadHealth(client, controller.signal, settings, scope);
+    };
+    load()
       .then((result) => {
         if (!controller.signal.aborted) setReport(result);
       })
@@ -87,23 +117,24 @@ export function HealthProvider({
       controller.abort();
       if (active.current === controller) active.current = undefined;
     };
-  }, [client, live, revision, visible]);
+  }, [client, live, revision, visible, deploymentClient, scope]);
   useEffect(() => {
-    if (!shouldPollHealth(live, visible) || !client) return;
+    if (!shouldPollHealth(live, visible) || !client || scope === "jobs") return;
     const timer = setInterval(
       () => setRevision((current) => current + 1),
       5 * 60 * 1000,
     );
     return () => clearInterval(timer);
-  }, [client, live, visible]);
+  }, [client, live, visible, scope]);
   const value = useMemo<HealthState>(
     () => ({
       report,
+      deployment,
       error,
       busy,
       refresh: () => setRevision((current) => current + 1),
     }),
-    [busy, error, report],
+    [busy, error, report, deployment],
   );
   return createElement(HealthContext.Provider, { value }, children);
 }
@@ -118,33 +149,49 @@ export function healthIndicator(
   if (!live) return "unknown";
   if (loading) return "loading";
   if (error) return "error";
-  if (!report) return "unknown";
-  if (!report.sources.some((source) => source.records !== undefined))
+  if (!report || report.scope === "jobs") return "unknown";
+  if (
+    report.deployment?.state !== "configured" ||
+    !report.deployment.activeContract
+  )
+    return "unknown";
+  const sources = report.sources.filter(
+    (source) =>
+      source.id !== undefined &&
+      expectationFor(report.deployment, source.id) === "active",
+  );
+  if (!sources.length) return "unknown";
+  const qualityRequired =
+    report.qualityRequired ??
+    selectedQualitySources(report.deployment).length > 0;
+  if (qualityRequired && report.quality.issues.length) return "attention";
+  const sourceStates = sources.map(
+    (source) => sourceAssessment(source, report.checkedAt).state,
+  );
+  if (sourceStates.includes("attention")) return "attention";
+  const requiredJobs = applicableJobs(report.deployment).filter(
+    (job) => job.required,
+  );
+  const jobs = requiredJobs.map((definition) =>
+    report.jobs.find((job) => job.name === definition.name),
+  );
+  if (jobs.some((job) => !job)) return "unknown";
+  const jobStates = jobs.map(
+    (job) => jobAssessment(job!, report.checkedAt).state,
+  );
+  if (jobStates.includes("attention")) return "attention";
+  if (
+    sourceStates.some((state) => state !== "healthy") ||
+    jobStates.some((state) => state !== "healthy")
+  )
     return "unknown";
   if (
-    report.warnings.length ||
-    report.quality.issues.length ||
-    !report.quality.evaluated
+    qualityRequired &&
+    (!report.quality.evaluated ||
+      report.quality.incomplete ||
+      report.quality.excluded === undefined)
   )
-    return "attention";
-
-  if (
-    report.sources.some(
-      (source) =>
-        sourceStatus(source, report.checkedAt) !==
-        "Data received within 20 minutes",
-    )
-  )
-    return "attention";
-  const builders = report.jobs.filter(
-    (job) => !job.name.toLowerCase().includes("prune"),
-  );
-  if (!builders.length) return "unknown";
-  if (
-    builders.some(
-      (job) => jobStatus(job, report.checkedAt) !== "Recent successful run",
-    )
-  )
-    return "attention";
+    return "unknown";
+  if (report.warnings.length) return "attention";
   return "healthy";
 }

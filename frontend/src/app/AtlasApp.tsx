@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { deploymentClient as nativeDeploymentClient } from "../data/deploymentClient";
+import type { DeploymentClient } from "../data/deploymentHealth";
 import { HealthProvider } from "../data/healthStatus";
 import {
   setupClient as nativeSetupClient,
@@ -21,6 +23,7 @@ export function AtlasApp({
   timezone,
   inSplunk = false,
   setupClient,
+  deploymentClient,
   user,
   usePersonaDefault,
 }: {
@@ -33,12 +36,20 @@ export function AtlasApp({
   timezone?: string;
   inSplunk?: boolean;
   setupClient?: SetupClient;
+  deploymentClient?: DeploymentClient;
 }) {
   const [mode, setMode] = useState(state.mode);
   const live = !!client && mode === "live";
-  const healthLive = live && page !== "help" && page !== "setup";
+  const healthLive = live && page !== "help";
+  const deployment =
+    deploymentClient ?? (inSplunk ? nativeDeploymentClient : undefined);
   return (
-    <HealthProvider client={client} live={healthLive}>
+    <HealthProvider
+      client={client}
+      live={healthLive}
+      scope={page === "setup" ? "jobs" : "full"}
+      deploymentClient={deployment}
+    >
       <Shell page={page} client={client} live={live}>
         {page === "map" ? (
           <MapPage
@@ -64,6 +75,7 @@ export function AtlasApp({
           <SetupPage
             client={setupClient ?? (inSplunk ? nativeSetupClient : undefined)}
             live={mode === "live"}
+            deploymentClient={deployment}
           />
         ) : (
           <HelpPage />

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "notes": "Local raw artifacts are retained under ignored dist/performance. These obsolete runs are excluded from the revised evidence-heavy comparison.",
+  "runs": [
+    {
+      "run": "exploratory-generic",
+      "eligibleForComparison": false,
+      "rawPath": "dist/performance/atlas-browser-exploratory.json",
+      "sha256": "3fd58507c74b12291a72e764aec07eb9f628936252eab9e5d4db32d2d7e07b21",
+      "bytes": 1935307,
+      "samples": 140,
+      "complete": true,
+      "sourceSha": "510754c17391e548309dd68ddac3f8b99e0b75c6",
+      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d"
+    },
+    {
+      "run": "interrupted-generic",
+      "eligibleForComparison": false,
+      "rawPath": "dist/performance/atlas-browser-interrupted-baseline.json",
+      "sha256": "0cae29320afc7c8628e9e238844236a9d38d77d8faf9f7022a9dc6a1fc99ceb0",
+      "bytes": 954482,
+      "samples": 74,
+      "complete": false,
+      "sourceSha": "510754c17391e548309dd68ddac3f8b99e0b75c6",
+      "harnessSha256": "4a6a417354f0b43b66df3b062d24b63a287c88e46da96ac4b15b4a15d060fc7d"
+    }
+  ]
+}

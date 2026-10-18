@@ -370,7 +370,9 @@ test("setup checklist blocks unknown and uppercase prerequisites", async ({
   await page.goto(
     "/tests/browser/browser.html?page=setup&mode=live&fault=setup-unknown",
   );
-  await expect(page.getByRole("alert")).toContainText("Administrator access");
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Administrator access" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Enable schedule/ }).first(),
   ).toBeDisabled();

@@ -30,12 +30,27 @@ The lab-only command uses the existing localhost helpers in
 python3 tools/pilot_readiness.py --lab --source netflow --source k8s --json
 ```
 
-At least one `--source` is required. Valid values are `netflow`, `dcn`, `ftd`,
-`isovalent`, `k8s`, `traces`, `hubble`, and `summary`. Without `--lab`, the
-CLI analyzes an empty snapshot and is useful for exercising output shape; a
-future connector can call `analyze(snapshot, selected_sources)` directly. The
+With `--lab`, omitting `--source` reads administrator-owned deployment expectations
+from `adm_deployment_settings`. Without configured intent, the result is unknown;
+visible events never select sources. Explicit `--source` scopes a read-only
+investigation without persisting settings. Values come from the shared
+`config/deployment-health.json` registry and include `netflow`, `dcn`, `aci`, `nd`,
+`nxos`, `ftd`, `isovalent`, `k8s`, `traces`, `hubble`, `catalyst`, `meraki`, `sdwan`
+and the legacy `summary` inspection option. Without `--lab`, at least one
+`--source` is required and the CLI analyzes an empty snapshot for output-shape
+inspection; a connector can call `analyze(snapshot, selected_sources)` directly. The
 checker does not accept credentials or URLs, dispatch saved searches, write
 lookups/KV collections, change schedules, or dump secret configuration.
+
+Source cadence/freshness and source-to-job dependencies use that same registry.
+The lab adapter verifies all public contract selectors; missing or inconsistent
+selectors remain unknown. Cisco sources selected on the shipped V1 contract are
+staged, without requiring disabled V2 builders. Job evidence distinguishes
+configuration, scheduler access, successful run freshness and failed/overdue
+required work. Source receipt probes cover seven days; unavailable or shorter
+lookback evidence cannot prove configured freshness or collection continuity.
+See [deployment health](DEPLOYMENT_HEALTH.md) for shared configuration, permissions
+and the distinct event-time, receipt-time and collector-evidence boundaries.
 
 The current lab adapter is intentionally limited: it cannot establish live
 collector configuration, exporter delivery, sampling accuracy, or visibility

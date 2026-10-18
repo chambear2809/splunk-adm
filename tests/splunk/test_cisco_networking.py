@@ -20,6 +20,15 @@ def read_conf(name: str) -> configparser.RawConfigParser:
     return parser
 
 
+def expanded_private_definition(macros, name: str) -> str:
+    value = macros.get(name, "definition")
+    return re.sub(
+        r"`((?:adm_network_client_|adm_health_)[a-z0-9_]+)`",
+        lambda match: expanded_private_definition(macros, match.group(1)),
+        value,
+    )
+
+
 def _macro_reference(ref: str) -> tuple[str, int]:
     """Return a macro reference's name and argument count."""
     ref = ref.strip()
@@ -142,8 +151,8 @@ class CiscoNetworkingContractTest(unittest.TestCase):
             "routing_domain",
         ):
             self.assertIn(field, transform)
-        definition = self.macros.get(
-            "adm_network_client_history_observations", "definition"
+        definition = expanded_private_definition(
+            self.macros, "adm_network_client_history_observations"
         )
         self.assertIn("mapping_key OUTPUT _key AS adm_mapping_keys", definition)
         self.assertIn('scope=if(mapping_status="mapped", scope, null())', definition)
@@ -164,8 +173,8 @@ class CiscoNetworkingContractTest(unittest.TestCase):
         )
 
     def test_network_client_timestamp_semantics_and_meraki_allowlist(self):
-        definition = self.macros.get(
-            "adm_network_client_history_observations", "definition"
+        definition = expanded_private_definition(
+            self.macros, "adm_network_client_history_observations"
         )
         self.assertIn('sourcetype="meraki:accesspoints"', definition)
         self.assertIn(
@@ -294,8 +303,8 @@ class CiscoNetworkingContractTest(unittest.TestCase):
 
     def test_v2_profiles_require_single_explicit_row_and_duplicate_count_one(self):
         enrich = self.macros.get("adm_flow_enrich_v2", "definition")
-        history = self.macros.get(
-            "adm_network_client_history_observations", "definition"
+        history = expanded_private_definition(
+            self.macros, "adm_network_client_history_observations"
         )
         self.assertIn("OUTPUT _key AS adm_registered_keys", enrich)
         self.assertIn("adm_mapping_rows==1", enrich)
@@ -463,7 +472,7 @@ class CiscoNetworkingContractTest(unittest.TestCase):
         )
 
     def test_v2_health_and_missed_slots_expose_staged_quality_gaps(self):
-        quality = self.macros.get("adm_health_quality_v2", "definition")
+        quality = expanded_private_definition(self.macros, "adm_health_quality_v2")
         missed_slots = self.macros.get("adm_health_missed_slots", "definition")
         for reason in (
             "profile_",
@@ -487,7 +496,10 @@ class CiscoNetworkingContractTest(unittest.TestCase):
             "adm_health_sources_v1_impl",
             self.macros.get("adm_health_sources_v2", "definition"),
         )
-        self.assertIn("adm_health_quality_v1_impl", quality)
+        self.assertIn(
+            "adm_health_quality_v1_impl",
+            self.macros.get("adm_health_quality_v2", "definition"),
+        )
         self.assertNotIn(
             "`adm_health_sources`",
             self.macros.get("adm_health_sources_v2", "definition"),
