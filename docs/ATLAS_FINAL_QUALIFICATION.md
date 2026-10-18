@@ -8,12 +8,19 @@ the user explicitly deferred that environment until access exists.
 ## Source, package and ownership
 
 - Isolated branch: `codex/atlas-final-qualification`.
-- Exact current candidate: `dist/final-qualification/packages/candidate-08.tar.gz`.
-- SHA-256: `946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`.
-- Package source: `50e098a602a21ef386172015aa2ed888b936efd4`. Qualification
-  revision `d8d4ff0a595174cd141e89818decfe6229e1e3ce` changes only the SHC
-  installed-file verifier, its tests and documentation; packaged application
-  sources and standalone integration tests are unchanged.
+- Exact current candidate: `dist/final-qualification/packages/candidate-09.tar.gz`.
+- SHA-256: `024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097`.
+- Package source: `6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca`. This candidate
+  fixes the final-review settings-read race described below. Relative to
+  candidate 08, only `appserver/static/pages/atlas.js` and the generated
+  `default/app.conf` build value changed. All other 83 package files remain
+  byte-exact, including CSS, SPL, backend code and installation defaults.
+- Retained candidate 08 SHA-256:
+  `946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`;
+  its package source is `50e098a602a21ef386172015aa2ed888b936efd4`.
+  Subsequent SHC verifier/convergence and opt-in terminal-success corrections
+  are separately identified by each run's source revision and test hashes.
+  Candidate-08 execution results do not become candidate-09 qualification.
 - Accepted-baseline archive SHA-256:
   `e691df2369712f21fc55442064fda8d52e1c0de00aab8ee8f77780a3f7a9bb41`.
 - Source and test hashes, commands, timestamps, outcomes and package bindings
@@ -39,7 +46,9 @@ from pinned image
 `splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4`.
 Independent readiness, migration and SHC clients use the task's private CA with
 hostname verification. The inherited local lab client uses its existing
-loopback-only test connection. Secrets and migration journals remain in protected external directories. The host is
+loopback-only test connection. Secrets and working migration journals remain
+in protected external directories; credential-scanned journal exports are
+retained with the ignored local evidence. The host is
 ephemeral; cleanup is limited to identified task resources.
 
 ## A — Selection performance
@@ -57,16 +66,22 @@ Automation completion is recorded separately.
 
 | Selection | Accepted baseline median / p95 | Candidate median / p95 |
 | --------- | ------------------------------ | ---------------------- |
-| Cold      | 367.6 / 384.8 ms               | 275.0 / 301.0 ms       |
-| Warm      | 367.9 / 384.7 ms               | 285.1 / 300.1 ms       |
+| Cold      | 352.2 / 370.0 ms               | 274.4 / 301.0 ms       |
+| Warm      | 366.85 / 382.8 ms              | 276.35 / 286.9 ms      |
 
-Warm median improved 22.5%, and warm observed p95 improved 22.0%. Both complete
+Warm median improved 24.7%, and warm observed p95 improved 25.1%. Both complete
 matrices passed **14 cases / 140 samples**. Matched native diagnostics contain
 six measured samples per build plus separately discarded warmup traces.
-The ordinary browser suite passed **94 tests**, and readiness tests passed
-**nine**. Source, imported fixture, served-asset and harness fingerprints agree
-across the final runs. Package 08's static assets match packages 05 and 07; profiling
-bundle bytes are not misrepresented as package bytes.
+The candidate-09 source's CI browser suite passed **94 tests**; the separate
+readiness suite previously passed **nine**. Source, imported fixture,
+served-asset and harness fingerprints agree across the final09 runs. The
+standalone profiling bundle is byte-identical to the earlier candidate because
+the deployment client is outside its import graph. Package 09's JavaScript
+changed, and these performance runs do not validate that client's race repair.
+Earlier native traces support attribution of the unchanged CSS fix. A brief
+19-test Python run (0.048 seconds) and Ruff overlapped the final candidate
+matrix before pausing; this timing limitation is retained without attributing
+or excluding individual samples.
 
 This is not a universal speedup: dense Meraki selection/filtering and Catalyst
 filtering had slower medians, and several individual/p95 samples exceeded
@@ -74,7 +89,7 @@ investigation thresholds. These thresholds are not production SLOs. Earlier
 incomplete or provenance-invalid runs remain retained but excluded from the
 acceptance comparison. See [full distributions and limitations](benchmarks/atlas-final-selection-results.md),
 [methodology](BROWSER_PERFORMANCE.md), and the
-[139-artifact index](benchmarks/atlas-final-browser-evidence-index.json).
+[172-artifact index](benchmarks/atlas-final-browser-evidence-index.json).
 
 ## B — Late Catalyst receipts
 
@@ -130,6 +145,13 @@ GUID, stable cluster GUID and exact management identities. Namespace identity
 excludes the elected captain and ephemeral PDL port. All-member KV readiness
 and live cross-member races remain separate execution gates. See [deployment boundary and operator setup](DEPLOYMENT_HEALTH.md).
 
+Final integrated review reproduced a browser-side stale-read race: an older
+settings read could wait for source-index macros, be overtaken by a newer read
+or verified save, then publish the old revision. Candidate 09 checks the
+revision watermark and namespace again after every awaited source read and
+immediately before publishing configured settings. Two deterministic delayed
+read/save regressions pass; the independent follow-up closed the finding.
+
 ## D — V2 cutover and pruning
 
 The [operator procedure](V2_FINAL_QUALIFICATION.md) and migration harness cover
@@ -139,8 +161,45 @@ restoration journal. The target lock is scoped to the same OS user/controller
 and authenticated server GUID; it is not distributed fencing. The helper
 continues to refuse SHC and Cloud cutover.
 
-The actual final-package cutover/rollback/restoration and active-V2 browser run
-are pending. No static or skipped test is presented as this deliverable.
+The disabled-origin rehearsal passed on the exact candidate-08 package, including a
+controlled interruption, resumed activation of all eight public selectors,
+actual scheduled summary/history cycles and verified rollback to the original
+disabled state. Its repeated terminal execution also passed. Both runs used
+source `d8d4ff0a595174cd141e89818decfe6229e1e3ce`; the main rehearsal ran from
+20:01:37 to 20:07:31 UTC on 2026-10-18 (two tests, 353.203 seconds).
+
+An earlier attempt correctly refused activation because the first required
+history schedule had no successful dispatch. Scheduler evidence recorded
+"Could not get next runtime" and a later successful cycle; the cause of that
+miss is not established. Supported rollback restored the exact original
+configuration before the fresh passing attempt. The guard was not weakened.
+A competing real CLI operation was refused while the first operation held its
+lock; it neither created a competing journal nor changed live configuration.
+
+Independent review identified a separate test-harness defect: a failed and
+rolled-back journal could retain staging eligibility and be accepted as a
+completed rehearsal. Revision `d4b781e574b7747191b71294e161c41cb11dff36`
+requires durable completed activation, the exact verified mutation plan,
+scheduled-cycle bounds and all public-selector proofs. A live negative check
+rejected the retained failed journal without changing it or the live
+configuration; the genuine completed journal passed the same pure guard.
+
+The enabled-origin rehearsal subsequently passed activation, deliberately aged
+manual V1 gap recovery, rollback, V2 restoration and repeated terminal
+execution. Its preserved earlier attempts include an expired one-hour session
+and a correctly refused restoration audit containing the preceding manual
+recovery write. A fresh approved session and a separately proven later actual
+V1 checkpoint allowed the unchanged product guards to complete. The harness now
+waits for that checkpoint automatically and recaptures stale preactivation
+checkpoints; both changes have pure regressions and independent review.
+The active-V2 browser check failed its selected-client conversation-edge
+assertion and is under investigation; it is not a passing browser result.
+Evidence already
+exported under `dist/final-qualification/native-08-migration/` contains 53
+hash-verified files for the failed first-history attempt and 107 for the
+passing disabled-origin attempt. Failed attempts remain failed evidence.
+These are candidate-08 rehearsals. Final candidate-09 runtime acceptance will
+be recorded separately after the settings-read correction.
 
 Three native pruning cases have passed: disabled gate causes no deletion;
 enabled fixture pruning respects retention/current/replay boundaries and
@@ -152,21 +211,21 @@ pruning defaults remain disabled.
 
 ## E — Complete suites and deployment boundaries
 
-| Check                                   | Current recorded outcome                                                                       |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Frontend lint, types and formatting     | Passed                                                                                         |
-| Frontend unit tests                     | 45 files / 572 tests passed                                                                    |
-| Ordinary browser regression             | 94 passed                                                                                      |
-| Python lint and formatting              | Passed                                                                                         |
-| Python unit tests                       | 557 passed                                                                                     |
-| Distributed tooling tests               | 52 passed; offline only                                                                        |
-| Build/package and release validation    | Passed for retained candidate 08                                                               |
+| Check                                   | Current recorded outcome                                                                                                              |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Frontend lint, types and formatting     | Passed                                                                                                                                |
+| Frontend unit tests                     | 45 files / 574 tests passed on candidate-09 source                                                                                    |
+| Ordinary browser regression             | 94 passed in CI at candidate-09 source 6ebbf0d                                                                                        |
+| Python lint and formatting              | Passed                                                                                                                                |
+| Python unit tests                       | 569 passed after restoration-checkpoint regressions                                                                                   |
+| Distributed tooling tests               | 61 passed; offline only                                                                                                               |
+| Build/package and release validation    | Passed for retained candidate 09                                                                                                      |
 | Installed package bytes                 | Package 08: all 85 files byte-exact before the suite; 84 exact afterward, with only documented generated install checksum in app.conf |
-| Installed V1 public contract            | Package 08: all eight selectors coherent and pruning closed before and after the complete suite |
-| AppInspect 4.3.1 Cloud precertification | 123 success, 117 not applicable, five warnings, one skip; zero failures/errors/future failures |
-| Fresh complete installed suite          | Package 08: 393 tests, 390 passed, 3 explicit skips, zero failures/errors; 2,168.188 seconds |
-| Actual distributed/SHC                  | Pending fresh execution                                                                        |
-| Actual Splunk Cloud                     | Unavailable; explicitly deferred until access exists                                           |
+| Installed V1 public contract            | Package 08: all eight selectors coherent and pruning closed before and after the complete suite                                       |
+| AppInspect 4.3.1 Cloud precertification | Candidate 09: 123 success, 117 not applicable, five warnings, one skip; zero failures/errors/future failures                          |
+| Fresh complete installed suite          | Package 08: 393 tests, 390 passed, 3 explicit skips, zero failures/errors; 2,168.188 seconds                                          |
+| Actual distributed/SHC                  | Pending fresh execution                                                                                                               |
+| Actual Splunk Cloud                     | Unavailable; explicitly deferred until access exists                                                                                  |
 
 AppInspect warnings remain recorded: Python migration advice, intentional
 custom-configuration replication boundary, collection presence, older bundled
@@ -198,7 +257,9 @@ replace the required complete pass. The fresh native run subsequently passed
 all 393 discovered tests except the three explicit environment/opt-in skips:
 the standalone cutover rehearsal and the two distributed interface cases.
 Those three require their separate actual qualification and are not considered
-passed by the complete-suite result.
+passed by the complete-suite result. Disabled- and enabled-origin cutover
+scenarios subsequently passed separately on candidate 08; active-V2 browser
+acceptance and actual SHC cases remain pending.
 
 The clean run used source `d8d4ff0a595174cd141e89818decfe6229e1e3ce`, the
 exact candidate-08 archive, Python 3.12.3, Node 22.13.0, and the local Docker
@@ -243,9 +304,18 @@ under a hidden server cap. All four were corrected and received focused
 validation. The bounded follow-up found no new actionable source defects.
 Subsequent independent reviews covered package fingerprints, viewer response
 matching, private HEC staging, CLI terminal draining and environment isolation,
-the native SHC/PDL gates, and generated installation-checksum verification. The terminal-drain finding was corrected; later
-source reviews found no actionable defects. Final review of the complete
+the native SHC/PDL gates, generated installation-checksum verification, explicit
+deployer settings overlays and settings convergence. Findings concerning
+terminal draining, null settings revisions and false terminal cutover success
+were corrected and independently reviewed again. Review verified all 34
+complete-suite export hashes, 400 source fingerprints, pruning restoration and
+the 53/107-file failed/passing cutover exports. Final review of the remaining
 final-package execution evidence is pending.
+
+The final combined-source review found the additional stale settings-read
+race described above. It was fixed in candidate 09 and independently reviewed
+with no new actionable findings. Renewed runtime acceptance is required for
+the new package.
 
 Commit, PR, CI and post-merge identifiers will be recorded after qualification
 and the final independent review. No overall Cloud qualification is claimed.

@@ -33,8 +33,9 @@ logs:
 - `ADM_CISCO_MIGRATION_RESTORE_JOURNAL`: another absolute journal path in that
   directory. Never reuse the first journal or edit a terminal journal.
 
-The initialization manifest's `index_window` records actual raw indexed
-receipts. Derive a containing five-minute-aligned range, then ensure its end
+The initialization manifest's `index_window` bounds the loading interval; it
+is not a measured minimum/maximum of every event's `_indextime`. Derive a
+containing five-minute-aligned range, then ensure its end
 leaves two closed five-minute slices before the current scheduler watermark:
 
 ```sh
@@ -108,6 +109,18 @@ Use distinct original/restore journals for disabled- and enabled-origin runs.
 Do not restore V2 after the first origin run if another V1-origin run follows;
 restore after the final qualifying rollback.
 
+After enabled-origin rollback, restoration waits for an actual completed V1
+scheduler checkpoint whose anchor is later than the durable recovery audit and
+rollback completion. A manual gap recovery can add retained rows after the
+previous empty scheduled cycle; immediately reusing that cycle correctly fails
+the unexplained-row audit. The harness records the completed rollback identity,
+boundary and new scheduler SID as `qualification_restoration_checkpoint`, then
+uses the unchanged source, retained-row, empty-window and 600-second freshness
+checks. Before activation, a resumed journal recaptures this checkpoint; once
+activation starts, its rollback anchor remains immutable. Missing, failed or
+active scheduler evidence still refuses, and the bounded wait does not authorize
+unexplained summary rows or replace scheduled proof with a manual dispatch.
+
 A timeout or failure retains live state and all journals. Inspect status without
 a session or operation lock:
 
@@ -119,6 +132,16 @@ Resume the exact same command, paths, package, and source after reconciling
 reported SIDs/configuration. An ambiguous dispatch is not automatically retried;
 use the existing `reconcile --sid` procedure. Do not delete the journal or
 reset the lab to make a failure disappear.
+
+Use a fresh administrator session from the approved login workflow before a
+long rehearsal; the observed test platform expires sessions after one hour.
+If a request returns HTTP 401, preserve the failed run and journal, obtain a
+new session into a mode-0600 external file, and verify the authenticated target
+and live selector/writer state. Then resume with the same journal and source,
+changing only the session-file path. Inspect and reuse recorded job SIDs;
+do not reissue an uncertain dispatch or reset the origin. The enabled-origin
+rehearsal exercised this recovery while rollback was in progress, with the V2
+public contract still coherent. Session policy was not extended or disabled.
 
 A missing first scheduled cycle is a different condition from a cycle that has
 not yet completed. Inspect the recorded enablement time, expected scheduler

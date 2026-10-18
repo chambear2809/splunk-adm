@@ -8,10 +8,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.cisco_contract_migration import Migration
+from tools.cisco_contract_migration import Migration, Refused
 
 from tests.splunk.test_cisco_upgrade import (
     _assert_completed_cutover_evidence,
+    _await_restoration_v1_checkpoint,
+    _restoration_checkpoint_origin,
     _gap_injection_resume_action,
     _read_gap_evidence,
     _resume_staging,
@@ -397,6 +399,228 @@ class CiscoUpgradeHarnessResumeTest(unittest.TestCase):
             link.symlink_to(target)
             with self.assertRaises(AssertionError):
                 _read_gap_evidence(link, "m1")
+
+
+class CiscoRestorationCheckpointTest(unittest.TestCase):
+    @staticmethod
+    def completed_rollback():
+        # Actual enabled-origin recovery finished after the empty 20:40 cycle.
+        return {
+            "migration_id": "completed-enabled-origin",
+            "phase": "rolled_back",
+            "origin": {
+                "saved_searches": {
+                    "ADM - Conversation rollup": {"content": {"disabled": False}}
+                }
+            },
+            "rollback": {
+                "state": "complete",
+                "completed_at": 1792356031,
+                "v1_recovery": {
+                    "state": "verified",
+                    "observation_epoch": 1792356017,
+                    "audit_observation_epoch": 1792356017,
+                    "completed_at": 1792356018,
+                },
+            },
+        }
+
+    class Controller(Migration):
+        def __init__(self, *, start=1792356290, fresh_at=1792356300):
+            self.value = {"phase": "coverage_validated", "jobs": []}
+            self.now = start
+            self.elapsed = 0
+            self.clock = lambda: self.now
+            self.fresh_at = fresh_at
+            self.inventory_calls = []
+            self.audit_bounds = []
+            self.writes = 0
+            self.manual_rows = [{"rollup_id": "a" * 64, "_indextime": 1792356011}]
+
+        def _load(self):
+            return self.value
+
+        def _write_journal(self, journal):
+            self.value = copy.deepcopy(journal)
+            self.writes += 1
+
+        @staticmethod
+        def cycle(anchor):
+            return {
+                "sid": f"scheduler__verified_v1_{anchor}",
+                "index_bounds": [anchor - 600, anchor - 300],
+                "event_bounds": {
+                    "earliest_time": str(anchor - 86400),
+                    "latest_time": str(anchor + 900),
+                },
+                "anchor": anchor,
+                "empty_summary_warning": True,
+            }
+
+        def _scheduled_writer_cycles(self, name, journal, **bounds):
+            self.inventory_calls.append((name, bounds))
+            anchors = [1792356000]
+            if self.fresh_at is not None and self.now >= self.fresh_at:
+                anchors.append(1792356300)
+            return [
+                self.cycle(anchor)
+                for anchor in anchors
+                if bounds["lower_epoch"] <= anchor < bounds["upper_epoch"]
+            ]
+
+        def _v1_expected_rows(self, *_args):
+            return {}
+
+        def _query(self, _journal, _query, start, end, **_kwargs):
+            # Exercise the unchanged empty-summary guard against a real row
+            # retained from the prior, separately proven manual recovery.
+            self.audit_bounds.append((start, end))
+            return [row for row in self.manual_rows if start <= row["_indextime"] < end]
+
+        def sleep(self, seconds):
+            self.elapsed += seconds
+            self.now += seconds
+
+    def wait(self, controller, completed=None, timeout=60):
+        return _await_restoration_v1_checkpoint(
+            controller,
+            completed or self.completed_rollback(),
+            controller.elapsed + timeout,
+            monotonic=lambda: controller.elapsed,
+            sleep=controller.sleep,
+        )
+
+    def test_old_empty_checkpoint_refuses_but_later_proven_checkpoint_preserves_row(
+        self,
+    ):
+        controller = self.Controller(start=1792356106)
+        before = copy.deepcopy(controller.manual_rows)
+        with self.assertRaisesRegex(Refused, "outside validated manifests"):
+            controller._capture_v1_pre_pause(controller._load())
+        self.assertNotIn("v1_pre_pause", controller._load())
+        controller.now = 1792356290
+        checkpoint = self.wait(controller)
+        self.assertEqual(checkpoint["anchor"], 1792356300)
+        self.assertEqual(controller.elapsed, 15)
+        self.assertEqual(controller.manual_rows, before)
+        self.assertEqual(checkpoint["empty_summary_proof"]["retained_rows"], 0)
+        readiness = controller._load()["qualification_restoration_checkpoint"]
+        self.assertEqual(readiness["origin"]["boundary"], 1792356031)
+        self.assertEqual(readiness["sid"], checkpoint["sid"])
+        self.assertEqual(controller.inventory_calls[1][1]["lower_epoch"], 1792356032)
+        calls = len(controller.inventory_calls)
+        # Resume reuses the validated checkpoint and original durable boundary.
+        controller.value["phase"] = "cutover"
+        self.assertEqual(self.wait(controller)["sid"], checkpoint["sid"])
+        self.assertEqual(len(controller.inventory_calls), calls)
+
+    def test_no_fresh_checkpoint_times_out_without_capture_or_target_mutation(self):
+        controller = self.Controller(fresh_at=None)
+        before = copy.deepcopy(controller.value)
+        rows = copy.deepcopy(controller.manual_rows)
+        with self.assertRaisesRegex(AssertionError, "timed out"):
+            self.wait(controller, timeout=30)
+        self.assertEqual(controller.elapsed, 30)
+        self.assertEqual(controller.value, before)
+        self.assertEqual(controller.manual_rows, rows)
+        self.assertEqual(controller.writes, 0)
+        self.assertFalse(controller.audit_bounds)
+
+    def test_fresh_checkpoint_does_not_bypass_unexplained_row_guard(self):
+        controller = self.Controller(start=1792356310)
+        controller.manual_rows.append({"rollup_id": "b" * 64, "_indextime": 1792356301})
+        rows = copy.deepcopy(controller.manual_rows)
+        with self.assertRaisesRegex(Refused, "outside validated manifests"):
+            self.wait(controller)
+        self.assertEqual(controller.manual_rows, rows)
+        self.assertEqual(controller.writes, 0)
+        self.assertNotIn("v1_pre_pause", controller.value)
+
+    def test_scheduler_refusal_propagates_without_retry_or_capture(self):
+        controller = self.Controller()
+
+        def refuse(*_args, **_kwargs):
+            raise Refused("scheduled writer evidence has a missing cycle")
+
+        controller._scheduled_writer_cycles = refuse
+        with self.assertRaisesRegex(Refused, "missing cycle"):
+            self.wait(controller)
+        self.assertEqual(controller.elapsed, 0)
+        self.assertEqual(controller.writes, 0)
+
+    def test_resume_rejects_old_checkpoint_or_changed_recovery_boundary(self):
+        controller = self.Controller()
+        controller.value["phase"] = "cutover_in_progress"
+        controller.value["v1_pre_pause"] = controller.cycle(1792356000)
+        with self.assertRaisesRegex(AssertionError, "does not follow"):
+            self.wait(controller)
+        self.assertEqual(controller.writes, 0)
+        controller = self.Controller(start=1792356310)
+        self.wait(controller)
+        changed = self.completed_rollback()
+        changed["rollback"]["completed_at"] += 1
+        with self.assertRaisesRegex(AssertionError, "boundary changed"):
+            self.wait(controller, changed)
+
+    def test_aged_preactivation_capture_is_revalidated_and_binding_uses_new_sid(self):
+        controller = self.Controller(start=1792356310)
+        first = self.wait(controller)
+        controller.now = 1792356960
+        fresh = controller.cycle(1792356900)
+        inventory_calls = []
+
+        def current_cycle(name, journal, **bounds):
+            inventory_calls.append(bounds)
+            return [fresh]
+
+        controller._scheduled_writer_cycles = current_cycle
+        checkpoint = self.wait(controller)
+        self.assertGreater(controller.now - first["anchor"], 600)
+        self.assertEqual(checkpoint["sid"], fresh["sid"])
+        self.assertEqual(len(inventory_calls), 2)
+        self.assertEqual(
+            controller.value["qualification_restoration_checkpoint"]["sid"],
+            fresh["sid"],
+        )
+        self.assertEqual(controller.value["v1_pre_pause"]["sid"], fresh["sid"])
+        # Activation resume preserves the newly validated rollback anchor.
+        controller.value["phase"] = "cutover_in_progress"
+        self.assertEqual(self.wait(controller)["sid"], fresh["sid"])
+        self.assertEqual(len(inventory_calls), 2)
+
+    def test_partial_activation_without_checkpoint_refuses_before_readiness_poll(self):
+        controller = self.Controller()
+        controller.value["phase"] = "cutover_in_progress"
+        with self.assertRaisesRegex(AssertionError, "lacks its durable V1 checkpoint"):
+            self.wait(controller)
+        self.assertFalse(controller.inventory_calls)
+        self.assertEqual(controller.writes, 0)
+
+    def test_boundary_requires_completed_recovery_and_uses_its_latest_evidence(self):
+        completed = self.completed_rollback()
+        self.assertEqual(
+            _restoration_checkpoint_origin(completed)["boundary"], 1792356031
+        )
+        for mutate in (
+            lambda j: j.update(phase="rollback_in_progress"),
+            lambda j: j["rollback"].update(state="recovering"),
+            lambda j: j["rollback"]["v1_recovery"].pop("observation_epoch"),
+            lambda j: j["rollback"]["v1_recovery"].update(completed_at=True),
+            lambda j: j["rollback"]["v1_recovery"].update(
+                audit_observation_epoch=1792356019
+            ),
+        ):
+            changed = copy.deepcopy(completed)
+            mutate(changed)
+            with self.assertRaises(AssertionError):
+                _restoration_checkpoint_origin(changed)
+        completed["origin"]["saved_searches"]["ADM - Conversation rollup"]["content"][
+            "disabled"
+        ] = True
+        controller = self.Controller()
+        self.assertIsNone(self.wait(controller, completed))
+        self.assertFalse(controller.inventory_calls)
+        self.assertEqual(controller.writes, 0)
 
 
 if __name__ == "__main__":

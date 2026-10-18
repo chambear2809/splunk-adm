@@ -189,6 +189,143 @@ def _assert_completed_cutover_evidence(migration, journal: dict) -> None:
             raise AssertionError("completed cutover public selector proof is malformed")
 
 
+def _restoration_checkpoint_origin(completed_rollback: dict) -> dict | None:
+    """Bind restoration readiness to completed recovery, not controller time."""
+    disabled = (
+        completed_rollback.get("origin", {})
+        .get("saved_searches", {})
+        .get("ADM - Conversation rollup", {})
+        .get("content", {})
+        .get("disabled")
+    )
+    if str(disabled).lower() in {"1", "true"}:
+        return None
+    if str(disabled).lower() not in {"0", "false"}:
+        raise AssertionError("restoration origin has no verified V1 writer state")
+    rollback = completed_rollback.get("rollback") or {}
+    recovery = rollback.get("v1_recovery") or {}
+    fields = {
+        "observation_epoch": recovery.get("observation_epoch"),
+        "recovery_completed_at": recovery.get("completed_at"),
+        "rollback_completed_at": rollback.get("completed_at"),
+    }
+    if "audit_observation_epoch" in recovery:
+        fields["audit_observation_epoch"] = recovery["audit_observation_epoch"]
+    if (
+        completed_rollback.get("phase") != "rolled_back"
+        or rollback.get("state") != "complete"
+        or recovery.get("state") != "verified"
+        or not isinstance(completed_rollback.get("migration_id"), str)
+        or not completed_rollback["migration_id"]
+        or any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in fields.values()
+        )
+        or fields["recovery_completed_at"] < fields["observation_epoch"]
+        or fields["recovery_completed_at"]
+        < fields.get("audit_observation_epoch", fields["observation_epoch"])
+        or fields["rollback_completed_at"] < fields["recovery_completed_at"]
+    ):
+        raise AssertionError(
+            "restoration requires completed durable V1 recovery evidence"
+        )
+    return {
+        "migration_id": completed_rollback["migration_id"],
+        **fields,
+        "boundary": max(fields.values()),
+    }
+
+
+def _await_restoration_v1_checkpoint(
+    migration,
+    completed_rollback: dict,
+    deadline: float,
+    *,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+) -> dict | None:
+    """Wait for a proven V1 checkpoint beyond the prior manual-write audit.
+
+    The migration's existing capture performs the source, retained-row and
+    empty-window checks unchanged. Refusals propagate; this waits only when
+    the strict scheduler inventory has no later completed checkpoint yet.
+    """
+    origin = _restoration_checkpoint_origin(completed_rollback)
+    if origin is None:
+        return None
+    journal = migration._load()
+    readiness = journal.get("qualification_restoration_checkpoint")
+    if readiness is not None and (
+        not isinstance(readiness, dict) or readiness.get("origin") != origin
+    ):
+        raise AssertionError("restoration recovery boundary changed on resume")
+    # Before activation, always re-run the product's current source/retained
+    # checks and <=600-second freshness gate. A prior successful capture may
+    # have aged while the controller was stopped. Once activation has begun,
+    # its rollback anchor is immutable and V1 may already be paused.
+    checkpoint = (
+        journal.get("v1_pre_pause")
+        if journal.get("phase") in {"cutover_in_progress", "cutover"}
+        else None
+    )
+    if checkpoint is None:
+        if journal.get("phase") != "coverage_validated":
+            raise AssertionError(
+                "restoration activation lacks its durable V1 checkpoint"
+            )
+        while True:
+            if monotonic() >= deadline:
+                raise AssertionError(
+                    "timed out waiting for a fresh V1 restoration checkpoint"
+                )
+            cycles = migration._scheduled_writer_cycles(
+                "ADM - Conversation rollup",
+                journal,
+                lower_epoch=origin["boundary"] + 1,
+                upper_epoch=int(migration.clock()) + 1,
+            )
+            if cycles:
+                checkpoint = migration._capture_v1_pre_pause(journal)
+                break
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise AssertionError(
+                    "timed out waiting for a fresh V1 restoration checkpoint"
+                )
+            sleep(min(15, remaining))
+    if not isinstance(checkpoint, dict):
+        raise AssertionError("restoration V1 checkpoint is malformed")
+    anchor = checkpoint.get("anchor")
+    if (
+        not isinstance(anchor, int)
+        or isinstance(anchor, bool)
+        or anchor <= origin["boundary"]
+    ):
+        raise AssertionError(
+            "restoration V1 checkpoint does not follow completed recovery"
+        )
+    if (
+        not isinstance(checkpoint.get("sid"), str)
+        or not checkpoint["sid"]
+        or not isinstance(checkpoint.get("captured_at"), int)
+        or isinstance(checkpoint["captured_at"], bool)
+        or checkpoint["captured_at"] < anchor
+    ):
+        raise AssertionError("restoration V1 checkpoint lacks durable capture evidence")
+    migration._write_journal(
+        {
+            **migration._load(),
+            "qualification_restoration_checkpoint": {
+                "origin": origin,
+                "sid": checkpoint["sid"],
+                "anchor": anchor,
+                "captured_at": checkpoint["captured_at"],
+            },
+        }
+    )
+    return checkpoint
+
+
 def _gap_injection_resume_action(journal: dict, evidence: dict | None) -> str:
     """Return reuse, inject, or fail-closed reconciliation for a gap marker."""
     if evidence is not None:
@@ -742,7 +879,14 @@ class CiscoContractUpgradeTest(unittest.TestCase):
         )
 
     def _restore_candidate_v2(
-        self, api, journal_path, start, end, scenario, timeout_seconds
+        self,
+        api,
+        journal_path,
+        start,
+        end,
+        scenario,
+        timeout_seconds,
+        completed_rollback,
     ):
         """Fresh restore journal; outer lifecycle already holds the target lock."""
         from tools.cisco_contract_migration import Journal, Migration
@@ -751,6 +895,9 @@ class CiscoContractUpgradeTest(unittest.TestCase):
         with restored.journal.locked(blocking=False):
             journal = restored.journal.read()
             if journal and journal.get("phase") == "cutover":
+                _await_restoration_v1_checkpoint(
+                    restored, completed_rollback, time.monotonic() + timeout_seconds
+                )
                 restored.cutover()  # revalidate actual active configuration
             else:
                 _, route, _ = _resume_staging(restored, start, end, scenario)
@@ -758,6 +905,7 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                     route, "cutover", "restore journal must not recycle a rollback"
                 )
                 deadline = time.monotonic() + timeout_seconds
+                _await_restoration_v1_checkpoint(restored, completed_rollback, deadline)
                 while True:
                     result = restored.cutover()
                     if result["status"] == "cutover":
@@ -885,6 +1033,7 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                                 end,
                                 scenario,
                                 timeout_seconds,
+                                journal,
                             )
                             return
                     if evidence is not None:
@@ -904,6 +1053,7 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                             end,
                             scenario,
                             timeout_seconds,
+                            journal,
                         )
                     return
                 journal, route, validation = _resume_staging(
@@ -1006,7 +1156,13 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                     time.sleep(15)
                 if restore_v2 == "1":
                     self._restore_candidate_v2(
-                        api, Path(restore_value), start, end, scenario, timeout_seconds
+                        api,
+                        Path(restore_value),
+                        start,
+                        end,
+                        scenario,
+                        timeout_seconds,
+                        migration._load(),
                     )
             except Refused as exc:
                 self.fail(

@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
-  "recordedAt": "2026-10-18T16:39:01.515468+00:00",
+  "schemaVersion": 2,
+  "recordedAt": "2026-10-18T20:52:35.810541+00:00",
   "acceptedBaseline": "64473e54d1fca4311ac592bc34c4a96a022efd48",
-  "candidatePrimaryTreeSha256": "d89f2c0d45a1fc9816a182e3a6e1417c8c13bb82d10843b2e05c4767cb0d523c",
+  "candidatePrimaryTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
   "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
   "effectiveWorker": {
     "model": "gpt-6.1-sol",
@@ -13,41 +13,43 @@
   "retention": "Raw evidence is ignored by git. Preserve this directory with retained packages when archiving the worktree. Paths are relative to this qualification checkout.",
   "scope": "Standalone production React profiling browser harness; no Splunk dispatch/download, platform or capacity claim. The profiling served bundle differs from packaged build.",
   "ordering": [
-    "candidate20/cache",
-    "baseline20/cache",
-    "baseline14case5/cache",
-    "candidate14case5/cache",
-    "baseline-native3/cache",
-    "candidate-native3/cache",
-    "candidate ordinary browser94"
+    "final09candidate20/cache",
+    "final09baseline20/cache",
+    "final09baseline14case5/cache",
+    "final09candidate14case5/cache"
   ],
-  "sourceCoverage": "Primary tree hashes frontend/src, fixtures and package-lock.json. Imported config/deployment-health.json and research/cisco-pipeline-interface.json plus all actual built served assets are hashed before/after every qualified run. All pass and match per role across all three modes. Other repository files are not implicitly measured.",
+  "sourceCoverage": "Primary tree hashes frontend/src, fixtures and package-lock.json. Imported config/deployment-health.json and research/cisco-pipeline-interface.json plus all actual built served assets are hashed before/after every final09 run. All pass and match per role across selection/full-matrix modes. Earlier native traces are retained separately; other repository files are not implicitly measured.",
   "sourceConsistency": {
-    "path": "dist/final-qualification/performance/qualified-input-consistency.json",
-    "sha256": "2bcb2e3835d62a3e56b0434260ece68aa3e6e67e4a68254220242f5b7f9b9b61",
-    "bytes": 9206
+    "path": "dist/final-qualification/performance/final09-input-consistency.json",
+    "sha256": "a16e5061647fcd8aa1b1d42f1c73c0f7c6419bacd2a3e2693f436d23c84a8227",
+    "bytes": 8037
   },
   "packageBinding": {
     "package": {
-      "path": "dist/final-qualification/packages/candidate-07.tar.gz",
-      "sha256": "cb37e69e0eb6670a85d11f176346aac750b08e937acbdcc7855306817ffb3005",
-      "bytes": 1002131
+      "path": "dist/final-qualification/packages/candidate-09.tar.gz",
+      "sha256": "024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097",
+      "bytes": 1003461
     },
-    "bridge": {
-      "path": "dist/final-qualification/candidate-05-to-07-archive-comparison.json",
-      "sha256": "e46a23dd738bd11e44d4969d9c9ca85f127411f9d0c50b1ef3587ca9fa2a142b",
-      "bytes": 2450
+    "coordinatorSourceAndFileManifest": {
+      "path": "dist/final-qualification/candidate-09-package.json",
+      "sha256": "762e4f2b13eb236a265b9f8f353af8776f7a07ba2322e9276aaa4f2f2ea637d6",
+      "bytes": 10808
     },
-    "limitation": "Bridge proves all packaged static assets including demo byteidentical05 to07; measurements bind frozen source separately, not profiling-bundle to packaged-bundle byte identity."
+    "sourceSha": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+    "packagedAtlasJsSha256": "388806966a80af83519df5711c1e9bdd05d23bea92c199c2749ce0f1453107ba",
+    "packagedCssSha256": "7967333c91d901e1e2e2dcd9104100ccc0976cac0bfde9054e5ba5b2a023f51c",
+    "standaloneProfilingBundleEqualsEarlierCandidate": true,
+    "limitation": "Actual package09 atlas.js changed for deployment-client stale-read repair. No final-package JS equality claim. Renewed source6eb standalone MapPage bundle hashes happen to equal earlier candidate; these benchmarks do not execute/qualify the asynchronous deployment-client race. Root ordinary-browser/unit/installed evidence is separate. Earlier native traces remain diagnostic support for unchanged CSS only."
   },
   "counts": {
     "completeMatrixCasesPerRole": 14,
     "completeMatrixSamplesPerRole": 140,
     "supplementalSelectionSamplesPerRole": 40,
-    "nativeMeasuredSamplesPerRole": 6,
-    "nativeDiscardedWarmupTracesPerRole": 1,
-    "ordinaryBrowserPassed": 94,
-    "readinessPassed": 9
+    "finalSourceNativeSamples": 0,
+    "earlierSourceNativeMeasuredSamplesPerRole": 6,
+    "earlierSourceNativeDiscardedWarmupTracesPerRole": 1,
+    "ordinaryBrowser": "CI current-source94 passed2.2m; independent correctness evidence, not local performance.",
+    "priorBrowserAndReadiness": "Earlier94 browser/9readiness retained in prior index, not substituted for final source."
   },
   "limitations": [
     "Main-thread stable DOM/geometry frames do not independently timestamp compositor presentation.",
@@ -55,69 +57,35 @@
     "Dense Meraki selection/filtering and other unfavorable observations remain retained; no broad speedup claim.",
     "Tracing, screenshot drain and injected CSS are separate diagnostic interventions, never accepted distribution replacements.",
     "CPU/desktop/GPU/thermal background state not fully controlled; coordinator paused heavy local builds/browser work, light remote RPC/log work continued.",
-    "No alternate-browser or long-running GPU memory qualification."
+    "No alternate-browser or long-running GPU memory qualification.",
+    "Coordinator reported19Pythonpuretests0.048s plusRuff before worker pause during candidate fullmatrix; exact time/Ruffduration unavailable. Outside input guards but bounded CPUoverlap may affect timing; no sample exclusion or individual attribution.",
+    "Deployment-client stale-read repair changes packaged atlas.js but not this standalone map bundle. Package runtime race verification belongs to separate coordinator evidence."
   ],
   "commands": {
-    "path": "dist/final-qualification/performance/command-manifest.json",
-    "sha256": "c88ee33f6a0c7615f1a3495bfa0b0de6f181857f1491a4e478b022593b52f026",
-    "bytes": 24729
+    "path": "dist/final-qualification/performance/final09-command-manifest.json",
+    "sha256": "76618f371fa7e33b6626913367def74e62639fad3395f1202725c0b73a33f65d",
+    "bytes": 4073
   },
   "additionalCommands": [
     {
       "argv": [
         "node",
         "tests/performance/report.mjs",
-        "dist/final-qualification/performance/qualified-baseline-matrix.json",
+        "dist/final-qualification/performance/final09-baseline-matrix.json",
         "",
-        "dist/final-qualification/performance/qualified-baseline-budget.md"
+        "dist/final-qualification/performance/final09-baseline-budget.md"
       ],
-      "outcome": "Passed before candidate matrix; provisional budgets retained."
+      "outcome": "Passed before candidate matrix; baseline-derived investigation budgets."
     },
     {
       "argv": [
         "node",
         "tests/performance/report.mjs",
-        "dist/final-qualification/performance/qualified-baseline-matrix.json",
-        "dist/final-qualification/performance/qualified-candidate-matrix.json",
-        "dist/final-qualification/performance/qualified-comparison.md"
+        "dist/final-qualification/performance/final09-baseline-matrix.json",
+        "dist/final-qualification/performance/final09-candidate-matrix.json",
+        "dist/final-qualification/performance/final09-comparison.md"
       ],
-      "outcome": "Passed; rejects incomplete/mismatched instrumentation/runtime/workloads."
-    },
-    {
-      "argv": [
-        "npx",
-        "playwright",
-        "test",
-        "--workers=2",
-        "--reporter=list",
-        "--output=dist/final-qualification/performance/qualified-browser-artifacts"
-      ],
-      "env": {
-        "CI": "1"
-      },
-      "outcome": "94 passed (44.2s)",
-      "log": "dist/final-qualification/performance/qualified-browser.log"
-    },
-    {
-      "argv": [
-        "npx",
-        "playwright",
-        "test",
-        "--config",
-        "tests/performance/readiness.config.ts"
-      ],
-      "outcome": "9 passed",
-      "log": "dist/final-qualification/performance/provenance-readiness.log"
-    },
-    {
-      "argv": [
-        "npx",
-        "tsc",
-        "-p",
-        "tests/performance/tsconfig.json",
-        "--noEmit"
-      ],
-      "outcome": "Passed before final runs; see provenance-readiness.log"
+      "outcome": "Passed; full comparable14cases140samples each."
     }
   ],
   "runs": [
@@ -525,8 +493,8 @@
       "path": "dist/final-qualification/performance/qualified-candidate-selection-20.json",
       "sha256": "8bce98bb66bfda4aaf64ff18746824731eed4533e40185e3c07a4ac97811794d",
       "bytes": 770292,
-      "eligibility": "supplemental-selection-distribution",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
       "complete": true,
       "expectedCases": 1,
       "expectedSamples": 40,
@@ -544,14 +512,15 @@
         "drainSelection": false,
         "selectionDiagnostic": true,
         "experimentalCss": null
-      }
+      },
+      "originalEligibility": "supplemental-selection-distribution"
     },
     {
       "path": "dist/final-qualification/performance/qualified-baseline-selection-20.json",
       "sha256": "6deb710d29e6d85839e271324fcf259c0372c54cd7a80cc8ee04b61c6d3d07f9",
       "bytes": 770901,
-      "eligibility": "supplemental-selection-distribution",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
       "complete": true,
       "expectedCases": 1,
       "expectedSamples": 40,
@@ -569,14 +538,15 @@
         "drainSelection": false,
         "selectionDiagnostic": true,
         "experimentalCss": null
-      }
+      },
+      "originalEligibility": "supplemental-selection-distribution"
     },
     {
       "path": "dist/final-qualification/performance/qualified-baseline-matrix.json",
       "sha256": "3f0523cd07214e22556a3d7a4882308ccc74adf526a38b276d0428f79c692027",
       "bytes": 14261138,
-      "eligibility": "accepted-complete-matrix",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
       "complete": true,
       "expectedCases": 14,
       "expectedSamples": 140,
@@ -594,14 +564,15 @@
         "drainSelection": false,
         "selectionDiagnostic": false,
         "experimentalCss": null
-      }
+      },
+      "originalEligibility": "accepted-complete-matrix"
     },
     {
       "path": "dist/final-qualification/performance/qualified-candidate-matrix.json",
       "sha256": "645b0531bcc806caf67e582be2f81708a4ef66293543158dd98b6398501d5563",
       "bytes": 14256698,
-      "eligibility": "accepted-complete-matrix",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
       "complete": true,
       "expectedCases": 14,
       "expectedSamples": 140,
@@ -619,14 +590,15 @@
         "drainSelection": false,
         "selectionDiagnostic": false,
         "experimentalCss": null
-      }
+      },
+      "originalEligibility": "accepted-complete-matrix"
     },
     {
       "path": "dist/final-qualification/performance/qualified-baseline-native.json",
       "sha256": "ccbf63def6fc7c0cebb248e083e3ff551475ad140fa96485b448c59f7df2ea2b",
       "bytes": 122999,
       "eligibility": "supplemental-native-diagnostic",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "reason": "Earlier source native diagnostic supporting unchanged CSS attribution; not a new final09 measurement.",
       "complete": true,
       "expectedCases": 1,
       "expectedSamples": 6,
@@ -651,7 +623,7 @@
       "sha256": "62e3683f81b5a4427d8a8107114f2b12df7f8134fc2c5dd8e6e2e64e2246f54b",
       "bytes": 123588,
       "eligibility": "supplemental-native-diagnostic",
-      "reason": "All freeze/complete guards pass; native and limited selection scope cannot replace full matrix.",
+      "reason": "Earlier source native diagnostic supporting unchanged CSS attribution; not a new final09 measurement.",
       "complete": true,
       "expectedCases": 1,
       "expectedSamples": 6,
@@ -668,6 +640,106 @@
         "traceCategories": "*,disabled-by-default-devtools.timeline",
         "drainSelection": false,
         "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.json",
+      "sha256": "a6c30c0d7a097fc2338da46e11306f48fb2982e381d3afd43dab60a91dc80f9a",
+      "bytes": 773161,
+      "eligibility": "supplemental-selection-distribution",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T20:33:11.332Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.json",
+      "sha256": "30789605ebb0183ad355cfc52b85630e6712b7073e7dd3dff637aad4cdfacedd",
+      "bytes": 774990,
+      "eligibility": "supplemental-selection-distribution",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T20:34:27.048Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.json",
+      "sha256": "45ea8b690d627586b17fa5092ea66f91c79ae29dd44f50832daf4a4471a21afa",
+      "bytes": 14252769,
+      "eligibility": "accepted-complete-matrix",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T20:43:15.424Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.json",
+      "sha256": "f17b27272184901035f0f5e67c6591bc086af530912826bb15c312a8d20c0a70",
+      "bytes": 14262240,
+      "eligibility": "accepted-complete-matrix",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T20:52:10.236Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
         "experimentalCss": null
       }
     }
@@ -747,6 +819,11 @@
       "path": "dist/final-qualification/performance/build-evidence-index.py",
       "sha256": "e2c9bd6678f7ee377ce126844d8ec5265a684d9481019a432d72070dce5d2330",
       "bytes": 11281
+    },
+    {
+      "path": "dist/final-qualification/performance/build-final09-evidence-index.py",
+      "sha256": "1f113eb025df2dd773c54478c17d8027f3b08dfd0dfe71e07ad42b24bbd4a7b7",
+      "bytes": 9912
     },
     {
       "path": "dist/final-qualification/performance/candidate-matrix-timeout-artifacts/.last-run.json",
@@ -979,6 +1056,146 @@
       "bytes": 15052
     },
     {
+      "path": "dist/final-qualification/performance/final09-baseline-budget.md",
+      "sha256": "2d438b0119080d04977f48abcf994de7e9bdfed5389a50f0cad7d4e6ee9d2df9",
+      "bytes": 7353
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-budget.summary.json",
+      "sha256": "0007336254147676850b19189e91f1c3b83f1e8cdc325012fc58cc23ed941dbf",
+      "bytes": 521215
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.json",
+      "sha256": "45ea8b690d627586b17fa5092ea66f91c79ae29dd44f50832daf4a4471a21afa",
+      "bytes": 14252769
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.log",
+      "sha256": "4d25e0f4692c5863acf1071e246c746f3720e9acec00b4bce38d241796e2aaf2",
+      "bytes": 4595
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-report.log",
+      "sha256": "691b020d5e6f0197a74f13e595855d0a17602f135550408da7a6e1b2849db43e",
+      "bytes": 70
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.json",
+      "sha256": "30789605ebb0183ad355cfc52b85630e6712b7073e7dd3dff637aad4cdfacedd",
+      "bytes": 774990
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.log",
+      "sha256": "a05dca2d3bc8d0bee4b9e0cf1520719d0967bad2aefbbf474a17d27836f7e040",
+      "bytes": 3290
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/demo-rows-aci-prev-CAV02_uu.js",
+      "sha256": "2322e519c9ff78ddccc2ec116742993e7289011e79a8e5cdf941960f76445826",
+      "bytes": 35161
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/index-BAGtxesw.js",
+      "sha256": "f31f57ece02a3df590263372f9976e9c91f56f10372092107287e2c1e31dcfe2",
+      "bytes": 2422372
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/index-DjXTbuGL.css",
+      "sha256": "9f043130c027c552038218383d6e35188276fa2b925b7b7a8e2f692aca13e00a",
+      "bytes": 30942
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/index.html",
+      "sha256": "38cc162ae70cf396fc4e4e3d4fa07dcf884b401615badfd06463c0e53aed8564",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-budget-observations.json",
+      "sha256": "95fdf459b1c1ac8bcb5669a76befd0e00ac04ecdcc466211c7ffc41a8e5bfcc0",
+      "bytes": 1409
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.json",
+      "sha256": "f17b27272184901035f0f5e67c6591bc086af530912826bb15c312a8d20c0a70",
+      "bytes": 14262240
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.log",
+      "sha256": "06363d3802efa55db446ef8095fa8a98c4b768a663a3b11f11af937dee1e972b",
+      "bytes": 4444
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.json",
+      "sha256": "a6c30c0d7a097fc2338da46e11306f48fb2982e381d3afd43dab60a91dc80f9a",
+      "bytes": 773161
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.log",
+      "sha256": "abd9913e0b0835fa277d14a6aedb27696a25a3f420d6fc9b2b0825b348684454",
+      "bytes": 3139
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/demo-rows-aci-prev-DFzlT3cI.js",
+      "sha256": "613bd4b2540bbfd2568aad0a1af473fd1c24f59cecb9e30dcefd8edddd162f6a",
+      "bytes": 35018
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/index-32hjsxe5.js",
+      "sha256": "7df50d00dab934e298e021f94d91c37d6276dc0ff80d1bbbeaaf7f462c284801",
+      "bytes": 2420530
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/index-BOodRQIs.css",
+      "sha256": "56006ee32eb43e10fcb3c93a6fd94beafec743a72271eabff27510065a19ead4",
+      "bytes": 30997
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/index.html",
+      "sha256": "e4bccc4c14e4e1386ec4c1a6e3e7ee5db26dd199e12f135fdb354fb8e0718bd3",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-command-manifest.json",
+      "sha256": "76618f371fa7e33b6626913367def74e62639fad3395f1202725c0b73a33f65d",
+      "bytes": 4073
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.log",
+      "sha256": "14e28202274870832f92c1e13a676b4bfd615d4cf9d6dd44394265afa240d85e",
+      "bytes": 65
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.md",
+      "sha256": "2c6c5a7fca38f8bbb1243e2dd823f69dded45f8761ecb0d1893efaacee25f341",
+      "bytes": 10094
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.summary.json",
+      "sha256": "f9290490959351ce154b4a46500bba2ff91400233a02f65409f0be7bcfedf963",
+      "bytes": 924783
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-concurrency-note.json",
+      "sha256": "1dd6cac185333b2665c7b7d88b848414ee7b5139b69c2247f9e7d907ae6f0025",
+      "bytes": 978
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-input-consistency.json",
+      "sha256": "a16e5061647fcd8aa1b1d42f1c73c0f7c6419bacd2a3e2693f436d23c84a8227",
+      "bytes": 8037
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-selection-summary.json",
+      "sha256": "b649a8b6d2857ea4ca6a6561fd04fbfa892428a26782c6b1e9ac15e582aa3056",
+      "bytes": 22409
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-selection-summary.log",
+      "sha256": "76957431ac161cf0a0b2535db697cadb968676df4e221ba661150c208f3839d1",
+      "bytes": 2923
+    },
+    {
       "path": "dist/final-qualification/performance/hit-stroke-diagnostic.json",
       "sha256": "a8034896271736d5c2cae2d2589648621e0bd80fb163b65bfcb11dd501bc3abe",
       "bytes": 608034
@@ -1002,6 +1219,16 @@
       "path": "dist/final-qualification/performance/hit-stroke-traces/selection-003.json",
       "sha256": "5a25164b1c7e02c580a3f330fa90522e24865647597d023d460946b5e659554c",
       "bytes": 2704957
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-browser-evidence-index.json",
+      "sha256": "7aaa1a8f86061bd47428f11d0e08efc0a6bae2d2c042a62cf5703a8d822ff73b",
+      "bytes": 60228
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-selection-results.md",
+      "sha256": "3f8a92f21ddd94b02463124519151f867fcb8e50dcb70cb478e98162619d3dd9",
+      "bytes": 15999
     },
     {
       "path": "dist/final-qualification/performance/pre-provenance-harness/browser.perf.spec.ts",
@@ -1367,6 +1594,50 @@
       "path": "dist/final-qualification/performance/selection-intervention-summary.json",
       "sha256": "f606ef6e3234dd1ff8c7d721a5ca7b1d8e616f06fbc06090267ab0c3d37b3b4b",
       "bytes": 7013
+    },
+    {
+      "path": "dist/final-qualification/performance/summarize-final09-selection.py",
+      "sha256": "b0daad9152c89af648e421e7c76b2d84411a03b7388dbb222f22ddb79dcde542",
+      "bytes": 2722
+    },
+    {
+      "path": "dist/final-qualification/performance/write-final09-results.py",
+      "sha256": "26704c76d7b5ff7b3068b6d876cad998b74215585a89c956621eb01e6bbd0e3a",
+      "bytes": 13026
     }
-  ]
+  ],
+  "candidateSource": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+  "previousQualificationIndex": {
+    "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-browser-evidence-index.json",
+    "sha256": "7aaa1a8f86061bd47428f11d0e08efc0a6bae2d2c042a62cf5703a8d822ff73b",
+    "bytes": 60228
+  },
+  "earlierCommands": {
+    "path": "dist/final-qualification/performance/command-manifest.json",
+    "sha256": "c88ee33f6a0c7615f1a3495bfa0b0de6f181857f1491a4e478b022593b52f026",
+    "bytes": 24729
+  },
+  "currentSourceOrdinaryBrowser": {
+    "source": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+    "jobId": "117782073158",
+    "runId": "39163678286",
+    "url": "https://github.com/chambear2809/splunk-adm/actions/runs/39163678286/job/117782073158",
+    "passed": 94,
+    "log": {
+      "path": "dist/final-qualification/ci-6ebbf0d-browser.log",
+      "sha256": "14b7e5f9a4639922f9b38b17b8bb5849d38b38c7f98dcc0c12011f4484643e31",
+      "bytes": 75850
+    },
+    "binding": {
+      "path": "dist/final-qualification/ci-6ebbf0d-browser-binding.json",
+      "sha256": "d7e3aa92d96ceec2ad8412a637cb36a95e520a9c92e4b6984cae3c3262b8ca65",
+      "bytes": 712
+    },
+    "scope": "CI correctness only; not a same-hardware benchmark comparison."
+  },
+  "concurrencyNote": {
+    "path": "dist/final-qualification/performance/final09-concurrency-note.json",
+    "sha256": "1dd6cac185333b2665c7b7d88b848414ee7b5139b69c2247f9e7d907ae6f0025",
+    "bytes": 978
+  }
 }
