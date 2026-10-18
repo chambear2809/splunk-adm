@@ -84,6 +84,10 @@ def login_pty(username, password, argv=("/opt/splunk/bin/splunk", "login"), time
         child, master = pty.fork()
         if child == 0:
             try:
+                # The image bootstrap environment can otherwise satisfy CLI
+                # credentials without the observed interactive prompt sequence.
+                for key in ("SPLUNK_USERNAME", "SPLUNK_PASSWORD", "SPLUNK_PASSCODE"):
+                    os.environ.pop(key, None)
                 echo_off(0)
                 os.execv(argv[0], list(argv))
             except BaseException:

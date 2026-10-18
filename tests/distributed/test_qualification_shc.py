@@ -4,6 +4,7 @@ import configparser
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import ssl
 import subprocess
@@ -439,6 +440,32 @@ assert username == "fixture-admin" and password == "fixture-password"
         )
         self.assertEqual(result["status"], "completed")
         self.assertFalse(result["username_prompt"] or result["password_prompt"])
+        self.assertTrue(result["child_reaped"])
+
+    def test_child_scrubs_bootstrap_credentials_without_changing_parent_environment(
+        self,
+    ):
+        bootstrap = {
+            "SPLUNK_USERNAME": "fixture-env-user",
+            "SPLUNK_PASSWORD": "fixture-env-password",
+            "SPLUNK_PASSCODE": "fixture-env-passcode",
+        }
+        program = self.interactive_program('print("interactive login accepted")\n')
+        path = Path(program[1])
+        path.write_text(
+            "import os\n"
+            "assert not any(key in os.environ for key in "
+            + repr(tuple(bootstrap))
+            + ")\n"
+            + path.read_text()
+        )
+        with patch.dict(os.environ, bootstrap):
+            result = self.login(
+                "fixture-admin", "fixture-password", argv=program, timeout=2
+            )
+            self.assertEqual({key: os.environ[key] for key in bootstrap}, bootstrap)
+        self.assertEqual(result["status"], "completed")
+        self.assertTrue(result["username_prompt"] and result["password_prompt"])
         self.assertTrue(result["child_reaped"])
 
     def exited_child(self, chunks, *, waiting=None):
