@@ -16,19 +16,24 @@ try {
     page.locator('input[type="submit"], button[type="submit"]').first().click(),
   ]);
   const writes = [];
+  const deploymentWrites = [];
   page.on("response", (response) => {
     const request = response.request();
     const path = new URL(request.url()).pathname;
+    if (request.method() !== "POST") return;
+    const evidence = {
+      status: response.status(),
+      csrf: !!request.headers()["x-splunk-form-key"],
+      namespace: path.includes("/servicesNS/nobody/splunk_adm/"),
+    };
+    if (/\/(configs\/conf-macros|saved\/searches)\//.test(path))
+      writes.push(evidence);
     if (
-      request.method() === "POST" &&
-      /\/(configs\/conf-macros|saved\/searches)\//.test(path)
-    ) {
-      writes.push({
-        status: response.status(),
-        csrf: !!request.headers()["x-splunk-form-key"],
-        namespace: path.includes("/servicesNS/nobody/splunk_adm/"),
-      });
-    }
+      /\/storage\/collections\/data\/adm_deployment_settings(?:\/deployment)?\/?$/.test(
+        path,
+      )
+    )
+      deploymentWrites.push(evidence);
   });
   stage = "live checklist";
   await page.goto("http://127.0.0.1:8000/en-US/app/splunk_adm/setup?mode=live");
@@ -62,6 +67,38 @@ try {
     fieldStyle.shadow !== "none"
   )
     throw new Error("Native dashboard field styling leaked");
+  stage = "save deployment expectations";
+  const saveExpectations = root.getByRole("button", {
+    name: "Save deployment expectations",
+    exact: true,
+  });
+  await expect(saveExpectations).toBeEnabled({ timeout: 90000 });
+  const sourceExpectations = root.getByLabel(/^Expectation for /);
+  if ((await sourceExpectations.count()) === 0)
+    throw new Error("Deployment source controls are unavailable");
+  for (const source of await sourceExpectations.all())
+    await source.selectOption("not_selected");
+  await root
+    .getByLabel("Expectation for Traces", { exact: true })
+    .selectOption("active");
+  await saveExpectations.click();
+  await expect(
+    root.getByText("Deployment expectations saved and verified.", { exact: true }),
+  ).toBeVisible({ timeout: 90000 });
+  stage = "deployment expectations readback";
+  await page.reload();
+  await expect(
+    root.getByText("Saved expectations; active data contract: 1.", { exact: true }),
+  ).toBeVisible({ timeout: 90000 });
+  await expect(
+    root.getByLabel("Expectation for Traces", { exact: true }),
+  ).toHaveValue("active");
+  for (const source of await sourceExpectations.all()) {
+    const label = await source.getAttribute("aria-label");
+    await expect(source).toHaveValue(
+      label === "Expectation for Traces" ? "active" : "not_selected",
+    );
+  }
   stage = "save macro";
   await macro.fill("adm_alt_nf");
   await root
@@ -100,7 +137,12 @@ try {
   await expect(
     root
       .getByRole("row")
-      .filter({ hasText: "ADM - Application catalog" })
+      .filter({
+        has: page.getByRole("cell", {
+          name: "ADM - Application catalog",
+          exact: true,
+        }),
+      })
       .getByText("Enabled", { exact: true }),
   ).toBeVisible();
   await page.screenshot({
@@ -109,6 +151,7 @@ try {
   });
   stage = "demo setup";
   const before = writes.length;
+  const deploymentBefore = deploymentWrites.length;
   await page.goto("http://127.0.0.1:8000/en-US/app/splunk_adm/setup?mode=demo");
   await expect(root.getByText(/Setup is unavailable in Demo/)).toBeVisible({
     timeout: 60000,
@@ -117,7 +160,9 @@ try {
   if (
     writes.length !== before ||
     writes.length !== 3 ||
-    writes.some(
+    deploymentWrites.length !== deploymentBefore ||
+    deploymentWrites.length !== 1 ||
+    [...writes, ...deploymentWrites].some(
       (write) => write.status >= 400 || !write.csrf || !write.namespace,
     )
   )
@@ -126,6 +171,8 @@ try {
     JSON.stringify({
       ok: true,
       verifiedWrites: writes.length,
+      verifiedDeploymentWrites: deploymentWrites.length,
+      deploymentReadback: true,
       csrf: true,
       demoWrites: 0,
     }) + "\n",

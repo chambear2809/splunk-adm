@@ -112,12 +112,13 @@ demos are regression data, not a restriction to four application topologies.
 
 ## Verification record
 
-Review has closed fifteen P2 findings across the initial review and follow-ups,
-including the browser measurement correction. No P0/P1 finding was reported. The reviewer is a separate Astra/max
-session and performed no edits, tests, builds, commits or lab operations. Final
-overall approval remains pending the completed live suite and installed-package
-checks. The corrected performance evidence has been independently approved within
-its documented bounds.
+Review has closed seventeen P2 findings across the initial review and follow-ups,
+including the browser measurement and native qualification corrections. No P0/P1
+finding was reported. The separate Astra/max reviewer approved the final source,
+package and qualification evidence within the documented bounds, with no remaining
+actionable findings. The reviewer independently checked the package and five
+qualification-file hashes and performed no edits, tests, builds, commits or lab
+operations. Final-commit CI and publication are separate steps.
 
 Historical evidence before incorporating PR #11: frontend lint/type checks,
 551 unit tests, 92 browser tests, package/release checks and AppInspect Cloud
@@ -135,9 +136,9 @@ Explicitly scanning all browser entrypoints fixed the test server; the complete
 post-fix run passed with assertions unchanged. Initial focused Splunk runs exposed
 uninitialized disposable collections and three fixture/dispatch mistakes, followed
 by timestamp serialization and moving-clock comparison issues. These were fixed
-without weakening evidence assertions; the two final focused cases passed. A
-complete final-source live-suite result is still pending and is not inferred from
-those focused reruns.
+without weakening evidence assertions; the two final focused cases passed. At
+that checkpoint the complete live suite was pending; its completed result is
+recorded below and is not inferred from those earlier focused reruns.
 
 ### Accepted-main integration
 
@@ -148,7 +149,7 @@ those accepted definitions. The old package and logs are retained under
 `dist/pre-main-integration-7999d3a/`. The interruption also ended the lock wrapper;
 the coordinator reacquired the exclusive lab lock before any further lab action,
 without contention. The owned lab was then stopped while integrating and
-remeasuring. The final integrated validation record will be added below.
+remeasuring. The final integrated validation record follows below.
 
 ### Integrated source checkpoint
 
@@ -156,8 +157,8 @@ The integrated runtime source is `8813eb534f907ac9c95d6673ed02fdbdf1008673`,
 reviewed independently against accepted main `d6863dd`. The reviewer found no
 new actionable source defects. Fifteen prior P2 findings (fourteen source issues
 and the browser interaction timer boundary) are closed in implementation;
-corrected performance evidence is approved, and live-package evidence remains
-pending.
+corrected performance evidence is approved. The later live-package results are
+recorded below.
 
 | Check on the integrated source | Actual outcome |
 | --- | --- |
@@ -177,13 +178,13 @@ Package: `dist/splunk_adm-0.3.0.tar.gz`, SHA-256
 `e691df2369712f21fc55442064fda8d52e1c0de00aab8ee8f77780a3f7a9bb41`.
 Logs use `dist/atlas-integrated-*`; the full browser rerun is
 `dist/atlas-integrated-browser-rerun.log`. The package retains the recorded build
-epoch for reproducibility. Current documentation-only follow-ups do not change
-its executable assets; final source/package binding must still be checked.
+epoch. Documentation and test-only follow-ups do not change its executable
+assets; the final source/package binding is recorded below.
 
 GitHub workflow `39106103577` also passed frontend, browser and Python checks
 for `8813eb5`; GitGuardian passed. Its Splunk integration job was skipped.
 CI metadata and logs are retained at `dist/atlas-ci-8813eb5.{json,log}`. This
-remote result does not replace the pending task-owned installed-app live run.
+remote result does not replace the task-owned installed-app live run below.
 
 ### Independent review audit
 
@@ -209,6 +210,8 @@ separately. The reviewer performed no edits, commits, builds, tests or lab actio
 | 13 | Readiness raw-field probes | Unselected/empty index macros bypassed search guards. Raw dispatch now requires selected, configured probes. |
 | 14 | Readiness timestamps | Integer parsing rejected valid fractional scheduler times. Bounded finite parsing preserves precision and rejects malformed/future evidence. |
 | 15 | Browser interaction readiness | Sampling after Playwright completion inflated browser latency. Sampling starts at capture, waits for intended DOM state and stable frames, and records automation completion separately. |
+| 16 | Native viewer no-probe qualification | A response-based counter could miss dispatched searches that fail or cancel. The visit now counts request events, retains successful graph response evidence separately, and requires settled unknown health. |
+| 17 | Native viewer unavailable metadata | Requiring a denied response body to complete exceeded the application's status-based error contract. Exact bounded 404/403 header waits and completed unknown UI now establish the intended behavior; missing headers still fail. |
 
 The sparse Cisco performance workload and metadata-only refresh checks were
 additional acceptance gaps, not additional numbered P2 findings. Evidence-heavy
@@ -227,3 +230,105 @@ contract class passed all 19 tests without `ADM_LAB`, with its log retained at
 `dist/atlas-integrated-contract-rerun.log`. Independent Astra follow-up approved
 the correction with no weakened evidence. This closes that assertion only; the
 original full-run failure is retained and is not relabeled as a clean full pass.
+
+### Completed live-suite run
+
+The exact-package integrated run completed on 2026-10-18 in 2,313.481 seconds:
+**379 tests, 373 passed, 3 failed, 3 skipped**. The command was
+`ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v` under the coordinator's
+held exclusive lab lock, with the candidate and historical rollback package paths
+supplied through `ADM_UPGRADE_PACKAGE` and `ADM_UPGRADE_BASELINE_PACKAGE`.
+`dist/atlas-integrated-lab-full.status.json` records the runtime source, archive
+hash, command, timestamps and exit code 1; the complete original log is preserved.
+
+The failures were the obsolete static interface assertion described above, the
+installed administrator Setup browser qualification, and the installed restricted
+viewer browser qualification. Setup's old fixture omitted deployment expectations
+before enabling a dependency-scoped job. The viewer fixture expected health
+searches even though shared intent was absent and the restricted user could not
+read contract metadata. The corrections save and verify explicit Traces-only
+intent for Setup, and verify unknown health with settled settings/contract
+responses and zero probe dispatches for the viewer. Focused reruns are recorded
+separately. All three upgrade cases,
+including real-release rollback and candidate restoration, passed. The skips were
+the explicitly opt-in V2 migration/cutover case and two distributed SHC cases; those
+environments were not enabled or claimed qualified.
+
+The first 24-test focused rerun passed 23 tests and failed the viewer case after
+the coordinator stopped its stalled Node driver. The Python runner performed
+cleanup and completed the remaining permission checks; the exclusive lab lock
+stayed held. Its 699.794-second run and the explicit interruption record remain
+at `dist/atlas-integrated-lab-requalification.{log,status.json}` and
+`dist/atlas-integrated-lab-requalification-interruption.json`. The native viewer
+had completed its dark-theme map, Find, saved-view and export assertions before
+stalling at Data health metadata. The cause was not proven. The newly introduced
+response-completion wait was then bounded by a named 90-second failure timeout
+for diagnosis. Independent review subsequently identified that successful denied
+body completion exceeded the application's error contract: the client rejects
+non-OK status headers without consuming those bodies. The final qualification
+requires exact 404/403 headers and completed unknown UI, with the two kinds of
+evidence named separately. It also counts request events to detect cancelled or
+failed probe dispatches. Both corrections were independently approved; this
+interrupted attempt is not counted as a pass.
+
+The diagnostic bounded attempt also passed 23 of 24 tests, in 387.339 seconds.
+It failed with `Timeout completing Data health metadata adm_find(1) after
+90000ms`, identifying the extra response-body wait. Its original log and status
+are retained at `dist/atlas-integrated-lab-requalification-rerun.{log,status.json}`.
+This result is not relabeled after removing that unsupported test requirement.
+
+### Final qualification and artifact binding
+
+The final focused command passed **all 24 tests, with no skips, in 334.256
+seconds**. It ran the complete `CiscoNetworkingContractTest`, `SetupBrowserTest`,
+`ViewerBrowserTest`, `SetupViewerWriteTest`, and the shared deployment-settings
+read/write permission test under the same held lab lock. The viewer passed both
+dark and light themes, including map, Find, timezone, saved-view, comparison,
+export and restricted metadata behavior. Setup verified its three original
+configuration writes plus one administrator-only shared-settings write and reload
+readback. Both fixtures restored prior settings. The final log/status are
+`dist/atlas-integrated-lab-requalification-final.{log,status.json}`; the status
+records the exact five changed test-file hashes and qualified archive hash.
+
+This is a focused closure of the three original failures, **not a clean rerun of
+all 379 tests**. The original full result and both unsuccessful focused attempts
+remain part of the record.
+
+| Final check | Actual outcome |
+| --- | --- |
+| Frontend lint, browser typecheck, Ruff lint/format, both native-browser script syntax checks | All six passed; `dist/atlas-final-static-checks.json` |
+| Installed `btool` and release validation | Passed; no `btool` warnings |
+| Installed package comparison | 75 files byte-exact; `default/app.conf` preserves every declared packaged setting; no differences or missing files |
+| Installed contract-state audit | All 8 public selectors match shipped V1; all 10 staged writers/prune searches are disabled |
+| Live pilot readiness | Exit 2, **unknown**: absent shared expectations and no selected sources; zero blocked findings, zero warnings. This is not a healthy-deployment claim |
+| Final rebuild and package binding | Build/package passed; all 95 archive entries (76 files), contents, types, permissions, ownership and links match the live-qualified package |
+| Final `python3 tools/check_release.py` | Passed against the retained qualified archive |
+| Fresh final AppInspect scan and gate | Passed against the exact retained archive: 0 errors, 0 failures, 5 warnings, 1 skipped, 127 not applicable, 113 successes |
+| Owned lab cleanup | Purge passed; owned container, volumes, image and lab secrets removed; coordinator exited the lock wrapper successfully |
+
+The existing packager does not normalize tar member timestamps. Consequently the
+fresh archive checksum differs, despite exact packaged-file equivalence. The
+deliverable remains the original live-qualified archive with SHA-256
+`e691df2369712f21fc55442064fda8d52e1c0de00aab8ee8f77780a3f7a9bb41`.
+`dist/atlas-final-package-binding/report.json` records both hashes, the source
+comparison, build command and zero content/permission differences. The final
+changes since runtime source `8813eb5` are evidence documentation and the five
+native/static qualification files; no packaged source or operational document
+changed. AppInspect and live-suite evidence therefore still apply to this exact
+deliverable. The final committed test-file hashes must match the successful
+qualification status before publication.
+
+The fresh AppInspect record is `dist/atlas-final-appinspect.status.json`, with
+the exact command, package hashes before and after scanning, report hash and
+environment hash. AppInspect 4.3.1 on Python 3.9.6 scanned the retained archive;
+both the scan and `tools/check_appinspect.py` exited successfully. The reviewer
+independently verified these bindings. Existing warnings and the package-ID skip
+remain as described above; a passing scan does not qualify a Cloud deployment.
+
+Installed evidence is retained in `dist/atlas-integrated-installed-comparison.json`,
+`dist/atlas-integrated-installed-contract.json` and
+`dist/atlas-integrated-lab-readiness.log`. Raw logs and screenshots remain local
+under `dist/`; the source coverage matrix and performance reports are committed.
+GitHub CI for the earlier evidence commit `edfb453` also passed
+(`39109541172`), with Splunk integration explicitly skipped there. Final-commit
+CI and publication are tracked separately from the local qualification.

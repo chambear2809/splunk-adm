@@ -75,9 +75,56 @@ class ViewerBrowserTest(unittest.TestCase):
         except json.JSONDecodeError as error:
             self.fail(f"viewer browser returned non-JSON evidence: {error}")
 
+    def _pin_absent_deployment_settings(self) -> None:
+        from test_permissions import _response
+
+        password = self.restricted.lab.read_secrets()["SPLUNK_PASSWORD"]
+        collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
+        record_path = collection + "/deployment"
+        status, body = _response("GET", record_path, "admin", password)
+        self.assertIn(status, (200, 404))
+        original = json.loads(body) if status == 200 else None
+        if original is not None:
+            self.assertEqual(original.get("_key"), "deployment")
+            # Preserve the application document exactly, including revision and
+            # settings_json. _user is response metadata supplied by KV Store.
+            original = {key: value for key, value in original.items() if key != "_user"}
+
+        def restore() -> None:
+            if original is not None:
+                status, _ = _response(
+                    "POST",
+                    collection,
+                    "admin",
+                    password,
+                    json.dumps(original).encode(),
+                    "application/json",
+                )
+                self.assertIn(status, (200, 201))
+                status, body = _response("GET", record_path, "admin", password)
+                self.assertEqual(status, 200)
+                restored = json.loads(body)
+                self.assertEqual(
+                    {key: value for key, value in restored.items() if key != "_user"},
+                    original,
+                )
+            else:
+                # This scenario creates no settings record. Never delete an
+                # unrelated record that appeared during the qualification.
+                status, _ = _response("GET", record_path, "admin", password)
+                self.assertEqual(status, 404)
+
+        self.addCleanup(restore)
+        if original is not None:
+            status, _ = _response("DELETE", record_path, "admin", password)
+            self.assertIn(status, (200, 204))
+        status, _ = _response("GET", record_path, "admin", password)
+        self.assertEqual(status, 404)
+
     def test_restricted_viewer_can_use_live_views(self) -> None:
         import lab
 
+        self._pin_absent_deployment_settings()
         viewer = self.restricted.username
         timezone = "Pacific/Honolulu"
         prefs = f"/servicesNS/{viewer}/user-prefs/data/user-prefs/general"
@@ -241,7 +288,30 @@ class ViewerBrowserTest(unittest.TestCase):
                 )
                 self.assertTrue(evidence.get("searchRequests"), evidence)
                 self.assertGreater(evidence.get("graphRequests", 0), 0, evidence)
-                self.assertGreater(evidence.get("healthRequests", 0), 0, evidence)
+                unknown_health = evidence.get("healthUnknown", {})
+                self.assertTrue(unknown_health.get("visible"), evidence)
+                self.assertTrue(unknown_health.get("metadataHeadersObserved"), evidence)
+                self.assertTrue(unknown_health.get("healthCompleted"), evidence)
+                self.assertEqual(unknown_health.get("settingsStatus"), 404, evidence)
+                expected_selectors = {
+                    selector["name"]
+                    for selector in json.loads(
+                        (ROOT / "research/cisco-pipeline-interface.json").read_text()
+                    )["activation"]["cutover_selectors"]
+                }
+                metadata = unknown_health.get("contractMetadata", [])
+                self.assertEqual(
+                    {row.get("name") for row in metadata}, expected_selectors, evidence
+                )
+                self.assertEqual(len(metadata), len(expected_selectors), evidence)
+                self.assertTrue(
+                    all(row.get("status") == 403 for row in metadata), evidence
+                )
+                self.assertEqual(
+                    unknown_health.get("probeCounter"), "request", evidence
+                )
+                self.assertEqual(unknown_health.get("probeRequests"), 0, evidence)
+                self.assertEqual(evidence.get("healthRequests"), 0, evidence)
                 self.assertFalse(evidence.get("requireMismatch"), evidence)
             process.stdin.write("quit\n")
             process.stdin.flush()

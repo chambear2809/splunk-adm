@@ -33,6 +33,56 @@ class SetupBrowserTest(unittest.TestCase):
                 self.fail("KV store did not become ready for Setup qualification")
             time.sleep(2)
         password = lab.read_secrets()["SPLUNK_PASSWORD"]
+        settings_collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
+        settings_path = settings_collection + "/deployment"
+        settings_status, settings_body = _response(
+            "GET", settings_path, "admin", password
+        )
+        self.assertIn(settings_status, (200, 404))
+        original_settings = (
+            json.loads(settings_body) if settings_status == 200 else None
+        )
+        if original_settings is not None:
+            self.assertIsInstance(original_settings, dict)
+            self.assertEqual(original_settings.get("_key"), "deployment")
+            # _user is KV Store response metadata, not an application setting.
+            original_settings = {
+                name: value
+                for name, value in original_settings.items()
+                if name != "_user"
+            }
+
+        def restore_settings() -> None:
+            if original_settings is None:
+                status, _ = _response("DELETE", settings_path, "admin", password)
+                self.assertIn(status, (200, 404))
+                status, _ = _response("GET", settings_path, "admin", password)
+                self.assertEqual(status, 404)
+                return
+            body = json.dumps(original_settings).encode()
+            status, _ = _response(
+                "POST", settings_path, "admin", password, body, "application/json"
+            )
+            if status == 404:
+                status, _ = _response(
+                    "POST",
+                    settings_collection,
+                    "admin",
+                    password,
+                    body,
+                    "application/json",
+                )
+            self.assertIn(status, (200, 201))
+            status, restored_body = _response("GET", settings_path, "admin", password)
+            self.assertEqual(status, 200)
+            restored = {
+                name: value
+                for name, value in json.loads(restored_body).items()
+                if name != "_user"
+            }
+            self.assertEqual(restored, original_settings)
+
+        self.addCleanup(restore_settings)
         collection = (
             "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
         )
@@ -96,6 +146,33 @@ class SetupBrowserTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, evidence)
         self.assertTrue(evidence["ok"], evidence)
         self.assertEqual(evidence["verifiedWrites"], 3, evidence)
+        self.assertEqual(evidence["verifiedDeploymentWrites"], 1, evidence)
+        self.assertTrue(evidence["deploymentReadback"], evidence)
+        settings_status, settings_body = _response(
+            "GET", settings_path, "admin", password
+        )
+        self.assertEqual(settings_status, 200)
+        saved_document = json.loads(settings_body)
+        saved_settings = json.loads(saved_document["settings_json"])
+        self.assertEqual(saved_document["_key"], "deployment")
+        self.assertEqual(saved_settings["schemaVersion"], 1)
+        self.assertRegex(
+            saved_settings["revision"],
+            r"^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$",
+        )
+        self.assertEqual(saved_document["revision"], saved_settings["revision"])
+        if original_settings is not None:
+            self.assertNotEqual(
+                saved_document["revision"], original_settings["revision"]
+            )
+        self.assertEqual(saved_settings["sources"]["traces"]["state"], "active")
+        self.assertTrue(
+            all(
+                source["state"] == "not_selected"
+                for name, source in saved_settings["sources"].items()
+                if name != "traces"
+            )
+        )
         self.assertEqual(
             lab._json("GET", macro_path)["entry"][0]["content"]["definition"],
             definition,
