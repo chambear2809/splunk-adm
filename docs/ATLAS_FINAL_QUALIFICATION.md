@@ -8,8 +8,12 @@ the user explicitly deferred that environment until access exists.
 ## Source, package and ownership
 
 - Isolated branch: `codex/atlas-final-qualification`.
-- Exact current candidate: `dist/final-qualification/packages/candidate-07.tar.gz`.
-- SHA-256: `cb37e69e0eb6670a85d11f176346aac750b08e937acbdcc7855306817ffb3005`.
+- Exact current candidate: `dist/final-qualification/packages/candidate-08.tar.gz`.
+- SHA-256: `946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`.
+- Package source: `50e098a602a21ef386172015aa2ed888b936efd4`. Qualification
+  revision `d8d4ff0a595174cd141e89818decfe6229e1e3ce` changes only the SHC
+  installed-file verifier, its tests and documentation; packaged application
+  sources and standalone integration tests are unchanged.
 - Accepted-baseline archive SHA-256:
   `e691df2369712f21fc55442064fda8d52e1c0de00aab8ee8f77780a3f7a9bb41`.
 - Source and test hashes, commands, timestamps, outcomes and package bindings
@@ -61,7 +65,7 @@ matrices passed **14 cases / 140 samples**. Matched native diagnostics contain
 six measured samples per build plus separately discarded warmup traces.
 The ordinary browser suite passed **94 tests**, and readiness tests passed
 **nine**. Source, imported fixture, served-asset and harness fingerprints agree
-across the final runs. Package 07's static assets match package 05; profiling
+across the final runs. Package 08's static assets match packages 05 and 07; profiling
 bundle bytes are not misrepresented as package bytes.
 
 This is not a universal speedup: dense Meraki selection/filtering and Catalyst
@@ -95,8 +99,8 @@ replay handling. Meraki retains its event-time/900-second behavior.
 
 Seven focused native regressions passed against the unchanged packaged SPL,
 including the complete raw → history → topology path and all five tested
-next-receipt termination cases. The final complete installed-suite result is
-recorded below when available. See [semantics and acceptance cases](LATE_CATALYST_RECEIPTS.md).
+next-receipt termination cases. All seven also passed in the clean complete
+package-08 suite. See [semantics and acceptance cases](LATE_CATALYST_RECEIPTS.md).
 
 ## C — Atomic administrator settings
 
@@ -120,8 +124,11 @@ Native standalone races, initial creation, stale revision, lost-response retry
 and viewer refusal passed. A separate real `max_rows_per_query=2` test retained
 three ledger rows, observed the native two-row cap, and required the endpoint
 to return 503/unavailable. The original limit and settings were restored and
-verified. SHC-specific native status and cross-member races remain a separate
-execution gate. See [deployment boundary and operator setup](DEPLOYMENT_HEALTH.md).
+verified. Cohosted PDL does not return Mongo replica-set/member fields. The
+SHC gate therefore checks the actual cluster/member endpoints, current member
+GUID, stable cluster GUID and exact management identities. Namespace identity
+excludes the elected captain and ephemeral PDL port. All-member KV readiness
+and live cross-member races remain separate execution gates. See [deployment boundary and operator setup](DEPLOYMENT_HEALTH.md).
 
 ## D — V2 cutover and pruning
 
@@ -138,8 +145,9 @@ are pending. No static or skipped test is presented as this deliverable.
 Three native pruning cases have passed: disabled gate causes no deletion;
 enabled fixture pruning respects retention/current/replay boundaries and
 idempotence; malformed/incomplete evidence and unauthorized writes fail closed.
-Original rows, macros and schedules were restored and verified. The complete
-installed suite also enables these cases against package 07. Production
+Original rows, macros and schedules were restored and verified. The first complete
+installed suite enabled and passed these cases against package 07. All three
+also passed in the clean complete package-08 run. Production
 pruning defaults remain disabled.
 
 ## E — Complete suites and deployment boundaries
@@ -150,13 +158,13 @@ pruning defaults remain disabled.
 | Frontend unit tests                     | 45 files / 572 tests passed                                                                    |
 | Ordinary browser regression             | 94 passed                                                                                      |
 | Python lint and formatting              | Passed                                                                                         |
-| Python unit tests                       | 531 passed                                                                                     |
-| Distributed tooling tests               | 34 passed; offline only                                                                        |
-| Build/package and release validation    | Passed for retained candidate 07                                                               |
-| Installed package bytes                 | All 85 archive files matched                                                                   |
-| Installed V1 public contract            | All eight selectors coherent; pruning closed                                                   |
+| Python unit tests                       | 557 passed                                                                                     |
+| Distributed tooling tests               | 52 passed; offline only                                                                        |
+| Build/package and release validation    | Passed for retained candidate 08                                                               |
+| Installed package bytes                 | Package 08: all 85 files byte-exact before the suite; 84 exact afterward, with only documented generated install checksum in app.conf |
+| Installed V1 public contract            | Package 08: all eight selectors coherent and pruning closed before and after the complete suite |
 | AppInspect 4.3.1 Cloud precertification | 123 success, 117 not applicable, five warnings, one skip; zero failures/errors/future failures |
-| Fresh complete installed suite          | First run has networking setup errors; clean complete rerun required                           |
+| Fresh complete installed suite          | Package 08: 393 tests, 390 passed, 3 explicit skips, zero failures/errors; 2,168.188 seconds |
 | Actual distributed/SHC                  | Pending fresh execution                                                                        |
 | Actual Splunk Cloud                     | Unavailable; explicitly deferred until access exists                                           |
 
@@ -167,13 +175,64 @@ both `python.version=python3` and `python.required=3.13`: the former satisfies
 the current checker while Enterprise 10.6 honors the required runtime. Native
 execution verified Python 3.13.11. AppInspect is not Cloud deployment evidence.
 
-The planned SHC topology is three search heads, a separate deployer and a
-separate indexing/search peer on the same host, RF3, with actual remote-search,
-shared-persistence, scheduling and V1/staged-V2 checks. It can establish bounded
+The SHC topology is three search heads, a separate deployer and a
+separate indexing/search peer on the same host, RF3. Its required application
+phases cover remote search, shared persistence, scheduling and V1/staged-V2
+behavior; these phases have not yet passed. It can establish bounded
 synthetic functionality only. It does not establish a supported production
 topology with independent machine failure domains, sizing, production TLS,
 load-balancer/SSO behavior, multisite, indexer clustering or Cloud. See
 [the exact SHC procedure and limits](SHC_FINAL_QUALIFICATION.md).
+
+The first complete run retained byte-exact installed package files throughout,
+but used an SSH Docker endpoint. Four networking setup classes correctly refused
+that endpoint, causing two additional missing-manifest errors. Downstream
+missing-control/vendor fixture failures were consistent with absent initialization;
+that attribution remains an inference requiring native rerun confirmation.
+Two recovery tests exceeded their
+five-second polling-count expectation over SSH; that assertion is unchanged
+for the native rerun. A viewer metadata response race was reproduced offline
+and fixed. The clean rerun uses the host's local Unix Docker socket, complete
+reviewed fixtures, and the exact retained package. Focused successes do not
+replace the required complete pass. The fresh native run subsequently passed
+all 393 discovered tests except the three explicit environment/opt-in skips:
+the standalone cutover rehearsal and the two distributed interface cases.
+Those three require their separate actual qualification and are not considered
+passed by the complete-suite result.
+
+The clean run used source `d8d4ff0a595174cd141e89818decfe6229e1e3ce`, the
+exact candidate-08 archive, Python 3.12.3, Node 22.13.0, and the local Docker
+socket. It ran from 18:53:55 to 19:30:04 UTC on 2026-10-18, with no source/test
+file changes during execution. The retained log SHA-256 is
+`a41af4d41a7254114207076ead63a9614bf946a5bf650571efb41aafeac929a5`.
+Evidence is under `dist/final-qualification/native-08/`.
+
+The original post-suite byte-check helper ran as the container's default OS
+user and failed to read files after the upgrade test's REST reinstall changed
+permissions. A separate read-only check as the Splunk service owner verified
+all 85 files: 84 byte-exact, and `default/app.conf` with only the documented
+generated `[install] install_source_checksum` added. Every declared setting
+remained exact; both hashes and the generated field are retained. The failed
+helper result is preserved separately from the passing complete suite and the
+successful corrected verification. V2 rehearsal starts with the same archive
+reinstalled through the normal lab procedure, followed by fresh owned fixtures.
+
+SHC startup attempts are retained individually. They exposed shared-parent
+permissions required by the image bootstrap user, CLI terminal/login behavior,
+the supported double-hyphen `--answer-yes` flag, and the native cohosted status
+schema. A diagnostic cluster also demonstrated paced PostgreSQL checkpoint and
+replica initialization followed by automatic sidecar recovery: all three
+members eventually passed strict readiness without a reset or forced restart.
+Attempt05 passed bootstrap and subsequent three-member readiness, then failed
+the bundle's installed-file verifier: all 85 package files were checked on all
+three members, and only Splunk's documented generated
+`[install] install_source_checksum` differed. The verifier had allowed the
+wrong field name. The narrow correction validates the generated field's
+observed shape, records both file hashes, and still rejects changes to declared
+settings or unrelated files. Attempt05 remains failed, with cleanup and 24
+exported JSON records retained; a fresh corrected lifecycle is required.
+Default internal sidecar TLS behavior is not represented as production
+transport qualification.
 
 ## Independent review and publication
 
@@ -182,7 +241,11 @@ status during graph aggregation, missing next-receipt attachment termination,
 inconsistent generic lab-port overrides, and incomplete SHC collection scans
 under a hidden server cap. All four were corrected and received focused
 validation. The bounded follow-up found no new actionable source defects.
-Final review of the complete final-package execution evidence is pending.
+Subsequent independent reviews covered package fingerprints, viewer response
+matching, private HEC staging, CLI terminal draining and environment isolation,
+the native SHC/PDL gates, and generated installation-checksum verification. The terminal-drain finding was corrected; later
+source reviews found no actionable defects. Final review of the complete
+final-package execution evidence is pending.
 
 Commit, PR, CI and post-merge identifiers will be recorded after qualification
 and the final independent review. No overall Cloud qualification is claimed.
