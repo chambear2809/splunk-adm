@@ -22,6 +22,13 @@ const response = (body: unknown, status = 200) =>
 const entry = (content: Record<string, unknown>, canWrite = true) => ({
   entry: [{ content, acl: { can_write: canWrite } }],
 });
+function barrier() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
 function fixture({
   admin = true,
   writable = true,
@@ -327,4 +334,52 @@ describe("administrator deployment settings persistence", () => {
     expect(read.canWrite).toBe(false);
     expect(read.error).toContain("previously observed");
   });
+  it.each(["read", "verified save"])(
+    "refuses an old read whose index macros finish after a newer %s",
+    async (advance) => {
+      const { fetcher } = fixture();
+      const blocked = barrier();
+      const resume = barrier();
+      let pauseNextIndex = false;
+      const client = new ToolkitDeploymentClient(async (input, init) => {
+        const result = await fetcher(input, init);
+        if (
+          pauseNextIndex &&
+          String(input).includes("conf-macros/adm_index_netflow?")
+        ) {
+          pauseNextIndex = false;
+          blocked.release();
+          await resume.promise;
+        }
+        return result;
+      });
+      const original = defaultExpectations();
+      original.sources.netflow.state = "active";
+      const initial = await client.write(original);
+      pauseNextIndex = true;
+      const oldRead = client.read();
+      await blocked.promise;
+
+      const changed = defaultExpectations();
+      changed.sources.netflow.state = "active";
+      changed.sources.netflow.cadenceSeconds = 120;
+      const writer =
+        advance === "read" ? new ToolkitDeploymentClient(fetcher) : client;
+      const saved = await writer.write(changed, initial.settings!.revision);
+      const newer = advance === "read" ? await client.read() : saved;
+      expect(newer.state).toBe("configured");
+      expect(newer.settings!.revision).not.toBe(initial.settings!.revision);
+      expect(newer.settings!.sources.netflow.cadenceSeconds).toBe(120);
+
+      resume.release();
+      const lateOld = await oldRead;
+      expect(lateOld.state).toBe("unavailable");
+      expect(lateOld.canWrite).toBe(false);
+      expect(lateOld.settings).toBeUndefined();
+      expect(lateOld.error).toContain("previously observed revision");
+      const ordinary = await client.read();
+      expect(ordinary.state).toBe("configured");
+      expect(ordinary.settings!.revision).toBe(newer.settings!.revision);
+    },
+  );
 });

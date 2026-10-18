@@ -158,17 +158,20 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const observedRevisions = backend.observedRevisions as string[];
       const namespace =
         typeof backend.namespace === "string" ? backend.namespace : undefined;
-      if (this.namespace && namespace && this.namespace !== namespace)
-        throw new Error(
-          "Deployment settings namespace changed. Reload this page after verifying the deployment routing.",
-        );
-      if (
-        this.observedRevision &&
-        !observedRevisions.includes(this.observedRevision)
-      )
-        throw new Error(
-          "Deployment settings refresh has not reached the previously observed revision. Retry after replication catches up.",
-        );
+      const assertFresh = () => {
+        if (this.namespace && namespace && this.namespace !== namespace)
+          throw new Error(
+            "Deployment settings namespace changed. Reload this page after verifying the deployment routing.",
+          );
+        if (
+          this.observedRevision &&
+          !observedRevisions.includes(this.observedRevision)
+        )
+          throw new Error(
+            "Deployment settings refresh has not reached the previously observed revision. Retry after replication catches up.",
+          );
+      };
+      assertFresh();
       const persistence = {
         namespace,
         observedRevisions,
@@ -250,6 +253,9 @@ export class ToolkitDeploymentClient implements DeploymentClient {
           state = "not_configured";
         sourceConfiguration[source.id] = state;
       }
+      // Another read/save can observe a successor while index macros are in
+      // flight. Recheck at publication so this snapshot cannot move it back.
+      assertFresh();
       return {
         state: "configured",
         settings,
