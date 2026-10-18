@@ -1,9 +1,18 @@
 # Final candidate distributed qualification
 
-Status: tooling and procedure prepared; no fresh live SHC result is claimed by
-this document. The earlier results in `SHC_QUALIFICATION.md` remain bound to
-their original archives. A passing offline harness test is not a live platform
-qualification result.
+Status (2026-10-18): corrected tooling and native platform bootstrap diagnostics
+are recorded; no final-candidate application qualification pass is claimed.
+Attempt05 used source
+`50e098a602a21ef386172015aa2ed888b936efd4` and candidate08 archive SHA-256
+`946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`.
+Its bootstrap and strict three-member KV/PDL readiness passed; bundle verification
+failed on the generated `install_source_checksum` field described below. The
+original failed phase remains recorded; no application checks are relabeled as
+passed. A corrected harness requires a separately recorded fresh lifecycle with
+the same unchanged candidate archive.
+The earlier results in `SHC_QUALIFICATION.md` remain bound to their original
+archives. A passing offline harness test is not a live platform qualification
+result.
 
 The accepted base for this work is
 `64473e54d1fca4311ac592bc34c4a96a022efd48`. The coordinator records the final
@@ -66,6 +75,12 @@ machine failure domains, production sizing, load balancer, SSO, indexer cluster
 or multisite deployment. It establishes bounded app functionality only and does
 not satisfy the supported production SHC topology requirement of a separate
 machine/VM per member.
+
+The platform's inherited internal sidecar TLS settings are a separate boundary
+from the harness's strict management/CLI checks. Attempt04's native Patroni log
+records disabled Etcd certificate verification. The harness does not replace
+those platform-managed sidecar settings, and the run does not qualify internal
+sidecar trust or end-to-end TLS for a production deployment.
 
 ## Coordinator execution sequence
 
@@ -158,9 +173,11 @@ before the eligible real five-minute slot, then requires the corresponding
 actual scheduler success and one summary with `records=1`, `bytes_c2s=900`.
 It restores the prior schedule flags afterward. The driver does not perform
 captain failure injection, browser automation or Cloud operations; those gates
-need separately recorded coordinator checks where required. Runtime bootstrap,
-SHC status response shapes and packaged endpoint behavior still require the
-actual fresh run. Do not relabel this driver implementation as a live pass.
+need separately recorded coordinator checks where required. Attempt04 established
+the native bootstrap/status response shapes during diagnosis; packaged endpoint
+behavior and the complete acceptance sequence still require the fresh exact
+candidate run. Do not relabel diagnostics or driver implementation as an
+application qualification pass.
 
 After the `cleanup` phase, rerun `manifest` to include cleanup evidence before
 export. Inspect unsuccessful phases separately; `cleanup` is allowed after a
@@ -179,10 +196,11 @@ first startup, preventing the previous run's corrective reingestion issue.
 wait for management readiness before authenticated captain bootstrap.
 
 `bootstrap()` uses a local Splunk CLI session, then the actual
-`bootstrap shcluster-captain` command. Config-first initialization and platform
-response shapes must be verified in the fresh run; the helper is not evidence
-that bootstrap passed. Preserve failures and stop for coordinator diagnosis.
-No automatic KV reset, second restart or readiness override is performed.
+`bootstrap shcluster-captain` command with the global `--answer-yes` flag.
+`apply_bundle()` uses that same double-hyphen spelling; the single-hyphen
+`-answer-yes` is rejected by the pinned CLI parser. Preserve failures and stop
+for coordinator diagnosis. No automatic KV reset, second restart or readiness
+override is performed.
 
 The initial fresh harness attempt completed create/support, then all five
 containers exited with code 2 during Ansible's version fact. The reported
@@ -214,27 +232,89 @@ status are retained in an exclusive mode-0600 `evidence/cli-login-*.json` file
 before rejecting a failed login, and in lifecycle state; no terminal transcript
 leaves the helper.
 
+The forked child removes `SPLUNK_USERNAME`, `SPLUNK_PASSWORD` and
+`SPLUNK_PASSCODE` before exec; the parent environment is unchanged. Native
+10.6 CLI code otherwise accepts those inherited image-bootstrap credentials,
+which caused a username-only exit before the expected password prompt in
+attempt03. A controlled native child-only scrub completed both prompts; this
+does not authorize accepting partial prompt flows. Even after the direct child
+exits, queued PTY output must pass the same prompt/byte/deadline checks through
+EOF/EIO before an exit-zero result can be accepted as a cached login.
+
 CLI TLS verification is explicit and separate from the REST client's strict
 TLS checks: the task's `[sslConfig] cliVerifyServerName = true` uses the existing
 `sslRootCAPath` and hostname/IP SANs for local and remote CLI connections, as
 specified in the [Enterprise 10.6 server.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/server.conf).
 No hostname-check bypass or broader `sslVerifyServerCert` change is applied.
-The failed piped-login attempt remains distinct from the subsequent PTY run;
-these source corrections do not establish successful SHC bootstrap.
+The failed piped-login and inherited-environment attempts retain separate
+evidence from the later successful interactive login.
+
+Attempt04 completed all five strict-CA startup/identity checks and interactive
+login, then its original bootstrap phase failed on `-answer-yes`. A separately
+recorded corrected-command diagnostic succeeded at 18:00:56 UTC. The original
+phase remains failed. All three members subsequently passed the corrected
+strict SHC/current-KV/cohosted-PDL readiness gate at 18:18:44 UTC, without a
+member restart, database reset, resync or configuration change.
+
+The first-start delay included sh1's PostgreSQL clone waiting on a paced forced
+checkpoint (`checkpoint_timeout=900`, `checkpoint_completion_target=0.9`).
+During storage initialization, PDL exhausted individual startup attempts and
+the supervisor continued retrying; native logs also recorded internal OAuth
+client-bootstrap EOF failures. These retries eventually converged automatically.
+The retained record is
+`dist/final-qualification/shc-attempt-04/evidence/diagnostic-assessment-15.json`,
+with native status, PostgreSQL/Patroni and supervisor retry diagnostics in the
+same hash-manifest-verified evidence directory. This establishes observed
+platform bootstrap behavior, not application acceptance or a production recovery
+time objective.
+
+Keep the existing bounded 1,200-second readiness wait. A `starting` or `failed`
+PDL status remains unready throughout it; PostgreSQL port health alone cannot
+satisfy the KV gate. Retain timeout evidence for coordinator diagnosis rather
+than automatically restarting, changing checkpoint settings, extending the
+deadline or bypassing a prerequisite.
 
 Apply the deployer bundle with `apply_bundle()`. Enterprise 10.6.0.5 does not
 provide `validate shcluster-bundle`; do not report a separate successful CLI
 validation. Add only the dedicated task peer to every member using
 `qualification_shc.add_remote_peer()`, then require all peer statuses `Up`.
 `verify_instances()`, `verify_shc_ready()` and `Lab.verify_candidate()` provide
-bounded gates. Verify platform endpoint response fields before accepting the
-first readiness result; unknown fields fail closed. All three members must be
-`Up`, agree on the captain and have ready KV Stores. Captain initialization,
-minimum-peer and service-ready flags must all be true.
+bounded gates. Missing or unsupported required response shapes fail closed.
+The pinned 10.6 native readiness contract is:
+
+- `/services/shcluster/member/info` reports `status=Up`, registration true and
+  maintenance false on every member; it does not provide `captain_uri`.
+- `/services/shcluster/status?advanced=1` reports the exact three owned
+  management URIs, all peers `Up`, and identical peer-GUID-to-URI mappings on
+  all members. Compare full URIs; aliases and hostname substrings do not prove
+  task ownership.
+- Every member agrees on `captain.mgmt_uri` and `captain.id`. The URI identifies
+  an owned elected member; `captain.id` is the shared cluster GUID, distinct
+  from the elected member's server GUID. Never substitute or generate either
+  platform identity.
+- Captain initialization, minimum-peer and service-ready flags are true, the
+  captain is stable, rolling restart/upgrade flags are false, and KV maintenance
+  is disabled. Every peer is synchronized, has manual detention off and
+  `restart_required=0`. The captain's own info endpoint also confirms the three
+  ready flags.
+- `/services/kvstore/status` reports both `current.status=ready` and
+  `cohosted.status=ready`, with `cohosted.serviceInfo.type=Pdl`. Each member's
+  `current.disabled` and `current.standalone` are false. Native cohosted PDL
+  responses can have `peers=null`; MongoDB replica-set/member fields are not
+  prerequisites. A ready `current` record with missing, starting or failed
+  cohosted state is rejected.
 
 `Lab.verify_candidate()` compares every installed package file on all members.
-The only non-byte-exact allowance is `default/app.conf` whitespace and Splunk's
-generated `[install] checksum`; declared values must match exactly. Record
+The only non-byte-exact allowance is `default/app.conf` whitespace and a newly
+generated `[install] install_source_checksum`, whose observed pinned-image shape
+is 40 lowercase hexadecimal characters. The [Enterprise 10.6 app.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/app.conf)
+identifies this field as automatically populated from the installation tarball.
+The harness validates its shape and records its value and both the archive-file
+and installed-file SHA-256 values; it does not equate the generated checksum to
+the raw candidate archive SHA-256. Every declared setting, including a checksum
+already declared in the archive, must match exactly. An added `checksum` key,
+other generated-field names, unexpected sections or unrelated changes are not
+allowed. Record
 task-local overrides separately. Verify effective definitions after deployment
 as well as archive bytes, because a preserved local override can change runtime
 behavior without changing `default/` files.

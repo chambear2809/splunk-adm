@@ -17,6 +17,7 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -889,7 +890,7 @@ class Lab:
         )
 
     def verify_candidate(self):
-        """Hash all installed archive files; permit only generated app checksum."""
+        """Hash package files; allow only the observed generated install checksum."""
         result = {}
         for role in MEMBERS:
             files = {}
@@ -918,17 +919,37 @@ class Lab:
                         set(baseline.sections()) == set(installed.sections()),
                         "installed app.conf sections differ",
                     )
+                    generated = {}
                     for section in baseline.sections():
                         declared = dict(baseline[section])
                         observed = dict(installed[section])
-                        if section == "install" and "checksum" not in declared:
-                            observed.pop("checksum", None)
+                        key = "install_source_checksum"
+                        if (
+                            section == "install"
+                            and key not in declared
+                            and key in observed
+                        ):
+                            require(
+                                re.fullmatch(r"[0-9a-f]{40}", observed[key])
+                                is not None,
+                                "generated app install checksum has unexpected shape",
+                            )
+                            generated[key] = observed.pop(key)
                         require(
                             declared == observed, "installed app.conf settings differ"
                         )
-                    files[name] = {"sha256": actual, "generated_checksum_only": True}
+                    files[name] = {
+                        "sha256": actual,
+                        "archive_file_sha256": expected,
+                        "normalized_app_conf": True,
+                        "generated_install_fields": generated,
+                    }
                 else:
-                    files[name] = {"sha256": actual, "byte_exact": True}
+                    files[name] = {
+                        "sha256": actual,
+                        "archive_file_sha256": expected,
+                        "byte_exact": True,
+                    }
             result[role] = files
         return result
 

@@ -282,6 +282,80 @@ class SafetyTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             client.write_evidence(self.directory, "result", {})
 
+    def candidate_check(self, installed, *, baseline=None, other=b"unchanged\n"):
+        baseline = (
+            baseline
+            or b"[install]\nstate = enabled\nbuild = 8\n[launcher]\nversion = 1.0.0\n"
+        )
+        app = self.directory / "stage/splunk_adm/default"
+        app.mkdir(parents=True, exist_ok=True)
+        (app / "app.conf").write_bytes(baseline)
+        lab = lifecycle.Lab(self.directory, self.task)
+        lab.state["candidate_files"] = {
+            "default/app.conf": hashlib.sha256(baseline).hexdigest(),
+            "default/macros.conf": hashlib.sha256(b"unchanged\n").hexdigest(),
+        }
+
+        def command(args):
+            return installed if args[-1].endswith("/app.conf") else other
+
+        with (
+            patch.object(lab, "identity", return_value="a" * 64),
+            patch.object(lifecycle, "command", side_effect=command),
+        ):
+            return lab.verify_candidate(), baseline
+
+    def test_candidate_allows_only_documented_generated_install_source_checksum(self):
+        checksum = "2bcb4b2aa985a382e071bd61e826a3041c153142"
+        installed = (
+            "[install]\nstate=enabled\nbuild=8\ninstall_source_checksum="
+            + checksum
+            + "\n[launcher]\nversion=1.0.0\n"
+        ).encode()
+        results, baseline = self.candidate_check(installed)
+        for role in client.MEMBERS:
+            item = results[role]["default/app.conf"]
+            self.assertEqual(item["sha256"], hashlib.sha256(installed).hexdigest())
+            self.assertEqual(
+                item["archive_file_sha256"], hashlib.sha256(baseline).hexdigest()
+            )
+            self.assertEqual(
+                item["generated_install_fields"], {"install_source_checksum": checksum}
+            )
+            self.assertTrue(results[role]["default/macros.conf"]["byte_exact"])
+
+    def test_candidate_refuses_bad_generated_checksum_or_unrelated_changes(self):
+        base = b"[install]\nstate = enabled\nbuild = 8\n[launcher]\nversion = 1.0.0\n"
+        cases = [
+            base.replace(b"build = 8", b"build = 9"),
+            base.replace(b"state = enabled", b"state = disabled"),
+            base.replace(b"version = 1.0.0", b"version = 2.0.0"),
+            base.replace(b"build = 8", b"build = 8\nchecksum = " + b"a" * 40),
+            base.replace(
+                b"build = 8", b"build = 8\ninstall_source_local_checksum = " + b"a" * 40
+            ),
+            base + b"extra = modified\n",
+            base + b"[extra]\nvalue = modified\n",
+        ]
+        for value in (b"", b"a" * 39, b"g" * 40, b"A" * 40, b"a" * 41):
+            cases.append(
+                base.replace(
+                    b"build = 8", b"build = 8\ninstall_source_checksum = " + value
+                )
+            )
+        for installed in cases:
+            with self.subTest(installed=installed), self.assertRaises(client.Refused):
+                self.candidate_check(installed)
+        with self.assertRaises(client.Refused):
+            self.candidate_check(base, other=b"changed macro\n")
+        declared = base.replace(
+            b"build = 8", b"build = 8\ninstall_source_checksum = " + b"a" * 40
+        )
+        with self.assertRaises(client.Refused):
+            self.candidate_check(
+                declared.replace(b"a" * 40, b"b" * 40), baseline=declared
+            )
+
 
 class ShcReadinessTests(unittest.TestCase):
     def setUp(self):
