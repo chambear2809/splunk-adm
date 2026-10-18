@@ -859,7 +859,7 @@ class Lab:
         self.save()
 
     def opt_in_settings(self):
-        """Task-local override distributed by deployer; package bytes stay exact."""
+        """Record a task override; the deployer can merge it into member defaults."""
         self._owned()
         self.copy_files(
             "deployer",
@@ -890,7 +890,17 @@ class Lab:
         )
 
     def verify_candidate(self):
-        """Hash package files; allow only the observed generated install checksum."""
+        """Hash package files and verify explicitly recorded installation variants."""
+        settings_override = self.state.get("settings_override")
+        require(
+            "settings_override" not in self.state
+            or (
+                type(settings_override) is dict
+                and settings_override
+                == {"write_mode": "qualified_shc", "platform": "enterprise"}
+            ),
+            "task settings override is malformed",
+        )
         result = {}
         for role in MEMBERS:
             files = {}
@@ -907,6 +917,54 @@ class Lab:
                     ]
                 )
                 actual = hashlib.sha256(data).hexdigest()
+                if actual != expected and name == "default/adm_settings.conf":
+                    require(
+                        settings_override is not None,
+                        "unrecorded settings default change",
+                    )
+                    baseline_data = (
+                        self.directory / "stage/splunk_adm" / name
+                    ).read_bytes()
+                    require(
+                        hashlib.sha256(baseline_data).hexdigest() == expected,
+                        "archived settings baseline differs",
+                    )
+                    baseline, installed = (
+                        configparser.RawConfigParser(),
+                        configparser.RawConfigParser(),
+                    )
+                    baseline.optionxform = installed.optionxform = str
+                    try:
+                        baseline.read_string(baseline_data.decode())
+                        installed.read_string(data.decode())
+                    except (UnicodeError, configparser.Error):
+                        raise Refused(
+                            "settings default configuration is malformed"
+                        ) from None
+                    require(
+                        baseline.defaults() == installed.defaults()
+                        and set(baseline.sections()) == set(installed.sections())
+                        and baseline.has_section("persistence")
+                        and all(
+                            key in baseline["persistence"] for key in settings_override
+                        ),
+                        "settings default sections or declared keys differ",
+                    )
+                    for section in baseline.sections():
+                        declared = dict(baseline[section])
+                        if section == "persistence":
+                            declared.update(settings_override)
+                        require(
+                            declared == dict(installed[section]),
+                            "settings default differs from exact task overlay",
+                        )
+                    files[name] = {
+                        "sha256": actual,
+                        "archive_file_sha256": expected,
+                        "observed_variant": "task_overlay_merged_to_default",
+                        "expected_overlay": {"persistence": dict(settings_override)},
+                    }
+                    continue
                 if actual != expected:
                     require(
                         name == "default/app.conf", "installed archive file differs"
@@ -950,6 +1008,13 @@ class Lab:
                         "archive_file_sha256": expected,
                         "byte_exact": True,
                     }
+                    if name == "default/adm_settings.conf":
+                        files[name]["observed_variant"] = "archive_byte_exact"
+                        files[name]["expected_overlay"] = (
+                            {"persistence": dict(settings_override)}
+                            if settings_override is not None
+                            else None
+                        )
             result[role] = files
         return result
 

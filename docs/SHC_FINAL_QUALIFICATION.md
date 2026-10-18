@@ -305,17 +305,18 @@ The pinned 10.6 native readiness contract is:
   cohosted state is rejected.
 
 `Lab.verify_candidate()` compares every installed package file on all members.
-The only non-byte-exact allowance is `default/app.conf` whitespace and a newly
+The `default/app.conf` allowance is limited to whitespace and a newly
 generated `[install] install_source_checksum`, whose observed pinned-image shape
 is 40 lowercase hexadecimal characters. The [Enterprise 10.6 app.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/app.conf)
 identifies this field as automatically populated from the installation tarball.
 The harness validates its shape and records its value and both the archive-file
 and installed-file SHA-256 values; it does not equate the generated checksum to
 the raw candidate archive SHA-256. Every declared setting, including a checksum
-already declared in the archive, must match exactly. An added `checksum` key,
+already declared in the archived app.conf, must match exactly. An added `checksum` key,
 other generated-field names, unexpected sections or unrelated changes are not
-allowed. Record
-task-local overrides separately. Verify effective definitions after deployment
+allowed. The separate, explicit settings-overlay allowance below applies only
+after the exact task opt-in is recorded. Record task-local overrides separately.
+Verify effective definitions after deployment
 as well as archive bytes, because a preserved local override can change runtime
 behavior without changing `default/` files.
 
@@ -399,6 +400,33 @@ the settings object contains `schemaVersion`, a fresh revision token and
 revision. Refusal or uncertainty is a failed prerequisite requiring evidence,
 not permission to relax namespace/KV/version checks. This run cannot establish
 Cloud or unrelated independent search-head persistence behavior.
+
+The deployer's documented default push mode is `merge_to_default`: settings in
+an app's deployer `local/` files override the corresponding settings in its
+`default/` files and are delivered to members' `default/` files. An app-specific
+or global mode can change that behavior; see the [Enterprise 10.6 deployer push-mode reference](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/10.6/update-search-head-cluster-members/use-the-deployer-to-distribute-apps-and-configuration-updates).
+The harness does not change the mode or infer its effective value from package
+identity. Initial candidate08 has no `local/` files, and support-app configuration
+is staged under the support apps' own names; neither establishes a settings
+merge into the candidate during its initial bundle.
+
+After opt-in, package verification accepts a changed
+`default/adm_settings.conf` only when lifecycle state records exactly
+`settings_override={write_mode:qualified_shc,platform:enterprise}`. It applies
+those two values to the existing `[persistence]` keys of the archived baseline
+and compares every resulting section/key/value. No other default, extra key,
+section, or unrecorded/malformed override is accepted. It records both raw file
+hashes, the exact expected overlay and observed variant
+`task_overlay_merged_to_default`. If the original default remains byte-exact,
+it records `archive_byte_exact` instead. Neither variant alone proves effective
+opt-in; all-member endpoint write-readiness, namespace and settings agreement
+checks remain required.
+
+The settings phase verifies and records all archive files immediately after its
+bundle/readiness checks, before the first settings endpoint or ledger operation.
+The reapplication phase repeats the same file verification. The candidate
+archive and its hash remain unchanged; these records explicitly distinguish a
+reviewed task configuration from the archived default bytes.
 
 `assert_standalone_only(packaged_app, source_root)` invokes the actual recovery
 and migration qualifiers behind a GET-only adapter. It passes only when each

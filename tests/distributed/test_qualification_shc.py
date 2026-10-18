@@ -357,6 +357,109 @@ class SafetyTests(unittest.TestCase):
             )
 
 
+class SettingsDefaultVerificationTests(unittest.TestCase):
+    BASELINE = b"[persistence]\nwrite_mode = disabled\nplatform = unqualified\nother = keep\n[other]\nvalue = keep\n"
+    OVERRIDE = {"write_mode": "qualified_shc", "platform": "enterprise"}
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+
+    def check(self, installed, *, recorded=False, override=None):
+        path = self.directory / "stage/splunk_adm/default/adm_settings.conf"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(self.BASELINE)
+        lab = lifecycle.Lab(self.directory, "adm-shc-settings-default")
+        lab.state["candidate_files"] = {
+            "default/adm_settings.conf": hashlib.sha256(self.BASELINE).hexdigest()
+        }
+        if recorded:
+            lab.state["settings_override"] = override
+        with (
+            patch.object(lab, "identity", return_value="a" * 64),
+            patch.object(lifecycle, "command", return_value=installed),
+        ):
+            return lab.verify_candidate()
+
+    def merged(self):
+        return self.BASELINE.replace(b"disabled", b"qualified_shc").replace(
+            b"unqualified", b"enterprise"
+        )
+
+    def test_records_byte_exact_or_exact_merged_variant_without_assuming_push_mode(
+        self,
+    ):
+        for installed, recorded, variant in (
+            (self.BASELINE, False, "archive_byte_exact"),
+            (self.BASELINE, True, "archive_byte_exact"),
+            (self.merged(), True, "task_overlay_merged_to_default"),
+        ):
+            with self.subTest(recorded=recorded, variant=variant):
+                result = self.check(
+                    installed, recorded=recorded, override=self.OVERRIDE
+                )
+                for role in client.MEMBERS:
+                    item = result[role]["default/adm_settings.conf"]
+                    self.assertEqual(item["observed_variant"], variant)
+                    self.assertEqual(
+                        item["sha256"], hashlib.sha256(installed).hexdigest()
+                    )
+                    self.assertEqual(
+                        item["archive_file_sha256"],
+                        hashlib.sha256(self.BASELINE).hexdigest(),
+                    )
+                    self.assertEqual(
+                        item["expected_overlay"],
+                        {"persistence": self.OVERRIDE} if recorded else None,
+                    )
+
+    def test_rejects_unrecorded_or_malformed_override_even_with_original_bytes(self):
+        with self.assertRaises(client.Refused):
+            self.check(self.merged())
+        for override in (
+            None,
+            {},
+            [],
+            {"write_mode": "qualified_standalone", "platform": "enterprise"},
+            {"write_mode": "qualified_shc", "platform": "cloud"},
+            {**self.OVERRIDE, "extra": "unexpected"},
+        ):
+            for installed in (self.BASELINE, self.merged()):
+                with (
+                    self.subTest(override=override, merged=installed != self.BASELINE),
+                    self.assertRaises(client.Refused),
+                ):
+                    self.check(installed, recorded=True, override=override)
+
+    def test_rejects_any_change_beyond_two_existing_persistence_keys(self):
+        merged = self.merged()
+        for installed in (
+            merged.replace(b"qualified_shc", b"qualified_standalone"),
+            merged.replace(b"enterprise", b"unqualified"),
+            merged.replace(b"other = keep", b"other = changed"),
+            merged.replace(b"value = keep", b"value = changed"),
+            merged.replace(
+                b"platform = enterprise", b"platform = enterprise\nextra = changed"
+            ),
+            merged + b"[extra]\nvalue = changed\n",
+            merged.replace(b"[other]\nvalue = keep\n", b""),
+            merged.replace(b"write_mode", b"Write_mode"),
+            merged + b"[DEFAULT]\nextra = changed\n",
+            merged.replace(
+                b"platform = enterprise",
+                b"platform = enterprise\nplatform = enterprise",
+            ),
+        ):
+            with self.subTest(installed=installed), self.assertRaises(client.Refused):
+                self.check(installed, recorded=True, override=self.OVERRIDE)
+
+    def test_override_cannot_introduce_a_key_absent_from_archived_baseline(self):
+        self.BASELINE = self.BASELINE.replace(b"platform = unqualified\n", b"")
+        with self.assertRaises(client.Refused):
+            self.check(self.merged(), recorded=True, override=self.OVERRIDE)
+
+
 class ShcReadinessTests(unittest.TestCase):
     def setUp(self):
         self.state = {
@@ -947,6 +1050,25 @@ class DriverTests(unittest.TestCase):
             "a" * 40,
             [directory / "reviewed-addon"],
         )
+
+    def test_settings_bundle_checks_files_before_endpoint_or_ledger_writes(self):
+        with (
+            patch.object(self.lab, "opt_in_settings") as opt_in,
+            patch.object(self.lab, "apply_bundle") as apply,
+            patch.object(self.driver, "_wait"),
+            patch.object(
+                self.lab,
+                "verify_candidate",
+                side_effect=client.Refused("unexpected file"),
+            ) as verify,
+            patch.object(client, "Api") as api,
+        ):
+            with self.assertRaisesRegex(client.Refused, "unexpected file"):
+                self.driver.phase_settings()
+        opt_in.assert_called_once()
+        apply.assert_called_once()
+        verify.assert_called_once()
+        api.assert_not_called()
 
     def test_failed_phase_retains_lock_and_does_not_cleanup_or_complete(self):
         with (

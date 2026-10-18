@@ -1616,6 +1616,8 @@ class Driver:
         self.lab.opt_in_settings()
         self.lab.apply_bundle()
         self._wait(client.verify_shc_ready)
+        files = self.lab.verify_candidate()
+        self._record("settings-installed-files", files)
         first = client.Api("sh1").json("GET", client.SETTINGS)
         client.require(
             first.get("state") == "absent",
@@ -1669,6 +1671,7 @@ class Driver:
             "settings"
         ]
         return {
+            "files": files,
             "namespace": namespace,
             "initial": initial,
             "subsequent": subsequent,
