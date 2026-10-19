@@ -102,7 +102,23 @@ try {
     const value = await readFile(await item.path(), "utf8");
     expect(value.length).toBeGreaterThan(0);
     await writeFile(destination, value, { mode: 0o600, flag: "wx" });
+    // JSON/CSV export handlers close the popover after starting the download.
+    await expect(region).not.toBeVisible();
     return value;
+  }
+  async function selectMapCard(card, previous) {
+    await expect(card).toHaveCount(1);
+    await expect(card).toBeVisible();
+    // Findings can keep Details open beside the SVG even without a selection.
+    // Exercise the card's supported keyboard handler instead of depending on
+    // its pointer center remaining outside that docked panel after layout.
+    await card.focus();
+    await expect(card).toBeFocused();
+    await card.press("Enter");
+    await expect(card).toHaveAttribute("aria-pressed", "true");
+    await expect(card).toBeFocused();
+    if (previous)
+      await expect(previous).toHaveAttribute("aria-pressed", "false");
   }
   async function map(scenario) {
     const args = new URLSearchParams({
@@ -165,13 +181,12 @@ try {
     const selected = selectScenarioEvidence(graph, scenario);
     const { observations, connection, ipClient, bindings } = selected;
     const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-    await page.keyboard.press("Escape");
     stage = `${scenario.cluster}: client Inspector provenance`;
-    const card = adm
-      .locator('.map-canvas .item[role="button"]')
-      .filter({ hasText: scenario.clientMac });
-    await expect(card).toHaveCount(1);
-    await card.click();
+    const card = adm.locator(".map-canvas").getByRole("button", {
+      name: `Network client ${client.label}`,
+      exact: true,
+    });
+    await selectMapCard(card);
     const details = page.getByRole("complementary", { name: "Details" });
     await expect(details).toContainText(scenario.sourceAuthority);
     await expect(details).toContainText(scenario.attachmentDeviceId);
@@ -189,12 +204,11 @@ try {
       for (const record of observation.traffic_observations)
         await expect(trafficDetails).toContainText(record.source_authority);
     stage = `${scenario.cluster}: separate unresolved IP identity and tuple-bound path`;
-    const ipCard = adm.getByRole("button", {
+    const ipCard = adm.locator(".map-canvas").getByRole("button", {
       name: `Unknown IP ${scenario.clientIp}, identity unknown`,
       exact: true,
     });
-    await expect(ipCard).toHaveCount(1);
-    await ipCard.click();
+    await selectMapCard(ipCard, card);
     await expect(details).toContainText(
       "No identity record covers this address",
     );
