@@ -109,6 +109,10 @@ SCOPES = (
     ("apic", "192.0.2.50", "prod", ""),
     ("nd_host", "192.0.2.60", "prod", ""),
 )
+V2_UNMAPPED_TOPOLOGY_WARNINGS = (
+    "No retained Catalyst client history is available; enable and backfill the source-qualified history builder before expecting Catalyst attachment context.",
+    "Nexus Dashboard fabric labels are not yet correlated into V2 inventory; flow observations remain available separately.",
+)
 
 
 class SavedSearchDeadline(RuntimeError):
@@ -737,6 +741,11 @@ def v2_fixture_inventory(source):
     scenario = json.loads((source / "fixtures/raw-aci/scenario.json").read_text())
     fabric = scenario["fabric"]
     authority = fabric["apic"]["oob"]
+    client.require(
+        [row for row in SCOPES if row[:2] == ("apic", authority)]
+        == [("apic", authority, "prod", "")],
+        "V2 fixture oracle requires the APIC's explicit unclustered scope mapping",
+    )
     expected = {}
     for node in [*fabric["switches"], {**fabric["apic"], "role": "controller"}]:
         native = f"pod-{fabric['pod_id']}/node-{node['node_id']}"
@@ -757,6 +766,11 @@ def v2_fixture_inventory(source):
             continue
         metadata = envelope["event"]["object"]["metadata"]
         cluster = envelope["fields"]["k8s.cluster.name"]
+        client.require(
+            [row for row in SCOPES if row[:2] == ("cluster", cluster)]
+            == [("cluster", cluster, "prod", cluster)],
+            "V2 fixture Kubernetes scope/cluster mapping differs",
+        )
         identity = "host:" + client.digest(
             ["kubernetes_node", cluster, metadata["uid"]]
         )
@@ -799,24 +813,21 @@ def semantic_v2_topology(rows, inventory):
     client.require(
         len(meta) == 1
         and int(meta[0].get("devices", 0)) == len(inventory)
-        and int(meta[0].get("links", -1)) == 0,
+        and int(meta[0].get("links", -1)) == 0
+        and int(meta[0].get("interfaces", -1)) == 0,
         "V2 topology counts differ",
     )
     warnings = as_list(meta[0].get("warnings"))
-    required = (
-        "No retained Catalyst client history is available;",
-        "Some inventory records, links, or interfaces have missing",
-        "Nexus Dashboard fabric labels are not yet correlated",
-    )
-    allowed = (*required, "Some LLDP peers could not be matched")
+    # Every nonempty-ID device is a supported inventory row, including the
+    # explicitly unmapped APIC devices above. With no APIC cluster mapping,
+    # fabric/LLDP branches filter their rows before unsupported-row counting.
+    # NX-OS input is outside this fixture's topology window. Consequently this
+    # fixture has neither unsupported rows nor retained unresolved LLDP rows;
+    # the corresponding conditional warnings must be absent. The standalone
+    # fixture maps its APIC to a cluster and has different warning expectations.
     client.require(
         all(isinstance(value, str) for value in warnings)
-        and all(
-            any(value.startswith(prefix) for value in warnings) for prefix in required
-        )
-        and all(
-            isinstance(value, str) and value.startswith(allowed) for value in warnings
-        ),
+        and sorted(warnings) == sorted(V2_UNMAPPED_TOPOLOGY_WARNINGS),
         "V2 topology uncertainty diagnostics are missing or unexpected",
     )
     return {

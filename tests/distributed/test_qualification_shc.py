@@ -3320,7 +3320,7 @@ class DriverTests(unittest.TestCase):
         with self.assertRaises(client.Refused):
             runner.semantic_v2_graph([], self.driver.expected)
 
-    def test_v2_topology_preserves_unmapped_authority_and_suppresses_adjacency(self):
+    def v2_topology_fixture(self):
         inventory = self.driver.v2_inventory
         rows = [
             {"row_type": "device", "device_id": identity, **value}
@@ -3331,13 +3331,18 @@ class DriverTests(unittest.TestCase):
                 "row_type": "meta",
                 "devices": str(len(inventory)),
                 "links": "0",
+                "interfaces": "0",
                 "warnings": [
-                    "No retained Catalyst client history is available; fixture has none.",
-                    "Some inventory records, links, or interfaces have missing cluster evidence.",
-                    "Nexus Dashboard fabric labels are not yet correlated into V2 inventory.",
+                    "No retained Catalyst client history is available; enable and backfill the source-qualified history builder before expecting Catalyst attachment context.",
+                    "Nexus Dashboard fabric labels are not yet correlated into V2 inventory; flow observations remain available separately.",
                 ],
             }
         )
+        return rows
+
+    def test_v2_topology_preserves_unmapped_authority_and_suppresses_adjacency(self):
+        inventory = self.driver.v2_inventory
+        rows = self.v2_topology_fixture()
         result = runner.semantic_v2_topology(rows, inventory)
         self.assertEqual(result["devices"], 9)
         self.assertEqual(sum(key.startswith("aci:") for key in inventory), 6)
@@ -3350,6 +3355,63 @@ class DriverTests(unittest.TestCase):
         rows.append({"row_type": "link", "a_device": "a", "b_device": "b"})
         with self.assertRaisesRegex(client.Refused, "invented adjacency"):
             runner.semantic_v2_topology(rows, inventory)
+
+    def test_v2_topology_requires_exact_fixture_diagnostics_no_missing_extra_or_duplicate(
+        self,
+    ):
+        for case in (
+            "missing-history",
+            "missing-nd",
+            "generic-inventory",
+            "lldp",
+            "duplicate",
+            "changed-text",
+            "non-string",
+        ):
+            rows = self.v2_topology_fixture()
+            warnings = rows[-1]["warnings"]
+            if case == "missing-history":
+                warnings.pop(0)
+            elif case == "missing-nd":
+                warnings.pop()
+            elif case == "generic-inventory":
+                warnings.append(
+                    "Some inventory records, links, or interfaces have missing, conflicting, or differently scoped device identities and remain unresolved."
+                )
+            elif case == "lldp":
+                warnings.append(
+                    "Some LLDP peers could not be matched to a unique Kubernetes host in the same scope and cluster; those attachments remain unresolved."
+                )
+            elif case == "duplicate":
+                warnings.append(warnings[0])
+            elif case == "changed-text":
+                warnings[0] = (
+                    "No retained Catalyst client history is available; invented suffix."
+                )
+            else:
+                warnings[0] = None
+            with (
+                self.subTest(case=case),
+                self.assertRaisesRegex(client.Refused, "uncertainty diagnostics"),
+            ):
+                runner.semantic_v2_topology(rows, self.driver.v2_inventory)
+
+    def test_v2_topology_zero_adjacency_counts_and_mapping_oracle_are_strict(self):
+        rows = self.v2_topology_fixture()
+        rows[-1]["interfaces"] = "1"
+        with self.assertRaisesRegex(client.Refused, "counts differ"):
+            runner.semantic_v2_topology(rows, self.driver.v2_inventory)
+        for kind in ("apic", "cluster"):
+            altered = tuple(
+                (row[0], row[1], row[2], "invented-cluster") if row[0] == kind else row
+                for row in runner.SCOPES
+            )
+            with (
+                self.subTest(kind=kind),
+                patch.object(runner, "SCOPES", altered),
+                self.assertRaisesRegex(client.Refused, "mapping"),
+            ):
+                runner.v2_fixture_inventory(TOOLS.parent)
 
     def test_v2_traffic_requires_raw_tuple_parity_and_unknown_counters(self):
         raw = [
