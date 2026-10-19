@@ -26,6 +26,152 @@ const interval = (record, start, end) => {
   return [first, last];
 };
 
+// Independent qualification contract for raw query JSON -> graph JSON.
+// Only these identifier fields may change number -> text; only the literal
+// metric flags "0"/"1" may change to boolean. Known optional null/"Null"/empty
+// values represent absence. Every other retained value, field and order is exact.
+const trafficIdentifiers = new Set(
+  (
+    "source_authority routing_domain observation_domain_id flow_id sequence " +
+    "vpn_id ingress_overlay_session_id egress_overlay_session_id"
+  ).split(" "),
+);
+const trafficText = new Set(
+  (
+    "source source_authority routing_domain observation_domain_id exporter_ip " +
+    "flow_id record_fingerprint sequence direction observation_point " +
+    "ingress_interface egress_interface exporter_sampling_mode vpn_id " +
+    "ingress_overlay_session_id egress_overlay_session_id counter_semantics " +
+    "source_mac destination_mac interface_in interface_out domain_kind scope " +
+    "cluster profile mapping_status source_ip destination_ip transport " +
+    "event_identity_status quality_errors quality_warnings"
+  ).split(" "),
+);
+const trafficNumbers = new Set(
+  (
+    "first_seen last_seen collected_time bytes_in bytes_out packets_in packets_out " +
+    "exporter_sampling_interval records source_port destination_port raw_bytes " +
+    "raw_packets raw_bytes_in raw_bytes_out raw_packets_in raw_packets_out " +
+    "server_port"
+  ).split(" "),
+);
+const trafficScalars = new Set([
+  "observation_domain_present",
+  "received_time",
+  "raw_sampling",
+]);
+const attachmentText = new Set(
+  (
+    "basis status device_id device_name device_mac device_serial client_source " +
+    "client_authority client_native_id"
+  ).split(" "),
+);
+const attachmentTimes = new Set([
+  "event_time",
+  "received_time",
+  "collected_time",
+]);
+const nonnegative = (value) =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0;
+
+export function normalizeEvidenceRecords(records, kind) {
+  assert(["traffic", "attachments"].includes(kind), "unknown evidence kind");
+  assert(Array.isArray(records), "evidence records must be an array");
+  return records.map((record) => {
+    assert(
+      record && typeof record === "object" && !Array.isArray(record),
+      "evidence record must be an object",
+    );
+    const normalized = {};
+    for (const [field, value] of Object.entries(record)) {
+      const text = kind === "traffic" ? trafficText : attachmentText;
+      const allowed =
+        text.has(field) ||
+        (kind === "traffic"
+          ? trafficNumbers.has(field) ||
+            trafficScalars.has(field) ||
+            ["metrics_authoritative", "quality_status"].includes(field)
+          : attachmentTimes.has(field) || field === "ssid_number");
+      assert(allowed, `unknown ${kind} evidence field: ${field}`);
+      if (value === null || value === "Null" || value === "") continue;
+      let canonical = value;
+      if (
+        kind === "traffic" &&
+        trafficIdentifiers.has(field) &&
+        typeof value === "number"
+      ) {
+        assert(
+          Number.isSafeInteger(value) && value >= 0,
+          "numeric evidence identifier must be a safe nonnegative integer",
+        );
+        canonical = value.toString();
+      } else if (kind === "traffic" && field === "metrics_authoritative") {
+        assert(
+          typeof value === "boolean" || value === "0" || value === "1",
+          "invalid metrics-authoritative evidence flag",
+        );
+        canonical = value === "0" ? false : value === "1" ? true : value;
+      }
+      if (text.has(field))
+        assert.equal(typeof canonical, "string", "invalid evidence text");
+      else if (kind === "traffic" && trafficNumbers.has(field))
+        assert(nonnegative(canonical), "invalid numeric traffic evidence");
+      else if (kind === "traffic" && trafficScalars.has(field))
+        assert(
+          typeof canonical === "string" || nonnegative(canonical),
+          "invalid scalar traffic evidence",
+        );
+      else if (field === "quality_status")
+        assert(
+          ["accepted", "accepted_with_warning", "excluded"].includes(canonical),
+          "invalid traffic quality status",
+        );
+      else if (kind === "attachments" && attachmentTimes.has(field)) {
+        assert(
+          nonnegative(canonical) ||
+            (typeof canonical === "string" &&
+              /^\d+(?:\.\d+)?$/.test(canonical)),
+          "invalid attachment evidence time",
+        );
+        assert(
+          Number(canonical) <= 8_640_000_000_000,
+          "attachment evidence time exceeds epoch bound",
+        );
+      } else if (kind === "attachments" && field === "ssid_number")
+        assert(
+          typeof canonical === "string" || nonnegative(canonical),
+          "invalid attachment SSID number",
+        );
+      normalized[field] = canonical;
+    }
+    if (
+      kind === "traffic" &&
+      normalized.first_seen !== undefined &&
+      normalized.last_seen !== undefined
+    )
+      assert(
+        normalized.first_seen <= normalized.last_seen,
+        "reversed traffic evidence times",
+      );
+    return normalized;
+  });
+}
+
+export function assertOriginalEvidence(actual, raw, kind) {
+  // A graph export must already satisfy the canonical contract. Normalizing
+  // both sides permissively would hide a broken or malformed frontend export.
+  assert.deepEqual(
+    actual,
+    normalizeEvidenceRecords(actual, kind),
+    "export evidence is not canonical",
+  );
+  assert.deepEqual(
+    actual,
+    normalizeEvidenceRecords(raw, kind),
+    `original ${kind} record changed in export`,
+  );
+}
+
 function backendTuples(row, nodes) {
   const [start, end] = interval(row, "adm_ct", "adm_cend");
   const service = nodes.get(row.adm_fe_id);
@@ -186,15 +332,15 @@ export function selectScenarioEvidence(graph, scenario) {
       (item) => item.id === edge.id,
     );
     assert.equal(edge.target, recorded.target);
-    assert.deepEqual(
+    assertOriginalEvidence(
       edge.traffic_observations,
       recorded.traffic,
-      "original observation record changed in export",
+      "traffic",
     );
-    assert.deepEqual(
+    assertOriginalEvidence(
       edge.attachment_evidence,
       recorded.attachments,
-      "original MAC attachment record changed in export",
+      "attachments",
     );
     const service = nodes.get(edge.target);
     assert(

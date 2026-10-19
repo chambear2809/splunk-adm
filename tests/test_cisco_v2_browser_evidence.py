@@ -11,10 +11,16 @@ import unittest
 
 HELPER = Path(__file__).parent / "splunk/cisco-v2-evidence.mjs"
 RUN = """
-const { selectScenarioEvidence, assertScenarioCsv } = await import(process.argv[1]);
+const { selectScenarioEvidence, assertScenarioCsv, assertOriginalEvidence } = await import(process.argv[1]);
 let input = ''; for await (const chunk of process.stdin) input += chunk;
 const value = JSON.parse(input);
 try {
+  if (value.evidenceComparison) {
+    const {actual, raw, kind} = value.evidenceComparison;
+    assertOriginalEvidence(actual, raw, kind);
+    process.stdout.write(JSON.stringify({ok:true}));
+    process.exit(0);
+  }
   const selected = selectScenarioEvidence(value.graph, value.scenario);
   if (value.context !== undefined)
     assertScenarioCsv(value.context, value.flows, selected, value.graph, value.scenario);
@@ -225,6 +231,165 @@ class CiscoV2BrowserEvidenceTest(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertNotEqual(result["mac"], result["ip"])
         self.assertIn("No identity record", result["reason"])
+
+    @staticmethod
+    def normalized_fixture():
+        value = CiscoV2BrowserEvidenceTest.fixture()
+        actual = value["graph"]["edges"][0]["traffic_observations"][0]
+        raw = value["scenario"]["observationRecords"][0]["traffic"][0]
+        # Reproduce the reported raw query/export representation differences.
+        for field, number in (
+            ("flow_id", 47001),
+            ("observation_domain_id", 701),
+            ("routing_domain", 20),
+            ("vpn_id", 20),
+            ("sequence", 1001),
+            ("ingress_overlay_session_id", 90101),
+            ("egress_overlay_session_id", 90201),
+        ):
+            raw[field], actual[field] = number, str(number)
+        raw["source_authority"], actual["source_authority"] = 192, "192"
+        raw["metrics_authoritative"], actual["metrics_authoritative"] = "0", False
+        raw.update(observation_point="", quality_errors="Null", collected_time=None)
+        raw.update(raw_sampling=0, records=0, observation_domain_present=0)
+        actual.update(raw_sampling=0, records=0, observation_domain_present=0)
+        attachment = value["scenario"]["observationRecords"][0]["attachments"][0]
+        attachment.update(device_serial="", collected_time=None, device_name="Null")
+        return value
+
+    def test_explicit_raw_to_export_normalization_and_exact_canonical_csv(self):
+        value, _, _ = self.with_exports(self.normalized_fixture())
+        self.assertTrue(self.run_helper(value)["ok"])
+        # The other documented metric literal is equally explicit.
+        value["scenario"]["observationRecords"][0]["traffic"][0][
+            "metrics_authoritative"
+        ] = "1"
+        value["graph"]["edges"][0]["traffic_observations"][0][
+            "metrics_authoritative"
+        ] = True
+        value, _, _ = self.with_exports(value)
+        self.assertTrue(self.run_helper(value)["ok"])
+
+    def test_canonical_graph_must_not_contain_raw_representation_or_empty_members(self):
+        for update in (
+            {"flow_id": 47001},
+            {"metrics_authoritative": "0"},
+            {"observation_point": ""},
+            {"quality_errors": "Null"},
+            {"collected_time": None},
+        ):
+            value = self.normalized_fixture()
+            value["graph"]["edges"][0]["traffic_observations"][0].update(update)
+            with self.subTest(update=update):
+                self.assertFalse(self.run_helper(value)["ok"])
+
+    def test_normalization_rejects_malformed_raw_types_and_unknown_fields(self):
+        for update in (
+            {"flow_id": True},
+            {"flow_id": 2**53},
+            {"flow_id": 1.5},
+            {"routing_domain": []},
+            {"metrics_authoritative": 0},
+            {"metrics_authoritative": "false"},
+            {"first_seen": "100"},
+            {"raw_packets": -1},
+            {"quality_status": "unverified"},
+            {"unexpected_provenance": ""},
+            {"received_time": False},
+        ):
+            value = self.normalized_fixture()
+            value["scenario"]["observationRecords"][0]["traffic"][0].update(update)
+            with self.subTest(update=update):
+                self.assertFalse(self.run_helper(value)["ok"])
+
+    def test_normalization_does_not_drop_or_coerce_changed_material_evidence(self):
+        for update in (
+            {"flow_id": "47002"},
+            {"flow_id": "047001"},
+            {"observation_domain_id": "702"},
+            {"routing_domain": "21"},
+            {"vpn_id": "21"},
+            {"source_authority": "another-exporter"},
+            {"metrics_authoritative": True},
+            {"source_ip": "10.61.0.21"},
+            {"first_seen": 100.5},
+            {"record_fingerprint": "another-fingerprint"},
+            {"observation_point": "new-assertion"},
+            {"raw_sampling": "0"},
+            {"records": "0"},
+        ):
+            value = self.normalized_fixture()
+            value["graph"]["edges"][0]["traffic_observations"][0].update(update)
+            with self.subTest(update=update):
+                self.assertFalse(self.run_helper(value)["ok"])
+        for field in ("flow_id", "metrics_authoritative", "raw_sampling", "records"):
+            value = self.normalized_fixture()
+            value["graph"]["edges"][0]["traffic_observations"][0].pop(field)
+            with self.subTest(omitted=field):
+                self.assertFalse(self.run_helper(value)["ok"])
+
+    def test_attachment_omissions_are_bounded_and_retained_types_remain_exact(self):
+        for update in (
+            {"client_authority": "another-controller"},
+            {"device_id": "another-switch"},
+            {"status": "new-status"},
+            {"collected_time": 100},
+            {"device_name": ""},
+            {"unexpected_provenance": ""},
+        ):
+            value = self.normalized_fixture()
+            value["graph"]["edges"][0]["attachment_evidence"][0].update(update)
+            with self.subTest(update=update):
+                self.assertFalse(self.run_helper(value)["ok"])
+        for actual, raw in (
+            ({"event_time": 100}, {"event_time": "100"}),
+            ({"ssid_number": 1}, {"ssid_number": "1"}),
+            ({"event_time": -1}, {"event_time": -1}),
+            ({"event_time": "not-time"}, {"event_time": "not-time"}),
+            ({"client_native_id": 123}, {"client_native_id": 123}),
+        ):
+            with self.subTest(actual=actual, raw=raw):
+                self.assertFalse(
+                    self.run_helper(
+                        {
+                            "evidenceComparison": {
+                                "kind": "attachments",
+                                "actual": [actual],
+                                "raw": [raw],
+                            }
+                        }
+                    )["ok"]
+                )
+
+    def test_context_csv_remains_exact_to_canonical_graph_after_raw_normalization(self):
+        value, context, _ = self.with_exports(self.normalized_fixture())
+        original = json.loads(context[0]["evidence_json"])
+        self.assertIs(original["metrics_authoritative"], False)
+        original["metrics_authoritative"] = "0"
+        context[0]["evidence_json"] = json.dumps(original)
+        value["context"] = self.as_csv(context)
+        self.assertFalse(self.run_helper(value)["ok"])
+
+    def test_records_and_array_order_cannot_be_lost_or_replaced(self):
+        for actual, raw in (
+            (None, []),
+            ([None], [None]),
+            ([["nested"]], [["nested"]]),
+            ([{"flow_id": "1"}], [{"flow_id": 1}, {"flow_id": 2}]),
+            ([{"flow_id": "2"}, {"flow_id": "1"}], [{"flow_id": 1}, {"flow_id": 2}]),
+        ):
+            with self.subTest(actual=actual, raw=raw):
+                self.assertFalse(
+                    self.run_helper(
+                        {
+                            "evidenceComparison": {
+                                "kind": "traffic",
+                                "actual": actual,
+                                "raw": raw,
+                            }
+                        }
+                    )["ok"]
+                )
 
     def test_other_client_scope_tuple_time_and_aggregate_substitution_are_rejected(
         self,
