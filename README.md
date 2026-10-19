@@ -1,20 +1,30 @@
 # Application Atlas
 
-**Application dependency mapping in Splunk.** Application Atlas connects network flows, Kubernetes history, application traces and Cisco infrastructure data to show who talks to what, over which ports, and how clients reach an application.
+**Application dependency mapping in Splunk.** Application Atlas shows how clients, applications and infrastructure communicate. It combines network flows, Kubernetes history, application traces and Cisco infrastructure data into a map of who talks to what, over which ports, and how clients reach an application.
+
+Atlas runs inside Splunk and uses data your teams already collect. Network observations show the connections; workload history identifies the systems behind the IP addresses; traces add service-level context. Together, they help application, network and security teams investigate the same dependency with a shared set of evidence.
 
 ## Why it matters
 
 IP addresses change, workloads move, and dependency evidence is spread across network, platform and application tools. Atlas brings that context together to help teams:
 
-- **Troubleshoot:** connect clients, services, workloads and external systems with traffic observations.
-- **Plan changes:** identify dependencies before migrations, network changes or segmentation.
-- **Review connectivity:** export required flows and inspect ACI policy context and evidence gaps.
+- **Troubleshoot across teams:** connect a client or service to its workloads, external dependencies and traffic observers, reducing manual searches across separate tools.
+- **Plan changes:** identify observed dependencies before a migration, network change or segmentation project so teams can review the connections that need to remain available.
+- **Review connectivity:** export required flows and inspect available ACI policy context, while seeing which conclusions are supported and where evidence is missing.
 
-The map distinguishes observations from inferred candidate paths. Missing data stays unresolved; it is never replaced with demo data.
+The map distinguishes observed traffic from inferred candidate paths. Device inventory can suggest a fabric path, but it does not prove the route a packet took. Missing data stays unresolved; it is never replaced with demo data.
+
+## How it works
+
+1. **Collect into Splunk.** Existing add-ons and collectors ingest flows, controller inventory, Kubernetes objects and spans into source indexes.
+2. **Build dependency history.** Scheduled searches normalize traffic into conversations and maintain endpoint, workload and Service history in summary indexes and KV Store. Correlation uses the relevant time and routing scope, so reused IPs in unrelated networks do not become one identity.
+3. **Explore an application.** Select an application or use Find, choose a scope and time window, and build the map. Inspect dependencies, ports, observers, candidate paths and supporting evidence, or export required flows. Data health explains source freshness and scheduled-search outcomes against the configured expectations.
+
+For example, a client reaches a Kubernetes LoadBalancer address and the application calls a database VM. Flow records establish the observed connections; Kubernetes history identifies the frontend and workloads; compatible Hubble evidence can connect that client's frontend connection to a backend pod. ACI inventory adds the VM's network context, and traces add service calls where instrumented. If the backend evidence is missing or ambiguous, that part stays unresolved.
 
 ## Products and what each must provide
 
-**Splunk is required; other products depend on the features you need.** Network conversations require a supported traffic feed. Kubernetes history and traces add workload and application context.
+**Splunk is required; other products depend on the features you need.** Traffic feeds establish connections, inventory supplies identity and attachment context, and Kubernetes history and traces explain application relationships. Inventory alone does not establish that traffic occurred. The linked guides provide exact fields, supported versions and setup steps.
 
 | Product                                                                            | What it adds                                                                           | Required configuration or data                                                                                                       |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
@@ -30,7 +40,13 @@ The map distinguishes observations from inferred candidate paths. Missing data s
 | [**Catalyst Center — optional V2**](docs/operators/cisco-enterprise-networking.md) | Wired-client identity and attachment observations                                      | Enterprise Networking add-on, scoped client API access and explicit source profiles.                                                 |
 | [**Meraki — optional V2**](docs/operators/cisco-enterprise-networking.md)          | Wireless-client attachment context                                                     | Meraki add-on, association events, compatible flow evidence and source profiles. NetFlow alone cannot establish wireless attachment. |
 
-Optional SD-WAN IPFIX retains overlay references, not router/tunnel topology. Verify exact product versions and compatibility in the guides.
+Choose sources by the question you want to answer:
+
+- **Which systems communicate?** Start with a supported traffic feed and explicit routing-scope mappings. Without workload evidence, endpoints may remain IP addresses. Find can bypass an empty catalog only when service/workload bindings already exist; traffic alone does not provide an arbitrary-IP map entry point.
+- **Which Kubernetes workload served a client?** Add object history and compatible Hubble handoff evidence. Traces add service calls and bindings; they are optional for network-derived conversations.
+- **What network or client context applies?** Add ACI/Nexus inventory for fabric context, FTD for firewall observations, or qualified Catalyst/Meraki V2 enrichment for client attachment.
+
+HEC is Splunk's HTTP Event Collector; OTLP is the OpenTelemetry export protocol. RBAC grants the collector permission to read Kubernetes objects. Optional SD-WAN IPFIX retains overlay references, not router/tunnel topology. Verify exact product versions and compatibility in the guides.
 
 ## Get started
 
