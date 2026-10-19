@@ -1,13 +1,35 @@
 # Final candidate distributed qualification
 
-Status (2026-10-19): Attempt11 failed the 1200-second bootstrap readiness gate
+Status (2026-10-19 UTC): Attempt16 completed every required application gate
+using the unchanged candidate09 archive and frozen source28 at
+`5391d93d7fe4ca63aab63080fc833979d09173bb`. It required the explicitly
+recorded SDK prerequisite repair described below; its first refusal import
+failure is retained. Both original distributed cases, settings races,
+reapplication and verified cleanup/export passed. This is same-host synthetic
+SHC functionality, with the production and Cloud boundaries below.
+
+Historical attempts: Attempt12 was interrupted when its EC2 host was
+terminated externally at `03:13:15Z`. Captain-bootstrap CLI acknowledgment
+does not establish readiness; no application phases ran, and no original remote
+evidence snapshot was exported. After existing-host checks and the user's
+authorization of a new disposable host, Attempt13 ran on
+`i-029223a47cbb06aee`. It passed unassisted bootstrap, bundle distribution,
+both original interface cases and collection checks, then failed the exact
+base-classification oracle. The installed CiscoSecurityCloud 3.7.2 add-on
+correctly rewrote four submitted `cisco:isovalent` events to
+`cisco:isovalent:processConnect`; the qualifier had expected their submitted
+sourcetype. All 963 events and the other 15 groups matched. No application
+builder was dispatched. The failed prefix is retained. Its reviewed correction ran as Attempt14,
+which passed the V1 application gates and then failed the staged V2 diagnostic
+oracle described below. Attempt15 subsequently failed in the runtime settings-overlay copy; those attempts do not establish application acceptance.
+Attempt11 failed the 1200-second bootstrap readiness gate
 after 1202.322 seconds at `2026-10-19T02:53:42Z`. No application phases ran.
 An ordinary coordinator-controlled Splunk restart of sh1 at
 `02:51:44Z`–`02:52:20Z` returned exit 0, but did not establish full KV readiness.
 This attempt is an assisted failed platform preparation, not an application
 qualification pass. Attempt10 earlier failed the base phase, where the interface
 writer completed with a warning and no inventory rows. No
-complete final-candidate SHC application qualification pass is claimed.
+application acceptance is attributed to Attempt10.
 Frozen source22 `7fc04abbda74b2840174fe4a305220dae7237873` and candidate09
 archive SHA-256
 `024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097`
@@ -24,7 +46,7 @@ The next correction adds reviewed positive NX-OS input and an independent exact
 inventory oracle while retaining strict warning rejection. It passed independent
 review and ran as Attempt11 from source
 `56947e7466851ec2b6584eb2060466551a5314f2`, with the unchanged candidate09
-archive and 144 verified source inputs. Application qualification remains pending.
+archive and 144 verified source inputs. Attempt11 did not qualify application behavior.
 The new-source correction described below permits explicit readiness-only retry
 after a durably acknowledged bootstrap; it is not applied to frozen Attempt11.
 The coordinator retains exclusive ownership of execution, export and cleanup.
@@ -43,14 +65,268 @@ complete installed-suite result.
 
 ## Target and ownership
 
-The authorized disposable qualification host is EC2
+The historical authorized disposable qualification host was EC2
 `i-0b186b390ea7ff8dc` in `us-east-1`, named
 `splunk106-validation-20261007`. Authentication follows the existing `duo-sso`
-workflow. SSH host-key verification stays enabled. No AWS infrastructure changes
-are required. The host is ephemeral, but the new harness still identifies every
+workflow. That instance is terminated. Existing-host selection requires live
+access/resource checks and confirmation before disrupting its demo workload;
+the old host's disposable-data permission does not transfer to another host.
+SSH host-key verification stays enabled. The harness identifies every
 resource by full Docker ID, exact task name and task label before lifecycle
 operations. It never uses a global prune, image removal, wildcard deletion or
 container name alone.
+
+The user subsequently authorized creation of a dedicated disposable host rather
+than disruption of the existing demo machines. Attempt13 uses
+`i-029223a47cbb06aee` in `us-east-1`, `m6i.2xlarge`, with an encrypted 100-GiB
+root volume. The existing validation security group permits only controller
+SSH ingress. Its task-specific key-pair registration uses an external key's
+public half; no private key enters the repository or instance user data.
+The scanned SSH host fingerprint was verified against authenticated EC2 console
+output. Ubuntu 24.04, Python 3.12.3 and Docker 29.1.3 are recorded separately
+from the pinned Enterprise image. The exact source24 archive is verified and
+extracted to the fresh `atlas-final-shc-source-25` path with 144 inputs and
+38 Git-bound files; the original source/archive/manifest are unchanged.
+Attempt13's 27-record failed prefix, including its exact base failure and
+manifest, is retained in `dist/final-qualification/shc13-failed-prefix-evidence.json`
+(SHA-256 `ef807818f932895b3e058cb797df9c66dbcf2cf5709fa4d46dc871e33b1d6917`).
+The classification diagnostic is separate read-only evidence and does not
+convert the failed oracle into a pass. A future oracle must derive the expected
+indexed classification from the reviewed add-on rules and fixture payloads,
+while retaining every count and strict subtype checks.
+
+The failed Attempt13 precleanup export lists 30 verified payload files; the final
+export lists 34, retaining all 27 original records and their byte continuity.
+Those original bytes were checked against 12 separately retained prefix
+snapshots; the snapshot JSON files are not payloads in these archives.
+Final archive SHA-256:
+`07cedfa23ee66280111a712048cd520c2fe78da096a11ba2bda25f171f182da6`.
+The exact five containers and network were removed at
+`2026-10-19T04:16:15.027462Z`; independent review71 verified both archives and
+cleanup. An initial final-export attempt rejected a stale precleanup manifest.
+That rejection remains retained; an explicit fresh manifest preceded the
+successful final export. The failed run is not application acceptance.
+
+The reviewed correction is committed at
+`74a77e1f28c3d454bdf7bb38257d02f018b26480`. Its 116 offline cases passed,
+including exact subtype/count/configuration and pre-mutation refusal checks.
+The pure preflight independently derives the declared-versus-indexed mapping
+from pinned CiscoSecurityCloud props/transforms and fixture payloads.
+Fresh Attempt14 uses the verified source26 archive (144 inputs/38 Git bindings,
+only the qualification driver changed) and the unchanged candidate09 archive.
+Its private directory/task are `atlas-final-shc-01a15236-14` /
+`adm-shc-01a15236-14`. It passed unassisted bootstrap (855.785 seconds),
+85-file distribution on all three members, both original interface tests
+(13.687 seconds, zero skips), all 15 collection checks, exact 963-event/16-group
+classification, and the exact two NX-OS interface rows on every member.
+Its ACI graph (25 nodes/33 edges) and topology (6 devices/11 links) passed
+independent fixture semantics and identical all-member readback. No optional
+standalone row reference was supplied.
+
+Attempt14 failed the staged V2 topology warning oracle after its staged graph
+passed. The oracle had required a generic unsupported-inventory warning
+from a different standalone APIC mapping. In this fixture, six source-qualified
+APIC devices remain explicitly unmapped and three Kubernetes hosts are mapped;
+unclustered APIC adjacency rows are filtered before unsupported-row counting.
+The actual two warnings preserve missing Catalyst history and uncorrelated
+Nexus Dashboard labels. The failed run remains nonacceptance. Its 96 original
+records plus sanitized dispatch state are retained in
+`dist/final-qualification/shc14-failed-prefix-evidence.json`
+(SHA-256 `82c0fdfe81028e8f379edb94f6870b65a458880594b4e2beeb25fa191e7a0de5`).
+The strict fixture-specific correction is committed at
+`7659d84339b9ea3901c00fba9eec5c9287e8d876`; independent review73 and
+118 offline tests passed. It requires exactly two full diagnostic strings,
+zero interface metadata, and exact APIC/Kubernetes fixture mappings while
+retaining identity, authority, scope, cluster and adjacency guards.
+Attempt14's precleanup/final exports list 100/104 verified payload files,
+retaining all 96 original records with byte continuity and zero credential
+matches. Those bytes were verified against 22 separately retained prefix
+snapshots, which are not archive payloads. Final archive SHA-256:
+`beea77c81b89f52264df10390eec2866a22c94c7776fb1d97fd64939b5438e7f`.
+The exact five containers/network were removed at
+`2026-10-19T05:02:15.372244Z`; a fresh manifest preceded the final export.
+Independent review74 verified the actual exports and cleanup.
+
+Fresh Attempt15 uses source27 at the new commit (144 inputs/38 Git bindings,
+only the driver input changed from source26), the unchanged candidate09 archive,
+and task `adm-shc-01a15236-15`. Its first all-member readiness check failed
+at `2026-10-19T05:25:10.923722Z` (1202.272 seconds including CLI setup)
+after the strict 1200-second readiness check. The
+acknowledged bootstrap was not dispatched again. An explicit readiness-only
+retry in the same continuously locked controller passed the complete gate at
+`05:30:28.474908Z` in 290.735 seconds. The first failure and both attempt
+journals remain retained. No manual restart, KV reset or internal configuration
+change occurred. The prepared ordinary-restart fallback remained unused.
+
+Troubleshooting compared PostgreSQL, Patroni, PgBouncer, Traefik, PDL and
+supervisor logs across the three members. sh1's replica basebackup waited on
+the primary's forced/wait checkpoint (`05:07:51.541Z`–`05:18:23.823Z`,
+632.282 seconds); the backup completed 0.405 seconds later. The checkpoint's
+write phase consumed 632.245 seconds and sync 0.013 seconds. Pacing is a
+supported inference from those timings, but actual pacing settings versus I/O
+contribution remain unproven. After the database/proxy became ready, a native
+PDL bootstrap attempt at `05:25:00.954Z` failed on an internal OAuth-client
+POST returning EOF; the update succeeded at `05:30:26.130Z`, followed by
+PDL startup and full readiness. The bounded supervisor tail does not establish
+its exact retry policy or permanent exhaustion, and the EOF cause remains
+unmeasured. Automatic recovery made a
+manual restart unnecessary. Sanitized, bounded diagnostics and exact selected
+line references are retained under
+`dist/final-qualification/shc15-startup-diagnosis-worker-01/`; they are
+explicitly separate from original byte-exact qualification records. Application
+qualification continues after this platform preparation.
+
+The fresh application prefix passed bundle verification on all three members
+(361.977 seconds), exact peers, both original distributed interface cases
+(13.119 seconds, zero skips), all 15 collection checks, and the complete
+963-event/16-group classification with two exact NX-OS interface rows on every
+member (79.975 seconds). Independent V1 graph (25 nodes/33 edges) and topology
+(6 devices/11 links) semantics and all-member equality passed. No optional
+standalone row oracle was supplied.
+
+Staged V2 passed in 68.307 seconds: the two writers completed through different
+members, yielding 35 conversation and 33 separate traffic records. All three
+members returned the same 23-node/32-edge graph, 16 spans, two independent
+witnesses and nine-device/zero-link topology with exactly two expected warnings.
+V1 selectors, graph/topology and original observer-scope rows remained unchanged.
+The least-privileged viewer then passed the same V1/V2 read equality across all
+members in 115.372 seconds. Protected recovery state/builders were inaccessible,
+and settings/KV writes returned 403. Actual scheduling then passed in 347.033
+seconds: the uniquely indexed probe was absent before the eligible `05:55Z`
+slot, and the native scheduler SID produced exactly one 900-byte, one-record
+summary. The original schedule flags were restored.
+
+Attempt15 failed its settings phase at `2026-10-19T05:55:57.361387Z`, before
+bundle application or any administrator settings API writes. The staged
+`qualified_shc` override and lifecycle state had already been saved. Deployer
+login exited 24; a separate authenticated request returned HTTP 500. The other
+four roles accepted the same protected administrator credentials.
+
+Read-only diagnostics established a qualification-harness ownership defect.
+Docker 29.1.3's `docker cp -a` extraction selects the container's configured
+`ansible` user (UID 999), overriding the tar's explicit UID 41812. The runtime
+overlay copy consequently changed `/opt/splunk/etc` and its staged overlay
+ancestors to `999:999`, mode 0755, and the overlay leaf to mode 0600. Splunk
+runs as UID 41812. Its log records `Permission denied` creating the
+`login-info.cfg` temporary file, followed by the authentication HTTP 500;
+the overlay leaf is also unreadable by Splunk. No OOM kill was recorded.
+The same unrelated orchestrator health warnings appeared on the healthy indexer
+and do not explain this permission failure. [Docker's extraction options](https://github.com/moby/moby/blob/docker-v29.1.3/daemon/archive_tarcopyoptions_unix.go)
+and [archive extraction](https://github.com/moby/moby/blob/docker-v29.1.3/daemon/archive_unix.go)
+corroborate the ownership mechanism.
+
+Independent review confirmed the harness defect. An unchanged retry would
+repeat it. The frozen source27 and original failed records are preserved;
+a reviewed copy fix and fresh pinned lifecycle are required. Administrator
+races, refusal and reapplication remain unqualified by Attempt15. This prefix
+is not full application acceptance. Sanitized diagnosis and exact permissions
+metadata are retained in `dist/final-qualification/shc15-deployer-diagnosis-worker-01/`,
+`shc15-permissions-02.json` and `shc15-diagnosis-reconciliation-01.json`.
+
+The independently reviewed one-flag copy correction at `5391d93` preserves
+numeric archive ownership instead of requesting Docker's configured-user
+override. All 122 distributed offline checks passed. An isolated native Docker
+probe reproduced UID999 with the old flag and UID41812 without it, with the
+same 0755/0600/0700 modes; both temporary trees were removed. It touched no
+application paths and does not establish application acceptance.
+
+Attempt15's verified failure exports list 116 precleanup and 120 final
+payload files, preserving all 95 original records and 15 pinned diagnostic
+artifacts. The original bytes were verified against 28 separately retained
+prefix snapshots; the snapshot JSON files are not in these archives. Their archive SHA-256 values are
+`a4a91480f1fe05d792e576a800cdf603f65d846f75497212a21ca4e0d16cf188` and
+`8010b11dcbd99bfa2fecec05b7a99ffe73e5f0fc8d321525146f6eef9dab5789`.
+Both retain the first bootstrap failure and the settings failure, with zero
+credential matches and exact precleanup-byte continuity. The five exact
+containers and network were removed at `2026-10-19T06:13:42.771240Z`;
+a fresh manifest preceded final export, and the locked controller exited 0.
+
+Fresh Attempt16 uses source28 at
+`5391d93d7fe4ca63aab63080fc833979d09173bb`, the same candidate09 package,
+144 inputs/38 Git bindings and task `adm-shc-01a15236-16`. Only the copy helper
+input differs from source27. Independent review verified the actual source
+archive, launcher and unchanged acceptance contracts. Startup passed with strict
+management TLS/identity checks in 83.386 seconds. The first all-member bootstrap
+readiness attempt passed in 860.579 seconds at `2026-10-19T06:30:42.307465Z`,
+with one acknowledged bootstrap dispatch and no retry, restart, reset or tuning.
+The primary checkpoint took 633.507 seconds (`06:19:14.897Z`–`06:29:48.403Z`);
+the lagging replica began listening at `06:29:49.158Z`, followed by its proxies
+and native PDL start at `06:30:37.155Z`. These timings establish the dependency
+chain, without proving checkpoint pacing settings or an I/O root cause.
+
+The actual Attempt16 prefix then passed all 85 installed files on every member,
+the two original distributed cases (2 passed, no skips), all 15 collections,
+963 indexed events in the 16 exact groups, six native V1 builders, and V1
+member parity (25 graph nodes/33 edges; 6 topology devices/11 links). Both staged
+V2 writers completed on different members, producing 68 summary rows; all three
+members agreed on 23 graph nodes/32 edges and 9 topology devices/0 links with
+exactly the two independently derived uncertainty warnings. Public V1 selectors
+and observer scope stayed unchanged. Viewer reads matched administrator reads;
+protected recovery/builders were inaccessible and stored-data/settings writes
+returned 403. The actual five-minute scheduler gate passed with one native
+success SID and exactly one 900-byte/one-record summary at the eligible
+`2026-10-19T06:55:00Z` slot; original scheduler flags were restored.
+
+Settings passed at `2026-10-19T06:56:00.464500Z`. Initial creation and the
+subsequent same-revision race each returned `[200,409]`; retrying the winning
+request through the third member returned the same result, and complete
+settings converged across members. Stale revision writes returned 409 and
+viewer writes returned 403. The final settings SHA-256 is
+`4be7d7269a68bf9401c1cf5efad4436a0b785ac68bfc3bbf1f2d899a1833b967`.
+Actual native metadata confirmed UID/GID41812 and the intended modes on all six
+copied overlay paths, with deployer/indexer authentication returning HTTP200;
+independent review closed the ownership defect using this runtime evidence.
+
+The next refusal phase failed before API calls at `07:02:19.771772Z` with
+`ModuleNotFoundError`. The harness imports the packaged recovery qualifier,
+which needs the SDK retained under candidate `bin/lib`; its import path omitted
+that directory. Actual-host reproduction confirmed missing `splunklib` before
+any API construction. Independent review85 cleared a narrow same-controller
+prerequisite installation: all 27 SDK Python files from the exact candidate
+were copied into an absent root-owned host Python package directory at
+`07:11:09.503481Z`, with every hash verified. The 144 frozen source inputs and
+staged package were unchanged. The original failed record remains retained.
+
+The explicit refusal retry passed in 0.123 seconds at `07:11:11.872071Z`.
+Packaged recovery and the actual migration qualifier each refused all three
+members using GET only. The permanent harness correction at
+`5b305648aa465ebdaec74ff0074673fbf26d1729` adds candidate `bin/lib` and
+rejects SDK modules loaded from another candidate before API construction.
+Its 125 offline distributed tests passed, including three clean/ambient-import
+regressions. A separate fresh `-S -B` native check of those committed client
+bytes passed against all three members at `07:13:06.208067Z`, with six actual
+GETs and SDK origins bound to the exact staged archive. The initial supplemental
+probe remains failed and is excluded from acceptance. Its fixed twelve-GET
+expectation used the offline fixture's control flow: fixture responses take
+four GETs per member, whereas actual SHC server-role responses allow both tools
+to refuse after two GETs per member.
+
+Bundle reapplication passed in 86.956 seconds at `07:12:43.229750Z`, preserving
+the complete winning settings, all 15 collection snapshots, V1 graph/topology,
+public V1 selectors and staged V2 administrator/viewer results. The precleanup
+export lists 112 payload files, SHA-256
+`819854f6171afe2d99d5f493a4a667ffb4cc2f6c40fbca9d016e376946391e4f`;
+the final export lists 117 payload files, SHA-256
+`c73950125b2e17a90a082c41eef0c2759d8c7b69d922efb89ec3823dbcc9a494`.
+Both retain the failed refusal record and all original prefix bytes, with zero
+credential matches. The 94 original records were byte-verified against nine
+separately retained append-only prefix snapshots; those snapshot JSON files
+are not payloads in the archives. The exact five containers
+and network were removed at `07:13:31.799045Z`; a fresh manifest at
+`07:13:49.480767Z` preceded final export, and full precleanup continuity was
+verified. The exact 27-file temporary SDK copy was removed at `07:14:15.574439Z`
+under the same attested controller lock, then the controller exited 0. No
+existing demo host or workload was disrupted. The additional host SDK receipts,
+startup diagnosis and corrected-client proof remain separately hash-bound
+under `dist/final-qualification/`; they are not silently inserted into frozen
+original phase records.
+
+At `2026-10-19T07:17Z`, AWS credentials were expired and the approved `duo-sso`
+refresh had failed while the Mac was locked. EC2 instance/root-volume and task
+AWS public-key registration disposal remained pending; Docker and SDK cleanup
+must not be represented as instance termination. The final publication record
+tracks any later resource state or cleanup after renewed access and exact
+ownership verification.
 
 The coordinator owns a single host-level exclusive lock throughout preparation,
 startup, installation, seeding, checks, failure investigation and cleanup.
@@ -194,11 +470,15 @@ Explicit `adm_topology_v2` reads require the raw scenario's six authority-keyed
 ACI devices and three native-UID-keyed Kubernetes hosts. The existing APIC scope
 row has no cluster: ACI inventory must remain visibly unmapped, and unsupported
 physical links must remain absent. The Kubernetes hosts remain mapped to the
-known scope/cluster. Missing Catalyst history, unqualified inventory and
-unsupported Nexus Dashboard fabric correlation diagnostics are required and
-retained; they are not suppressed to obtain a clean result. This tests the
-conservative staged boundary, not mapped ACI adjacency or additional source
-combinations.
+known scope/cluster. Exactly the missing-Catalyst-history and unsupported
+Nexus Dashboard fabric-label correlation diagnostics are required. A valid
+unmapped device remains a supported inventory row; the unclustered APIC
+adjacency branches filter their rows before unsupported-row counting. This
+fixture therefore must not emit the generic unsupported-inventory or unresolved
+LLDP warnings associated with differently mapped fixtures. The oracle rejects
+missing, additional, changed or duplicate warnings and requires zero link and
+interface counts. This tests the conservative staged boundary, not mapped ACI
+adjacency or additional source combinations.
 
 V2 graph, topology and summary results must agree across all members and with
 the least-privileged viewer, and repeat unchanged after bundle reapplication.
@@ -410,10 +690,10 @@ overlap the ACI topology window. Every expected index/sourcetype count, includin
 The actual Interface inventory writer must populate exactly these two rows on
 each member, with `_key=device_ip|ifindex` and `updated=1792295614`:
 
-| Device IP | Device | ifIndex | Interface | Neighbor | Neighbor interface |
-| --- | --- | --- | --- | --- | --- |
-| 192.0.2.11 | leaf-101 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/1 |
-| 192.0.2.12 | leaf-102 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/2 |
+| Device IP  | Device   | ifIndex   | Interface    | Neighbor | Neighbor interface |
+| ---------- | -------- | --------- | ------------ | -------- | ------------------ |
+| 192.0.2.11 | leaf-101 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/1        |
+| 192.0.2.12 | leaf-102 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/2        |
 
 The oracle is declared independently of query output and checked against the
 reviewed raw hostname/CDP fields during preflight. All stored semantic keys and
@@ -432,17 +712,17 @@ previous-package or corrective-reingestion oracle evidence.
 
 ## Required recorded checks
 
-| Check | Required evidence |
-| --- | --- |
-| Distribution | Full candidate hashes on every member, effective macros/configuration, peer-only raw data, fresh bundle generation |
-| Lookup locality | The actual two distributed interface tests, all members, zero warning/partial-result jobs |
-| Shared persistence | Every shipped collection create → cross-member update → delete convergence, with only task-unique probes removed |
-| Reader access | Full expected graph/topology with a search-only viewer on every member; stored writes, private recovery/settings data and owner-dispatched writers denied |
-| Actual scheduling | Shipped five-minute conversation schedule, current unique fixture, real scheduler success SID for every expected slot and matching new summary; no manual dispatch substituted |
+| Check               | Required evidence                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Distribution        | Full candidate hashes on every member, effective macros/configuration, peer-only raw data, fresh bundle generation                                                                                                        |
+| Lookup locality     | The actual two distributed interface tests, all members, zero warning/partial-result jobs                                                                                                                                 |
+| Shared persistence  | Every shipped collection create → cross-member update → delete convergence, with only task-unique probes removed                                                                                                          |
+| Reader access       | Full expected graph/topology with a search-only viewer on every member; stored writes, private recovery/settings data and owner-dispatched writers denied                                                                 |
+| Actual scheduling   | Shipped five-minute conversation schedule, current unique fixture, real scheduler success SID for every expected slot and matching new summary; no manual dispatch substituted                                            |
 | Concurrent settings | Initial creation and existing-revision races through different members; one success/one 409, stale revision rejection, stable request-ID retry after simulated response loss, all-member read convergence, viewer refusal |
-| V1/V2 boundaries | Actual packaged recovery and current migration deployment qualifiers refuse all members before mutations; no SHC cutover enabled |
-| Reapplication | Same exact candidate reapplied via deployer; settings ledger, task configuration override and lookup data retained and effective definitions understood |
-| Final state | All members/KV ready; exact graph and settings agreement; fresh configuration creation/deletion convergence |
+| V1/V2 boundaries    | Actual packaged recovery and current migration deployment qualifiers refuse all members before mutations; no SHC cutover enabled                                                                                          |
+| Reapplication       | Same exact candidate reapplied via deployer; settings ledger, task configuration override and lookup data retained and effective definitions understood                                                                   |
+| Final state         | All members/KV ready; exact graph and settings agreement; fresh configuration creation/deletion convergence                                                                                                               |
 
 `collection_convergence()` inserts only unique task probe keys, updates on a
 second member, deletes on a third and requires deletion convergence. Run it
@@ -693,10 +973,22 @@ preflight, exact two-row all-member inventory, 963-event classification, and
 prompt terminal warning/failure regressions. The current Attempt10 source is not
 modified. Review57 cleared this source correction; Review59 verified source23
 transfer and the failed-run exports. Attempt11 subsequently failed bootstrap
-readiness as recorded above; no application phase was executed. Its failed-run
-export and cleanup remain coordinator-owned. The new readiness-only retry
-boundary requires independent review and a fresh immutable source before use;
-it does not change Attempt11's failed result.
+readiness as recorded above; no application phase was executed. Its 31-file final failure export preserves all 24 original records, including
+the executed restart, and exact five-container/network cleanup at
+`2026-10-19T03:07:31.204705Z` (4.177 seconds). Final archive SHA-256:
+`2c9f7f553544d3beed9b60fe65ce1ba21a25455a0808c540306079f32c1f6cfb`.
+Review63 independently verified both exports and cleanup. The readiness-only
+retry change passed 106 offline cases and independent review61. Attempt12
+used `79c18ce8f3b63aee657ab12a6a3a7705504d8086` with 144 verified inputs,
+but the EC2 host was terminated from the AWS console at
+`2026-10-19T03:13:15Z`, closing the controller during bootstrap. Its CLI
+acknowledgment at `03:12:54.245993Z` is not a readiness pass; no application
+phases ran. Local owner responses/runtime/acknowledgment and EC2/CloudTrail
+records survive, while the original remote evidence snapshot was not exported
+before termination. The lost controller cannot use the same-controller retry
+contract. The authorized new host's Attempt13 subsequently failed the exact
+base-classification oracle; its retained exports and cleanup are recorded above.
+This does not change Attempt11's failed result.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.
@@ -713,6 +1005,13 @@ only recorded task containers, their anonymous volumes and the task network;
 the image cache remains. The external private directory, state and credentials
 remain until the coordinator verifies export and explicitly disposes it. Do
 not publish secrets with the evidence.
+
+After cleanup, request `{"phase":"manifest","rerun":true}` and require its
+actual `outcome=passed` response before the final export. A manifest command
+without explicit rerun returns `already_complete` when a precleanup manifest
+exists; it does not capture the new cleanup evidence. Preserve any rejected
+export attempt and verify the final archive against the original precleanup
+bytes before releasing the controller.
 
 No authorized Splunk Cloud test stack/access has been identified. Cloud
 installation, capabilities, shared persistence, searches/builders, browser

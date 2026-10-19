@@ -7,6 +7,84 @@ deployment shapes. Retain the exact candidate archive/checksum, matching
 checkout, initialization manifest, journals, result artifacts, and raw logs.
 Do not start another scenario or reset a target with an unresolved journal.
 
+## Recorded candidate09 evidence
+
+Evidence links below refer to the retained qualification checkout's ignored
+`dist/` directory. Operators need that evidence bundle to inspect the fixture
+preparation aids; these aids are not installed production commands.
+
+Runtime checks passed. Independent review48 verified the retained runtime,
+source binding and package-byte evidence with no findings. The combined [export manifest](../dist/final-qualification/native-09-migration-complete-02/export-manifest.json)
+retains 474 hash-verified files and reports zero credential matches. Its archive
+SHA-256 is `58a3167b53ccdd32ffec541f10ef4deb3d565dd8c9c13ba0d1eb5a4bbfd6ccb2`.
+This is owned standalone synthetic evidence, with no Cloud/SHC cutover or
+collector qualification claim.
+
+| Evidence                                          | Recorded result                                                                                                                       |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Installed candidate09 archive                     | SHA-256 `024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097`; package source `6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca` |
+| Complete suite and migration source               | `c314cc89f7ea6e14f317371fd5c2d19e5b74cc6b`                                                                                            |
+| Final browser05 and byte-check source             | `d7d0c61f818018ef9cbf8ee6ad17ca9fd246aa69`; all 85 installed package files remained byte-exact                                        |
+| Disabled-origin rehearsal                         | 2026-10-18 23:10:00–23:16:20 UTC; 2 tests passed in 380.464s; terminal repeat passed in 0.275s                                        |
+| Enabled-origin rehearsal and fresh V2 restoration | 23:20:58–23:52:40 UTC; 2 tests passed in 1901.969s; terminal repeat passed in 0.980s                                                  |
+| Active V2 browser05                               | 2026-10-19 00:26:59–00:28:16 UTC; both recorded scenarios passed; unchanged configuration, zero writes and zero demo requests         |
+
+The separate [complete-suite export](../dist/final-qualification/native-09-complete-suite/export-manifest.json)
+records 393 tests: 390 passed and 3 skipped in 2173.773s. All three pruning cases
+passed. The skips were the explicit migration opt-in and two distributed SHC
+interface cases; the suite itself does not qualify those skipped paths. The
+migration rehearsals above exercised the exact upgrade test and its gap-envelope
+companion separately. The manifest binds each historical wrapper/source and the
+later browser-only qualifier changes to the unchanged package; it does not claim
+that all runs used one source revision.
+
+Both original migration journals finished `rolled_back` after completed
+activation; the fresh restoration journal finished `cutover`. Each activation
+recorded 13 applied mutations, including all eight public selectors. The enabled
+run injected a single raw receipt at 23:22:08 UTC into receipt slice
+`[1792365600,1792365900)`. Rollback completed at 23:40:34 UTC after exact manual
+V1 recovery with one retained copy of rollup
+`76658a5577bcccbdaf8d3eb7d8be60d57ce5053d00e8be09cc1e1d9da234c61a`.
+The recovery SID was
+`admin__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1792366815_37`.
+
+Restoration automatically waited for the actual 23:45 V1 checkpoint,
+`scheduler__nobody_c3BsdW5rX2FkbQ__RMD58b8ebc5b13d11344_at_1792367100_42`,
+whose anchor followed the completed recovery boundary. It then validated the
+23:50 conversation/traffic cycles and the 23:51 history cycle. Those scheduled
+slices legitimately had zero expected rows; bounded empty-summary and final
+history readback proofs were retained. Their success is not evidence of newly
+arriving traffic. The [concurrent-operation proof](../dist/final-qualification/native-09-migration-complete-02/runs/native-09-concurrent-migration.json)
+records exit 2, no competing journal, unchanged configuration and a readable
+original journal for the same-controller/OS-user guard.
+
+The [final browser evidence](../dist/final-qualification/native-09-migration-complete-02/browser/evidence.json)
+records Catalyst/ACI (`cilium-aci-east`, 25 nodes/36 edges) and Meraki/NX-OS
+(`cilium-nxos-west`, 21 nodes/23 edges). Both passed graph, Inspector, exact
+scoped-IP backend/receiver path, attachment inventory, reload, Find,
+preceding-window comparison, JSON, context CSV and required-flow CSV checks.
+Setup observed all eight V2 selectors. Health followed the configured source,
+profile, quality, summary and scheduler dependencies. It truthfully showed aged
+source warnings and four disabled prerequisite builders (Identity, Service
+binding, Service backends and ACI policy), alongside recent successful V2
+history, conversation, traffic and catalog jobs. This is not an all-green
+health or prerequisite-automation claim.
+
+All four earlier native09 browser attempts remain failed evidence: raw versus
+canonical JSON representation, an Inspector pointer interception, CSV quote
+encoding, and canonical versus displayed scheduler names respectively. They
+were fixed in the qualifier without changing the installed product or resetting
+the active V2 data. These are distinct from the historical candidate08 missing
+first-history-cycle and HTTP 401 recovery attempts described below.
+
+The [native cleanup record](../dist/final-qualification/native-09-cleanup.json)
+confirms removal of the recorded container
+`25ac217aa8e568c019a6e1682f59afa9a3da50f31fd2386411417189611a3f1d`,
+its volumes and lab credentials at 2026-10-19 00:41:17.436082 UTC. The lifecycle
+owner exited and released its locks. No unrelated containers were included.
+Cloud cutover remains deferred; separate SHC qualification does not extend this
+standalone migration result.
+
 ## Prepare the owned lifecycle
 
 The coordinator holds `tools/lab_lock.py` across prepare, install, seed, all
@@ -17,6 +95,36 @@ V1 selectors with the V2 writers disabled, exact source profiles and Cilium
 cluster settings configured, and a nonempty initialized synthetic workload.
 Record all effective selector/writer states before starting. The optional
 history builder remains a prerequisite for receipt-qualified Catalyst topology.
+
+The networking loader initializes V2 fixture state; it does not create the real
+V1 summary baseline required for this rehearsal. Before migration, derive the
+nine-field scenario from the initialized raw workload and generate/read back
+that baseline using the installed V1 normalization and writer definitions. The
+reviewed fixture-only `prepare-migration-09.py` aid is retained under `helpers/`
+in the combined export, together with its tests and exact bytes. Under the held
+lab lock, its tested preparation commands were:
+
+```sh
+python3 tools/load_networking_lab.py --reset --regenerate \
+  --raw-dir dist/networking-path-tests \
+  --output dist/networking-path-tests/initialization.json
+python3 dist/final-qualification/prepare-migration-09.py --fixture-target \
+  --runtime-root "$ADM_MIGRATION_RUNTIME_ROOT" \
+  --ca-file "$ADM_CISCO_MIGRATION_CA_FILE"
+```
+
+Create a new mode-0700 external runtime root before invoking the reviewed aid;
+this is not a production setup tool. The aid refuses a preexisting partial baseline.
+Only after one verified completed collect may readback poll exact subsets until
+full equality within one shared 90-second deadline; unknown rows, conflicting
+material, excess copies and timeout refuse without recollecting. In native09,
+one 90-row collect was followed by eight 85-row exact subsets and then full
+90-row equality. The aid also records the fixture scope, truthful saved
+expectations, protected session/scenario paths and unchanged selectors/writers.
+Read its emitted environment paths and readiness evidence; never evaluate
+artifact text as shell code. Native09 preparation initially reported
+`closed_and_lagged=false`; migration waited until 23:10 UTC rather than forcing
+a future receipt range. Do not reinitialize after migration begins.
 
 Supply these external owner-only files through the existing lab authentication
 workflow; credentials never belong in command arguments, repository files, or
@@ -61,16 +169,21 @@ outside builder coverage; the independent raw health probe can expose it.
 
 ## Cut over, interrupt, resume, roll back, restore V2
 
-With the paths and epochs above exported, run under the same existing lab
-owner (nested lock ownership is supported):
+Use distinct journals for the two origins. Run the disabled-origin rehearsal
+first with `ADM_CISCO_MIGRATION_RESTORE_V2=0` and
+`ADM_CISCO_MIGRATION_V1_GAP_INJECTION=0`, then repeat it before changing the
+origin. For the final enabled-origin rehearsal, establish the real V1 checkpoint
+and protected gap fixture below. With its emitted paths and epochs exported,
+run under the same existing lab owner (nested lock ownership is supported):
 
 ```sh
 ADM_LAB=1 ADM_CISCO_MIGRATION_RUN=1 \
 ADM_CISCO_MIGRATION_INTERRUPT_ONCE=1 \
 ADM_CISCO_MIGRATION_RESTORE_V2=1 \
+ADM_CISCO_MIGRATION_V1_GAP_INJECTION=1 \
 ADM_CISCO_MIGRATION_TIMEOUT=3600 \
 python3 tools/lab_lock.py --root . -- \
-  python3 -m unittest discover -s tests/splunk -p test_cisco_upgrade.py
+  python3 -m unittest discover -s tests/splunk -p test_cisco_upgrade.py -v
 ```
 
 The harness performs bounded preparation/backfill, complete source/readback
@@ -86,8 +199,10 @@ regressions.
 
 It then verifies rollback to the recorded V1 origin. The first journal must
 finish `phase=rolled_back`, `rollback.state=complete`, and
-`candidate_cutover_eligible=true`. The restoration starts a fresh journal from
-that restored V1 state, stages and validates again, and leaves the tested
+`candidate_cutover_eligible=true`, plus `cutover.state=complete`, valid completion
+time, applied verified mutations, scheduler bounds and public-selector evidence.
+Eligibility alone is insufficient. When restoration is enabled, it starts a
+fresh journal from that restored V1 state, stages and validates again, and leaves the tested
 candidate fully active under V2. The second journal must finish
 `phase=cutover`, with eligible candidate evidence and a
 `.restoration-evidence.json` artifact asserting verified selectors and repeated
@@ -95,11 +210,21 @@ cutover. Repeating the same harness command verifies existing terminal
 journals/current V2 state rather than recycling a rolled-back journal.
 
 For enabled-origin recovery qualification, first establish and record a real
-recent successful V1 scheduler checkpoint. In addition set
+recent successful V1 scheduler checkpoint. Native09 used the reviewed
+`refresh-migration-session-09.py` aid after disabled-origin rollback to obtain a
+fresh external `session*` file, verifying the same target, eight V1 selectors and
+original writer states without changing session policy. The reviewed
+`prepare-enabled-origin.py` aid then enabled only the V1 rollup, verified its
+configuration, and waited for an actual scheduler-owned completed checkpoint.
+It retained before/after state, scheduler SID, an external gap-fixture copy and
+new unused enabled/restore journal paths. Both aids and their execution records
+are retained with the export. Do not rerun a failed preparation marker blindly.
+For enabled-origin qualification set
 `ADM_CISCO_MIGRATION_V1_GAP_INJECTION=1` and
-`ADM_CISCO_MIGRATION_V1_GAP_FIXTURE` to an absolute, nonsymlink copy of one
-TA-shaped standard Stream envelope outside the checkout. Record its origin and
-checksum. The harness injects one uniquely tagged current raw record while V1
+`ADM_CISCO_MIGRATION_V1_GAP_FIXTURE` to an absolute, nonsymlink copy of the
+initialized `campus_netflow.ndjson` outside the checkout. Preserve all lines and
+record its origin and checksum; the harness selects one eligible TA-shaped
+standard Stream record. The harness injects one uniquely tagged current raw record while V1
 is paused, waits beyond the resumed scheduler's lookback, and requires exact
 manual gap recovery. It preserves `.v1-gap-evidence.json`, verified manual SID,
 raw index bounds, source-derived fingerprint, and retained material row.
@@ -134,17 +259,24 @@ use the existing `reconcile --sid` procedure. Do not delete the journal or
 reset the lab to make a failure disappear.
 
 Use a fresh administrator session from the approved login workflow before a
-long rehearsal; the observed test platform expires sessions after one hour.
+long rehearsal. A prior candidate08 run encountered HTTP 401 after roughly an
+hour; this observation is not a guarantee about another platform's session
+lifetime.
 If a request returns HTTP 401, preserve the failed run and journal, obtain a
 new session into a mode-0600 external file, and verify the authenticated target
 and live selector/writer state. Then resume with the same journal and source,
 changing only the session-file path. Inspect and reuse recorded job SIDs;
-do not reissue an uncertain dispatch or reset the origin. The enabled-origin
-rehearsal exercised this recovery while rollback was in progress, with the V2
-public contract still coherent. Session policy was not extended or disabled.
+do not reissue an uncertain dispatch or reset the origin. The prior candidate08
+enabled-origin rehearsal exercised this recovery while rollback was in progress,
+with the V2 public contract still coherent. Final native09 refreshed its session
+before enabled-origin preparation and completed without that HTTP 401 recovery.
+Session policy was not extended or disabled.
 
-A missing first scheduled cycle is a different condition from a cycle that has
-not yet completed. Inspect the recorded enablement time, expected scheduler
+The prior candidate08 attempt also retained a missed first-history-cycle failure
+and completed rollback before a fresh successful attempt. Logs showed the
+missing expected slot and a scheduler “Could not get next runtime” message;
+they did not establish a guaranteed timing-based root cause. A missing first
+scheduled cycle is a different condition from a cycle that has not yet completed. Inspect the recorded enablement time, expected scheduler
 anchor, actual job metadata and `scheduler.log`. A later successful cycle does
 not prove that the required first cycle ran. If the expected dispatch was
 missed, retain that failed attempt and use the supported rollback operation:
@@ -256,7 +388,7 @@ selected-client/backend handoffs, configured deployment expectations and index
 metadata. It then exercises the native packaged application through public
 searches: both recorded graphs, MAC Inspector provenance, the exact scoped IP
 conversation's backend and receiving-node evidence, candidate path, physical attachment
-inventory, reload, Find, preceding-window comparison, JSON and context CSV
+inventory, reload, Find, preceding-window comparison, JSON, context CSV and required-flow CSV
 exports, Setup and Data health. Missing required behavior fails the run.
 
 The MAC network-client node's traffic observations and the scoped IP
@@ -269,6 +401,18 @@ and checks both paths in comparisons and exports. Aggregate service backends
 cannot replace those records. A missing direct conversation edge from the MAC
 node is not itself missing Hubble handoff evidence.
 
+The qualifier compares raw query records to canonical graph evidence using an
+independent explicit field/type contract: only documented numeric identifiers
+become text, literal `"0"`/`"1"` metric flags become booleans, and known optional
+null/`"Null"`/empty members may be omitted. Every retained field, value and record
+order must match; malformed values, unknown fields and lost nonempty evidence
+fail. CSV checks parse quoted cells, require complete record equality, bind both
+flattened authority columns to that same record and require the opposite-kind
+authority column to be blank. Raw CSV substring spelling is not an authority
+check. Map cards use their exact accessible names and supported focus/Enter
+selection, verifying focus, selected state and prior-card deselection. No forced
+pointer clicks or injected selection state are used.
+
 Before running, an administrator must already have saved expectations matching
 the initialized workload in Setup. Select at least NetFlow, DC Networking,
 Kubernetes, Traces, Hubble, Catalyst Center, Meraki and Catalyst SD-WAN as active.
@@ -279,6 +423,14 @@ V2 jobs. Setup must observe the active V2 selectors and scheduled writers and
 load `adm_health_jobs`. Legitimate negative fixtures and disabled prerequisites
 can show attention; this qualification does not require every source to be green.
 Incomplete probe retrieval is a failure.
+
+Health displays scheduler names without the `ADM - ` prefix and includes the
+full registry, including inactive diagnostics. The qualifier retains canonical
+required V2 job names from preflight and matches each exact scheduler-table row
+once, preserving its status, last run/success and failure/skip cells. A required
+row classified `Not required for this deployment` fails; unknown, aged, disabled
+or warning evidence remains visible. Extra inactive V1 diagnostic rows cannot
+substitute for required V2 rows and need not be hidden.
 
 Under the same lab owner, use a **new evidence directory for every attempt**:
 
