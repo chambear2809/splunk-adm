@@ -16,6 +16,7 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+import urllib.parse
 
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
 sys.path.insert(0, str(TOOLS))
@@ -1424,6 +1425,23 @@ class DriverTests(unittest.TestCase):
             [directory / "reviewed-addon"],
         )
 
+    @staticmethod
+    def local_saved_response(api, path, disabled=False, scheduled="0"):
+        return {
+            "entry": [
+                {
+                    "name": urllib.parse.unquote(path.rsplit("/", 1)[1]),
+                    "id": api.url + path,
+                    "content": {
+                        "disabled": disabled,
+                        "enableSched": scheduled,
+                        "eai:appName": "splunk_adm",
+                        "eai:userName": "nobody",
+                    },
+                }
+            ]
+        }
+
     def saved_api(
         self, *, converge=True, dispatch_error=None, config_error=None, scheduled=False
     ):
@@ -1433,11 +1451,15 @@ class DriverTests(unittest.TestCase):
             "dispatches": 0,
             "config_posts": 0,
             "desired": None,
+            "read_paths": [],
         }
 
         class FakeApi:
             def __init__(self, role):
                 self.role = role
+                self.url = "https://localhost:" + str(
+                    22009 + 10 * client.ROLES.index(role)
+                )
 
             def json(inner, method, path, data=None, timeout=None):
                 if path.endswith("/dispatch"):
@@ -1455,6 +1477,7 @@ class DriverTests(unittest.TestCase):
                     state["round_reads"] = 0
                     return {}
                 state["reads"] += 1
+                state["read_paths"].append(path)
                 if state["desired"] is None:
                     flags = {"disabled": True, "is_scheduled": scheduled}
                 else:
@@ -1464,6 +1487,10 @@ class DriverTests(unittest.TestCase):
                     ):
                         flags["disabled"] = not flags["disabled"]
                     state["round_reads"] += 1
+                if "/configs/conf-savedsearches/" in path:
+                    return self.local_saved_response(
+                        inner, path, flags["disabled"], str(int(flags["is_scheduled"]))
+                    )
                 return {"entry": [{"content": flags}]}
 
         return FakeApi, state
@@ -1501,6 +1528,9 @@ class DriverTests(unittest.TestCase):
             self.driver._saved("sh2", runner.BUILDERS[1], index_window=(10, 20))
         self.assertEqual(state["dispatches"], 1)
         self.assertEqual(state["config_posts"], 1)
+        self.assertTrue(
+            all("/configs/conf-savedsearches/" in path for path in state["read_paths"])
+        )
         names = [call.args[0] for call in evidence.call_args_list]
         self.assertIn("saved-search-predispatch", names)
         self.assertIn("saved-search-dispatched", names)
@@ -1527,6 +1557,23 @@ class DriverTests(unittest.TestCase):
         ]
         self.assertFalse(configs[-1]["converged"])
         self.assertEqual(configs[-1]["members"]["sh2"]["disabled"], True)
+
+    def test_dispatch_http400_does_not_authorize_a_second_dispatch(self):
+        api, state = self.saved_api(dispatch_error=client.ApiError(400))
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+        ):
+            with self.assertRaises(client.ApiError):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+            with self.assertRaisesRegex(client.Refused, "uncertain"):
+                self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["dispatches"], 1)
+        self.assertNotIn("sid", self.lab.state["builder_dispatch"][runner.BUILDERS[1]])
 
     def test_failed_configuration_post_never_dispatches(self):
         api, state = self.saved_api(config_error=client.ApiError(403))
@@ -1794,10 +1841,15 @@ class DriverTests(unittest.TestCase):
         class Api:
             def __init__(inner, role):
                 inner.role = role
+                inner.url = "https://localhost:" + str(
+                    22009 + 10 * client.MEMBERS.index(role)
+                )
 
             def json(inner, method, path, **kwargs):
                 if method == "GET" and inner.role == "sh3":
                     clock[0] = 125.0
+                if method == "GET":
+                    return self.local_saved_response(inner, path)
                 return {"entry": [{"content": desired}]}
 
         with (
@@ -1816,6 +1868,110 @@ class DriverTests(unittest.TestCase):
         ]
         self.assertFalse(configs[-1]["converged"])
         self.assertEqual(self.lab.state["builder_dispatch"], {})
+
+    def test_local_saved_config_rejects_captain_proxy_before_dispatch(self):
+        api_class, state = self.saved_api()
+
+        def api(role):
+            value = api_class(role)
+            original_json = value.json
+
+            def json_response(method, path, **kwargs):
+                response = original_json(method, path, **kwargs)
+                if method == "GET":
+                    response["entry"][0]["id"] = "https://localhost:22009" + path
+                return response
+
+            value.json = json_response
+            return value
+
+        timing, sleeping = self.virtual_saved_wait()
+        with (
+            timing,
+            sleeping,
+            patch.object(client, "Api", side_effect=api),
+            patch.object(self.driver, "_record") as evidence,
+            patch.object(self.driver, "_job") as job,
+            self.assertRaises(client.Refused),
+        ):
+            self.driver._saved("sh2", runner.BUILDERS[1])
+        self.assertEqual(state["config_posts"], 1)
+        self.assertEqual(state["dispatches"], 0)
+        job.assert_not_called()
+        configs = [
+            call.args[1]
+            for call in evidence.call_args_list
+            if call.args[0] == "saved-search-config"
+        ]
+        self.assertFalse(configs[-1]["converged"])
+
+    def test_local_saved_config_matches_native_identity_namespace_and_flags(self):
+        name = runner.BUILDERS[1]
+        path = (
+            client.APP
+            + "/configs/conf-savedsearches/"
+            + urllib.parse.quote(name, safe="")
+        )
+        api = SimpleNamespace(url="https://localhost:22019")
+        for disabled, scheduled in ((False, "0"), (True, "1")):
+            value = self.local_saved_response(api, path, disabled, scheduled)
+            self.assertEqual(
+                self.driver._local_saved_flags(api, value, path, name),
+                {
+                    "uri": api.url + path,
+                    "disabled": disabled,
+                    "is_scheduled": scheduled == "1",
+                },
+            )
+
+    def test_local_saved_config_refuses_malformed_flags_namespaces_and_identity(self):
+        name = runner.BUILDERS[1]
+        path = (
+            client.APP
+            + "/configs/conf-savedsearches/"
+            + urllib.parse.quote(name, safe="")
+        )
+        api = SimpleNamespace(url="https://localhost:22019")
+        invalid = []
+        for field, values in {
+            "disabled": (None, "unknown", 0.0),
+            "enableSched": (None, True, 0, "false", "2"),
+            "eai:appName": (None, "other_app"),
+            "eai:userName": (None, "admin"),
+        }.items():
+            for bad in values:
+                value = self.local_saved_response(api, path)
+                value["entry"][0]["content"][field] = bad
+                invalid.append(value)
+            value = self.local_saved_response(api, path)
+            del value["entry"][0]["content"][field]
+            invalid.append(value)
+        for uri in (
+            "https://localhost:22009" + path,
+            "https://foreign.example:22019" + path,
+            "http://localhost:22019" + path,
+            "https://user@localhost:22019" + path,
+            api.url + path.replace("/nobody/", "/admin/"),
+            api.url + path.replace("/splunk_adm/", "/other_app/"),
+            api.url + path.replace("conf-savedsearches", "saved/searches"),
+            api.url + path.replace("Service%20binding", "Identity%20builder"),
+            api.url + path.replace("%20", " "),
+            api.url + path.replace("nobody", "%6eobody"),
+            api.url + path + "%2520",
+            api.url + path + "?foreign=1",
+            api.url + path + "#fragment",
+            "https://[invalid" + path,
+            "https://local\nhost:22019" + path,
+        ):
+            value = self.local_saved_response(api, path)
+            value["entry"][0]["id"] = uri
+            invalid.append(value)
+        value = self.local_saved_response(api, path)
+        value["entry"][0]["name"] = runner.BUILDERS[0]
+        invalid.extend([value, {}, {"entry": []}, {"entry": [{}, {}]}])
+        for value in invalid:
+            with self.subTest(value=value), self.assertRaises(client.Refused):
+                self.driver._local_saved_flags(api, value, path, name)
 
     def test_configuration_total_timer_interrupts_blocked_body_and_cleans_up(self):
         old_handler = signal.getsignal(signal.SIGALRM)

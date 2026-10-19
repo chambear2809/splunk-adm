@@ -1,15 +1,23 @@
 # Final candidate distributed qualification
 
-Status (2026-10-18): corrected tooling and native platform bootstrap diagnostics
-are recorded; no final-candidate application qualification pass is claimed.
-Attempt05 used source
-`50e098a602a21ef386172015aa2ed888b936efd4` and candidate08 archive SHA-256
-`946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`.
-Its bootstrap and strict three-member KV/PDL readiness passed; bundle verification
-failed on the generated `install_source_checksum` field described below. The
-original failed phase remains recorded; no application checks are relabeled as
-passed. A corrected harness requires a separately recorded fresh lifecycle with
-the same unchanged candidate archive.
+Status (2026-10-19): Attempt09 failed its base phase; no complete final-candidate
+SHC application qualification pass is claimed. Frozen source21
+`f3b42485e38119f93e6363bfdeb28a0e99973788` and candidate09
+archive SHA-256
+`024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097`
+passed unassisted bootstrap, strict member/KV readiness, bundle verification,
+peer checks, both original distributed interface cases and all 15 collection
+convergence checks. Service binding dispatch still returned HTTP 400, reporting
+the search disabled, despite apparently converged saved-search GETs. Native
+diagnostics then showed those GETs returned the captain's object rather than
+each requested member's local configuration. The failed phase remains failed;
+the remaining application phases were not qualified.
+
+The correction now checks the exact local configuration stanza on each member.
+It awaits review and a fresh Attempt10 lifecycle with the unchanged candidate09
+archive. No Attempt10 phase outcome is claimed here. The coordinator retains
+exclusive ownership of export, cleanup and fresh execution.
+
 The earlier results in `SHC_QUALIFICATION.md` remain bound to their original
 archives. A passing offline harness test is not a live platform qualification
 result.
@@ -407,7 +415,7 @@ The race helper independently computes that expected revision and requires the
 full winning settings in the commit response, retry response and every member
 read. Its evidence records the operation fingerprint, submitted/committed
 payload hashes and all-member agreement. Equal server-reported revisions alone
-are insufficient. The 69 distributed tooling tests include wrong revision,
+are insufficient. The distributed tooling regressions include wrong revision,
 wrong commit/retry payload and same-revision/wrong-member-payload regressions.
 
 The deployer's documented default push mode is `merge_to_default`: settings in
@@ -452,6 +460,14 @@ still cannot establish supported production failure-domain behavior.
 
 ## Evidence export, cleanup and unavailable boundaries
 
+Attempt05 used source `50e098a602a21ef386172015aa2ed888b936efd4` and
+candidate08 archive SHA-256
+`946ff4806917bda093659328811b05c348251a9197e3b61244b0902254a9b4b6`.
+Its bootstrap and strict three-member KV/PDL readiness passed; bundle verification
+failed on the generated `install_source_checksum` field described above. The
+original failed phase remains recorded. The checksum correction and subsequent
+fresh lifecycles do not relabel that earlier result.
+
 Attempt06 deployed candidate09 to all three members and verified every archived
 file after unassisted cluster/KV readiness. Both original interface cases ran:
 all six member searches completed, but cleanup of the populated-inventory case
@@ -459,8 +475,9 @@ failed. Splunk returned HTTP 200 with zero response bytes for the successful
 KV item DELETE; the qualification client incorrectly required JSON. The client
 now accepts an empty body only for a successful 2xx DELETE. Empty GET/POST,
 nonempty malformed JSON and HTTP errors still fail. The original interface
-assertions remain unchanged. All 65 distributed tooling tests pass, including
-the original cleanup path with a successful empty DELETE followed by replicated
+assertions remain unchanged. At that correction, all 65 distributed tooling
+tests passed, including the original cleanup path with a successful empty DELETE
+followed by replicated
 404 responses. Independent review found no actionable defect in the correction.
 
 Attempt06 remains failed. Its 30 exported files, including the failure,
@@ -493,9 +510,13 @@ The failed run remains failed. Its 36 exported files, including native refusal
 diagnostics and exact owned cleanup, were credential-scanned and verified under
 `dist/final-qualification/shc-attempt-08-failure-final/`; archive SHA-256 is
 `20690327c28d44e08b14f06d7308db2bbc8accb38d99c0b288b6e94eca99e667`.
+The scan found zero credential matches. All five exact owned containers and
+their task network were removed; the retained export preserves the failure.
 The corrected harness posts each intended saved-search configuration once and
-requires exact `disabled` and `is_scheduled` values on all three members before
-dispatch. Its 120-second transition budget covers response bodies and parsing,
+originally required matching `disabled` and `is_scheduled` values from three
+saved-search endpoint requests before dispatch. Attempt09 showed these reads
+could all proxy to the captain; they were not local-member readiness proof.
+The 120-second transition budget covers response bodies and parsing,
 using an owned POSIX main-thread timer; an existing timer or blocked deadline
 signal refuses before mutation. Configuration convergence does not establish
 dispatch-engine atomicity: a remaining native rejection is still a failure.
@@ -505,11 +526,59 @@ writer retries restore both persisted original flags before reporting success.
 The scheduler preserves its original flags and acknowledged probe across
 failures. Unknown dispatch/ingestion outcomes require inspection; an elapsed
 slot with no proven pre-slot absence also refuses rather than becoming a
-successful retry. All 87 distributed tooling tests pass. Independent review
-identified and closed three P2s in the correction: changing retry windows,
+successful retry. All 87 distributed tooling tests passed in the coordinator's
+1.125-second offline run. Independent review identified and closed three P2s in
+the correction: changing retry windows,
 incomplete restoration on retry, and late responses accepted after the deadline.
-The reviewer independently ran the 11 added follow-up regressions. Fresh
-complete SHC execution remains pending.
+The review33 findings were closed through review34; the reviewer independently
+ran the 11 added follow-up regressions. These are offline harness results.
+Those fixes did not establish a live SHC pass in Attempt09.
+
+Attempt09, task `adm-shc-01a14f65-09`, used source21
+`f3b42485e38119f93e6363bfdeb28a0e99973788`, driver SHA-256
+`8280b38a38e8d69c4409a035080f090f08e711b9f12a117d51fa12b7d04cbc9b`, and
+the unchanged candidate09 archive. Bootstrap passed in 844.093 seconds and
+bundle verification in 365.854 seconds, followed by peer checks, both original
+interface cases with zero skips in 7.598 seconds, and all 15 collection checks
+in 2.344 seconds. The base phase failed after 29.166 seconds at
+`2026-10-19T01:07:46.959560Z`: sh2 rejected Service binding dispatch as disabled.
+The identity builder had a known completed SID; Service binding remained
+`dispatching` without a SID. The acknowledged fixture inputs and original
+closed receipt window remain recorded; no uncertain dispatch is repeated.
+
+Read-only diagnostics in
+`dist/final-qualification/shc09-service-binding-object-diagnostic.json`
+(SHA-256 `6fc53bb12ba8cfeae69d019178bac7b03766fe1f261d9766ff68bb2e86b45d2b`)
+show sh2 saved-search GETs in the nobody, admin and wildcard namespaces all
+returning sh1's captain URI. The local configuration endpoint and exact btool
+stanza instead identified sh2 and reported `disabled=false`, `enableSched=0`.
+These later reads do not prove the dispatch engine continued rejecting the
+search; only the original dispatch was attempted. They expose a gap in the
+purported all-member pre-dispatch proof. The [Enterprise 10.6 server.conf reference](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/server.conf)
+documents saved-search proxying to the captain. The harness does not disable
+that global behavior or rely on an undocumented `shc_local_only` parameter.
+
+The revised transition gate keeps the same single configuration POST, then
+reads the exact `/servicesNS/nobody/splunk_adm/configs/conf-savedsearches/{name}`
+stanza independently from each member using the [documented configuration API](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/10.6/configuration-endpoints/configuration-endpoint-descriptions).
+Each response must contain exactly one named entry whose HTTPS origin equals
+the requested client's origin and whose canonical escaped path equals the
+requested stanza path. Its native `eai:appName` and `eai:userName` must be
+`splunk_adm` and `nobody`. Native `disabled` and strict `enableSched=0|1` values
+are normalized to the existing desired disabled/schedule flags, and the exact
+local URI and normalized flags are retained. A captain/foreign origin,
+different namespace/stanza or malformed/missing flags cannot converge.
+All 91 offline distributed-tooling tests pass, including captain-proxy,
+individual-member lag, exact local identity/namespace, malformed native flags,
+deadline, durable retry and HTTP400-without-redispatch regressions.
+
+This is a bounded local configuration proof, not an atomic dispatch-engine
+guarantee. The full wall-clock budget still covers requests, response bodies
+and parsing. Dispatch uses the actual packaged saved search through the
+assigned different members exactly once; rejection still fails. Neither
+HTTP400 alone nor a lost response clears an unknown SID or authorizes a retry.
+The failed Attempt09 record is retained while the coordinator exports and
+cleans it up. Fresh complete Attempt10 execution remains pending.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.

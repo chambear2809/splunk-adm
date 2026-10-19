@@ -851,6 +851,54 @@ class Driver:
             result[key] = value in (True, 1, "1")
         return result
 
+    @classmethod
+    def _local_saved_flags(cls, api, value, path, name):
+        client.require(
+            isinstance(value, dict)
+            and isinstance(value.get("entry"), list)
+            and len(value["entry"]) == 1
+            and isinstance(value["entry"][0], dict),
+            "local saved-search configuration object is malformed",
+        )
+        entry = value["entry"][0]
+        uri = entry.get("id")
+        client.require(isinstance(uri, str), "local saved-search identity is missing")
+        try:
+            actual, expected = (
+                urllib.parse.urlsplit(uri),
+                urllib.parse.urlsplit(api.url),
+            )
+        except ValueError:
+            raise client.Refused("local saved-search identity is malformed") from None
+        # The pinned native endpoint returns the same canonical escaped path we
+        # requested. Do not admit authority, namespace or stanza-name aliases.
+        client.require(
+            actual.scheme == expected.scheme == "https"
+            and actual.netloc == expected.netloc
+            and actual.username is None
+            and not actual.query
+            and not actual.fragment
+            and actual.path == path
+            and uri == urllib.parse.urlunsplit(actual)
+            and entry.get("name") == name,
+            "local saved-search identity differs from the requested member/stanza",
+        )
+        content = entry.get("content")
+        client.require(
+            isinstance(content, dict)
+            and content.get("eai:appName") == "splunk_adm"
+            and content.get("eai:userName") == "nobody"
+            and content.get("enableSched") in ("0", "1"),
+            "local saved-search namespace or schedule flag is malformed",
+        )
+        flags = cls._saved_flags(
+            {
+                "disabled": content.get("disabled"),
+                "is_scheduled": content["enableSched"],
+            }
+        )
+        return {"uri": uri, **flags}
+
     def _set_saved_flags(self, role, name, *, disabled, is_scheduled, timeout=120):
         client.require(
             0 < timeout <= 120,
@@ -863,6 +911,11 @@ class Driver:
             "saved-search target flags must be boolean",
         )
         path = client.APP + "/saved/searches/" + urllib.parse.quote(name, safe="")
+        local_path = (
+            client.APP
+            + "/configs/conf-savedsearches/"
+            + urllib.parse.quote(name, safe="")
+        )
         evidence = {
             "role": role,
             "name": name,
@@ -877,15 +930,19 @@ class Driver:
                 client.require(
                     remaining > 0, "saved-search configuration deadline expired"
                 )
-                content = client.Api(member).json(
-                    "GET", path, timeout=min(30, remaining)
-                )["entry"][0]["content"]
+                api = client.Api(member)
+                value = api.json("GET", local_path, timeout=min(30, remaining))
                 if time.monotonic() >= deadline:
                     raise SavedSearchDeadline(
                         "saved-search configuration deadline expired"
                     )
-                evidence["members"][member] = self._saved_flags(content)
-            return all(value == desired for value in evidence["members"].values())
+                evidence["members"][member] = self._local_saved_flags(
+                    api, value, local_path, name
+                )
+            return all(
+                all(value[key] == expected for key, expected in desired.items())
+                for value in evidence["members"].values()
+            )
 
         try:
             with saved_search_deadline(deadline):
