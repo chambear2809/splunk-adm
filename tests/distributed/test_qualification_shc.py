@@ -3686,5 +3686,92 @@ class DriverTests(unittest.TestCase):
             )
 
 
+class StandaloneRefusalImportTests(unittest.TestCase):
+    def probe(self, mode):
+        script = r"""
+import importlib.util
+import json
+import os
+from pathlib import Path
+import shutil
+import sys
+import tempfile
+
+os.environ.pop("ADM_SHC_STATE", None)
+source = Path(sys.argv[1])
+candidate = source / "splunk_app/splunk_adm"
+assert importlib.util.find_spec("splunklib") is None
+temporary = tempfile.TemporaryDirectory()
+if sys.argv[2] != "clean":
+    foreign = Path(temporary.name)
+    shutil.copytree(candidate / "bin/lib/splunklib", foreign / "splunklib")
+    sys.path.insert(0, str(foreign))
+    if sys.argv[2] == "ambient_package":
+        import splunklib.binding
+    else:
+        import splunklib.data
+        del sys.modules["splunklib"]
+    sys.path.remove(str(foreign))
+
+sys.path.insert(0, str(source / "tools"))
+import qualification_shc as client
+
+constructed, requests = [], []
+class FixtureApi:
+    def __init__(self, role):
+        constructed.append(role)
+        self.role = role
+
+    def request(self, method, path, **kwargs):
+        requests.append({"role": self.role, "method": method, "path": path})
+        assert method == "GET"
+        if path == "/services/server/info":
+            return {"entry": [{"content": {
+                "version": "10.6.0.5", "product_type": "enterprise",
+                "mode": "normal", "isForwarding": False,
+                "server_roles": ["indexer", "license_master", "license_manager", "kv_store"]
+            }}]}
+        if path == "/servicesNS/nobody/system/configs/conf-server/shclustering":
+            return {"entry": [{"content": {"disabled": False}}]}
+        raise AssertionError("Unexpected management request")
+
+client.Api = FixtureApi
+try:
+    result = client.assert_standalone_only(candidate, source)
+except client.Refused as error:
+    assert sys.argv[2] != "clean"
+    assert str(error) == "Splunk SDK was imported from another candidate"
+    assert constructed == requests == []
+    result = {"foreign_sdk_refused_before_api": True}
+else:
+    assert sys.argv[2] == "clean"
+    assert len(requests) == 12
+    assert all(row["method"] == "GET" for row in requests)
+    assert all(row == {"recovery": "refused", "migration": "refused", "methods": ["GET"] * 4} for row in result.values())
+    sdk = candidate.resolve() / "bin/lib/splunklib"
+    assert all(Path(module.__file__).resolve().is_relative_to(sdk) for name, module in sys.modules.items() if name == "splunklib" or name.startswith("splunklib."))
+print(json.dumps(result))
+"""
+        completed = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", "-c", script, str(TOOLS.parent), mode],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return json.loads(completed.stdout)
+
+    def test_clean_interpreter_uses_candidate_sdk_and_refuses_shc_with_gets_only(self):
+        self.assertEqual(set(self.probe("clean")), set(client.MEMBERS))
+
+    def test_cached_ambient_sdk_is_refused_before_any_management_request(self):
+        self.assertTrue(self.probe("ambient_package")["foreign_sdk_refused_before_api"])
+
+    def test_cached_ambient_sdk_dependency_is_refused_before_any_management_request(
+        self,
+    ):
+        self.assertTrue(self.probe("ambient_data")["foreign_sdk_refused_before_api"])
+
+
 if __name__ == "__main__":
     unittest.main()

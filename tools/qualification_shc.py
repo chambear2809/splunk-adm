@@ -717,10 +717,20 @@ def settings_race(expected_revision, payloads, namespace):
 def assert_standalone_only(packaged_app: Path, source_root: Path):
     """Execute actual qualifiers through a GET-only adapter, without a journal."""
     sys.path.insert(0, str(Path(packaged_app) / "bin"))
+    sys.path.insert(0, str(Path(packaged_app) / "bin/lib"))
     sys.path.insert(0, str(Path(source_root) / "tools"))
     from adm_recovery_lib.core import Recovery, Refused as RecoveryRefused
     from cisco_contract_migration import Migration, Refused as MigrationRefused
 
+    sdk_root = Path(packaged_app).resolve() / "bin/lib/splunklib"
+    for name, module in tuple(sys.modules.items()):
+        if name == "splunklib" or name.startswith("splunklib."):
+            origin = getattr(module, "__file__", None)
+            require(
+                isinstance(origin, str)
+                and Path(origin).resolve().is_relative_to(sdk_root),
+                "Splunk SDK was imported from another candidate",
+            )
     require(
         Path(sys.modules[Recovery.__module__].__file__)
         .resolve()
