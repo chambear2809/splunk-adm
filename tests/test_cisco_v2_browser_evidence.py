@@ -11,10 +11,15 @@ import unittest
 
 HELPER = Path(__file__).parent / "splunk/cisco-v2-evidence.mjs"
 RUN = """
-const { selectScenarioEvidence, assertScenarioCsv, assertOriginalEvidence, csvRecords } = await import(process.argv[1]);
+const { selectScenarioEvidence, assertScenarioCsv, assertOriginalEvidence, csvRecords, requiredSchedulerEvidence } = await import(process.argv[1]);
 let input = ''; for await (const chunk of process.stdin) input += chunk;
 const value = JSON.parse(input);
 try {
+  if (value.scheduler) {
+    const rows = requiredSchedulerEvidence(value.scheduler.rows, value.scheduler.requiredJobs);
+    process.stdout.write(JSON.stringify({ok:true,rows}));
+    process.exit(0);
+  }
   if (value.evidenceComparison) {
     const {actual, raw, kind} = value.evidenceComparison;
     assertOriginalEvidence(actual, raw, kind);
@@ -227,6 +232,72 @@ class CiscoV2BrowserEvidenceTest(unittest.TestCase):
         }
         value.update(context=self.as_csv(context), flows=self.as_csv([flow]))
         return value, context, flow
+
+    def test_exact_required_scheduler_rows_preserve_unknown_and_inactive_diagnostics(
+        self,
+    ):
+        required = ["ADM - Identity builder", "ADM - Conversation rollup v2"]
+        rows = [
+            [
+                "Identity builder",
+                "No successful run observed",
+                "Not observed\nNot observed",
+                "Unknown / Unknown",
+            ],
+            [
+                "Conversation rollup",
+                "Not required for this deployment",
+                "Not observed\nNot observed",
+                "Unknown / Unknown",
+            ],
+            [
+                "Conversation rollup v2",
+                "No recent successful run",
+                "Aged run\nAged success",
+                "0 / 1",
+            ],
+        ]
+        result = self.run_helper(
+            {"scheduler": {"rows": rows, "requiredJobs": required}}
+        )
+        self.assertTrue(result["ok"], result)
+        self.assertEqual([row["name"] for row in result["rows"]], required)
+        self.assertEqual(result["rows"][0]["status"], "No successful run observed")
+        self.assertEqual(result["rows"][1]["failuresSkips"], "0 / 1")
+        for change in (
+            "missing",
+            "duplicate",
+            "wrong-v1-chain",
+            "body-only-name",
+            "missing-cell",
+            "empty-status",
+            "inactive-required",
+            "duplicate-required",
+        ):
+            changed = copy.deepcopy(rows)
+            expected = required.copy()
+            if change == "missing":
+                changed.pop()
+            elif change == "duplicate":
+                changed.append(changed[-1].copy())
+            elif change == "wrong-v1-chain":
+                changed[-1][0] = "Conversation rollup"
+            elif change == "body-only-name":
+                changed[-1][0], changed[-1][1] = "Other job", "Conversation rollup v2"
+            elif change == "missing-cell":
+                changed[-1].pop()
+            elif change == "empty-status":
+                changed[-1][1] = ""
+            elif change == "inactive-required":
+                changed[-1][1] = "Not required for this deployment"
+            else:
+                expected.append(expected[0])
+            with self.subTest(change=change):
+                self.assertFalse(
+                    self.run_helper(
+                        {"scheduler": {"rows": changed, "requiredJobs": expected}}
+                    )["ok"]
+                )
 
     def test_distinct_mac_and_ip_contracts_and_exact_csv_records(self):
         value, _, _ = self.with_exports(self.fixture())

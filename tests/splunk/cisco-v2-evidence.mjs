@@ -517,6 +517,49 @@ export function selectScenarioEvidence(graph, scenario) {
   return { client, observations, connection, ipClient, bindings };
 }
 
+// Health renders every registry job, including inactive diagnostics. Preflight
+// supplies only the required active dependency subset with canonical REST names.
+export function requiredSchedulerEvidence(rows, requiredJobs) {
+  assert(Array.isArray(rows), "scheduler table rows must be an array");
+  assert(
+    Array.isArray(requiredJobs) && requiredJobs.length > 0,
+    "required scheduler inventory is missing",
+  );
+  assert.equal(
+    new Set(requiredJobs).size,
+    requiredJobs.length,
+    "duplicate required scheduler identity",
+  );
+  return requiredJobs.map((name) => {
+    assert(
+      typeof name === "string" && /^ADM - .+/.test(name),
+      "invalid canonical scheduler identity",
+    );
+    const displayName = name.replace(/^ADM - /, "");
+    const matches = rows.filter(
+      (cells) => Array.isArray(cells) && cells[0] === displayName,
+    );
+    assert.equal(
+      matches.length,
+      1,
+      `missing or duplicate required scheduler row: ${name}`,
+    );
+    const cells = matches[0];
+    assert(
+      cells.length === 4 &&
+        cells.every((cell) => typeof cell === "string" && /\S/.test(cell)),
+      "required scheduler row lacks display/status/run/count evidence",
+    );
+    const [, status, lastRunSuccess, failuresSkips] = cells;
+    assert.notEqual(
+      status,
+      "Not required for this deployment",
+      "required scheduler job was classified inactive",
+    );
+    return { name, displayName, status, lastRunSuccess, failuresSkips };
+  });
+}
+
 export function csvRecords(text) {
   const rows = [],
     row = [];

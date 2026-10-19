@@ -8,6 +8,7 @@ import {
   selectScenarioEvidence,
   assertScenarioCsv,
   expectedBackendText,
+  requiredSchedulerEvidence,
 } from "./cisco-v2-evidence.mjs";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
@@ -503,8 +504,24 @@ try {
   ).toHaveCount(0);
   for (const label of dependencies.sourceLabels)
     expect(healthText).toContain(label);
-  for (const name of dependencies.requiredJobs)
-    expect(healthText).toContain(name);
+  const schedulerTable = root.getByRole("table").filter({
+    has: page.getByRole("columnheader", {
+      name: "Last run / success",
+      exact: true,
+    }),
+  });
+  await expect(schedulerTable).toHaveCount(1);
+  const schedulerRows = await schedulerTable
+    .locator("tbody tr")
+    .evaluateAll((rows) =>
+      rows.map((row) =>
+        Array.from(row.querySelectorAll("td"), (cell) => cell.innerText),
+      ),
+    );
+  const requiredSchedulerRows = requiredSchedulerEvidence(
+    schedulerRows,
+    dependencies.requiredJobs,
+  );
   const healthQueries = searches.slice(healthStart);
   for (const macro of dependencies.healthProbes)
     expect(
@@ -540,6 +557,7 @@ try {
     configuredExpectations: true,
     sourceLabels: dependencies.sourceLabels,
     requiredJobs: dependencies.requiredJobs,
+    requiredSchedulerRows,
     probes: healthQueries,
     indexMetadata: dependencies.indexMacros,
     tableRows: await root.locator("table tbody tr").allInnerTexts(),
