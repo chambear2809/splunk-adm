@@ -965,7 +965,7 @@ function NodeDetails({
           )}
           {!wirelessCorrelated && (
             <p
-              className={`callout ${attachmentStatus === "conflict" || attachmentStatus === "stale" ? "warn" : "neutral"}`}
+              className={`callout ${attachmentStatus === "conflict" || attachmentStatus === "stale" || attrs.source_time_status === "stale" || attrs.history_coverage === "unconfirmed" ? "warn" : "neutral"}`}
             >
               {networkClientAttachmentMessage(attrs)}
             </p>
@@ -978,11 +978,30 @@ function NodeDetails({
               ["MAC address", attrs.client_mac],
               ["Attachment status", attachmentStatus],
               ["Evidence basis", attrs.attachment_basis],
-              ["Source event time", evidenceTime(attrs.attachment_event_time)],
-              ["Received time", evidenceTime(attrs.attachment_received_time)],
+              [
+                "Source event time",
+                evidenceTime(attrs.source_time ?? attrs.attachment_event_time),
+              ],
+              ["Source time status", attrs.source_time_status],
+              [
+                "Received time",
+                evidenceTime(
+                  attrs.received_time ?? attrs.attachment_received_time,
+                ),
+              ],
+              [
+                "History coverage",
+                attrs.history_coverage === "retained_evidence"
+                  ? "Retained evidence only"
+                  : attrs.history_coverage === "unconfirmed"
+                    ? "Unconfirmed"
+                    : attrs.history_coverage,
+              ],
               [
                 "Source collection time",
-                evidenceTime(attrs.attachment_collected_time),
+                evidenceTime(
+                  attrs.collected_time ?? attrs.attachment_collected_time,
+                ),
               ],
               ["Access point or device", attrs.attachment_device_name],
               ["Attachment device ID", attrs.attachment_device_id],

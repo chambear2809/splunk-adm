@@ -86,7 +86,7 @@ class TopologyV2ProposalTest(unittest.TestCase):
     def test_history_generators_have_a_pipeline_context_in_subsearches(self):
         self.assertEqual(
             self.text.count("| append [ | `adm_topology_client_observations`"),
-            3,
+            1,
         )
 
     def test_meraki_association_and_inventory_share_one_collision_safe_device_key(self):

@@ -1,3 +1,4 @@
+import { DeploymentWriteError } from "../data/deploymentClient";
 import { useEffect, useRef, useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
 import TableExport from "@splunk/react-ui/Table";
@@ -310,6 +311,9 @@ export function SetupPage({
                     : "Deployment expectations are unavailable."}
               </p>
               {deployment?.error && <p role="alert">{deployment.error}</p>}
+              {deployment?.writeUnavailableReason && (
+                <p role="status">{deployment.writeUnavailableReason}</p>
+              )}
               {settings && (
                 <>
                   <Table
@@ -464,6 +468,20 @@ export function SetupPage({
                           health?.refresh();
                         })
                         .catch((reason: unknown) => {
+                          if (
+                            reason instanceof DeploymentWriteError &&
+                            reason.code === "conflict"
+                          ) {
+                            setDraftConflict(reason.message);
+                            void deploymentClient
+                              .read(signal)
+                              .then((next) => {
+                                if (!signal?.aborted) receiveDeployment(next);
+                              })
+                              .catch(() => {
+                                /* The draft and conflict remain visible. */
+                              });
+                          }
                           if (!signal?.aborted)
                             setError(
                               reason instanceof Error

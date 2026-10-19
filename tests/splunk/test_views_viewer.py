@@ -76,50 +76,15 @@ class ViewerBrowserTest(unittest.TestCase):
             self.fail(f"viewer browser returned non-JSON evidence: {error}")
 
     def _pin_absent_deployment_settings(self) -> None:
-        from test_permissions import _response
+        from settings_fixture import SettingsFixture
 
-        password = self.restricted.lab.read_secrets()["SPLUNK_PASSWORD"]
-        collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
-        record_path = collection + "/deployment"
-        status, body = _response("GET", record_path, "admin", password)
-        self.assertIn(status, (200, 404))
-        original = json.loads(body) if status == 200 else None
-        if original is not None:
-            self.assertEqual(original.get("_key"), "deployment")
-            # Preserve the application document exactly, including revision and
-            # settings_json. _user is response metadata supplied by KV Store.
-            original = {key: value for key, value in original.items() if key != "_user"}
-
-        def restore() -> None:
-            if original is not None:
-                status, _ = _response(
-                    "POST",
-                    collection,
-                    "admin",
-                    password,
-                    json.dumps(original).encode(),
-                    "application/json",
-                )
-                self.assertIn(status, (200, 201))
-                status, body = _response("GET", record_path, "admin", password)
-                self.assertEqual(status, 200)
-                restored = json.loads(body)
-                self.assertEqual(
-                    {key: value for key, value in restored.items() if key != "_user"},
-                    original,
-                )
-            else:
-                # This scenario creates no settings record. Never delete an
-                # unrelated record that appeared during the qualification.
-                status, _ = _response("GET", record_path, "admin", password)
-                self.assertEqual(status, 404)
-
-        self.addCleanup(restore)
-        if original is not None:
-            status, _ = _response("DELETE", record_path, "admin", password)
-            self.assertIn(status, (200, 204))
-        status, _ = _response("GET", record_path, "admin", password)
-        self.assertEqual(status, 404)
+        # The parent owns this disposable namespace. Preserve all immutable
+        # slots as well as the legacy anchor, and restore the complete snapshot.
+        fixture = SettingsFixture(self, enable_writes=False)
+        fixture.clear()
+        status, snapshot = fixture.request("GET")
+        self.assertEqual(status, 200)
+        self.assertEqual(snapshot["state"], "absent")
 
     def test_restricted_viewer_can_use_live_views(self) -> None:
         import lab
@@ -292,7 +257,10 @@ class ViewerBrowserTest(unittest.TestCase):
                 self.assertTrue(unknown_health.get("visible"), evidence)
                 self.assertTrue(unknown_health.get("metadataHeadersObserved"), evidence)
                 self.assertTrue(unknown_health.get("healthCompleted"), evidence)
-                self.assertEqual(unknown_health.get("settingsStatus"), 404, evidence)
+                self.assertEqual(unknown_health.get("settingsStatus"), 200, evidence)
+                self.assertEqual(
+                    unknown_health.get("settingsState"), "absent", evidence
+                )
                 expected_selectors = {
                     selector["name"]
                     for selector in json.loads(

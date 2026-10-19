@@ -1,0 +1,1643 @@
+{
+  "schemaVersion": 2,
+  "recordedAt": "2026-10-18T20:52:35.810541+00:00",
+  "acceptedBaseline": "64473e54d1fca4311ac592bc34c4a96a022efd48",
+  "candidatePrimaryTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
+  "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+  "effectiveWorker": {
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "verification": "Coordinator inspected active child session turn_context."
+  },
+  "rawEvidenceRoot": "dist/final-qualification/performance",
+  "retention": "Raw evidence is ignored by git. Preserve this directory with retained packages when archiving the worktree. Paths are relative to this qualification checkout.",
+  "scope": "Standalone production React profiling browser harness; no Splunk dispatch/download, platform or capacity claim. The profiling served bundle differs from packaged build.",
+  "ordering": [
+    "final09candidate20/cache",
+    "final09baseline20/cache",
+    "final09baseline14case5/cache",
+    "final09candidate14case5/cache"
+  ],
+  "sourceCoverage": "Primary tree hashes frontend/src, fixtures and package-lock.json. Imported config/deployment-health.json and research/cisco-pipeline-interface.json plus all actual built served assets are hashed before/after every final09 run. All pass and match per role across selection/full-matrix modes. Earlier native traces are retained separately; other repository files are not implicitly measured.",
+  "sourceConsistency": {
+    "path": "dist/final-qualification/performance/final09-input-consistency.json",
+    "sha256": "a16e5061647fcd8aa1b1d42f1c73c0f7c6419bacd2a3e2693f436d23c84a8227",
+    "bytes": 8037
+  },
+  "packageBinding": {
+    "package": {
+      "path": "dist/final-qualification/packages/candidate-09.tar.gz",
+      "sha256": "024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097",
+      "bytes": 1003461
+    },
+    "coordinatorSourceAndFileManifest": {
+      "path": "dist/final-qualification/candidate-09-package.json",
+      "sha256": "762e4f2b13eb236a265b9f8f353af8776f7a07ba2322e9276aaa4f2f2ea637d6",
+      "bytes": 10808
+    },
+    "sourceSha": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+    "packagedAtlasJsSha256": "388806966a80af83519df5711c1e9bdd05d23bea92c199c2749ce0f1453107ba",
+    "packagedCssSha256": "7967333c91d901e1e2e2dcd9104100ccc0976cac0bfde9054e5ba5b2a023f51c",
+    "standaloneProfilingBundleEqualsEarlierCandidate": true,
+    "limitation": "Actual package09 atlas.js changed for deployment-client stale-read repair. No final-package JS equality claim. Renewed source6eb standalone MapPage bundle hashes happen to equal earlier candidate; these benchmarks do not execute/qualify the asynchronous deployment-client race. Root ordinary-browser/unit/installed evidence is separate. Earlier native traces remain diagnostic support for unchanged CSS only."
+  },
+  "counts": {
+    "completeMatrixCasesPerRole": 14,
+    "completeMatrixSamplesPerRole": 140,
+    "supplementalSelectionSamplesPerRole": 40,
+    "finalSourceNativeSamples": 0,
+    "earlierSourceNativeMeasuredSamplesPerRole": 6,
+    "earlierSourceNativeDiscardedWarmupTracesPerRole": 1,
+    "ordinaryBrowser": "CI current-source94 passed2.2m; independent correctness evidence, not local performance.",
+    "priorBrowserAndReadiness": "Earlier94 browser/9readiness retained in prior index, not substituted for final source."
+  },
+  "limitations": [
+    "Main-thread stable DOM/geometry frames do not independently timestamp compositor presentation.",
+    "n=5 matrix p95 is maximum; n=20 p95 is nineteenth observation. Neither is a population SLO.",
+    "Dense Meraki selection/filtering and other unfavorable observations remain retained; no broad speedup claim.",
+    "Tracing, screenshot drain and injected CSS are separate diagnostic interventions, never accepted distribution replacements.",
+    "CPU/desktop/GPU/thermal background state not fully controlled; coordinator paused heavy local builds/browser work, light remote RPC/log work continued.",
+    "No alternate-browser or long-running GPU memory qualification.",
+    "Coordinator reported19Pythonpuretests0.048s plusRuff before worker pause during candidate fullmatrix; exact time/Ruffduration unavailable. Outside input guards but bounded CPUoverlap may affect timing; no sample exclusion or individual attribution.",
+    "Deployment-client stale-read repair changes packaged atlas.js but not this standalone map bundle. Package runtime race verification belongs to separate coordinator evidence."
+  ],
+  "commands": {
+    "path": "dist/final-qualification/performance/final09-command-manifest.json",
+    "sha256": "76618f371fa7e33b6626913367def74e62639fad3395f1202725c0b73a33f65d",
+    "bytes": 4073
+  },
+  "additionalCommands": [
+    {
+      "argv": [
+        "node",
+        "tests/performance/report.mjs",
+        "dist/final-qualification/performance/final09-baseline-matrix.json",
+        "",
+        "dist/final-qualification/performance/final09-baseline-budget.md"
+      ],
+      "outcome": "Passed before candidate matrix; baseline-derived investigation budgets."
+    },
+    {
+      "argv": [
+        "node",
+        "tests/performance/report.mjs",
+        "dist/final-qualification/performance/final09-baseline-matrix.json",
+        "dist/final-qualification/performance/final09-candidate-matrix.json",
+        "dist/final-qualification/performance/final09-comparison.md"
+      ],
+      "outcome": "Passed; full comparable14cases140samples each."
+    }
+  ],
+  "runs": [
+    {
+      "path": "dist/final-qualification/performance/baseline-diagnostic.json",
+      "sha256": "953f713be1dcbbfd87ca3e76d842a74ce2bd79deaeeb9e2d4aad8c4f6869abc7",
+      "bytes": 607390,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:29:17.306Z",
+      "harnessSha256": "853f8c74a8a1f4a3a17b165f9e5ce727a45968cc50324ed381c23a0fd04f3538",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": null,
+        "drainSelection": null,
+        "selectionDiagnostic": null,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-diagnostic.json",
+      "sha256": "cd8b2013b5e043bc0ddc5150c7e175e85e3829aaf06de000a5331c9d6d8bc6f4",
+      "bytes": 606786,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:30:26.484Z",
+      "harnessSha256": "b2457c55cfaea413cec80d74fee212932162e28d850a56bb6b5a84138203a24d",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": null,
+        "drainSelection": null,
+        "selectionDiagnostic": null,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-diagnostic.json",
+      "sha256": "715f645aebf0fa8a6ccea88877ab4bb8e5497f669a592a9a0959f9e28400b395",
+      "bytes": 607088,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:31:51.773Z",
+      "harnessSha256": "f5b57b817b8b790c17a182e8ebbfcb79c167b56309eab4def9485e41ecc16a8f",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": null,
+        "selectionDiagnostic": null,
+        "experimentalCss": ".adm .map-canvas{contain:paint}"
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-diagnostic.json",
+      "sha256": "1bbacf1e4ea79740a61b1c68ed86657b8a28bbcf961fed273cf26edba2eec7db",
+      "bytes": 608043,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:32:32.158Z",
+      "harnessSha256": "f5b57b817b8b790c17a182e8ebbfcb79c167b56309eab4def9485e41ecc16a8f",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": null,
+        "selectionDiagnostic": null,
+        "experimentalCss": ".adm .edge.dim,.adm .pill.dim{opacity:1;fill-opacity:.3;stroke-opacity:.3}"
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-diagnostic.json",
+      "sha256": "a8034896271736d5c2cae2d2589648621e0bd80fb163b65bfcb11dd501bc3abe",
+      "bytes": 608034,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:33:22.960Z",
+      "harnessSha256": "f5b57b817b8b790c17a182e8ebbfcb79c167b56309eab4def9485e41ecc16a8f",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": null,
+        "selectionDiagnostic": null,
+        "experimentalCss": ".adm .edge-hit{stroke:none;pointer-events:stroke}"
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-diagnostic.json",
+      "sha256": "404848bae64f5bb0d8732082ac16184c8855cfeafa10c66958fc205ecaf2862a",
+      "bytes": 607775,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:34:05.630Z",
+      "harnessSha256": "a69a0e755ad12cb18c63f59733d9164e8ceda13456399ae84a475aec5ddda8a0",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": true,
+        "selectionDiagnostic": null,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-diagnostic.json",
+      "sha256": "7463a7c36f5590c39dfbe99d1a7079adc30aa441a7163b526f84567013daf386",
+      "bytes": 607859,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 2,
+      "measuredSamples": 2,
+      "recordedAt": "2026-10-18T14:34:49.184Z",
+      "harnessSha256": "a69a0e755ad12cb18c63f59733d9164e8ceda13456399ae84a475aec5ddda8a0",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": false,
+        "selectionDiagnostic": null,
+        "experimentalCss": ".adm .map-svg [data-export-root]{will-change:transform}"
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-10.json",
+      "sha256": "d9e111a0d84755c7f8bea263de16949bf160664d6dc8c4f67469a99c83e0262d",
+      "bytes": 3928061,
+      "eligibility": "excluded-incomplete",
+      "reason": "Whole-case timeout; samples and failures preserved.",
+      "complete": false,
+      "expectedCases": 1,
+      "expectedSamples": 20,
+      "measuredSamples": 13,
+      "recordedAt": "2026-10-18T14:40:35.044Z",
+      "harnessSha256": "a69a0e755ad12cb18c63f59733d9164e8ceda13456399ae84a475aec5ddda8a0",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": null,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-only-20.json",
+      "sha256": "5612c1b73337fcd730bc1ca9a5799edbb4ce7ac74734b549276ebddacc78c9fa",
+      "bytes": 763112,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T14:42:16.269Z",
+      "harnessSha256": "057610c50eddbe880e0e162ff113a0accd2507730c5739c37d77c96b1f6ed60f",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-selection-only-20.json",
+      "sha256": "a4b3842d018d6a05b943357fc7019ecbecc5ed7fb5405b6a28494f0c6486c82e",
+      "bytes": 762069,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T14:43:58.820Z",
+      "harnessSha256": "057610c50eddbe880e0e162ff113a0accd2507730c5739c37d77c96b1f6ed60f",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Earlier complete selected workflow; see raw report",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": ".adm .map-svg [data-export-root]{will-change:transform}"
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20.json",
+      "sha256": "845ccc59a6f5c7c2c2613c3aca7b9f9a15e300d4a7579b051ac30d040d1a3305",
+      "bytes": 761772,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T14:51:36.926Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "69aaf0ca1bf9433673783adc1bcd2d1a8ff79aa25fbe4f153d86eb8bbec94813",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20.json",
+      "sha256": "11ecab07d2fa27f7b0b658dfa0ae3dfa02cc03dfd66513e5b6fe79ec62854507",
+      "bytes": 759202,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T14:53:37.982Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-matrix.json",
+      "sha256": "7e30fa7b6e709c2a9a341f3e26302e0662381b614986308266bf532d3fd501f1",
+      "bytes": 14218671,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T15:08:01.080Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20-r2.json",
+      "sha256": "5697b5528b81cd8e948c71db4ea053c9cac0f3ce12b7746baf7b80b31f5fdeb6",
+      "bytes": 768741,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T15:12:24.322Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "2117e4ad810958f8123276c33ca82a80ce52a81325f49953fb3faaf1540c14a6",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20-r2.json",
+      "sha256": "22c4bd7be01dbcd693ac7f157cd92085d53732e0453a81675f26df21b13639d0",
+      "bytes": 765847,
+      "eligibility": "earlier-diagnostic-only",
+      "reason": "Earlier instrumentation/source or experimental CSS/drain/tracing; excluded from final accepted distributions.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T15:13:59.696Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-matrix.json",
+      "sha256": "94ab8d01c426cbfe157021928247cbeb7565112e44f5231bac2e7f0de690cbf6",
+      "bytes": 13620281,
+      "eligibility": "excluded-incomplete",
+      "reason": "Whole-case timeout; all samples and failures preserved. Imported JSON also changed during final-candidate-matrix; no retroactive freeze claim.",
+      "complete": false,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 138,
+      "recordedAt": "2026-10-18T15:32:01.806Z",
+      "harnessSha256": "a7f905aca21533baa2a8c79eb50ddea7bd4d0fd81806e20519ccee2febada16e",
+      "sourceTreeSha256": "2117e4ad810958f8123276c33ca82a80ce52a81325f49953fb3faaf1540c14a6",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": false,
+      "builtServedFreezeGuardPresent": false,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-selection-20.json",
+      "sha256": "8bce98bb66bfda4aaf64ff18746824731eed4533e40185e3c07a4ac97811794d",
+      "bytes": 770292,
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T16:08:59.517Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "d89f2c0d45a1fc9816a182e3a6e1417c8c13bb82d10843b2e05c4767cb0d523c",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      },
+      "originalEligibility": "supplemental-selection-distribution"
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-selection-20.json",
+      "sha256": "6deb710d29e6d85839e271324fcf259c0372c54cd7a80cc8ee04b61c6d3d07f9",
+      "bytes": 770901,
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T16:11:08.589Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      },
+      "originalEligibility": "supplemental-selection-distribution"
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-matrix.json",
+      "sha256": "3f0523cd07214e22556a3d7a4882308ccc74adf526a38b276d0428f79c692027",
+      "bytes": 14261138,
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T16:21:09.311Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      },
+      "originalEligibility": "accepted-complete-matrix"
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-matrix.json",
+      "sha256": "645b0531bcc806caf67e582be2f81708a4ef66293543158dd98b6398501d5563",
+      "bytes": 14256698,
+      "eligibility": "prior-source-qualification",
+      "reason": "Retained prior source qualification; renewed final09 runs supersede for final acceptance.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T16:30:29.482Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "d89f2c0d45a1fc9816a182e3a6e1417c8c13bb82d10843b2e05c4767cb0d523c",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      },
+      "originalEligibility": "accepted-complete-matrix"
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native.json",
+      "sha256": "ccbf63def6fc7c0cebb248e083e3ff551475ad140fa96485b448c59f7df2ea2b",
+      "bytes": 122999,
+      "eligibility": "supplemental-native-diagnostic",
+      "reason": "Earlier source native diagnostic supporting unchanged CSS attribution; not a new final09 measurement.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 6,
+      "measuredSamples": 6,
+      "recordedAt": "2026-10-18T16:34:26.134Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native.json",
+      "sha256": "62e3683f81b5a4427d8a8107114f2b12df7f8134fc2c5dd8e6e2e64e2246f54b",
+      "bytes": 123588,
+      "eligibility": "supplemental-native-diagnostic",
+      "reason": "Earlier source native diagnostic supporting unchanged CSS attribution; not a new final09 measurement.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 6,
+      "measuredSamples": 6,
+      "recordedAt": "2026-10-18T16:34:48.659Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "d89f2c0d45a1fc9816a182e3a6e1417c8c13bb82d10843b2e05c4767cb0d523c",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": true,
+        "traceCategories": "*,disabled-by-default-devtools.timeline",
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.json",
+      "sha256": "a6c30c0d7a097fc2338da46e11306f48fb2982e381d3afd43dab60a91dc80f9a",
+      "bytes": 773161,
+      "eligibility": "supplemental-selection-distribution",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T20:33:11.332Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.json",
+      "sha256": "30789605ebb0183ad355cfc52b85630e6712b7073e7dd3dff637aad4cdfacedd",
+      "bytes": 774990,
+      "eligibility": "supplemental-selection-distribution",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 1,
+      "expectedSamples": 40,
+      "measuredSamples": 40,
+      "recordedAt": "2026-10-18T20:34:27.048Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": true,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.json",
+      "sha256": "45ea8b690d627586b17fa5092ea66f91c79ae29dd44f50832daf4a4471a21afa",
+      "bytes": 14252769,
+      "eligibility": "accepted-complete-matrix",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T20:43:15.424Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "65847e91461b32039123e36da921efadc1d8c4c415b13180a822ad9ac50799da",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      }
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.json",
+      "sha256": "f17b27272184901035f0f5e67c6591bc086af530912826bb15c312a8d20c0a70",
+      "bytes": 14262240,
+      "eligibility": "accepted-complete-matrix",
+      "reason": "Renewed final source6eb vs accepted644; all completeness/source/imported/served/harness guards pass.",
+      "complete": true,
+      "expectedCases": 14,
+      "expectedSamples": 140,
+      "measuredSamples": 140,
+      "recordedAt": "2026-10-18T20:52:10.236Z",
+      "harnessSha256": "75a82d0198e5214c4b48fa37988f3c38f823e68f38175e923ee48b217ab612a7",
+      "sourceTreeSha256": "340ef7883a0340fc069fc2148943a8a37a0826bc84f546e725890a38420c6285",
+      "sourceUnchangedDuringRun": true,
+      "importedFreezeGuardPresent": true,
+      "builtServedFreezeGuardPresent": true,
+      "methodology": "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      "runtimeControls": {
+        "tracing": false,
+        "traceCategories": null,
+        "drainSelection": false,
+        "selectionDiagnostic": false,
+        "experimentalCss": null
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "dist/final-qualification/performance/baseline-diagnostic.json",
+      "sha256": "953f713be1dcbbfd87ca3e76d842a74ce2bd79deaeeb9e2d4aad8c4f6869abc7",
+      "bytes": 607390
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-diagnostic.log",
+      "sha256": "a824b9bd1c7eb1c2ffb654402ad37c56b74df0b9a27cf96d30c04c507a9aad74",
+      "bytes": 3279
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-diagnostic.json",
+      "sha256": "cd8b2013b5e043bc0ddc5150c7e175e85e3829aaf06de000a5331c9d6d8bc6f4",
+      "bytes": 606786
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-diagnostic.log",
+      "sha256": "633ef47d42e1250ea68cc0a96374334e51d2470452a654f8e2756db8230839e5",
+      "bytes": 3286
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-traces/selection-001.json",
+      "sha256": "27aef4426ffd13c20641824f1a4acd890141bca2bb6cf7b4b0ac52be43a365c4",
+      "bytes": 2707783
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-traces/selection-002.json",
+      "sha256": "67ed074d1200c967a641e4d153fb553337cb54addd518d4d153d944dcaeb99d6",
+      "bytes": 2758071
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-native-traces/selection-003.json",
+      "sha256": "7f30a75c447572e32a80b46c354c97bd713677edd5e67a3272b5b77448d2ccd3",
+      "bytes": 2760606
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-10.json",
+      "sha256": "d9e111a0d84755c7f8bea263de16949bf160664d6dc8c4f67469a99c83e0262d",
+      "bytes": 3928061
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-10.log",
+      "sha256": "f223ca561a9f5e32b15ff348730a96b9bb47b64cce16b069ed72d5e1314d19d5",
+      "bytes": 4532
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-only-20.json",
+      "sha256": "5612c1b73337fcd730bc1ca9a5799edbb4ce7ac74734b549276ebddacc78c9fa",
+      "bytes": 763112
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-selection-only-20.log",
+      "sha256": "49fafdc8bafa400da0fef23d6a3ca4e47d4707fec2b6e61f531a843264005d7c",
+      "bytes": 3284
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-traces/selection-001.json",
+      "sha256": "d34ae7230e11caa8bd3b94d4d7eabd9a314a8ba7cc9f6859ebe23ad0935e392a",
+      "bytes": 223464
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-traces/selection-002.json",
+      "sha256": "16c4eae3d1844aaacaf666d7e7a8d79d7561e4f44802246f996f3ed424a66265",
+      "bytes": 231399
+    },
+    {
+      "path": "dist/final-qualification/performance/baseline-traces/selection-003.json",
+      "sha256": "8dfbf8a272dd1d9c3be7345d8690db0a092bfa6f124abd0e49c59c79d4f61064",
+      "bytes": 229508
+    },
+    {
+      "path": "dist/final-qualification/performance/build-evidence-index.py",
+      "sha256": "e2c9bd6678f7ee377ce126844d8ec5265a684d9481019a432d72070dce5d2330",
+      "bytes": 11281
+    },
+    {
+      "path": "dist/final-qualification/performance/build-final09-evidence-index.py",
+      "sha256": "1f113eb025df2dd773c54478c17d8027f3b08dfd0dfe71e07ad42b24bbd4a7b7",
+      "bytes": 9912
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-matrix-timeout-artifacts/.last-run.json",
+      "sha256": "a994f497fbb92a5d8cc04a2f555ff6b4053c8a9f4ee272da801ba6262d4ba3f8",
+      "bytes": 96
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-matrix-timeout-artifacts/browser.perf-meraki-nxos-near-limit/error-context.md",
+      "sha256": "d12464def204fcd8845aaddb4d6b16db11e33860d1d43b0d6f2549f9b48de6fe",
+      "bytes": 355
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-timeout-served-assets/assets/demo-rows-aci-prev-CAV02_uu.js",
+      "sha256": "2322e519c9ff78ddccc2ec116742993e7289011e79a8e5cdf941960f76445826",
+      "bytes": 35161
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-timeout-served-assets/assets/index-BOodRQIs.css",
+      "sha256": "56006ee32eb43e10fcb3c93a6fd94beafec743a72271eabff27510065a19ead4",
+      "bytes": 30997
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-timeout-served-assets/assets/index-qad7YEq8.js",
+      "sha256": "83309b5bc5df967364be4788bdba4f19ea9c6b0999b1b7581b9e1af54d5a2ad2",
+      "bytes": 2420530
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-timeout-served-assets/audit-manifest.json",
+      "sha256": "1de22a497b900a92b34a9f43c861d231541a9ee17805e9d49d9278fb85a2e8f2",
+      "bytes": 1039
+    },
+    {
+      "path": "dist/final-qualification/performance/candidate-timeout-served-assets/index.html",
+      "sha256": "5b4698a4020cc229dfcf18d2cafa0cda286f81ae9e33c9da4d20cbd327483a85",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/command-manifest-pre-qualified.json",
+      "sha256": "71ecc63a87ce4400a11dc952b7ea66099205f0bb05678cdb536553f1cb708f3e",
+      "bytes": 14620
+    },
+    {
+      "path": "dist/final-qualification/performance/command-manifest.json",
+      "sha256": "c88ee33f6a0c7615f1a3495bfa0b0de6f181857f1491a4e478b022593b52f026",
+      "bytes": 24729
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-diagnostic.json",
+      "sha256": "7463a7c36f5590c39dfbe99d1a7079adc30aa441a7163b526f84567013daf386",
+      "bytes": 607859
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-diagnostic.log",
+      "sha256": "33692a4ccff10e434f1f9aa62ba42dfcdb8c2d886825468ed2a3ba1f62d73976",
+      "bytes": 3278
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-selection-only-20.json",
+      "sha256": "a4b3842d018d6a05b943357fc7019ecbecc5ed7fb5405b6a28494f0c6486c82e",
+      "bytes": 762069
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-selection-only-20.log",
+      "sha256": "ba5e9703cf58e78240218ed574aa32da1241d25bc86988e689d3fcc530d45e53",
+      "bytes": 3286
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-traces/selection-001.json",
+      "sha256": "17e224a1a0dabff46f49dc5e3f32394d6a17f500c1c4da4700f79be75e2bf491",
+      "bytes": 2369275
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-traces/selection-002.json",
+      "sha256": "5c64ec5fdb0ec02d4b55b10dc0cac76c43f8124369c1bba68a9f234b8d7caebc",
+      "bytes": 2447798
+    },
+    {
+      "path": "dist/final-qualification/performance/composited-traces/selection-003.json",
+      "sha256": "3fa8e4e3174f69324045786e47e5d7026205728c96360f03389856eff03ae42a",
+      "bytes": 2426930
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-diagnostic.json",
+      "sha256": "715f645aebf0fa8a6ccea88877ab4bb8e5497f669a592a9a0959f9e28400b395",
+      "bytes": 607088
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-diagnostic.log",
+      "sha256": "2f13042cb0a38ebd7a61d5f54a8aeb58b8a666c18f3f89b17ea9a0e1ec55ddff",
+      "bytes": 3278
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-traces/selection-001.json",
+      "sha256": "15253b21f024f8c222d5efa687da018dcb55b3ca15805430e168eef96c4dba28",
+      "bytes": 2646551
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-traces/selection-002.json",
+      "sha256": "50924da813db20936fb6133e673af1618670bcd5a709fb61edc52b5936a050fa",
+      "bytes": 2713609
+    },
+    {
+      "path": "dist/final-qualification/performance/contain-traces/selection-003.json",
+      "sha256": "f7bb99661b52f6f224c450b01b5253bfefb45135f528f9e757f9494ffa43357f",
+      "bytes": 2753179
+    },
+    {
+      "path": "dist/final-qualification/performance/diagnostic-index.json",
+      "sha256": "41b97e43dd88bb99ab7f4f7f053c717ff5339a7fad25f68ce243a13bacb94c84",
+      "bytes": 13039
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-diagnostic.json",
+      "sha256": "404848bae64f5bb0d8732082ac16184c8855cfeafa10c66958fc205ecaf2862a",
+      "bytes": 607775
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-diagnostic.log",
+      "sha256": "b194dddaedb4e6c5a91a048698d8ff7d8d04b5568defcea75ec8656b69e220e9",
+      "bytes": 3272
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-traces/selection-001.json",
+      "sha256": "f1c2a00ae44de695c8e435242244ed5916d3515f1c2658416d81b1b533c7819c",
+      "bytes": 1821764
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-traces/selection-002.json",
+      "sha256": "7aebb29f80aa33e2b99c9589dcc80111cf85f2da34f5480b4950d4fab9ff23f9",
+      "bytes": 1903428
+    },
+    {
+      "path": "dist/final-qualification/performance/drained-traces/selection-003.json",
+      "sha256": "a9367f29eb8b3c146a92afc721615ea59503ad1b1e994d7e653ebe001f01fb68",
+      "bytes": 1879296
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-budget.md",
+      "sha256": "585a21b17d310e50b6dead0d5b5f8dcb8913bf5508421e4d90fc2fc660b5bc53",
+      "bytes": 7353
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-budget.summary.json",
+      "sha256": "e4a9e47d73c7c43b3be816767a0d4e89ec52eda1be97e00cbec629ef8ef47b44",
+      "bytes": 519357
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-matrix.json",
+      "sha256": "7e30fa7b6e709c2a9a341f3e26302e0662381b614986308266bf532d3fd501f1",
+      "bytes": 14218671
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-matrix.log",
+      "sha256": "54539bedc2420600a7c41eaef19aaeca01aec3f1e762105fec29e36fbf223d1b",
+      "bytes": 4595
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-report.log",
+      "sha256": "70ef2dc4d1bbda9e3fb477cf86852982ec4e4a730a962b1b9e0a94c6db369962",
+      "bytes": 33
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20-r2.json",
+      "sha256": "22c4bd7be01dbcd693ac7f157cd92085d53732e0453a81675f26df21b13639d0",
+      "bytes": 765847
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20-r2.log",
+      "sha256": "840a3abd88bdfcef46339486a8354ce791207675c96bc65391e271a6bffb80e4",
+      "bytes": 3291
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20.json",
+      "sha256": "11ecab07d2fa27f7b0b658dfa0ae3dfa02cc03dfd66513e5b6fe79ec62854507",
+      "bytes": 759202
+    },
+    {
+      "path": "dist/final-qualification/performance/final-baseline-selection-20.log",
+      "sha256": "651cd2db61188f41f5a3d9b77079831bbb09112329888ba2f0fdd8f6918fbf06",
+      "bytes": 3288
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-matrix.json",
+      "sha256": "94ab8d01c426cbfe157021928247cbeb7565112e44f5231bac2e7f0de690cbf6",
+      "bytes": 13620281
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-matrix.log",
+      "sha256": "e612194fd30db57f5d1bce2e6dee780f4d7bf8e73fbcf8e0033489d0edb8da0b",
+      "bytes": 5554
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20-r2.json",
+      "sha256": "5697b5528b81cd8e948c71db4ea053c9cac0f3ce12b7746baf7b80b31f5fdeb6",
+      "bytes": 768741
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20-r2.log",
+      "sha256": "e00ee578c5a7c3eb859a64e869457488fc8a6084cb7b26be850f5b8b795afa40",
+      "bytes": 3140
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20.json",
+      "sha256": "845ccc59a6f5c7c2c2613c3aca7b9f9a15e300d4a7579b051ac30d040d1a3305",
+      "bytes": 761772
+    },
+    {
+      "path": "dist/final-qualification/performance/final-candidate-selection-20.log",
+      "sha256": "ee7728066f939cb3a5eda676ae3df4648e24d1b5291c3fd9e7581a208390c847",
+      "bytes": 3137
+    },
+    {
+      "path": "dist/final-qualification/performance/final-imported-source-before.json",
+      "sha256": "229fcb9b8b0fd5d8357705b9f868caab64b014649978b6efeaec24317466d62d",
+      "bytes": 1305
+    },
+    {
+      "path": "dist/final-qualification/performance/final-readiness.log",
+      "sha256": "57114ffa8fbfa0fc86fb3f919ee8102249ba0e468c64231f6e52fb3758a0dc85",
+      "bytes": 1937
+    },
+    {
+      "path": "dist/final-qualification/performance/final-selection-summary-r1.json",
+      "sha256": "5b8946a2652bd7314f8e2b836fe8a489c5dba494ea0ee767bc1fd9227c88b99c",
+      "bytes": 14913
+    },
+    {
+      "path": "dist/final-qualification/performance/final-selection-summary.json",
+      "sha256": "33c6f200b487f2d2e869c58d459eaf1bf2c087ea87f27cdb238a5e5d9e678cca",
+      "bytes": 15052
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-budget.md",
+      "sha256": "2d438b0119080d04977f48abcf994de7e9bdfed5389a50f0cad7d4e6ee9d2df9",
+      "bytes": 7353
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-budget.summary.json",
+      "sha256": "0007336254147676850b19189e91f1c3b83f1e8cdc325012fc58cc23ed941dbf",
+      "bytes": 521215
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.json",
+      "sha256": "45ea8b690d627586b17fa5092ea66f91c79ae29dd44f50832daf4a4471a21afa",
+      "bytes": 14252769
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-matrix.log",
+      "sha256": "4d25e0f4692c5863acf1071e246c746f3720e9acec00b4bce38d241796e2aaf2",
+      "bytes": 4595
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-report.log",
+      "sha256": "691b020d5e6f0197a74f13e595855d0a17602f135550408da7a6e1b2849db43e",
+      "bytes": 70
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.json",
+      "sha256": "30789605ebb0183ad355cfc52b85630e6712b7073e7dd3dff637aad4cdfacedd",
+      "bytes": 774990
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-selection-20.log",
+      "sha256": "a05dca2d3bc8d0bee4b9e0cf1520719d0967bad2aefbbf474a17d27836f7e040",
+      "bytes": 3290
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/demo-rows-aci-prev-CAV02_uu.js",
+      "sha256": "2322e519c9ff78ddccc2ec116742993e7289011e79a8e5cdf941960f76445826",
+      "bytes": 35161
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/index-BAGtxesw.js",
+      "sha256": "f31f57ece02a3df590263372f9976e9c91f56f10372092107287e2c1e31dcfe2",
+      "bytes": 2422372
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/assets/index-DjXTbuGL.css",
+      "sha256": "9f043130c027c552038218383d6e35188276fa2b925b7b7a8e2f692aca13e00a",
+      "bytes": 30942
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-baseline-served-assets/index.html",
+      "sha256": "38cc162ae70cf396fc4e4e3d4fa07dcf884b401615badfd06463c0e53aed8564",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-budget-observations.json",
+      "sha256": "95fdf459b1c1ac8bcb5669a76befd0e00ac04ecdcc466211c7ffc41a8e5bfcc0",
+      "bytes": 1409
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.json",
+      "sha256": "f17b27272184901035f0f5e67c6591bc086af530912826bb15c312a8d20c0a70",
+      "bytes": 14262240
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-matrix.log",
+      "sha256": "06363d3802efa55db446ef8095fa8a98c4b768a663a3b11f11af937dee1e972b",
+      "bytes": 4444
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.json",
+      "sha256": "a6c30c0d7a097fc2338da46e11306f48fb2982e381d3afd43dab60a91dc80f9a",
+      "bytes": 773161
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-selection-20.log",
+      "sha256": "abd9913e0b0835fa277d14a6aedb27696a25a3f420d6fc9b2b0825b348684454",
+      "bytes": 3139
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/demo-rows-aci-prev-DFzlT3cI.js",
+      "sha256": "613bd4b2540bbfd2568aad0a1af473fd1c24f59cecb9e30dcefd8edddd162f6a",
+      "bytes": 35018
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/index-32hjsxe5.js",
+      "sha256": "7df50d00dab934e298e021f94d91c37d6276dc0ff80d1bbbeaaf7f462c284801",
+      "bytes": 2420530
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/assets/index-BOodRQIs.css",
+      "sha256": "56006ee32eb43e10fcb3c93a6fd94beafec743a72271eabff27510065a19ead4",
+      "bytes": 30997
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-candidate-served-assets/index.html",
+      "sha256": "e4bccc4c14e4e1386ec4c1a6e3e7ee5db26dd199e12f135fdb354fb8e0718bd3",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-command-manifest.json",
+      "sha256": "76618f371fa7e33b6626913367def74e62639fad3395f1202725c0b73a33f65d",
+      "bytes": 4073
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.log",
+      "sha256": "14e28202274870832f92c1e13a676b4bfd615d4cf9d6dd44394265afa240d85e",
+      "bytes": 65
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.md",
+      "sha256": "2c6c5a7fca38f8bbb1243e2dd823f69dded45f8761ecb0d1893efaacee25f341",
+      "bytes": 10094
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-comparison.summary.json",
+      "sha256": "f9290490959351ce154b4a46500bba2ff91400233a02f65409f0be7bcfedf963",
+      "bytes": 924783
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-concurrency-note.json",
+      "sha256": "1dd6cac185333b2665c7b7d88b848414ee7b5139b69c2247f9e7d907ae6f0025",
+      "bytes": 978
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-input-consistency.json",
+      "sha256": "a16e5061647fcd8aa1b1d42f1c73c0f7c6419bacd2a3e2693f436d23c84a8227",
+      "bytes": 8037
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-selection-summary.json",
+      "sha256": "b649a8b6d2857ea4ca6a6561fd04fbfa892428a26782c6b1e9ac15e582aa3056",
+      "bytes": 22409
+    },
+    {
+      "path": "dist/final-qualification/performance/final09-selection-summary.log",
+      "sha256": "76957431ac161cf0a0b2535db697cadb968676df4e221ba661150c208f3839d1",
+      "bytes": 2923
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-diagnostic.json",
+      "sha256": "a8034896271736d5c2cae2d2589648621e0bd80fb163b65bfcb11dd501bc3abe",
+      "bytes": 608034
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-diagnostic.log",
+      "sha256": "37b70cf4ad4389721a3777be8483f759b116dac32cb4628fef41451282d8e20d",
+      "bytes": 3275
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-traces/selection-001.json",
+      "sha256": "29a8e40260a259c58c13bebeb44d2e6b24f2158da80ba64c520b69e02bef0613",
+      "bytes": 2646238
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-traces/selection-002.json",
+      "sha256": "461cc0940c6bc55262fc49c6e63508ebab7fd5635781f79c06f44daab8d72e08",
+      "bytes": 2736966
+    },
+    {
+      "path": "dist/final-qualification/performance/hit-stroke-traces/selection-003.json",
+      "sha256": "5a25164b1c7e02c580a3f330fa90522e24865647597d023d460946b5e659554c",
+      "bytes": 2704957
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-browser-evidence-index.json",
+      "sha256": "7aaa1a8f86061bd47428f11d0e08efc0a6bae2d2c042a62cf5703a8d822ff73b",
+      "bytes": 60228
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-selection-results.md",
+      "sha256": "3f8a92f21ddd94b02463124519151f867fcb8e50dcb70cb478e98162619d3dd9",
+      "bytes": 15999
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/browser.perf.spec.ts",
+      "sha256": "e9d91ce0ddb99095387d18de34075f40b8555c0689709a2bc6c7807e2cc6ac90",
+      "bytes": 25840
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/ciscoWorkloads.ts",
+      "sha256": "af9308cf6b1dff374be7c20c7ae63ac240a1c2d3b24cc13dd1503cba684c086f",
+      "bytes": 14500
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/harness.tsx",
+      "sha256": "05b38626e4a61d59a5c748309bc0d6e71db1a6296069e58680e102317cf644fb",
+      "bytes": 26659
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/index.html",
+      "sha256": "c59d0beb6be068be9008a4c24e960c3e288fd3071a4829b41598fe5511251fec",
+      "bytes": 321
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/playwright.config.ts",
+      "sha256": "bec702ef9494011cd13fe7e80484a71434e83e166f4efd0877a29d9ef91bf4e2",
+      "bytes": 1392
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/readiness.ts",
+      "sha256": "3e269e7500ba84c4635d8d459c20317d574c4b3c0df34b4df57bec699f8365be",
+      "bytes": 3709
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/snapshot-manifest.json",
+      "sha256": "5f817f4bcdf0c1868d65ada0c7349dc4d9a8fd6b493775da608c4ec46005093c",
+      "bytes": 1631
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/tsconfig.json",
+      "sha256": "1b137040d51768edfd6a9a141e625e2ab7062769de49f22ab10b4c34a949b92f",
+      "bytes": 320
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/vite.config.ts",
+      "sha256": "ba285cd7bc355e18f9831717f9cf031d4ff693d6a86e2a0eaefe741093de5b3b",
+      "bytes": 813
+    },
+    {
+      "path": "dist/final-qualification/performance/pre-provenance-harness/workloads.ts",
+      "sha256": "d1ed0be5522d21cf5afaf998efcf0ab06cab96059d154d0a987892ebfa133382",
+      "bytes": 6901
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-diagnostic.json",
+      "sha256": "1bbacf1e4ea79740a61b1c68ed86657b8a28bbcf961fed273cf26edba2eec7db",
+      "bytes": 608043
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-diagnostic.log",
+      "sha256": "693eabe84684d6aea4cc5b7170f48bc816491c7a10d81eef384fbf9b91d84832",
+      "bytes": 3280
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-traces/selection-001.json",
+      "sha256": "b6297a9e88b874aaf944ac18608cee0d120aa8e370fee94caf63f8bac339e189",
+      "bytes": 2699648
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-traces/selection-002.json",
+      "sha256": "0f61b1b26d5eff5f853ee59236de32c8f3f2602518199c82fa1ec17f3a51290d",
+      "bytes": 2766193
+    },
+    {
+      "path": "dist/final-qualification/performance/primitive-traces/selection-003.json",
+      "sha256": "22f6fac758556e9809b661287c6409d66d429286880f4e85d8a8805701ff5217",
+      "bytes": 2784113
+    },
+    {
+      "path": "dist/final-qualification/performance/provenance-readiness.log",
+      "sha256": "3de655032cc976b78407474d4855997ed7e765c8400aa9a7b261703df159a6ac",
+      "bytes": 1937
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-budget.md",
+      "sha256": "28eb463732444eee7ad66cf520b8bb24d1755b34df948e36b231b901a433a656",
+      "bytes": 7353
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-budget.summary.json",
+      "sha256": "cd1360379c00c1b4b65e970a92b074f479c903ff10154a09b017971ac0aa0c77",
+      "bytes": 520998
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-matrix.json",
+      "sha256": "3f0523cd07214e22556a3d7a4882308ccc74adf526a38b276d0428f79c692027",
+      "bytes": 14261138
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-matrix.log",
+      "sha256": "c389be97d9935d402fb41d94bbcd657c87222c90ee0eb24d764fdea960f6a6ca",
+      "bytes": 4597
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-001.json",
+      "sha256": "3c83b05e35c4c8a230b33ddd5d4fd0bb477c981976e6699bcfb64a03cd5360ff",
+      "bytes": 2704038
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-002.json",
+      "sha256": "5f43afc2666861e34751143d803000827358b8dc14d4459edd1ed595136d6192",
+      "bytes": 2743049
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-003.json",
+      "sha256": "1c747502617ceecd22dd2cf553a7f0650345088b80ae0b67572dec3235879d5f",
+      "bytes": 2781416
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-004.json",
+      "sha256": "2dff08a7ced482e68edb71bc1ab4dbd24449d7e7bc498e0dea7440b3172707b6",
+      "bytes": 2767696
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-005.json",
+      "sha256": "f88b2b74f99c204cedf3480bd6706f895fc4ffaef0f92e30f681c4e47e77a21a",
+      "bytes": 2737863
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-006.json",
+      "sha256": "f36fb26839326694cc42cfd6134360abbcb8b2c7c05fa93ccce791fce5be751a",
+      "bytes": 2757151
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native-traces/selection-007.json",
+      "sha256": "1b6d61b8cfdba1d4718d881bd6264a2b92862df24a423617cc80ed1681bac71b",
+      "bytes": 2746077
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native.json",
+      "sha256": "ccbf63def6fc7c0cebb248e083e3ff551475ad140fa96485b448c59f7df2ea2b",
+      "bytes": 122999
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-native.log",
+      "sha256": "aaf83f3235545285a1e57d78c73c4472f8a0be6c1f4a17d8a5de59cd7ef3f5b7",
+      "bytes": 3285
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-report.log",
+      "sha256": "73927514c1dd1c170ded3f936794d18364982d53369adb48045ff2deed91e29a",
+      "bytes": 72
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-selection-20.json",
+      "sha256": "6deb710d29e6d85839e271324fcf259c0372c54cd7a80cc8ee04b61c6d3d07f9",
+      "bytes": 770901
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-selection-20.log",
+      "sha256": "cdc13d8443e9abdd76050ad98cbd4f1aea4ba08ecca2f3ac196936583899cb3e",
+      "bytes": 3292
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-served-assets/assets/demo-rows-aci-prev-CAV02_uu.js",
+      "sha256": "2322e519c9ff78ddccc2ec116742993e7289011e79a8e5cdf941960f76445826",
+      "bytes": 35161
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-served-assets/assets/index-BAGtxesw.js",
+      "sha256": "f31f57ece02a3df590263372f9976e9c91f56f10372092107287e2c1e31dcfe2",
+      "bytes": 2422372
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-served-assets/assets/index-DjXTbuGL.css",
+      "sha256": "9f043130c027c552038218383d6e35188276fa2b925b7b7a8e2f692aca13e00a",
+      "bytes": 30942
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-baseline-served-assets/index.html",
+      "sha256": "38cc162ae70cf396fc4e4e3d4fa07dcf884b401615badfd06463c0e53aed8564",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-browser-artifacts/.last-run.json",
+      "sha256": "91d1c43004802cd49950d78eb11c8fa7d05da8ffffe219a8b13b2f561bc00903",
+      "bytes": 45
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-browser.log",
+      "sha256": "bc519c97a63437f34c3b9716710bc6fd59a6d058784ba018cea03f2dc4fe9d9b",
+      "bytes": 13139
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-budget-observations.json",
+      "sha256": "ad08b94fa8dce01249574457c73a8fa830e464b218881697fb54d62d8a43d5f8",
+      "bytes": 1825
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-matrix.json",
+      "sha256": "645b0531bcc806caf67e582be2f81708a4ef66293543158dd98b6398501d5563",
+      "bytes": 14256698
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-matrix.log",
+      "sha256": "b44677d29e520a389ce04938ce7dea26702772ba1368fe68a0287bd328df76b1",
+      "bytes": 4446
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-001.json",
+      "sha256": "df9019e4f5ac76bff8761f2dcc2cf355d236f357a89378763a6bd45a47d48a3e",
+      "bytes": 2408918
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-002.json",
+      "sha256": "53f2fa52459aa788fe99aee87af4498ecf2d1a5b856a1a68140139fad0cd4834",
+      "bytes": 2434766
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-003.json",
+      "sha256": "774eed21512d6cc0870b43f3b3aa79322c509a38c248ab78ddf66616fd899b95",
+      "bytes": 2442393
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-004.json",
+      "sha256": "14f827329883ce7adbc318df5e34ddff3c627d0f8325667d57e611a55e6569b9",
+      "bytes": 2420624
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-005.json",
+      "sha256": "0bd5dcdf12a695eabd44e64dd9c3295558123d187f412a42c9d55e177f22dcdc",
+      "bytes": 2462363
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-006.json",
+      "sha256": "0195d1978377de8cad552823db45e9443f4efe2cf9fa42051337d7d2022d79d3",
+      "bytes": 2486735
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native-traces/selection-007.json",
+      "sha256": "1521ba95afc81633c383911357117d6b0ed5bb37477f10bab00a860963365453",
+      "bytes": 2449724
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native.json",
+      "sha256": "62e3683f81b5a4427d8a8107114f2b12df7f8134fc2c5dd8e6e2e64e2246f54b",
+      "bytes": 123588
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-native.log",
+      "sha256": "c9e2b4ef248e108a19e565cbf81f9c6378762b0448948ec80d3beecfe2c8bc6e",
+      "bytes": 3134
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-selection-20.json",
+      "sha256": "8bce98bb66bfda4aaf64ff18746824731eed4533e40185e3c07a4ac97811794d",
+      "bytes": 770292
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-selection-20.log",
+      "sha256": "46df7f9f4d8be1175c73b5bf0892e462fbbd0cb27664076ef4857439181f3e4d",
+      "bytes": 3141
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-served-assets/assets/demo-rows-aci-prev-DFzlT3cI.js",
+      "sha256": "613bd4b2540bbfd2568aad0a1af473fd1c24f59cecb9e30dcefd8edddd162f6a",
+      "bytes": 35018
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-served-assets/assets/index-32hjsxe5.js",
+      "sha256": "7df50d00dab934e298e021f94d91c37d6276dc0ff80d1bbbeaaf7f462c284801",
+      "bytes": 2420530
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-served-assets/assets/index-BOodRQIs.css",
+      "sha256": "56006ee32eb43e10fcb3c93a6fd94beafec743a72271eabff27510065a19ead4",
+      "bytes": 30997
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-candidate-served-assets/index.html",
+      "sha256": "e4bccc4c14e4e1386ec4c1a6e3e7ee5db26dd199e12f135fdb354fb8e0718bd3",
+      "bytes": 420
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-comparison.log",
+      "sha256": "78d279efaff47816edeea438d8afeca9708b3e0479a998a3470a7082cef1c227",
+      "bytes": 67
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-comparison.md",
+      "sha256": "a66f4004fcc09084868766458812f353e36e18750cd468d39c91e23551b7a485",
+      "bytes": 10089
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-comparison.summary.json",
+      "sha256": "b102c3ca97df031167733efee3d2103353ec15b4838e689a409c1dc7aa476694",
+      "bytes": 926281
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/browser.perf.spec.ts",
+      "sha256": "f2ed949a7cc90184dd5bf7e405831d73248f88c4a9247257a239f7211f7c63e2",
+      "bytes": 29127
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/ciscoWorkloads.ts",
+      "sha256": "af9308cf6b1dff374be7c20c7ae63ac240a1c2d3b24cc13dd1503cba684c086f",
+      "bytes": 14500
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/harness.tsx",
+      "sha256": "05b38626e4a61d59a5c748309bc0d6e71db1a6296069e58680e102317cf644fb",
+      "bytes": 26659
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/index.html",
+      "sha256": "c59d0beb6be068be9008a4c24e960c3e288fd3071a4829b41598fe5511251fec",
+      "bytes": 321
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/playwright.config.ts",
+      "sha256": "f8494915ec4885147ba41a1d1d813d83cda01563f102938642aaa993b96a099a",
+      "bytes": 1393
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/readiness.ts",
+      "sha256": "3e269e7500ba84c4635d8d459c20317d574c4b3c0df34b4df57bec699f8365be",
+      "bytes": 3709
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/snapshot-manifest.json",
+      "sha256": "3cd5a3a3fe91c6d2ced0c5af78e3c0f637372530f48cdbb0b6ca57872c1b3d71",
+      "bytes": 2709
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/tsconfig.json",
+      "sha256": "1b137040d51768edfd6a9a141e625e2ab7062769de49f22ab10b4c34a949b92f",
+      "bytes": 320
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/vite.config.ts",
+      "sha256": "ba285cd7bc355e18f9831717f9cf031d4ff693d6a86e2a0eaefe741093de5b3b",
+      "bytes": 813
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-harness/workloads.ts",
+      "sha256": "d1ed0be5522d21cf5afaf998efcf0ab06cab96059d154d0a987892ebfa133382",
+      "bytes": 6901
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-input-consistency.json",
+      "sha256": "2bcb2e3835d62a3e56b0434260ece68aa3e6e67e4a68254220242f5b7f9b9b61",
+      "bytes": 9206
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-native-summary.json",
+      "sha256": "1da0b482785c61d412bd21e53af1e6685a3ad0e36b3e15b477dee41ec9255b24",
+      "bytes": 23259
+    },
+    {
+      "path": "dist/final-qualification/performance/qualified-selection-summary.json",
+      "sha256": "6fc327a29ee5370a84c3a1744122ca15bbfa12e64ce8ab70dafd4e5dc822b547",
+      "bytes": 20864
+    },
+    {
+      "path": "dist/final-qualification/performance/selection-intervention-summary.json",
+      "sha256": "f606ef6e3234dd1ff8c7d721a5ca7b1d8e616f06fbc06090267ab0c3d37b3b4b",
+      "bytes": 7013
+    },
+    {
+      "path": "dist/final-qualification/performance/summarize-final09-selection.py",
+      "sha256": "b0daad9152c89af648e421e7c76b2d84411a03b7388dbb222f22ddb79dcde542",
+      "bytes": 2722
+    },
+    {
+      "path": "dist/final-qualification/performance/write-final09-results.py",
+      "sha256": "26704c76d7b5ff7b3068b6d876cad998b74215585a89c956621eb01e6bbd0e3a",
+      "bytes": 13026
+    }
+  ],
+  "candidateSource": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+  "previousQualificationIndex": {
+    "path": "dist/final-qualification/performance/pre-final09-docs/atlas-final-browser-evidence-index.json",
+    "sha256": "7aaa1a8f86061bd47428f11d0e08efc0a6bae2d2c042a62cf5703a8d822ff73b",
+    "bytes": 60228
+  },
+  "earlierCommands": {
+    "path": "dist/final-qualification/performance/command-manifest.json",
+    "sha256": "c88ee33f6a0c7615f1a3495bfa0b0de6f181857f1491a4e478b022593b52f026",
+    "bytes": 24729
+  },
+  "currentSourceOrdinaryBrowser": {
+    "source": "6ebbf0dae3bd9ff0a2d982fe9f3b561687764eca",
+    "jobId": "117782073158",
+    "runId": "39163678286",
+    "url": "https://github.com/chambear2809/splunk-adm/actions/runs/39163678286/job/117782073158",
+    "passed": 94,
+    "log": {
+      "path": "dist/final-qualification/ci-6ebbf0d-browser.log",
+      "sha256": "14b7e5f9a4639922f9b38b17b8bb5849d38b38c7f98dcc0c12011f4484643e31",
+      "bytes": 75850
+    },
+    "binding": {
+      "path": "dist/final-qualification/ci-6ebbf0d-browser-binding.json",
+      "sha256": "d7e3aa92d96ceec2ad8412a637cb36a95e520a9c92e4b6984cae3c3262b8ca65",
+      "bytes": 712
+    },
+    "scope": "CI correctness only; not a same-hardware benchmark comparison."
+  },
+  "concurrencyNote": {
+    "path": "dist/final-qualification/performance/final09-concurrency-note.json",
+    "sha256": "1dd6cac185333b2665c7b7d88b848414ee7b5139b69c2247f9e7d907ae6f0025",
+    "bytes": 978
+  }
+}

@@ -6,7 +6,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 IMAGE="splunk/splunk:10.6.0.5"
 NAME="adm-splunk-lab"
-SECRETS="$HERE/.lab-secrets"
+SECRETS="${ADM_LAB_SECRETS:-$HERE/.lab-secrets}"
 EXTRACTED="$ROOT/research/extracted"
 TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
@@ -77,8 +77,9 @@ copy_ta() {
 }
 
 cmd_install() {
-  local stage ta token
+  local stage ta
   stage="$(mktemp -d)"
+  chmod 700 "$stage"
   trap 'rm -rf "$stage"' RETURN
   for ta in "${TAS[@]}"; do
     [[ -d "$EXTRACTED/$ta" ]] || { echo "missing $EXTRACTED/$ta" >&2; return 1; }
@@ -106,14 +107,50 @@ local.mkdir(exist_ok=True)
     )
 )
 PY
-  # Install the source app (not a possibly stale dist/stage copy) so tests see current knowledge objects.
-  cp -R "$ROOT/splunk_app/splunk_adm" "$stage/splunk_adm"
+  # Final qualification installs the retained exact archive; source remains useful for development.
+  if [[ -n "${ADM_LAB_PACKAGE:-}" ]]; then
+    python3 "$ROOT/tools/stage_lab_package.py" "$ADM_LAB_PACKAGE" "$stage"
+  else
+    cp -R "$ROOT/splunk_app/splunk_adm" "$stage/splunk_adm"
+    cp "$ROOT/config/deployment-health.json" "$stage/splunk_adm/bin/adm_settings_registry.json"
+  fi
   cp -R "$HERE/lab_app" "$stage/adm_lab"
-  token="$(sed -n 's/^HEC_TOKEN=//p' "$SECRETS")"
-  sed "s/@HEC_TOKEN@/$token/" "$stage/adm_lab/default/inputs.conf.template" \
-    >"$stage/adm_lab/default/inputs.conf"
-  rm "$stage/adm_lab/default/inputs.conf.template"
-  find "$stage" -type d -exec chmod 755 {} + && find "$stage" -type f -exec chmod 644 {} +
+  # Keep the private staging root closed while ordinary app content receives
+  # its existing install modes. Render credentials only after this pass.
+  find "$stage" -mindepth 1 -type d -exec chmod 755 {} +
+  find "$stage" -type f -exec chmod 644 {} +
+  python3 - "$SECRETS" "$stage/adm_lab/default" <<'PY'
+import os
+from pathlib import Path
+import stat
+import sys
+
+try:
+    descriptor = os.open(sys.argv[1], os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(descriptor, encoding="utf-8") as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise ValueError("unsafe secret file")
+        contents = stream.read(65537)
+    if len(contents) > 65536:
+        raise ValueError("oversized secret file")
+    tokens = [line.partition("=")[2] for line in contents.splitlines() if line.startswith("HEC_TOKEN=")]
+    if len(tokens) != 1 or not tokens[0] or "\0" in tokens[0]:
+        raise ValueError("invalid HEC configuration")
+    default = Path(sys.argv[2])
+    template = default / "inputs.conf.template"
+    text = template.read_text()
+    if text.count("@HEC_TOKEN@") != 1:
+        raise ValueError("invalid HEC template")
+    descriptor = os.open(default / "inputs.conf", os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(descriptor, "w") as output:
+        os.fchmod(output.fileno(), 0o600)
+        output.write(text.replace("@HEC_TOKEN@", tokens[0]))
+    template.unlink()
+except Exception:
+    # Secret contents and parser exceptions must never reach installation logs.
+    raise SystemExit("Unable to render private lab HEC configuration") from None
+PY
   for app in "$stage"/*; do
     docker exec -u root "$NAME" rm -rf "/opt/splunk/etc/apps/$(basename "$app")"
     docker cp "$app" "$NAME:/opt/splunk/etc/apps/$(basename "$app")" >/dev/null

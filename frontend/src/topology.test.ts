@@ -95,6 +95,8 @@ describe("rowsToTopology", () => {
         device_authority: '["org-a","network-a"]',
         native_device_id: "02:61:00:00:00:20",
         source_time: "1780000000",
+        source_time_status: "stale",
+        history_coverage: "unconfirmed",
         received_time: "1780000005",
         latest_received_time: "1780000010",
         attachment_status: "observed_snapshot",
@@ -133,6 +135,8 @@ describe("rowsToTopology", () => {
       attachment_status: "observed_snapshot",
       attachment_basis: "catalyst_client_snapshot",
       source_time: "1780000000",
+      source_time_status: "stale",
+      history_coverage: "unconfirmed",
       received_time: "1780000005",
       latest_received_time: "1780000010",
     });

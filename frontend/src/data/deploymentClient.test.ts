@@ -7,7 +7,10 @@ vi.mock("@splunk/splunk-utils/fetch", () => ({
     headers: new Headers({ "X-Splunk-Form-Key": "csrf-test" }),
   }),
 }));
-import { ToolkitDeploymentClient } from "./deploymentClient";
+import {
+  DeploymentWriteError,
+  ToolkitDeploymentClient,
+} from "./deploymentClient";
 import {
   defaultExpectations,
   DATA_CONTRACT_SELECTORS,
@@ -19,6 +22,13 @@ const response = (body: unknown, status = 200) =>
 const entry = (content: Record<string, unknown>, canWrite = true) => ({
   entry: [{ content, acl: { can_write: canWrite } }],
 });
+function barrier() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
 function fixture({
   admin = true,
   writable = true,
@@ -29,15 +39,16 @@ function fixture({
   missingSelector = false,
   indexDefinition = "index=netflow",
   unreadableIndex = false,
+  enabled = true,
+  lostResponse = false,
 } = {}) {
-  let record: Record<string, unknown> | undefined;
+  let record: ReturnType<typeof defaultExpectations> | undefined;
+  const revisions: string[] = [];
+  const operations = new Map<string, { revision: string; signature: string }>();
+  let lose = lostResponse;
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
-      if (path.includes("authentication/current-context"))
-        return response(
-          entry({ capabilities: admin ? ["admin_all_objects"] : ["search"] }),
-        );
       if (path.includes("configs/conf-macros")) {
         const name = decodeURIComponent(
           path.split("conf-macros/")[1].split("?")[0],
@@ -68,18 +79,63 @@ function fixture({
           }),
         );
       }
-      if (path.includes("storage/collections/config"))
-        return response(entry({}, writable));
+      if (!path.includes("adm/deployment-settings"))
+        throw new Error(`Unexpected endpoint ${path}`);
       if (init?.method === "POST") {
-        record = JSON.parse(String(init.body));
-        if (readbackMismatch) record = { ...record, revision: "conflict" };
-        return response({});
+        if (!admin || !writable)
+          return response(
+            { code: "forbidden", error: "Administrator access required." },
+            403,
+          );
+        const body = JSON.parse(String(init.body));
+        const signature = JSON.stringify([
+          body.expectedRevision,
+          body.settings.sources,
+        ]);
+        const existing = operations.get(body.requestId);
+        if (existing && existing.signature !== signature)
+          return response({ code: "conflict", error: "Request changed." }, 409);
+        if (!existing && (record?.revision ?? null) !== body.expectedRevision)
+          return response(
+            {
+              code: "conflict",
+              error:
+                "Deployment expectations changed. Your draft is preserved; reload before saving.",
+            },
+            409,
+          );
+        const revision = existing?.revision ?? `revision_${operations.size}`;
+        if (!existing) {
+          record = { ...body.settings, revision };
+          revisions.push(revision);
+          operations.set(body.requestId, { revision, signature });
+        }
+        if (lose) {
+          lose = false;
+          throw new Error("response lost");
+        }
+        return response({
+          committedRevision: revision,
+          requestId: body.requestId,
+        });
       }
       if (unreadable) return response({}, 403);
-      return record ? response(record) : response({}, 404);
+      return response({
+        state: record ? "configured" : "absent",
+        settings: record,
+        observedRevisions: readbackMismatch && record ? [] : [...revisions],
+        canWrite: admin && writable && enabled,
+        namespace: "namespace_a",
+        ...(!enabled
+          ? {
+              writeUnavailableReason:
+                "Settings writes are disabled pending topology qualification.",
+            }
+          : {}),
+      });
     },
   );
-  return { fetcher, client: new ToolkitDeploymentClient(fetcher) };
+  return { fetcher, client: new ToolkitDeploymentClient(fetcher), operations };
 }
 
 describe("administrator deployment settings persistence", () => {
@@ -136,7 +192,7 @@ describe("administrator deployment settings persistence", () => {
       ).toBe(false);
     }
   });
-  it("persists a fixed shared document with CSRF protection and verifies readback", async () => {
+  it("uses the authenticated endpoint with CSRF protection and verifies the committed revision", async () => {
     const { client, fetcher } = fixture();
     const settings = defaultExpectations();
     settings.sources.catalyst.state = "active";
@@ -150,7 +206,9 @@ describe("administrator deployment settings persistence", () => {
     expect(new Headers(write[1]?.headers).get("X-Splunk-Form-Key")).toBe(
       "csrf-test",
     );
-    expect(JSON.parse(String(write[1]?.body))._key).toBe("deployment");
+    expect(String(write[0])).toContain("adm/deployment-settings");
+    expect(JSON.parse(String(write[1]?.body)).namespace).toBe("namespace_a");
+    expect(JSON.parse(String(write[1]?.body)).expectedRevision).toBeNull();
     await expect(client.write(settings)).rejects.toThrow("changed");
     expect((await client.write(settings, saved.settings!.revision)).state).toBe(
       "configured",
@@ -159,7 +217,7 @@ describe("administrator deployment settings persistence", () => {
   it("fails readback and aborted writes without publishing a healthy configuration", async () => {
     await expect(
       fixture({ readbackMismatch: true }).client.write(defaultExpectations()),
-    ).rejects.toThrow("readback");
+    ).rejects.toThrow("verified");
     const { client, fetcher } = fixture();
     const controller = new AbortController();
     controller.abort();
@@ -168,4 +226,160 @@ describe("administrator deployment settings persistence", () => {
     ).rejects.toThrow("cancelled");
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("preserves idempotent request identity after response loss and recovers after later saves", async () => {
+    const { client, fetcher, operations } = fixture({ lostResponse: true });
+    const first = defaultExpectations();
+    await expect(client.write(first)).rejects.toThrow("response lost");
+    const another = new ToolkitDeploymentClient(fetcher);
+    const head = await another.read();
+    const next = defaultExpectations();
+    next.sources.netflow.state = "staged";
+    await another.write(next, head.settings!.revision);
+    await expect(client.write(first)).rejects.toMatchObject({
+      code: "conflict",
+    });
+    const posts = fetcher.mock.calls.filter(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(JSON.parse(String(posts[0][1]?.body)).requestId).toBe(
+      JSON.parse(String(posts[2][1]?.body)).requestId,
+    );
+    expect(operations.size).toBe(2);
+  });
+  it("keeps existing settings readable with disabled writes and explains qualification", async () => {
+    const { client, fetcher } = fixture({ enabled: false });
+    const state = await client.read();
+    expect(state.state).toBe("absent");
+    expect(state.canWrite).toBe(false);
+    expect(state.writeUnavailableReason).toContain("disabled");
+    await expect(client.write(defaultExpectations())).rejects.toThrow(
+      "qualification",
+    );
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+      false,
+    );
+  });
+  it("exposes a typed conflict while preserving the original settings object", async () => {
+    const { client, fetcher } = fixture();
+    const stale = defaultExpectations();
+    await new ToolkitDeploymentClient(fetcher).write(defaultExpectations());
+    await expect(client.write(stale)).rejects.toBeInstanceOf(
+      DeploymentWriteError,
+    );
+    expect(stale.revision).toBe("draft");
+  });
+  it("arbitrates independent client creations at the server endpoint", async () => {
+    const { fetcher, operations } = fixture();
+    const outcomes = await Promise.allSettled([
+      new ToolkitDeploymentClient(fetcher).write(defaultExpectations()),
+      new ToolkitDeploymentClient(fetcher).write(defaultExpectations()),
+    ]);
+    expect(
+      outcomes.filter((outcome) => outcome.status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      outcomes.filter((outcome) => outcome.status === "rejected"),
+    ).toHaveLength(1);
+    expect(operations.size).toBe(1);
+  });
+  it("retains the request identity when cancellation follows server acceptance", async () => {
+    const { fetcher, operations } = fixture();
+    const controller = new AbortController();
+    let cancel = true;
+    const client = new ToolkitDeploymentClient(async (input, init) => {
+      const result = await fetcher(input, init);
+      if (cancel && init?.method === "POST") {
+        cancel = false;
+        controller.abort();
+      }
+      return result;
+    });
+    await expect(
+      client.write(defaultExpectations(), undefined, controller.signal),
+    ).rejects.toThrow("cancelled");
+    await expect(client.write(defaultExpectations())).resolves.toMatchObject({
+      state: "configured",
+    });
+    const posts = fetcher.mock.calls.filter(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(JSON.parse(String(posts[0][1]?.body)).requestId).toBe(
+      JSON.parse(String(posts[1][1]?.body)).requestId,
+    );
+    expect(operations.size).toBe(1);
+  });
+  it("refuses a replica refresh that loses an already observed revision", async () => {
+    const { fetcher } = fixture();
+    let stale = false;
+    const client = new ToolkitDeploymentClient(async (input, init) => {
+      const result = await fetcher(input, init);
+      if (
+        stale &&
+        String(input).includes("adm/deployment-settings") &&
+        init?.method === "GET"
+      )
+        return response({
+          state: "absent",
+          settings: null,
+          observedRevisions: [],
+          canWrite: true,
+          namespace: "namespace_a",
+        });
+      return result;
+    });
+    await client.write(defaultExpectations());
+    stale = true;
+    const read = await client.read();
+    expect(read.state).toBe("unavailable");
+    expect(read.canWrite).toBe(false);
+    expect(read.error).toContain("previously observed");
+  });
+  it.each(["read", "verified save"])(
+    "refuses an old read whose index macros finish after a newer %s",
+    async (advance) => {
+      const { fetcher } = fixture();
+      const blocked = barrier();
+      const resume = barrier();
+      let pauseNextIndex = false;
+      const client = new ToolkitDeploymentClient(async (input, init) => {
+        const result = await fetcher(input, init);
+        if (
+          pauseNextIndex &&
+          String(input).includes("conf-macros/adm_index_netflow?")
+        ) {
+          pauseNextIndex = false;
+          blocked.release();
+          await resume.promise;
+        }
+        return result;
+      });
+      const original = defaultExpectations();
+      original.sources.netflow.state = "active";
+      const initial = await client.write(original);
+      pauseNextIndex = true;
+      const oldRead = client.read();
+      await blocked.promise;
+
+      const changed = defaultExpectations();
+      changed.sources.netflow.state = "active";
+      changed.sources.netflow.cadenceSeconds = 120;
+      const writer =
+        advance === "read" ? new ToolkitDeploymentClient(fetcher) : client;
+      const saved = await writer.write(changed, initial.settings!.revision);
+      const newer = advance === "read" ? await client.read() : saved;
+      expect(newer.state).toBe("configured");
+      expect(newer.settings!.revision).not.toBe(initial.settings!.revision);
+      expect(newer.settings!.sources.netflow.cadenceSeconds).toBe(120);
+
+      resume.release();
+      const lateOld = await oldRead;
+      expect(lateOld.state).toBe("unavailable");
+      expect(lateOld.canWrite).toBe(false);
+      expect(lateOld.settings).toBeUndefined();
+      expect(lateOld.error).toContain("previously observed revision");
+      const ordinary = await client.read();
+      expect(ordinary.state).toBe("configured");
+      expect(ordinary.settings!.revision).toBe(newer.settings!.revision);
+    },
+  );
 });

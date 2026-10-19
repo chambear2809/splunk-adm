@@ -438,6 +438,14 @@ def _truth(value: Any) -> bool:
     return str(value).lower() in {"1", "true"}
 
 
+def _job_active(content: dict[str, Any]) -> bool:
+    # FINALIZING may still flush collect/outputlookup writes even if isDone
+    # arrived early; it is never a safe drain boundary.
+    return content.get("dispatchState") == "FINALIZING" or not _truth(
+        content.get("isDone")
+    )
+
+
 def _job_pre_execution(content: dict[str, Any]) -> bool:
     return content.get("dispatchState") in {
         "PARSING",
@@ -683,7 +691,7 @@ class Journal:
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
 
     @contextmanager
-    def locked(self):
+    def locked(self, *, blocking: bool = True):
         ensure_state_directory(self.path.parent)
         try:
             fd = os.open(
@@ -700,8 +708,10 @@ class Journal:
             try:
                 if os.fstat(fd).st_uid != os.geteuid():
                     raise Refused("journal lock file is owned by another user")
-                os.fchmod(fd, 0o600)
-                fcntl.flock(fd, fcntl.LOCK_EX)
+                metadata = os.fstat(fd)
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_mode & 0o077:
+                    raise Refused("journal lock must be an owner-only regular file")
+                fcntl.flock(fd, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
             except OSError as error:
                 raise Refused(
                     f"journal lock {self.lock_path} is unavailable: "
@@ -813,6 +823,27 @@ class Migration:
         self.clock = clock
         self.sleep = sleep
         self.qualifier = qualifier
+
+    @contextmanager
+    def operation_locked(self, *, lock_directory: Path | None = None):
+        """Serialize one OS user's local controller by verified target GUID.
+
+        This is an extra local guard, not a remote/distributed run fence. The
+        operator still owns an exclusive lifecycle across other users/hosts.
+        Acquire target before journal in every mutating CLI/harness path.
+        """
+        self.qualify()
+        server = self._single_entry("/services/server/info").get("content") or {}
+        guid = server.get("guid")
+        if not isinstance(guid, str) or not guid.strip():
+            raise Refused("target GUID is unavailable for local operation fencing")
+        directory = lock_directory or Path.home() / ".splunk-adm/cisco-target-locks"
+        ensure_state_directory(directory)
+        _verify_created_directory(directory)
+        identity = hashlib.sha256(canonical([guid, "splunk_adm"])).hexdigest()
+        target = Journal(directory / (identity + ".operation"))
+        with target.locked(blocking=False), self.journal.locked(blocking=False):
+            yield
 
     def _request(self, method: str, path: str, data=None):
         try:
@@ -1058,7 +1089,7 @@ class Migration:
         while True:
             page = self._request(
                 "GET",
-                base + f"?limit={COLLECTION_PAGE_SIZE}&skip={offset}",
+                base + f"?limit={COLLECTION_PAGE_SIZE}&skip={offset}&sort=_key:1",
             )
             if not isinstance(page, list) or len(page) > COLLECTION_PAGE_SIZE:
                 raise Refused(f"{name} paged read is malformed")
@@ -1066,6 +1097,17 @@ class Migration:
             if len(records) > MAX_COLLECTION_ROWS:
                 raise Refused(f"{name} collection exceeds the qualified row bound")
             if len(page) < COLLECTION_PAGE_SIZE:
+                # A reduced server query cap can masquerade as a short final
+                # page. Sorted overlap proves there is no extra hidden row.
+                probe = self._request(
+                    "GET",
+                    base
+                    + f"?limit={COLLECTION_PAGE_SIZE}&skip={offset + 1}&sort=_key:1",
+                )
+                if probe != page[1:]:
+                    raise Refused(
+                        f"{name} collection read is capped or changed during completion proof"
+                    )
                 break
             offset += len(page)
         return records
@@ -1539,7 +1581,7 @@ class Migration:
                     r"(?i)\bcollect\s+index\s*=\s*(?:`?adm_summary_index_v2_name`?|adm_summary_v2)\b",
                     search,
                 )
-            ) and not _truth(content.get("isDone")):
+            ) and _job_active(content):
                 sid = _job_sid(entry)
                 if sid not in known_sids:
                     raise Refused("a competing staged v2 writer job is active")
@@ -5081,9 +5123,7 @@ class Migration:
             for entry in entries:
                 content = entry.get("content") or {}
                 label = content.get("savedsearch_name") or content.get("label")
-                if label == "ADM - Conversation rollup" and not _truth(
-                    content.get("isDone")
-                ):
+                if label == "ADM - Conversation rollup" and _job_active(content):
                     active.append(_job_sid(entry))
             if not active:
                 journal["cutover"]["legacy_writer_drained_at"] = int(self.clock())
@@ -7219,6 +7259,16 @@ class Migration:
         journal = self._load()
         if journal.get("phase") not in {"coverage_validated", "cutover_in_progress"}:
             if journal.get("phase") == "cutover":
+                self._assert_cutover_origin_compatible(journal)
+                for mutation in (journal.get("cutover") or {}).get("mutations", []):
+                    if not self._mutation_equal(
+                        mutation,
+                        self._mutation_target(mutation)["value"],
+                        mutation["after"],
+                    ):
+                        raise Refused(
+                            "completed cutover is no longer fully active; reconcile the journaled target"
+                        )
                 return {"status": "cutover", "migration_id": journal["migration_id"]}
             raise Refused("coverage must be validated before cutover")
         # Derived from the locked journal, never from a path stored in it.
@@ -7629,10 +7679,19 @@ def main(argv: list[str] | None = None) -> int:
     actions.add_parser("status")
     args = parser.parse_args(argv)
     try:
-        api = _api_from_stdin(args.management_uri, args.ca_file)
         journal = Journal(args.journal)
-        with journal.locked():
-            migration = Migration(api, journal)
+        if args.action == "status":
+            print(
+                json.dumps(
+                    journal.read() or {"status": "uninitialized"},
+                    sort_keys=True,
+                    indent=2,
+                )
+            )
+            return 0
+        api = _api_from_stdin(args.management_uri, args.ca_file)
+        migration = Migration(api, journal)
+        with migration.operation_locked():
             if args.action == "prepare":
                 result = migration.prepare(args.start, args.end)
             elif args.action == "backfill":

@@ -285,3 +285,33 @@ it("ignores evidence set ordering but preserves changed observation values", () 
     "node-b",
   ]);
 });
+
+it("compares late receipt changes without replacing their original source time", () => {
+  const observation = {
+    client_source: "catalyst_client_snapshot",
+    client_authority: "center-a",
+    client_native_id: "client-a",
+    scope: "site-a",
+    cluster: "cluster-a",
+    event_time: 100,
+    received_time: 259300,
+  };
+  const before = { ...edge("late-client"), attachment_evidence: [observation] };
+  const after = {
+    ...before,
+    attachment_evidence: [{ ...observation, received_time: 259600 }],
+  };
+  const changed = diffGraphs(
+    graph([], [before]),
+    graph([], [after]),
+  ).changedEdges;
+  expect(changed).toHaveLength(1);
+  expect(changed[0].previous.attachment_evidence).toEqual([observation]);
+  expect(changed[0].current.attachment_evidence?.[0]).toEqual({
+    ...observation,
+    received_time: 259600,
+  });
+  expect(
+    changed[0].current.attachment_evidence?.[0].collected_time,
+  ).toBeUndefined();
+});

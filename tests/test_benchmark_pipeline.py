@@ -1,6 +1,10 @@
 """Safety and evidence-quality checks; no Docker or Splunk required."""
 
 import tempfile
+import hashlib
+import io
+import tarfile
+from types import SimpleNamespace
 import os
 import unittest
 from pathlib import Path
@@ -251,3 +255,142 @@ class ScopeSeedRegressionTest(unittest.TestCase):
             ],
         ):
             bench.seed_scope(source)
+
+
+class PackageFingerprintRegressionTest(unittest.TestCase):
+    """The installed candidate is exact, and its defaults still bind to source."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.app = self.root / "splunk_app/splunk_adm"
+        (self.app / "default").mkdir(parents=True)
+        self.source = {
+            "app.conf": b"[id]\nname = splunk_adm\nversion = 0.3.0\n",
+            "macros.conf": b"[adm_test]\ndefinition = index=synthetic\n",
+        }
+        for name, content in self.source.items():
+            (self.app / "default" / name).write_bytes(content)
+        self.packaged = dict(self.source)
+        self.packaged["app.conf"] = (
+            b"[install]\nbuild = 1792340274\n" + self.source["app.conf"]
+        )
+        self.archive = self.root / "candidate.tgz"
+
+    def write_archive(self, configs=None, unsafe=False):
+        with tarfile.open(self.archive, "w:gz") as archive:
+            for name, content in (
+                self.packaged if configs is None else configs
+            ).items():
+                info = tarfile.TarInfo("splunk_adm/default/" + name)
+                info.size = len(content)
+                info.mode = 0o644
+                archive.addfile(info, io.BytesIO(content))
+            if unsafe:
+                info = tarfile.TarInfo("splunk_adm/default/escape.conf")
+                info.type = tarfile.SYMTYPE
+                info.linkname = "/etc/passwd"
+                archive.addfile(info)
+
+    def fingerprints(self, installed=None, *, supplied=True):
+        installed = self.packaged if installed is None else installed
+
+        def docker(args, **_kwargs):
+            if "find" in args:
+                return "".join(
+                    "/opt/splunk/etc/apps/splunk_adm/default/" + name + "\n"
+                    for name in sorted(installed)
+                ).encode()
+            return installed[args[-1].split("/default/", 1)[1]]
+
+        with (
+            patch.object(bench, "ROOT", self.root),
+            patch.dict(
+                os.environ,
+                {"ADM_LAB_PACKAGE": str(self.archive)} if supplied else {},
+                clear=True,
+            ),
+            patch.object(bench.subprocess, "check_output", side_effect=docker),
+            patch.object(
+                bench.subprocess, "run", return_value=SimpleNamespace(returncode=1)
+            ),
+        ):
+            return bench.installed_fingerprints()
+
+    def test_generated_build_metadata_matches_exact_installed_archive(self):
+        self.write_archive()
+        result = self.fingerprints()
+        self.assertEqual(
+            result["splunk_app/splunk_adm/default/app.conf"],
+            hashlib.sha256(self.packaged["app.conf"]).hexdigest(),
+        )
+        self.assertEqual(len(result), 2)
+        self.assertNotEqual(self.packaged["app.conf"], self.source["app.conf"])
+
+    def test_archive_pipeline_drift_is_refused_before_installed_read(self):
+        changed = dict(
+            self.packaged, **{"macros.conf": b"[adm_test]\ndefinition = index=other\n"}
+        )
+        self.write_archive(changed)
+        with patch.object(bench.subprocess, "check_output") as docker:
+            with self.assertRaisesRegex(ValueError, "differs from source"):
+                bench._package_default_configs(self.app, self.archive)
+            docker.assert_not_called()
+
+    def test_only_generated_build_metadata_is_exempt(self):
+        for content in (
+            self.packaged["app.conf"].replace(b"0.3.0", b"0.4.0"),
+            b"[install]\nbuild = 1792340274\nstate = disabled\n"
+            + self.source["app.conf"],
+            b"[install]\nbuild = -1\n" + self.source["app.conf"],
+        ):
+            with self.subTest(content=content):
+                self.write_archive(dict(self.packaged, **{"app.conf": content}))
+                with self.assertRaisesRegex(ValueError, "app.conf differs from source"):
+                    bench._package_default_configs(self.app, self.archive)
+
+    def test_archive_missing_or_extra_defaults_are_refused(self):
+        for configs in (
+            {"app.conf": self.packaged["app.conf"]},
+            dict(self.packaged, **{"props.conf": b"[extra]\n"}),
+        ):
+            with self.subTest(configs=sorted(configs)):
+                self.write_archive(configs)
+                with self.assertRaisesRegex(
+                    ValueError, "config set differs from source"
+                ):
+                    bench._package_default_configs(self.app, self.archive)
+
+    def test_installed_bytes_must_match_the_supplied_archive(self):
+        self.write_archive()
+        for name in ("app.conf", "macros.conf"):
+            with self.subTest(name=name):
+                installed = dict(self.packaged)
+                installed[name] += b"# changed installed bytes\n"
+                with self.assertRaisesRegex(
+                    ValueError, "differs from provided package"
+                ):
+                    self.fingerprints(installed)
+
+    def test_installed_missing_or_extra_defaults_are_refused(self):
+        self.write_archive()
+        for installed in (
+            {"app.conf": self.packaged["app.conf"]},
+            dict(self.packaged, **{"props.conf": b"[extra]\n"}),
+        ):
+            with self.subTest(installed=sorted(installed)):
+                with self.assertRaisesRegex(
+                    ValueError, "config set differs from provided package"
+                ):
+                    self.fingerprints(installed)
+
+    def test_unsafe_archive_is_refused_by_the_shared_stager(self):
+        self.write_archive(unsafe=True)
+        with self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+            bench._package_default_configs(self.app, self.archive)
+
+    def test_unsupplied_package_keeps_source_only_byte_exact_behavior(self):
+        self.assertEqual(len(self.fingerprints(self.source, supplied=False)), 2)
+        with self.assertRaisesRegex(ValueError, "app.conf differs from source"):
+            self.fingerprints(self.packaged, supplied=False)

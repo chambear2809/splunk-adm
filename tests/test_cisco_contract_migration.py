@@ -1149,7 +1149,7 @@ assert api.token == 'token'
                 ),
                 patch.object(
                     Journal,
-                    "locked",
+                    "read",
                     side_effect=OSError(5, "Input/output error", root),
                 ),
                 redirect_stdout(output),

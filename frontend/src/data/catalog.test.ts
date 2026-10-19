@@ -181,6 +181,8 @@ describe("catalog parsing", () => {
         client_ip: "192.0.2.10",
         attachment_status: "unresolved",
         diagnostic_status: "incomplete",
+        source_time_status: "stale",
+        history_coverage: "unconfirmed",
         diagnostic_reason:
           "A valid client MAC is unavailable; no AP is inferred.",
         history_rows: "2",
@@ -189,6 +191,8 @@ describe("catalog parsing", () => {
     ]);
     expect(rows[0]).toMatchObject({
       diagnostic_status: "incomplete",
+      source_time_status: "stale",
+      history_coverage: "unconfirmed",
       history_rows: 2,
       simultaneous_claims: 1,
     });

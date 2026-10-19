@@ -333,4 +333,26 @@ describe("network evidence inspectors", () => {
     expect(html).toContain("SSID number");
     expect(html).not.toContain("Correlated from association and flow evidence");
   });
+
+  it("shows the old source timestamp separately from the eligible receipt without inventing collection time", () => {
+    const graph = structuredClone(demoGraph("nxos"));
+    const client = graph.nodes.find((node) => node.kind === "endpoint")!;
+    client.endpoint_kind = "network_client";
+    client.attributes = {
+      attachment_basis: "catalyst_client_snapshot",
+      attachment_status: "observed_snapshot",
+      source_time: "100",
+      received_time: "259300",
+      source_time_status: "stale",
+      history_coverage: "retained_evidence",
+    };
+    const html = inspector(graph, { kind: "node", id: client.id });
+    expect(html).toContain("old source timestamp");
+    expect(html).toContain("Source event time");
+    expect(html).toContain("Received time");
+    expect(html).toContain("Source time status");
+    expect(html).toContain("Retained evidence only");
+    expect(html).not.toContain("Source collection time");
+    expect(html).not.toContain("Current Catalyst");
+  });
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Page, type CDPSession } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFile, mkdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, mkdir, writeFile } from "node:fs/promises";
 import { cpus, totalmem, platform, release, arch } from "node:os";
 import { resolve } from "node:path";
 import type { PerfApi, ActionIntent } from "./harness";
@@ -26,6 +26,15 @@ if (
 )
   throw new Error("Invalid performance workload selection");
 const results: Record<string, unknown>[] = [];
+const pageSessions = new WeakMap<Page, CDPSession>();
+const traceSelection = process.env.ADM_PERF_TRACE_SELECTION === "1";
+const traceCategories =
+  process.env.ADM_PERF_TRACE_CATEGORIES ??
+  "toplevel,devtools.timeline,v8,blink.user_timing,disabled-by-default-devtools.timeline,disabled-by-default-v8.cpu_profiler";
+const experimentalCss = process.env.ADM_PERF_EXPERIMENT_CSS;
+const drainSelection = process.env.ADM_PERF_DRAIN_SELECTION === "1";
+const selectionDiagnostic = process.env.ADM_PERF_SELECTION_DIAGNOSTIC === "1";
+let traceNumber = 0;
 const failures: {
   title: string;
   status: string | undefined;
@@ -34,6 +43,13 @@ const failures: {
 test.describe.configure({ mode: "serial" });
 let sourceHashBefore = "";
 let harnessHashBefore = "";
+const importedFiles = [
+  "config/deployment-health.json",
+  "research/cisco-pipeline-interface.json",
+];
+const builtRoot = resolve(process.cwd(), "dist/performance-app");
+let importedBefore: Awaited<ReturnType<typeof fingerprintFiles>>;
+let builtBefore: Awaited<ReturnType<typeof fingerprintFiles>>;
 const harnessFiles = [
   "browser.perf.spec.ts",
   "harness.tsx",
@@ -60,6 +76,8 @@ const sourceFiles = () =>
 test.beforeAll(async () => {
   sourceHashBefore = await hashFiles(sourceRoot, sourceFiles());
   harnessHashBefore = await hashFiles(process.cwd(), harnessFiles);
+  importedBefore = await fingerprintFiles(sourceRoot, importedFiles);
+  builtBefore = await fingerprintFiles(builtRoot, await builtFiles());
 });
 test.afterEach(async ({}, info) => {
   if (info.status !== "passed")
@@ -87,6 +105,38 @@ async function hashFiles(root: string, files: string[]) {
     hash.update(await readFile(resolve(root, file)));
   }
   return hash.digest("hex");
+}
+async function builtFiles(prefix = ""): Promise<string[]> {
+  const entries = await readdir(resolve(builtRoot, prefix), {
+    withFileTypes: true,
+  });
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const path = prefix ? `${prefix}/${entry.name}` : entry.name;
+      return entry.isDirectory() ? builtFiles(path) : [path];
+    }),
+  );
+  return files.flat().sort();
+}
+async function fingerprintFiles(root: string, files: string[]) {
+  const records: Record<
+    string,
+    { present: boolean; sha256?: string; bytes?: number }
+  > = {};
+  for (const file of [...files].sort()) {
+    try {
+      const bytes = await readFile(resolve(root, file));
+      records[file] = {
+        present: true,
+        sha256: createHash("sha256").update(bytes).digest("hex"),
+        bytes: bytes.length,
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      records[file] = { present: false };
+    }
+  }
+  return records;
 }
 async function metrics(cdp: CDPSession) {
   const response = await cdp.send("Performance.getMetrics");
@@ -124,6 +174,18 @@ async function action(
   intent: ActionIntent,
   trigger: () => Promise<unknown>,
 ) {
+  const cdp = pageSessions.get(page);
+  // Diagnostic control: flush the previous action's compositor work before
+  // capture. This is never enabled for the retained comparison matrix.
+  if (drainSelection && intent.kind === "selectCard" && cdp)
+    await cdp.send("Page.captureScreenshot", { format: "png" });
+  const trace = traceSelection && intent.kind === "selectCard" && cdp;
+  if (trace)
+    await cdp.send("Tracing.start", {
+      categories: traceCategories,
+      transferMode: "ReturnAsStream",
+    });
+  const before = cdp ? await metrics(cdp) : undefined;
   await page.evaluate(
     ({ event, intent }) => window.__ATLAS_PERF__.armAction(event, intent),
     { event, intent },
@@ -143,8 +205,44 @@ async function action(
   const playwrightTriggerDurationMs = performance.now() - triggerStarted;
   await page.evaluate(() => window.__ATLAS_PERF__.actionTriggerCompleted());
   const timing = await page.evaluate(() => window.__ATLAS_PERF__.endAction());
+  const after = cdp ? await metrics(cdp) : undefined;
+  let tracePath: string | undefined;
+  if (trace) {
+    const complete = new Promise<{ stream?: string }>((resolve) =>
+      cdp.once("Tracing.tracingComplete", resolve),
+    );
+    await cdp.send("Tracing.end");
+    const { stream } = await complete;
+    if (!stream) throw new Error("Selection trace did not return a stream");
+    let data = "";
+    for (;;) {
+      const chunk = await cdp.send("IO.read", { handle: stream });
+      data += chunk.base64Encoded
+        ? Buffer.from(chunk.data, "base64").toString("utf8")
+        : chunk.data;
+      if (chunk.eof) break;
+    }
+    await cdp.send("IO.close", { handle: stream });
+    const directory = resolve(
+      process.env.ADM_PERF_TRACE_DIR ??
+        "dist/final-qualification/performance/traces",
+    );
+    await mkdir(directory, { recursive: true });
+    tracePath = resolve(
+      directory,
+      `selection-${String(++traceNumber).padStart(3, "0")}.json`,
+    );
+    await writeFile(tracePath, data);
+  }
   expect(timing.committedPostcondition).toBe(true);
-  return { ...timing, playwrightTriggerDurationMs };
+  return {
+    ...timing,
+    playwrightTriggerDurationMs,
+    tracePath,
+    // This CDP envelope includes automation and evaluation outside event-to-ready.
+    // Use tracing timestamps to attribute work to the exact browser interval.
+    cdpActionEnvelope: before && after ? deltas(before, after) : undefined,
+  };
 }
 async function download(page: Page, name: RegExp, format: string) {
   if (!(await page.getByRole("button", { name }).isVisible()))
@@ -203,10 +301,13 @@ async function sample(
   size: Size,
   partial: boolean,
 ) {
+  pageSessions.set(page, cdp);
+  const sampleStarted = performance.now();
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   const navigationBegin = performance.now();
   await page.goto("/");
+  if (experimentalCss) await page.addStyleTag({ content: experimentalCss });
   await page.waitForFunction(() => !!window.__ATLAS_PERF__);
   const navigationToHarnessReadyUpperBoundMs =
     performance.now() - navigationBegin;
@@ -226,6 +327,7 @@ async function sample(
   const before = await metrics(cdp);
   const mount: Mount = await page.evaluate(() => window.__ATLAS_PERF__.mount());
   const after = await metrics(cdp);
+  const mountedAt = performance.now();
   expect(pageErrors).toEqual([]);
   await expect(page.locator(".adm")).toHaveAttribute(
     "data-node-count",
@@ -260,6 +362,33 @@ async function sample(
   await expect(
     page.getByRole("complementary", { name: "Details" }),
   ).toBeVisible();
+  if (selectionDiagnostic) {
+    expect(pageErrors).toEqual([]);
+    return {
+      scenario,
+      size,
+      partial,
+      mount,
+      startup,
+      navigationToHarnessReadyUpperBoundMs,
+      browserMetricsMount: deltas(before, after),
+      interactions: {
+        highlight: highlightTiming,
+        highlightJump: highlightJumpTiming,
+        selection: selectionTiming,
+      },
+      diagnosticOnly: true,
+      outsideMeasuredWallStages: {
+        navigationPreparationMountMs: mountedAt - sampleStarted,
+        selectionWorkflowMs: performance.now() - mountedAt,
+        totalSampleMs: performance.now() - sampleStarted,
+      },
+      correctness: {
+        intendedSelection: true,
+        fullCountsAndFiniteGeometry: true,
+      },
+    };
+  }
   const clearSelectionTiming = await action(
     page,
     "click",
@@ -344,6 +473,7 @@ async function sample(
   const benchmark = await page.evaluate(() =>
     window.__ATLAS_PERF__.benchmark(),
   );
+  const correctnessStarted = performance.now();
   const exported = JSON.parse(json.body.toString());
   // Full export equality protects IDs, handoff records, attachment/traffic evidence and warnings.
   expect(exported).toEqual(benchmark.graph);
@@ -384,11 +514,12 @@ async function sample(
         .slice(1)
         .filter((row) => row[kindIndex] === "traffic_observation"),
     ).toHaveLength(benchmark.evidence.traffic);
-    contextRows
-      .slice(1)
-      .forEach((row) =>
-        expect(() => JSON.parse(row[evidenceIndex])).not.toThrow(),
-      );
+    // Parse every evidence row, retaining the same malformed-row failure.
+    // One assertion avoids retaining thousands of Playwright reporter steps
+    // per sample; this bookkeeping is outside all browser timing intervals.
+    expect(() => {
+      for (const row of contextRows.slice(1)) JSON.parse(row[evidenceIndex]);
+    }).not.toThrow();
     expect(attachmentUi.visibleReferences).toBe(
       Math.min(32, benchmark.evidence.attachmentReferences),
     );
@@ -463,6 +594,7 @@ async function sample(
       ),
     ).toBe(true);
   const state = await page.evaluate(() => window.__ATLAS_PERF__.read());
+  const sampleFinished = performance.now();
   expect(pageErrors).toEqual([]);
   const { graph: _graph, ...microbenchmark } = benchmark;
   const exports = [json, csv, context, png].filter(Boolean).map((item) => {
@@ -477,6 +609,12 @@ async function sample(
     navigationToHarnessReadyUpperBoundMs,
     startup,
     browserMetricsMount: deltas(before, after),
+    outsideMeasuredWallStages: {
+      navigationPreparationMountMs: mountedAt - sampleStarted,
+      interactionsExportsMicrobenchmarkMs: correctnessStarted - mountedAt,
+      fullRecordValidationAndTelemetryMs: sampleFinished - correctnessStarted,
+      totalSampleMs: sampleFinished - sampleStarted,
+    },
     interactions: {
       highlight: highlightTiming,
       highlightJump: highlightJumpTiming,
@@ -517,6 +655,12 @@ test.afterAll(async () => {
   await mkdir(resolve(outputPath, ".."), { recursive: true });
   const sourceHashAfter = await hashFiles(sourceRoot, sourceFiles());
   const harnessHashAfter = await hashFiles(process.cwd(), harnessFiles);
+  const importedAfter = await fingerprintFiles(sourceRoot, importedFiles);
+  const builtAfter = await fingerprintFiles(builtRoot, await builtFiles());
+  const importedUnchanged =
+    JSON.stringify(importedBefore) === JSON.stringify(importedAfter);
+  const builtUnchanged =
+    JSON.stringify(builtBefore) === JSON.stringify(builtAfter);
   const expectedWorkloads = selected.reduce(
     (total, scenario) =>
       total +
@@ -539,7 +683,20 @@ test.afterAll(async () => {
       ),
       treeSha256: sourceHashBefore,
       treeSha256After: sourceHashAfter,
-      unchangedDuringRun: sourceHashBefore === sourceHashAfter,
+      unchangedDuringRun:
+        sourceHashBefore === sourceHashAfter &&
+        importedUnchanged &&
+        builtUnchanged,
+      importedDependencies: {
+        before: importedBefore,
+        after: importedAfter,
+        unchangedDuringRun: importedUnchanged,
+      },
+      builtServedAssets: {
+        before: builtBefore,
+        after: builtAfter,
+        unchangedDuringRun: builtUnchanged,
+      },
       lockSha256: createHash("sha256")
         .update(await readFile(resolve(sourceRoot, "package-lock.json")))
         .digest("hex"),
@@ -575,7 +732,11 @@ test.afterAll(async () => {
       colorScheme: "light",
       reactDomBuild:
         "Production profiling build; identical instrumentation for baseline and candidate",
-      tracing: false,
+      tracing: traceSelection,
+      traceCategories: traceSelection ? traceCategories : undefined,
+      experimentalCss,
+      drainSelection,
+      selectionDiagnostic,
     },
     methodology: {
       interactionProtocol:
@@ -583,8 +744,14 @@ test.afterAll(async () => {
       repetitionsPerCacheState: repetitions,
       cold: "Fresh browser context and page per sample; browser process reused, OS and server caches uncontrolled",
       warm: "Same context, one discarded warmup, fresh page per measured sample",
-      isolatedOperationWarmup: 1,
-      isolatedOperationRepetitions: 5,
+      measurementScope: selectionDiagnostic
+        ? "Supplemental mount/highlight/jump/card-selection diagnostic only; no filtering, exports, or isolated-operation acceptance"
+        : "Complete selected workload matrix with filtering, evidence/export correctness and isolated operations",
+      wholeCaseTimeoutMs: Math.max(300000, repetitions * 180000),
+      outsideMeasuredWallStages:
+        "Node wall-clock workflow staging includes automation and full-record validation; never added to browser phase timings",
+      isolatedOperationWarmup: selectionDiagnostic ? 0 : 1,
+      isolatedOperationRepetitions: selectionDiagnostic ? 0 : 5,
       usable:
         "Fonts ready; loaded counts, SVG geometry and hit targets valid; transform/dimensions/counts stable for three consecutive animation frames",
       network:

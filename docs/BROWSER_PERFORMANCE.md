@@ -7,8 +7,12 @@ are available. The same harness can load an untouched baseline checkout and the
 candidate checkout through `ADM_PERF_SOURCE_ROOT`. It does not require Splunk,
 credentials, Docker or a lab.
 
-The current retained comparison is in
-[corrected accepted-main results](benchmarks/atlas-browser-d686-results.md):
+The current accepted-baseline follow-up is in
+[final selection results](benchmarks/atlas-final-selection-results.md), with the
+[raw evidence index](benchmarks/atlas-final-browser-evidence-index.json). It uses
+accepted baseline `64473e5`, final frozen inputs, a complete 14-case matrix and
+separate repeated selection/native diagnostics. The historical
+[corrected accepted-main results](benchmarks/atlas-browser-d686-results.md) compare
 baseline `d6863dd` versus candidate `8813eb5`, including unfavorable observations,
 median/p95 checks and raw evidence checksums. The
 [earlier comparison](benchmarks/atlas-browser-results.md) is preserved as
@@ -47,10 +51,48 @@ hashes before and after measurement must agree. The report tool rejects incomple
 runs, differing workload fingerprints, differing instrumentation and differing
 runtime/hardware settings.
 
+Raw reports also fingerprint the imported deployment-health configuration and
+pipeline-interface JSON, plus every file in the built `dist/performance-app`
+directory, before and after each run. The source-freeze guard requires all of
+these bytes to remain unchanged. The server runs `vite build` followed by
+`vite preview`, with no HMR; source changes after building do not hot-reload the
+served bundle, but still invalidate source provenance. The asset fingerprints
+bind the actual production JavaScript/CSS/HTML served to the browser.
+
+Complete CSV validation still parses every evidence record. One assertion wraps
+the full parse loop, avoiding thousands of retained reporter steps per sample.
+Node wall-stage telemetry records workflow and full-record validation separately
+from browser timings. The whole-workload timeout scales with repetitions
+(15 minutes at five repetitions per cache state); per-action automation and
+browser-readiness deadlines remain 10 and 15 seconds respectively.
+
 For harness development, `ADM_PERF_REPETITIONS=1` shortens the run. Optional
 `ADM_PERF_SCENARIOS=aci,nxos,catalyst-aci,meraki-nxos` and
 `ADM_PERF_SIZES=captured,realistic,near-limit` select subsets. Retained baseline and
 candidate evidence must use the same complete matrix and repetition count.
+
+For a **supplemental selection investigation**, set
+`ADM_PERF_SELECTION_DIAGNOSTIC=1`. This retains preparation, mount, highlighting,
+keyboard highlight jump and card selection with their normal preconditions,
+intended DOM state, full graph counts, finite geometry and frame-settling checks.
+It returns before filtering, exports and isolated operations, and explicitly
+records this limited scope. It cannot replace the complete matrix or be passed
+to the complete-matrix report tool. Use identical settings and harness bytes for
+baseline and candidate. Twenty repetitions per cache state permit a
+nearest-rank p95 distinct from the maximum; this still is a small local sample.
+
+`ADM_PERF_TRACE_SELECTION=1` enables a separate CDP trace around selection;
+`ADM_PERF_TRACE_DIR` chooses its ignored output directory. Optional
+`ADM_PERF_TRACE_CATEGORIES` overrides the categories. Broad native diagnostic
+categories such as `*,disabled-by-default-devtools.timeline` expose raster and
+compositor waits that JavaScript profiles alone do not explain. Trace settings
+are recorded; traced observations are kept separate from untraced distributions.
+Two further diagnostic controls are deliberately excluded from normal acceptance:
+`ADM_PERF_EXPERIMENT_CSS` injects explicitly recorded experimental styles, and
+`ADM_PERF_DRAIN_SELECTION=1` requests a compositor screenshot before selection to
+drain the preceding action's work. The screenshot is a scheduling intervention,
+outside the timed action; its result must not replace the unchanged interaction
+sequence or be presented as a product improvement.
 
 ## Workloads and correctness
 
@@ -137,6 +179,22 @@ timestamp sampled by an evaluation after that wait, so its corresponding event
 interval is an upper bound on trigger completion. These clocks/intervals must
 not be subtracted to infer a browser phase.
 
+Each action also retains the actual input timestamp/target, first intended DOM
+state observed by a mutation callback, individual React commits, integrated
+transform calls, and each readiness frame's time, geometry, postcondition and
+read cost. Mutation observation does not read geometry or establish presentation.
+Per-action CDP deltas cover the surrounding automation/evaluation envelope;
+they are not exact event-to-ready CPU intervals. Native trace timestamps are
+needed to attribute work to that interval. These measurements overlap and must
+not be added into a phase total.
+
+The stable-frame protocol observes main-thread animation callbacks and DOM/SVG
+geometry; it does not independently observe compositor presentation. A preceding
+action can have raster work still in flight, even after these checks, and that
+work can block a later action's compositor commit. Investigate task/frame
+provenance before attributing the entire overlapping task to the new action.
+The retained protocol and its checks remain unchanged during such diagnostics.
+
 In the original retained interaction protocol (raw schema 1), the test awaits Playwright's trigger
 completion before invoking the browser's settling loop. The recorded interval
 therefore includes that automation completion wait as well as browser work and
@@ -167,8 +225,9 @@ synthetic/captured repository data only; do not substitute customer data.
 The effective tree hash covers `frontend/src`, `fixtures` and `package-lock.json`.
 The harness hash covers its browser entry, workload generators, specification and
 standalone build/test/TypeScript configurations. Imported configuration and
-research data outside that tree are bound separately to the measured commits in
-`benchmarks/atlas-browser-d686-imported-source-manifest.json`. The evidence index
+research data outside that tree are fingerprinted before/after each current run.
+The historical `benchmarks/atlas-browser-d686-imported-source-manifest.json` binds
+only its earlier comparison. The current evidence index
 records raw report locations and checksums; unchanged hashes alone do not claim
 that every repository file was measured.
 

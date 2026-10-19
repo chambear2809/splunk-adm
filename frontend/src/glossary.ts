@@ -134,8 +134,18 @@ export function networkClientAttachmentMessage(
     return "Client attachment could not be uniquely resolved.";
   if (attrs.attachment_status === "varied")
     return "Attachment observations vary across this time range; no single access device is selected.";
-  if (attrs.attachment_basis === "catalyst_client_snapshot")
-    return "Current Catalyst client snapshot. Attachment is observed from receipt time onward; lastUpdatedTime is freshness only.";
+  if (attrs.attachment_basis === "catalyst_client_snapshot") {
+    if (attrs.history_coverage === "unconfirmed")
+      return "Retained Catalyst history cannot establish this observation's continuity. Current attachment is not established.";
+    if (attrs.source_time_status === "stale")
+      return "Catalyst snapshot with an old source timestamp. Attachment is observed from receipt time onward; the source timestamp does not establish collection time.";
+    if (
+      attrs.source_time_status === "ahead" ||
+      attrs.source_time_status === "missing"
+    )
+      return "Catalyst source time is missing or ahead of receipt time. Attachment remains unresolved.";
+    return "Catalyst client snapshot. Attachment is observed from receipt time onward; lastUpdatedTime is freshness only.";
+  }
   return "Association event is a point observation, not proof of ongoing presence.";
 }
 

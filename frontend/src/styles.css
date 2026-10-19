@@ -428,6 +428,10 @@
 .adm .map-svg {
   display: block;
 }
+.adm .map-svg [data-export-root] {
+  /* Retain the map's rasterized content while its pan/zoom transform changes. */
+  will-change: transform;
+}
 .adm .zoom-controls {
   position: absolute;
   right: 12px;

@@ -78,6 +78,254 @@ def _upgrade_resume_route(journal: dict | None) -> str:
     return routes[phase]
 
 
+def _assert_completed_cutover_evidence(migration, journal: dict) -> None:
+    """Check durable activation success independently of staging eligibility.
+
+    This only reads the interface and immutable journal origin; it performs no
+    target requests. A partial activation may be safely rolled back without ever
+    having qualified the candidate's activated behavior.
+    """
+    cutover = journal.get("cutover") or {}
+
+    def epoch(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+    started, completed = cutover.get("started_at"), cutover.get("completed_at")
+    if (
+        cutover.get("state") != "complete"
+        or not epoch(started)
+        or not epoch(completed)
+        or completed < started
+    ):
+        raise AssertionError("journal lacks durable completed cutover evidence")
+    interface, _ = migration._interface()
+    expected = migration._build_cutover_mutations(journal, interface)
+    mutations = cutover.get("mutations")
+    if (
+        not isinstance(mutations, list)
+        or not expected
+        or any(not isinstance(item, dict) for item in mutations)
+    ):
+        raise AssertionError("completed cutover lacks its intended mutation plan")
+    if [item.get("id") for item in mutations] != [item["id"] for item in expected]:
+        raise AssertionError("completed cutover mutation plan is incomplete or changed")
+    for recorded, intended in zip(mutations, expected):
+        if any(
+            recorded.get(field) != intended.get(field)
+            for field in ("kind", "name", "field", "rest_target", "acl")
+        ) or any(
+            not migration._mutation_equal(
+                intended, recorded.get(field), intended[field]
+            )
+            for field in ("before", "after")
+        ):
+            raise AssertionError(
+                "completed cutover mutation differs from its origin plan"
+            )
+        if intended["kind"] == "macro_definition" and not migration._macro_args_equal(
+            intended["name"], recorded.get("args", ""), intended.get("args", "")
+        ):
+            raise AssertionError("completed cutover macro arguments changed")
+        verified = recorded.get("verified_at")
+        if (
+            recorded.get("state") != "applied"
+            or not epoch(verified)
+            or not started <= verified <= completed
+        ):
+            raise AssertionError(
+                "completed cutover has an unverified intended mutation"
+            )
+    bounds = cutover.get("scheduled_cycle_bounds") or {}
+    lower, upper = bounds.get("index_earliest"), bounds.get("index_latest")
+    watermark = cutover.get("scheduled_watermark_at")
+    if (
+        not epoch(lower)
+        or not epoch(upper)
+        or lower >= upper
+        or lower % 300
+        or upper % 300
+        or not epoch(watermark)
+        or not started <= watermark <= completed
+        or upper > watermark
+    ):
+        raise AssertionError("completed cutover lacks validated scheduled cycle bounds")
+    required = set()
+    for surface in interface["public_surfaces"]:
+        if surface.get("surface") == "writers":
+            continue
+        for version in ("v2", "network_client_v2", "traffic_v2"):
+            spec = surface.get(version)
+            if isinstance(spec, dict) and (
+                spec.get("public_after_invoke")
+                or version in {"network_client_v2", "traffic_v2"}
+                and spec.get("invoke")
+            ):
+                required.add((surface["surface"], version))
+    evidence = cutover.get("public_selector_evidence")
+    if not isinstance(evidence, list) or any(
+        not isinstance(item, dict) for item in evidence
+    ):
+        raise AssertionError("completed cutover lacks public selector evidence")
+    observed = [(item.get("surface"), item.get("version")) for item in evidence]
+    if not required or len(observed) != len(required) or set(observed) != required:
+        raise AssertionError("completed cutover public selector evidence is incomplete")
+    last_mutation = max(item["verified_at"] for item in mutations)
+    for item in evidence:
+        validated = item.get("validated_at")
+        count = item.get("row_count")
+        if (
+            item.get("phase") != "public_after_invoke"
+            or not epoch(validated)
+            or not last_mutation <= validated <= completed
+            or not isinstance(count, int)
+            or isinstance(count, bool)
+            or count < 0
+            or any(
+                not isinstance(item.get(field), str)
+                or not re.fullmatch(r"[0-9a-f]{64}", item[field])
+                for field in ("query_sha256", "rows_sha256")
+            )
+        ):
+            raise AssertionError("completed cutover public selector proof is malformed")
+
+
+def _restoration_checkpoint_origin(completed_rollback: dict) -> dict | None:
+    """Bind restoration readiness to completed recovery, not controller time."""
+    disabled = (
+        completed_rollback.get("origin", {})
+        .get("saved_searches", {})
+        .get("ADM - Conversation rollup", {})
+        .get("content", {})
+        .get("disabled")
+    )
+    if str(disabled).lower() in {"1", "true"}:
+        return None
+    if str(disabled).lower() not in {"0", "false"}:
+        raise AssertionError("restoration origin has no verified V1 writer state")
+    rollback = completed_rollback.get("rollback") or {}
+    recovery = rollback.get("v1_recovery") or {}
+    fields = {
+        "observation_epoch": recovery.get("observation_epoch"),
+        "recovery_completed_at": recovery.get("completed_at"),
+        "rollback_completed_at": rollback.get("completed_at"),
+    }
+    if "audit_observation_epoch" in recovery:
+        fields["audit_observation_epoch"] = recovery["audit_observation_epoch"]
+    if (
+        completed_rollback.get("phase") != "rolled_back"
+        or rollback.get("state") != "complete"
+        or recovery.get("state") != "verified"
+        or not isinstance(completed_rollback.get("migration_id"), str)
+        or not completed_rollback["migration_id"]
+        or any(
+            not isinstance(value, int) or isinstance(value, bool) or value <= 0
+            for value in fields.values()
+        )
+        or fields["recovery_completed_at"] < fields["observation_epoch"]
+        or fields["recovery_completed_at"]
+        < fields.get("audit_observation_epoch", fields["observation_epoch"])
+        or fields["rollback_completed_at"] < fields["recovery_completed_at"]
+    ):
+        raise AssertionError(
+            "restoration requires completed durable V1 recovery evidence"
+        )
+    return {
+        "migration_id": completed_rollback["migration_id"],
+        **fields,
+        "boundary": max(fields.values()),
+    }
+
+
+def _await_restoration_v1_checkpoint(
+    migration,
+    completed_rollback: dict,
+    deadline: float,
+    *,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+) -> dict | None:
+    """Wait for a proven V1 checkpoint beyond the prior manual-write audit.
+
+    The migration's existing capture performs the source, retained-row and
+    empty-window checks unchanged. Refusals propagate; this waits only when
+    the strict scheduler inventory has no later completed checkpoint yet.
+    """
+    origin = _restoration_checkpoint_origin(completed_rollback)
+    if origin is None:
+        return None
+    journal = migration._load()
+    readiness = journal.get("qualification_restoration_checkpoint")
+    if readiness is not None and (
+        not isinstance(readiness, dict) or readiness.get("origin") != origin
+    ):
+        raise AssertionError("restoration recovery boundary changed on resume")
+    # Before activation, always re-run the product's current source/retained
+    # checks and <=600-second freshness gate. A prior successful capture may
+    # have aged while the controller was stopped. Once activation has begun,
+    # its rollback anchor is immutable and V1 may already be paused.
+    checkpoint = (
+        journal.get("v1_pre_pause")
+        if journal.get("phase") in {"cutover_in_progress", "cutover"}
+        else None
+    )
+    if checkpoint is None:
+        if journal.get("phase") != "coverage_validated":
+            raise AssertionError(
+                "restoration activation lacks its durable V1 checkpoint"
+            )
+        while True:
+            if monotonic() >= deadline:
+                raise AssertionError(
+                    "timed out waiting for a fresh V1 restoration checkpoint"
+                )
+            cycles = migration._scheduled_writer_cycles(
+                "ADM - Conversation rollup",
+                journal,
+                lower_epoch=origin["boundary"] + 1,
+                upper_epoch=int(migration.clock()) + 1,
+            )
+            if cycles:
+                checkpoint = migration._capture_v1_pre_pause(journal)
+                break
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise AssertionError(
+                    "timed out waiting for a fresh V1 restoration checkpoint"
+                )
+            sleep(min(15, remaining))
+    if not isinstance(checkpoint, dict):
+        raise AssertionError("restoration V1 checkpoint is malformed")
+    anchor = checkpoint.get("anchor")
+    if (
+        not isinstance(anchor, int)
+        or isinstance(anchor, bool)
+        or anchor <= origin["boundary"]
+    ):
+        raise AssertionError(
+            "restoration V1 checkpoint does not follow completed recovery"
+        )
+    if (
+        not isinstance(checkpoint.get("sid"), str)
+        or not checkpoint["sid"]
+        or not isinstance(checkpoint.get("captured_at"), int)
+        or isinstance(checkpoint["captured_at"], bool)
+        or checkpoint["captured_at"] < anchor
+    ):
+        raise AssertionError("restoration V1 checkpoint lacks durable capture evidence")
+    migration._write_journal(
+        {
+            **migration._load(),
+            "qualification_restoration_checkpoint": {
+                "origin": origin,
+                "sid": checkpoint["sid"],
+                "anchor": anchor,
+                "captured_at": checkpoint["captured_at"],
+            },
+        }
+    )
+    return checkpoint
+
+
 def _gap_injection_resume_action(journal: dict, evidence: dict | None) -> str:
     """Return reuse, inject, or fail-closed reconciliation for a gap marker."""
     if evidence is not None:
@@ -225,6 +473,34 @@ def _resume_staging(migration, start: int, end: int, scenario: dict):
     else:
         validation = {"status": "coverage_validated", "cutover_eligible": True}
     return migration._load(), route, validation
+
+
+class QualificationInterrupted(RuntimeError):
+    """Controlled harness interruption after a real durable mutation."""
+
+
+def _qualification_cutover(migration, interrupt_once=False):
+    original = migration._apply_mutation
+
+    def apply(journal, mutation):
+        original(journal, mutation)
+        changed = not migration._mutation_equal(
+            mutation, mutation["before"], mutation["after"]
+        )
+        if interrupt_once and changed and not journal.get("qualification_interrupt"):
+            journal["qualification_interrupt"] = {
+                "state": "after_verified_mutation",
+                "mutation_id": mutation["id"],
+                "phase": journal.get("phase"),
+            }
+            migration._write_journal(journal)
+            raise QualificationInterrupted("controlled stop after durable mutation")
+
+    migration._apply_mutation = apply
+    try:
+        return migration.cutover()
+    finally:
+        migration._apply_mutation = original
 
 
 class CiscoMigrationGapEnvelopeTest(unittest.TestCase):
@@ -602,6 +878,60 @@ class CiscoContractUpgradeTest(unittest.TestCase):
             migration.journal.path.with_suffix(".v1-gap-evidence.json"), evidence
         )
 
+    def _restore_candidate_v2(
+        self,
+        api,
+        journal_path,
+        start,
+        end,
+        scenario,
+        timeout_seconds,
+        completed_rollback,
+    ):
+        """Fresh restore journal; outer lifecycle already holds the target lock."""
+        from tools.cisco_contract_migration import Journal, Migration
+
+        restored = Migration(api, Journal(journal_path))
+        with restored.journal.locked(blocking=False):
+            journal = restored.journal.read()
+            if journal and journal.get("phase") == "cutover":
+                _await_restoration_v1_checkpoint(
+                    restored, completed_rollback, time.monotonic() + timeout_seconds
+                )
+                restored.cutover()  # revalidate actual active configuration
+            else:
+                _, route, _ = _resume_staging(restored, start, end, scenario)
+                self.assertEqual(
+                    route, "cutover", "restore journal must not recycle a rollback"
+                )
+                deadline = time.monotonic() + timeout_seconds
+                _await_restoration_v1_checkpoint(restored, completed_rollback, deadline)
+                while True:
+                    result = restored.cutover()
+                    if result["status"] == "cutover":
+                        break
+                    self.assertEqual(result["status"], "awaiting_first_scheduled_cycle")
+                    if time.monotonic() >= deadline:
+                        self.fail(
+                            "timed out restoring tested candidate; retain the restore journal"
+                        )
+                    time.sleep(15)
+            self._assert_v2_cutover_state(restored)
+            self.assertEqual(restored.cutover()["status"], "cutover")
+            final = restored._load()
+            self.assertTrue(final.get("candidate_cutover_eligible"))
+            self.assertEqual(final["phase"], "cutover")
+            restored.journal.write_artifact(
+                journal_path.with_suffix(".restoration-evidence.json"),
+                {
+                    "migration_id": final["migration_id"],
+                    "phase": final["phase"],
+                    "candidate_sha256": final["candidate_sha256"],
+                    "selectors_verified": True,
+                    "repeated_cutover_verified": True,
+                },
+            )
+
     def test_staging_cutover_resume_and_rollback(self):
         from tools.cisco_contract_migration import Journal, Migration, Refused
         from adm_recovery_lib.rest import Rest
@@ -614,6 +944,17 @@ class CiscoContractUpgradeTest(unittest.TestCase):
         end = int(os.environ["ADM_CISCO_MIGRATION_END"])
         timeout_seconds = int(os.environ.get("ADM_CISCO_MIGRATION_TIMEOUT", "1800"))
         inject_gap = os.environ.get("ADM_CISCO_MIGRATION_V1_GAP_INJECTION", "")
+        interrupt_once = os.environ.get("ADM_CISCO_MIGRATION_INTERRUPT_ONCE", "0")
+        restore_v2 = os.environ.get("ADM_CISCO_MIGRATION_RESTORE_V2", "0")
+        if interrupt_once not in {"0", "1"} or restore_v2 not in {"0", "1"}:
+            self.fail("migration interruption/restoration opt-ins must be 0 or 1")
+        restore_value = os.environ.get("ADM_CISCO_MIGRATION_RESTORE_JOURNAL", "")
+        if restore_v2 == "1" and (
+            not restore_value
+            or not Path(restore_value).is_absolute()
+            or Path(restore_value).resolve() == journal_path.resolve()
+        ):
+            self.fail("V2 restoration requires a distinct absolute restore journal")
         fixture_value = os.environ.get("ADM_CISCO_MIGRATION_V1_GAP_FIXTURE", "")
         if inject_gap not in {"", "0", "1"}:
             self.fail("ADM_CISCO_MIGRATION_V1_GAP_INJECTION must be 0 or 1")
@@ -647,17 +988,25 @@ class CiscoContractUpgradeTest(unittest.TestCase):
         # Cooperate with the repository-wide fixed-container lock. When the
         # suite is launched through tools/lab_lock.py this validates inherited
         # ownership; otherwise it acquires the same lock itself.
-        with LabLock(ROOT), migration.journal.locked():
+        with LabLock(ROOT), migration.operation_locked():
             try:
                 journal = migration.journal.read()
                 if journal:
                     journal = migration._load()
+                if journal and (journal.get("origin") or {}).get("target", {}).get(
+                    "guid"
+                ) != (
+                    migration._single_entry("/services/server/info").get("content")
+                    or {}
+                ).get("guid"):
+                    self.fail("migration journal belongs to another target")
                 route = _upgrade_resume_route(journal)
                 if route == "terminal":
                     if journal.get("candidate_cutover_eligible") is not True:
                         self.fail(
                             "rolled-back journal lacks a completed eligible candidate"
                         )
+                    _assert_completed_cutover_evidence(migration, journal)
                     if (journal.get("rollback") or {}).get("state") != "complete":
                         self.fail(
                             "rolled-back journal lacks completed rollback evidence"
@@ -674,6 +1023,19 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                         self.fail(
                             "rolled-back gap qualification lacks durable evidence"
                         )
+                    if restore_v2 == "1" and Path(restore_value).exists():
+                        restore_state = Journal(Path(restore_value)).read()
+                        if restore_state and restore_state.get("phase") == "cutover":
+                            self._restore_candidate_v2(
+                                api,
+                                Path(restore_value),
+                                start,
+                                end,
+                                scenario,
+                                timeout_seconds,
+                                journal,
+                            )
+                            return
                     if evidence is not None:
                         self._assert_v1_gap_recovered(migration, evidence)
                     else:
@@ -682,6 +1044,16 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                         self.assertEqual(
                             current["saved_searches"],
                             journal["origin"]["saved_searches"],
+                        )
+                    if restore_v2 == "1":
+                        self._restore_candidate_v2(
+                            api,
+                            Path(restore_value),
+                            start,
+                            end,
+                            scenario,
+                            timeout_seconds,
+                            journal,
                         )
                     return
                 journal, route, validation = _resume_staging(
@@ -701,8 +1073,23 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                 )
                 deadline = time.monotonic() + timeout_seconds
                 while route == "cutover":
-                    result = migration.cutover()
+                    try:
+                        result = _qualification_cutover(
+                            migration, interrupt_once == "1"
+                        )
+                    except QualificationInterrupted:
+                        persisted = migration._load()
+                        self.assertEqual(persisted["phase"], "cutover_in_progress")
+                        self.assertEqual(
+                            persisted["qualification_interrupt"]["state"],
+                            "after_verified_mutation",
+                        )
+                        # Recreate the controller from durable state; the outer
+                        # target and journal locks still protect this lifecycle.
+                        migration = Migration(api, Journal(journal_path))
+                        continue
                     if result["status"] == "cutover":
+                        self.assertEqual(migration.cutover()["status"], "cutover")
                         route = "rollback"
                         break
                     self.assertEqual(result["status"], "awaiting_first_scheduled_cycle")
@@ -767,6 +1154,16 @@ class CiscoContractUpgradeTest(unittest.TestCase):
                             "timed out waiting for a confirmed V1 rollback recovery cycle"
                         )
                     time.sleep(15)
+                if restore_v2 == "1":
+                    self._restore_candidate_v2(
+                        api,
+                        Path(restore_value),
+                        start,
+                        end,
+                        scenario,
+                        timeout_seconds,
+                        migration._load(),
+                    )
             except Refused as exc:
                 self.fail(
                     f"contract migration refused: {exc}; retained journal: {journal_path}. "

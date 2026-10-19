@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import configparser
 import gzip
 import hashlib
@@ -22,8 +23,26 @@ MAX_ATLAS_GZIP_BYTES = 650 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
+SETTINGS_ENTRYPOINT = "splunk_adm/bin/adm_settings.py"
+SETTINGS_REGISTRY_PATH = "splunk_adm/bin/adm_settings_registry.json"
+SETTINGS_RUNTIME_FILES = frozenset(
+    {
+        SETTINGS_ENTRYPOINT,
+        "splunk_adm/bin/adm_settings_lib/__init__.py",
+        "splunk_adm/bin/adm_settings_lib/rest.py",
+    }
+)
+SETTINGS_CONFIG_FILES = frozenset(
+    {
+        "splunk_adm/default/restmap.conf",
+        "splunk_adm/default/web.conf",
+        "splunk_adm/default/adm_settings.conf",
+        "splunk_adm/README/adm_settings.conf.spec",
+    }
+)
 BUNDLED_RUNTIME_FILES = frozenset(
     {
+        *SETTINGS_RUNTIME_FILES,
         "splunk_adm/bin/adm_recovery.py",
         "splunk_adm/bin/adm_recovery_lib/__init__.py",
         "splunk_adm/bin/adm_recovery_lib/core.py",
@@ -212,7 +231,163 @@ def _verify_checksum(archive: Path) -> None:
         raise ValueError(f"checksum mismatch: {archive}")
 
 
-def _required_files(files: dict[str, bytes], version: str) -> None:
+def _packaged_config(
+    files: dict[str, bytes], relative: str
+) -> configparser.RawConfigParser:
+    config = configparser.RawConfigParser(strict=True)
+    try:
+        text = files[f"splunk_adm/{relative}"].decode("utf-8")
+        if relative.endswith(".meta"):
+            text = text.replace("[]", "[app]", 1)
+        config.read_string(text)
+    except (configparser.Error, UnicodeDecodeError) as exc:
+        raise ValueError(
+            f"invalid packaged settings configuration: {relative}"
+        ) from exc
+    if config.defaults():
+        raise ValueError(
+            f"packaged settings configuration must not inherit DEFAULT values: {relative}"
+        )
+    return config
+
+
+def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
+    for name in SETTINGS_RUNTIME_FILES:
+        try:
+            tree = ast.parse(files[name], filename=name)
+        except (SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(
+                f"invalid packaged settings Python runtime: {name}"
+            ) from exc
+        if name == SETTINGS_ENTRYPOINT and not any(
+            isinstance(node, ast.ClassDef) and node.name == "SettingsHandler"
+            for node in tree.body
+        ):
+            raise ValueError("settings entrypoint must define shipped SettingsHandler")
+    rest = _packaged_config(files, "default/restmap.conf")
+    stanza = "script:adm_deployment_settings"
+    expected = {
+        "match": "/adm/deployment-settings",
+        "script": "adm_settings.py",
+        "scripttype": "persist",
+        "handler": "adm_settings.SettingsHandler",
+        "python.required": "3.13",
+        "python.version": "python3",
+        "capability.post": "admin_all_objects",
+        "output_modes": "json",
+    }
+    if not rest.has_section(stanza) or any(
+        rest.get(stanza, key, fallback=None) != value for key, value in expected.items()
+    ):
+        raise ValueError(
+            "settings registration must reference the shipped authenticated SettingsHandler"
+        )
+    for key, value in (
+        ("requireAuthentication", True),
+        ("passPayload", True),
+        ("passSession", True),
+        ("passSystemAuth", False),
+    ):
+        try:
+            valid = (
+                rest.has_option(stanza, key) and rest.getboolean(stanza, key) is value
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError(
+                f"settings registration requires {key} = {str(value).lower()}"
+            )
+    if rest.get(stanza, "capability", fallback="") or rest.get(
+        stanza, "capability.get", fallback=""
+    ):
+        raise ValueError(
+            "settings registration must preserve authenticated reader access"
+        )
+    if rest.get(stanza, "restReplay", fallback="false").casefold() not in (
+        "false",
+        "0",
+    ):
+        raise ValueError("settings registration must not enable REST replay")
+    if [
+        name
+        for name in rest.sections()
+        if rest.get(name, "match", fallback="") == expected["match"]
+    ] != [stanza]:
+        raise ValueError("settings endpoint must have one unambiguous registration")
+    web = _packaged_config(files, "default/web.conf")
+    exposure = "expose:adm_deployment_settings"
+    if (
+        not web.has_section(exposure)
+        or web.get(exposure, "pattern", fallback=None) != "adm/deployment-settings"
+        or set(web.get(exposure, "methods", fallback="").split(",")) != {"GET", "POST"}
+    ):
+        raise ValueError(
+            "settings browser exposure must match the supported GET/POST endpoint"
+        )
+    # Splunk Cloud permits only these two exposure fields. Omitting the
+    # skipCSRFProtection override retains the native web.conf.spec default 0.
+    if set(web[exposure]) != {"pattern", "methods"}:
+        raise ValueError(
+            "settings browser exposure must use only pattern/methods and inherit CSRF protection"
+        )
+    if [
+        name
+        for name in web.sections()
+        if web.get(name, "pattern", fallback="") == "adm/deployment-settings"
+    ] != [exposure]:
+        raise ValueError("settings browser exposure must be unambiguous")
+    config = _packaged_config(files, "default/adm_settings.conf")
+    if (
+        config.get("persistence", "write_mode", fallback=None) != "disabled"
+        or config.get("persistence", "platform", fallback=None) != "unqualified"
+    ):
+        raise ValueError(
+            "packaged settings defaults must remain disabled and unqualified"
+        )
+    collections = _packaged_config(files, "default/collections.conf")
+    if any(
+        collections.get("adm_deployment_settings", field, fallback=None) != "string"
+        for field in ("field.revision", "field.settings_json")
+    ):
+        raise ValueError(
+            "packaged settings collection must preserve revision/settings schema"
+        )
+    metadata = _packaged_config(files, "metadata/default.meta")
+    acl = metadata.get("collections/adm_deployment_settings", "access", fallback="")
+    if re.sub(r"\s+", "", acl) != "read:[*],write:[admin,sc_admin]":
+        raise ValueError(
+            "packaged settings ACL must preserve readers and admin/sc_admin writers"
+        )
+    spec = files["splunk_adm/README/adm_settings.conf.spec"]
+    if any(
+        token not in spec
+        for token in (b"[persistence]", b"write_mode =", b"platform =")
+    ):
+        raise ValueError(
+            "packaged settings spec must document the persistence controls"
+        )
+    try:
+        value = json.loads(files[SETTINGS_REGISTRY_PATH])
+        source = json.loads(registry)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ValueError(
+            "invalid packaged or canonical deployment-health registry"
+        ) from exc
+    if (
+        not isinstance(value, dict)
+        or value.get("schemaVersion") != 1
+        or not isinstance(value.get("sources"), list)
+        or not value["sources"]
+        or value != source
+        or files[SETTINGS_REGISTRY_PATH] != registry
+    ):
+        raise ValueError(
+            "packaged settings registry must match the canonical deployment-health registry"
+        )
+
+
+def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> None:
     required = {
         "splunk_adm/appserver/static/adm.css",
         "splunk_adm/appserver/static/pages/atlas.js",
@@ -244,6 +419,8 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/NOTICE",
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
+        "splunk_adm/docs/DEPLOYMENT_HEALTH.md",
+        "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md",
         "splunk_adm/docs/UPGRADES.md",
         "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md",
         "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md",
@@ -259,10 +436,13 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         "splunk_adm/default/data/ui/views/dependency_map.xml",
         "splunk_adm/metadata/default.meta",
         *BUNDLED_RUNTIME_FILES,
+        *SETTINGS_CONFIG_FILES,
+        SETTINGS_REGISTRY_PATH,
     }
     missing = sorted(required - files.keys())
     if missing:
         raise ValueError(f"archive missing required files: {', '.join(missing)}")
+    _check_settings_contract(files, registry)
     _check_scope_transform(
         files["splunk_adm/default/transforms.conf"],
         "packaged default/transforms.conf",
@@ -288,6 +468,8 @@ def _required_files(files: dict[str, bytes], version: str) -> None:
         raise ValueError("app.conf [package] id does not match splunk_adm")
     if config.get("triggers", "reload.adm_recovery", fallback=None) != "simple":
         raise ValueError("app.conf [triggers] reload.adm_recovery must be simple")
+    if config.get("triggers", "reload.adm_settings", fallback=None) != "simple":
+        raise ValueError("app.conf [triggers] reload.adm_settings must be simple")
     actions = configparser.RawConfigParser(strict=True)
     try:
         actions.read_string(files[ALERT_ACTIONS_PATH].decode("utf-8"))
@@ -327,7 +509,14 @@ def check_release(
     _verify_checksum(archive_path)
     archive = _read_archive(archive_path)
     _assert_safe_files(archive.files)
-    _required_files(archive.files, version)
+    registry_path = package_json.parent / "config/deployment-health.json"
+    try:
+        registry = registry_path.read_bytes()
+    except OSError as exc:
+        raise ValueError(
+            f"unable to read canonical deployment-health registry: {registry_path}"
+        ) from exc
+    _required_files(archive.files, version, registry)
 
 
 def main() -> None:

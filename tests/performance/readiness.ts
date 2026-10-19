@@ -7,14 +7,20 @@ export async function committedFrames(options: {
   nextFrame: (signal: AbortSignal) => Promise<void>;
   signal: AbortSignal;
   now: () => number;
+  onFrame?: (
+    frame: FrameState & { at: number; committed: boolean; readMs: number },
+  ) => void;
 }) {
   let previous: string | undefined;
   let same = 0;
   while (!options.signal.aborted) {
     await options.nextFrame(options.signal);
     options.signal.throwIfAborted();
+    const at = options.now();
     const frame = options.read();
-    if (!frame.valid || !options.committed()) {
+    const committed = options.committed();
+    options.onFrame?.({ ...frame, at, committed, readMs: options.now() - at });
+    if (!frame.valid || !committed) {
       previous = undefined;
       same = 0;
       continue;

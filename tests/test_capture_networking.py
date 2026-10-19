@@ -8,6 +8,10 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import io
+import tarfile
+
+from tools import capture_networking_fixtures as networking
 
 from tools.capture_networking_fixtures import (
     capture,
@@ -141,6 +145,7 @@ class CaptureNetworkingTest(unittest.TestCase):
             )
             lab = SimpleNamespace(_json=get)
             with (
+                patch.dict(os.environ, {}, clear=True),
                 patch("tools.capture_networking_fixtures.ROOT", root),
                 patch("tools.capture_networking_fixtures.require_local_lab"),
                 patch(
@@ -373,3 +378,200 @@ class CaptureNetworkingTest(unittest.TestCase):
         ):
             with self.subTest(key=key), self.assertRaises(RuntimeError):
                 require_client(rows[:-1] + [{**rows[-1], key: value}], "aci")
+
+
+class CapturePackageFingerprintTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.app = self.root / "splunk_app/splunk_adm"
+        (self.app / "default").mkdir(parents=True)
+        self.source = {
+            "app.conf": b"[id]\nname = splunk_adm\nversion = 0.3.0\n",
+            "macros.conf": b"[adm_example]\ndefinition = index=netflow\n",
+            "savedsearches.conf": b"[ADM - Example]\nsearch = | makeresults\n",
+        }
+        for name, content in self.source.items():
+            (self.app / "default" / name).write_bytes(content)
+        (self.root / "tools").mkdir()
+        (self.root / "tools/gen_raw_fixtures.py").write_text("# synthetic generator\n")
+        self.raw = self.root / "raw"
+        self.raw.mkdir()
+        for name in ("scenario.json", "source-profiles.json"):
+            (self.raw / name).write_text("{}")
+        (self.raw / "capture-manifest.json").write_text(
+            json.dumps({"index_events": {"netflow": 1}})
+        )
+        self.packaged = dict(self.source)
+        self.packaged["app.conf"] = (
+            b"[install]\nbuild = 1792340274\n" + self.source["app.conf"]
+        )
+        self.archive = self.root / "candidate.tgz"
+        self.installed = dict(self.packaged)
+        self.macro = "index=netflow"
+
+    def write_archive(self, configs=None, unsafe=False):
+        with tarfile.open(self.archive, "w:gz") as archive:
+            for name, content in (
+                self.packaged if configs is None else configs
+            ).items():
+                info = tarfile.TarInfo("splunk_adm/default/" + name)
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+            if unsafe:
+                info = tarfile.TarInfo("splunk_adm/default/escape.conf")
+                info.type = tarfile.SYMTYPE
+                info.linkname = "/etc/passwd"
+                archive.addfile(info)
+
+    def fingerprint(self, *, supplied=True, strict=True):
+        def api(_method, path):
+            if "/conf-macros?" in path:
+                return {
+                    "paging": {"total": 1},
+                    "entry": [
+                        {"name": "adm_example", "content": {"definition": self.macro}}
+                    ],
+                }
+            if "/saved/searches?" in path:
+                return {
+                    "paging": {"total": 1},
+                    "entry": [
+                        {
+                            "name": "ADM - Example",
+                            "content": {
+                                "search": "| makeresults",
+                                "disabled": True,
+                                "is_scheduled": False,
+                            },
+                        }
+                    ],
+                }
+            return []
+
+        prefix = "/opt/splunk/etc/apps/splunk_adm/default/"
+        hashes = "\n".join(
+            hashlib.sha256(content).hexdigest() + "  " + prefix + name
+            for name, content in sorted(self.installed.items())
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {"ADM_LAB_PACKAGE": str(self.archive)} if supplied else {},
+                clear=True,
+            ),
+            patch.object(networking, "ROOT", self.root),
+            patch.object(networking, "require_local_lab"),
+            patch.object(
+                networking.subprocess,
+                "check_output",
+                return_value="".join(
+                    prefix + name + "\n" for name in sorted(self.installed)
+                ).encode(),
+            ),
+            patch.object(
+                networking.subprocess,
+                "run",
+                return_value=SimpleNamespace(stdout=hashes),
+            ) as docker,
+            patch.object(
+                networking,
+                "search",
+                return_value=(
+                    [{"index": "netflow", "evidence_id": "synthetic", "count": "1"}],
+                    {},
+                ),
+            ),
+        ):
+            evidence = networking.evidence_fingerprints(
+                SimpleNamespace(_json=api), self.raw, require_candidate=strict
+            )
+            self.assertEqual(docker.call_count, 1)
+            self.assertIn("sha256sum", docker.call_args.args[0])
+            return evidence
+
+    def test_exact_archive_and_source_hashes_are_separately_bound(self):
+        self.write_archive()
+        result = self.fingerprint()
+        self.assertEqual(
+            result["package_archive_sha256"],
+            hashlib.sha256(self.archive.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            result["source_default_sha256"],
+            {
+                name: hashlib.sha256(content).hexdigest()
+                for name, content in self.source.items()
+            },
+        )
+        self.assertEqual(
+            result["installed_default_sha256"],
+            {
+                name: hashlib.sha256(content).hexdigest()
+                for name, content in self.packaged.items()
+            },
+        )
+        self.assertNotEqual(
+            result["source_default_sha256"]["app.conf"],
+            result["installed_default_sha256"]["app.conf"],
+        )
+
+    def test_archive_source_query_drift_is_rejected(self):
+        self.write_archive(
+            dict(
+                self.packaged,
+                **{"macros.conf": b"[adm_example]\ndefinition = index=other\n"},
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "differs from source"):
+            self.fingerprint()
+
+    def test_installed_archive_hash_drift_is_rejected_even_without_strict_mode(self):
+        self.write_archive()
+        self.installed["app.conf"] += b"# installed drift\n"
+        with self.assertRaisesRegex(RuntimeError, "differs from the provided package"):
+            self.fingerprint(strict=False)
+
+    def test_installed_extra_or_missing_defaults_are_rejected(self):
+        self.write_archive()
+        for installed in (
+            {"app.conf": self.packaged["app.conf"]},
+            dict(self.packaged, **{"props.conf": b"[extra]\n"}),
+        ):
+            with self.subTest(installed=sorted(installed)):
+                self.installed = installed
+                with self.assertRaisesRegex(
+                    RuntimeError, "config set differs from provided package"
+                ):
+                    self.fingerprint()
+
+    def test_local_effective_override_is_recorded_without_benchmark_override_guard(
+        self,
+    ):
+        self.write_archive()
+        before = self.fingerprint(strict=False)
+        self.macro = "index=selected-local-source"
+        after = self.fingerprint(strict=False)
+        self.assertNotEqual(
+            before["effective_macros_sha256"], after["effective_macros_sha256"]
+        )
+        self.assertEqual(
+            before["installed_default_sha256"], after["installed_default_sha256"]
+        )
+        with self.assertRaisesRegex(RuntimeError, "effective macro"):
+            self.fingerprint(strict=True)
+
+    def test_unsafe_archive_fails_shared_validation(self):
+        self.write_archive(unsafe=True)
+        with self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+            self.fingerprint()
+
+    def test_no_package_behavior_remains_source_based(self):
+        self.installed = dict(self.source)
+        result = self.fingerprint(supplied=False)
+        self.assertNotIn("package_archive_sha256", result)
+        self.assertNotIn("source_default_sha256", result)
+        self.installed["app.conf"] = self.packaged["app.conf"]
+        with self.assertRaisesRegex(RuntimeError, "differs from the candidate source"):
+            self.fingerprint(supplied=False)

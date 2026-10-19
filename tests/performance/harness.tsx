@@ -205,12 +205,9 @@ function actionExpectation(intent: ActionIntent) {
       break;
     case "selectCard": {
       target = query(".item[data-hit].match");
-      const label = target?.getAttribute("aria-label");
       const selected = () =>
         [...document.querySelectorAll(".item[data-hit].selected")].find(
-          (e) =>
-            e.getAttribute("aria-label") === label &&
-            e.getAttribute("aria-pressed") === "true",
+          (e) => e === target && e.getAttribute("aria-pressed") === "true",
         );
       precondition = () =>
         !!target &&
@@ -290,6 +287,28 @@ function actionExpectation(intent: ActionIntent) {
 }
 let pendingAction: ReturnType<typeof capturedAction> | undefined;
 let removeActionListener: (() => void) | undefined;
+let actionTelemetry:
+  | {
+      input?: {
+        capturedAt: number;
+        eventTimeStamp: number;
+        type: string;
+        trusted: boolean;
+        target: string | null;
+      };
+      firstCommittedDomAt?: number;
+      frames: {
+        at: number;
+        readMs: number;
+        valid: boolean;
+        committed: boolean;
+        geometry: unknown[];
+        detailsTextLength: number;
+      }[];
+      transformsBefore: number;
+    }
+  | undefined;
+let actionMutations: MutationObserver | undefined;
 const read = () => {
   flushTasks();
   return {
@@ -441,6 +460,11 @@ const api = {
         app?.dataset.edgeCount === String(prepared.edges)
       );
     };
+    const telemetry = {
+      frames: [],
+      transformsBefore: samples.length,
+    } as NonNullable<typeof actionTelemetry>;
+    actionTelemetry = telemetry;
     pendingAction = capturedAction({
       name: intent.kind,
       precondition: expected.precondition,
@@ -453,6 +477,17 @@ const api = {
           nextFrame,
           read: () => readinessFrame(expected.requireMap),
           committed: () => counts() && expected.committed(),
+          onFrame: ({ at, readMs, valid, committed, signature }) => {
+            const state = JSON.parse(signature) as unknown[];
+            telemetry.frames.push({
+              at,
+              readMs,
+              valid,
+              committed,
+              geometry: state.slice(0, 12),
+              detailsTextLength: String(state[13] ?? "").length,
+            });
+          },
         });
       },
     });
@@ -468,6 +503,32 @@ const api = {
         );
         return;
       }
+      telemetry.input = {
+        capturedAt: performance.now(),
+        eventTimeStamp: input.timeStamp,
+        type: input.type,
+        trusted: input.isTrusted,
+        target: expected.target?.getAttribute("aria-label") ?? null,
+      };
+      performance.mark(`atlas:input:${intent.kind}`);
+      // Mutation callbacks observe committed DOM without forcing geometry reads.
+      actionMutations = new MutationObserver(() => {
+        if (
+          telemetry.firstCommittedDomAt === undefined &&
+          counts() &&
+          expected.committed()
+        ) {
+          telemetry.firstCommittedDomAt = performance.now();
+          performance.mark(`atlas:committed:${intent.kind}`);
+          actionMutations?.disconnect();
+        }
+      });
+      actionMutations.observe(document.getElementById("adm-root")!, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
       pendingAction?.capture();
     };
     document.addEventListener(event, listener, { capture: true, once: true });
@@ -483,6 +544,8 @@ const api = {
     removeActionListener?.();
     removeActionListener = undefined;
     pendingAction = undefined;
+    actionMutations?.disconnect();
+    actionTelemetry = undefined;
   },
   async endAction() {
     if (!pendingAction) throw new Error("No armed action");
@@ -491,6 +554,22 @@ const api = {
       flushTasks();
       return {
         ...timing,
+        telemetry: {
+          ...actionTelemetry,
+          integratedTransforms: samples.slice(
+            actionTelemetry?.transformsBefore,
+          ),
+          commits: renders.filter(
+            (render) =>
+              render.commit >= timing.start && render.start <= timing.end,
+          ),
+          selectedCard: document
+            .querySelector(".item[data-hit].selected")
+            ?.getAttribute("aria-label"),
+          inspectorTextLength:
+            document.querySelector('[aria-label="Details"]')?.textContent
+              ?.length ?? 0,
+        },
         longTasks: tasks.filter(
           (task) =>
             task.start < timing.end &&
@@ -507,6 +586,8 @@ const api = {
       removeActionListener?.();
       removeActionListener = undefined;
       pendingAction = undefined;
+      actionMutations?.disconnect();
+      actionTelemetry = undefined;
     }
   },
   downloadTiming() {
