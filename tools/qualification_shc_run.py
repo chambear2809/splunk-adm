@@ -41,6 +41,31 @@ BUILDERS = (
 )
 ROLLUP = "ADM - Conversation rollup"
 V2_WRITERS = ("ADM - Conversation rollup v2", "ADM - Traffic observation rollup v2")
+NXOS_FIXTURE = "fixtures/raw-networking/nxos_inventory.ndjson"
+NXOS_FIXTURE_SHA256 = "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062"
+NXOS_EVENT_WINDOW = (1792293814, 1792295615)
+INTERFACE_ORACLE = [
+    {
+        "_key": "192.0.2.11|436232192",
+        "device_ip": "192.0.2.11",
+        "device": "leaf-101",
+        "ifindex": "436232192",
+        "interface": "Ethernet1/49",
+        "neighbor": "border-1",
+        "neighbor_interface": "Ethernet1/1",
+        "updated": 1792295614,
+    },
+    {
+        "_key": "192.0.2.12|436232192",
+        "device_ip": "192.0.2.12",
+        "device": "leaf-102",
+        "ifindex": "436232192",
+        "interface": "Ethernet1/49",
+        "neighbor": "border-1",
+        "neighbor_interface": "Ethernet1/2",
+        "updated": 1792295614,
+    },
+]
 SCOPES = (
     ("exporter", "192.0.2.101", "prod", ""),
     ("exporter", "192.0.2.102", "prod", ""),
@@ -116,6 +141,137 @@ def normalized(rows):
         ),
         key=lambda row: client.canonical(row),
     )
+
+
+def nxos_interface_fixture(source, aci_windows):
+    """Preflight reviewed raw NX-OS input against an independent two-row oracle."""
+    path = Path(source) / NXOS_FIXTURE
+    client.require(path.is_file(), "reviewed NX-OS interface fixture is missing")
+    data = path.read_bytes()
+    raw_sha = hashlib.sha256(data).hexdigest()
+    client.require(
+        raw_sha == NXOS_FIXTURE_SHA256, "reviewed NX-OS fixture hash differs"
+    )
+    try:
+        rows = [json.loads(line) for line in data.splitlines() if line.strip()]
+        components, hostnames, mappings, times = Counter(), {}, {}, []
+        for row in rows:
+            client.require(
+                row["index"] == "cisco_dc" and row["sourcetype"] == "cisco:dc:nexus9k",
+                "NX-OS fixture index or sourcetype differs",
+            )
+            event = json.loads(row["event"])
+            timestamp = (
+                datetime.strptime(event["timestamp"], "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+            )
+            client.require(
+                type(row["time"]) in (int, float) and row["time"] == timestamp,
+                "NX-OS fixture envelope/event time differs",
+            )
+            times.append(timestamp)
+            component, body = event["component"], event["Row_info"]
+            components[component] += 1
+            device = event["device"].removesuffix(":443")
+            if component == "nxhostname":
+                hostnames[device] = body[0]["hostname"]
+                client.require(
+                    hostnames[device]
+                    == {
+                        "192.0.2.11": "leaf-101",
+                        "192.0.2.12": "leaf-102",
+                        "192.0.2.21": "border-1",
+                    }.get(device),
+                    "NX-OS fixture hostname differs",
+                )
+            if component == "nxneighbor":
+                client.require(
+                    isinstance(body, dict)
+                    and (device == "192.0.2.21" or "ifindex" in body),
+                    "NX-OS neighbor ifIndex is missing",
+                )
+            if component == "nxneighbor" and "ifindex" in body:
+                client.require(
+                    type(body["ifindex"]) in (str, int), "NX-OS ifIndex is malformed"
+                )
+                ifindex = str(body["ifindex"])
+                key = device + "|" + ifindex
+                mappings[key] = {
+                    "_key": key,
+                    "device_ip": device,
+                    "ifindex": ifindex,
+                    "interface": body["intf_id"],
+                    "neighbor": body["device_id"].split("(", 1)[0],
+                    "neighbor_interface": body["port_id"],
+                    "updated": timestamp,
+                }
+                wanted = next(
+                    (row for row in INTERFACE_ORACLE if row["_key"] == key), None
+                )
+                client.require(
+                    wanted is not None
+                    and all(
+                        wanted[field] == value
+                        for field, value in mappings[key].items()
+                        if field != "updated"
+                    ),
+                    "NX-OS neighbor mapping differs from independent oracle",
+                )
+        for row in mappings.values():
+            row["device"] = hostnames[row["device_ip"]]
+        client.require(
+            len(rows) == 105
+            and components
+            == {"nxhostname": 21, "nxversion": 21, "nxneighbor": 28, "nxinterface": 35}
+            and (min(times), max(times) + 1) == NXOS_EVENT_WINDOW
+            and sorted(mappings.values(), key=lambda row: row["_key"])
+            == INTERFACE_ORACLE,
+            "NX-OS fixture counts, time window or independent interface oracle differs",
+        )
+        for window in aci_windows:
+            earliest, latest = map(int, window)
+            client.require(
+                earliest < latest
+                and (
+                    NXOS_EVENT_WINDOW[1] <= earliest or NXOS_EVENT_WINDOW[0] >= latest
+                ),
+                "NX-OS fixture event window overlaps an ACI acceptance window",
+            )
+    except (KeyError, TypeError, ValueError, IndexError):
+        raise client.Refused("NX-OS fixture fields are malformed") from None
+    return {
+        "path": NXOS_FIXTURE,
+        "sha256": raw_sha,
+        "events": len(rows),
+        "index": "cisco_dc",
+        "sourcetype": "cisco:dc:nexus9k",
+        "components": dict(components),
+        "event_window": list(NXOS_EVENT_WINDOW),
+        "aci_windows": [list(window) for window in aci_windows],
+        "expected_interfaces": INTERFACE_ORACLE,
+    }
+
+
+def semantic_interfaces(rows):
+    """Require complete native builder rows; only KV's _user is metadata."""
+    client.require(
+        isinstance(rows, list) and len(rows) == 2, "interface row count differs"
+    )
+    semantic = []
+    for row in rows:
+        client.require(isinstance(row, dict), "interface row is malformed")
+        projected = {key: value for key, value in row.items() if key != "_user"}
+        client.require(
+            type(projected.get("updated")) in (int, float),
+            "interface update time is malformed",
+        )
+        semantic.append(projected)
+    semantic.sort(key=lambda row: row.get("_key", ""))
+    client.require(
+        semantic == INTERFACE_ORACLE, "interface rows differ from independent oracle"
+    )
+    return semantic
 
 
 def as_list(value):
@@ -618,6 +774,7 @@ class Driver:
 
     def phase_prepare(self):
         client.require(bool(self.addons), "explicit reviewed add-on roots are required")
+        nxos = nxos_interface_fixture(self.source, (self.window, self.topology_window))
         self.lab.prepare(self.source, self.archive, source_sha=self.source_sha)
         self.lab.state["test_hashes"]["tools/qualification_shc_run.py"] = (
             hashlib.sha256(
@@ -636,6 +793,7 @@ class Driver:
             "fixtures/raw-aci/scenario.json",
             "fixtures/raw-aci/kube_objects.ndjson",
             "fixtures/raw-aci/stream_netflow.ndjson",
+            NXOS_FIXTURE,
         ):
             self.lab.state["test_hashes"][relative] = hashlib.sha256(
                 (self.source / relative).read_bytes()
@@ -645,6 +803,7 @@ class Driver:
             "archive_sha256": self.lab.state["archive_sha256"],
             "source_sha": self.source_sha,
             "test_hashes": self.lab.state["test_hashes"],
+            "nxos_interface_fixture": nxos,
         }
 
     def phase_create(self):
@@ -1012,13 +1171,40 @@ class Driver:
 
         def done():
             value = api.json("GET", path)["entry"][0]["content"]
-            client.reject_messages(value.get("messages", []))
-            client.require(
-                value.get("dispatchState") != "FAILED", "builder search failed"
+            bad_messages = any(
+                message.get("type", "").upper() in ("WARN", "WARNING", "ERROR", "FATAL")
+                for message in value.get("messages", [])
             )
-            return value if value.get("isDone") in (True, 1, "1") else False
+            return (
+                value
+                if (
+                    bad_messages
+                    or value.get("dispatchState")
+                    in ("FAILED", "INTERNAL_CANCEL", "QUIT", "DONE")
+                    or value.get("isDone") in (True, 1, "1")
+                )
+                else False
+            )
 
         job = self._wait(done, timeout=timeout)
+        self._record(
+            "saved-search-terminal",
+            {
+                "sid": sid,
+                "dispatchState": job.get("dispatchState"),
+                "isDone": job.get("isDone"),
+                "message_types": [
+                    message.get("type") for message in job.get("messages", [])
+                ],
+            },
+        )
+        # Terminal failures must escape the convergence wait, which deliberately
+        # retries Refused conditions for ordinary eventual consistency.
+        client.reject_messages(job.get("messages", []))
+        client.require(
+            job.get("dispatchState") == "DONE" and job.get("isDone") in (True, 1, "1"),
+            "builder search failed",
+        )
         value = api.json("GET", path + "/results?count=0")
         client.reject_messages(value.get("messages", []))
         return value.get("results", []), {
@@ -1028,31 +1214,44 @@ class Driver:
         }
 
     def phase_base(self):
+        nxos = nxos_interface_fixture(self.source, (self.window, self.topology_window))
         paths = sorted(
             path
             for path in (self.source / "fixtures/raw-aci").glob("*.ndjson")
             if path.name != "stream_netflow.ndjson"
         )
+        paths.append(self.source / NXOS_FIXTURE)
+        self._record("nxos-interface-fixture-preflight", nxos)
         if "base_ingestion" not in self.lab.state:
             self.lab.state["base_ingestion"] = {"state": "started"}
             self.lab.save()
             loaded = self._ingest(paths)
-            self.lab.state["base_ingestion"] = {"state": "acknowledged", **loaded}
+            self.lab.state["base_ingestion"] = {
+                "state": "acknowledged",
+                **loaded,
+                "nxos_interface_fixture": nxos,
+            }
             self.lab.save()
         loaded = self.lab.state["base_ingestion"]
         client.require(
             loaded.get("state") == "acknowledged",
             "base ingestion is uncertain; inspect indexed data before retry",
         )
-        expected_counts = {}
-        for path in (self.source / "fixtures/raw-aci").glob("*.ndjson"):
+        expected_counts, fixture_counts = Counter(), {}
+        for path in [*paths, self.source / "fixtures/raw-aci/stream_netflow.ndjson"]:
+            count = 0
             for line in path.read_text().splitlines():
                 if line.strip():
-                    index = json.loads(line)["index"]
-                    expected_counts[index] = expected_counts.get(index, 0) + 1
+                    event = json.loads(line)
+                    expected_counts[(event["index"], event["sourcetype"])] += 1
+                    count += 1
+            fixture_counts[str(path.relative_to(self.source))] = count
         raw_query = (
             "search ("
-            + " OR ".join("index=" + name for name in sorted(expected_counts))
+            + " OR ".join(
+                "index=" + name
+                for name in sorted({index for index, _ in expected_counts})
+            )
             + ")"
         )
 
@@ -1062,12 +1261,22 @@ class Driver:
             )
             observed = {}
             for row in rows:
-                observed[row["index"]] = observed.get(row["index"], 0) + int(
-                    row["count"]
-                )
+                observed[(row["index"], row["sourcetype"])] = int(row["count"])
             return {"rows": rows, "job": job} if observed == expected_counts else False
 
         classification = self._wait(indexed, timeout=180)
+        self._record(
+            "base-input-classification",
+            {
+                "fixture_events": fixture_counts,
+                "total_events": sum(expected_counts.values()),
+                "expected": [
+                    {"index": index, "sourcetype": sourcetype, "count": count}
+                    for (index, sourcetype), count in sorted(expected_counts.items())
+                ],
+                "observed": classification,
+            },
+        )
         csv = "observer_kind,observer,scope,cluster\n" + "\n".join(
             ",".join(row) for row in SCOPES
         )
@@ -1114,11 +1323,13 @@ class Driver:
         index_window = tuple(index_window)
         self.slice_end = index_window[1]
         time.sleep(2)
-        jobs = {}
+        jobs, interfaces = {}, None
         for i, name in enumerate((*BUILDERS, ROLLUP)):
             _, jobs[name] = self._saved(
                 client.MEMBERS[i % 3], name, index_window=index_window
             )
+            if name == "ADM - Interface inventory":
+                interfaces = self._wait(self._interface_inventory, timeout=120)
             if name != ROLLUP:
                 self._wait(self.collection_snapshot, timeout=120)
         self._wait(
@@ -1135,7 +1346,23 @@ class Driver:
             "index_window": index_window,
             "jobs": jobs,
             "raw_classification": classification,
+            "nxos_interface_fixture": nxos,
+            "interface_inventory": interfaces,
+            "fixture_events": fixture_counts,
         }
+
+    def _interface_inventory(self):
+        result = {}
+        for role in client.MEMBERS:
+            rows = complete_collection_rows(
+                client.Api(role),
+                client.APP + "/storage/collections/data/adm_interfaces",
+            )
+            result[role] = {
+                "rows": rows,
+                "sha256": client.digest(semantic_interfaces(rows)),
+            }
+        return {"expected": INTERFACE_ORACLE, "members": result}
 
     def collection_snapshot(self):
         definitions = configparser.RawConfigParser()

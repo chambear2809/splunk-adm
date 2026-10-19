@@ -1,22 +1,24 @@
 # Final candidate distributed qualification
 
-Status (2026-10-19): Attempt09 failed its base phase; no complete final-candidate
-SHC application qualification pass is claimed. Frozen source21
-`f3b42485e38119f93e6363bfdeb28a0e99973788` and candidate09
+Status (2026-10-19): Attempt10 failed the base phase, where the interface writer
+completed with a warning and no inventory rows. No
+complete final-candidate SHC application qualification pass is claimed.
+Frozen source22 `7fc04abbda74b2840174fe4a305220dae7237873` and candidate09
 archive SHA-256
 `024d11c83ae9cb21a19259b57038d0e4a68414d1b2d3dde82cad527d789a0097`
 passed unassisted bootstrap, strict member/KV readiness, bundle verification,
 peer checks, both original distributed interface cases and all 15 collection
-convergence checks. Service binding dispatch still returned HTTP 400, reporting
-the search disabled, despite apparently converged saved-search GETs. Native
-diagnostics then showed those GETs returned the captain's object rather than
-each requested member's local configuration. The failed phase remains failed;
-the remaining application phases were not qualified.
+convergence checks. The local configuration gate allowed the actual Identity
+and Service binding writers to complete through different members. The
+NX-OS-only Interface inventory writer had no matching inputs in the ACI-only
+batch. Its native warning remains a rejection; the remaining application phases
+were not qualified. Final failure/export/cleanup records remain coordinator-owned.
 
-The correction now checks the exact local configuration stanza on each member.
-It awaits review and a fresh Attempt10 lifecycle with the unchanged candidate09
-archive. No Attempt10 phase outcome is claimed here. The coordinator retains
-exclusive ownership of export, cleanup and fresh execution.
+The next correction adds reviewed positive NX-OS input and an independent exact
+inventory oracle while retaining strict warning rejection. It awaits review and
+a fresh Attempt11 lifecycle with the unchanged candidate09 archive. No Attempt11
+phase outcome is claimed here. The coordinator retains exclusive ownership of
+export, cleanup and fresh execution.
 
 The earlier results in `SHC_QUALIFICATION.md` remain bound to their original
 archives. A passing offline harness test is not a live platform qualification
@@ -351,7 +353,43 @@ mock assertions.
 
 Next ingest a pristine all-source base slice with vendor indexing definitions
 already active. Record each fixture checksum, input count and observed
-index/sourcetype classification. Use `tests/splunk/test_aci.py`'s documented
+index/sourcetype classification. The ACI data supplies 825 base events plus the
+33 NetFlow events loaded before the original interface cases. Add the unchanged
+105-event `fixtures/raw-networking/nxos_inventory.ndjson` file to the base batch:
+the acknowledged base POSTs then cover 930 events and the combined classified
+inventory is exactly 963 events. The NX-OS file SHA-256 is
+`753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062`.
+Its provenance remains `fixtures/raw-networking/FIELDS.md` and the NX-OS command
+contract in `fixtures/raw/FIELDS.md`; the fixture and product files are unchanged.
+
+Preflight before preparation and base ingestion requires the pinned bytes,
+105 source-qualified records, component counts (21 hostname, 21 version,
+28 neighbor, 35 interface), consistent envelope/event timestamps and the exact
+event interval `[1792293814,1792295615)`. That October 18 interval must be disjoint
+from both declared October 7 ACI graph/topology windows. All inputs share the
+original persisted closed receipt slice for builder dispatch; the receipt bounds
+are distinct from these fixture event-time windows. The ordinary NX-OS fixture
+under `fixtures/raw/nexus9k.ndjson` is not substituted because its event times
+overlap the ACI topology window. Every expected index/sourcetype count, including
+105 `cisco_dc` / `cisco:dc:nexus9k` events, must match before dispatch.
+
+The actual Interface inventory writer must populate exactly these two rows on
+each member, with `_key=device_ip|ifindex` and `updated=1792295614`:
+
+| Device IP | Device | ifIndex | Interface | Neighbor | Neighbor interface |
+| --- | --- | --- | --- | --- | --- |
+| 192.0.2.11 | leaf-101 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/1 |
+| 192.0.2.12 | leaf-102 | 436232192 | Ethernet1/49 | border-1 | Ethernet1/2 |
+
+The oracle is declared independently of query output and checked against the
+reviewed raw hostname/CDP fields during preflight. All stored semantic keys and
+values must match; only native KV `_user` metadata is excluded from the semantic
+comparison, while full returned rows are retained. Per-member row/hash evidence,
+fixture path/hash/count/event bounds and the common receipt bounds are recorded.
+Missing/altered input fields, overlapping event windows, missing/duplicate/wrong
+inventory rows, or native warnings cannot become a positive builder result.
+
+Use `tests/splunk/test_aci.py`'s documented
 scope rows, builder definitions, expected arguments and closed index-time slice
 protocol. Run builders through different members, forward summaries to the
 peer, then compare graph/topology rows on all three members with the exact
@@ -577,8 +615,44 @@ guarantee. The full wall-clock budget still covers requests, response bodies
 and parsing. Dispatch uses the actual packaged saved search through the
 assigned different members exactly once; rejection still fails. Neither
 HTTP400 alone nor a lost response clears an unknown SID or authorizes a retry.
-The failed Attempt09 record is retained while the coordinator exports and
-cleans it up. Fresh complete Attempt10 execution remains pending.
+The failed Attempt09 record remains retained separately from Attempt10.
+
+Attempt10, task `adm-shc-01a14f65-10`, used source22
+`7fc04abbda74b2840174fe4a305220dae7237873` and the unchanged candidate09 archive.
+Bootstrap passed in 844.253 seconds. During bundle application, sh2 PDL failed
+to connect to the local PostgreSQL primary proxy at `127.0.0.1:5433`. It later
+recovered automatically; all three members became ready and bundle verification
+passed in 926.492 seconds at `2026-10-19T02:08:29.491237Z`. A proposed member
+restart's precondition refused because KV was already ready, before any restart
+marker or mutation. No manual restart, KV reset or configuration change occurred.
+This remains observed bounded platform behavior, not an availability guarantee.
+
+Peers, both original interface cases and all 15 collections then passed.
+Identity and Service binding writers completed successfully with local member
+configuration readback. Interface inventory reached `DONE` but reported
+`Found no results to write to collection`, with zero matching inputs and zero
+stored interface rows. The retained read-only job capture is
+`dist/final-qualification/shc10-base-job-diagnostic-01.json`. The original two
+interface cases insert a temporary KV probe to test lookup locality; they do not
+populate raw NX-OS inventory. The ACI-only fixture contains no NX-OS events.
+Standalone `test_aci.py` runs this same empty writer, but its lab helper rejects
+ERROR/FATAL rather than WARN; that does not satisfy this harness's stricter gate.
+The original base phase failed at `2026-10-19T02:22:23.760001Z` after 657.05
+seconds. Its 50 original evidence records are retained in
+`dist/final-qualification/shc10-failed-prefix-evidence.json` (SHA-256
+`03dd158df78dac98239994f7ee357093594e59dc05d1a03fdffafb1cfd496ecb`).
+This retained prefix does not claim completed export or cleanup.
+
+The correction retains the warning rejection and requires the positive NX-OS
+fixture/oracle above. Terminal WARN/ERROR/FATAL or failed/cancelled search states
+now leave the job polling loop and fail immediately, retaining the known SID and
+sanitized terminal status; ordinary incomplete healthy jobs continue polling.
+Result warnings still fail. None of these outcomes triggers another dispatch.
+All 99 offline tooling tests pass, including missing/altered fixture and overlap
+preflight, exact two-row all-member inventory, 963-event classification, and
+prompt terminal warning/failure regressions. The current Attempt10 source is not
+modified. Fresh complete Attempt11 execution remains pending review, export and
+cleanup of the unsuccessful run.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.

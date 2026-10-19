@@ -1702,6 +1702,251 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(len(set(dispatches)), len(dispatches))
         self.assertEqual(result["jobs"][runner.BUILDERS[0]]["sid"], "sid-1")
 
+    def test_reviewed_nxos_fixture_has_exact_independent_rows_and_separate_event_time(
+        self,
+    ):
+        result = runner.nxos_interface_fixture(
+            TOOLS.parent, (self.driver.window, self.driver.topology_window)
+        )
+        self.assertEqual(result["events"], 105)
+        self.assertEqual(
+            result["sha256"],
+            "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062",
+        )
+        self.assertEqual(result["event_window"], [1792293814, 1792295615])
+        self.assertEqual(
+            [row["_key"] for row in result["expected_interfaces"]],
+            ["192.0.2.11|436232192", "192.0.2.12|436232192"],
+        )
+        with self.assertRaisesRegex(client.Refused, "overlaps"):
+            runner.nxos_interface_fixture(TOOLS.parent, (runner.NXOS_EVENT_WINDOW,))
+
+    def test_nxos_preflight_rejects_missing_hash_changed_fields_and_event_time(self):
+        source = Path(self.temp.name) / "fixtures-source"
+        target = source / runner.NXOS_FIXTURE
+        target.parent.mkdir(parents=True)
+        with self.assertRaisesRegex(client.Refused, "missing"):
+            runner.nxos_interface_fixture(source, (self.driver.window,))
+        original = (TOOLS.parent / runner.NXOS_FIXTURE).read_bytes()
+        target.write_bytes(original + b"\n")
+        with self.assertRaisesRegex(client.Refused, "hash differs"):
+            runner.nxos_interface_fixture(source, (self.driver.window,))
+        for change in ("ifindex", "interface", "time", "source"):
+            rows = [json.loads(line) for line in original.splitlines()]
+            for row in rows:
+                event = json.loads(row["event"])
+                if (
+                    event["component"] == "nxneighbor"
+                    and "ifindex" in event["Row_info"]
+                ):
+                    if change == "ifindex":
+                        del event["Row_info"]["ifindex"]
+                    elif change == "interface":
+                        event["Row_info"]["intf_id"] = "Ethernet1/48"
+                    elif change == "time":
+                        row["time"] = int(self.driver.window[0])
+                    else:
+                        row["sourcetype"] = "cisco:dc:aci:class"
+                    row["event"] = json.dumps(event)
+                    break
+            data = b"\n".join(client.canonical(row) for row in rows) + b"\n"
+            target.write_bytes(data)
+            # Exercise semantic guards independently of the pinned-byte guard.
+            with (
+                self.subTest(change=change),
+                patch.object(
+                    runner, "NXOS_FIXTURE_SHA256", hashlib.sha256(data).hexdigest()
+                ),
+                self.assertRaises(client.Refused),
+            ):
+                runner.nxos_interface_fixture(source, (self.driver.window,))
+
+    def test_prepare_rejects_missing_nxos_before_any_lab_mutation(self):
+        with (
+            patch.object(
+                runner,
+                "nxos_interface_fixture",
+                side_effect=client.Refused("missing fixture"),
+            ),
+            patch.object(self.lab, "prepare") as prepare,
+            self.assertRaisesRegex(client.Refused, "missing fixture"),
+        ):
+            self.driver.phase_prepare()
+        prepare.assert_not_called()
+
+    def test_base_ingests_nxos_and_requires_all_963_events_classified_by_sourcetype(
+        self,
+    ):
+        expected = {}
+        for path in [
+            *(TOOLS.parent / "fixtures/raw-aci").glob("*.ndjson"),
+            TOOLS.parent / runner.NXOS_FIXTURE,
+        ]:
+            for line in path.read_text().splitlines():
+                event = json.loads(line)
+                key = (event["index"], event["sourcetype"])
+                expected[key] = expected.get(key, 0) + 1
+        raw = [
+            {"index": index, "sourcetype": sourcetype, "count": str(count)}
+            for (index, sourcetype), count in expected.items()
+        ]
+        self.assertEqual(sum(expected.values()), 963)
+        api = Mock()
+        api.search.return_value = (raw, {"sid": "classification_sid"})
+
+        def check_classification(check, **_kwargs):
+            nxos = next(row for row in raw if row["sourcetype"] == "cisco:dc:nexus9k")
+            nxos["count"] = "104"
+            self.assertFalse(check())
+            nxos["count"] = "105"
+            self.assertTrue(check())
+            raise client.Refused("stop after classification proof")
+
+        with (
+            patch.object(client, "Api", return_value=api),
+            patch.object(self.lab, "save"),
+            patch.object(self.driver, "_record"),
+            patch.object(
+                self.driver, "_ingest", return_value={"events": 930}
+            ) as ingest,
+            patch.object(self.driver, "_wait", side_effect=check_classification),
+            self.assertRaisesRegex(client.Refused, "classification proof"),
+        ):
+            self.driver.phase_base()
+        self.assertIn(TOOLS.parent / runner.NXOS_FIXTURE, ingest.call_args.args[0])
+        self.assertNotIn(
+            TOOLS.parent / "fixtures/raw-aci/stream_netflow.ndjson",
+            ingest.call_args.args[0],
+        )
+        self.assertEqual(self.lab.state["base_ingestion"]["events"], 930)
+        self.assertEqual(
+            self.lab.state["base_ingestion"]["nxos_interface_fixture"]["events"], 105
+        )
+
+    def test_exact_interface_oracle_is_required_on_every_member(self):
+        rows = json.loads(json.dumps(runner.INTERFACE_ORACLE))
+        for row in rows:
+            row["_user"] = "nobody"
+        with (
+            patch.object(
+                client, "Api", side_effect=lambda role: SimpleNamespace(role=role)
+            ),
+            patch.object(runner, "complete_collection_rows", return_value=rows) as read,
+        ):
+            result = self.driver._interface_inventory()
+        self.assertEqual(
+            [call.args[0].role for call in read.call_args_list], list(client.MEMBERS)
+        )
+        self.assertEqual(set(result["members"]), set(client.MEMBERS))
+        bad_member = json.loads(json.dumps(rows))
+        bad_member[1]["neighbor_interface"] = "Ethernet1/99"
+        with (
+            patch.object(client, "Api"),
+            patch.object(
+                runner, "complete_collection_rows", side_effect=[rows, rows, bad_member]
+            ),
+            self.assertRaisesRegex(client.Refused, "independent oracle"),
+        ):
+            self.driver._interface_inventory()
+        for mutation in (
+            "missing",
+            "duplicate",
+            "interface",
+            "neighbor",
+            "updated",
+            "extra",
+        ):
+            invalid = json.loads(json.dumps(rows))
+            if mutation == "missing":
+                invalid.pop()
+            elif mutation == "duplicate":
+                invalid[1] = invalid[0]
+            elif mutation == "updated":
+                invalid[0][mutation] += 1
+            else:
+                invalid[0][mutation] = "wrong"
+            with self.subTest(mutation=mutation), self.assertRaises(client.Refused):
+                runner.semantic_interfaces(invalid)
+
+    def test_terminal_job_warnings_errors_and_failure_escape_polling_immediately(self):
+        for state, severity in (
+            ("DONE", "WARN"),
+            ("RUNNING", "ERROR"),
+            ("FAILED", None),
+            ("QUIT", None),
+        ):
+            api = Mock()
+            api.json.return_value = {
+                "entry": [
+                    {
+                        "content": {
+                            "dispatchState": state,
+                            "isDone": state == "DONE",
+                            "messages": [
+                                {"type": severity, "text": "native terminal message"}
+                            ]
+                            if severity
+                            else [],
+                        }
+                    }
+                ]
+            }
+            with (
+                self.subTest(state=state, severity=severity),
+                patch.object(self.driver, "_record") as evidence,
+                patch.object(client.time, "sleep") as sleep,
+                self.assertRaises(client.Refused),
+            ):
+                self.driver._job(api, "known_sid")
+            self.assertEqual(api.json.call_count, 1)
+            sleep.assert_not_called()
+            self.assertEqual(evidence.call_args.args[1]["sid"], "known_sid")
+
+    def test_healthy_job_polls_then_rejects_result_warning_without_repolling(self):
+        api = Mock()
+        api.json.side_effect = [
+            {"entry": [{"content": {"dispatchState": "RUNNING", "isDone": False}}]},
+            {"entry": [{"content": {"dispatchState": "DONE", "isDone": True}}]},
+            {"messages": [{"type": "WARN", "text": "result warning"}], "results": []},
+        ]
+        with (
+            patch.object(self.driver, "_record"),
+            patch.object(client.time, "sleep") as sleep,
+            self.assertRaises(client.Refused),
+        ):
+            self.driver._job(api, "known_sid")
+        self.assertEqual(api.json.call_count, 3)
+        self.assertEqual(sleep.call_count, 1)
+
+    def test_completed_healthy_job_keeps_real_sid_and_result_evidence(self):
+        api = Mock()
+        api.json.side_effect = [
+            {
+                "entry": [
+                    {
+                        "content": {
+                            "dispatchState": "DONE",
+                            "isDone": True,
+                            "resultCount": 1,
+                            "messages": [{"type": "INFO", "text": "Results written"}],
+                        }
+                    }
+                ]
+            },
+            {"results": [{"rows_written": "2"}]},
+        ]
+        with (
+            patch.object(self.driver, "_record"),
+            patch.object(client.time, "sleep") as sleep,
+        ):
+            rows, job = self.driver._job(api, "known_sid")
+        self.assertEqual(rows, [{"rows_written": "2"}])
+        self.assertEqual(
+            job, {"sid": "known_sid", "dispatchState": "DONE", "resultCount": 1}
+        )
+        self.assertEqual(api.json.call_count, 2)
+        sleep.assert_not_called()
+
     def test_v2_known_sid_retry_restores_original_true_true_after_restore_failure(self):
         api, state = self.saved_api(scheduled=True)
         self.lab.state.update(fixture_index_earliest=10, fixture_index_latest=20)
