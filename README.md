@@ -15,10 +15,11 @@ For each application, the map shows:
 
 ## Quick start
 
-Requires Node 22.13+, 24.x or 26+ and npm. Clone with submodules so the vendored operator setup skills (`vendor/splunk-cisco-skills`, see [below](#operator-setup-skills)) are present:
+Requires Node 22.13+ within the 22.x series, 24.x, or 26+ and npm (Node 25 is not supported by Vitest). CI uses Node 22.13.0. Packaging also requires `tar`. Clone with submodules so the vendored operator setup skills (`vendor/splunk-cisco-skills`, see [below](#operator-setup-skills)) are present:
 
 ```sh
-git clone --recurse-submodules <this repo>
+git clone --recurse-submodules https://github.com/chambear2809/splunk-adm.git
+cd splunk-adm
 # or, if already cloned: git submodule update --init
 npm ci --registry=https://registry.npmjs.org --ignore-scripts
 npm run dev
@@ -28,9 +29,13 @@ Open the localhost URL printed by Vite. Demo mode needs no Splunk connection. It
 
 The additional **Catalyst → ACI** and **Meraki wireless → NX-OS** demos use two separate Kubernetes clusters and applications. Their captured results include source-qualified client identity, attachment history, and traffic observations. Wireless attribution is correlated from Meraki association events and switch-exported flows; NetFlow alone does not establish wireless attachment. The Cisco integration is an optional V2 contract with a staged migration. See [qualification status](docs/CISCO_NETWORKING_QUALIFICATION.md) before enabling it.
 
-The same `npm run package` archive installs and updates the app; deployment-owned state lives in KV store and `local/`. See [upgrade preservation checks](docs/UPGRADES.md).
+Packaging creates `dist/splunk_adm-<version>.tar.gz` and its SHA256 file. The same archive installs and updates the app; deployment-owned state lives in KV store and `local/`. See [upgrade preservation checks](docs/UPGRADES.md).
 
-**Targets:** Splunk Cloud and Splunk Enterprise 10.6+. The pilot is a single ACI fabric with Kubernetes on Cilium. Runtime validation uses a local Splunk 10.6.0.5 lab with synthetic data; Cloud runtime, formal vetting and a customer pilot remain unqualified. See [integration and release readiness](docs/UI-PHASE-9.md).
+**Targets:** Splunk Cloud and Splunk Enterprise 10.6+. The pilot is a single ACI fabric with Kubernetes on Cilium. Recorded qualification covers Splunk Enterprise 10.6.0.5 with synthetic data: the complete standalone installed suite, separate V2 migration/browser acceptance, and a bounded same-host SHC deployment. Cloud runtime, formal vetting, real controller/exporter collection, production topology/capacity and a customer pilot remain unqualified. See [current engineering qualification](docs/ATLAS_FINAL_QUALIFICATION.md) and the [SHC procedure and limits](docs/SHC_FINAL_QUALIFICATION.md).
+
+## Install in Splunk
+
+Choose [deployment options](docs/operators/deployment-options.md), then follow the [operator setup sequence](docs/operators/splunk-setup-guide.md) to install the archive, create the summary index, configure source-index macros and viewer permissions, populate observer scopes, save qualified deployment expectations, and enable the searches required by the selected sources. Settings writes require the [deployment persistence gate](docs/DEPLOYMENT_HEALTH.md#supported-write-contract-and-deployment-gate). The app does not collect source data or create indexes, and its saved searches ship disabled. Existing installations must follow the [upgrade procedure](docs/UPGRADES.md), including any required scope migration, before enabling searches.
 
 ## Project layout
 
@@ -48,22 +53,29 @@ The same `npm run package` archive installs and updates the app; deployment-owne
 
 ## Commands
 
-| Command                                                  | Purpose                                                                                                  |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                                            | Local demo                                                                                               |
-| `npm run lint`                                           | ESLint, type checks and Prettier checks                                                                  |
-| `npm run format`                                         | Format frontend and build files                                                                          |
-| `npm test`                                               | Frontend unit tests (Vitest)                                                                             |
-| `npm run build`                                          | Build standalone preview and Splunk assets                                                               |
-| `npm run package`                                        | Build, stage in `dist/stage/` and archive the Splunk app                                                 |
-| `python3 tools/gen_raw_fixtures.py [--scenario aci]`     | Regenerate the NX-OS (default) or ACI synthetic events                                                   |
-| `tests/splunk/lab.sh up` / `install` / `purge`           | Local Splunk lab lifecycle (Docker; see [PILOT.md](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab)) |
+| Command                                                                                        | Purpose                                                                                                  |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                                                                                  | Local demo                                                                                               |
+| `npm run lint`                                                                                 | ESLint, type checks and Prettier checks                                                                  |
+| `npm run format`                                                                               | Format frontend and build files                                                                          |
+| `npm test`                                                                                     | Frontend unit tests (Vitest)                                                                             |
+| `npm run typecheck:browser` / `npm run test:browser`                                           | Browser test type checks / Playwright regressions (see [browser setup](docs/BROWSER_TESTS.md))           |
+| `npm run build`                                                                                | Build standalone preview and Splunk assets                                                               |
+| `npm run package`                                                                              | Build, stage in `dist/stage/` and archive the Splunk app                                                 |
+| `python3 tools/gen_raw_fixtures.py [--scenario aci]`                                           | Regenerate the NX-OS (default) or ACI synthetic events                                                   |
+| `tests/splunk/lab.sh up` / `install` / `purge`                                                 | Local Splunk lab lifecycle (Docker; see [PILOT.md](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab)) |
 | `ADM_LAB=1 python3 tools/lab_lock.py --root . -- python3 -m unittest discover -s tests/splunk` | Data-layer tests against the lab                                                                         |
-| `ruff check tools tests`                                 | Python lint (install Ruff separately)                                                                    |
+| `ruff check tools tests`                                                                       | Python lint (install Ruff separately)                                                                    |
+| `ruff format --check tools tests`                                                              | Python formatting checks                                                                                 |
+| `python3 -m unittest discover -s tests -p 'test_*.py'`                                         | Offline Python tests                                                                                     |
 
-Python 3.10+ is needed only for the fixture generator and the lab tests. The lab needs Docker. It pulls a Splunk image of about 2 GB and accepts the Splunk General Terms for a local development instance.
+Python tooling and lab tests require Python 3.10+; the frontend demo does not require Python. Use Python 3.11 for AppInspect, as described in [pilot validation](docs/PILOT.md#build-and-test).
+
+The lab requires Docker and the extracted Stream Wire Data 8.1.6, Cisco Security Cloud 3.7.2, and Cisco DC Networking 1.2.2 add-ons under `research/extracted/`; these ignored vendor artifacts are not included in a clone. See the [package manifest](research/package-manifest.json) for provenance and checksums and [CI artifact preparation](docs/CI.md) for extraction instructions. The full lab suite also requires a built archive and Playwright Chromium; follow the [complete lab lifecycle](docs/PILOT.md#synthetic-fixtures-and-the-splunk-lab), which handles exclusive ownership and cleanup. Starting the lab pulls a Splunk image of about 2 GB and accepts the Splunk General Terms for a local development instance.
 
 ## Pipeline health
+
+Administrators configure shared source selection, cadence and receipt freshness in **Setup** after qualifying persistence. With no saved expectations, deployment health remains unknown; source receipt alone never selects sources. Saving expectations does not configure collectors or activate V2. See [deployment health and write prerequisites](docs/DEPLOYMENT_HEALTH.md).
 
 In the installed app, choose **Data health** to inspect source freshness, ingestion delay, and scheduled-search outcomes. Health is app-wide and available even before a map loads. Missing data or restricted permissions are shown as unconfirmed; synthetic demo data is never presented as live health. See [the health contract](docs/DATA_LAYER.md#pipeline-health-and-search-completeness).
 
@@ -89,6 +101,9 @@ Mutating execution stays disabled in every committed registration (`SPLUNK_SKILL
 
 ## Documentation
 
+- [Deployment options and behavior without optional products](docs/operators/deployment-options.md)
+- [Current engineering qualification](docs/ATLAS_FINAL_QUALIFICATION.md) and [SHC evidence and limits](docs/SHC_FINAL_QUALIFICATION.md)
+- [Deployment expectations and health](docs/DEPLOYMENT_HEALTH.md)
 - [Pilot setup and prerequisites](docs/PILOT.md)
 - [Cisco networking integration and qualification](docs/CISCO_NETWORKING_QUALIFICATION.md)
 - [Cisco source setup and telemetry limits](docs/operators/cisco-enterprise-networking.md)
@@ -116,4 +131,4 @@ Mutating execution stays disabled in every committed registration (`SPLUNK_SKILL
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). The packaged Splunk app also includes `THIRD_PARTY_NOTICES.txt` with the licenses of the bundled frontend libraries (React, React DOM, scheduler, lucide-react).
+Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE). The packaged Splunk app also includes `THIRD_PARTY_NOTICES.txt` with license texts for frontend runtime dependencies, including React, Splunk UI libraries, styled-components, and lucide-react.

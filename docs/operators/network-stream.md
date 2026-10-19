@@ -2,6 +2,8 @@
 
 **Purpose:** receive NetFlow v9 from the ACI leaves with a Splunk Stream forwarder and index the records, so each conversation shows which leaf saw it and on which ingress interface.
 
+For source selection and release limits, see [deployment options](deployment-options.md). Use this handout when Stream flow collection is selected. Other supported traffic feeds may supply conversations without Stream; inventory alone cannot. The receiver example below is for the ACI pilot. Campus, Meraki MS390 and optional SD-WAN exporters require their own qualified templates and explicit V2 source profiles in the [Cisco handout](cisco-enterprise-networking.md).
+
 ## What we need from you
 
 - [ ] A Stream forwarder (Splunk Add-on for Stream Forwarders) on a host the leaves' out-of-band network can reach over UDP.
@@ -63,9 +65,9 @@ Every leaf OOB address should appear as an `exporter_ip`, and `timestamp` should
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): Splunk Stream, stream forwarder (`streamfwd`) and the NetFlow/IPFIX receiver (`netflowReceiver`).
+- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-stream-setup): Splunk Stream, stream forwarder (`streamfwd`) and the NetFlow/IPFIX receiver (`netflowReceiver`).
 
 Before enabling a new field set, render the owning setup plan and review the
 class or record arrival. For the APIC relation input, use the dry-run command

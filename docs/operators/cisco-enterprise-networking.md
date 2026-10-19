@@ -2,6 +2,8 @@
 
 **Purpose:** provide scoped wired-client observations from Catalyst Center and wireless association events from Meraki Dashboard for Application Atlas. These sources enrich endpoint identity and attachment context; they do not prove a physical packet path.
 
+This handout applies only when Catalyst or Meraki enrichment is selected. Other evidence can remain useful without these products; see [deployment options](deployment-options.md). Captured Cisco demos work without a live controller. The release ships V1 public readers and disabled V2 writers; configuring collection is not authorization to activate V2.
+
 ## Data flow and ownership
 
 | Source                  | Splunk input / raw sourcetype                                  | Atlas index macro                       | Evidence provided                                                                                                                  |
@@ -42,12 +44,14 @@ Handoff counts describe represented raw-tuple connections, not all traffic or th
 
 ## Readiness checks
 
-From the reviewed repository checkout, after collection and scope profiles are configured, run the read-only readiness report with only the source or sources being qualified. These tools are operator tooling and are not installed in the app package:
+From the reviewed repository checkout, after collection and scope profiles are configured, use the read-only analyzer with only the source or sources being investigated. The commands below analyze an empty snapshot and demonstrate report shape; they do not query your deployment or validate collection. They normally report unknown (exit code 2). These tools are operator tooling and are not installed in the app package:
 
 ```sh
 python3 tools/pilot_readiness.py --source catalyst --json
 python3 tools/pilot_readiness.py --source meraki --json
 ```
+
+For the isolated local lab only, add `--lab` to collect bounded read-only Splunk evidence. For a real deployment, an approved connector must supply the analyzer snapshot; this CLI has no production connection option. See [readiness tooling](../PILOT_READINESS.md).
 
 Readiness distinguishes index visibility from verified API permission, raw-schema coverage, source-to-scope ambiguity, history continuity, and actual collection. The report can only evaluate those categories when its input snapshot includes the corresponding evidence; absent evidence stays unknown. The current `--lab` collector does not query Catalyst Center or Meraki APIs and does not establish their permissions or source-history continuity. Synthetic fixture events are reported separately and do not count as actual source collection. Partial permissions or invalid raw schema block readiness; ambiguous mappings block correlation. A “ready” report alone is not production qualification.
 

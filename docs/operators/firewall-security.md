@@ -1,6 +1,8 @@
 # Firewall and security team (Cisco FTD / FMC)
 
-**Purpose:** send FTD connection events to Splunk so that conversations crossing the firewall show the firewall as an observation point with its interfaces and zones. This is needed only for application traffic that crosses an FTD, for example to the internet or between VRFs.
+**Purpose:** send FTD connection events to Splunk so that conversations crossing the firewall show the firewall as an observation point with its ingress/egress interface observations. This is needed only for application traffic that crosses an FTD, for example to the internet or between VRFs.
+
+For source selection and release limits, see [deployment options](deployment-options.md). Skip this setup when the selected application traffic does not cross an FTD. Other traffic feeds can still contribute conversations. Missing FTD observations do not prove that a firewall allowed or denied a connection.
 
 ## What we need from you
 
@@ -41,14 +43,14 @@ index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | head 5
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): Cisco Security Cloud inputs, including the FTD eStreamer input, indexes and product flows.
+- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-security-cloud-setup): Cisco Security Cloud inputs, including the FTD eStreamer input, indexes and product flows.
 
 ## What to send back
 
 - FMC and FTD versions; FTD device names and management IPs (the map uses them to name the firewall).
-- Interface and zone names on the path of application traffic.
+- Interface names on the path of application traffic. Zone names may be retained as raw source context but are not displayed by the current FTD map contract.
 - Sample DNAT and SNAT connection events (raw JSON from Splunk).
 
 ## Open questions

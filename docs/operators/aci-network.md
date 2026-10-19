@@ -2,6 +2,8 @@
 
 **Purpose:** give Splunk read-only access to the ACI fabric and Nexus Dashboard, and export NetFlow from the leaves, so the dependency map can name endpoints, show fabric paths and ACI policy, and mark where traffic was seen.
 
+For source selection and release limits, see [deployment options](deployment-options.md). Use this handout when ACI/APIC or Nexus Dashboard evidence is selected. ACI policy and candidate fabric paths are unavailable without the corresponding objects; other available traffic and workload evidence can still contribute. Configure only the approved fabric/tenant scope and record uncollected classes as gaps.
+
 ## What we need from you
 
 - [ ] A read-only APIC account and a read-only Nexus Dashboard account for the Cisco DC Networking add-on.
@@ -164,11 +166,11 @@ Every leaf OOB address should appear as an `exporter_ip`.
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-dc-networking-setup): DC Networking accounts and the default inputs for APIC, Nexus Dashboard and Nexus 9000, plus the `application-atlas`/`adm` and `adm-policy` custom `classInfo` presets used above (`--classinfo-preset`), or any other class list with `--classinfo-input`/`--classinfo-classes`.
-- [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-product-setup): entry point that routes a Cisco product (ACI, Nexus 9000) to the right setup skill.
-- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-stream-setup): the Stream forwarder's NetFlow receiver that your ACI NetFlow exporter targets (owned by the Stream team; see [network-stream.md](network-stream.md)).
+- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-dc-networking-setup): DC Networking accounts and the default inputs for APIC, Nexus Dashboard and Nexus 9000, plus the `application-atlas`/`adm` and `adm-policy` custom `classInfo` presets used above (`--classinfo-preset`), or any other class list with `--classinfo-input`/`--classinfo-classes`.
+- [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-product-setup): entry point that routes a Cisco product (ACI, Nexus 9000) to the right setup skill.
+- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-stream-setup): the Stream forwarder's NetFlow receiver that your ACI NetFlow exporter targets (owned by the Stream team; see [network-stream.md](network-stream.md)).
 
 ## What to send back
 

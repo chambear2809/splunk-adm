@@ -57,6 +57,8 @@ collector configuration, exporter delivery, sampling accuracy, or visibility
 outside the lab user's permissions. Scope mapping and quality evidence should
 therefore be read as bounded evidence from the current Splunk context.
 
+Catalyst/Meraki checks can evaluate supplied snapshot evidence for permissions, raw schema, mapping, history and actual collection. The CLI without `--lab` supplies none of that evidence and normally returns unknown (exit code 2). The lab collector does not establish real controller/API permissions or collection continuity. Explicit source selection scopes the analyzer without persisting deployment expectations or activating V2. See [deployment options](operators/deployment-options.md).
+
 The raw Kubernetes readiness probe counts only eligible pod objects: it
 excludes `DELETED` events and Pending pods, because those objects may not yet
 have an assigned pod IP. The traces probe checks the fields required by the
