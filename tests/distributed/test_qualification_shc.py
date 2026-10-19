@@ -1410,6 +1410,249 @@ assert username == "fixture-admin" and password == "fixture-password"
             self.assertNotIn(credentials["password"], path.read_text())
 
 
+class IndexedSourcetypeOracleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.source = Path(self.temp.name)
+        self.addon = self.source / "reviewed/CiscoSecurityCloud"
+        default = self.addon / "default"
+        default.mkdir(parents=True)
+        (default / "props.conf").write_text(
+            "[cisco:isovalent]\n"
+            "TRANSFORMS-set_isovalent_sourcetype = set_sourcetype_processConnect, "
+            "set_sourcetype_processExec, set_sourcetype_alert, "
+            "set_sourcetype_telemetry_network, set_sourcetype_telemetry_process\n"
+        )
+        (default / "transforms.conf").write_text(
+            '[set_sourcetype_processConnect]\nREGEX = \\"process_connect\\"\n'
+            "DEST_KEY = MetaData:Sourcetype\nFORMAT = sourcetype::cisco:isovalent:processConnect\n"
+            '[set_sourcetype_processExec]\nREGEX = \\"process_exec\\"\n'
+            "DEST_KEY = MetaData:Sourcetype\nFORMAT = sourcetype::cisco:isovalent:processExec\n"
+            '[set_sourcetype_alert]\nREGEX = "event"\n'
+            "DEST_KEY = MetaData:Sourcetype\nFORMAT = sourcetype::cisco:isovalent:alert\n"
+            "[set_sourcetype_telemetry_network]\n"
+            'REGEX = \\"event_type\\":\\s*\\"(TELEMETRY_TYPE_NETWORK_CONNECT)\\"\n'
+            "DEST_KEY = MetaData:Sourcetype\nFORMAT = sourcetype::cisco:isovalent:telemetry:network\n"
+            "[set_sourcetype_telemetry_process]\n"
+            'REGEX = \\"event_type\\":\\s*\\"(TELEMETRY_TYPE_PROCESS)\\"\n'
+            "DEST_KEY = MetaData:Sourcetype\nFORMAT = sourcetype::cisco:isovalent:telemetry:process\n"
+        )
+        self.hashes = {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in default.iterdir()
+        }
+        # The test uses small literal TA stanzas, not downloaded runtime inputs.
+        # Semantic guards are exercised independently of the full-file hash pin.
+        pin = patch.object(runner, "ISOVALENT_CONFIG_SHA256", self.hashes)
+        pin.start()
+        self.addCleanup(pin.stop)
+
+    def contract(self):
+        return runner.isovalent_indexed_sourcetype_contract(self.source, [self.addon])
+
+    def envelope(self):
+        return {
+            "index": "cisco_isovalent",
+            "sourcetype": "cisco:isovalent",
+            "event": {"process_connect": {"source_ip": "192.0.2.1"}},
+        }
+
+    def test_exact_ta_rule_rewrites_only_declared_process_connect(self):
+        contract = self.contract()
+        self.assertEqual(
+            runner.expected_indexed_sourcetype(self.envelope(), contract),
+            "cisco:isovalent:processConnect",
+        )
+        self.assertEqual(contract["props_stanza"], "cisco:isovalent")
+        self.assertEqual(
+            contract["transform_order"][0], "set_sourcetype_processConnect"
+        )
+        self.assertEqual(
+            contract["transforms"]["set_sourcetype_processConnect"],
+            {
+                "REGEX": r"\"process_connect\"",
+                "DEST_KEY": "MetaData:Sourcetype",
+                "FORMAT": "sourcetype::cisco:isovalent:processConnect",
+            },
+        )
+        for name, expected in self.hashes.items():
+            self.assertEqual(
+                contract["source_files"]["reviewed/CiscoSecurityCloud/default/" + name],
+                expected,
+            )
+            self.assertEqual(
+                contract["support_files"]["CiscoSecurityCloud/default/" + name],
+                expected,
+            )
+
+    def test_unknown_declared_subtypes_wrong_index_and_malformed_payload_refuse(self):
+        contract = self.contract()
+        for field, value in (
+            ("sourcetype", "cisco:isovalent:processExec"),
+            ("sourcetype", "cisco:isovalent:processConnect"),
+            ("sourcetype", "cisco:isovalent:anything"),
+            ("sourcetype", "cisco:isovalentBogus"),
+            ("index", "other"),
+            ("event", {}),
+            ("event", {"process_exec": {"pid": 1}}),
+            ("event", {"process_connect": {}}),
+            ("event", {"process_connect": []}),
+            ("event", {"process_connect": "wrong"}),
+            ("event", "not a JSON object"),
+        ):
+            envelope = self.envelope()
+            envelope[field] = value
+            with (
+                self.subTest(field=field, value=value),
+                self.assertRaises(client.Refused),
+            ):
+                runner.expected_indexed_sourcetype(envelope, contract)
+        for envelope in (
+            None,
+            [],
+            {},
+            {"index": "cisco_isovalent", "sourcetype": None},
+        ):
+            with self.subTest(envelope=envelope), self.assertRaises(client.Refused):
+                runner.expected_indexed_sourcetype(envelope, contract)
+
+    def test_conflicting_native_transform_discriminators_refuse(self):
+        contract = self.contract()
+        for key, value in (
+            ("process_exec", {"pid": 1}),
+            ("event", {}),
+            ("event_type", "TELEMETRY_TYPE_NETWORK_CONNECT"),
+            ("event_type", "TELEMETRY_TYPE_PROCESS"),
+        ):
+            envelope = self.envelope()
+            envelope["event"][key] = value
+            with (
+                self.subTest(key=key, value=value),
+                self.assertRaisesRegex(client.Refused, "conflicting"),
+            ):
+                runner.expected_indexed_sourcetype(envelope, contract)
+
+    def test_non_isovalent_fixture_sourcetype_is_unchanged(self):
+        self.assertEqual(
+            runner.expected_indexed_sourcetype(
+                {
+                    "index": "cisco_dc",
+                    "sourcetype": "cisco:dc:nexus9k",
+                    "event": "native raw text",
+                },
+                self.contract(),
+            ),
+            "cisco:dc:nexus9k",
+        )
+
+    def test_configuration_missing_duplicate_changed_or_outside_source_refuses(self):
+        for roots in ([], [self.addon, self.addon]):
+            with self.subTest(roots=roots), self.assertRaises(client.Refused):
+                runner.isovalent_indexed_sourcetype_contract(self.source, roots)
+        with self.assertRaises(client.Refused):
+            runner.isovalent_indexed_sourcetype_contract(
+                self.source / "other", [self.addon]
+            )
+        props = self.addon / "default/props.conf"
+        data = props.read_bytes()
+        props.write_bytes(data + b"\n#changed\n")
+        with self.assertRaisesRegex(client.Refused, "hash differs"):
+            self.contract()
+        props.unlink()
+        with self.assertRaisesRegex(client.Refused, "missing"):
+            self.contract()
+
+    def test_rehashed_wrong_order_regex_format_destination_or_missing_rule_refuses(
+        self,
+    ):
+        for case in ("order", "regex", "format", "destination", "missing", "malformed"):
+            name = "props.conf" if case == "order" else "transforms.conf"
+            path = self.addon / "default" / name
+            original = path.read_bytes()
+            changed = original
+            if case == "order":
+                changed = changed.replace(
+                    b"set_sourcetype_processConnect, set_sourcetype_processExec",
+                    b"set_sourcetype_processExec, set_sourcetype_processConnect",
+                )
+            elif case == "regex":
+                changed = changed.replace(b"process_connect", b"process_close")
+            elif case == "format":
+                changed = changed.replace(
+                    b"sourcetype::cisco:isovalent:processConnect",
+                    b"sourcetype::cisco:isovalent:processExec",
+                )
+            elif case == "destination":
+                changed = changed.replace(b"MetaData:Sourcetype", b"MetaData:Host")
+            elif case == "missing":
+                changed = changed.replace(
+                    b"[set_sourcetype_processConnect]", b"[missing]"
+                )
+            else:
+                changed = b"not a config file\n"
+            path.write_bytes(changed)
+            self.hashes[name] = hashlib.sha256(changed).hexdigest()
+            with self.subTest(case=case), self.assertRaises(client.Refused):
+                self.contract()
+            path.write_bytes(original)
+            self.hashes[name] = hashlib.sha256(original).hexdigest()
+
+    def test_complete_fixture_classification_records_exact_declared_and_indexed_types(
+        self,
+    ):
+        expected, evidence = runner.base_input_classification(
+            TOOLS.parent, runner.base_input_paths(TOOLS.parent), self.contract()
+        )
+        self.assertEqual(sum(expected.values()), 963)
+        self.assertEqual(len(expected), 16)
+        self.assertEqual(expected[("cisco_dc", "cisco:dc:nexus9k")], 105)
+        self.assertEqual(
+            expected[("cisco_isovalent", "cisco:isovalent:processConnect")], 4
+        )
+        self.assertNotIn(("cisco_isovalent", "cisco:isovalent"), expected)
+        self.assertEqual(
+            evidence["declared_to_indexed"],
+            [
+                {
+                    "index": "cisco_isovalent",
+                    "input_sourcetype": "cisco:isovalent",
+                    "indexed_sourcetype": "cisco:isovalent:processConnect",
+                    "count": 4,
+                }
+            ],
+        )
+        self.assertEqual(sum(row["count"] for row in evidence["declared"]), 963)
+        self.assertEqual(
+            evidence["sourcetype_transform_contract"]["source_files"],
+            self.contract()["source_files"],
+        )
+
+    def test_fixture_loss_added_row_or_malformed_ndjson_refuses(self):
+        paths = runner.base_input_paths(TOOLS.parent)
+        original = TOOLS.parent / "fixtures/raw-aci/isovalent.ndjson"
+        for case in ("missing-row", "added-row", "malformed"):
+            rows = original.read_text().splitlines()
+            data = "\n".join(rows[:-1] if case == "missing-row" else rows + [rows[0]])
+            if case == "malformed":
+                data = "{not-json}"
+            changed = self.source / "fixtures/raw-aci/isovalent.ndjson"
+            changed.parent.mkdir(parents=True, exist_ok=True)
+            changed.write_text(data + "\n")
+            # Preserve source-relative paths while changing only one read.
+            read_text = Path.read_text
+
+            def fixture_read(path, *args, **kwargs):
+                return data if path == original else read_text(path, *args, **kwargs)
+
+            with (
+                self.subTest(case=case),
+                patch.object(Path, "read_text", fixture_read),
+                self.assertRaises(client.Refused),
+            ):
+                runner.base_input_classification(TOOLS.parent, paths, self.contract())
+
+
 class DriverTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -1425,6 +1668,22 @@ class DriverTests(unittest.TestCase):
             "a" * 40,
             [directory / "reviewed-addon"],
         )
+
+    def indexed_contract(self):
+        contract = {
+            "source_files": {},
+            "support_files": {
+                "CiscoSecurityCloud/default/" + name: value
+                for name, value in runner.ISOVALENT_CONFIG_SHA256.items()
+            },
+            "transform_order": list(runner.ISOVALENT_TRANSFORMS),
+            "transforms": runner.ISOVALENT_TRANSFORMS,
+            "input_sourcetype": "cisco:isovalent",
+            "indexed_sourcetype": "cisco:isovalent:processConnect",
+            "fixture_event_key": "process_connect",
+        }
+        self.lab.state["support_files"] = contract["support_files"]
+        return contract
 
     def bootstrap_state(self):
         self.lab.directory.mkdir()
@@ -1956,6 +2215,7 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(state["round_reads"], 6)
 
     def test_base_phase_retry_reuses_frozen_window_and_prior_sids(self):
+        contract = self.indexed_contract()
         self.lab.state.update(
             fixture_index_earliest=10,
             base_ingestion={"state": "acknowledged", "events": 1},
@@ -1986,6 +2246,9 @@ class DriverTests(unittest.TestCase):
             return [], {"sid": sid}
 
         with (
+            patch.object(
+                runner, "isovalent_indexed_sourcetype_contract", return_value=contract
+            ),
             patch.object(client, "Api", Api),
             patch.object(self.lab, "save"),
             patch.object(self.driver, "_record"),
@@ -2084,6 +2347,7 @@ class DriverTests(unittest.TestCase):
     def test_base_ingests_nxos_and_requires_all_963_events_classified_by_sourcetype(
         self,
     ):
+        contract = self.indexed_contract()
         expected = {}
         for path in [
             *(TOOLS.parent / "fixtures/raw-aci").glob("*.ndjson"),
@@ -2091,7 +2355,11 @@ class DriverTests(unittest.TestCase):
         ]:
             for line in path.read_text().splitlines():
                 event = json.loads(line)
-                key = (event["index"], event["sourcetype"])
+                indexed_type = event["sourcetype"]
+                if indexed_type == "cisco:isovalent":
+                    self.assertIn("process_connect", event["event"])
+                    indexed_type = "cisco:isovalent:processConnect"
+                key = (event["index"], indexed_type)
                 expected[key] = expected.get(key, 0) + 1
         raw = [
             {"index": index, "sourcetype": sourcetype, "count": str(count)}
@@ -2102,14 +2370,35 @@ class DriverTests(unittest.TestCase):
         api.search.return_value = (raw, {"sid": "classification_sid"})
 
         def check_classification(check, **_kwargs):
+            isovalent = next(row for row in raw if row["index"] == "cisco_isovalent")
+            for wrong in (
+                "cisco:isovalent",
+                "cisco:isovalent:processExec",
+                "cisco:isovalent:anything",
+            ):
+                isovalent["sourcetype"] = wrong
+                self.assertFalse(check())
+            isovalent["sourcetype"] = "cisco:isovalent:processConnect"
+            for malformed in (4.9, True, "4.0", None):
+                isovalent["count"] = malformed
+                self.assertFalse(check())
+            del isovalent["count"]
+            self.assertFalse(check())
+            isovalent["count"] = "4"
             nxos = next(row for row in raw if row["sourcetype"] == "cisco:dc:nexus9k")
             nxos["count"] = "104"
             self.assertFalse(check())
             nxos["count"] = "105"
             self.assertTrue(check())
+            raw.append(dict(isovalent))
+            self.assertFalse(check())
+            raw.pop()
             raise client.Refused("stop after classification proof")
 
         with (
+            patch.object(
+                runner, "isovalent_indexed_sourcetype_contract", return_value=contract
+            ),
             patch.object(client, "Api", return_value=api),
             patch.object(self.lab, "save"),
             patch.object(self.driver, "_record"),
@@ -2129,6 +2418,43 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(
             self.lab.state["base_ingestion"]["nxos_interface_fixture"]["events"], 105
         )
+
+    def test_base_refuses_wrong_installed_transform_hash_before_ingestion(self):
+        contract = self.indexed_contract()
+        self.lab.state["support_files"] = {}
+        with (
+            patch.object(
+                runner, "isovalent_indexed_sourcetype_contract", return_value=contract
+            ),
+            patch.object(self.driver, "_ingest") as ingest,
+            self.assertRaisesRegex(client.Refused, "installed Isovalent support"),
+        ):
+            self.driver.phase_base()
+        ingest.assert_not_called()
+        self.assertNotIn("base_ingestion", self.lab.state)
+
+    def test_prepare_refuses_config_or_fixture_oracle_failure_before_lab_mutation(self):
+        for stage in ("configuration", "fixture"):
+            with (
+                self.subTest(stage=stage),
+                patch.object(
+                    runner,
+                    "isovalent_indexed_sourcetype_contract",
+                    side_effect=client.Refused("configuration differs")
+                    if stage == "configuration"
+                    else None,
+                    return_value=self.indexed_contract(),
+                ),
+                patch.object(
+                    runner,
+                    "base_input_classification",
+                    side_effect=client.Refused("fixture malformed"),
+                ),
+                patch.object(self.lab, "prepare") as prepare,
+                self.assertRaises(client.Refused),
+            ):
+                self.driver.phase_prepare()
+            prepare.assert_not_called()
 
     def test_exact_interface_oracle_is_required_on_every_member(self):
         rows = json.loads(json.dumps(runner.INTERFACE_ORACLE))

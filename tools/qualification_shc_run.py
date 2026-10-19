@@ -20,6 +20,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import sys
 import threading
@@ -44,6 +45,37 @@ V2_WRITERS = ("ADM - Conversation rollup v2", "ADM - Traffic observation rollup 
 NXOS_FIXTURE = "fixtures/raw-networking/nxos_inventory.ndjson"
 NXOS_FIXTURE_SHA256 = "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062"
 NXOS_EVENT_WINDOW = (1792293814, 1792295615)
+ISOVALENT_CONFIG_SHA256 = {
+    "props.conf": "39f2787b8fe7fefd1cdc17eb3a7b381085ed3add83a1f59ace85ef7769d98f0f",
+    "transforms.conf": "6f023133a01bca6e968028a863cc278235ae81701b9631f5699321aab34db330",
+}
+ISOVALENT_TRANSFORMS = {
+    "set_sourcetype_processConnect": {
+        "REGEX": r"\"process_connect\"",
+        "DEST_KEY": "MetaData:Sourcetype",
+        "FORMAT": "sourcetype::cisco:isovalent:processConnect",
+    },
+    "set_sourcetype_processExec": {
+        "REGEX": r"\"process_exec\"",
+        "DEST_KEY": "MetaData:Sourcetype",
+        "FORMAT": "sourcetype::cisco:isovalent:processExec",
+    },
+    "set_sourcetype_alert": {
+        "REGEX": '"event"',
+        "DEST_KEY": "MetaData:Sourcetype",
+        "FORMAT": "sourcetype::cisco:isovalent:alert",
+    },
+    "set_sourcetype_telemetry_network": {
+        "REGEX": r"\"event_type\":\s*\"(TELEMETRY_TYPE_NETWORK_CONNECT)\"",
+        "DEST_KEY": "MetaData:Sourcetype",
+        "FORMAT": "sourcetype::cisco:isovalent:telemetry:network",
+    },
+    "set_sourcetype_telemetry_process": {
+        "REGEX": r"\"event_type\":\s*\"(TELEMETRY_TYPE_PROCESS)\"",
+        "DEST_KEY": "MetaData:Sourcetype",
+        "FORMAT": "sourcetype::cisco:isovalent:telemetry:process",
+    },
+}
 INTERFACE_ORACLE = [
     {
         "_key": "192.0.2.11|436232192",
@@ -141,6 +173,183 @@ def normalized(rows):
         ),
         key=lambda row: client.canonical(row),
     )
+
+
+def isovalent_indexed_sourcetype_contract(source, addon_roots):
+    """Bind this fixture's index-time rewrite to reviewed Security Cloud 3.7.2.
+
+    This is a narrow fixture oracle, not a general Splunk transform interpreter.
+    Vendor configuration is read as data, never imported or executed.
+    """
+    roots = [
+        Path(root) for root in addon_roots if Path(root).name == "CiscoSecurityCloud"
+    ]
+    client.require(
+        len(roots) == 1, "one reviewed CiscoSecurityCloud add-on is required"
+    )
+    root = roots[0]
+    definitions, source_files, support_files = {}, {}, {}
+    try:
+        for name, expected_hash in ISOVALENT_CONFIG_SHA256.items():
+            path = root / "default" / name
+            client.require(
+                path.is_file() and not path.is_symlink(),
+                "Isovalent configuration is missing or symlinked",
+            )
+            data = path.read_bytes()
+            actual_hash = hashlib.sha256(data).hexdigest()
+            client.require(
+                actual_hash == expected_hash,
+                "reviewed Isovalent configuration hash differs",
+            )
+            relative = str(path.resolve().relative_to(Path(source).resolve()))
+            source_files[relative] = actual_hash
+            support_files["CiscoSecurityCloud/default/" + name] = actual_hash
+            config = configparser.RawConfigParser()
+            config.optionxform = str
+            config.read_string(data.decode())
+            definitions[name] = config
+        transform_order = definitions["props.conf"]["cisco:isovalent"][
+            "TRANSFORMS-set_isovalent_sourcetype"
+        ]
+        client.require(
+            transform_order == ", ".join(ISOVALENT_TRANSFORMS),
+            "Isovalent transform order differs from reviewed definitions",
+        )
+        transforms = {
+            name: dict(definitions["transforms.conf"][name])
+            for name in ISOVALENT_TRANSFORMS
+        }
+        client.require(
+            transforms == ISOVALENT_TRANSFORMS, "Isovalent transform definitions differ"
+        )
+    except (OSError, ValueError, KeyError, configparser.Error):
+        raise client.Refused(
+            "Isovalent configuration is malformed or outside the source"
+        ) from None
+    return {
+        "source_files": source_files,
+        "support_files": support_files,
+        "props_stanza": "cisco:isovalent",
+        "props_key": "TRANSFORMS-set_isovalent_sourcetype",
+        "transform_order": list(transforms),
+        "transforms": transforms,
+        "input_sourcetype": "cisco:isovalent",
+        "indexed_sourcetype": "cisco:isovalent:processConnect",
+        "fixture_event_key": "process_connect",
+    }
+
+
+def expected_indexed_sourcetype(envelope, contract):
+    """Derive expected indexed type from exact input metadata and payload."""
+    try:
+        index, sourcetype = envelope["index"], envelope["sourcetype"]
+        client.require(
+            isinstance(index, str)
+            and bool(index)
+            and isinstance(sourcetype, str)
+            and bool(sourcetype),
+            "fixture index or sourcetype is malformed",
+        )
+        if (
+            index == "cisco_isovalent"
+            or sourcetype == "cisco:isovalent"
+            or sourcetype.startswith("cisco:isovalent:")
+        ):
+            payload = envelope["event"]
+            client.require(
+                index == "cisco_isovalent"
+                and sourcetype == contract["input_sourcetype"]
+                and isinstance(payload, dict)
+                and isinstance(payload.get("process_connect"), dict)
+                and bool(payload["process_connect"]),
+                "Isovalent fixture input type or process_connect payload differs",
+            )
+            raw = json.dumps(payload)
+            matched = [
+                name
+                for name in contract["transform_order"]
+                if re.search(contract["transforms"][name]["REGEX"], raw)
+            ]
+            client.require(
+                matched == ["set_sourcetype_processConnect"],
+                "Isovalent fixture has missing or conflicting sourcetype discriminators",
+            )
+            return contract["transforms"][matched[0]]["FORMAT"].removeprefix(
+                "sourcetype::"
+            )
+        return sourcetype
+    except (KeyError, TypeError, ValueError):
+        raise client.Refused(
+            "fixture sourcetype or event payload is malformed"
+        ) from None
+
+
+def base_input_paths(source):
+    return [
+        *sorted(
+            path
+            for path in (Path(source) / "fixtures/raw-aci").glob("*.ndjson")
+            if path.name != "stream_netflow.ndjson"
+        ),
+        Path(source) / NXOS_FIXTURE,
+    ]
+
+
+def base_input_classification(source, paths, contract):
+    """Require exact fixture cardinality; expected types never use search rows."""
+    declared, indexed, fixture_counts, rewrites = Counter(), Counter(), {}, Counter()
+    try:
+        for path in [*paths, Path(source) / "fixtures/raw-aci/stream_netflow.ndjson"]:
+            count = 0
+            for line in path.read_text().splitlines():
+                if not line.strip():
+                    continue
+                envelope = json.loads(line)
+                sourcetype = expected_indexed_sourcetype(envelope, contract)
+                key = (envelope["index"], envelope["sourcetype"])
+                declared[key] += 1
+                indexed[(key[0], sourcetype)] += 1
+                if key[1] != sourcetype:
+                    rewrites[(key[0], key[1], sourcetype)] += 1
+                count += 1
+            fixture_counts[str(path.relative_to(source))] = count
+    except (OSError, KeyError, TypeError, ValueError):
+        raise client.Refused(
+            "base classification fixture is missing or malformed"
+        ) from None
+    client.require(
+        sum(indexed.values()) == 963
+        and len(indexed) == len(declared) == 16
+        and indexed[("cisco_dc", "cisco:dc:nexus9k")] == 105
+        and rewrites
+        == {
+            ("cisco_isovalent", "cisco:isovalent", "cisco:isovalent:processConnect"): 4
+        },
+        "base fixture totals, groups or declared-to-indexed rewrites differ",
+    )
+    return indexed, {
+        "fixture_events": fixture_counts,
+        "total_events": sum(indexed.values()),
+        "declared": [
+            {"index": index, "sourcetype": sourcetype, "count": count}
+            for (index, sourcetype), count in sorted(declared.items())
+        ],
+        "expected": [
+            {"index": index, "sourcetype": sourcetype, "count": count}
+            for (index, sourcetype), count in sorted(indexed.items())
+        ],
+        "declared_to_indexed": [
+            {
+                "index": index,
+                "input_sourcetype": input_type,
+                "indexed_sourcetype": indexed_type,
+                "count": count,
+            }
+            for (index, input_type, indexed_type), count in sorted(rewrites.items())
+        ],
+        "sourcetype_transform_contract": contract,
+    }
 
 
 def nxos_interface_fixture(source, aci_windows):
@@ -777,6 +986,12 @@ class Driver:
     def phase_prepare(self):
         client.require(bool(self.addons), "explicit reviewed add-on roots are required")
         nxos = nxos_interface_fixture(self.source, (self.window, self.topology_window))
+        indexed_contract = isovalent_indexed_sourcetype_contract(
+            self.source, self.addons
+        )
+        _, classification = base_input_classification(
+            self.source, base_input_paths(self.source), indexed_contract
+        )
         self.lab.prepare(self.source, self.archive, source_sha=self.source_sha)
         self.lab.state["test_hashes"]["tools/qualification_shc_run.py"] = (
             hashlib.sha256(
@@ -806,6 +1021,7 @@ class Driver:
             "source_sha": self.source_sha,
             "test_hashes": self.lab.state["test_hashes"],
             "nxos_interface_fixture": nxos,
+            "base_input_classification": classification,
         }
 
     def phase_create(self):
@@ -1341,13 +1557,22 @@ class Driver:
 
     def phase_base(self):
         nxos = nxos_interface_fixture(self.source, (self.window, self.topology_window))
-        paths = sorted(
-            path
-            for path in (self.source / "fixtures/raw-aci").glob("*.ndjson")
-            if path.name != "stream_netflow.ndjson"
+        paths = base_input_paths(self.source)
+        indexed_contract = isovalent_indexed_sourcetype_contract(
+            self.source, self.addons
         )
-        paths.append(self.source / NXOS_FIXTURE)
+        client.require(
+            all(
+                self.lab.state.get("support_files", {}).get(name) == expected
+                for name, expected in indexed_contract["support_files"].items()
+            ),
+            "installed Isovalent support configuration differs from the indexed-type oracle",
+        )
+        expected_counts, classification_preflight = base_input_classification(
+            self.source, paths, indexed_contract
+        )
         self._record("nxos-interface-fixture-preflight", nxos)
+        self._record("base-input-classification-preflight", classification_preflight)
         if "base_ingestion" not in self.lab.state:
             self.lab.state["base_ingestion"] = {"state": "started"}
             self.lab.save()
@@ -1363,15 +1588,7 @@ class Driver:
             loaded.get("state") == "acknowledged",
             "base ingestion is uncertain; inspect indexed data before retry",
         )
-        expected_counts, fixture_counts = Counter(), {}
-        for path in [*paths, self.source / "fixtures/raw-aci/stream_netflow.ndjson"]:
-            count = 0
-            for line in path.read_text().splitlines():
-                if line.strip():
-                    event = json.loads(line)
-                    expected_counts[(event["index"], event["sourcetype"])] += 1
-                    count += 1
-            fixture_counts[str(path.relative_to(self.source))] = count
+        fixture_counts = classification_preflight["fixture_events"]
         raw_query = (
             "search ("
             + " OR ".join(
@@ -1385,21 +1602,29 @@ class Driver:
             rows, job = client.Api("sh1").search(
                 raw_query + " | stats count by index sourcetype", "0", "now"
             )
+            if not isinstance(rows, list) or len(rows) != len(expected_counts):
+                return False
             observed = {}
             for row in rows:
-                observed[(row["index"], row["sourcetype"])] = int(row["count"])
+                if (
+                    not isinstance(row, dict)
+                    or not isinstance(row.get("index"), str)
+                    or not isinstance(row.get("sourcetype"), str)
+                    or type(row.get("count")) not in (int, str)
+                    or not re.fullmatch(r"[1-9][0-9]*", str(row["count"]))
+                ):
+                    return False
+                key = (row["index"], row["sourcetype"])
+                if key in observed:
+                    return False
+                observed[key] = int(row["count"])
             return {"rows": rows, "job": job} if observed == expected_counts else False
 
         classification = self._wait(indexed, timeout=180)
         self._record(
             "base-input-classification",
             {
-                "fixture_events": fixture_counts,
-                "total_events": sum(expected_counts.values()),
-                "expected": [
-                    {"index": index, "sourcetype": sourcetype, "count": count}
-                    for (index, sourcetype), count in sorted(expected_counts.items())
-                ],
+                **classification_preflight,
                 "observed": classification,
             },
         )
@@ -1472,6 +1697,7 @@ class Driver:
             "index_window": index_window,
             "jobs": jobs,
             "raw_classification": classification,
+            "sourcetype_transform_contract": indexed_contract,
             "nxos_interface_fixture": nxos,
             "interface_inventory": interfaces,
             "fixture_events": fixture_counts,
