@@ -1,5 +1,11 @@
 # Cisco networking qualification status
 
+## Current status (2026-10-19)
+
+The records below describe earlier candidates and retain their original results and limitations. Current merged engineering evidence is in [final qualification](ATLAS_FINAL_QUALIFICATION.md) and [SHC final qualification](SHC_FINAL_QUALIFICATION.md): the complete standalone installed suite, separate standalone V2 migration/browser acceptance, and bounded same-host SHC V1/staged-V2 and shared-settings qualification passed on Enterprise 10.6.0.5. These results supersede older statements that no SHC application validation exists, while preserving their package-specific historical evidence.
+
+The V2 migration helper still refuses SHC and distributed targets. A same-host SHC result does not establish production failure domains, full distributed deployment support, customer scale, actual vendor API/exporter collection, or Cloud runtime/vetting. Those target-specific gates remain open. The shipped contract remains V1 with V2 writers disabled.
+
 ## Enterprise remediation candidate (2026-10-17)
 
 The uncommitted remediation candidate starts from `origin/main` revision `510754c17391e548309dd68ddac3f8b99e0b75c6`. It corrects observer-scope isolation, legacy identity provenance, temporal NodePort/ACI attribution, Service frontend history, raw ACI action provenance, migration safeguards, frontend diagnostics, and package validation. It has received independent static review. Candidate-specific logs and the final archive checksums belong in `dist/remediation-evidence.json`; historical release hashes below do not identify this candidate.

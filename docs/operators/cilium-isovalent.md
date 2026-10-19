@@ -2,12 +2,14 @@
 
 **Purpose:** export Hubble flow logs and Isovalent Runtime Security connection events, and tell us how Cilium load-balances, so the map can say which backend pod served a client that came in through a LoadBalancer VIP, NodePort, Ingress or Gateway.
 
+For source selection and release limits, see [deployment options](deployment-options.md). Hubble and Isovalent Runtime Security are separate optional feeds. Configure the ones selected for your deployment. Without compatible handoff evidence, a Service frontend may remain visible while its backend or receiving node stays unresolved; do not infer that path from aggregate backend traffic.
+
 ## What we need from you
 
 - [ ] Enable Hubble's static flow exporter, limited to the application's traffic and the fields below.
 - [ ] Send us the load-balancing settings in effect (table below).
 - [ ] Keep Isovalent Runtime Security `processConnect` events flowing to the Splunk HEC token `isovalent`.
-- [ ] If you use Isovalent Enterprise's own flow exporter, send one real sample event before we model it.
+- [ ] If you use Isovalent Enterprise's own flow exporter, verify that its events use the supported Hubble JSON-lines envelope; send a redacted sample for an unrecognized format.
 
 ## Hubble flow export (Cilium Helm values)
 
@@ -88,7 +90,7 @@ hubble:
 
 ### Monitor aggregation
 
-The default `bpf.monitorAggregation: medium` suppresses Hubble's pre-translation and some forwarding traces. Flows still appear at the backend pod after translation, which is enough for `externalTrafficPolicy: Local`, DSR and NodePort `Local`. For `Cluster` with SNAT to a pod on another node, the map then marks the client-to-pod link "inferred" instead of "observed". Lowering aggregation adds events and CPU; do not change it for the pilot without measuring.
+The default `bpf.monitorAggregation: medium` suppresses Hubble's pre-translation and some forwarding traces. Flows still appear at the backend pod after translation, which is enough for `externalTrafficPolicy: Local`, DSR and NodePort `Local`. For `Cluster` with SNAT to a pod on another node, the map can use timing inference only when the data contract's uniqueness and exclusion rules pass; otherwise the backend stays unresolved. Lowering aggregation adds events and CPU; do not change it for the pilot without measuring.
 
 ## Load-balancing facts we need
 
@@ -99,7 +101,7 @@ The default `bpf.monitorAggregation: medium` suppresses Hubble's pre-translation
 | `loadBalancer.mode` (`snat`, `dsr`, `hybrid`) and `loadBalancer.algorithm` | SNAT hides the client IP from remote backends; DSR keeps it and returns traffic directly from the backend node                                                                                                                                                                                                                                                                                                   |
 | `loadBalancer.dsrDispatch`                                                 | How DSR carries the service address (`opt`, `ipip`, `geneve`). Use `ipip` if DSR is used: the fabric then shows the receiving-node → backend-node hop as IPIP, which the map uses to tie the client to the backend. With `opt`, that hop is indistinguishable from a direct client → pod connection, and the map reports a warning instead of guessing. Per-Service DSR also needs `bpf.lbModeAnnotation: true`. |
 | `bgpControlPlane.enabled` and your BGP advertisements                      | Which nodes attract VIP traffic. With `externalTrafficPolicy: Local`, only nodes with a local backend advertise                                                                                                                                                                                                                                                                                                  |
-| `l2announcements.enabled`                                                  | L2 announcements cannot be combined with `externalTrafficPolicy: Local`. Reported here as the `` `adm_l2announcements_enabled` `` macro (0/1, operator-set, next to `` `adm_cilium_lb_mode` ``); the map warns when it is 1 and a `Local`-policy Service is in scope.                                                                                                                                          |
+| `l2announcements.enabled`                                                  | L2 announcements cannot be combined with `externalTrafficPolicy: Local`. Reported here as the `` `adm_l2announcements_enabled` `` macro (0/1, operator-set, next to `` `adm_cilium_lb_mode` ``); the map warns when it is 1 and a `Local`-policy Service is in scope.                                                                                                                                            |
 | `ingressController.enabled`, `gatewayAPI.enabled`                          | Cilium's Envoy terminates client connections and opens new ones to backends from the node's ingress IP, and adds `X-Forwarded-For`                                                                                                                                                                                                                                                                               |
 
 Also send the LB IPAM pools (`CiliumLoadBalancerIPPool`) and BGP advertisement objects in use.
@@ -112,7 +114,7 @@ Verify with your Isovalent version that connect events are enabled. In open-sour
 
 ## Isovalent Enterprise flow export
 
-If Isovalent Enterprise exports flows instead of, or alongside, Hubble's built-in file export, send us one real exported event per event type: a forwarded flow, an L7 HTTP flow and a dropped flow. We will not model the Enterprise format before we have seen it.
+The shared parser supports open-source and Isovalent Enterprise Hubble JSON-lines with the `flow`, `node_name` and `time` envelope and documented Cilium flow fields. The checked-in [Enterprise samples](../../fixtures/samples/hubble-enterprise/README.md) and `tests/splunk/test_hubble_enterprise.py` cover the inspected 1.19.5-cee.1 export. This does not qualify every Enterprise version or a different export schema. Verify actual event fields, and provide redacted forwarded/L7/dropped samples when the target differs. Do not ingest the same export twice under separate OSS and Enterprise aliases.
 
 ## How to verify
 
@@ -124,11 +126,11 @@ index=cisco_isovalent sourcetype="cisco:isovalent:processConnect" | head 5
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-isovalent-platform-setup): install and validate Cilium, Tetragon and Hubble, including the `hubble_flow_export` spec block used above (OSS Cilium chart only; the Isovalent Enterprise chart's flow-export values aren't verified, so the skill fails closed if you point it there — use the raw Helm values in that case).
-- [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-isovalent-integration): ships Tetragon logs to Splunk Platform (collector file tail and HEC), tails the Hubble flow export file into `cilium_hubble` (coordinates automatically with the block above), and ships Hubble metrics to Splunk Observability Cloud.
-- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/cisco-security-cloud-setup): the Cisco Security Cloud Isovalent HEC input (configured by the Splunk team).
+- [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-isovalent-platform-setup): install and validate Cilium, Tetragon and Hubble, including the `hubble_flow_export` spec block used above (OSS Cilium chart only; the Isovalent Enterprise chart's flow-export values aren't verified, so the skill fails closed if you point it there — verify the supported values for your Enterprise chart and use its approved configuration procedure; the raw values above are the OSS example).
+- [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-isovalent-integration): ships Tetragon logs to Splunk Platform (collector file tail and HEC), tails the Hubble flow export file into `cilium_hubble` (coordinates automatically with the block above), and ships Hubble metrics to Splunk Observability Cloud.
+- [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-security-cloud-setup): the Cisco Security Cloud Isovalent HEC input (configured by the Splunk team).
 
 ## What to send back
 
@@ -140,7 +142,7 @@ Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-s
 
 - Which Services use `externalTrafficPolicy: Local` and which use `Cluster`?
 - Is DSR or hybrid mode enabled, and with which dispatch?
-- Is TLS passthrough used on any Gateway? With passthrough, Envoy cannot add `X-Forwarded-For`, so attribution through it is time-correlated only.
+- Is TLS passthrough used on any Gateway? With passthrough, HTTP header evidence may be unavailable; do not assume the remaining evidence resolves a backend. Check the supported handoff rules and preserve unresolved boundaries.
 
 ## Sources
 

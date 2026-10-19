@@ -2,6 +2,8 @@
 
 **Purpose:** send Kubernetes object history, application spans and Hubble flow logs to Splunk through the Splunk OpenTelemetry Collector for Kubernetes, so the map can tell which pod, Service, Ingress or Gateway owned an address at a given time.
 
+For source selection and release limits, see [deployment options](deployment-options.md). Select object history, traces and Hubble file collection independently for your deployment; skip unused receivers, token destinations and RBAC permissions. Without object history, pod/Service identity and backend attribution may remain unresolved. LLDP is needed only for the corresponding host-to-fabric attachment context.
+
 ## What we need from you
 
 - [ ] Deploy (or update) the Splunk OTel Collector Helm chart with the values below.
@@ -112,10 +114,10 @@ Every node should appear as a `host` in the last search.
 
 ## Automation skills
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Its `main` branch now covers Splunk Enterprise 10.6: check each skill's own 10.6 status (`supported`, `conditional`, or `not-applicable`) in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/main/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
 
-- [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-otel-collector-setup): renders, preflights, applies and validates the Splunk OTel Collector Helm chart, including `splunkPlatform`, `tracesEnabled`, `clusterReceiver.k8sObjects` and `logsCollection.extraFileLogs`.
-- [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/main/skills/splunk-observability-k8s-auto-instrumentation-setup): zero-code instrumentation for application pods (used with the application teams).
+- [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-otel-collector-setup): renders, preflights, applies and validates the Splunk OTel Collector Helm chart, including `splunkPlatform`, `tracesEnabled`, `clusterReceiver.k8sObjects` and `logsCollection.extraFileLogs`.
+- [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-k8s-auto-instrumentation-setup): zero-code instrumentation for application pods (used with the application teams).
 
 ## What to send back
 
