@@ -1,6 +1,7 @@
 """Small offline safety/coordination tests; no Docker, SSH, or Splunk operations."""
 
 import configparser
+from datetime import datetime, timezone
 import hashlib
 import io
 import importlib.util
@@ -1424,6 +1425,312 @@ class DriverTests(unittest.TestCase):
             "a" * 40,
             [directory / "reviewed-addon"],
         )
+
+    def bootstrap_state(self):
+        self.lab.directory.mkdir()
+        (self.lab.directory / "evidence").mkdir()
+        self.lab.state.update(
+            {
+                "source_sha": self.driver.source_sha,
+                "archive_sha256": "b" * 64,
+                "network": {"id": "c" * 64, "name": self.lab.task + "-network"},
+                "test_hashes": {
+                    "tools/qualification_shc_run.py": hashlib.sha256(
+                        (TOOLS / "qualification_shc_run.py").read_bytes()
+                    ).hexdigest()
+                },
+                "created": {
+                    role: {
+                        "id": str(index + 1) * 64,
+                        "name": self.lab.task + "-" + role,
+                        "url": "https://localhost:" + str(22009 + index * 10),
+                    }
+                    for index, role in enumerate(client.ROLES)
+                },
+            }
+        )
+        self.driver.completed = list(runner.Driver.ORDER[:4])
+        return json.loads(client.canonical(self.lab.state))
+
+    def test_bootstrap_acknowledged_timeout_retry_only_rechecks_native_readiness(self):
+        configured = self.bootstrap_state()
+        native = {role: {"native_gate": "ready"} for role in client.MEMBERS}
+        waits = []
+
+        def wait(check, *, timeout):
+            self.assertIs(check, client.verify_shc_ready)
+            self.assertEqual(timeout, 1200)
+            waits.append(timeout)
+            value = check()
+            if len(waits) == 1:
+                raise client.Refused("readiness deadline")
+            return value
+
+        def bootstrap():
+            saved = json.loads((self.lab.directory / "state.json").read_text())
+            self.assertEqual(saved["bootstrap_dispatch"]["state"], "started")
+            self.assertNotIn("acknowledged_utc", saved["bootstrap_dispatch"])
+
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(self.lab, "bootstrap", side_effect=bootstrap) as dispatch,
+            patch.object(client, "verify_shc_ready", return_value=native) as gate,
+            patch.object(self.driver, "_wait", side_effect=wait),
+        ):
+            with self.assertRaisesRegex(client.Refused, "readiness deadline"):
+                self.driver.run_phase("bootstrap")
+            failures = list(
+                (self.lab.directory / "evidence").glob("bootstrap-failed-*.json")
+            )
+            self.assertEqual(len(failures), 1)
+            first_failure = failures[0].read_bytes()
+            with self.assertRaisesRegex(client.Refused, "explicit rerun"):
+                self.driver.run_phase("bootstrap")
+            result = self.driver.run_phase("bootstrap", rerun=True)
+            self.assertEqual(result["result"], native)
+            self.assertEqual(failures[0].read_bytes(), first_failure)
+            dispatch.assert_called_once()
+            self.assertEqual(gate.call_count, 2)
+        saved = json.loads((self.lab.directory / "state.json").read_text())
+        journal = saved["bootstrap_dispatch"]
+        self.assertEqual(journal["state"], "acknowledged")
+        self.assertEqual(journal["readiness_attempts"], 2)
+        self.assertEqual(len(journal["readiness_failures"]), 1)
+        records = [
+            json.loads(path.read_text())
+            for path in (self.lab.directory / "evidence").glob(
+                "bootstrap-readiness-attempt-*.json"
+            )
+        ]
+        self.assertEqual(
+            {row["mode"] for row in records},
+            {"initial", "acknowledged_readiness_retry"},
+        )
+        self.assertEqual(
+            {row["binding_sha256"] for row in records},
+            {client.digest(journal["binding"])},
+        )
+        for record in records:
+            self.assertEqual(datetime.fromisoformat(record["utc"]).tzinfo, timezone.utc)
+
+    def test_bootstrap_manifest_records_detached_persisted_journal_without_credentials(
+        self,
+    ):
+        configured = self.bootstrap_state()
+        native = {"sh1": {"captain_id": "native-cluster-guid", "kv": "ready"}}
+        self.lab.state["account_files"] = {"admin": "/private/admin.json"}
+        self.lab.state["nonjournal_secret"] = "must-not-be-exported"
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(self.lab, "bootstrap"),
+            patch.object(self.driver, "_wait", return_value=native),
+        ):
+            before = self.driver.phase_manifest()
+            self.assertNotIn("bootstrap_dispatch", before)
+            outcome = self.driver.run_phase("bootstrap")
+            persisted = json.loads((self.lab.directory / "state.json").read_text())
+            manifest = self.driver.run_phase("manifest")["result"]
+            records = list(
+                (self.lab.directory / "evidence").glob("manifest-passed-*.json")
+            )
+            self.assertEqual(len(records), 1)
+            recorded = json.loads(records[0].read_text())["result"]
+            self.assertEqual(
+                recorded["bootstrap_dispatch"], persisted["bootstrap_dispatch"]
+            )
+            self.assertEqual(
+                manifest["bootstrap_dispatch"], persisted["bootstrap_dispatch"]
+            )
+            self.assertNotIn("must-not-be-exported", json.dumps(recorded))
+            self.assertNotIn("/private/admin.json", json.dumps(recorded))
+            self.assertEqual(outcome["result"], native)
+            manifest["bootstrap_dispatch"]["binding"]["created"]["sh1"]["id"] = (
+                "changed"
+            )
+            manifest["bootstrap_dispatch"]["readiness_failures"].append(
+                {"changed": True}
+            )
+            self.assertEqual(
+                self.lab.state["bootstrap_dispatch"], persisted["bootstrap_dispatch"]
+            )
+            self.assertEqual(self.driver.results["bootstrap"]["result"], native)
+            self.assertEqual(json.loads(records[0].read_text())["result"], recorded)
+
+    def test_bootstrap_uncertain_cli_response_never_redispatches(self):
+        configured = self.bootstrap_state()
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(
+                self.lab, "bootstrap", side_effect=client.ApiError(400)
+            ) as dispatch,
+            patch.object(self.driver, "_wait") as wait,
+        ):
+            with self.assertRaises(client.ApiError):
+                self.driver.run_phase("bootstrap")
+            self.assertEqual(
+                json.loads((self.lab.directory / "state.json").read_text())[
+                    "bootstrap_dispatch"
+                ]["state"],
+                "started",
+            )
+            for state in ("started", "failed", "lost_response"):
+                self.lab.state["bootstrap_dispatch"]["state"] = state
+                with (
+                    self.subTest(state=state),
+                    self.assertRaisesRegex(client.Refused, "do not redispatch"),
+                ):
+                    self.driver.run_phase("bootstrap", rerun=True)
+            dispatch.assert_called_once()
+            wait.assert_not_called()
+
+    def test_bootstrap_retry_rejects_changed_binding_and_malformed_journal(self):
+        configured = self.bootstrap_state()
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(self.lab, "bootstrap") as dispatch,
+            patch.object(self.driver, "_wait", return_value={}) as wait,
+        ):
+            self.driver.run_phase("bootstrap")
+            original = json.loads(
+                client.canonical(self.lab.state["bootstrap_dispatch"])
+            )
+            mutations = {
+                "task": "adm-shc-foreign",
+                "source_sha": "f" * 40,
+                "source": "/foreign/source",
+                "archive_sha256": "f" * 64,
+                "directory": "/foreign/task",
+                "network": {"id": "f" * 64},
+                "image": "foreign-image",
+            }
+            for key, value in mutations.items():
+                journal = json.loads(client.canonical(original))
+                journal["binding"][key] = value
+                self.lab.state["bootstrap_dispatch"] = journal
+                with self.subTest(key=key), self.assertRaises(client.Refused):
+                    self.driver.run_phase("bootstrap", rerun=True)
+            for key in ("id", "name", "url"):
+                journal = json.loads(client.canonical(original))
+                journal["binding"]["created"]["sh2"][key] = "foreign"
+                self.lab.state["bootstrap_dispatch"] = journal
+                with self.subTest(key=key), self.assertRaises(client.Refused):
+                    self.driver.run_phase("bootstrap", rerun=True)
+            for journal in (
+                None,
+                {},
+                {"state": "acknowledged"},
+                {**original, "readiness_attempts": True},
+            ):
+                self.lab.state["bootstrap_dispatch"] = journal
+                with self.subTest(journal=journal), self.assertRaises(client.Refused):
+                    self.driver.run_phase("bootstrap", rerun=True)
+            dispatch.assert_called_once()
+            wait.assert_called_once()
+
+    def test_bootstrap_retry_revalidates_actual_owned_ids_and_current_source(self):
+        configured = self.bootstrap_state()
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ) as identity,
+            patch.object(self.lab, "bootstrap") as dispatch,
+            patch.object(self.driver, "_wait", return_value={}) as wait,
+        ):
+            self.driver.run_phase("bootstrap")
+            identity.side_effect = lambda role: (
+                "f" * 64 if role == "sh2" else configured["created"][role]["id"]
+            )
+            with self.assertRaisesRegex(client.Refused, "owned container identity"):
+                self.driver.run_phase("bootstrap", rerun=True)
+            identity.side_effect = lambda role: configured["created"][role]["id"]
+            self.driver.source_sha = "f" * 40
+            with self.assertRaisesRegex(client.Refused, "source or configured task"):
+                self.driver.run_phase("bootstrap", rerun=True)
+            self.driver.source_sha = configured["source_sha"]
+            self.lab.state["test_hashes"]["tools/qualification_shc_run.py"] = "f" * 64
+            with self.assertRaisesRegex(client.Refused, "source/test file changed"):
+                self.driver.run_phase("bootstrap", rerun=True)
+            dispatch.assert_called_once()
+            wait.assert_called_once()
+
+    def test_bootstrap_failed_started_state_persistence_prevents_cli_dispatch(self):
+        configured = self.bootstrap_state()
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(self.lab, "save", side_effect=OSError("disk failure")),
+            patch.object(self.lab, "bootstrap") as dispatch,
+            patch.object(self.driver, "_wait") as wait,
+            self.assertRaises(OSError),
+        ):
+            self.driver.run_phase("bootstrap")
+        dispatch.assert_not_called()
+        wait.assert_not_called()
+
+    def test_bootstrap_failed_acknowledgment_save_cannot_authorize_retry(self):
+        configured = self.bootstrap_state()
+        save = self.lab.save
+        saves = []
+
+        def failing_ack_save():
+            saves.append(self.lab.state["bootstrap_dispatch"]["state"])
+            if len(saves) == 2:
+                raise OSError("acknowledgment persistence failed")
+            save()
+
+        with (
+            self.lab.locked(),
+            patch.dict(client.STATE, configured, clear=True),
+            patch.object(
+                self.lab,
+                "identity",
+                side_effect=lambda role: configured["created"][role]["id"],
+            ),
+            patch.object(self.lab, "save", side_effect=failing_ack_save),
+            patch.object(self.lab, "bootstrap") as dispatch,
+            patch.object(self.driver, "_wait") as wait,
+        ):
+            with self.assertRaises(OSError):
+                self.driver.run_phase("bootstrap")
+            persisted = json.loads((self.lab.directory / "state.json").read_text())
+            self.assertEqual(persisted["bootstrap_dispatch"]["state"], "started")
+            with self.assertRaisesRegex(client.Refused, "not durably recorded"):
+                self.driver.run_phase("bootstrap", rerun=True)
+        dispatch.assert_called_once()
+        wait.assert_not_called()
 
     @staticmethod
     def local_saved_response(api, path, disabled=False, scheduled="0"):

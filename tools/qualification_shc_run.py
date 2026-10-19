@@ -720,6 +720,8 @@ class Driver:
         client.require(name in self.ORDER, "unknown phase")
         if name in self.completed and not rerun:
             return {"phase": name, "already_complete": True}
+        if name == "bootstrap" and "bootstrap_dispatch" in self.lab.state:
+            client.require(rerun, "bootstrap readiness retry requires explicit rerun")
         if rerun and name in self.completed and name not in ("manifest", "cleanup"):
             index = self.ORDER.index(name)
             self.completed = [
@@ -871,9 +873,133 @@ class Driver:
         self._wait(ready, running_roles=client.ROLES)
         return {"all_management_tls_and_identity": "passed"}
 
+    def _bootstrap_binding(self):
+        """Bind an acknowledged CLI to this exact source and owned resources."""
+        self.lab._owned()
+        state = self.lab.state
+        client.require(
+            state.get("task") == self.lab.task
+            and state.get("source_sha") == self.source_sha
+            and bool(self.source_sha)
+            and client.STATE.get("task") == self.lab.task
+            and client.STATE.get("created") == state.get("created")
+            and client.STATE.get("source_sha") == self.source_sha,
+            "bootstrap source or configured task identity changed",
+        )
+        created = state.get("created")
+        client.require(
+            isinstance(created, dict) and set(created) == set(client.ROLES),
+            "bootstrap resource identities are incomplete",
+        )
+        for index, role in enumerate(client.ROLES):
+            entry = created[role]
+            client.require(
+                isinstance(entry, dict)
+                and entry.get("name") == f"{self.lab.task}-{role}"
+                and isinstance(entry.get("id"), str)
+                and len(entry["id"]) == 64
+                and all(character in "0123456789abcdef" for character in entry["id"])
+                and entry.get("url")
+                == f"https://localhost:{self.lab.port_base + index * 10 + 9}",
+                "bootstrap resource identity is malformed",
+            )
+        hashes = state.get("test_hashes")
+        client.require(
+            isinstance(hashes, dict) and "tools/qualification_shc_run.py" in hashes,
+            "bootstrap source snapshot is missing",
+        )
+        for relative, expected_hash in hashes.items():
+            path = (self.source / relative).resolve()
+            client.require(
+                path.is_relative_to(self.source)
+                and hashlib.sha256(path.read_bytes()).hexdigest() == expected_hash,
+                "bootstrap qualification source changed after snapshot",
+            )
+        binding = {
+            "task": self.lab.task,
+            "directory": str(self.lab.directory),
+            "source": str(self.source),
+            "source_sha": self.source_sha,
+            "archive_sha256": state.get("archive_sha256"),
+            "image": state.get("image"),
+            "network": state.get("network"),
+            "created": created,
+            "test_hashes": hashes,
+        }
+        # A copy prevents later in-memory state edits from changing the journal.
+        return json.loads(client.canonical(binding))
+
     def phase_bootstrap(self):
-        self.lab.bootstrap()
-        return self._wait(client.verify_shc_ready)
+        binding = self._bootstrap_binding()
+        journal = self.lab.state.get("bootstrap_dispatch")
+        retry = "bootstrap_dispatch" in self.lab.state
+        if retry:
+            client.require(
+                isinstance(journal, dict)
+                and journal.get("state") == "acknowledged"
+                and journal.get("binding") == binding
+                and isinstance(journal.get("acknowledged_utc"), str)
+                and bool(journal["acknowledged_utc"])
+                and isinstance(journal.get("readiness_attempts"), int)
+                and not isinstance(journal["readiness_attempts"], bool)
+                and journal["readiness_attempts"] >= 0
+                and isinstance(journal.get("readiness_failures"), list),
+                "bootstrap is uncertain or its acknowledged identity changed; do not redispatch",
+            )
+            persisted = json.loads(
+                client.protected_file(self.lab.directory / "state.json").read_text()
+            )
+            client.require(
+                persisted.get("bootstrap_dispatch") == journal,
+                "bootstrap acknowledgment is not durably recorded; do not redispatch",
+            )
+        for role in client.ROLES:
+            client.require(
+                self.lab.identity(role) == binding["created"][role]["id"],
+                "bootstrap owned container identity changed",
+            )
+        if not retry:
+            journal = {
+                "state": "started",
+                "binding": binding,
+                "started_utc": datetime.now(timezone.utc).isoformat(),
+                "readiness_attempts": 0,
+                "readiness_failures": [],
+            }
+            self.lab.state["bootstrap_dispatch"] = journal
+            self.lab.save()
+            # Any exception leaves started durable: even a lost CLI response must
+            # never trigger an automatic second captain bootstrap.
+            self.lab.bootstrap()
+            journal["state"] = "acknowledged"
+            journal["acknowledged_utc"] = datetime.now(timezone.utc).isoformat()
+            self.lab.save()
+        journal["readiness_attempts"] += 1
+        self.lab.save()
+        self._record(
+            "bootstrap-readiness-attempt",
+            {
+                "utc": datetime.now(timezone.utc).isoformat(),
+                "mode": "acknowledged_readiness_retry" if retry else "initial",
+                "attempt": journal["readiness_attempts"],
+                "binding_sha256": client.digest(binding),
+                "bootstrap_cli": "previously_acknowledged" if retry else "acknowledged",
+                "timeout_seconds": 1200,
+            },
+        )
+        try:
+            return self._wait(client.verify_shc_ready, timeout=1200)
+        except Exception as error:
+            journal["readiness_failures"].append(
+                {
+                    "attempt": journal["readiness_attempts"],
+                    "utc": datetime.now(timezone.utc).isoformat(),
+                    "error_type": type(error).__name__,
+                    "http_status": getattr(error, "status", None),
+                }
+            )
+            self.lab.save()
+            raise
 
     def phase_bundle(self):
         self.lab.apply_bundle()
@@ -2230,6 +2356,12 @@ class Driver:
             "cloud": "unavailable; no authorized stack",
             "boundary": "same-host synthetic functionality; no supported production topology claim",
         }
+        if "bootstrap_dispatch" in self.lab.state:
+            # The generated journal contains only lifecycle/source identities and
+            # sanitized status metadata, never accounts, env files or transcripts.
+            result["bootstrap_dispatch"] = json.loads(
+                client.canonical(self.lab.state["bootstrap_dispatch"])
+            )
         return result
 
     def phase_cleanup(self):

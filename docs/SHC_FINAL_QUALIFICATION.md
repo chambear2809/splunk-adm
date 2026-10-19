@@ -1,7 +1,12 @@
 # Final candidate distributed qualification
 
-Status (2026-10-19): Attempt10 failed the base phase, where the interface writer
-completed with a warning and no inventory rows. No
+Status (2026-10-19): Attempt11 failed the 1200-second bootstrap readiness gate
+after 1202.322 seconds at `2026-10-19T02:53:42Z`. No application phases ran.
+An ordinary coordinator-controlled Splunk restart of sh1 at
+`02:51:44Z`–`02:52:20Z` returned exit 0, but did not establish full KV readiness.
+This attempt is an assisted failed platform preparation, not an application
+qualification pass. Attempt10 earlier failed the base phase, where the interface
+writer completed with a warning and no inventory rows. No
 complete final-candidate SHC application qualification pass is claimed.
 Frozen source22 `7fc04abbda74b2840174fe4a305220dae7237873` and candidate09
 archive SHA-256
@@ -12,13 +17,17 @@ convergence checks. The local configuration gate allowed the actual Identity
 and Service binding writers to complete through different members. The
 NX-OS-only Interface inventory writer had no matching inputs in the ACI-only
 batch. Its native warning remains a rejection; the remaining application phases
-were not qualified. Final failure/export/cleanup records remain coordinator-owned.
+were not qualified. The final 57-file failure export and removal of the exact
+five containers/network have been independently verified.
 
 The next correction adds reviewed positive NX-OS input and an independent exact
-inventory oracle while retaining strict warning rejection. It awaits review and
-a fresh Attempt11 lifecycle with the unchanged candidate09 archive. No Attempt11
-phase outcome is claimed here. The coordinator retains exclusive ownership of
-export, cleanup and fresh execution.
+inventory oracle while retaining strict warning rejection. It passed independent
+review and ran as Attempt11 from source
+`56947e7466851ec2b6584eb2060466551a5314f2`, with the unchanged candidate09
+archive and 144 verified source inputs. Application qualification remains pending.
+The new-source correction described below permits explicit readiness-only retry
+after a durably acknowledged bootstrap; it is not applied to frozen Attempt11.
+The coordinator retains exclusive ownership of execution, export and cleanup.
 
 The earlier results in `SHC_QUALIFICATION.md` remain bound to their original
 archives. A passing offline harness test is not a live platform qualification
@@ -118,6 +127,31 @@ Use `{"phase":"name","rerun":true}` only after inspection/repair; rerunning a
 completed earlier phase invalidates its later acceptance phases. Ingestion
 records are marked before POST, so uncertain HEC outcomes require explicit
 inspection and do not silently resend. `quit` requires task cleanup first.
+
+In the new source, captain bootstrap is journaled as `started` before calling
+the CLI and `acknowledged` only after a known successful return. The journal
+binds the exact source snapshot/hash, archive hash, task directory, image,
+network, full container IDs, task names and management URLs. After a readiness
+timeout, `{"phase":"bootstrap","rerun":true}` validates that durable journal,
+the unchanged source and every live ID/name/task label, then runs only the same
+full `verify_shc_ready` gate with the same 1200-second bound. Native readiness
+results retain their original shape; separate UTC-timestamped evidence identifies
+each initial or readiness-only attempt. The manifest includes a detached copy of
+the sanitized bootstrap journal, binding those attempts to their source and
+owned resources. Original failure records remain retained. A started,
+failed, malformed or undurably acknowledged CLI attempt refuses redispatch,
+including HTTP 400 or a lost CLI response. No bootstrap retry is inferred from
+an apparently initialized cluster or from a platform error message.
+
+Splunk's [10.6 deployment procedure](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/10.6/deploy-search-head-clustering/deploy-a-search-head-cluster)
+describes bootstrap as selecting the first captain. It does not promise generic
+idempotence on an existing dynamic cluster. Rebootstrap is separately documented
+within [static-to-dynamic disaster recovery](https://help.splunk.com/en/splunk-enterprise/administer/distributed-search/10.6/manage-search-head-clustering/use-static-captain-to-recover-from-loss-of-majority);
+that procedure does not apply here. The [10.6 sidecar lifecycle](https://help.splunk.com/en/data-management/splunk-enterprise-admin-manual/10.6/splunk-sidecars/about-splunk-sidecars)
+assigns unhealthy/terminated sidecar restarts to the supervisor. The reviewed
+official lifecycle and KV endpoint documentation provide no targeted manual PDL
+restart command for this condition. No sidecar kill, KV reset or configuration
+workaround is introduced.
 
 The driver runs the two original interface tests programmatically and exports
 their real per-member SIDs, counts, failures and skips. It checks the independent
@@ -641,7 +675,13 @@ The original base phase failed at `2026-10-19T02:22:23.760001Z` after 657.05
 seconds. Its 50 original evidence records are retained in
 `dist/final-qualification/shc10-failed-prefix-evidence.json` (SHA-256
 `03dd158df78dac98239994f7ee357093594e59dc05d1a03fdffafb1cfd496ecb`).
-This retained prefix does not claim completed export or cleanup.
+The final failure export subsequently retained 57 verified files, including all
+50 original records and cleanup of the five owned containers/network at
+`2026-10-19T02:30:13.987706Z`. Final archive SHA-256:
+`626217006eb730335acdb09902dffeb75312d2656a6b9f9f8418dd6700c4473e`.
+Independent review verified both precleanup/final archives, exact original
+bytes, ownership and continued failed/incomplete classification. The old owner
+session closed before Attempt11 acquired its lifecycle locks.
 
 The correction retains the warning rejection and requires the positive NX-OS
 fixture/oracle above. Terminal WARN/ERROR/FATAL or failed/cancelled search states
@@ -651,8 +691,12 @@ Result warnings still fail. None of these outcomes triggers another dispatch.
 All 99 offline tooling tests pass, including missing/altered fixture and overlap
 preflight, exact two-row all-member inventory, 963-event classification, and
 prompt terminal warning/failure regressions. The current Attempt10 source is not
-modified. Fresh complete Attempt11 execution remains pending review, export and
-cleanup of the unsuccessful run.
+modified. Review57 cleared this source correction; Review59 verified source23
+transfer and the failed-run exports. Attempt11 subsequently failed bootstrap
+readiness as recorded above; no application phase was executed. Its failed-run
+export and cleanup remain coordinator-owned. The new readiness-only retry
+boundary requires independent review and a fresh immutable source before use;
+it does not change Attempt11's failed result.
 
 Store sanitized evidence under the external task's `evidence/` directory.
 `write_evidence()` uses owner-only exclusive writes and returns a SHA-256.
