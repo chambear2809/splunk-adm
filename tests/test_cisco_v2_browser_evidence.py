@@ -11,7 +11,7 @@ import unittest
 
 HELPER = Path(__file__).parent / "splunk/cisco-v2-evidence.mjs"
 RUN = """
-const { selectScenarioEvidence, assertScenarioCsv, assertOriginalEvidence } = await import(process.argv[1]);
+const { selectScenarioEvidence, assertScenarioCsv, assertOriginalEvidence, csvRecords } = await import(process.argv[1]);
 let input = ''; for await (const chunk of process.stdin) input += chunk;
 const value = JSON.parse(input);
 try {
@@ -26,7 +26,8 @@ try {
     assertScenarioCsv(value.context, value.flows, selected, value.graph, value.scenario);
   process.stdout.write(JSON.stringify({ok:true, mac:selected.client.id,
     ip:selected.ipClient.id, reason:selected.ipClient.reason,
-    edge:selected.connection.id}));
+    edge:selected.connection.id,
+    ...(value.returnParsedContext ? {context:csvRecords(value.context)} : {})}));
 } catch (error) { process.stdout.write(JSON.stringify({ok:false,error:error.message})); }
 """
 
@@ -206,6 +207,8 @@ class CiscoV2BrowserEvidenceTest(unittest.TestCase):
                         "source_id": edge["source"],
                         "target_id": edge["target"],
                         "evidence_kind": kind,
+                        "source_authority": record.get("source_authority", ""),
+                        "client_authority": record.get("client_authority", ""),
                         "evidence_json": json.dumps(record, separators=(",", ":")),
                     }
                 )
@@ -269,6 +272,68 @@ class CiscoV2BrowserEvidenceTest(unittest.TestCase):
         ] = True
         value, _, _ = self.with_exports(value)
         self.assertTrue(self.run_helper(value)["ok"])
+
+    def test_csv_authority_round_trips_quotes_commas_newlines_and_rejects_changes(self):
+        for authority in (
+            '["org-demo","network-demo"]',
+            'org,"quoted"',
+            'org,"quoted"\nnetwork\r\nnext',
+        ):
+            value = self.fixture()
+            value["scenario"]["sourceAuthority"] = authority
+            value["graph"]["nodes"][0]["attributes"]["source_authority"] = authority
+            edge = value["graph"]["edges"][0]
+            raw = value["scenario"]["observationRecords"][0]
+            edge["traffic_observations"][0]["source_authority"] = authority
+            raw["traffic"][0]["source_authority"] = authority
+            edge["attachment_evidence"][0]["client_authority"] = authority
+            raw["attachments"][0]["client_authority"] = authority
+            value, context, _ = self.with_exports(value)
+            value["returnParsedContext"] = True
+            with self.subTest(authority=authority):
+                result = self.run_helper(value)
+                self.assertTrue(result["ok"], result)
+                traffic, attachment = result["context"]
+                self.assertEqual(traffic["source_authority"], authority)
+                self.assertEqual(attachment["client_authority"], authority)
+                self.assertEqual(
+                    json.loads(attachment["evidence_json"])["client_authority"],
+                    authority,
+                )
+                # The actual encoded CSV can double quotes and embed newlines;
+                # retaining the original semantic value is the requirement.
+                if '"' in authority:
+                    self.assertNotIn(authority, value["context"])
+            for mutate in ("changed", "omitted"):
+                changed = copy.deepcopy(value)
+                changed_context = copy.deepcopy(context)
+                record = json.loads(changed_context[1]["evidence_json"])
+                if mutate == "changed":
+                    record["client_authority"] = 'another,"organization"'
+                else:
+                    record.pop("client_authority")
+                changed_context[1]["evidence_json"] = json.dumps(record)
+                # Correct flattened authority cannot launder an altered record.
+                changed["context"] = self.as_csv(changed_context)
+                with self.subTest(authority=authority, mutation=mutate):
+                    self.assertFalse(self.run_helper(changed)["ok"])
+
+    def test_flattened_authorities_must_match_json_and_opposite_kind_stays_blank(self):
+        for index, field, replacement in (
+            (0, "source_authority", "wrong-exporter"),
+            (0, "source_authority", ""),
+            (1, "client_authority", "wrong-controller"),
+            (1, "client_authority", ""),
+            (0, "client_authority", "unexpected-controller"),
+            (1, "source_authority", "unexpected-exporter"),
+        ):
+            value, context, _ = self.with_exports(self.fixture())
+            original_json = context[index]["evidence_json"]
+            context[index][field] = replacement
+            value["context"] = self.as_csv(context)
+            self.assertEqual(context[index]["evidence_json"], original_json)
+            with self.subTest(row=index, field=field, replacement=replacement):
+                self.assertFalse(self.run_helper(value)["ok"])
 
     def test_canonical_graph_must_not_contain_raw_representation_or_empty_members(self):
         for update in (

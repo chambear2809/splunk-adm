@@ -572,6 +572,14 @@ export function assertScenarioCsv(context, flows, selected, graph, scenario) {
               row.source_id === selected.client.id &&
               row.target_id === edge.target &&
               row.evidence_kind === kind &&
+              row.source_authority ===
+                (kind === "traffic_observation"
+                  ? (record.source_authority ?? "")
+                  : "") &&
+              row.client_authority ===
+                (kind === "attachment_evidence"
+                  ? (record.client_authority ?? "")
+                  : "") &&
               isDeepStrictEqual(JSON.parse(row.evidence_json), record),
           ),
           "context export lost exact MAC observation/attachment record",

@@ -301,7 +301,8 @@ try {
       prefix + "-context.csv",
     );
     expect(csv).toContain(scenario.clientId);
-    expect(csv).toContain(scenario.sourceAuthority);
+    // Exact authority survives CSV quoting inside the parsed original records
+    // checked by assertScenarioCsv below; its raw CSV spelling is not stable.
     expect(csv).toContain(scenario.attachmentDeviceId);
     expect(csv).toContain("traffic_observation");
     expect(csv).toContain("attachment_evidence");
