@@ -249,6 +249,9 @@ class SafetyTests(unittest.TestCase):
                 },
             )
         content = run.call_args.kwargs["data"]
+        self.assertEqual(
+            run.call_args.args[0], ["docker", "cp", "-", "1" * 64 + ":/opt/splunk"]
+        )
         with tarfile.open(fileobj=io.BytesIO(content)) as archive:
             item = archive.getmember("etc/apps/example/bin/run.py")
             self.assertEqual((item.uid, item.gid, item.mode), (41812, 41812, 0o700))
@@ -259,6 +262,143 @@ class SafetyTests(unittest.TestCase):
             self.assertEqual(
                 archive.getmember("etc/system/local/server.conf").mode, 0o600
             )
+
+    def test_stdin_copy_avoids_docker_config_user_ownership_override(self):
+        # Docker 29.1.3 archive_unix.go uses tarCopyOptions for copyUIDGID;
+        # archive_tarcopyoptions_unix.go sets ChownOpts from Config.User.
+        # Model that independent daemon contract, not merely our tar headers:
+        # the former `docker cp -a - ...` corrupts live etc/ and fails this test.
+        for status in ("created", "running"):
+            with self.subTest(status=status):
+                lab = lifecycle.Lab(
+                    self.directory / "task",
+                    self.task,
+                    lock_file=self.directory / "lock",
+                )
+                lab.state = self.state
+                identity = self.state["created"]["deployer"]
+                filesystem = {
+                    "etc": (41812, 41812, 0o755),
+                    "etc/login-info.cfg": (41812, 41812, 0o600),
+                }
+                calls = []
+
+                def docker(argv, *, data=None):
+                    calls.append(argv)
+                    if argv == ["docker", "inspect", identity["id"]]:
+                        return json.dumps(
+                            [
+                                {
+                                    "Id": identity["id"],
+                                    "Name": "/" + identity["name"],
+                                    "Config": {
+                                        "User": "999:999",
+                                        "Labels": {lifecycle.LABEL: self.task},
+                                    },
+                                    "State": {"Status": status},
+                                }
+                            ]
+                        ).encode()
+                    self.assertEqual(argv[:2], ["docker", "cp"])
+                    self.assertEqual(argv[-2:], ["-", identity["id"] + ":/opt/splunk"])
+                    with tarfile.open(fileobj=io.BytesIO(data)) as archive:
+                        for member in archive.getmembers():
+                            uid, gid = (
+                                (999, 999) if "-a" in argv else (member.uid, member.gid)
+                            )
+                            filesystem[member.name] = (uid, gid, member.mode)
+                    return b""
+
+                with (
+                    lab.locked(),
+                    patch.object(lifecycle, "command", side_effect=docker),
+                ):
+                    lab.copy_files(
+                        "deployer",
+                        {
+                            "etc/shcluster/apps/splunk_adm/local/adm_settings.conf": b"private",
+                            "etc/shcluster/apps/splunk_adm/bin/run.py": (
+                                b"pass\n",
+                                0o700,
+                            ),
+                        },
+                    )
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(filesystem["etc"], (41812, 41812, 0o755))
+                self.assertEqual(
+                    filesystem["etc/login-info.cfg"], (41812, 41812, 0o600)
+                )
+                self.assertEqual(
+                    filesystem["etc/shcluster/apps/splunk_adm/local/adm_settings.conf"],
+                    (41812, 41812, 0o600),
+                )
+                self.assertEqual(
+                    filesystem["etc/shcluster/apps/splunk_adm/bin/run.py"],
+                    (41812, 41812, 0o700),
+                )
+
+    def test_copy_refuses_foreign_container_before_upload(self):
+        for changed in ("id", "name", "label"):
+            with self.subTest(changed=changed):
+                lab = lifecycle.Lab(
+                    self.directory / "task",
+                    self.task,
+                    lock_file=self.directory / "lock",
+                )
+                lab.state = self.state
+                identity = self.state["created"]["deployer"]
+                observed = {
+                    "Id": "foreign" if changed == "id" else identity["id"],
+                    "Name": "/foreign" if changed == "name" else "/" + identity["name"],
+                    "Config": {
+                        "Labels": {
+                            lifecycle.LABEL: "foreign"
+                            if changed == "label"
+                            else self.task
+                        }
+                    },
+                }
+                with (
+                    lab.locked(),
+                    patch.object(
+                        lifecycle,
+                        "command",
+                        return_value=json.dumps([observed]).encode(),
+                    ) as run,
+                ):
+                    with self.assertRaises(client.Refused):
+                        lab.copy_files("deployer", {"etc/example.conf": b"private"})
+                self.assertEqual(run.call_count, 1)
+                self.assertEqual(
+                    run.call_args.args[0], ["docker", "inspect", identity["id"]]
+                )
+
+    def test_failed_settings_copy_does_not_record_success_or_override(self):
+        lab = lifecycle.Lab(
+            self.directory / "task", self.task, lock_file=self.directory / "lock"
+        )
+        with (
+            lab.locked(),
+            patch.object(lab, "identity", return_value="1" * 64),
+            patch.object(
+                lifecycle, "command", side_effect=client.Refused("copy failed")
+            ),
+            patch.object(lab, "save") as save,
+        ):
+            with self.assertRaises(client.Refused):
+                lab.opt_in_settings()
+        self.assertNotIn("settings_override", lab.state)
+        save.assert_not_called()
+
+    def test_copy_refuses_unsafe_target_before_upload(self):
+        lab = lifecycle.Lab(
+            self.directory / "task", self.task, lock_file=self.directory / "lock"
+        )
+        for target in ("../outside", "/absolute", "etc/../../outside"):
+            with lab.locked(), patch.object(lifecycle, "command") as run:
+                with self.subTest(target=target), self.assertRaises(client.Refused):
+                    lab.copy_files("deployer", {target: b"private"})
+                run.assert_not_called()
 
     def test_archive_refuses_path_traversal_and_links(self):
         for name, kind in (

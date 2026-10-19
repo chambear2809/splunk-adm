@@ -631,8 +631,12 @@ class Lab:
                 info.uname = info.gname = "splunk"
                 info.mode, info.size = mode, len(data)
                 output.addfile(info, io.BytesIO(data))
+        # For stdin archives, Docker 29.1.3's -a path replaces every header's
+        # owner with Config.User (999 in this image), including live etc/.
+        # The default extraction path preserves our numeric archive owners and
+        # works before startup too; do not request the Config.User override.
         command(
-            ["docker", "cp", "-a", "-", self.identity(role) + ":/opt/splunk"],
+            ["docker", "cp", "-", self.identity(role) + ":/opt/splunk"],
             data=archive.getvalue(),
         )
 
