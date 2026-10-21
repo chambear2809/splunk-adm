@@ -430,8 +430,10 @@ class UpgradeIntegrationTest(unittest.TestCase):
         cls.lab = lab
         cls.password = lab.read_secrets()["SPLUNK_PASSWORD"]
         cls.package = Path(os.environ["ADM_UPGRADE_PACKAGE"]).resolve()
+        # The class only runs when live upgrade validation was requested, so a
+        # wrong package path or stopped lab is a failure, never a silent skip.
         if not cls.package.is_file():
-            raise unittest.SkipTest(f"package does not exist: {cls.package}")
+            raise AssertionError(f"ADM_UPGRADE_PACKAGE does not exist: {cls.package}")
         with tarfile.open(cls.package, "r:gz") as package:
             names = {name.removeprefix("./") for name in package.getnames()}
         if f"{APP}/lookups/adm_observer_scope.csv" in names:
@@ -609,7 +611,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
             check=True,
         )
         if result.stdout.strip() != "true":
-            raise unittest.SkipTest(f"{CONTAINER} is not running")
+            raise AssertionError(f"{CONTAINER} is not running")
 
     @classmethod
     def _docker_file(cls, path):

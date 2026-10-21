@@ -3,7 +3,7 @@
 `scenario.json` is a synthetic, local qualification fixture. It does not represent
 captured Dashboard API responses, Catalyst Center client records, or decoded NetFlow
 templates. Use `python3 tools/gen_raw_fixtures.py --scenario networking --base-time
-2026-10-16T13:00:00Z` to regenerate the checked-in example at a stable anchor. Use
+2026-10-18T03:38:34Z` to regenerate the checked-in example at a stable anchor. Use
 `--output-dir /tmp/networking-capture` to write a separate qualification dataset and
 its `capture-manifest.json` without changing checked-in fixtures. The manifest lists
 the intended 15-minute graph window separately from the ingestion window calculated
@@ -27,10 +27,10 @@ identical node names and IPs in the lab without adding a native
 ## Client source records
 
 * `catalyst_clients.ndjson` projects a Catalyst Center client response into the
-  verified TA 4.0.50 `cisco:dnac:client` shape. The client input writes JSON, adds
+  verified TA 4.0.60 `cisco:dnac:client` shape. The client input writes JSON, adds
   `cisco_catalyst_host`, chooses the connected switch name for Splunk host, and uses
   `cisco_catalyst_dnac_client://<input>` as source. See
-  `research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py:463-481`.
+  `research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py:463-481`.
   The positive record includes documented API fields `type=Wired`,
   `connectionStatus=connected`, `connectedNetworkDeviceType=Switch`, and
   `connectedNetworkDevice.interfaceName`; the chosen switch port name is a synthetic
@@ -114,7 +114,8 @@ identical node names and IPs in the lab without adding a native
   and Nexus Dashboard fixture builders with the NX-OS dashboard fabric configured
   as `nxos-campus-1`. NX-OS inventory begins at `base_time - 900s`. Inventory and
 name matches do not establish client attachment or packet route. The synthetic
-`nxversion` rows include `Row_info.proc_board_id` as the native chassis identity:
+`nxversion` rows carry `Row_info{}.proc_board_id` (its own `Row_info` list item, as the
+TA emits each scalar `show version` key) as the native chassis identity:
 Cisco's NX-OS 10.5(x) Programmability Guide documents this field in the JSON
 result from `clid('show version')`; the DC Networking TA serializes NX-API
 `Row_info` into the event without removing fields. Synthetic authority mappings

@@ -95,6 +95,9 @@ FORBIDDEN_COMPONENTS = {"local", "secrets", "secret", "credentials"}
 DEV_RECORD_DIRS = ("research/", "docs/benchmarks/")
 MAKO_DIRS = ("appserver/templates/", "appserver/modules/")
 FORBIDDEN_NAMES = {".env", ".env.local", "credentials", "secrets.json"}
+DEVELOPMENT_COMPONENTS = {".git", "node_modules", "__pycache__"}
+DEVELOPMENT_NAMES = {".ds_store"}
+DEVELOPMENT_SUFFIXES = (".pyc", ".pyo")
 
 
 @dataclass(frozen=True)
@@ -198,9 +201,16 @@ def _assert_safe_files(files: dict[str, bytes]) -> None:
         if relative.casefold().startswith(MAKO_DIRS):
             raise ValueError(f"custom Mako template path in archive: {name}")
         components = {component.casefold() for component in relative.split("/")}
-        if components & FORBIDDEN_COMPONENTS:
-            raise ValueError(f"deployment-local path in archive: {name}")
         basename = relative.rsplit("/", 1)[-1].casefold()
+        if components & FORBIDDEN_COMPONENTS or basename == "local.meta":
+            raise ValueError(f"deployment-local path in archive: {name}")
+        if (
+            components & DEVELOPMENT_COMPONENTS
+            or basename in DEVELOPMENT_NAMES
+            or basename.startswith("._")
+            or basename.endswith(DEVELOPMENT_SUFFIXES)
+        ):
+            raise ValueError(f"development artifact in archive: {name}")
         if basename == "limits.conf":
             raise ValueError(f"packaged limits.conf is disallowed for Cloud: {name}")
         if (
@@ -209,6 +219,16 @@ def _assert_safe_files(files: dict[str, bytes]) -> None:
             or basename.endswith((".pem", ".key", ".p12", ".pfx"))
         ):
             raise ValueError(f"secret-like path in archive: {name}")
+
+
+def _assert_safe_directories(directories: frozenset[str]) -> None:
+    for name in directories:
+        relative = name.removeprefix("splunk_adm").lstrip("/")
+        components = {component.casefold() for component in relative.split("/")}
+        if components & FORBIDDEN_COMPONENTS:
+            raise ValueError(f"deployment-local path in archive: {name}")
+        if components & DEVELOPMENT_COMPONENTS:
+            raise ValueError(f"development artifact in archive: {name}")
 
 
 def _verify_checksum(archive: Path) -> None:
@@ -509,6 +529,7 @@ def check_release(
     _verify_checksum(archive_path)
     archive = _read_archive(archive_path)
     _assert_safe_files(archive.files)
+    _assert_safe_directories(archive.directories)
     registry_path = package_json.parent / "config/deployment-health.json"
     try:
         registry = registry_path.read_bytes()

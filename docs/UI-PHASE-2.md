@@ -44,8 +44,8 @@ Independent review found and verified fixes for malformed relative-time gaps, ti
 
 ## Size and limits
 
-The Toolkit time picker increases the bundle beyond the earlier 350 KB gzip comparison target. Final measured size: **2,073,514 bytes raw / 512,912 bytes gzip**, measured with Python gzip. The five warnings remain Python script existence, custom-conf replication, collections, Python SDK version, and synthetic host/IP values. No SplunkJS or custom-Mako warning was introduced. The standard dashboard panel boundary is retained. Captured demo screenshots were inspected in [light](../dist/atlas-phase2-demo-light.png) and [dark](../dist/atlas-phase2-demo-dark.png); these ignored diagnostics are not shipped.
+The Toolkit time picker increases the bundle beyond the earlier 350 KB gzip comparison target. Final measured size: **2,073,514 bytes raw / 512,912 bytes gzip**, measured with Python gzip. The five warnings remain Python script existence, custom-conf replication, collections, Python SDK version, and synthetic host/IP values. No SplunkJS or custom-Mako warning was introduced. The standard dashboard panel boundary is retained. Captured demo screenshots (`dist/atlas-phase2-demo-light.png`, `dist/atlas-phase2-demo-dark.png` in the ignored `dist/` directory of the qualification checkout) were inspected; they are not committed or shipped.
 
-All lab runs purged their owned container, volumes, cached image and lab credentials and removed the temporary research symlink. Ephemeral viewer accounts and roles were cleaned up. Real viewer screenshots: [dark](../dist/atlas-live-dark.png), [light](../dist/atlas-live-light.png).
+All lab runs purged their owned container, volumes, cached image and lab credentials and removed the temporary research symlink. Ephemeral viewer accounts and roles were cleaned up. Real viewer screenshots (`dist/atlas-live-dark.png`, `dist/atlas-live-light.png`) are uncommitted local diagnostics in the same ignored directory.
 
 Live qualification targets Splunk Enterprise 10.6.0.5. Live Splunk Cloud runtime and formal vetting remain unverified. No new product decision is outstanding.

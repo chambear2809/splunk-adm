@@ -10,6 +10,7 @@ from typing import Any
 
 
 BAD_RESULTS = frozenset(("error", "failure"))
+# splunk_appinspect.reporter.STATUS_TYPES for the version pinned in ci.yml (4.3.1).
 KNOWN_RESULTS = frozenset(
     ("success", "warning", "not_applicable", "skipped", "future_failure", *BAD_RESULTS)
 )

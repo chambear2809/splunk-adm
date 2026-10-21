@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 PACKAGES = {
     "cisco-catalyst-app": "4.0.20",
-    "TA_cisco_catalyst": "4.0.50",
+    "TA_cisco_catalyst": "4.0.60",
     "splunk_app_stream_ipfix_cisco_hsl": "4.0.0",
     "Splunk_TA_cisco_meraki": "3.5.0",
 }

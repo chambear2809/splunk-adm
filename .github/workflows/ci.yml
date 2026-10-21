@@ -23,9 +23,11 @@ on:
 permissions:
   contents: read
 
+# Only superseded pull-request runs are cancelled; push, schedule and dispatch
+# runs (including the lab lifecycle) always finish and clean up.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   frontend:
@@ -33,8 +35,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.13.0
           cache: npm
@@ -43,14 +45,14 @@ jobs:
       - run: npm test -- --run
       - run: npm run package
       - run: python3 tools/check_release.py --dist dist
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.11"
       - name: Verify Atlas bundle
         run: python3 -m unittest tests.test_atlas_build
       - name: AppInspect Cloud precert gate
         run: |
-          python3 -m pip install --disable-pip-version-check splunk-appinspect
+          python3 -m pip install --disable-pip-version-check 'splunk-appinspect==4.3.1'
           archives=(dist/splunk_adm-*.tar.gz)
           test "${#archives[@]}" -eq 1
           report=dist/appinspect-cloud.json
@@ -67,8 +69,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.13.0
           cache: npm
@@ -79,7 +81,7 @@ jobs:
       - run: npm run test:browser
       - name: Retain failed browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: browser-failure-diagnostics
           path: test-results/
@@ -91,10 +93,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
-          python-version: "3.12"
+          # Match restmap.conf python.required for the shipped REST handlers.
+          python-version: "3.13"
       - run: python -m pip install --disable-pip-version-check 'ruff==0.13.2'
       - run: python -m ruff check tools tests
       - run: python -m ruff format --check tools tests
@@ -112,8 +115,8 @@ jobs:
     env:
       ADM_TA_ROOT: ${{ vars.ADM_TA_ROOT }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.13.0
           cache: npm
@@ -151,6 +154,8 @@ jobs:
             fi
             export ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-$(node -p "require(\"./package.json\").version").tar.gz"
             test -f "$ADM_UPGRADE_PACKAGE"
+            # Integration tests install the verified release archive, not the source tree.
+            export ADM_LAB_PACKAGE="$ADM_UPGRADE_PACKAGE"
             trap "tests/splunk/lab.sh purge" EXIT
             tests/splunk/lab.sh up
             tests/splunk/lab.sh install
@@ -164,7 +169,7 @@ jobs:
           '
       - name: Preserve rehearsal evidence
         if: ${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule') }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pipeline-rehearsal-evidence
           path: |

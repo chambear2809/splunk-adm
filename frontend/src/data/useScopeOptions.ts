@@ -32,6 +32,7 @@ export function useScopeOptions(
           latest: "now",
           maxRows: 20000,
           signal: controller.signal,
+          allowEmpty: true,
         });
         requireNoSearchErrors(result, "Scope options search");
         return { rows: parseScopes(result.rows), warnings: result.warnings };

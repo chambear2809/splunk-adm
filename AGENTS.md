@@ -2,7 +2,7 @@
 
 ## Project Structure
 
-This repository currently contains research and project guidance. Dependency mapping investigations and package findings live in `docs/`. Downloaded TA archives and extracted files belong in `research/packages/` and `research/extracted/`; both are ignored. Record package versions, download provenance, and checksums in `research/package-manifest.json`. Inspect vendor files as data; do not execute downloaded input scripts during static analysis. Codex settings live in `.codex/`; the independent reviewer is defined in `.codex/agents/reviewer.toml`. `.github/pull_request_template.md` provides the change checklist. Place application source and tests in clearly named directories such as `src/` and `tests/` when implementation begins.
+The Splunk app (Application Atlas) lives in `splunk_app/splunk_adm/` (confs, REST handlers, recovery alert action). Its React frontend is in `frontend/src/`, build/packaging/qualification tooling in `tools/`, Python and lab tests in `tests/` (`tests/splunk/` for the Splunk lab, `tests/browser/` for Playwright), and TA-grounded synthetic fixtures in `fixtures/`. Design records, operator guides and package findings live in `docs/`. Downloaded TA archives and extracted files belong in `research/packages/` and `research/extracted/`; both are ignored. Record package versions, download provenance, and checksums in `research/package-manifest.json`. Inspect vendor files as data; do not execute downloaded input scripts during static analysis. Codex settings live in `.codex/`; the independent reviewer is defined in `.codex/agents/reviewer.toml`. `.github/pull_request_template.md` provides the change checklist.
 
 ## Development and Validation
 

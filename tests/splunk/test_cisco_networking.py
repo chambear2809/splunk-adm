@@ -172,6 +172,43 @@ class CiscoNetworkingContractTest(unittest.TestCase):
             definition, r'adm_scope="default"|scope=coalesce\(scope,\s*"default"\)'
         )
 
+    def test_ipfix_exporter_authority_and_domain_flag_are_normalized_on_both_sides(
+        self,
+    ):
+        migration = self.searches.get("ADM - Migrate network source scope", "search")
+        self.assertIn(
+            'source_authority=if(source=="stream_ipfix", lower(trim(source_authority)), trim(source_authority))',
+            migration,
+        )
+        self.assertIn('trim(observation_domain_present)=="1"', migration)
+        self.assertIn(
+            'adm_scope_authority=lower(trim(coalesce(adm_raw_exporter_ip, "")))',
+            self.macros.get("adm_flows_netflow_v2", "definition"),
+        )
+
+    def test_ipfix_authority_upgrade_is_manual_in_place_and_fail_closed(self):
+        name = "ADM - Normalize IPFIX source scope authority"
+        stanza = dict(self.searches.items(name))
+        self.assertEqual(stanza["disabled"], "1")
+        self.assertEqual(stanza["enablesched"], "0")
+        self.assertEqual(stanza["dispatchas"], "owner")
+        search = stanza["search"]
+        self.assertIn("outputlookup append=true key_field=_key", search)
+        self.assertIn("dc(mapping_key) AS adm_source_keys", search)
+        self.assertIn("where adm_blocked==0", search)
+        migration = self.searches.get("ADM - Migrate network source scope", "search")
+        key_expression = re.search(r"mapping_key=(sha256\(.*?\)\)\)\))", migration)
+        self.assertIsNotNone(key_expression)
+        self.assertIn(
+            key_expression.group(1).replace("source_authority", "adm_authority"),
+            search,
+        )
+        health = self.macros.get("adm_health_network_profile_rows", "definition")
+        self.assertIn(
+            'source!="stream_ipfix" OR source_authority==lower(trim(source_authority))',
+            health,
+        )
+
     def test_network_client_timestamp_semantics_and_meraki_allowlist(self):
         definition = expanded_private_definition(
             self.macros, "adm_network_client_history_observations"
@@ -638,7 +675,7 @@ class CiscoNetworkingLabTest(unittest.TestCase):
                 "source-scope profile outputlookup did not report the expected write count"
             )
         readback = self.lab.search(
-            f'| inputlookup strict=true adm_network_source_scope | search source_authority="{self.exporter}" | stats count AS rows',
+            f'| inputlookup strict=true adm_network_source_scope | search source_authority="{profiles[0]["source_authority"]}" | stats count AS rows',
             "0",
             "+10y",
         )
@@ -756,6 +793,94 @@ class CiscoNetworkingLabTest(unittest.TestCase):
             self.assertEqual(evidence["counter_semantics"], "unknown")
             self.assertEqual(evidence["metrics_authoritative"], "0")
             self.assertEqual(evidence["records"], 1)
+
+    def test_mixed_case_ipv6_exporter_maps_to_its_lowercase_registered_authority(
+        self,
+    ):
+        import uuid
+
+        exporter = "2001:DB8::ABCD:" + uuid.uuid4().hex[:4].upper()
+        profile = self._profile("0", "", "", "", "standard_netflow")
+        profile["source_authority"] = exporter.lower()
+        self._seed_profiles([profile])
+        event = self._stream_event(False, None, 4)
+        event["event"]["exporter_ip"] = exporter
+        self._load([event])
+        rows = self.lab.search(
+            f'| `adm_flows_v2` | search adm_scope_authority="{exporter.lower()}" | table adm_scope_authority adm_profile_status adm_scope adm_traffic_observation',
+            "0",
+            "+10y",
+        )
+        self.assertEqual(len(rows), 1, rows)
+        evidence = self._json.loads(rows[0]["adm_traffic_observation"])
+        self.assertEqual(evidence["source_authority"], exporter.lower())
+        self.assertEqual(evidence["exporter_ip"], exporter)
+        self.assertEqual(rows[0]["adm_scope_authority"], exporter.lower())
+        self.assertEqual(rows[0]["adm_profile_status"], "mapped", rows[0])
+        self.assertEqual(rows[0]["adm_scope"], self.scope)
+
+    def _normalization_search(self) -> str:
+        return self.searches_conf.get(
+            "ADM - Normalize IPFIX source scope authority", "search"
+        ).replace("\\\n", " ")
+
+    @property
+    def searches_conf(self):
+        return read_conf("savedsearches.conf")
+
+    def _scope_rows(self, authority: str) -> list[dict]:
+        return self.lab.search(
+            "| inputlookup strict=true adm_network_source_scope "
+            f'| where scope="{self.scope}" AND lower(source_authority)="{authority.lower()}" '
+            "| table _key mapping_key source_authority",
+            "0",
+            "+10y",
+        )
+
+    def test_legacy_mixed_case_ipfix_profile_is_rekeyed_in_place(self):
+        import uuid
+
+        exporter = "2001:DB8::BEEF:" + uuid.uuid4().hex[:4].upper()
+        profile = self._profile("0", "", "", "", "standard_netflow")
+        profile["source_authority"] = exporter
+        self._seed_profiles([profile])
+        before = self._scope_rows(exporter)
+        self.assertEqual(len(before), 1, before)
+        result = self.lab.search(self._normalization_search())
+        self.assertEqual(result[0]["blocked"], "0", result)
+        self.assertGreaterEqual(int(result[0]["rows_written"]), 1, result)
+        after = self._scope_rows(exporter)
+        self.assertEqual(len(after), 1, after)
+        self.assertEqual(after[0]["_key"], before[0]["_key"])
+        self.assertEqual(after[0]["source_authority"], exporter.lower())
+        self.assertNotEqual(after[0]["mapping_key"], before[0]["mapping_key"])
+        rerun = self.lab.search(self._normalization_search())
+        self.assertEqual(rerun[0]["rows_written"], "0", rerun)
+        event = self._stream_event(False, None, 5)
+        event["event"]["exporter_ip"] = exporter
+        self._load([event])
+        rows = self.lab.search(
+            f'| `adm_flows_v2` | search adm_scope_authority="{exporter.lower()}" | table adm_profile_status adm_scope',
+            "0",
+            "+10y",
+        )
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0]["adm_profile_status"], "mapped", rows[0])
+        self.assertEqual(rows[0]["adm_scope"], self.scope)
+
+    def test_ipfix_normalization_refuses_colliding_mappings(self):
+        import uuid
+
+        exporter = "2001:DB8::CAFE:" + uuid.uuid4().hex[:4].upper()
+        legacy = self._profile("0", "", "", "", "standard_netflow")
+        legacy["source_authority"] = exporter
+        current = dict(legacy, source_authority=exporter.lower())
+        self._seed_profiles([legacy, current])
+        result = self.lab.search(self._normalization_search())
+        self.assertEqual(result[0]["blocked"], "1", result)
+        self.assertEqual(result[0]["rows_written"], "0", result)
+        stored = {row["source_authority"] for row in self._scope_rows(exporter)}
+        self.assertEqual(stored, {exporter, exporter.lower()})
 
     def test_raw_interfaces_and_ifindex_do_not_inherit_unscoped_inventory_names(self):
         inventory = {

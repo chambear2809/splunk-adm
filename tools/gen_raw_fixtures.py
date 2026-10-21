@@ -652,12 +652,13 @@ def nexus9k(s: Scenario) -> list[dict]:
                 )
 
             emit("cisco_nexus_9k://nxhostname", "nxhostname", [{"hostname": name}])
-            # "show version" (default/inputs.conf:143). Cisco NX-OS show-version JSON
-            # includes proc_board_id; the TA passes Row_info through unchanged.
+            # "show version" (default/inputs.conf:143). Its JSON has only scalar
+            # top-level keys, which the TA emits as one {key: value} list item each
+            # (bin/cisco_nexus_9k.py:155-180); proc_board_id follows nxos_ver_str.
             emit(
                 "cisco_nexus_9k://nxversion",
                 "nxversion",
-                [{"nxos_ver_str": sw["nxos"], "proc_board_id": sw["serial"]}],
+                [{"nxos_ver_str": sw["nxos"]}, {"proc_board_id": sw["serial"]}],
             )
             for i in names.get(name, []):
                 emit(
@@ -2710,12 +2711,12 @@ def aci_otel_traces(s: AciScenario) -> list[dict]:
     return out
 
 
-def main_aci() -> int:
+def main_aci(out_dir: Path = RAW_ACI) -> int:
     s = AciScenario(json.loads((RAW_ACI / "scenario.json").read_text()))
     outputs = aci_outputs(s)
     for name, events in outputs.items():
-        print(f"{name}: {write(name, events, RAW_ACI)}")
-    main_aci_edge(s.doc)
+        print(f"{name}: {write(name, events, out_dir)}")
+    main_aci_edge(s.doc, out_dir)
     return 0
 
 
@@ -2848,7 +2849,7 @@ def aci_edge_kube_objects(s: AciScenario, edge: dict) -> list[dict]:
     return out, late
 
 
-def main_aci_edge(base: dict) -> None:
+def main_aci_edge(base: dict, out_dir: Path = RAW_ACI) -> None:
     edge = json.loads((RAW_ACI / "edge-cases.json").read_text())
     s = AciScenario(aci_edge_doc(base, edge))
     end = epoch(s.window_end)
@@ -2871,7 +2872,7 @@ def main_aci_edge(base: dict) -> None:
         "isovalent.ndjson": aci_isovalent(s),
         "otel_traces.ndjson": aci_otel_traces(s),
     }
-    edge_dir, late_dir = RAW_ACI / "edge", RAW_ACI / "edge" / "late"
+    edge_dir, late_dir = out_dir / "edge", out_dir / "edge" / "late"
     late_dir.mkdir(parents=True, exist_ok=True)
     late = {"kube_objects.ndjson": kube_late}
     for name, events in outputs.items():
@@ -3519,21 +3520,25 @@ def main() -> int:
     )
     parser.add_argument(
         "--output-dir",
-        help="write the combined networking dataset and capture manifest here instead of fixtures/raw-networking/",
+        help="write generated files here instead of the scenario's fixtures/ directory (not supported for aci-prev)",
     )
     args = parser.parse_args()
     scenario = args.scenario
     base_time = args.base_time
+    out_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
     if scenario == "networking":
         return main_networking(base_time, args.output_dir)
     if scenario == "aci":
-        return main_aci()
+        return main_aci(out_dir or RAW_ACI)
     if scenario == "aci-prev":
+        if out_dir:
+            parser.error("--output-dir is not supported for aci-prev")
         return main_aci_previous()
+    out_dir = out_dir or RAW
     s = Scenario(json.loads((RAW / "scenario.json").read_text()))
     aci_stats, aci_class = aci(s)
     netflow, netflow_late = stream_netflow(s)
-    (RAW / "late").mkdir(exist_ok=True)
+    (out_dir / "late").mkdir(parents=True, exist_ok=True)
     outputs = {
         "stream_netflow.ndjson": netflow,
         "late/stream_netflow.ndjson": netflow_late,
@@ -3548,7 +3553,7 @@ def main() -> int:
         "otel_traces.ndjson": otel_traces(s),
     }
     for name, events in outputs.items():
-        print(f"{name}: {write(name, events)}")
+        print(f"{name}: {write(name, events, out_dir)}")
     return 0
 
 

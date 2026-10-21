@@ -14,6 +14,34 @@ from adm_recovery_lib.core import Recovery, Settings, TARGET_WINDOWS  # noqa: E4
 from adm_recovery_lib.rest import Rest  # noqa: E402
 
 
+def _spl_string(value):
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+# The detector also reports V2 writers, which this action cannot replay.
+DETECTOR_QUERY = (
+    '| `adm_health_missed_slots` | where reason="missed_slot" '
+    "| search name IN ("
+    + ", ".join(_spl_string(name) for name in sorted(TARGET_WINDOWS))
+    + ") | sort 0 scheduled_time"
+)
+
+
+def earliest_replayable(rows):
+    """Return the earliest detector row this action can replay, if any."""
+    candidates = []
+    for row in rows:
+        name = row.get("name")
+        if name not in TARGET_WINDOWS:
+            continue
+        try:
+            scheduled = float(row.get("scheduled_time"))
+        except (TypeError, ValueError):
+            continue
+        candidates.append((scheduled, name))
+    return min(candidates)[1] if candidates else None
+
+
 def main():
     parser = configparser.RawConfigParser()
     parser.read(
@@ -42,15 +70,12 @@ def main():
     )
     recovery = Recovery(api, settings)
     if target not in TARGET_WINDOWS:
-        rows = recovery.search(
-            '| `adm_health_missed_slots` | where reason="missed_slot" | sort scheduled_time'
-        )
-        if not rows:
+        target = earliest_replayable(recovery.search(DETECTOR_QUERY))
+        if target is None:
             print(
                 json.dumps({"status": "noop", "reason": "no replayable detector rows"})
             )
             return 0
-        target = rows[0]["name"]
     result = recovery.run(target)
     print(json.dumps(result, sort_keys=True))
     return 0 if result["status"] in ("noop", "recovered") else 1

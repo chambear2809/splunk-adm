@@ -1493,6 +1493,31 @@ describe("Stream/IPFIX exporter resolution", () => {
     ).toMatchObject({ key: LEAF_102, resolved: true });
   });
 
+  it("matches IPv6 exporter observers to their traffic observation", () => {
+    const { graph, topology, edge } = scenario();
+    const ipv6 = "2001:db8::66";
+    for (const item of edge.traffic_observations!) {
+      if (item.exporter_ip !== "192.0.2.102") continue;
+      item.exporter_ip = ipv6;
+      item.source_authority = ipv6;
+    }
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    const ipv6SeenBy = () =>
+      observationsByDevice(
+        { ...edge, observers: [`netflow:${ipv6}:ifIndex 436400128>`] },
+        indexTopology(topology),
+        [],
+        edgeDeviceContext(edge, indexGraph(graph)),
+      );
+    leaf.mgmt_ip = ipv6;
+    expect(ipv6SeenBy()[0]).toMatchObject({ key: LEAF_102, resolved: true });
+    leaf.scope = "meraki-nxos";
+    expect(ipv6SeenBy()[0]).toMatchObject({
+      key: JSON.stringify([ipv6, "campus-aci", "cilium-aci-east"]),
+      resolved: false,
+    });
+  });
+
   it("does not resolve the same management IP from another scope", () => {
     const { graph, topology, edge } = scenario();
     const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
@@ -1586,6 +1611,32 @@ describe("Stream/IPFIX exporter resolution", () => {
       `Exporter leaf-102 (${LEAF_102})`,
     );
     expect(seenBy(graph, topology, edge)).toEqual([]);
+  });
+
+  it("matches a normalized authority to a mixed-case IPv6 exporter address", () => {
+    const { graph, topology, edge } = scenario();
+    const leaf = topology.devices.find((device) => device.id === LEAF_102)!;
+    leaf.mgmt_ip = "2001:db8::102";
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "192.0.2.102") {
+        item.exporter_ip = "2001:DB8::102";
+        item.source_authority = "2001:db8::102";
+      }
+    expect(exporterContexts(graph, topology)).toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "2001:DB8::102")
+        item.source_authority = " 2001:DB8::102 ";
+    expect(exporterContexts(graph, topology)).toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
+    for (const item of edge.traffic_observations!)
+      if (item.exporter_ip === "2001:DB8::102")
+        item.source_authority = "2001:db8::103";
+    expect(exporterContexts(graph, topology)).not.toContain(
+      `Exporter leaf-102 (${LEAF_102})`,
+    );
   });
 
   it("requires an exporter authority equal to the exporter address on a V2 topology", () => {

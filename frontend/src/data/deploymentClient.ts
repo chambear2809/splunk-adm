@@ -13,6 +13,8 @@ import {
 } from "./deploymentHealth";
 
 const ENDPOINT = "adm/deployment-settings";
+const UNCERTAIN =
+  "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.";
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 export class DeploymentWriteError extends Error {
@@ -57,7 +59,10 @@ export class ToolkitDeploymentClient implements DeploymentClient {
   private pending = new Map<string, string>();
   private observedRevision?: string;
   private namespace?: string;
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  // Native fetch throws "Illegal invocation" when called as another object's method.
+  constructor(
+    private readonly fetcher: typeof fetch = (...args) => fetch(...args),
+  ) {}
   private async request(
     path: string,
     signal?: AbortSignal,
@@ -75,21 +80,35 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const headers = new Headers(defaults.headers);
       if (body !== undefined) headers.set("Content-Type", "application/json");
       const endpoint = `${path}?output_mode=json`;
-      const response = await this.fetcher(
-        createRESTURL(
-          endpoint,
-          global ? undefined : { app: "splunk_adm", owner: "nobody" },
-        ),
-        {
-          ...defaults,
-          headers,
-          signal: controller.signal,
-          method: body === undefined ? "GET" : "POST",
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        },
-      );
-      const payload: unknown = await response.json();
+      let response: Response;
+      try {
+        response = await this.fetcher(
+          createRESTURL(
+            endpoint,
+            global ? undefined : { app: "splunk_adm", owner: "nobody" },
+          ),
+          {
+            ...defaults,
+            headers,
+            signal: controller.signal,
+            method: body === undefined ? "GET" : "POST",
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          },
+        );
+      } catch (reason) {
+        // A timed-out, cancelled or dropped POST may still have committed.
+        if (body !== undefined)
+          throw new DeploymentWriteError("uncertain", UNCERTAIN);
+        throw reason;
+      }
+      const payload: unknown = await response.json().catch(() => undefined);
+      const coded = object(payload) && typeof payload.code === "string";
+      // A proxy/gateway failure on POST says nothing about whether the insert landed.
+      if (body !== undefined && (response.ok ? payload === undefined : !coded))
+        throw new DeploymentWriteError("uncertain", UNCERTAIN);
       if (!response.ok) throw new HTTPError(response.status, payload);
+      if (payload === undefined)
+        throw new Error("Deployment settings response is not JSON.");
       return payload;
     } finally {
       clearTimeout(timeout);
@@ -290,16 +309,17 @@ export class ToolkitDeploymentClient implements DeploymentClient {
   ): Promise<DeploymentSnapshot> {
     const validated = validateExpectations(settings);
     const before = await this.read(signal);
+    if (before.state === "unavailable")
+      throw new DeploymentWriteError(
+        "unavailable",
+        before.error ??
+          "Read deployment expectations successfully before changing them.",
+      );
     if (!before.canWrite || !before.namespace)
       throw new DeploymentWriteError(
         "forbidden",
         before.writeUnavailableReason ??
           "Administrator capability and collection write permission are required.",
-      );
-    if (before.state === "unavailable")
-      throw new DeploymentWriteError(
-        "unavailable",
-        "Read deployment expectations successfully before changing them.",
       );
     const signature = JSON.stringify([
       expectedRevision ?? null,
@@ -320,10 +340,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       typeof result.committedRevision !== "string" ||
       result.requestId !== requestId
     )
-      throw new DeploymentWriteError(
-        "uncertain",
-        "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.",
-      );
+      throw new DeploymentWriteError("uncertain", UNCERTAIN);
     const after = await this.read(signal);
     if (
       after.state !== "configured" ||

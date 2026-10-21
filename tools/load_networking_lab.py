@@ -101,6 +101,19 @@ def _lookup(lab, collection: str, rows: list[dict], key: tuple[str, ...]) -> Non
             }
             for row in rows
         ]
+    if collection == "adm_network_source_scope":
+        # IPFIX events key on the lowercase, trimmed exporter address.
+        rows = [
+            {
+                **row,
+                "source_authority": str(row.get("source_authority", ""))
+                .strip()
+                .lower(),
+            }
+            if row.get("source") == "stream_ipfix"
+            else row
+            for row in rows
+        ]
     identities = [tuple(str(row.get(field, "")) for field in key) for row in rows]
     if len(set(identities)) != len(identities):
         raise ValueError(f"duplicate configured key in {collection}")

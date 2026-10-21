@@ -63,6 +63,29 @@ class NetworkingLabLoaderTest(unittest.TestCase):
             f"mapping_key=sha256(json_array({expression}))", query.call_args.args[1]
         )
 
+    def test_ipfix_profile_authority_is_lowercased_and_trimmed_before_write(self):
+        base = dict.fromkeys(PROFILE_KEY, "")
+        ipfix = dict(base, source="stream_ipfix", source_authority=" 2001:DB8::A ")
+        meraki = dict(base, source="meraki_association", source_authority="OrgA")
+        with patch(
+            "tools.load_networking_lab.search", return_value=([ipfix, meraki], {})
+        ) as query:
+            _lookup(None, "adm_network_source_scope", [ipfix, meraki], PROFILE_KEY)
+        written = json.loads(
+            json.loads(query.call_args.args[1].split("data=", 1)[1].split(" | ", 1)[0])
+        )
+        self.assertEqual(
+            [row["source_authority"] for row in written], ["2001:db8::a", "OrgA"]
+        )
+        rows = [
+            dict(ipfix, source_authority="2001:DB8::A"),
+            dict(ipfix, source_authority="2001:db8::a"),
+        ]
+        with patch("tools.load_networking_lab.search") as search:
+            with self.assertRaises(ValueError):
+                _lookup(None, "adm_network_source_scope", rows, PROFILE_KEY)
+            search.assert_not_called()
+
     def test_dispatch_refuses_active_schedule_and_keeps_unknown_job_stopped(self):
         lab = Mock()
         lab._json.return_value = {

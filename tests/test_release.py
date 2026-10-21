@@ -450,6 +450,50 @@ class ReleaseArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "secret-like path"):
             check_release(self.root / "dist", self.root / "package.json")
 
+    def test_rejects_deployment_local_metadata(self):
+        for path in (
+            "splunk_adm/metadata/local.meta",
+            "splunk_adm/metadata/LOCAL.META",
+            "splunk_adm/local/app.conf",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"[]\naccess = read : [ * ]\n"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "deployment-local path"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_development_artifacts(self):
+        for path in (
+            "splunk_adm/bin/__pycache__/adm_settings.cpython-313.pyc",
+            "splunk_adm/bin/adm_settings.pyc",
+            "splunk_adm/bin/adm_settings.pyo",
+            "splunk_adm/default/._app.conf",
+            "splunk_adm/appserver/.DS_Store",
+            "splunk_adm/.git/config",
+            "splunk_adm/appserver/static/node_modules/react/index.js",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"x"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "development artifact"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_empty_local_or_development_directories(self):
+        for path, message in (
+            ("splunk_adm/local", "deployment-local path"),
+            ("splunk_adm/bin/__pycache__", "development artifact"),
+        ):
+            with self.subTest(path=path):
+                directory = tarfile.TarInfo(path)
+                directory.type = tarfile.DIRTYPE
+                self._write_archive(
+                    "splunk_adm-1.2.3.tar.gz", self._files(), [directory]
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    check_release(self.root / "dist", self.root / "package.json")
+
     def test_rejects_custom_mako_template(self):
         for path in (
             "splunk_adm/appserver/templates/atlas.html",

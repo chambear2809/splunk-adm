@@ -317,11 +317,14 @@ export const observedKeyContext = (
 ): DeviceResolutionContext => ({ ...context, authority: undefined });
 
 // Stream/IPFIX source_authority is the exporter address (adm_traffic_observation in macros.conf).
+// The macro lowercases/trims the authority but keeps exporter_ip raw; older summaries keep both raw.
 const exporterAuthorityAgrees = (
   observation: TrafficObservation,
   topo: TopologyIndex,
 ) =>
-  observation.source_authority === observation.exporter_ip ||
+  (!!observation.source_authority &&
+    !!observation.exporter_ip &&
+    key(observation.source_authority) === key(observation.exporter_ip)) ||
   (!topo.containsV2Devices && !observation.source_authority);
 
 /** Summarize aggregate frontend coverage; client-specific evidence is validated separately. */
@@ -721,6 +724,9 @@ function resolveIf(
  * observation points. Nexus Dashboard reports ingress and egress leaves
  * (`<fabric>:<leaf>:<if>><leaf>:<if>`), so it yields up to two points.
  */
+// Exporter/firewall observers are `<source>:<ip>[:<in>><out>]`; the address may be IPv6.
+const OBSERVER_INTERFACES = /^(.*):([^:>]*)>([^:>]*)$/;
+
 export function parseObserver(
   observer: string,
   topo: TopologyIndex,
@@ -799,7 +805,7 @@ export function parseObserver(
           },
         ];
   }
-  const m = /^(.*):([^:>]*)>([^:>]*)$/.exec(rest);
+  const m = OBSERVER_INTERFACES.exec(rest);
   const ip = m ? m[1] : rest;
   const device = resolveDevice(
     ip,
@@ -849,7 +855,7 @@ function parseEdgeObserver(
   if (context.conflict) return [];
   const at = observer.indexOf(":");
   const rest = at < 0 ? "" : observer.slice(at + 1);
-  const ip = rest.split(":", 1)[0];
+  const ip = OBSERVER_INTERFACES.exec(rest)?.[1] ?? rest;
   const observations =
     edge.traffic_observations?.filter(
       (item) => !!item.exporter_ip && item.exporter_ip === ip,

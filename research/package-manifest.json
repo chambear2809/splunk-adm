@@ -224,24 +224,24 @@
     {
       "title": "Cisco Enterprise Networking Add-on for Splunk",
       "splunkbase_id": "7538",
-      "version": "4.0.50",
+      "version": "4.0.60",
       "status": "downloaded_and_statically_inspected",
-      "archive_path": "research/packages/cisco-enterprise-networking-add-on-for-splunk_4050.tgz",
-      "extracted_path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst",
-      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7538/releases/4.0.50/download/?origin=sb&lead=true",
+      "archive_path": "research/packages/cisco-enterprise-networking-add-on-for-splunk_4060.tgz",
+      "extracted_path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst",
+      "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7538/releases/4.0.60/download/?origin=sb&lead=true",
       "source_metadata_url": "https://splunkbase.splunk.com/app/7538",
-      "sha256": "deae4c416a61a6cc0366398a1f2c32463a070af7e797640cb15ddce8efeba783",
-      "bytes": 49695910,
+      "sha256": "bbf2ace479e3fc9b15fbe5c8c30b212fdf474931a7b428f361219e6c19a1172d",
+      "bytes": 52763218,
       "publisher_digest_verified": true,
-      "publisher_digest_source": "SHA-256 displayed by the authenticated Splunkbase download confirmation",
-      "acquired_at": "2026-10-16",
+      "publisher_digest_source": "SHA-256 computed locally from the user's authenticated Splunkbase browser download; the user confirmed on 2026-10-21 that it matches the Splunkbase-published digest",
+      "acquired_at": "2026-10-20",
       "app_conf_versions": {
-        "launcher": "4.0.50",
-        "id": "4.0.50"
+        "launcher": "4.0.60",
+        "id": "4.0.60"
       },
       "extraction_scope": "All regular files; traversal, links, special files, duplicate paths and oversized entries rejected; file execute permissions removed",
-      "extracted_files": 2663,
-      "license_acceptance": "Cisco EULA and Splunk terms/privacy explicitly approved by the user on 2026-10-16",
+      "extracted_files": 2678,
+      "license_acceptance": "Accepted by the user during the authenticated Splunkbase download on 2026-10-20",
       "download_method": "Authenticated Splunkbase browser download",
       "installed": true,
       "executed": false,
@@ -250,9 +250,10 @@
       "lab_installation": {
         "target": "Disposable standalone Splunk Enterprise 10.6.0.5 on localhost",
         "scope": "Search/parsing configuration only; no input scripts or configured collectors",
-        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
+        "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-20 with 4.0.60",
         "collector_scripts_executed": false
-      }
+      },
+      "upgrade_review": "Replaces 4.0.50 (sha256 deae4c41...ba783). Static diff: search-time change limited to the x_status severity EVAL (CRITICAL now maps to critical); other changes are ISE/pxGrid collection code, setup UI assets and specs, none consumed by splunk_adm. All 21 cited evidence line ranges are byte-identical."
     },
     {
       "title": "Cisco Enterprise Networking NetFlow Add-on for Splunk",

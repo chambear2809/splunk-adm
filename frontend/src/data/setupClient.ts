@@ -414,7 +414,8 @@ class SetupHTTPError extends Error {
 export class ToolkitSetupClient implements SetupClient {
   private readonly deploymentClient: DeploymentClient;
   constructor(
-    private readonly fetcher: typeof fetch = fetch,
+    // Native fetch throws "Illegal invocation" when called as another object's method.
+    private readonly fetcher: typeof fetch = (...args) => fetch(...args),
     deploymentClient?: DeploymentClient,
   ) {
     this.deploymentClient =
@@ -840,8 +841,12 @@ export class ToolkitSetupClient implements SetupClient {
     const contract = macros.find(
       (row) => row.name === "adm_data_contract_version",
     );
-    const activeV2 = contract?.definition === "2";
-    if (!activeV2 && contract?.definition !== "1")
+    const version =
+      contract?.definition === undefined
+        ? undefined
+        : normalizeDefinition(contract.definition);
+    const activeV2 = version === "2";
+    if (!activeV2 && version !== "1")
       reasons.push("The active data contract could not be verified.");
     for (const selector of DATA_CONTRACT_SELECTORS.filter(
       (item) => item.name !== "adm_data_contract_version",

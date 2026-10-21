@@ -318,9 +318,9 @@ The `adm_recovery` custom administrator-only alert action is shipped
 disabled through both `action.adm_recovery=0` and `[recovery] enabled=0` in
 `default/adm_recovery.conf`; enable it only through local overrides. Enabling
 the detector's notification does not enable recovery. The action is intended
-for standalone Splunk Enterprise 10.6.x. The qualification gate accepts any 10.6
-patch release; the [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
-passed on 10.6.0.5, the only patch release tested. The separately disabled abandoned-lease supervisor reports uncertain
+for standalone Splunk Enterprise 10.6.0.5. The qualification gate accepts only
+that exact release, the same set as the settings write gate; the [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
+passed on 10.6.0.5. Other patch releases are refused until qualified. The separately disabled abandoned-lease supervisor reports uncertain
 recovery state for operator reconciliation; it does not take over a claim or
 resume a writer. SHC and failover are outside the qualification. It requires the
 target saved search to retain its shipped absolute windows and
@@ -479,7 +479,7 @@ The identity tests ingest pod observations and assert exact client and server UI
 | Deployment | Current evidence / operational boundary |
 | --- | --- |
 | Standalone Enterprise 10.6.0.5 | Historical synthetic lab qualification; every release candidate still requires its exact archive and live regression evidence. |
-| Other 10.6.x patches | Accepted by recovery/migration shape guards but not separately live qualified. |
+| Other 10.6.x patches | Not live qualified. Automated recovery, V2 migration and settings writes refuse them. |
 | Distributed Enterprise / remote peers | Bounded synthetic SHC data-layer searches through a separate 10.6.0.5 peer passed; peer-export freshness, production load and other topologies remain unqualified. Automated recovery and V2 migration refuse remote peers. |
 | Search head clustering | Bounded 10.6.0.5 checks cover graph/search, member KV convergence, permissions, browser access, configuration reapplication, scheduled execution during captain loss and unassisted member rejoin. An earlier assisted run is retained separately. Production availability, capacity and version upgrades remain unqualified. Automated recovery and V2 migration refuse SHC. |
 | Splunk Cloud | Private-app vetting and runtime qualification outstanding; automated recovery and V2 migration refuse Cloud. |

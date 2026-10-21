@@ -24,7 +24,8 @@ APP = "/servicesNS/nobody/splunk_adm"
 STATE = APP + "/storage/collections/data/adm_recovery_state"
 AUDIT = APP + "/storage/collections/data/adm_recovery_audit"
 ROLLUP = "ADM - Conversation rollup"
-SUPPORTED_VERSION = re.compile(r"10\.6(\.[0-9]+){1,2}")
+# Must equal adm_settings_lib.rest.QUALIFIED_VERSIONS; each patch is live-qualified.
+QUALIFIED_VERSIONS = frozenset({"10.6.0.5"})
 FIELDS = (
     "search",
     "cron_schedule",
@@ -238,8 +239,12 @@ class Recovery:
 
         server = content("/services/server/info")
         version = server.get("version")
-        if not isinstance(version, str) or not SUPPORTED_VERSION.fullmatch(version):
-            raise Refused("only standalone Splunk Enterprise 10.6.x is qualified")
+        if not isinstance(version, str) or version not in QUALIFIED_VERSIONS:
+            raise Refused(
+                "only standalone Splunk Enterprise "
+                + ", ".join(sorted(QUALIFIED_VERSIONS))
+                + " is qualified"
+            )
         # instance_type=cloud is the discriminator used by Splunk's solnlib.
         # The qualified Enterprise instance omits it. Any new value requires
         # qualification rather than being treated as Enterprise by default.

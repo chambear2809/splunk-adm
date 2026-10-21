@@ -12,7 +12,7 @@ TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
   "cisco-security-cloud_372/CiscoSecurityCloud"
   "cisco-dc-networking_122/cisco_dc_networking_app_for_splunk"
-  "cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst"
+  "cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst"
   "cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl"
   "cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki"
 )
@@ -21,6 +21,15 @@ SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros collections ip
 LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y)
 
 py() { python3 "$HERE/lab.py" "$@"; }
+
+# Staging holds the rendered HEC token. A RETURN trap is skipped when set -e
+# exits the shell, so cleanup is bound to process exit and fatal signals.
+STAGE=""
+cleanup_stage() { [[ -z "$STAGE" ]] || rm -rf "$STAGE"; }
+trap cleanup_stage EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Re-exec under the cooperative lock. The token is inherited by nested lab
 # subprocesses; the lock itself remains held by the wrapper process.
@@ -78,9 +87,9 @@ copy_ta() {
 
 cmd_install() {
   local stage ta
-  stage="$(mktemp -d)"
+  STAGE="$(mktemp -d)"
+  stage="$STAGE"
   chmod 700 "$stage"
-  trap 'rm -rf "$stage"' RETURN
   for ta in "${TAS[@]}"; do
     [[ -d "$EXTRACTED/$ta" ]] || { echo "missing $EXTRACTED/$ta" >&2; return 1; }
     copy_ta "$EXTRACTED/$ta" "$stage/$(basename "$ta")"

@@ -70,7 +70,7 @@ Commands `show hostname`, `show version`, `show interface`, `show cdp neighbors 
 
 - `nxhostname`: `Row_info[].hostname`.
 - `nxinterface`: `interface`, `state`, `admin_state`, `share_state`, `desc`, `eth_hw_desc`, `eth_hw_addr`, `eth_bia_addr`, `eth_mtu`, `eth_bw`, `eth_duplex`, `eth_speed`, `medium` (alias list `props.conf:15`). NX-API value types are not grounded.
-- `nxversion`: `Row_info[].nxos_ver_str` only (`default/props.conf:21` `EVAL-version`); scenario `nxos`. Other `show version` keys are not grounded in the TA and are omitted.
+- `nxversion`: `Row_info` is `[{"nxos_ver_str"}, {"proc_board_id"}]`, one list item per scalar `show version` key (`bin/cisco_nexus_9k.py:155-180`). `nxos_ver_str` feeds `default/props.conf:21` `EVAL-version` (scenario `nxos`); `proc_board_id` (switch `serial`, synthetic) is the native chassis identity documented in the NX-OS 10.5(x) Programmability Guide `clid('show version')` output (see `fixtures/raw-networking/FIELDS.md`). Other `show version` keys are omitted.
 - `nxneighbor`: `ifindex`, `device_id` (`name(serial)`), `v4mgmtaddr`, `platform_id`, `capability[]`, `intf_id`, `port_id`, `ttl`. `ifindex` is the local port's SNMP ifIndex, emitted only where the scenario defines it (leaf uplinks).
 
 No default command reports ifIndex for host-facing ports, so `stream:netflow` `input_snmpidx`/`output_snmpidx` resolve to names only for CDP-connected uplinks. Mapping access ports needs an extra command such as `show interface snmp-ifindex`; its NX-API JSON schema is not in the TA, so `nexus9k_optional_snmp_ifindex.ndjson` was not generated. Border-1 interface rows are omitted (the scenario lists no border interfaces); its CDP rows are the reverse of the leaf entries.

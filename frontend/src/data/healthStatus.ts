@@ -60,6 +60,7 @@ export function HealthProvider({
       typeof document === "undefined" || document.visibilityState !== "hidden",
   );
   const active = useRef<AbortController>();
+  const source = useRef<unknown[]>();
   useEffect(() => {
     if (typeof document === "undefined") return;
     const changed = () => {
@@ -71,19 +72,34 @@ export function HealthProvider({
     return () => document.removeEventListener("visibilitychange", changed);
   }, []);
   useEffect(() => {
-    if (!shouldPollHealth(live, visible) || !client) {
+    if (!live || !client) {
       active.current?.abort();
+      source.current = undefined;
       setReport(undefined);
       setDeployment(undefined);
       setError(undefined);
       setBusy(false);
       return;
     }
+    if (!visible) {
+      active.current?.abort();
+      setBusy(false);
+      return;
+    }
+    // Background refreshes keep the last report; a different source starts clean.
+    const identity = [client, deploymentClient, scope];
+    if (
+      !source.current ||
+      source.current.some((value, i) => value !== identity[i])
+    ) {
+      source.current = identity;
+      setReport(undefined);
+      setDeployment(undefined);
+    }
     const controller = new AbortController();
     active.current = controller;
     setBusy(true);
     setError(undefined);
-    setReport(undefined);
     const load = async () => {
       const settings: DeploymentSnapshot = deploymentClient
         ? await deploymentClient.read(controller.signal).catch(() => ({
@@ -105,10 +121,12 @@ export function HealthProvider({
         if (!controller.signal.aborted) setReport(result);
       })
       .catch((reason: unknown) => {
-        if (!controller.signal.aborted)
-          setError(
-            reason instanceof Error ? reason.message : "Health check failed.",
-          );
+        if (controller.signal.aborted) return;
+        // A failed refresh must not keep presenting earlier evidence as current.
+        setReport(undefined);
+        setError(
+          reason instanceof Error ? reason.message : "Health check failed.",
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);

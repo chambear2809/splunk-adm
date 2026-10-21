@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -28,9 +29,8 @@ class LabStagingTest(unittest.TestCase):
         shutil.copytree(ROOT / "tests/splunk/lab_app", here / "lab_app")
         tools = root / "tools"
         tools.mkdir()
-        shutil.copy2(
-            ROOT / "tools/stage_lab_package.py", tools / "stage_lab_package.py"
-        )
+        for tool in ("stage_lab_package.py", "check_release.py"):
+            shutil.copy2(ROOT / "tools" / tool, tools / tool)
         # The shell guard and restart are intercepted by fake python3 below.
         (tools / "lab_lock.py").write_text("# fake tool path\n")
         (here / "lab.py").write_text("# fake tool path\n")
@@ -39,7 +39,7 @@ class LabStagingTest(unittest.TestCase):
             ("splunk-add-on-for-stream-wire-data_816", "Splunk_TA_stream_wire_data"),
             ("cisco-security-cloud_372", "CiscoSecurityCloud"),
             ("cisco-dc-networking_122", "cisco_dc_networking_app_for_splunk"),
-            ("cisco-enterprise-networking-add-on-for-splunk_4050", "TA_cisco_catalyst"),
+            ("cisco-enterprise-networking-add-on-for-splunk_4060", "TA_cisco_catalyst"),
             (
                 "cisco-enterprise-networking-netflow-add-on-for-splunk_400",
                 "splunk_app_stream_ipfix_cisco_hsl",
@@ -92,6 +92,8 @@ class LabStagingTest(unittest.TestCase):
             "from pathlib import Path\n"
             "with Path(os.environ['TEST_ARGV']).open('a') as out:\n"
             "    out.write(json.dumps(['docker', *sys.argv[1:]])+'\\n')\n"
+            "if sys.argv[1] == 'cp' and os.environ.get('TEST_DOCKER_CP_FAIL'):\n"
+            "    raise SystemExit(1)\n"
             "if sys.argv[1] == 'cp':\n"
             "    source=Path(sys.argv[2]); stage=source.parent\n"
             "    assert stat.S_IMODE(stage.stat().st_mode)==0o700\n"
@@ -139,6 +141,8 @@ class LabStagingTest(unittest.TestCase):
                     entry.size = len(content)
                     entry.mode = 0o644
                     package.addfile(entry, io.BytesIO(content))
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            Path(f"{path}.sha256").write_text(f"{digest}  {path.name}\n")
             environment["ADM_LAB_PACKAGE"] = str(path)
         return here, environment
 
@@ -194,6 +198,37 @@ class LabStagingTest(unittest.TestCase):
                     "name=exact-candidate" if archive else "name=source-only",
                     installed.read_text(),
                 )
+
+    def test_rendered_staging_is_removed_on_success_and_failure(self):
+        for fail in (False, True):
+            with (
+                self.subTest(fail=fail),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                here, environment = self.fixture(directory)
+                scratch = root / "scratch"
+                scratch.mkdir()
+                mktemp = root / "fake-bin/mktemp"
+                mktemp.write_text(
+                    f"#!{sys.executable}\n"
+                    "import os, sys, tempfile\n"
+                    "assert sys.argv[1:] == ['-d']\n"
+                    "print(tempfile.mkdtemp(dir=os.environ['TEST_SCRATCH']))\n"
+                )
+                mktemp.chmod(0o755)
+                environment["TEST_SCRATCH"] = str(scratch)
+                if fail:
+                    environment["TEST_DOCKER_CP_FAIL"] = "1"
+                result = subprocess.run(
+                    ["bash", str(here / "lab.sh"), "install"],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                self.assertEqual(result.returncode != 0, fail, result.stderr)
+                self.assertEqual(list(scratch.iterdir()), [])
 
     def test_unprotected_or_ambiguous_secrets_fail_before_install_without_values(self):
         for secret_mode, duplicate in ((0o644, False), (0o600, True)):
