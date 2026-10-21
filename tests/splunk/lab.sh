@@ -12,7 +12,7 @@ TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
   "cisco-security-cloud_372/CiscoSecurityCloud"
   "cisco-dc-networking_122/cisco_dc_networking_app_for_splunk"
-  "cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst"
+  "cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst"
   "cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl"
   "cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki"
 )

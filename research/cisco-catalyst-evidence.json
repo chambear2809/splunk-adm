@@ -5,8 +5,8 @@
     "packages": [
       {
         "name": "Cisco Enterprise Networking Add-on for Splunk",
-        "package_version": "4.0.50",
-        "path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst"
+        "package_version": "4.0.60",
+        "path": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst"
       },
       {
         "name": "Cisco Enterprise Networking NetFlow Add-on for Splunk",
@@ -77,12 +77,12 @@
         }
       },
       "sources": [
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/inputs.conf", "lines": "67-74", "supports": "Sourcetype, interval, disabled default." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "3422-3455", "supports": "Client list API and available filters." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/consts.py", "lines": "40-45", "supports": "Client page-size, sort, interval, overlap and readiness bounds." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py", "lines": "23-40,67-112,192-233,270-353,450-481", "supports": "Time window, page validation and bounded pagination, endpoint client, raw JSON event emission and host selection." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "644-681", "supports": "lastUpdatedTime indexing, raw JSON search-time extraction, wired-client caveat and available aliases." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "202-229", "supports": "Account/input setup fields; service identity configured at the add-on." }
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/inputs.conf", "lines": "67-74", "supports": "Sourcetype, interval, disabled default." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "3422-3455", "supports": "Client list API and available filters." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/consts.py", "lines": "40-45", "supports": "Client page-size, sort, interval, overlap and readiness bounds." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py", "lines": "23-40,67-112,192-233,270-353,450-481", "supports": "Time window, page validation and bounded pagination, endpoint client, raw JSON event emission and host selection." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/props.conf", "lines": "644-681", "supports": "lastUpdatedTime indexing, raw JSON search-time extraction, wired-client caveat and available aliases." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/README.md", "lines": "202-229", "supports": "Account/input setup fields; service identity configured at the add-on." }
       ]
     },
     "inventory_and_physical_adjacency": {
@@ -92,34 +92,34 @@
           "dataset": "Network-device inventory",
           "facts": "The endpoint catalog describes GET /dna/intent/api/v1/network-device as a paginated inventory API with offset/limit, one-based offsets, up to 500 records per page, and a count endpoint. The bounded setup inventory projects device id, name, management IP, family/type, model, site path, reachability/management status, and interface count. That compact setup projection is not itself an indexed modular-input event schema.",
           "sources": [
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2137-2153", "supports": "Endpoint path and documented offset/limit inventory contract." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_interface_inventory.py", "lines": "1-81", "supports": "Read-only bounded inventory projection and one-based pages." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "149", "supports": "Dedicated inventory page-size, drift and fail-closed limitations." }
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2137-2153", "supports": "Endpoint path and documented offset/limit inventory contract." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_interface_inventory.py", "lines": "1-81", "supports": "Read-only bounded inventory projection and one-based pages." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/README.md", "lines": "149", "supports": "Dedicated inventory page-size, drift and fail-closed limitations." }
           ]
         },
         {
           "dataset": "Site Topology",
           "facts": "The dedicated input pages GET /dna/intent/api/v1/topology/site-topology (default 3600 seconds, disabled) and serializes each site record with snapshot_id, snapshot_sequence and snapshot_expected_records. Its hierarchy enrichment types only explicitly identified geography/campus/area/building/floor nodes; it preserves the raw path and does not guess missing levels. This describes site hierarchy, not switch-to-switch physical edges or endpoint-to-port attachment.",
           "sources": [
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/inputs.conf", "lines": "155-162", "supports": "Dedicated site-topology sourcetype/cadence/default state." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_site_topology.py", "lines": "23-52,134-171", "supports": "Paged site topology, snapshot metadata and raw JSON output." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_site_hierarchy.py", "lines": "4-12,30-45,70-101,134-144", "supports": "Typed hierarchy fields only from explicit topology node types." }
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/inputs.conf", "lines": "155-162", "supports": "Dedicated site-topology sourcetype/cadence/default state." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/cisco_catalyst_dnac_site_topology.py", "lines": "23-52,134-171", "supports": "Paged site topology, snapshot metadata and raw JSON output." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_site_hierarchy.py", "lines": "4-12,30-45,70-101,134-144", "supports": "Typed hierarchy fields only from explicit topology node types." }
           ]
         },
         {
           "dataset": "Physical topology / adjacency",
           "facts": "The curated API catalog lists GET /dna/intent/api/v1/topology/physical-topology and calls it raw physical topology. The dedicated-endpoint coverage map does not name a dedicated physical-topology input. The generic API collector supports allow-listed Catalyst Center GET paths, but only exact profiled paths are paginated; physical-topology is not in the pagination profile, so it keeps one bounded GET and does not prove a complete multi-page graph. Treat as exploratory pending controller permissions, schema, size, and completeness qualification.",
           "sources": [
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2318-2330", "supports": "Physical-topology endpoint catalog entry." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/dnac_dedicated_endpoint_coverage.json", "lines": "1-105", "supports": "Dedicated input-to-endpoint inventory; no physical-topology collector is listed." },
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_api.py", "lines": "108-132,133-164,606-665,776-814", "supports": "Generic path allow-list, exact pagination profiles, single-GET fallback for unprofiled endpoints, and input registration." }
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_endpoints.json", "lines": "2318-2330", "supports": "Physical-topology endpoint catalog entry." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/dnac_dedicated_endpoint_coverage.json", "lines": "1-105", "supports": "Dedicated input-to-endpoint inventory; no physical-topology collector is listed." },
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/cisco_catalyst_dnac_api.py", "lines": "108-132,133-164,606-665,776-814", "supports": "Generic path allow-list, exact pagination profiles, single-GET fallback for unprofiled endpoints, and input registration." }
           ]
         },
         {
           "dataset": "Device-neighbor syslog extractions",
           "facts": "The TA has search-time CDP neighbor added/removed and routing adjacency log extractions. These are event observations from device syslog when that feed exists, not a canonical inventory snapshot or a substitute for validated physical-topology records.",
           "sources": [
-            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "3084-3106,3115-3116", "supports": "BGP/ISIS adjacency and CDP neighbor log extractions." }
+            { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/props.conf", "lines": "3084-3106,3115-3116", "supports": "BGP/ISIS adjacency and CDP neighbor log extractions." }
           ]
         }
       ]
@@ -148,7 +148,7 @@
         { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/cisco.hsl.xml", "lines": "82-92,309-333", "supports": "Typed VPN and TLOC vocabulary." },
         { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/lookups/cisco_sdwan_netflow_field_reference.csv", "lines": "18-21,55-83,87-98,121-129", "supports": "Field/CIM evidence labels and flow tuple, time, interface, direction, counters and sampling reference." },
         { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/default/data/ui/views/home.xml", "lines": "84,300-347,351-360", "supports": "Separate TLOC option dictionary requiring an explicit session join; integer millisecond IANA flow times; data path, dependencies, disabled definition, package responsibility boundaries and explicit CIM caveat." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "3255-3292", "supports": "Stream-owned sourcetype is retained; bounded search-time CIM aliases/evaluations for direction, interfaces, exporter and flow fields." }
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/props.conf", "lines": "3255-3292", "supports": "Stream-owned sourcetype is retained; bounded search-time CIM aliases/evaluations for direction, interfaces, exporter and flow fields." }
       ]
     },
     "deployment_dependencies_and_permissions": {
@@ -157,9 +157,9 @@
       "cim": "The TA owns Stream search-time field aliases/eventtype and documents Splunk_SA_CIM 8.6 for its Network Traffic knowledge. Its client comments cite Network Sessions model in Splunk_SA_CIM 8.5. Confirm the installed CIM version/schema before data-model acceleration; the Cisco NetFlow decoder alone does not add CIM tags/eventtypes/aliases.",
       "visualization_app": "Cisco Enterprise Networking App for Splunk is a separate visualization package that consumes add-on data (its app.conf describes its purpose as dashboards/visualization). Keep it co-installed/compatible as a separate app package, not embedded in the Atlas package.",
       "sources": [
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/appserver/static/js/build/user_guide.js", "lines": "1", "supports": "Bundled User Guide: Catalyst Center permissions/setup and required account/input guidance; file is minified." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/README.md", "lines": "10,28-46,55-63", "supports": "Dependency and distributed-tier placement for TA, visualization app and managed Stream collection." },
-        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/default/props.conf", "lines": "665-681,3269-3272", "supports": "CIM version notes and field knowledge scope." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/appserver/static/js/build/user_guide.js", "lines": "1", "supports": "Bundled User Guide: Catalyst Center permissions/setup and required account/input guidance; file is minified." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/README.md", "lines": "10,28-46,55-63", "supports": "Dependency and distributed-tier placement for TA, visualization app and managed Stream collection." },
+        { "file": "research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/default/props.conf", "lines": "665-681,3269-3272", "supports": "CIM version notes and field knowledge scope." },
         { "file": "research/extracted/cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app/default/app.conf", "lines": "5-22", "supports": "App identity and visualization/data-consumer role." },
         { "file": "research/extracted/cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl/README.md", "lines": "94-122", "supports": "Managed Stream requirements and placement." }
       ]

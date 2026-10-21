@@ -30,8 +30,8 @@ REQUIRED = {
         "cisco-enterprise-networking-app-for-splunk_4020",
     ),
     "Cisco Enterprise Networking Add-on for Splunk": (
-        "cisco-enterprise-networking-add-on-for-splunk_4050.tgz",
-        "cisco-enterprise-networking-add-on-for-splunk_4050",
+        "cisco-enterprise-networking-add-on-for-splunk_4060.tgz",
+        "cisco-enterprise-networking-add-on-for-splunk_4060",
     ),
     "Cisco Enterprise Networking NetFlow Add-on for Splunk": (
         "cisco-enterprise-networking-netflow-add-on-for-splunk_400.tgz",

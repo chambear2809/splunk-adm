@@ -27,10 +27,10 @@ identical node names and IPs in the lab without adding a native
 ## Client source records
 
 * `catalyst_clients.ndjson` projects a Catalyst Center client response into the
-  verified TA 4.0.50 `cisco:dnac:client` shape. The client input writes JSON, adds
+  verified TA 4.0.60 `cisco:dnac:client` shape. The client input writes JSON, adds
   `cisco_catalyst_host`, chooses the connected switch name for Splunk host, and uses
   `cisco_catalyst_dnac_client://<input>` as source. See
-  `research/extracted/cisco-enterprise-networking-add-on-for-splunk_4050/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py:463-481`.
+  `research/extracted/cisco-enterprise-networking-add-on-for-splunk_4060/TA_cisco_catalyst/bin/cisco_catalyst_dnac_client.py:463-481`.
   The positive record includes documented API fields `type=Wired`,
   `connectionStatus=connected`, `connectedNetworkDeviceType=Switch`, and
   `connectedNetworkDevice.interfaceName`; the chosen switch port name is a synthetic
