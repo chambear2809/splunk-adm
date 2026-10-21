@@ -232,8 +232,8 @@
       "source_metadata_url": "https://splunkbase.splunk.com/app/7538",
       "sha256": "bbf2ace479e3fc9b15fbe5c8c30b212fdf474931a7b428f361219e6c19a1172d",
       "bytes": 52763218,
-      "publisher_digest_verified": false,
-      "publisher_digest_source": "Not compared; SHA-256 computed locally from the user's authenticated Splunkbase browser download",
+      "publisher_digest_verified": true,
+      "publisher_digest_source": "SHA-256 computed locally from the user's authenticated Splunkbase browser download; the user confirmed on 2026-10-21 that it matches the Splunkbase-published digest",
       "acquired_at": "2026-10-20",
       "app_conf_versions": {
         "launcher": "4.0.60",
