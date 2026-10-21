@@ -84,7 +84,7 @@ All deployment gates remain open until evidence is collected and reviewed for th
 - [ ] Explicit, unambiguous source-authority and routing-domain profiles for each source, with no cross-organization or cross-cluster fallback. Ambiguous, stale, missing, or conflicting evidence must remain unresolved.
 - [ ] Raw-field schema validation against real events. Native vendor field names must remain distinct from CIM claims unless separately mapped and validated.
 - [ ] Source-history qualification across moves, replay, restart, partial pagination, outages, and bounded retention. Do not imply continuity across missing intervals.
-- [ ] Stream Forwarder 8.1.7 compatibility on Splunk Enterprise 10.6. The available compatibility listing reaches 10.5; verify the supported deployment placement and qualify the selected IPFIX template before relying on Catalyst SD-WAN traffic.
+- [ ] Stream Forwarder compatibility on Splunk Enterprise 10.6. The inspected and lab-pinned package is Stream Forwarders 8.1.3 (`research/package-manifest.json`); the Splunkbase compatibility listing for the current release (8.1.7 when reviewed) reaches only 10.5; verify the supported deployment placement and qualify the selected IPFIX template before relying on Catalyst SD-WAN traffic.
 - [ ] Supported deployment qualification for distributed Enterprise, search head clustering, checkpoint/state persistence, upgrades and rollback. The local standalone deployment-shape check is not this gate.
 - [ ] Splunk Cloud support and operational behavior, if Cloud is in scope.
 - [ ] Production capacity, request pacing, index volume, search cost, and failure recovery at the intended scale.

@@ -392,6 +392,36 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
         self.assertEqual(result[0]["mapped_records"], "0")
         self.assertEqual(result[0]["ambiguous_records"], "2")
 
+    def test_unnormalized_ipfix_authority_is_reported_incomplete(self):
+        tail = definition("adm_health_network_profile_rows").split(
+            "inputlookup strict=true adm_network_source_scope", 1
+        )[1]
+        row = {
+            "mapping_key": "a",
+            "source": "stream_ipfix",
+            "source_authority": "2001:db8::1",
+            "mapping_status": "mapped",
+            "duplicate_count": 1,
+            "scope": "synthetic-scope",
+            "cluster": "synthetic-cluster",
+            "profile": "standard_netflow",
+        }
+        for authority, status, mapped in (
+            ("2001:db8::1", "visible", "1"),
+            ("2001:DB8::1", "incomplete", "0"),
+            (" 2001:db8::1", "incomplete", "0"),
+        ):
+            with self.subTest(authority=authority):
+                result = self.lab.search(
+                    seed([dict(row, source_authority=authority)])
+                    + tail
+                    + ' | where name=="Stream source scope profiles"',
+                    "1000",
+                    "2000",
+                )
+                self.assertEqual(result[0]["status"], status, result)
+                self.assertEqual(result[0]["mapped_records"], mapped, result)
+
     def test_job_schedule_flag_is_independent_of_disabled_state(self):
         rows = [
             {"title": "ADM - synthetic manual", "disabled": "0", "is_scheduled": "0"},

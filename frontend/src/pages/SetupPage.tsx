@@ -1,5 +1,5 @@
 import { DeploymentWriteError } from "../data/deploymentClient";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
 import TableExport from "@splunk/react-ui/Table";
 import TextExport from "@splunk/react-ui/Text";
@@ -31,6 +31,8 @@ const recoveryURL =
   "https://github.com/chambear2809/splunk-adm/blob/main/docs/RECOVERY.md";
 const acsURL =
   "https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.2.2510/administer-splunk-cloud-platform-using-the-admin-config-service-acs-api/manage-indexes-in-splunk-cloud-platform";
+const DRAFT_CONFLICT =
+  "Deployment settings changed since this draft began. Discard the draft and reload before saving.";
 const editableExpectations = (
   saved?: DeploymentExpectations,
 ): DeploymentExpectations => {
@@ -116,20 +118,41 @@ export function SetupPage({
   const draftRevision = useRef<string>();
   const [draftDirty, setDraftDirty] = useState(false);
   const [draftConflict, setDraftConflict] = useState<string>();
+  // An uncertain save may have advanced the revision itself; retrying the
+  // unchanged draft reuses its request ID and lets the server arbitrate.
+  const uncertainSave = useRef(false);
+  const observedRevision = useRef<string>();
+  const noticeRef = useRef<HTMLParagraphElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const restoreFocus = (target: RefObject<HTMLElement>) =>
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (
+        !active ||
+        active === document.body ||
+        (active as HTMLButtonElement).disabled ||
+        active.getAttribute("aria-disabled") === "true"
+      )
+        target.current?.focus();
+    });
   const receiveDeployment = (
     next: DeploymentSnapshot,
     discardDraft = false,
   ) => {
     setDeployment(next);
+    if (next.state === "configured" || next.state === "absent")
+      observedRevision.current = next.settings?.revision;
     if (dirtyDraft.current && !discardDraft) {
       if (next.state === "configured" || next.state === "absent")
         setDraftConflict(
-          next.settings?.revision !== draftRevision.current
-            ? "Deployment settings changed since this draft began. Discard the draft and reload before saving."
+          !uncertainSave.current &&
+            next.settings?.revision !== draftRevision.current
+            ? DRAFT_CONFLICT
             : undefined,
         );
       return;
     }
+    uncertainSave.current = false;
     dirtyDraft.current = false;
     setDraftDirty(false);
     draftRevision.current = next.settings?.revision;
@@ -139,6 +162,7 @@ export function SetupPage({
   useEffect(() => {
     if (health?.deployment) receiveDeployment(health.deployment);
   }, [health?.deployment]);
+  const healthMissing = health === undefined;
   useEffect(() => {
     setSnapshot(undefined);
     setError(undefined);
@@ -151,7 +175,7 @@ export function SetupPage({
     const request = new AbortController();
     controller.current = request;
     setBusy(true);
-    if (deploymentClient && !health)
+    if (deploymentClient && healthMissing)
       void deploymentClient
         .read(request.signal)
         .then((result) => {
@@ -178,7 +202,7 @@ export function SetupPage({
         if (!request.signal.aborted) setBusy(false);
       });
     return () => request.abort();
-  }, [client, live, revision, deploymentClient, health === undefined]);
+  }, [client, live, revision, deploymentClient, healthMissing]);
   const perform = async (
     action: () => Promise<void>,
     verified: (state: SetupSnapshot) => boolean,
@@ -193,13 +217,13 @@ export function SetupPage({
       await action();
       if (signal?.aborted) return;
       setNotice("Change saved. Checking the current configuration…");
-      setSnapshot(undefined);
       const refreshed = await client.read(signal);
       if (signal?.aborted) return;
       if (!verified(refreshed))
         throw new Error("Change could not be verified.");
       setSnapshot(refreshed);
       setNotice("Change saved and configuration refreshed.");
+      restoreFocus(noticeRef);
       health?.refresh();
     } catch {
       if (signal?.aborted) return;
@@ -208,6 +232,7 @@ export function SetupPage({
         "The change or its verification failed. Refresh the checklist before trying again.",
       );
       setSnapshot(undefined);
+      restoreFocus(errorRef);
     } finally {
       mutation.current = false;
       if (!signal?.aborted) setBusy(false);
@@ -276,8 +301,16 @@ export function SetupPage({
             Refresh checklist
           </Button>
           {busy && <p role="status">Checking configuration…</p>}
-          {error && <p role="alert">{error}</p>}
-          {notice && <p role="status">{notice}</p>}
+          {error && (
+            <p role="alert" ref={errorRef} tabIndex={-1}>
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p role="status" ref={noticeRef} tabIndex={-1}>
+              {notice}
+            </p>
+          )}
           {snapshot && (
             <>
               {!snapshot.authorized && (
@@ -339,6 +372,14 @@ export function SetupPage({
                         ) => {
                           dirtyDraft.current = true;
                           setDraftDirty(true);
+                          // An edited draft is a new operation and needs a current base.
+                          if (uncertainSave.current) {
+                            uncertainSave.current = false;
+                            if (
+                              observedRevision.current !== draftRevision.current
+                            )
+                              setDraftConflict(DRAFT_CONFLICT);
+                          }
                           setSettings({
                             ...settings,
                             sources: {
@@ -472,8 +513,14 @@ export function SetupPage({
                         .catch((reason: unknown) => {
                           if (
                             reason instanceof DeploymentWriteError &&
+                            reason.code === "uncertain"
+                          )
+                            uncertainSave.current = true;
+                          if (
+                            reason instanceof DeploymentWriteError &&
                             reason.code === "conflict"
                           ) {
+                            uncertainSave.current = false;
                             setDraftConflict(reason.message);
                             void deploymentClient
                               .read(signal)

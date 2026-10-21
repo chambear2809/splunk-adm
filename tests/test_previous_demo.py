@@ -121,13 +121,30 @@ class PreviousDemoTest(unittest.TestCase):
         self.assertEqual(
             provenance["source"], "splunk_app/splunk_adm/default/macros.conf:adm_graph"
         )
-        for key, path in [
-            ("generator_sha256", "tools/gen_raw_fixtures.py"),
-            ("scenario_sha256", "fixtures/raw-aci/scenario.json"),
-        ]:
+        self.assertEqual(
+            provenance["scenario_sha256"],
+            hashlib.sha256(
+                (ROOT / "fixtures/raw-aci/scenario.json").read_bytes()
+            ).hexdigest(),
+        )
+        accepted_generator_hashes = {provenance["generator_sha256"]}
+        generator_review = provenance.get("reviewed_generator_compatibility")
+        if generator_review is not None:
             self.assertEqual(
-                provenance[key], hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+                generator_review["captured_generator_sha256"],
+                provenance["generator_sha256"],
             )
+            self.assertEqual(
+                generator_review["method"], "static review only; no recapture"
+            )
+            self.assertTrue(generator_review["reason"])
+            accepted_generator_hashes.add(generator_review["reviewed_generator_sha256"])
+        self.assertIn(
+            hashlib.sha256(
+                (ROOT / "tools/gen_raw_fixtures.py").read_bytes()
+            ).hexdigest(),
+            accepted_generator_hashes,
+        )
         # Keep the capture hash immutable. An explicitly reviewed revision may
         # preserve complete-input output without claiming a new live capture.
         current_macro_hash = hashlib.sha256(

@@ -80,19 +80,27 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const headers = new Headers(defaults.headers);
       if (body !== undefined) headers.set("Content-Type", "application/json");
       const endpoint = `${path}?output_mode=json`;
-      const response = await this.fetcher(
-        createRESTURL(
-          endpoint,
-          global ? undefined : { app: "splunk_adm", owner: "nobody" },
-        ),
-        {
-          ...defaults,
-          headers,
-          signal: controller.signal,
-          method: body === undefined ? "GET" : "POST",
-          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-        },
-      );
+      let response: Response;
+      try {
+        response = await this.fetcher(
+          createRESTURL(
+            endpoint,
+            global ? undefined : { app: "splunk_adm", owner: "nobody" },
+          ),
+          {
+            ...defaults,
+            headers,
+            signal: controller.signal,
+            method: body === undefined ? "GET" : "POST",
+            ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+          },
+        );
+      } catch (reason) {
+        // A timed-out, cancelled or dropped POST may still have committed.
+        if (body !== undefined)
+          throw new DeploymentWriteError("uncertain", UNCERTAIN);
+        throw reason;
+      }
       const payload: unknown = await response.json().catch(() => undefined);
       const coded = object(payload) && typeof payload.code === "string";
       // A proxy/gateway failure on POST says nothing about whether the insert landed.

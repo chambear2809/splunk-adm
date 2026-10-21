@@ -346,6 +346,35 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
             time.sleep(2)
         self.fail("sendalert did not produce a recovery audit record")
 
+    def test_unrecoverable_v2_detector_rows_do_not_block_v1_fallback(self):
+        macro_path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_health_missed_slots"
+        )
+        original = self.lab._json("GET", macro_path)["entry"][0]["content"][
+            "definition"
+        ]
+        now = int(time.time())
+        definition = (
+            'makeresults count=3 | streamstats count AS n | eval reason="missed_slot", '
+            'name=case(n==1, "ADM - Conversation rollup v2", '
+            'n==2, "ADM - Application catalog v2", n==3, "ADM - Identity builder"), '
+            f"scheduled_time=if(n==3, {now - 600}, {now - 3600}) "
+            "| fields name scheduled_time reason"
+        )
+        try:
+            self.lab._json("POST", macro_path, {"definition": definition})
+            self.lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
+            result = self._run_entrypoint(
+                self._session_key(), "ADM - Conversation rollup v2"
+            )
+            output = json.loads(result.stdout)
+            self.assertNotEqual(output.get("reason"), "unknown target", output)
+            self.assertEqual(output.get("name"), "ADM - Identity builder", output)
+            self.assertIn(output["status"], ("noop", "recovered"), output)
+        finally:
+            self.lab._json("POST", macro_path, {"definition": original})
+            self.lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
+
     def test_packaged_entrypoint_recovers_one_builder_slot(self):
         target = "ADM - Service binding"
         now = int(time.time())

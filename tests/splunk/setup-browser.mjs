@@ -68,15 +68,18 @@ try {
     name: "Save deployment expectations",
     exact: true,
   });
-  await expect(saveExpectations).toBeEnabled({ timeout: 90000 });
+  const traces = root.getByLabel("Expectation for Traces", { exact: true });
+  await expect(traces).toBeEnabled({ timeout: 90000 });
   const sourceExpectations = root.getByLabel(/^Expectation for /);
   if ((await sourceExpectations.count()) === 0)
     throw new Error("Deployment source controls are unavailable");
   for (const source of await sourceExpectations.all())
     await source.selectOption("not_selected");
-  await root
-    .getByLabel("Expectation for Traces", { exact: true })
-    .selectOption("active");
+  // Pass through another state so the draft is dirty even when a previous
+  // run already saved this exact selection (clean drafts cannot be saved).
+  await traces.selectOption("staged");
+  await traces.selectOption("active");
+  await expect(saveExpectations).toBeEnabled({ timeout: 90000 });
   await saveExpectations.click();
   await expect(
     root.getByText("Deployment expectations saved and verified.", {

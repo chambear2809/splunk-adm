@@ -71,7 +71,8 @@ export function Shell({
   const health = useHealthStatus();
   const indicator = healthIndicator(
     health?.report,
-    health?.busy ?? false,
+    // A background refresh keeps showing the last completed assessment.
+    !!health?.busy && !health.report,
     health?.error,
     live ?? false,
   );

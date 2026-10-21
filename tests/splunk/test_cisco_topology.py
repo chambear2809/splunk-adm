@@ -159,7 +159,11 @@ class TopologyV2ProposalTest(unittest.TestCase):
                 version_events.append(raw)
         self.assertTrue(version_events)
         self.assertTrue(
-            all("proc_board_id" in event["Row_info"][0] for event in version_events)
+            all(
+                [list(row) for row in event["Row_info"]]
+                == [["nxos_ver_str"], ["proc_board_id"]]
+                for event in version_events
+            )
         )
 
     def test_nxos_authority_is_explicit_and_qualified(self):

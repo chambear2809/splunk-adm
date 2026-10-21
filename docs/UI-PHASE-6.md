@@ -58,8 +58,8 @@ remain Phase 8 scope.
 - Lab cleanup: owned container, volumes, image, lab secrets and temporary
   research link removed; ephemeral viewer user/role cleanup completed.
 
-Screenshots: [Dark focus](../dist/atlas-phase6-focus-dark.png) and
-[Light focus](../dist/atlas-phase6-focus-light.png).
+Screenshots (uncommitted local diagnostics in the ignored `dist/` directory): Dark focus (`dist/atlas-phase6-focus-dark.png`) and
+Light focus (`dist/atlas-phase6-focus-light.png`).
 
 ## Limits
 

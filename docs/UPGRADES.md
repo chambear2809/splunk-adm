@@ -40,6 +40,22 @@ Then disable it again. This saved search ships disabled, has no cron schedule an
 
 Fresh installations start with an empty KV collection; administrators populate the named lookup using the same normalized-key upsert pattern. Never import unreviewed rows automatically from a header-only legacy template retained from an older release. The four public field names and lookup name are unchanged. Case normalization is limited to `observer_kind`/`observer`, preserving the former case-insensitive matching without changing mixed-case scope or cluster values.
 
+## IPFIX exporter authority normalization
+
+Stream/IPFIX events now derive their source-scope mapping key from the lowercase, trimmed `exporter_ip`, and `ADM - Migrate network source scope` normalizes `stream_ipfix` authorities the same way. An `adm_network_source_scope` row written earlier with a mixed-case (typically IPv6) or padded `stream_ipfix` authority no longer matches its exporter's events, so those events become unmapped. Health reports such rows under **Stream source scope profiles** or **SD-WAN source scope profiles** as `incomplete`.
+
+1. As an administrator, list affected rows:
+
+```spl
+| inputlookup adm_network_source_scope
+| where source=="stream_ipfix" AND source_authority!=lower(trim(source_authority))
+| table _key source_authority domain_kind observation_domain_present observation_domain_id vpn_id routing_domain scope cluster profile
+```
+
+2. If any are listed, enable **ADM - Normalize IPFIX source scope authority** for one manual run (keep `enableSched=0`), dispatch `| savedsearch "ADM - Normalize IPFIX source scope authority"` from the app namespace, then disable it again. It rewrites each affected row in place under its existing `_key` with the normalized authority and recomputed `mapping_key`; scope, cluster, profile and status are unchanged. A rerun writes nothing.
+3. It refuses (`blocked=1`, `rows_written=0`, no writes) when two distinct mappings would normalize to the same key, for example an old mixed-case row next to a newer lowercase row for the same exporter. Delete the stale row through the collection's REST endpoint, then rerun.
+4. Rerun the step 1 search; it must return no rows, and the profile health rows must no longer report these mappings as incomplete.
+
 ## Upgrade regression
 
 Run the live check against an already running and installed lab:

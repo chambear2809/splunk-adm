@@ -292,6 +292,10 @@ class PackageFingerprintRegressionTest(unittest.TestCase):
                 info.type = tarfile.SYMTYPE
                 info.linkname = "/etc/passwd"
                 archive.addfile(info)
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        Path(f"{self.archive}.sha256").write_text(
+            f"{digest}  {self.archive.name}\n", encoding="utf-8"
+        )
 
     def fingerprints(self, installed=None, *, supplied=True):
         installed = self.packaged if installed is None else installed
@@ -387,7 +391,7 @@ class PackageFingerprintRegressionTest(unittest.TestCase):
 
     def test_unsafe_archive_is_refused_by_the_shared_stager(self):
         self.write_archive(unsafe=True)
-        with self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+        with self.assertRaisesRegex(ValueError, "links or special files"):
             bench._package_default_configs(self.app, self.archive)
 
     def test_unsupplied_package_keeps_source_only_byte_exact_behavior(self):

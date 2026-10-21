@@ -522,6 +522,18 @@ def _canonical_spl_whitespace(value: Any) -> str | None:
     return "".join(result).strip()
 
 
+# ECMAScript \s, so the marker parses as frontend normalizeDefinition does.
+_JS_SPACE = "[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+
+
+def _contract_marker(value: Any) -> str | None:
+    """Normalize the contract-version macro like the Setup UI."""
+    if not isinstance(value, str):
+        return None
+    value = re.sub(r"\\\r?\n" + _JS_SPACE + "*", " ", value)
+    return re.sub(_JS_SPACE + "+", " ", value).strip(" ")
+
+
 def _macro_definition_equal(actual: Any, expected: Any) -> bool:
     """Compare selector SPL while preserving quoted literal bytes."""
     left = _canonical_spl_whitespace(actual)
@@ -1267,7 +1279,9 @@ class Migration:
             raise Refused("staged summary reader/writer contract differs from v2")
         if V1_INDEX == V2_INDEX:
             raise Refused("v1 and v2 summary indexes must be distinct")
-        active_version = macros["adm_data_contract_version"]["definition"]
+        active_version = _contract_marker(
+            macros["adm_data_contract_version"]["definition"]
+        )
         if active_version != "1" and not (allow_activation and active_version == "2"):
             raise Refused(
                 "active data contract is not v1; inspect current cutover state"

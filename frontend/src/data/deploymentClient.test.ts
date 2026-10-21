@@ -229,7 +229,10 @@ describe("administrator deployment settings persistence", () => {
   it("preserves idempotent request identity after response loss and recovers after later saves", async () => {
     const { client, fetcher, operations } = fixture({ lostResponse: true });
     const first = defaultExpectations();
-    await expect(client.write(first)).rejects.toThrow("response lost");
+    await expect(client.write(first)).rejects.toMatchObject({
+      code: "uncertain",
+      message: expect.stringContaining("retry the same save"),
+    });
     const another = new ToolkitDeploymentClient(fetcher);
     const head = await another.read();
     const next = defaultExpectations();
@@ -365,6 +368,52 @@ describe("administrator deployment settings persistence", () => {
       code: "uncertain",
       message: expect.stringContaining("retry the same save"),
     });
+  });
+  it("reports a dropped or timed-out save as uncertain and retries the same operation", async () => {
+    const { fetcher, operations } = fixture();
+    let failure: "network" | "timeout" | undefined = "network";
+    const client = new ToolkitDeploymentClient(async (input, init) => {
+      if (init?.method !== "POST" || !failure) return fetcher(input, init);
+      const mode = failure;
+      failure = undefined;
+      await fetcher(input, init);
+      if (mode === "network") throw new TypeError("Failed to fetch");
+      return new Promise<Response>((_, reject) =>
+        init.signal?.addEventListener("abort", () =>
+          reject(new DOMException("The operation was aborted.", "AbortError")),
+        ),
+      );
+    });
+    await expect(client.write(defaultExpectations())).rejects.toMatchObject({
+      code: "uncertain",
+      message: expect.stringContaining("retry the same save"),
+    });
+    await expect(client.write(defaultExpectations())).resolves.toMatchObject({
+      state: "configured",
+    });
+    const posts = fetcher.mock.calls.filter(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(JSON.parse(String(posts[0][1]?.body)).requestId).toBe(
+      JSON.parse(String(posts[1][1]?.body)).requestId,
+    );
+    expect(operations.size).toBe(1);
+
+    vi.useFakeTimers();
+    try {
+      const head = await client.read();
+      failure = "timeout";
+      const next = defaultExpectations();
+      next.sources.netflow.state = "staged";
+      const pending = client.write(next, head.settings!.revision);
+      const outcome = expect(pending).rejects.toMatchObject({
+        code: "uncertain",
+      });
+      await vi.advanceTimersByTimeAsync(30000);
+      await outcome;
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("reports a failed pre-save read as unavailable, not as missing permissions", async () => {
     const { fetcher } = fixture();

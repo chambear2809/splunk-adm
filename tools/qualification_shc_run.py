@@ -43,7 +43,7 @@ BUILDERS = (
 ROLLUP = "ADM - Conversation rollup"
 V2_WRITERS = ("ADM - Conversation rollup v2", "ADM - Traffic observation rollup v2")
 NXOS_FIXTURE = "fixtures/raw-networking/nxos_inventory.ndjson"
-NXOS_FIXTURE_SHA256 = "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062"
+NXOS_FIXTURE_SHA256 = "50d220da8aaebd3e5449f8d4430b263731578aa27e9e205cabbe8e7aec94d3fd"
 NXOS_EVENT_WINDOW = (1792293814, 1792295615)
 ISOVALENT_CONFIG_SHA256 = {
     "props.conf": "39f2787b8fe7fefd1cdc17eb3a7b381085ed3add83a1f59ace85ef7769d98f0f",
@@ -1860,7 +1860,10 @@ class Driver:
             .read_text()
             .splitlines()
         ]
-        exporters = sorted({str(row["event"]["exporter_ip"]) for row in raw})
+        # IPFIX events key on the lowercase, trimmed exporter address.
+        exporters = sorted(
+            {str(row["event"]["exporter_ip"]).strip().lower() for row in raw}
+        )
         profiles = []
         for exporter in exporters:
             mapping = client.digest(

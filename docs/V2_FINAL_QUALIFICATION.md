@@ -9,12 +9,12 @@ Do not start another scenario or reset a target with an unresolved journal.
 
 ## Recorded candidate09 evidence
 
-Evidence links below refer to the retained qualification checkout's ignored
-`dist/` directory. Operators need that evidence bundle to inspect the fixture
+Evidence paths below (`dist/...`) refer to the retained qualification checkout's
+ignored `dist/` directory; they are not committed to this repository. Operators need that evidence bundle to inspect the fixture
 preparation aids; these aids are not installed production commands.
 
 Runtime checks passed. Independent review48 verified the retained runtime,
-source binding and package-byte evidence with no findings. The combined [export manifest](../dist/final-qualification/native-09-migration-complete-02/export-manifest.json)
+source binding and package-byte evidence with no findings. The combined export manifest (`dist/final-qualification/native-09-migration-complete-02/export-manifest.json`)
 retains 474 hash-verified files and reports zero credential matches. Its archive
 SHA-256 is `58a3167b53ccdd32ffec541f10ef4deb3d565dd8c9c13ba0d1eb5a4bbfd6ccb2`.
 This is owned standalone synthetic evidence, with no Cloud/SHC cutover or
@@ -29,7 +29,7 @@ collector qualification claim.
 | Enabled-origin rehearsal and fresh V2 restoration | 23:20:58–23:52:40 UTC; 2 tests passed in 1901.969s; terminal repeat passed in 0.980s                                                  |
 | Active V2 browser05                               | 2026-10-19 00:26:59–00:28:16 UTC; both recorded scenarios passed; unchanged configuration, zero writes and zero demo requests         |
 
-The separate [complete-suite export](../dist/final-qualification/native-09-complete-suite/export-manifest.json)
+The separate complete-suite export (`dist/final-qualification/native-09-complete-suite/export-manifest.json`)
 records 393 tests: 390 passed and 3 skipped in 2173.773s. All three pruning cases
 passed. The skips were the explicit migration opt-in and two distributed SHC
 interface cases; the suite itself does not qualify those skipped paths. The
@@ -42,7 +42,7 @@ Both original migration journals finished `rolled_back` after completed
 activation; the fresh restoration journal finished `cutover`. Each activation
 recorded 13 applied mutations, including all eight public selectors. The enabled
 run injected a single raw receipt at 23:22:08 UTC into receipt slice
-`[1792365600,1792365900)`. Rollback completed at 23:40:34 UTC after exact manual
+`1792365600,1792365900)`. Rollback completed at 23:40:34 UTC after exact manual
 V1 recovery with one retained copy of rollup
 `76658a5577bcccbdaf8d3eb7d8be60d57ce5053d00e8be09cc1e1d9da234c61a`.
 The recovery SID was
@@ -54,11 +54,11 @@ whose anchor followed the completed recovery boundary. It then validated the
 23:50 conversation/traffic cycles and the 23:51 history cycle. Those scheduled
 slices legitimately had zero expected rows; bounded empty-summary and final
 history readback proofs were retained. Their success is not evidence of newly
-arriving traffic. The [concurrent-operation proof](../dist/final-qualification/native-09-migration-complete-02/runs/native-09-concurrent-migration.json)
+arriving traffic. The [concurrent-operation proof (`dist/final-qualification/native-09-migration-complete-02/runs/native-09-concurrent-migration.json`)
 records exit 2, no competing journal, unchanged configuration and a readable
 original journal for the same-controller/OS-user guard.
 
-The [final browser evidence](../dist/final-qualification/native-09-migration-complete-02/browser/evidence.json)
+The final browser evidence (`dist/final-qualification/native-09-migration-complete-02/browser/evidence.json`)
 records Catalyst/ACI (`cilium-aci-east`, 25 nodes/36 edges) and Meraki/NX-OS
 (`cilium-nxos-west`, 21 nodes/23 edges). Both passed graph, Inspector, exact
 scoped-IP backend/receiver path, attachment inventory, reload, Find,
@@ -77,7 +77,7 @@ were fixed in the qualifier without changing the installed product or resetting
 the active V2 data. These are distinct from the historical candidate08 missing
 first-history-cycle and HTTP 401 recovery attempts described below.
 
-The [native cleanup record](../dist/final-qualification/native-09-cleanup.json)
+The native cleanup record (`dist/final-qualification/native-09-cleanup.json`)
 confirms removal of the recorded container
 `25ac217aa8e568c019a6e1682f59afa9a3da50f31fd2386411417189611a3f1d`,
 its volumes and lab credentials at 2026-10-19 00:41:17.436082 UTC. The lifecycle

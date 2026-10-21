@@ -22,9 +22,9 @@ exercises the absolute-slice procedure and records replay jobs separately from
 native scheduler activity. The shipped action is **automated assisted
 recovery**: it is administrator-only and separately opt-in. The accepted KV
 claim gate covers standalone Splunk only. The [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
-passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts any 10.6.x patch release. The separate abandoned-lease supervisor
+passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts only that exact release. The separate abandoned-lease supervisor
 adds detection; it never takes over a recovery. SHC and failover behavior are not qualified. The action
-refuses versions other than 10.6.x, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
+refuses versions other than 10.6.0.5, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
 overrides explicitly enable both the saved-search action and
 `local/adm_recovery.conf`. Native scheduler catch-up remains a failed
 qualification; the manual absolute-slice fallback remains required when the
@@ -38,7 +38,11 @@ diffing expected five-minute writer slots and hourly V2 catalog slots against `s
 whose SID starts with `scheduler__`, with a 10-minute grace period before a
 slot counts as missed. Only slots strictly after a target's earliest visible
 scheduler success are expected: gaps have `reason=missed_slot`, while slots
-before that checkpoint are not reported. An enabled, scheduled target with
+before that checkpoint are not reported. Hourly catalog slots are whole hours
+after its checkpoint rather than a clock minute, so the result does not depend on
+the server's or the searching user's time zone. Only the four V1 writers are
+replayable; the recovery action ignores rows for the V2 writers and catalog.
+An enabled, scheduled target with
 no successful checkpoint produces exactly one `reason=no_successful_checkpoint`
 row without `scheduled_time`; investigate its configuration and scheduler
 history instead of treating the row as a replayable slice. Disabled and
@@ -149,7 +153,7 @@ inconclusive, the slot remains uncertain and the manual fallback applies.
 ## Abandoned recovery claims
 
 `ADM - Recovery abandoned-lease alert` ships disabled. On qualified standalone
-Splunk 10.6.x (live-tested on 10.6.0.5), an administrator can enable it independently of the recovery
+Splunk 10.6.0.5, an administrator can enable it independently of the recovery
 action. It pages through the recovery-state lookup every five minutes,
 including targets that are paused and claims older than the missed-slot
 history window. It reuses `adm_kv_read_all` (20 pages of 10,000 rows) and

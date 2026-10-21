@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.check_appinspect import check_report
+from tools.check_appinspect import KNOWN_RESULTS, check_report
 
 
 class AppInspectReportTests(unittest.TestCase):
@@ -13,6 +13,20 @@ class AppInspectReportTests(unittest.TestCase):
         json.dump(value, handle)
         handle.close()
         return Path(handle.name)
+
+    def test_known_results_match_pinned_appinspect_status_types(self):
+        self.assertEqual(
+            KNOWN_RESULTS,
+            {
+                "error",
+                "failure",
+                "future_failure",
+                "skipped",
+                "not_applicable",
+                "warning",
+                "success",
+            },
+        )
 
     def test_accepts_success_warning_and_not_applicable_results(self):
         path = self.write_report(

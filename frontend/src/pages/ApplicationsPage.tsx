@@ -142,10 +142,20 @@ export function ApplicationsPage({
   const findRevision = useRef(0);
   const catalogController = useRef<AbortController>();
   const findController = useRef<AbortController>();
+  // Only an over-limit catalog narrows by service, so scope edits must not
+  // otherwise restart the catalog or reset Find.
+  const service = useRef(args.service);
+  const catalogService = useRef<string>();
+  const catalogLimited = useRef(false);
+  useEffect(() => {
+    service.current = args.service;
+  }, [args.service]);
 
   const loadCatalog = useCallback(() => {
     if (!client || state.mode !== "live") return;
     catalogController.current?.abort();
+    const selectedService = service.current;
+    catalogService.current = selectedService;
     const controller = new AbortController();
     catalogController.current = controller;
     const current = ++revision.current;
@@ -167,6 +177,7 @@ export function ApplicationsPage({
       .then((result) => {
         if (controller.signal.aborted || current !== revision.current) return;
         requireNoSearchErrors(result, "Application catalog search");
+        catalogLimited.current = false;
         const parsed = parseCatalogRows(result.rows);
         if (parsed.length) {
           setCatalog(parsed);
@@ -178,12 +189,13 @@ export function ApplicationsPage({
       .catch(async (reason: unknown) => {
         if (controller.signal.aborted || current !== revision.current) return;
         if (isSearchResultLimitError(reason)) {
-          if (!args.service) {
+          catalogLimited.current = true;
+          if (!selectedService) {
             setError(catalogLimitMessage(reason.maxRows));
             return;
           }
           try {
-            const serviceSearch = validatedBuildCatalogSearch(args.service);
+            const serviceSearch = validatedBuildCatalogSearch(selectedService);
             const narrowed = await client.search({
               search: serviceSearch,
               earliest: "0",
@@ -199,7 +211,7 @@ export function ApplicationsPage({
               setCatalog(parseCatalogRows(narrowed.rows));
               setWarning(
                 [
-                  `Catalog narrowed to service “${args.service}”; metrics use each row’s last completed hour.`,
+                  `Catalog narrowed to service “${selectedService}”; metrics use each row’s last completed hour.`,
                   ...narrowed.warnings,
                 ].join(" "),
               );
@@ -253,7 +265,7 @@ export function ApplicationsPage({
         if (!controller.signal.aborted && current === revision.current)
           setLoading(false);
       });
-  }, [args.service, client, state.mode]);
+  }, [client, state.mode]);
 
   useEffect(() => {
     findController.current?.abort();
@@ -303,12 +315,20 @@ export function ApplicationsPage({
         });
     }
     return () => {
+      // These are request counters, not DOM refs; bumping them invalidates in-flight work.
+      /* eslint-disable react-hooks/exhaustive-deps */
       revision.current++;
       findRevision.current++;
+      /* eslint-enable react-hooks/exhaustive-deps */
       catalogController.current?.abort();
       findController.current?.abort();
     };
   }, [demoRetry, loadCatalog, state.mode, state.scenario]);
+
+  useEffect(() => {
+    if (catalogLimited.current && args.service !== catalogService.current)
+      loadCatalog();
+  }, [args.service, loadCatalog]);
 
   useEffect(
     () => () => {

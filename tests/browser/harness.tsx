@@ -48,9 +48,15 @@ const setupRequest = (value: string) => {
 class FakeDeploymentClient implements DeploymentClient {
   private snapshot: DeploymentSnapshot;
   private reads = 0;
+  private uncommitted = faultScenario === "deployment-write-uncertain";
+  private uncertain?: string;
   constructor() {
     const settings = defaultExpectations();
     settings.sources.aci.state = "active";
+    if (faultScenario === "deployment-absent") {
+      this.snapshot = { state: "absent", activeContract: 1, canWrite: true };
+      return;
+    }
     this.snapshot = {
       state: "configured",
       settings,
@@ -67,6 +73,8 @@ class FakeDeploymentClient implements DeploymentClient {
     };
   }
   async read(signal?: AbortSignal) {
+    window.__ADM_DEPLOYMENT_READS__ =
+      (window.__ADM_DEPLOYMENT_READS__ ?? 0) + 1;
     if (signal?.aborted) throw new Error("Cancelled");
     this.reads += 1;
     if (faultScenario === "deployment-revision-change" && this.reads > 1) {
@@ -115,14 +123,36 @@ class FakeDeploymentClient implements DeploymentClient {
         "Deployment expectations changed. Your draft is preserved; reload before saving.",
       );
     }
+    const operation = JSON.stringify([expectedRevision, settings.sources]);
+    if (this.uncertain === operation) {
+      // The server resolves a retried request ID to its committed revision.
+      this.uncertain = undefined;
+      setupRequest("deployment:recovered");
+      return this.read(signal);
+    }
     if (expectedRevision !== this.snapshot.settings?.revision)
-      throw new Error("Deployment settings changed.");
+      throw new DeploymentWriteError(
+        "conflict",
+        "Deployment settings changed.",
+      );
     if (faultScenario === "deployment-write-fails")
       throw new Error("Deployment settings readback did not match.");
-    this.snapshot.settings = {
-      ...structuredClone(settings),
-      revision: crypto.randomUUID(),
+    this.snapshot = {
+      ...this.snapshot,
+      state: "configured",
+      settings: {
+        ...structuredClone(settings),
+        revision: crypto.randomUUID(),
+      },
     };
+    if (this.uncommitted) {
+      this.uncommitted = false;
+      this.uncertain = operation;
+      throw new DeploymentWriteError(
+        "uncertain",
+        "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.",
+      );
+    }
     setupRequest("deployment:verified");
     return this.read(signal);
   }
@@ -313,6 +343,19 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (
+      faultScenario === "health-hold" &&
+      request.search.includes("adm_health")
+    ) {
+      const target = window as Window & {
+        __ADM_HOLD_HEALTH__?: boolean;
+        __ADM_HELD__?: (() => void)[];
+      };
+      if (target.__ADM_HOLD_HEALTH__)
+        await new Promise<void>((resolve) =>
+          (target.__ADM_HELD__ ??= []).push(resolve),
+        );
+    }
     if (request.search.includes("adm_health_jobs")) {
       if (faultScenario === "health-permission")
         throw new Error("Scheduler evidence permission denied.");
@@ -393,6 +436,11 @@ class FakeSearchClient implements SearchClient {
         )
       )
         throw new Error("Configured scopes unavailable.");
+      if (faultScenario === "empty-scopes") {
+        // Mirrors ToolkitSearchClient, which rejects empty results by default.
+        if (!request.allowEmpty) throw new Error("Search returned no rows.");
+        return { rows: [], warnings: [], errors: [] };
+      }
       return {
         rows:
           faultScenario === "single-scope"

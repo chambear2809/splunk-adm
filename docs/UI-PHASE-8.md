@@ -92,7 +92,7 @@ Shared bundle: 2,330,488 bytes raw / 585,059 bytes gzip.
 
 Native artifacts (ignored local build outputs):
 
-- [Dark PNG](../dist/atlas-phase8-map-dark.png)
-- [Light PNG](../dist/atlas-phase8-map-light.png)
-- [Change comparison](../dist/atlas-phase8-changes-light.png)
-- [Saved views](../dist/atlas-phase8-saved-views-dark.png)
+- Dark PNG (`dist/atlas-phase8-map-dark.png`)
+- Light PNG (`dist/atlas-phase8-map-light.png`)
+- Change comparison (`dist/atlas-phase8-changes-light.png`)
+- Saved views (`dist/atlas-phase8-saved-views-dark.png`)

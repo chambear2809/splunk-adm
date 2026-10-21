@@ -795,6 +795,73 @@ test("catalog over-limit is actionable and does not fall back to scopes", async 
   ).toBe(true);
 });
 
+test("a fresh install without service bindings shows guidance, not a search error", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?mode=live&fault=empty-scopes");
+  await expect(
+    page.getByText(/No service bindings found\. Enter a valid scope/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Scope options:" }),
+  ).toHaveCount(0);
+});
+
+test("editing the scope keeps Find results and does not restart the catalog", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
+  const catalogRequests = () =>
+    page.evaluate(
+      () =>
+        (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+          request.spl.startsWith("| inputlookup adm_app_catalog"),
+        ).length,
+    );
+  await expect(page.locator("tbody").first()).toContainText("checkout");
+  const input = page.getByLabel(/Find an address, EPG, or device/).first();
+  await input.fill("db");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  const results = page.locator('[aria-label="Find results"]');
+  await expect(results).toBeVisible();
+  const before = await catalogRequests();
+  const service = page.getByRole("combobox", { name: "Service", exact: true });
+  await service.fill("front");
+  await service.fill("frontend-x");
+  await page
+    .getByRole("combobox", { name: "Environment", exact: true })
+    .fill("prod");
+  await expect(results).toBeVisible();
+  expect(await catalogRequests()).toBe(before);
+});
+
+test("an over-limit catalog narrows again when the service changes", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-narrowed",
+  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
+  await page
+    .getByRole("combobox", { name: "Service", exact: true })
+    .fill("checkout");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window.__ADM_REQUESTS__ ?? []).some(
+          (request) =>
+            request.spl ===
+            '| inputlookup adm_app_catalog WHERE service="checkout"',
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("catalog preserves warnings from a narrowed service search", async ({
   page,
 }) => {
@@ -828,7 +895,16 @@ test("catalog uses its captured metric window when the Find/map picker changes",
     .click();
   await page.getByRole("button", { name: "Presets", exact: true }).click();
   await page.getByText("Last 24 hours", { exact: true }).click();
-  await page.waitForTimeout(100);
+  await expect(
+    page.getByLabel("Time range", { exact: true }).getByRole("button"),
+  ).toContainText("Last 24 hours");
+  // Effects scheduled by the committed time change have run after a frame and a task.
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => setTimeout(resolve, 0)),
+      ),
+  );
   expect(await catalogRequests()).toHaveLength(before.length);
 });
 

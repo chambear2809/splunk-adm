@@ -46,7 +46,7 @@ The final executable bundle is **1,174,455 bytes raw / 310,737 bytes gzip** (gzi
 
 The final run removed its container, volumes, cached image and lab credentials through `purge`, and removed the temporary research symlink. Temporary viewer accounts/roles were removed through class cleanup. Pipe handles were also closed explicitly after qualification to avoid Python resource warnings.
 
-Screenshots from the real viewer: [dark](../dist/atlas-live-dark.png), [light](../dist/atlas-live-light.png). Demo checks also produced [Applications](../dist/atlas-applications-light.png) and [Map](../dist/atlas-demo-dark.png) screenshots. These local diagnostics are ignored and are not shipped.
+Screenshots from the real viewer (`dist/atlas-live-dark.png`, `dist/atlas-live-light.png`) and the demo checks (`dist/atlas-applications-light.png`, `dist/atlas-demo-dark.png`) were local diagnostics in the ignored `dist/` directory of the qualification checkout. They are not committed or shipped; rerun the phase's browser checks to reproduce them.
 
 ## Qualification limits and integration
 

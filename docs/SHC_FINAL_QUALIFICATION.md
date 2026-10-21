@@ -671,8 +671,13 @@ index/sourcetype classification. The ACI data supplies 825 base events plus the
 33 NetFlow events loaded before the original interface cases. Add the unchanged
 105-event `fixtures/raw-networking/nxos_inventory.ndjson` file to the base batch:
 the acknowledged base POSTs then cover 930 events and the combined classified
-inventory is exactly 963 events. The NX-OS file SHA-256 is
-`753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062`.
+inventory is exactly 963 events. The recorded run used NX-OS file SHA-256
+`753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062`. The
+fixture was later regenerated so `nxversion` emits one `Row_info` item per
+scalar `show version` key, as the TA does; event and record counts are unchanged
+and the driver now pins
+`50d220da8aaebd3e5449f8d4430b263731578aa27e9e205cabbe8e7aec94d3fd`. The
+recorded SHC evidence predates that change and must be re-run to cover it.
 Its provenance remains `fixtures/raw-networking/FIELDS.md` and the NX-OS command
 contract in `fixtures/raw/FIELDS.md`; the fixture and product files are unchanged.
 

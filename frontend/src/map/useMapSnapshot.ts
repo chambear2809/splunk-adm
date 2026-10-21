@@ -96,6 +96,8 @@ export function useMapSnapshot({
     // the prior snapshot, but never let its pending request publish afterward.
     cancelQuery();
     return () => {
+      // revision is a request counter, not a DOM ref; bumping it invalidates in-flight work.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       revision.current++;
       abort();
     };
@@ -178,6 +180,7 @@ export function useMapSnapshot({
     )
       void refresh();
     // Initial deep links dispatch once. Draft edits require Build map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return {
     ...snapshot,

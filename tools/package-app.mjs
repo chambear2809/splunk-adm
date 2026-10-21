@@ -63,10 +63,14 @@ const stageRoot = "dist/stage";
 const stage = `${stageRoot}/splunk_adm`;
 await rm(stageRoot, { recursive: true, force: true });
 await mkdir(stageRoot, { recursive: true });
+// Deployment-local state and development artifacts never ship; check_release.py
+// enforces the same set on the finished archive.
+const excludedFromStage =
+  /(^|\/)(\.DS_Store|\._.*|docs|local|local\.meta|\.git|node_modules|__pycache__|.*\.py[co])$/;
 await cp(app, stage, {
   recursive: true,
   filter: (source) =>
-    !/(^|\/)(\.DS_Store|\._.*|docs|__pycache__|.*\.py[co])$/.test(source),
+    !excludedFromStage.test(source.slice(app.length).replaceAll("\\", "/")),
 });
 // The endpoint validates against the same source registry as the frontend.
 await copyFile(

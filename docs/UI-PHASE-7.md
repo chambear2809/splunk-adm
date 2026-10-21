@@ -53,10 +53,10 @@ client, permissions and data-layer definitions are unchanged.
 
 Native screenshots (local, ignored build artifacts):
 
-- [Dark inspector](../dist/atlas-phase7-long-name-dark.png)
-- [Light inspector](../dist/atlas-phase7-long-name-light.png)
-- [Dark tooltip](../dist/atlas-phase7-tooltip-dark.png)
-- [Light tooltip](../dist/atlas-phase7-tooltip-light.png)
+- Dark inspector (`dist/atlas-phase7-long-name-dark.png`)
+- Light inspector (`dist/atlas-phase7-long-name-light.png`)
+- Dark tooltip (`dist/atlas-phase7-tooltip-dark.png`)
+- Light tooltip (`dist/atlas-phase7-tooltip-light.png`)
 
 The final archive SHA256 is
 `5a7cabddeac05c628ad3245f82fe9df18cca0e500d39318765fa6a265f55b159`.

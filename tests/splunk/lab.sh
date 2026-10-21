@@ -22,6 +22,15 @@ LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cis
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
+# Staging holds the rendered HEC token. A RETURN trap is skipped when set -e
+# exits the shell, so cleanup is bound to process exit and fatal signals.
+STAGE=""
+cleanup_stage() { [[ -z "$STAGE" ]] || rm -rf "$STAGE"; }
+trap cleanup_stage EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 # Re-exec under the cooperative lock. The token is inherited by nested lab
 # subprocesses; the lock itself remains held by the wrapper process.
 if ! python3 "$ROOT/tools/lab_lock.py" --root "$ROOT" --check-owned; then
@@ -78,9 +87,9 @@ copy_ta() {
 
 cmd_install() {
   local stage ta
-  stage="$(mktemp -d)"
+  STAGE="$(mktemp -d)"
+  stage="$STAGE"
   chmod 700 "$stage"
-  trap 'rm -rf "$stage"' RETURN
   for ta in "${TAS[@]}"; do
     [[ -d "$EXTRACTED/$ta" ]] || { echo "missing $EXTRACTED/$ta" >&2; return 1; }
     copy_ta "$EXTRACTED/$ta" "$stage/$(basename "$ta")"

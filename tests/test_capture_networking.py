@@ -424,6 +424,10 @@ class CapturePackageFingerprintTest(unittest.TestCase):
                 info.type = tarfile.SYMTYPE
                 info.linkname = "/etc/passwd"
                 archive.addfile(info)
+        digest = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        Path(f"{self.archive}.sha256").write_text(
+            f"{digest}  {self.archive.name}\n", encoding="utf-8"
+        )
 
     def fingerprint(self, *, supplied=True, strict=True):
         def api(_method, path):
@@ -564,7 +568,7 @@ class CapturePackageFingerprintTest(unittest.TestCase):
 
     def test_unsafe_archive_fails_shared_validation(self):
         self.write_archive(unsafe=True)
-        with self.assertRaisesRegex(ValueError, "unsafe or duplicate"):
+        with self.assertRaisesRegex(ValueError, "links or special files"):
             self.fingerprint()
 
     def test_no_package_behavior_remains_source_based(self):

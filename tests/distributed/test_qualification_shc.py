@@ -2421,7 +2421,7 @@ class DriverTests(unittest.TestCase):
         self.assertEqual(result["events"], 105)
         self.assertEqual(
             result["sha256"],
-            "753a7c58f7db489d2a575474ca207d0cab03383d140bb5c01b7a58528b3d0062",
+            "50d220da8aaebd3e5449f8d4430b263731578aa27e9e205cabbe8e7aec94d3fd",
         )
         self.assertEqual(result["event_window"], [1792293814, 1792295615])
         self.assertEqual(

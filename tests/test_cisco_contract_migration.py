@@ -1187,6 +1187,36 @@ assert api.token == 'token'
         with self.assertRaises(Refused):
             migration.snapshot(allow_activation=True)
 
+    def test_contract_marker_parses_like_the_setup_ui(self):
+        from tools.cisco_contract_migration import _contract_marker
+
+        for raw, expected in (
+            ("1", "1"),
+            (" 2 ", "2"),
+            ("2\n", "2"),
+            ("\\\n  1", "1"),
+            (" 1\ufeff", "1"),
+            ("1 2", "1 2"),
+            ("\x1c1", "\x1c1"),
+            ("\x851", "\x851"),
+            ("", ""),
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual(_contract_marker(raw), expected)
+        self.assertIsNone(_contract_marker(1))
+        self.assertIsNone(_contract_marker(None))
+
+    def test_snapshot_accepts_whitespace_padded_contract_marker(self):
+        api = FakeApi()
+        api.macros["adm_data_contract_version"] = " 1\n"
+        self.migration(api).snapshot()
+        api.macros["adm_data_contract_version"] = "2 "
+        with self.assertRaisesRegex(Refused, "not v1"):
+            self.migration(api).snapshot()
+        api.macros["adm_data_contract_version"] = "1 0"
+        with self.assertRaisesRegex(Refused, "not v1"):
+            self.migration(api).snapshot()
+
     def test_snapshot_normalizes_splunk_boolean_config_values(self):
         api = FakeApi()
         migration = self.migration(api)

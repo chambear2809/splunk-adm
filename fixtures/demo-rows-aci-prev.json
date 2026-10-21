@@ -90,9 +90,15 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "79e407bd7ec2673707cfbc4ff5755fb7b0e0f368c887aefcf269db3801244081",
+      "reviewed_macro_file_sha256": "dadbc516a5d4ebcad5151799fa80ea5ad978da9034dd2cea63188f67e5f343ce",
       "method": "static review only; no recapture",
-      "reason": "All 37 transitive V1 adm_graph macro definitions are byte-identical to accepted base 64473e54d1fca4311ac592bc34c4a96a022efd48. Later revisions change V2 receipt/history/topology helpers, pruning and the V2 IPFIX exporter-authority normalization in adm_flows_netflow_v2 only; captured V1 rows and original capture hashes remain unchanged. No new live capture is claimed."
+      "reason": "All 37 transitive V1 adm_graph macro definitions are byte-identical to accepted base 64473e54d1fca4311ac592bc34c4a96a022efd48. Later revisions change V2 receipt/history/topology helpers, pruning the V2 IPFIX exporter-authority normalization in adm_flows_netflow_v2, the missed-slot detector's recoverable-target and catalog-slot anchoring, and IPFIX scope-authority profile health only; captured V1 rows and original capture hashes remain unchanged. No new live capture is claimed."
+    },
+    "reviewed_generator_compatibility": {
+      "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
+      "reviewed_generator_sha256": "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
+      "method": "static review only; no recapture",
+      "reason": "The revision changes only the NX-OS nxversion Row_info shape and --output-dir plumbing. aci_outputs(previous_aci_scenario()) is byte-identical (857 events) under the captured and reviewed generators, so the captured rows remain valid. No new live capture is claimed."
     }
   },
   "rows": [
