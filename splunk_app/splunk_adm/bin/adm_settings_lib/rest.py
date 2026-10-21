@@ -8,6 +8,7 @@ from . import SettingsError, SettingsService, canonical, digest
 
 APP = "/servicesNS/nobody/splunk_adm"
 COLLECTION = APP + "/storage/collections/data/adm_deployment_settings"
+QUALIFIED_VERSIONS = frozenset({"10.6.0.5"})
 
 
 def content(value):
@@ -140,13 +141,18 @@ class SplunkStore:
         )
         # Additional runtimes require installed endpoint/concurrency evidence.
         if (
-            server.get("version") not in {"10.6.0.5"}
+            server.get("version") not in QUALIFIED_VERSIONS
             or server.get("product_type") != "enterprise"
         ):
+            reported = " ".join(
+                str(server.get(key) or "unknown") for key in ("product_type", "version")
+            )
             raise SettingsError(
                 503,
                 "unsupported",
-                "This Splunk version is not qualified for settings writes.",
+                f"Settings writes are qualified only on Splunk Enterprise "
+                f"{', '.join(sorted(QUALIFIED_VERSIONS))}; this server reports "
+                f"{reported}. Settings stay read-only until it is qualified.",
             )
         if (
             any(

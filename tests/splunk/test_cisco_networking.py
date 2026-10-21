@@ -172,6 +172,20 @@ class CiscoNetworkingContractTest(unittest.TestCase):
             definition, r'adm_scope="default"|scope=coalesce\(scope,\s*"default"\)'
         )
 
+    def test_ipfix_exporter_authority_and_domain_flag_are_normalized_on_both_sides(
+        self,
+    ):
+        migration = self.searches.get("ADM - Migrate network source scope", "search")
+        self.assertIn(
+            'source_authority=if(source=="stream_ipfix", lower(trim(source_authority)), trim(source_authority))',
+            migration,
+        )
+        self.assertIn('trim(observation_domain_present)=="1"', migration)
+        self.assertIn(
+            'adm_scope_authority=lower(trim(coalesce(adm_raw_exporter_ip, "")))',
+            self.macros.get("adm_flows_netflow_v2", "definition"),
+        )
+
     def test_network_client_timestamp_semantics_and_meraki_allowlist(self):
         definition = expanded_private_definition(
             self.macros, "adm_network_client_history_observations"
@@ -638,7 +652,7 @@ class CiscoNetworkingLabTest(unittest.TestCase):
                 "source-scope profile outputlookup did not report the expected write count"
             )
         readback = self.lab.search(
-            f'| inputlookup strict=true adm_network_source_scope | search source_authority="{self.exporter}" | stats count AS rows',
+            f'| inputlookup strict=true adm_network_source_scope | search source_authority="{profiles[0]["source_authority"]}" | stats count AS rows',
             "0",
             "+10y",
         )
@@ -756,6 +770,31 @@ class CiscoNetworkingLabTest(unittest.TestCase):
             self.assertEqual(evidence["counter_semantics"], "unknown")
             self.assertEqual(evidence["metrics_authoritative"], "0")
             self.assertEqual(evidence["records"], 1)
+
+    def test_mixed_case_ipv6_exporter_maps_to_its_lowercase_registered_authority(
+        self,
+    ):
+        import uuid
+
+        exporter = "2001:DB8::ABCD:" + uuid.uuid4().hex[:4].upper()
+        profile = self._profile("0", "", "", "", "standard_netflow")
+        profile["source_authority"] = exporter.lower()
+        self._seed_profiles([profile])
+        event = self._stream_event(False, None, 4)
+        event["event"]["exporter_ip"] = exporter
+        self._load([event])
+        rows = self.lab.search(
+            f'| `adm_flows_v2` | search adm_scope_authority="{exporter.lower()}" | table adm_scope_authority adm_profile_status adm_scope adm_traffic_observation',
+            "0",
+            "+10y",
+        )
+        self.assertEqual(len(rows), 1, rows)
+        evidence = self._json.loads(rows[0]["adm_traffic_observation"])
+        self.assertEqual(evidence["source_authority"], exporter.lower())
+        self.assertEqual(evidence["exporter_ip"], exporter)
+        self.assertEqual(rows[0]["adm_scope_authority"], exporter.lower())
+        self.assertEqual(rows[0]["adm_profile_status"], "mapped", rows[0])
+        self.assertEqual(rows[0]["adm_scope"], self.scope)
 
     def test_raw_interfaces_and_ifindex_do_not_inherit_unscoped_inventory_names(self):
         inventory = {

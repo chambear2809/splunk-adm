@@ -444,6 +444,8 @@ export function SetupPage({
                   <Button
                     disabled={
                       busy ||
+                      // Each save consumes one slot of the bounded immutable history.
+                      (!draftDirty && deployment?.state !== "absent") ||
                       !!settingsError ||
                       !!draftConflict ||
                       !snapshot.authorized ||

@@ -90,9 +90,9 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "ccf4d4cbd1a7fce11a0a5afae3ed6ef8a428c71754dfad4c3a088ba13a9959a1",
+      "reviewed_macro_file_sha256": "79e407bd7ec2673707cfbc4ff5755fb7b0e0f368c887aefcf269db3801244081",
       "method": "static review only; no recapture",
-      "reason": "All 37 transitive V1 adm_graph macro definitions are byte-identical to accepted base 64473e54d1fca4311ac592bc34c4a96a022efd48. This revision changes V2 receipt/history/topology helpers and pruning only; captured V1 rows and original capture hashes remain unchanged. No new live capture is claimed."
+      "reason": "All 37 transitive V1 adm_graph macro definitions are byte-identical to accepted base 64473e54d1fca4311ac592bc34c4a96a022efd48. Later revisions change V2 receipt/history/topology helpers, pruning and the V2 IPFIX exporter-authority normalization in adm_flows_netflow_v2 only; captured V1 rows and original capture hashes remain unchanged. No new live capture is claimed."
     }
   },
   "rows": [

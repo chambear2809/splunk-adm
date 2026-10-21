@@ -31,7 +31,8 @@ def invalid(message="Deployment settings history is invalid or incomplete."):
     return SettingsError(503, "unavailable", message)
 
 
-def validate_settings(value, source_ids):
+def validate_settings(value, source_ids=None):
+    """source_ids=None checks stored history structurally; retired IDs stay verifiable."""
     if (
         not isinstance(value, dict)
         or set(value) != {"schemaVersion", "revision", "sources"}
@@ -44,7 +45,7 @@ def validate_settings(value, source_ids):
         raise SettingsError(400, "invalid", "Unsupported deployment settings schema.")
     for name, item in value["sources"].items():
         if (
-            name not in source_ids
+            (source_ids is not None and name not in source_ids)
             or not isinstance(item, dict)
             or set(item) != {"state", "cadenceSeconds", "staleAfterSeconds"}
             or item["state"] not in ("active", "staged", "not_selected")
@@ -83,9 +84,7 @@ class SettingsService:
         legacy_settings = None
         try:
             if legacy is not None:
-                legacy_settings = validate_settings(
-                    json.loads(legacy["settings_json"]), self.source_ids
-                )
+                legacy_settings = validate_settings(json.loads(legacy["settings_json"]))
                 if legacy.get("revision") != legacy_settings["revision"]:
                     raise invalid()
         except (KeyError, TypeError, ValueError, SettingsError) as exc:
@@ -106,9 +105,7 @@ class SettingsService:
         while key in records:
             row = records[key]
             try:
-                settings = validate_settings(
-                    json.loads(row["settings_json"]), self.source_ids
-                )
+                settings = validate_settings(json.loads(row["settings_json"]))
                 if (
                     row.get("format") != 2
                     or row.get("previous_revision") != previous
@@ -142,6 +139,18 @@ class SettingsService:
             [previous, request_id, settings["schemaVersion"], settings["sources"]]
         )
 
+    def visible(self, settings):
+        # Revisions and fingerprints cover the stored sources; only the view drops
+        # sources the installed registry no longer offers.
+        if settings is None:
+            return None
+        sources = {
+            name: item
+            for name, item in settings["sources"].items()
+            if name in self.source_ids
+        }
+        return {**settings, "sources": sources}
+
     def read(self):
         settings, chain, _, _ = self.inspect()
         revisions = [row["revision"] for row in chain]
@@ -151,7 +160,7 @@ class SettingsService:
             revisions.append(settings["revision"])
         return {
             "state": "configured" if settings else "absent",
-            "settings": settings,
+            "settings": self.visible(settings),
             "observedRevisions": revisions,
         }
 
@@ -233,11 +242,10 @@ class SettingsService:
             "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.",
         )
 
-    @staticmethod
-    def verified(row, current):
+    def verified(self, row, current):
         return {
             "state": "configured",
-            "settings": current,
+            "settings": self.visible(current),
             "committedRevision": row["revision"],
             "requestId": row["request_id"],
             "superseded": current["revision"] != row["revision"],

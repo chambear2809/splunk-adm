@@ -926,6 +926,41 @@ it("uses ND identity and traffic observer keys for their own builders", async ()
   ).not.toContain("observer mapping for Nexus Dashboard");
 });
 
+it("reads a version marker saved with surrounding whitespace or a continuation", async () => {
+  for (const marker of ["2 ", " 2", "2\\\n"]) {
+    const staged = stagedIntegrationFetcher();
+    const request = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("configs/conf-macros/")) {
+          const name = decodeURIComponent(
+            url.split("configs/conf-macros/")[1].split("?")[0],
+          );
+          if (name === "adm_data_contract_version")
+            return response(record({ definition: marker }, false));
+          if (CISCO_V2_SELECTORS[name])
+            return response(
+              record({ definition: CISCO_V2_SELECTORS[name] }, false),
+            );
+        }
+        return staged(input, init);
+      },
+    );
+    const result = await new ToolkitSetupClient(
+      request,
+      deploymentClient(expectedDeployment("netflow", 2)),
+    ).read();
+    expect(result.ciscoIntegration.reasons).not.toContain(
+      "The active data contract could not be verified.",
+    );
+    expect(
+      result.ciscoIntegration.reasons.some((reason) =>
+        reason.includes("does not match the data-contract marker"),
+      ),
+    ).toBe(false);
+  }
+});
+
 it("observes active version 2 only when marker, selectors and writer schedules agree", async () => {
   const request = stagedIntegrationFetcher();
   const staged = stagedIntegrationFetcher();

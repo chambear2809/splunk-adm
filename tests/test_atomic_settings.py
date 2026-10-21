@@ -138,6 +138,44 @@ class AtomicSettingsTests(unittest.TestCase):
         )
         self.assertEqual(len(self.store.attempts), 2)
 
+    def test_history_with_a_retired_source_stays_readable_and_writable(self):
+        retired = operation()
+        retired["settings"]["sources"]["sdwan"] = {
+            "state": "active",
+            "cadenceSeconds": 60,
+            "staleAfterSeconds": 600,
+        }
+        committed = SettingsService(self.store, {"netflow", "sdwan"}).write(retired)
+        legacy = settings("legacy_revision")
+        legacy["sources"]["sdwan"] = legacy["sources"]["netflow"]
+        for rows in (
+            dict(self.store.rows),
+            {
+                "deployment": {
+                    "_key": "deployment",
+                    "revision": "legacy_revision",
+                    "settings_json": canonical(legacy),
+                }
+            },
+        ):
+            with self.subTest(rows=sorted(rows)):
+                self.store.rows = copy.deepcopy(rows)
+                read = self.service.read()
+                self.assertEqual(read["state"], "configured")
+                self.assertEqual(set(read["settings"]["sources"]), {"netflow"})
+                head = read["settings"]["revision"]
+                self.assertIn(head, read["observedRevisions"])
+                saved = self.service.write(operation("request_after_retire", head))
+                self.assertFalse(saved["superseded"])
+                self.assertEqual(set(saved["settings"]["sources"]), {"netflow"})
+        self.assertEqual(committed["settings"]["sources"].keys(), {"netflow", "sdwan"})
+        with self.assertRaises(SettingsError) as caught:
+            self.service.write(
+                operation("request_new_retired", saved["committedRevision"])
+                | {"settings": retired["settings"]}
+            )
+        self.assertEqual(caught.exception.code, "invalid")
+
     def test_stale_revision_is_rejected_without_insert(self):
         self.service.write(operation())
         before = len(self.store.attempts)
@@ -502,6 +540,7 @@ class TopologyGateTests(unittest.TestCase):
         server_guid="head-one",
         cluster=None,
         member=None,
+        version="10.6.0.5",
         **current,
     ):
         from adm_settings_lib.rest import SplunkStore
@@ -516,7 +555,7 @@ class TopologyGateTests(unittest.TestCase):
                     value = {"write_mode": mode, "platform": platform}
                 elif "server/info" in path:
                     value = {
-                        "version": "10.6.0.5",
+                        "version": version,
                         "product_type": "enterprise",
                         "guid": server_guid,
                     }
@@ -796,6 +835,17 @@ class TopologyGateTests(unittest.TestCase):
         ):
             with self.subTest(values=values), self.assertRaises(SettingsError):
                 self.store(**values).persistence()
+
+    def test_unqualified_version_names_the_qualified_and_reported_versions(self):
+        for version in ("10.6.1", "10.6.0.6", "10.7.0"):
+            with (
+                self.subTest(version=version),
+                self.assertRaises(SettingsError) as caught,
+            ):
+                self.store(version=version).persistence()
+            self.assertEqual(caught.exception.code, "unsupported")
+            self.assertIn("10.6.0.5", str(caught.exception))
+            self.assertIn(f"enterprise {version}", str(caught.exception))
 
 
 if __name__ == "__main__":

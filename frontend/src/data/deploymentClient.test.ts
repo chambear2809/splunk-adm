@@ -334,6 +334,56 @@ describe("administrator deployment settings persistence", () => {
     expect(read.canWrite).toBe(false);
     expect(read.error).toContain("previously observed");
   });
+  it("calls the default native fetch without rebinding it to the client", async () => {
+    const { fetcher } = fixture();
+    vi.stubGlobal(
+      "fetch",
+      function (this: unknown, input: RequestInfo | URL, init?: RequestInit) {
+        if (this !== undefined && this !== globalThis)
+          throw new TypeError("Failed to execute 'fetch': Illegal invocation");
+        return fetcher(input, init);
+      },
+    );
+    try {
+      expect((await new ToolkitDeploymentClient().read()).state).toBe("absent");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+  it("reports a non-JSON gateway failure on save as uncertain", async () => {
+    const { fetcher } = fixture();
+    const client = new ToolkitDeploymentClient(async (input, init) =>
+      init?.method === "POST"
+        ? ({
+            ok: false,
+            status: 504,
+            json: async () => JSON.parse("<html>Gateway Timeout</html>"),
+          } as Response)
+        : fetcher(input, init),
+    );
+    await expect(client.write(defaultExpectations())).rejects.toMatchObject({
+      code: "uncertain",
+      message: expect.stringContaining("retry the same save"),
+    });
+  });
+  it("reports a failed pre-save read as unavailable, not as missing permissions", async () => {
+    const { fetcher } = fixture();
+    const client = new ToolkitDeploymentClient(async (input, init) =>
+      String(input).includes("adm/deployment-settings")
+        ? ({
+            ok: false,
+            status: 502,
+            json: async () => JSON.parse("<html>Bad Gateway</html>"),
+          } as Response)
+        : fetcher(input, init),
+    );
+    await expect(client.write(defaultExpectations())).rejects.toMatchObject({
+      code: "unavailable",
+    });
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+      false,
+    );
+  });
   it.each(["read", "verified save"])(
     "refuses an old read whose index macros finish after a newer %s",
     async (advance) => {
