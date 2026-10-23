@@ -7,6 +7,7 @@ import {
   SOURCE_DEFINITIONS,
   expectationFor,
   indexNames,
+  UNCONFIGURED_DNS_INDEX,
   type DeploymentClient,
   type DeploymentExpectations,
   type DeploymentSnapshot,
@@ -253,7 +254,11 @@ export class ToolkitDeploymentClient implements DeploymentClient {
             const definition = entry(result.value).content.definition;
             if (typeof definition !== "string")
               throw new Error("Macro definition unavailable");
-            const parsed = indexNames({ name, definition });
+            const listed = indexNames({ name, definition });
+            const parsed =
+              listed.length === 1 && listed[0] === UNCONFIGURED_DNS_INDEX
+                ? []
+                : listed;
             indexes.push(parsed);
             if (!parsed.length && state !== "unavailable")
               state = "not_configured";

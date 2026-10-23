@@ -1,0 +1,8 @@
+{
+  "host": "worker-a",
+  "index": "hubble_dns",
+  "_time": "2026-10-07T16:25:00.250000000Z",
+  "_indextime": "1791373502.750",
+  "event_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "_raw": "{\"flow\":{\"time\":\"2026-10-07T16:25:00.250000000Z\",\"uuid\":\"flow-7\",\"IP\":{\"source\":\"192.0.2.53\",\"destination\":\"192.0.2.11\"},\"l7\":{\"type\":\"RESPONSE\",\"dns\":{\"query\":\"api.example.test.\",\"qtypes\":[\"A\",\"AAAA\"],\"rcode\":0,\"ips\":[\"198.51.100.20\",\"2001:db8::20\"],\"cnames\":[\"edge.example.test.\"],\"ttl\":90}},\"traffic_direction\":\"EGRESS\",\"is_reply\":true,\"node_name\":\"worker-a/worker-a-01\"},\"node_name\":\"worker-a/worker-a-01\",\"time\":\"2026-10-07T16:25:00.250000000Z\"}"
+}

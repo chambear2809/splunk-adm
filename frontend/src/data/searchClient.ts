@@ -1,10 +1,12 @@
 import SearchJobExport from "@splunk/search-job/SearchJob";
 import { username } from "@splunk/splunk-utils/config";
 import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
+import { createRESTURL } from "@splunk/splunk-utils/url";
 import { toolkitDefault } from "../app/interop";
 import { splunkErrors, splunkWarnings } from "../provider";
 import type { Row } from "../rows";
 import { timeError } from "./timeBounds";
+import { optionalJobs } from "./optionalJobs";
 export { timeError } from "./timeBounds";
 
 export interface SearchRequest {
@@ -16,6 +18,18 @@ export interface SearchRequest {
   /** Catalog and Find may legitimately return zero rows. Graph callers retain strict defaults. */
   allowEmpty?: boolean;
   signal: AbortSignal;
+  /** Opt-in bounded investigations; existing callers keep their 120s deadline. */
+  budget?: { serverSeconds: number; clientMilliseconds: number };
+  onLifecycle?: (event: {
+    state:
+      | "creating"
+      | "created"
+      | "cleanup_pending"
+      | "cleanup_unverified"
+      | "released";
+    sid?: string;
+  }) => void;
+  optionalSource?: "dns_stream" | "dns_hubble";
 }
 export interface RunResult {
   rows: Row[];
@@ -110,6 +124,19 @@ export const incompleteSearchError = (value: unknown) => {
 
 export class ToolkitSearchClient implements SearchClient {
   search(request: SearchRequest): Promise<RunResult> {
+    if (
+      request.budget &&
+      (!Number.isInteger(request.budget.serverSeconds) ||
+        request.budget.serverSeconds < 1 ||
+        request.budget.serverSeconds > 30 ||
+        !Number.isInteger(request.budget.clientMilliseconds) ||
+        request.budget.clientMilliseconds <
+          request.budget.serverSeconds * 1000 ||
+        request.budget.clientMilliseconds > 35000)
+    )
+      return Promise.reject(
+        new Error("Invalid investigation execution budget."),
+      );
     const invalid = timeError(
       request.earliest,
       request.latest,
@@ -122,33 +149,136 @@ export class ToolkitSearchClient implements SearchClient {
     if (!username)
       return Promise.reject(new Error("Splunk user context is unavailable."));
     SearchJob.setBaseFetchInit(getDefaultFetchInit());
-    const job = SearchJob.create(
-      {
-        search: request.search,
-        earliest_time: request.earliest,
-        latest_time: request.latest ?? "now",
-      },
-      { app: "splunk_adm", owner: username, cancelOnUnload: true },
-    );
+    request.onLifecycle?.({ state: "creating" });
+    let job: ReturnType<typeof SearchJob.create>;
+    if (!request.optionalSource) optionalJobs.coreStarted();
+    try {
+      job = SearchJob.create(
+        {
+          search: request.search,
+          earliest_time: request.earliest,
+          latest_time: request.latest ?? "now",
+          ...(request.budget
+            ? {
+                max_time: String(request.budget.serverSeconds),
+                auto_cancel: String(request.budget.serverSeconds),
+                auto_pause: "0",
+                status_buckets: "0",
+              }
+            : {}),
+        },
+        { app: "splunk_adm", owner: username, cancelOnUnload: true },
+      );
+    } catch {
+      if (!request.optionalSource) optionalJobs.coreFinished();
+      return Promise.reject(
+        new Error("Splunk job creation could not be acknowledged."),
+      );
+    }
     return new Promise((resolve, reject) => {
       let settled = false;
       let subscription: { unsubscribe(): void } | undefined;
       let progressSubscription: { unsubscribe(): void } | undefined;
       let finalState: unknown;
+      let sid: string | undefined;
+      let released = false;
+      let cleanupChecks = 0;
+      let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+      let cleanupCheckInFlight = false;
+      let unverifiedReported = false;
+      let sidGraceTimer: ReturnType<typeof setTimeout> | undefined;
+      let sidSubscription: { unsubscribe(): void } | undefined;
+      const release = () => {
+        if (released) return;
+        released = true;
+        sidSubscription?.unsubscribe();
+        if (cleanupTimer) clearTimeout(cleanupTimer);
+        if (sidGraceTimer) clearTimeout(sidGraceTimer);
+        request.onLifecycle?.({ state: "released", sid });
+      };
+      // Server-side cleanup could not be confirmed; callers may drop their
+      // browser-local lease, but the native job is not reported as released.
+      const reportUnverified = () => {
+        if (released || unverifiedReported) return;
+        unverifiedReported = true;
+        if (cleanupTimer) clearTimeout(cleanupTimer);
+        if (sidGraceTimer) clearTimeout(sidGraceTimer);
+        request.onLifecycle?.({ state: "cleanup_unverified", sid });
+      };
+      const verifyCleanup = async () => {
+        if (cleanupTimer) {
+          clearTimeout(cleanupTimer);
+          cleanupTimer = undefined;
+        }
+        if (released || !request.budget || !sid || cleanupCheckInFlight) return;
+        if (cleanupChecks >= 12) {
+          reportUnverified();
+          return;
+        }
+        cleanupCheckInFlight = true;
+        cleanupChecks++;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000);
+        try {
+          const response = await fetch(
+            createRESTURL(
+              `search/jobs/${encodeURIComponent(sid)}?output_mode=json`,
+              { app: "splunk_adm", owner: username },
+            ),
+            { ...getDefaultFetchInit(), signal: controller.signal },
+          );
+          if (response.status === 404 || response.status === 410) {
+            release();
+            return;
+          }
+          if (response.ok) {
+            const value = (await response.json()) as {
+              entry?: { content?: Record<string, unknown> }[];
+            };
+            const native =
+              value.entry?.length === 1 ? value.entry[0].content : undefined;
+            if (
+              trueFlag(native?.isDone) ||
+              trueFlag(native?.isFailed) ||
+              trueFlag(native?.isFinalized)
+            ) {
+              release();
+              return;
+            }
+          }
+        } catch {
+          /* retain the native lease when status is unknown */
+        } finally {
+          clearTimeout(timeout);
+          cleanupCheckInFlight = false;
+        }
+        if (released || cleanupTimer) return;
+        if (cleanupChecks >= 12) {
+          reportUnverified();
+          return;
+        }
+        cleanupTimer = setTimeout(() => {
+          cleanupTimer = undefined;
+          void verifyCleanup();
+        }, 5000);
+      };
       const timer = setTimeout(
         () =>
           finish(
             undefined,
             new Error(
-              "Search timed out after 120 seconds. Narrow the time range or check that the ADM saved searches are enabled.",
+              request.budget
+                ? "Investigation deadline exceeded. Cleanup is pending until Splunk confirms cancellation."
+                : "Search timed out after 120 seconds. Narrow the time range or check that the ADM saved searches are enabled.",
             ),
           ),
-        120000,
+        request.budget?.clientMilliseconds ?? 120000,
       );
       const abort = () => finish(undefined, new Error("Search cancelled."));
       const finish = (result?: RunResult, error?: Error) => {
         if (settled) return;
         settled = true;
+        if (!request.optionalSource) optionalJobs.coreFinished();
         clearTimeout(timer);
         request.signal.removeEventListener("abort", abort);
         try {
@@ -158,20 +288,57 @@ export class ToolkitSearchClient implements SearchClient {
           /* toolkit versions differ */
         }
         try {
+          const native = (
+            finalState as { content?: Record<string, unknown> } | undefined
+          )?.content;
+          if (trueFlag(native?.isDone) || trueFlag(native?.isFailed)) release();
+          if (!released)
+            request.onLifecycle?.({ state: "cleanup_pending", sid });
           const cancellation = job.cancel();
           cancellation?.subscribe?.({
+            next: () => release(),
             error: () => {
-              /* cancellation is best effort */
+              void verifyCleanup();
             },
           });
+          // Cancellation observables can remain open without emitting or failing.
+          // Independently verify the known SID, retaining the lease until native
+          // status is terminal, deleted, or cancellation is acknowledged.
+          void verifyCleanup();
         } catch {
-          /* toolkit versions differ */
+          void verifyCleanup();
         }
+        if (!sid && !released && request.budget && !sidGraceTimer)
+          sidGraceTimer = setTimeout(reportUnverified, 60000);
         if (result) resolve(result);
         else reject(error ?? new Error("Search returned no rows."));
       };
       request.signal.addEventListener("abort", abort);
+      // Keep this acknowledgement subscription alive during uncertain creation.
+      // A late SID still permits the already requested native cancellation.
+      const subscribeSid = () => {
+        sidSubscription = job.getSid?.().subscribe({
+          next: (value: unknown) => {
+            if (typeof value === "string" && value) {
+              sid = value;
+              if (sidGraceTimer) {
+                clearTimeout(sidGraceTimer);
+                sidGraceTimer = undefined;
+              }
+              request.onLifecycle?.({ state: "created", sid });
+              if (settled && !released) void verifyCleanup();
+            }
+          },
+          error: () => {
+            // Native creation rejection is observed by progress/results as well.
+            // Never surface it as an unhandled RxJS error or infer unknown creation cleanup.
+          },
+        });
+        if (released) sidSubscription?.unsubscribe();
+      };
       try {
+        subscribeSid();
+        if (settled) return;
         progressSubscription = job.getProgress().subscribe({
           next: (state: unknown) => {
             finalState = state;

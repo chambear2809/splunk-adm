@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { optionalJobs } from "./optionalJobs";
 import {
   SearchResultLimitError,
   ToolkitSearchClient,
@@ -18,6 +19,9 @@ vi.mock("@splunk/search-job/SearchJob", () => ({
 vi.mock("@splunk/splunk-utils/config", () => ({ username: "alice" }));
 vi.mock("@splunk/splunk-utils/fetch", () => ({
   getDefaultFetchInit: () => ({ credentials: "same-origin" }),
+}));
+vi.mock("@splunk/splunk-utils/url", () => ({
+  createRESTURL: (path: string) => `/rest/${path}`,
 }));
 const job = () => ({
   getProgress: () => ({
@@ -61,6 +65,244 @@ describe("timeError", () => {
   it("rejects unsafe values and reversed epochs", () => {
     expect(timeError("-1h | delete")).toMatch(/Unsupported/);
     expect(timeError("20", "10")).toMatch(/precede/);
+  });
+});
+
+describe("bounded investigation job lifecycle", () => {
+  it("observes SID creation failures without an unhandled observable error", async () => {
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: (observer: any) => {
+          expect(observer.error).toBeTypeOf("function");
+          observer.error(Error("dispatch rejected"));
+          return { unsubscribe: vi.fn() };
+        },
+      }),
+    }));
+    const pending = new ToolkitSearchClient().search({
+      ...request(),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+    });
+    runtime.progress.error(Error("dispatch rejected"));
+    await expect(pending).rejects.toThrow(/dispatch rejected/);
+  });
+  it("sends native execution budgets and retains cleanup until a terminal status is verified", async () => {
+    const lifecycle = vi.fn();
+    const controller = new AbortController();
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: (observer: any) => {
+          observer.next("native-safe-id");
+          return { unsubscribe: vi.fn() };
+        },
+      }),
+    }));
+    runtime.cancel.mockReturnValue({
+      subscribe: (observer: any) => {
+        observer.error(Error("transient cancel failure"));
+        return { unsubscribe: vi.fn() };
+      },
+    });
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ entry: [{ content: { isDone: true } }] }),
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const pending = new ToolkitSearchClient().search({
+      ...request(controller.signal),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+      onLifecycle: lifecycle,
+    });
+    expect(runtime.create.mock.calls[0][0]).toMatchObject({
+      max_time: "30",
+      auto_cancel: "30",
+      auto_pause: "0",
+    });
+    controller.abort();
+    await expect(pending).rejects.toThrow(/cancelled/);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(lifecycle).toHaveBeenCalledWith({
+      state: "released",
+      sid: "native-safe-id",
+    });
+    vi.unstubAllGlobals();
+  });
+  it("verifies a known SID when cancellation remains open without acknowledgment", async () => {
+    vi.useFakeTimers();
+    const lifecycle = vi.fn();
+    const controller = new AbortController();
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: (observer: any) => {
+          observer.next("native-stalled-cancel-id");
+          return { unsubscribe: vi.fn() };
+        },
+      }),
+    }));
+    runtime.cancel.mockReturnValue({
+      subscribe: () => ({ unsubscribe: vi.fn() }),
+    });
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entry: [{ content: { isDone: false } }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ entry: [{ content: { isDone: true } }] }),
+      });
+    vi.stubGlobal("fetch", fetcher);
+    const pending = new ToolkitSearchClient().search({
+      ...request(controller.signal),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+      onLifecycle: lifecycle,
+    });
+
+    controller.abort();
+    await expect(pending).rejects.toThrow(/cancelled/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lifecycle).toHaveBeenCalledWith({
+      state: "cleanup_pending",
+      sid: "native-stalled-cancel-id",
+    });
+    expect(lifecycle).not.toHaveBeenCalledWith({
+      state: "released",
+      sid: "native-stalled-cancel-id",
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(lifecycle).toHaveBeenCalledWith({
+      state: "released",
+      sid: "native-stalled-cancel-id",
+    });
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+  it("returns the core counter to zero when onLifecycle or getSid throws synchronously", async () => {
+    const drain = vi.spyOn(optionalJobs, "coreFinished");
+    const started = vi.spyOn(optionalJobs, "coreStarted");
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: () => {
+          throw new Error("subscribe failed");
+        },
+      }),
+    }));
+    runtime.cancel.mockReturnValue(undefined);
+    await expect(new ToolkitSearchClient().search(request())).rejects.toThrow(
+      /subscribe failed/,
+    );
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(drain).toHaveBeenCalledTimes(1);
+
+    started.mockClear();
+    drain.mockClear();
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: (observer: any) => {
+          observer.next("sid-1");
+          return { unsubscribe: vi.fn() };
+        },
+      }),
+    }));
+    await expect(
+      new ToolkitSearchClient().search({
+        ...request(),
+        onLifecycle: (event) => {
+          if (event.state === "created") throw new Error("lifecycle failed");
+        },
+      }),
+    ).rejects.toThrow(/lifecycle failed/);
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(drain).toHaveBeenCalledTimes(1);
+    started.mockRestore();
+    drain.mockRestore();
+  });
+  it("reports cleanup_unverified once after twelve unreadable status checks", async () => {
+    vi.useFakeTimers();
+    const lifecycle = vi.fn();
+    const controller = new AbortController();
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({
+        subscribe: (observer: any) => {
+          observer.next("native-unreadable-id");
+          return { unsubscribe: vi.fn() };
+        },
+      }),
+    }));
+    runtime.cancel.mockReturnValue({
+      subscribe: () => ({ unsubscribe: vi.fn() }),
+    });
+    const fetcher = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+    vi.stubGlobal("fetch", fetcher);
+    const pending = new ToolkitSearchClient().search({
+      ...request(controller.signal),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+      onLifecycle: lifecycle,
+    });
+    controller.abort();
+    await expect(pending).rejects.toThrow(/cancelled/);
+    await vi.advanceTimersByTimeAsync(5000 * 14);
+    expect(fetcher).toHaveBeenCalledTimes(12);
+    expect(
+      lifecycle.mock.calls.filter(([e]) => e.state === "cleanup_unverified"),
+    ).toEqual([[{ state: "cleanup_unverified", sid: "native-unreadable-id" }]]);
+    expect(lifecycle).not.toHaveBeenCalledWith(
+      expect.objectContaining({ state: "released" }),
+    );
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+  it("reports cleanup_unverified when no SID ever arrives", async () => {
+    vi.useFakeTimers();
+    const lifecycle = vi.fn();
+    const controller = new AbortController();
+    runtime.create.mockImplementation(() => ({
+      ...job(),
+      getSid: () => ({ subscribe: () => ({ unsubscribe: vi.fn() }) }),
+    }));
+    runtime.cancel.mockReturnValue({
+      subscribe: () => ({ unsubscribe: vi.fn() }),
+    });
+    const pending = new ToolkitSearchClient().search({
+      ...request(controller.signal),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+      onLifecycle: lifecycle,
+    });
+    controller.abort();
+    await expect(pending).rejects.toThrow(/cancelled/);
+    expect(lifecycle).not.toHaveBeenCalledWith(
+      expect.objectContaining({ state: "cleanup_unverified" }),
+    );
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(lifecycle).toHaveBeenCalledWith({
+      state: "cleanup_unverified",
+      sid: undefined,
+    });
+    vi.useRealTimers();
+  });
+  it("refuses invalid budgets before native dispatch", async () => {
+    await expect(
+      new ToolkitSearchClient().search({
+        ...request(),
+        budget: { serverSeconds: 31, clientMilliseconds: 35000 },
+      }),
+    ).rejects.toThrow(/budget/);
+    expect(runtime.create).not.toHaveBeenCalled();
   });
 });
 describe("ToolkitSearchClient", () => {

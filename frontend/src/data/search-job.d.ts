@@ -17,6 +17,7 @@ declare module "@splunk/search-job/SearchJob" {
       options: { app: string; owner: string; cancelOnUnload: boolean },
     ): SearchJob;
     getProgress(): Observable<unknown>;
+    getSid(): Observable<string>;
     getResults(params: {
       count: number;
       output_mode: string;

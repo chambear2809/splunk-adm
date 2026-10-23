@@ -18,6 +18,7 @@ import type { SearchClient } from "./searchClient";
 import {
   applicableJobs,
   expectationFor,
+  SOURCE_DEFINITIONS,
   selectedQualitySources,
   type DeploymentSnapshot,
 } from "./deploymentHealth";
@@ -184,6 +185,8 @@ export function healthIndicator(
   const sources = report.sources.filter(
     (source) =>
       source.id !== undefined &&
+      SOURCE_DEFINITIONS.find((definition) => definition.id === source.id)
+        ?.readinessImpact !== "optional_evidence" &&
       expectationFor(report.deployment, source.id) === "active",
   );
   if (!sources.length) return "unknown";

@@ -1,5 +1,6 @@
 """Installed endpoint arbitration. Parent owns the exclusive lab lifecycle."""
 
+import json
 import os
 import secrets
 import sys
@@ -13,7 +14,14 @@ sys.path.insert(0, str(HERE))
 from settings_fixture import CONFIG, ENDPOINT, SettingsFixture  # noqa: E402
 
 
-def operation(namespace, expected=None, request_id=None, state="active"):
+def operation(namespace, expected=None, request_id=None, state="active", sources=None):
+    sources = sources or {
+        "netflow": {
+            "state": state,
+            "cadenceSeconds": 60,
+            "staleAfterSeconds": 600,
+        }
+    }
     return {
         "namespace": namespace,
         "requestId": request_id or secrets.token_hex(16),
@@ -21,13 +29,7 @@ def operation(namespace, expected=None, request_id=None, state="active"):
         "settings": {
             "schemaVersion": 1,
             "revision": "draft",
-            "sources": {
-                "netflow": {
-                    "state": state,
-                    "cadenceSeconds": 60,
-                    "staleAfterSeconds": 600,
-                }
-            },
+            "sources": sources,
         },
     }
 
@@ -100,6 +102,84 @@ class InstalledAtomicSettingsTest(unittest.TestCase):
         self.assertEqual(
             self.fixture.request("POST", payload=operation(self.namespace))[0], 503
         )
+
+    def test_dns_intents_are_immutable_revisioned_and_readable_when_disabled(self):
+        def source_settings(stream, hubble):
+            return {
+                name: {
+                    "state": state,
+                    "cadenceSeconds": 60,
+                    "staleAfterSeconds": 600,
+                }
+                for name, state in (
+                    ("netflow", "active"),
+                    ("dns_stream", stream),
+                    ("dns_hubble", hubble),
+                )
+            }
+
+        initial_payload = operation(
+            self.namespace,
+            sources=source_settings("staged", "active"),
+        )
+        status, initial = self.fixture.request("POST", payload=initial_payload)
+        self.assertEqual(status, 200, initial)
+        prior_rows = self.fixture.rows()
+        self.assertEqual(len(prior_rows), 1)
+        prior_settings = json.loads(prior_rows[0]["settings_json"])
+        self.assertEqual(prior_settings["sources"]["dns_stream"]["state"], "staged")
+        self.assertEqual(prior_settings["sources"]["dns_hubble"]["state"], "active")
+
+        successor_payload = operation(
+            self.namespace,
+            initial["committedRevision"],
+            sources=source_settings("not_selected", "not_selected"),
+        )
+        status, successor = self.fixture.request("POST", payload=successor_payload)
+        self.assertEqual(status, 200, successor)
+        current = self.fixture.request("GET")[1]
+        self.assertEqual(
+            current["settings"]["sources"],
+            source_settings("not_selected", "not_selected"),
+        )
+        rows_after = self.fixture.rows()
+        self.assertEqual(len(rows_after), 2)
+        self.assertEqual(
+            next(row for row in rows_after if row["_key"] == prior_rows[0]["_key"]),
+            prior_rows[0],
+        )
+
+        stale = operation(
+            self.namespace,
+            initial["committedRevision"],
+            sources=source_settings("active", "active"),
+        )
+        status, conflict = self.fixture.request("POST", payload=stale)
+        self.assertEqual(status, 409)
+        self.assertEqual(conflict["code"], "conflict")
+
+        self.fixture.lab._json("POST", CONFIG, {"write_mode": "disabled"})
+        status, disabled = self.fixture.request("GET")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            disabled["settings"]["sources"]["dns_stream"]["state"], "not_selected"
+        )
+        self.assertEqual(
+            disabled["settings"]["sources"]["dns_hubble"]["state"], "not_selected"
+        )
+        self.assertEqual(disabled["settings"]["sources"]["netflow"]["state"], "active")
+        self.assertEqual(
+            self.fixture.request(
+                "POST",
+                payload=operation(
+                    self.namespace,
+                    successor["committedRevision"],
+                    sources=source_settings("active", "active"),
+                ),
+            )[0],
+            503,
+        )
+        self.assertEqual(self.fixture.rows(), rows_after)
 
     def test_viewer_reads_but_server_rejects_write(self):
         user = "adm_atomic_" + secrets.token_hex(8)

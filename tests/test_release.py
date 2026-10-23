@@ -98,7 +98,14 @@ class ReleaseArchiveTests(unittest.TestCase):
             },
             **{
                 f"splunk_adm/default/data/ui/views/{page}.xml": b"view"
-                for page in ("applications", "map", "data_health", "setup", "help")
+                for page in (
+                    "applications",
+                    "map",
+                    "endpoints",
+                    "data_health",
+                    "setup",
+                    "help",
+                )
             },
             "splunk_adm/appserver/static/adm.css": b"css",
             "splunk_adm/default/app.conf": config,
@@ -114,6 +121,11 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
             "splunk_adm/docs/operators/cisco-enterprise-networking.md": b"operator docs",
+            "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md": b"dns qualification docs",
+            "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md": b"dns scenario docs",
+            "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md": b"dns design docs",
+            "splunk_adm/docs/DNS_INGESTION_RESEARCH.md": b"dns research docs",
+            "splunk_adm/docs/operators/dns-evidence.md": b"dns operator docs",
             "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
             "splunk_adm/default/macros.conf": b"[x]\n",
@@ -181,6 +193,24 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "missing required files"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_endpoints_view_or_dns_docs(self):
+        for name in (
+            "splunk_adm/default/data/ui/views/endpoints.xml",
+            "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md",
+            "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md",
+            "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md",
+            "splunk_adm/docs/DNS_INGESTION_RESEARCH.md",
+            "splunk_adm/docs/operators/dns-evidence.md",
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                del install[name]
+                self._write_pair(install)
+                with self.assertRaisesRegex(
+                    ValueError, f"missing required files.*{Path(name).name}"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_recovery_runtime_dependency(self):
         install = self._files()

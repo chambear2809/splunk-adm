@@ -90,9 +90,9 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "dadbc516a5d4ebcad5151799fa80ea5ad978da9034dd2cea63188f67e5f343ce",
+      "reviewed_macro_file_sha256": "070a452af6aee4b939e7eec8831eedc08b3ca0b67ff20419823b06d0b34259e9",
       "method": "static review only; no recapture",
-      "reason": "All 37 transitive V1 adm_graph macro definitions are byte-identical to accepted base 64473e54d1fca4311ac592bc34c4a96a022efd48. Later revisions change V2 receipt/history/topology helpers, pruning the V2 IPFIX exporter-authority normalization in adm_flows_netflow_v2, the missed-slot detector's recoverable-target and catalog-slot anchoring, and IPFIX scope-authority profile health only; captured V1 rows and original capture hashes remain unchanged. No new live capture is claimed."
+      "reason": "Previous compatibility review hash dadbc516a5d4ebcad5151799fa80ea5ad978da9034dd2cea63188f67e5f343ce is retained as review history. The current revision appends exactly six optional DNS selector/configuration macro stanzas at end of file; each is a literal definition with iseval=0. Static diff review confirms no existing macro stanza changed; the captured adm_graph(4) body, its hash, scenario hash, and generator provenance remain unchanged. These settings do not execute searches and are excluded from graph capture. Static review only; no recapture or new live evidence is claimed."
     },
     "reviewed_generator_compatibility": {
       "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",

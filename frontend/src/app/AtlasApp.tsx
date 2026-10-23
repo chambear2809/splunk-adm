@@ -9,6 +9,8 @@ import {
 import { Shell } from "./Shell";
 import { ApplicationsPage } from "../pages/ApplicationsPage";
 import { MapPage } from "../pages/MapPage";
+import { EndpointsPage } from "../pages/EndpointsPage";
+import { DnsEvidencePanel } from "../DnsEvidencePanel";
 import { HealthPage } from "../pages/HealthPage";
 import { SetupPage } from "../pages/SetupPage";
 import { HelpPage } from "../pages/HelpPage";
@@ -61,6 +63,21 @@ export function AtlasApp({
             theme={theme}
             timezone={timezone}
             inSplunk={inSplunk}
+          />
+        ) : page === "endpoints" ? (
+          <EndpointsPage
+            key={`${user ?? "anonymous"}:${mode}`}
+            client={client}
+            live={live}
+            renderEvidence={(selection) =>
+              client && live ? (
+                <DnsEvidencePanel
+                  key={JSON.stringify(selection)}
+                  selection={selection}
+                  client={client}
+                />
+              ) : null
+            }
           />
         ) : page === "applications" ? (
           <ApplicationsPage

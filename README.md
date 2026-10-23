@@ -28,6 +28,7 @@ For example, a client reaches a Kubernetes LoadBalancer address and the applicat
 
 | Product                                                                            | What it adds                                                                           | Required configuration or data                                                                                                       |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| [**Optional DNS evidence**](docs/operators/dns-evidence.md) | Scoped endpoint investigations and supplemental resolution context | Customer-managed Stream DNS or Hubble DNS L7; verified source scope, caller access and target qualification. |
 | [**Splunk Enterprise**](docs/operators/splunk-platform.md)                         | Search, correlation, history and the Atlas interface                                   | Healthy KV Store; source and summary indexes; index permissions and routing-scope mappings.                                          |
 | [**Splunk Stream + NetFlow/IPFIX exporters**](docs/operators/network-stream.md)    | Connections, ports, traffic counters and observing devices                             | Stream add-ons, a receiver and an enabled NetFlow stream; endpoint, time, exporter, interface and sampling fields.                   |
 | [**Cisco ACI / APIC**](docs/operators/aci-network.md)                              | Endpoint identity, EPG/bridge-domain context, candidate fabric paths and policy intent | DC Networking add-on, read-only APIC access, and endpoint, topology and policy inputs.                                               |
@@ -42,7 +43,7 @@ For example, a client reaches a Kubernetes LoadBalancer address and the applicat
 
 Choose sources by the question you want to answer:
 
-- **Which systems communicate?** Start with a supported traffic feed and explicit routing-scope mappings. Without workload evidence, endpoints may remain IP addresses. Find can bypass an empty catalog only when service/workload bindings already exist; traffic alone does not provide an arbitrary-IP map entry point.
+- **Which systems communicate?** Start with a supported traffic feed and explicit routing-scope mappings. Without workload evidence, endpoints may remain IP addresses. Find needs service/workload bindings to open an application map. The separate **Endpoints** page supports scoped-IP investigations from configured conversation summaries and verified scope, without requiring a Kubernetes or trace catalog; optional DNS adds resolution context.
 - **Which Kubernetes workload served a client?** Add object history and compatible Hubble handoff evidence. Traces add service calls and bindings; they are optional for network-derived conversations.
 - **What network or client context applies?** Add ACI/Nexus inventory for fabric context, FTD for firewall observations, or qualified Catalyst/Meraki V2 enrichment for client attachment.
 
@@ -60,6 +61,8 @@ npm run dev
 ```
 
 Open the localhost URL; the captured synthetic demos need no Splunk connection.
+
+**Present the demo:** follow the [networking SE script](docs/demos/NETWORKING_SE.md) or [Splunk SE script](docs/demos/SPLUNK_SE.md). Both include timed talk tracks, exact clicks, expected results and recovery steps. The [presenter guide](docs/demos/README.md) covers local setup and the separate synthetic endpoint/DNS UI segment.
 
 **Use your data:** follow the [operator setup sequence](docs/operators/splunk-setup-guide.md). Atlas reads indexed data; operators configure collectors, indexes, permissions, scopes and deployment expectations. Searches and settings writes ship disabled; settings persistence requires deployment qualification. V2 activation follows the [migration procedure](docs/CISCO_CONTRACT_MIGRATION.md).
 

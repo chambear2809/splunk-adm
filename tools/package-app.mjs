@@ -85,6 +85,27 @@ await copyFile(
 );
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
 await copyFile(
+  "docs/DNS_EVIDENCE_QUALIFICATION.md",
+  `${stage}/docs/DNS_EVIDENCE_QUALIFICATION.md`,
+);
+await copyFile(
+  "docs/DNS_EVIDENCE_SCENARIOS.md",
+  `${stage}/docs/DNS_EVIDENCE_SCENARIOS.md`,
+);
+await copyFile(
+  "docs/DNS_EVIDENCE_DESIGN.md",
+  `${stage}/docs/DNS_EVIDENCE_DESIGN.md`,
+);
+await copyFile(
+  "docs/DNS_INGESTION_RESEARCH.md",
+  `${stage}/docs/DNS_INGESTION_RESEARCH.md`,
+);
+await mkdir(`${stage}/docs/operators`, { recursive: true });
+await copyFile(
+  "docs/operators/dns-evidence.md",
+  `${stage}/docs/operators/dns-evidence.md`,
+);
+await copyFile(
   "docs/LATE_CATALYST_RECEIPTS.md",
   `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
 );

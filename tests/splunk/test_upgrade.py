@@ -1059,6 +1059,23 @@ class UpgradeIntegrationTest(unittest.TestCase):
                 for row, key in zip(self.legacy_scope_rows, self.legacy_scope_keys)
             ],
         )
+        # An operator attestation must survive a verified rerun of the migration.
+        attested_key = self.legacy_scope_keys[0]
+        self.lab.search(
+            f'| inputlookup adm_observer_scope | search _key="{attested_key}" '
+            '| eval mapping_status="verified" '
+            "| outputlookup append=true key_field=_key adm_observer_scope"
+        )
+        rerun = self.lab.search(migration)
+        self.assertEqual(rerun[0]["blocked"], "0")
+        self.assertEqual(
+            self.lab.search(
+                f'| inputlookup adm_observer_scope | search _key="{attested_key}" '
+                "| table _key mapping_status"
+            ),
+            [{"_key": attested_key, "mapping_status": "verified"}],
+            "migration rerun must not drop mapping_status",
+        )
         self.assertEqual(
             self._docker_file(
                 "/opt/splunk/etc/apps/splunk_adm/lookups/adm_observer_scope.csv"

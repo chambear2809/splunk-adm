@@ -6,6 +6,8 @@ Everything in the data layer is SPL in `macros.conf`, `savedsearches.conf`, `col
 
 ## Sources
 
+Optional on-demand DNS resolution evidence and standalone scoped-address investigations use separate versioned result contracts. They do not change application graphs, summary counters or ownership, and introduce no scheduled DNS writer. See [DNS operations](operators/dns-evidence.md) and the [candidate qualification record](DNS_EVIDENCE_QUALIFICATION.md). Existing traffic readers and settings persistence gates remain applicable.
+
 | Source | Sourcetype | Role |
 | --- | --- | --- |
 | Splunk Stream NetFlow/IPFIX from NX-OS leaves | `stream:netflow` (`source=stream:netflow`) | Unidirectional flow records, exporter and ifIndex |

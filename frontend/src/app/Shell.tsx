@@ -22,6 +22,7 @@ const Root = styled.div`
 const labels: Record<Page, string> = {
   applications: "Applications",
   map: "Map",
+  endpoints: "Endpoints",
   data_health: "Data health",
   setup: "Setup",
   help: "Help",
@@ -90,7 +91,21 @@ export function Shell({
         {PAGES.map((p) => (
           <a
             key={p}
-            href={pageURL(p, new URLSearchParams(search))}
+            href={pageURL(
+              p,
+              p === "endpoints"
+                ? new URLSearchParams(
+                    [...new URLSearchParams(search)].filter(([key]) =>
+                      [
+                        "endpoint_ip",
+                        "endpoint_scope",
+                        "endpoint_start",
+                        "endpoint_end",
+                      ].includes(key),
+                    ),
+                  )
+                : new URLSearchParams(search),
+            )}
             aria-current={p === page ? "page" : undefined}
           >
             {labels[p]}

@@ -432,7 +432,14 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         },
         *{
             f"splunk_adm/default/data/ui/views/{page}.xml"
-            for page in ("applications", "map", "data_health", "setup", "help")
+            for page in (
+                "applications",
+                "map",
+                "endpoints",
+                "data_health",
+                "setup",
+                "help",
+            )
         },
         "splunk_adm/default/app.conf",
         "splunk_adm/LICENSE",
@@ -445,6 +452,11 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md",
         "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md",
         "splunk_adm/docs/operators/cisco-enterprise-networking.md",
+        "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md",
+        "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md",
+        "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md",
+        "splunk_adm/docs/DNS_INGESTION_RESEARCH.md",
+        "splunk_adm/docs/operators/dns-evidence.md",
         RECOVERY_DOC_PATH,
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",

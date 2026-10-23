@@ -15,6 +15,7 @@ import { plural, portLabel, warningTitle } from "../glossary";
 import type { View } from "../layout";
 import { MapView } from "../MapView";
 import { Inspector } from "../Inspector";
+import { MapDnsInspection } from "../MapDnsInspection";
 import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
@@ -1067,6 +1068,16 @@ export function MapPage({
                 pathOpen={pathTab && !!path && !pathHidden}
                 summary={summary}
               />
+              {selection && (
+                <MapDnsInspection
+                  key={`${user ?? "anonymous"}:${graph.snapshot_id}:${selection.kind}:${selection.id}:${mode}`}
+                  graph={graph}
+                  index={index}
+                  selection={selection}
+                  client={client}
+                  live={mode === "live"}
+                />
+              )}
               {selectedEdge && (
                 <div className="inspector-body">
                   <EvidenceActions

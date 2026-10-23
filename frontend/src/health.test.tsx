@@ -24,6 +24,7 @@ import type { SearchClient } from "./data/searchClient";
 const now = 200000;
 const report: HealthReport = {
   sources: sourceRows([]),
+  optionalEvidence: [],
   jobs: jobRows([]),
   quality: qualityRows([]),
   warnings: [],
@@ -32,8 +33,36 @@ const report: HealthReport = {
 const search = vi.fn();
 const client: SearchClient = { search };
 describe("pipeline health", () => {
+  it("preserves the deployment URL prefix in endpoint navigation", () => {
+    vi.stubGlobal("location", {
+      pathname: "/splunk/en-US/app/splunk_adm/data_health",
+    });
+    try {
+      const html = renderToStaticMarkup(
+        <HealthResults
+          report={{
+            ...report,
+            optionalEvidence: [
+              {
+                id: "dns_stream",
+                name: "Stream DNS",
+                expectation: "not_selected",
+                configuration: "unknown",
+                receipt: "unknown",
+                status: "not_selected",
+                diagnostic: "Not selected",
+              },
+            ],
+          }}
+        />,
+      );
+      expect(html).toContain('href="/splunk/en-US/app/splunk_adm/endpoints"');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("preserves unknown values instead of inventing successful empty results", () => {
-    expect(sourceRows([])).toHaveLength(SOURCE_NAMES.length);
+    expect(sourceRows([])).toHaveLength(SOURCE_NAMES.length - 2);
     expect(jobRows([])).toHaveLength(JOB_NAMES.length);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
@@ -368,6 +397,31 @@ const deployment = (id: string, contract: 1 | 2 = 1): DeploymentSnapshot => {
   };
 };
 describe("deployment health evidence", () => {
+  it("keeps selected DNS evidence separate and never dispatches it through health macros", async () => {
+    const config = deployment("dns_stream");
+    config.settings!.sources.dns_hubble.state = "active";
+    config.sourceConfiguration = {
+      dns_stream: "configured",
+      dns_hubble: "not_configured",
+    };
+    search
+      .mockReset()
+      .mockResolvedValue({ rows: [], warnings: [], errors: [] });
+    const result = await loadHealth(
+      client,
+      new AbortController().signal,
+      config,
+    );
+    expect(search).not.toHaveBeenCalled();
+    expect(result.sources.some((source) => source.id?.startsWith("dns_"))).toBe(
+      false,
+    );
+    expect(result.optionalEvidence.map((item) => item.status)).toEqual([
+      "configured",
+      "not_configured",
+    ]);
+  });
+
   it("preserves staged V2 and unselected sources without demanding their receipt", () => {
     const result = sourceRows([], deployment("sdwan"));
     expect(result.find((row) => row.id === "sdwan")?.expectation).toBe(

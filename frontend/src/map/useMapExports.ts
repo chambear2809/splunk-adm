@@ -2,16 +2,8 @@ import { useState, type RefObject } from "react";
 import { type Graph, type indexGraph } from "../graph";
 import type { indexTopology } from "../topology";
 import { contextEvidenceCsv, requiredFlowsCsv } from "../csv";
+import { downloadBlob as download } from "../download";
 import { exportMapPng, printMap } from "../exportMap";
-const download = (name: string, type: string, body: string) => {
-  const url = URL.createObjectURL(new Blob([body], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-
 /** Data exports use loaded evidence; images use the currently rendered map. */
 export function useMapExports({
   graph,

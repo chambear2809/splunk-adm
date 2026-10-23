@@ -4,6 +4,8 @@ Splunk app for network-perspective application dependency mapping, targeting Spl
 
 ## Run locally
 
+For a guided customer-facing walkthrough, use the [networking SE script](demos/NETWORKING_SE.md) or [Splunk SE script](demos/SPLUNK_SE.md). The [shared presenter guide](demos/README.md) provides scenario bookmarks, setup and an optional endpoint/DNS mock-UI segment with explicit qualification limits.
+
 Requires Node 22.13+, 24.x or 26+ (Vitest does not support Node 25), npm, and `tar` for packaging. Python 3.10+ is needed only for the fixture generator and the lab tests.
 
 ```sh
