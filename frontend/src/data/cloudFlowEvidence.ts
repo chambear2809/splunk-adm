@@ -274,6 +274,7 @@ export function buildCloudFlowSearch(
     "host",
     "index",
     "event_fingerprint",
+    "event_time_epoch",
     "_time",
     "_indextime",
     "input_count",
@@ -293,7 +294,7 @@ export function buildCloudFlowSearch(
       CLOUD_FLOW_RECORD_BYTES +
       ',1,0), _cloud_line=if(oversized=1,"",replace(trim(_raw),"\\s+"," ")), _cloud_fields=split(_cloud_line," "), flow_field_count=coalesce(mvcount(_cloud_fields),0)',
     "| eval " + projection,
-    "| eval event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null())",
+    "| eval event_time_epoch=tonumber(_time), event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null())",
     "| where flow_field_count!=29 OR ((" +
       intervalPredicate +
       ") AND ((" +
@@ -493,7 +494,7 @@ export function normalizeCloudFlowEvidence(
       )
         throw new Error("Record origin fingerprint is invalid.");
       const indexedTime = optionalEpoch(row._indextime);
-      const rowTime = optionalEpoch(row._time);
+      const rowTime = optionalEpoch(row.event_time_epoch);
       if (indexedTime === undefined || rowTime === undefined)
         throw new Error("Record event or index time is missing or invalid.");
       const start = requiredEpoch(fields.start);

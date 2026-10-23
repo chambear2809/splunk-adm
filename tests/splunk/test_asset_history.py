@@ -359,6 +359,9 @@ class AssetHistoryInstalledLabTest(unittest.TestCase):
         self.assertEqual(records[0]["owner_id"], "team-new")
         self.assertEqual(records[0]["environment"], "production")
         self.assertEqual(records[0]["network_id"], "vpc-lab")
+        self.assertEqual(
+            float(records[0]["event_time_epoch"]), float(records[0]["valid_from"])
+        )
         self.assertNotEqual(records[0]["asset_id"], "asset-old")
         normalized = self._normalize(selection, configuration, rows)
         self.assertEqual(normalized["rejected"], 0)
@@ -408,6 +411,9 @@ class AssetHistoryInstalledLabTest(unittest.TestCase):
         records = [row for row in rows if row.get("kind") == "supplemental_record"]
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["validity_basis"], "snapshot_current")
+        self.assertEqual(
+            float(records[0]["event_time_epoch"]), float(records[0]["valid_from"])
+        )
         normalized = self._normalize(selection, configuration, rows)
         self.assertEqual(
             normalized["records"][0]["attribution"], "current_snapshot_context"

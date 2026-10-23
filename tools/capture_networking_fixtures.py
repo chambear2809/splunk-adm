@@ -356,11 +356,16 @@ def _digest(value) -> str:
 
 def require_local_lab(lab) -> None:
     """Pin Docker to the same disposable localhost target used by REST/HEC."""
-    from benchmark_pipeline import command, local_docker_endpoint, validate_ports
+    from benchmark_pipeline import (
+        CONTAINER,
+        command,
+        local_docker_endpoint,
+        validate_lab_target,
+        validate_ports,
+    )
 
     local_docker_endpoint()
-    if lab.MGMT != "https://127.0.0.1:8089" or lab.HEC != "https://127.0.0.1:8088":
-        raise RuntimeError("Cisco fixture tools require the disposable localhost lab")
+    validate_lab_target(lab)
     validate_ports(
         json.loads(
             command(
@@ -368,7 +373,7 @@ def require_local_lab(lab) -> None:
                 "inspect",
                 "--format",
                 "{{json .NetworkSettings.Ports}}",
-                "adm-splunk-lab",
+                CONTAINER,
             )
         )
     )
@@ -379,6 +384,8 @@ def evidence_fingerprints(
 ) -> dict:
     """Bind capture to raw files, installed defaults, effective macros and KV state."""
     require_local_lab(lab)
+    from benchmark_pipeline import CONTAINER
+
     app = ROOT / "splunk_app/splunk_adm"
     archive = os.environ.get("ADM_LAB_PACKAGE")
     package_sha256 = None
@@ -403,7 +410,7 @@ def evidence_fingerprints(
                 [
                     "docker",
                     "exec",
-                    "adm-splunk-lab",
+                    CONTAINER,
                     "find",
                     prefix.rstrip("/"),
                     "-type",
@@ -440,7 +447,7 @@ def evidence_fingerprints(
     prefix = "/opt/splunk/etc/apps/splunk_adm/default/"
     paths = [prefix + name for name in sorted(expected)]
     response = subprocess.run(
-        ["docker", "exec", "-u", "splunk", "adm-splunk-lab", "sha256sum", *paths],
+        ["docker", "exec", "-u", "splunk", CONTAINER, "sha256sum", *paths],
         capture_output=True,
         text=True,
         check=True,

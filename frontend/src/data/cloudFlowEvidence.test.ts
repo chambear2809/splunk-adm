@@ -77,6 +77,7 @@ function projectedRow(
     index: "aws_flow",
     event_fingerprint: "b".repeat(64),
     _time: Number(fields.start),
+    event_time_epoch: Number(fields.start),
     _indextime: "1791373500",
     ...overrides,
   };
@@ -175,6 +176,7 @@ describe("AWS VPC Flow Logs v5 contract", () => {
     const search = buildCloudFlowSearch(source, selection);
     expect(search).toContain('sourcetype="aws:vpcflow:v5"');
     expect(search).toContain('host IN ("collector-a")');
+    expect(search).toContain("event_time_epoch=tonumber(_time)");
     for (const [, column] of CLOUD_FLOW_PROJECTION.slice(1, 3)) {
       expect(search).toContain(column + "=mvindex(_cloud_fields");
     }
@@ -282,11 +284,14 @@ describe("AWS VPC Flow Logs v5 contract", () => {
   it("requires event time to match producer start within one second", () => {
     const line = raw("accepted-flow");
     const start = Number(parseCloudFlowLine(line).start);
-    const valid = projectedRow(line, { _time: start + 1 });
+    const valid = projectedRow(line, {
+      _time: "2026-10-23T23:44:34.000+00:00",
+      event_time_epoch: start + 1,
+    });
     const missing = projectedRow(line);
-    delete missing._time;
-    const mismatch = projectedRow(line, { _time: start + 2 });
-    const invalid = projectedRow(line, { _time: "now" });
+    delete missing.event_time_epoch;
+    const mismatch = projectedRow(line, { event_time_epoch: start + 2 });
+    const invalid = projectedRow(line, { event_time_epoch: "now" });
     const result = normalizeCloudFlowEvidence(
       [valid, missing, mismatch, invalid],
       selection,

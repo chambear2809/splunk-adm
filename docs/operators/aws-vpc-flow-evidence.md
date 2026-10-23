@@ -20,14 +20,14 @@ AWS custom formats choose both field membership and order. The record version re
 
 ### Splunk timestamp parsing
 
-Install the app's sourcetype stanza on the Splunk parsing tier that receives these events. The supported parser reads the seventh token, start, as Unix seconds:
+Install the app's sourcetype stanza on the Splunk parsing tier that receives these events. The supported parser is intended to read the seventh token, start, as Unix seconds:
 
     SHOULD_LINEMERGE = false
     TIME_PREFIX = ^(?:\S+\s+){6}
     TIME_FORMAT = %s
     MAX_TIMESTAMP_LOOKAHEAD = 10
 
-Confirm the effective configuration on the target before setting the source's schema-qualified flag. A local search-head-only props setting is insufficient when event parsing occurs on indexers or heavy forwarders. If start is not extracted as event time, Splunk's dispatch-time bounds can omit records; a green source selector does not prove timestamp correctness.
+Confirm the effective configuration and observed event timestamps on the target before setting the source's schema-qualified flag. A local search-head-only props setting is insufficient when event parsing occurs on indexers or heavy forwarders. Direct HEC input may assign receipt time instead of applying this props stanza; the lab qualification therefore supplies HEC `time` explicitly and does not qualify props-based timestamp extraction. The ingestion path must assign `_time` from the producer `start` value (within one second), either through effective parsing-tier configuration or an explicit HEC event-time field. Atlas projects numeric `_time` as `event_time_epoch` and rejects records where it is missing or disagrees with producer `start`. Missing or incorrect event time can place records outside dispatch bounds before normalization, so verify the effective ingestion path with time-separated samples.
 
 ## Authority, account, and routing scope
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -241,8 +242,18 @@ class ProxyEvidenceRuntimeTest(unittest.TestCase):
         self.assertEqual(records[0]["host"], self.token)
         self.assertEqual(records[0]["index"], INDEX)
         self.assertRegex(records[0]["event_fingerprint"], r"^[a-f0-9]{64}$")
+        splunk_time = records[0]["_time"]
+        try:
+            observed_time = float(splunk_time)
+        except (TypeError, ValueError):
+            parsed_time = datetime.fromisoformat(
+                str(splunk_time).replace("Z", "+00:00")
+            )
+            if parsed_time.tzinfo is None:
+                parsed_time = parsed_time.replace(tzinfo=timezone.utc)
+            observed_time = parsed_time.timestamp()
         self.assertLessEqual(
-            abs(float(records[0]["_time"]) - self.event_time),
+            abs(observed_time - self.event_time),
             1,
             "the installed Envoy props stanza must parse the producer start_time",
         )

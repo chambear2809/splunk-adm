@@ -221,12 +221,12 @@ export function buildAssetHistorySearch(
 | eventstats sum(__eligible) AS input_count
 | eval kind=if(__eligible=1,"supplemental_record","supplemental_filtered")
 | appendpipe [| stats max(source_scan_count) AS source_scan_count max(source_scan_invalid_count) AS source_scan_invalid_count max(source_scan_capped) AS source_scan_capped max(input_count) AS input_count | eval kind="supplemental_completion",schema_version=1,input_count=coalesce(input_count,0),returned_count=min(coalesce(input_count,0),${EVIDENCE_LIMITS.records}),input_capped=if(coalesce(input_count,0)>${EVIDENCE_LIMITS.input},1,0),source_scan_count=coalesce(source_scan_count,0),source_scan_invalid_count=coalesce(source_scan_invalid_count,0),source_scan_capped=coalesce(source_scan_capped,0),oversized=0]
-| eval indexed_at=_indextime,record_fingerprint=coalesce(record_fingerprint,sha256(json_array(asset_authority,snapshot_id,record_id,revision,asset_id,scope,ip,valid_from,valid_to,validity_basis)))
+| eval indexed_at=_indextime,event_time_epoch=tonumber(_time),record_fingerprint=coalesce(record_fingerprint,sha256(json_array(asset_authority,snapshot_id,record_id,revision,asset_id,scope,ip,valid_from,valid_to,validity_basis)))
 | where kind="supplemental_completion" OR kind="supplemental_record"
 | sort 0 kind - _time record_fingerprint
 | streamstats count AS kind_rank BY kind
 | where kind="supplemental_completion" OR kind_rank<=${EVIDENCE_LIMITS.records}
-| fields kind schema_version input_count returned_count input_capped source_scan_count source_scan_invalid_count source_scan_capped oversized index _time indexed_at asset_authority scope ip record_id revision revision_conflict asset_id asset_name service_id service_name environment owner_id owner_name network_id validity_basis valid_from valid_to retired_at snapshot_id snapshot_at snapshot_complete record_fingerprint`;
+| fields kind schema_version input_count returned_count input_capped source_scan_count source_scan_invalid_count source_scan_capped oversized index _time event_time_epoch indexed_at asset_authority scope ip record_id revision revision_conflict asset_id asset_name service_id service_name environment owner_id owner_name network_id validity_basis valid_from valid_to retired_at snapshot_id snapshot_at snapshot_complete record_fingerprint`;
 }
 
 interface Candidate {
@@ -320,7 +320,7 @@ function normalizeRow(
   );
   const revisionConflict = boolean(row.revision_conflict, "revision conflict");
   const validFrom = finiteTime(row.valid_from, "valid_from")!;
-  const rowTime = finiteTime(row._time, "indexed event time")!;
+  const rowTime = finiteTime(row.event_time_epoch, "indexed event time")!;
   const validTo = finiteTime(row.valid_to, "valid_to", true);
   const retiredAt = finiteTime(row.retired_at, "retired_at", true);
   if (Math.abs(rowTime - validFrom) > 0.001)

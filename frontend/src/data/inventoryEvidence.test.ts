@@ -50,7 +50,8 @@ function row(overrides: Partial<Row> = {}): Row {
   return {
     kind: "supplemental_record",
     index: "asset_history_idx",
-    _time: String(validFrom),
+    _time: new Date(validFrom * 1000).toISOString(),
+    event_time_epoch: String(validFrom),
     indexed_at: String(start + 10),
     schema_version: "1",
     asset_authority: "cmdb-prod",
@@ -109,6 +110,7 @@ describe("asset-history evidence contract", () => {
       "sum(source_row_invalid) AS source_scan_invalid_count",
     );
     expect(search).toContain("source_scan_capped");
+    expect(search).toContain("event_time_epoch=tonumber(_time)");
     expect(search).toContain("max(revision_number) AS latest_revision");
     expect(search).toContain("values(revision_semantic) AS revision_semantics");
     expect(search).toContain("mvcount(revision_semantics)>1");
@@ -131,6 +133,7 @@ describe("asset-history evidence contract", () => {
     expect(search).toContain(
       "| fields kind schema_version input_count returned_count input_capped source_scan_count source_scan_invalid_count source_scan_capped",
     );
+    expect(search).toContain("_time event_time_epoch indexed_at");
     expect(search).not.toContain("index=*");
   });
 
@@ -160,7 +163,7 @@ describe("asset-history evidence contract", () => {
       record_id: "assignment-old",
       asset_id: "asset-old",
       valid_from: String(start - 600),
-      _time: String(start - 600),
+      event_time_epoch: String(start - 600),
       valid_to: String(start),
       snapshot_at: String(start + 100),
     });
@@ -168,7 +171,7 @@ describe("asset-history evidence contract", () => {
       record_id: "assignment-new",
       asset_id: "asset-new",
       valid_from: String(start),
-      _time: String(start),
+      event_time_epoch: String(start),
       valid_to: String(start + 600),
       snapshot_at: String(start + 600),
     });
@@ -195,14 +198,14 @@ describe("asset-history evidence contract", () => {
   it("marks overlapping different owners ambiguous and keeps scope isolation", () => {
     const first = row({
       valid_from: String(start - 100),
-      _time: String(start - 100),
+      event_time_epoch: String(start - 100),
       valid_to: String(start + 200),
     });
     const second = row({
       record_id: "assignment-2",
       asset_id: "asset-web-2",
       valid_from: String(start + 100),
-      _time: String(start + 100),
+      event_time_epoch: String(start + 100),
       valid_to: String(start + 500),
     });
     const otherScope = row({
@@ -210,7 +213,7 @@ describe("asset-history evidence contract", () => {
       asset_id: "asset-other-scope",
       scope: "prod-west",
       valid_from: String(start + 100),
-      _time: String(start + 100),
+      event_time_epoch: String(start + 100),
     });
     const result = normalizeAssetHistoryEvidence(
       [first, second, otherScope],
@@ -228,7 +231,7 @@ describe("asset-history evidence contract", () => {
   it("marks overlapping contradictions for the same asset identity ambiguous", () => {
     const first = row({
       valid_from: String(start - 100),
-      _time: String(start - 100),
+      event_time_epoch: String(start - 100),
       valid_to: String(start + 500),
       owner_id: "team-commerce",
       service_id: "service-checkout",
@@ -236,7 +239,7 @@ describe("asset-history evidence contract", () => {
     const second = row({
       record_id: "assignment-context-conflict",
       valid_from: String(start - 50),
-      _time: String(start - 50),
+      event_time_epoch: String(start - 50),
       valid_to: String(start + 400),
       owner_id: "team-other",
       service_id: "service-other",
@@ -263,7 +266,7 @@ describe("asset-history evidence contract", () => {
     const snapshot = row({
       validity_basis: "snapshot_current",
       valid_from: String(snapshotAt),
-      _time: String(snapshotAt),
+      event_time_epoch: String(snapshotAt),
       valid_to: undefined,
       retired_at: undefined,
       snapshot_at: String(snapshotAt),
@@ -304,14 +307,14 @@ describe("asset-history evidence contract", () => {
   it("resolves a later closure before testing a historical window", () => {
     const revisionOne = row({
       valid_from: String(start - 600),
-      _time: String(start - 600),
+      event_time_epoch: String(start - 600),
       valid_to: String(start + 600),
       snapshot_at: String(start + 900),
     });
     const revisionTwo = row({
       revision: "2",
       valid_from: String(start - 600),
-      _time: String(start - 600),
+      event_time_epoch: String(start - 600),
       valid_to: String(start - 100),
       retired_at: String(start - 100),
       snapshot_at: String(start + 900),
@@ -333,7 +336,7 @@ describe("asset-history evidence contract", () => {
     (_label, change) => {
       const revisionOne = row({
         valid_from: String(start - 600),
-        _time: String(start - 600),
+        event_time_epoch: String(start - 600),
         valid_to: String(start + 600),
         snapshot_at: String(start + 900),
       });
@@ -341,7 +344,7 @@ describe("asset-history evidence contract", () => {
         ...change,
         revision: "2",
         valid_from: String(start - 600),
-        _time: String(start - 600),
+        event_time_epoch: String(start - 600),
         valid_to: String(start + 600),
         snapshot_at: String(start + 900),
       });
@@ -358,7 +361,7 @@ describe("asset-history evidence contract", () => {
   it("does not admit an older revision when the latest starts after the window", () => {
     const revisionOne = row({
       valid_from: String(start - 600),
-      _time: String(start - 600),
+      event_time_epoch: String(start - 600),
       valid_to: String(start + 600),
       snapshot_at: String(start + 900),
     });
@@ -366,7 +369,7 @@ describe("asset-history evidence contract", () => {
     const revisionTwo = row({
       revision: "2",
       valid_from: String(correctedStart),
-      _time: String(correctedStart),
+      event_time_epoch: String(correctedStart),
       valid_to: String(start + 1000),
       snapshot_at: String(start + 1100),
     });
@@ -397,7 +400,7 @@ describe("asset-history evidence contract", () => {
 
   it("rejects event-time, source, scope and identity mismatches", () => {
     for (const changes of [
-      { _time: String(start - 59) },
+      { event_time_epoch: String(start - 59) },
       { index: "other_index" },
       { asset_authority: "unmapped" },
       { owner_name: "Commerce Platform", owner_id: undefined },

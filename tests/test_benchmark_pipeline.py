@@ -28,6 +28,43 @@ class BenchmarkPipelineTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             bench.validate_ports({})
 
+    def test_task_owned_lab_ports_require_exact_local_bindings(self):
+        ports = {
+            "8088/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18088"}],
+            "8089/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18089"}],
+        }
+        with patch.dict(
+            os.environ, {"ADM_LAB_HEC_PORT": "18088", "ADM_LAB_MGMT_PORT": "18089"}
+        ):
+            bench.validate_ports(ports)
+            with self.assertRaises(ValueError):
+                bench.validate_ports(
+                    {**ports, "8089/tcp": [{"HostIp": "0.0.0.0", "HostPort": "18089"}]}
+                )
+            with self.assertRaises(ValueError):
+                bench.validate_ports(
+                    {**ports, "8088/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8088"}]}
+                )
+
+    def test_task_owned_lab_target_rejects_remote_and_invalid_port(self):
+        with (
+            patch.dict(
+                os.environ, {"ADM_LAB_HEC_PORT": "18088", "ADM_LAB_MGMT_PORT": "18089"}
+            ),
+            patch.object(bench.lab, "MGMT", "https://127.0.0.1:18089"),
+            patch.object(bench.lab, "HEC", "https://127.0.0.1:18088"),
+        ):
+            bench.validate_lab_target()
+            with patch.object(bench.lab, "MGMT", "https://192.0.2.1:18089"):
+                with self.assertRaises(ValueError):
+                    bench.validate_lab_target()
+            with patch.dict(os.environ, {"ADM_LAB_MGMT_PORT": "-1"}):
+                with self.assertRaises(ValueError):
+                    bench.validate_lab_target()
+            with patch.object(bench, "CONTAINER", "production-splunk"):
+                with self.assertRaises(ValueError):
+                    bench.validate_lab_target()
+
     def test_docker_endpoint_precedence_and_pinning(self):
         with (
             patch.dict(

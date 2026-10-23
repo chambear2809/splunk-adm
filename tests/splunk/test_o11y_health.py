@@ -255,7 +255,7 @@ class O11yHealthRuntimeTest(unittest.TestCase):
 
         records, normalized, search_completion = self.search_and_normalize()
         self.assertEqual(len(records), len(events))
-        self.assertEqual(search_completion["schema_version"], 1)
+        self.assertEqual(int(search_completion["schema_version"]), 1)
         self.assertEqual(normalized["rejected"], 0)
         self.assertEqual(len(normalized["records"]), 6)
         self.assertEqual(normalized["records"][-1]["kind"], "export_completion")

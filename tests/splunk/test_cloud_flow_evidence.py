@@ -148,13 +148,23 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
 
     def post_events(self) -> None:
         events = [
-            {"host": self.authority, "event": self.flow()},
-            {"host": self.authority, "event": self.status()},
+            {"host": self.authority, "event": self.flow(), "time": self.flow_start},
+            {"host": self.authority, "event": self.status(), "time": self.flow_start},
             {
                 "host": self.authority,
                 "event": self.flow(vpc="vpc-0fffffff"),
+                "time": self.flow_start,
             },
-            {"host": self.authority + "-other", "event": self.flow()},
+            {
+                "host": self.authority + "-other",
+                "event": self.flow(),
+                "time": self.flow_start,
+            },
+            {
+                "host": self.authority,
+                "event": self.flow(),
+                "time": self.flow_start + 5,
+            },
         ]
         batch = []
         for event in events:
@@ -204,23 +214,26 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
             len(completions), 1, "query must return its completion envelope"
         )
         self.assertEqual(
-            len(records), 3, "only the configured capture host is searched"
+            len(records), 4, "only the configured capture host is searched"
         )
-        self.assertEqual(int(completions[0]["input_count"]), 3)
-        self.assertEqual(int(completions[0]["returned_count"]), 3)
+        self.assertEqual(int(completions[0]["input_count"]), 4)
+        self.assertEqual(int(completions[0]["returned_count"]), 4)
         self.assertEqual(int(completions[0]["input_capped"]), 0)
         self.assertEqual(int(completions[0]["oversized"]), 0)
-        self.assertTrue(
-            all(
-                abs(float(record["_time"]) - self.flow_start) <= 1 for record in records
-            ),
-            "the installed aws:vpcflow:v5 props stanza must extract token seven as event time",
+        self.assertCountEqual(
+            [int(float(record["event_time_epoch"])) for record in records],
+            [self.flow_start, self.flow_start, self.flow_start, self.flow_start + 5],
+            "the query projects numeric HEC event time for normalization",
         )
 
         normalized = self.helper(
             {"config": self.config, "selection": self.selection, "rows": records}
         )["normalized"]
-        self.assertEqual(normalized["rejected"], 1, "wrong VPC must not be attributed")
+        self.assertEqual(
+            normalized["rejected"],
+            2,
+            "wrong VPC and mismatched HEC event time must not be attributed",
+        )
         self.assertEqual(len(normalized["records"]), 2)
         self.assertTrue(
             all(
