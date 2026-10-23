@@ -99,6 +99,7 @@ export function validateIndexName(value: string): string | undefined {
 export const isCoreSource = (source: SourceDefinition) =>
   source.readinessImpact !== "optional_evidence";
 export const UNCONFIGURED_DNS_INDEX = "unconfigured_dns";
+export const UNCONFIGURED_OPTIONAL_INDEX = "unconfigured_optional";
 const indexTerm = /^index=([a-z][a-z0-9_-]{0,79})$/;
 type IndexDefinition = { name: string; definition?: string };
 export function indexNames(macro: IndexDefinition): string[] {

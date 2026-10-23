@@ -4,5 +4,5 @@
   "_time": "1791373500.125",
   "_indextime": "1791373502.500",
   "event_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "_raw": "{\"query\":[\"api.example.test.\"],\"query_type\":[\"A\"],\"message_type\":[\"RESPONSE\"],\"src_ip\":\"192.0.2.10\",\"dest_ip\":\"192.0.2.53\",\"reply_code\":0,\"response_time\":25000,\"start\":1791373500.100,\"end\":1791373500.125,\"host_addr\":[\"198.51.100.20\"],\"ttl\":[120]}"
+  "_raw": "{\"query\":[\"api.example.test.\"],\"query_type\":[\"A\"],\"message_type\":[\"RESPONSE\"],\"src_ip\":\"192.0.2.10\",\"dest_ip\":\"192.0.2.53\",\"reply_code\":0,\"response_time\":25000,\"timestamp\":\"2026-10-07T07:45:00.100000-04:00\",\"endtime\":\"2026-10-07T07:45:00.125000-04:00\",\"host_addr\":[\"198.51.100.20\"],\"ttl\":[120]}"
 }

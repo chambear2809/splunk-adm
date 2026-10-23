@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "authority": "cmdb-prod",
+  "snapshot_id": "conflict-2026-10-23",
+  "snapshot_at": "2026-10-23T12:00:00Z",
+  "snapshot_complete": false,
+  "records": [
+    {
+      "record_id": "claim-a",
+      "revision": 1,
+      "asset_id": "asset-a",
+      "asset_name": "a",
+      "scope": "prod-east",
+      "ip": "10.20.0.40",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-20T00:00:00Z",
+      "valid_to": "2026-10-23T00:00:00Z"
+    },
+    {
+      "record_id": "claim-b",
+      "revision": 1,
+      "asset_id": "asset-b",
+      "asset_name": "b",
+      "scope": "prod-east",
+      "ip": "10.20.0.40",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-22T00:00:00Z",
+      "valid_to": null
+    },
+    {
+      "record_id": "other-scope",
+      "revision": 1,
+      "asset_id": "asset-c",
+      "asset_name": "c",
+      "scope": "prod-west",
+      "ip": "10.20.0.40",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-22T00:00:00Z",
+      "valid_to": null
+    }
+  ]
+}

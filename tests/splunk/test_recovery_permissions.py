@@ -18,7 +18,7 @@ import urllib.request
 
 
 APP = "splunk_adm"
-MGMT = "https://127.0.0.1:8089"
+MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
 CTX = ssl.create_default_context()
 CTX.check_hostname = False
 CTX.verify_mode = ssl.CERT_NONE

@@ -75,6 +75,8 @@ The Splunk administrator saves selected sources, cadence and receipt freshness i
 
 Flow and trace data contain internal IP addresses, host and pod names, and (for Hubble L7 and spans) HTTP paths and headers. Each handout notes where to limit or redact. Never put tokens or passwords in tickets, chat or these documents; share them through your normal secret-management process.
 
-## Optional DNS and endpoint investigations
+## Optional evidence and endpoint/service investigations
 
 The [DNS evidence handout](dns-evidence.md) covers separate Stream DNS and Hubble DNS L7 adapters, verified scope mappings, caller access, explicit evidence exports, and disable-first rollback. The Endpoints page accepts a scoped IP and bounded time window without Kubernetes or traces. DNS remains unselected by default; [candidate qualification](../DNS_EVIDENCE_QUALIFICATION.md) records the remaining source and environment gates.
+
+The other optional evidence sources use the same scoped endpoint or service workflows: [Envoy request routing](proxy-evidence.md), [AWS VPC Flow Logs](aws-vpc-flow-evidence.md), [asset history import](asset-history.md), and [Splunk Observability Cloud health](o11y-health.md). Each handout defines its exact initial producer schema, authority mapping, index, field/time semantics and qualification limits. The [shared evidence contract](../SUPPLEMENTAL_EVIDENCE_CONTRACT.md) explains why these observations remain distinct from graph traffic totals and policy intent. Leave a source unselected until its ingest contract and viewer permissions have been checked.

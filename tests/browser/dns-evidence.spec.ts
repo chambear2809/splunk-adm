@@ -1,6 +1,58 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("optional DNS and scoped endpoint investigations", () => {
+  test("keeps optional sources together and isolates an unselected source from traffic", async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/dns-evidence.html?fault=off");
+    await page
+      .getByRole("button", { name: "Investigate", exact: true })
+      .click();
+    await expect(page.getByLabel("Scoped endpoint evidence")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Inspect proxy evidence" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Inspect Flow Logs evidence" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Inspect asset history" }),
+    ).toBeVisible();
+    const before = await page.evaluate(
+      () =>
+        (
+          (window as Window & { __DNS_SEARCHES__?: string[] })
+            .__DNS_SEARCHES__ ?? []
+        ).length,
+    );
+    await page.getByRole("button", { name: "Inspect proxy evidence" }).click();
+    await expect(
+      page.getByText(
+        "Proxy evidence is off. An administrator must select and qualify an Envoy source before a search can run.",
+      ),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Inspect Flow Logs evidence" })
+      .click();
+    await expect(page.getByText("Source state: not_selected.")).toBeVisible();
+    await page.getByRole("button", { name: "Inspect asset history" }).click();
+    await expect(
+      page
+        .locator('section[aria-labelledby="inventory-evidence-title"]')
+        .getByText("state: not_selected", { exact: false }),
+    ).toBeVisible();
+    const after = await page.evaluate(
+      () =>
+        (
+          (window as Window & { __DNS_SEARCHES__?: string[] })
+            .__DNS_SEARCHES__ ?? []
+        ).length,
+    );
+    expect(after).toBe(before);
+    await expect(
+      page.getByRole("table", { name: "Observed one-hop conversations" }),
+    ).toContainText("198.51.100.20");
+  });
   test("keeps traffic visible after optional permission failure", async ({
     page,
   }) => {

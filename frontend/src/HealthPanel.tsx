@@ -124,16 +124,16 @@ export function HealthResults({ report }: { report: HealthReport }) {
         }))}
       />
       {report.optionalEvidence.length > 0 && (
-        <section aria-labelledby="optional-dns-health">
-          <h3 id="optional-dns-health">Optional DNS evidence</h3>
+        <section aria-labelledby="optional-source-health">
+          <h3 id="optional-source-health">Optional evidence sources</h3>
           <p className="muted small">
-            DNS evidence is supplemental. This health view checks selection and
-            index configuration only; it does not run a DNS search or treat a
-            quiet feed as a core readiness failure.
+            This view checks source selection and index configuration. It does
+            not run source searches or treat a quiet optional feed as a core
+            readiness failure.
           </p>
           <p>
             <a href={pageURL("endpoints")}>
-              Open endpoint investigations to inspect optional DNS
+              Open endpoint investigations to inspect scoped evidence
             </a>
           </p>
           <HealthTable
@@ -153,7 +153,7 @@ export function HealthResults({ report }: { report: HealthReport }) {
                         : item.status === "not_selected"
                           ? "Not selected"
                           : "Configuration unknown",
-                "Not checked; requires explicit address and scope",
+                "Not checked; requires an explicit scoped investigation",
                 `${item.diagnostic} Receipt health stays unknown until a scoped diagnostic is requested.`,
               ],
             }))}

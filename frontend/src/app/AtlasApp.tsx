@@ -10,7 +10,7 @@ import { Shell } from "./Shell";
 import { ApplicationsPage } from "../pages/ApplicationsPage";
 import { MapPage } from "../pages/MapPage";
 import { EndpointsPage } from "../pages/EndpointsPage";
-import { DnsEvidencePanel } from "../DnsEvidencePanel";
+import { EndpointEvidencePanels } from "../EndpointEvidencePanels";
 import { HealthPage } from "../pages/HealthPage";
 import { SetupPage } from "../pages/SetupPage";
 import { HelpPage } from "../pages/HelpPage";
@@ -71,7 +71,7 @@ export function AtlasApp({
             live={live}
             renderEvidence={(selection) =>
               client && live ? (
-                <DnsEvidencePanel
+                <EndpointEvidencePanels
                   key={JSON.stringify(selection)}
                   selection={selection}
                   client={client}

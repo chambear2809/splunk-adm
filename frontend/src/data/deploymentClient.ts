@@ -8,6 +8,7 @@ import {
   expectationFor,
   indexNames,
   UNCONFIGURED_DNS_INDEX,
+  UNCONFIGURED_OPTIONAL_INDEX,
   type DeploymentClient,
   type DeploymentExpectations,
   type DeploymentSnapshot,
@@ -256,7 +257,10 @@ export class ToolkitDeploymentClient implements DeploymentClient {
               throw new Error("Macro definition unavailable");
             const listed = indexNames({ name, definition });
             const parsed =
-              listed.length === 1 && listed[0] === UNCONFIGURED_DNS_INDEX
+              listed.length === 1 &&
+              [UNCONFIGURED_DNS_INDEX, UNCONFIGURED_OPTIONAL_INDEX].includes(
+                listed[0],
+              )
                 ? []
                 : listed;
             indexes.push(parsed);

@@ -23,7 +23,7 @@ COLLECTIONS = {
     "adm_service_routes": ("adm_service_routes_prune", "valid_to"),
     "adm_aci_policy": ("adm_aci_policy_prune", "last_seen"),
 }
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 
 

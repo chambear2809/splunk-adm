@@ -90,7 +90,7 @@ async function documentMetadata(
   }
 }
 
-const BASE = "http://127.0.0.1:8000";
+const BASE = `http://127.0.0.1:${Number(process.env.ADM_LAB_WEB_PORT || 8000)}`;
 const { ADM_VIEWER_USER: user, ADM_VIEWER_PASS: pass } = process.env;
 const [earliest, latest, expectedNodes, timezone] = process.argv.slice(2);
 if (!user || !pass) throw new Error("viewer credentials missing from env");
@@ -378,6 +378,10 @@ try {
         .getByRole("button", { name: "Service frontend", exact: true })
         .click();
       await adm.locator(".atlas-emphasis-banner").waitFor();
+      await expect(
+        adm.getByRole("heading", { name: "Service health evidence" }),
+      ).toBeVisible();
+      evidence.serviceHealthEntry = true;
       const fullName = await adm
         .locator(".atlas-inspector-title h2")
         .textContent();

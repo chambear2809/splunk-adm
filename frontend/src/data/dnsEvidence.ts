@@ -51,6 +51,8 @@ function projectedRaw(stream: boolean): string {
         "transaction_id",
         "response_time",
         "duration",
+        "timestamp",
+        "endtime",
         "start",
         "end",
         "host_addr",

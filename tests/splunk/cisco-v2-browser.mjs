@@ -21,7 +21,7 @@ if (!auth?.username || !auth?.password || scenarios?.length !== 2)
   throw new Error(
     "protected stdin authentication and two recorded scenarios required",
   );
-const BASE = "http://127.0.0.1:8000";
+const BASE = `http://127.0.0.1:${Number(process.env.ADM_LAB_WEB_PORT || 8000)}`;
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const safe = (value) =>
   String(value)

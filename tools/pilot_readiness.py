@@ -132,6 +132,11 @@ def _source_configuration(snapshot, source):
     ]
     if any(value is None for value in indexes):
         return "unavailable"
+    if source.get("readinessImpact") == "optional_evidence" and any(
+        value == ["unconfigured_dns"] or value == ["unconfigured_optional"]
+        for value in indexes
+    ):
+        return "not_configured"
     if any(not value for value in indexes):
         return "not_configured"
     if (
@@ -820,7 +825,10 @@ def analyze(snapshot, selected_sources=()):
                     and settings["sources"].get(name, {}).get("state") == "staged"
                     else "runtime_diagnostics_not_run"
                 ),
-                "message": "Optional DNS evidence does not affect core readiness; select an address and scope before requesting diagnostics.",
+                "configuration": _source_configuration(
+                    snapshot, SOURCE_DEFINITIONS[name]
+                ),
+                "message": "Optional evidence does not affect core readiness; select a scoped entity and interval before requesting diagnostics.",
             }
             for name in sorted(optional_selected)
         ],

@@ -1,0 +1,2 @@
+schema_version,authority,snapshot_id,snapshot_at,snapshot_complete,record_id,revision,asset_id,asset_name,service_id,service_name,environment,owner_id,owner_name,network_id,scope,ip,validity_basis,valid_from,valid_to,retired_at
+1,cmdb-prod,snapshot-2026-10-23,2026-10-23T12:00:00Z,true,snapshot-web-c,1,asset-web-c,web-c,service-checkout,Checkout,production,team-commerce,Commerce Platform,vpc-prod-east,prod-east,10.20.0.30,snapshot_current,,,

@@ -2,13 +2,14 @@
 import { createRequire } from "node:module";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
+const BASE = `http://127.0.0.1:${Number(process.env.ADM_LAB_WEB_PORT || 8000)}`;
 const browser = await chromium.launch({ headless: true });
 let stage = "login";
 try {
   const page = await browser.newPage({
     viewport: { width: 1440, height: 1100 },
   });
-  await page.goto("http://127.0.0.1:8000/en-US/account/login");
+  await page.goto(`${BASE}/en-US/account/login`);
   await page.locator('input[name="username"]').fill("admin");
   await page.locator('input[name="password"]').fill(process.env.ADM_SETUP_PASS);
   await Promise.all([
@@ -32,7 +33,7 @@ try {
       deploymentWrites.push(evidence);
   });
   stage = "live checklist";
-  await page.goto("http://127.0.0.1:8000/en-US/app/splunk_adm/setup?mode=live");
+  await page.goto(`${BASE}/en-US/app/splunk_adm/setup?mode=live`);
   const root = page.locator("#atlas-root");
   await expect(root.getByText("Summary reader and writer match.")).toBeVisible({
     timeout: 90000,
@@ -155,7 +156,7 @@ try {
   stage = "demo setup";
   const before = writes.length;
   const deploymentBefore = deploymentWrites.length;
-  await page.goto("http://127.0.0.1:8000/en-US/app/splunk_adm/setup?mode=demo");
+  await page.goto(`${BASE}/en-US/app/splunk_adm/setup?mode=demo`);
   await expect(root.getByText(/Setup is unavailable in Demo/)).toBeVisible({
     timeout: 60000,
   });

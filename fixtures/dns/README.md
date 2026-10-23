@@ -2,7 +2,9 @@
 
 These fixtures are synthetic and explicitly unqualified. The Stream field
 names and list semantics are grounded in the locally inspected Stream App 8.1.6
-`default/streams/dns` definition. The Hubble envelope and L7 field names follow
+`default/streams/dns` definition. Its timestamp fixture follows the matching TA
+`props.conf` contract: `timestamp` is the transaction start and `endtime` is the
+transaction end used for `_time`. The Hubble envelope and L7 field names follow
 the Cilium flow JSON shape; the local Enterprise Hubble sample contains no DNS
 L7 event and does not qualify the DNS schema. Neither fixture is a captured DNS
 event. Stream's independent `host_addr` and `ttl` arrays intentionally do not

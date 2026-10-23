@@ -11,6 +11,8 @@ export default defineConfig({
       "tests/browser/harness.tsx",
       "tests/browser/map-lifecycle-harness.tsx",
       "tests/browser/dns-evidence-harness.tsx",
+      "tests/browser/o11y-health-harness.tsx",
+      "tests/browser/map-service-health-harness.tsx",
     ],
   },
   plugins: [

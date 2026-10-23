@@ -14,6 +14,9 @@ export const EVIDENCE_LIMITS = {
   relationships: 500,
 } as const;
 export type DnsSource = "dns_stream" | "dns_hubble";
+export type SupplementalSource =
+  "proxy_envoy" | "aws_vpc_flow" | "asset_history" | "o11y_health";
+export type OptionalSource = DnsSource | SupplementalSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {
   client: string;
@@ -36,6 +39,25 @@ export interface EvidenceSelection {
   /** Actual peer addresses included in selected graph identity revalidation. */
   identityAddresses?: string[];
   contexts: TrafficContext[];
+  identityBasis: string;
+  configurationFingerprint: string;
+}
+/** Exact service identity for optional health; namespace is the Kubernetes namespace. */
+export interface ServiceHealthSelection {
+  schemaVersion: 1;
+  workflow: "service";
+  selectionId: string;
+  scope: string;
+  window: EvidenceWindow;
+  service: {
+    name: string;
+    environment: string;
+    cluster: string;
+    namespace: string;
+    /** OTel service.namespace, independent of Kubernetes namespace. */
+    serviceNamespace?: string;
+  };
+  workloads?: { podUid: string; validFrom: number; validTo?: number }[];
   identityBasis: string;
   configurationFingerprint: string;
 }
@@ -232,6 +254,49 @@ export function validateSelection(value: EvidenceSelection): EvidenceSelection {
     )
       throw new Error("Invalid scoped traffic observation context.");
   }
+  return value;
+}
+export function validateServiceHealthSelection(
+  value: ServiceHealthSelection,
+): ServiceHealthSelection {
+  if (
+    !isObject(value) ||
+    value.schemaVersion !== 1 ||
+    value.workflow !== "service" ||
+    !validText(value.selectionId, 1024) ||
+    !validText(value.identityBasis, 1024) ||
+    !/^[a-f0-9]{64}$/.test(value.configurationFingerprint)
+  )
+    throw new Error("Invalid service health selection.");
+  validateWindow(value.window);
+  routingScope(value.scope);
+  if (!isObject(value.service))
+    throw new Error("Select one exact service identity.");
+  for (const field of ["name", "environment", "cluster", "namespace"] as const)
+    literal(value.service[field], 255);
+  if (value.service.serviceNamespace !== undefined)
+    literal(value.service.serviceNamespace, 255);
+  if (
+    value.workloads !== undefined &&
+    (!Array.isArray(value.workloads) ||
+      value.workloads.length > 64 ||
+      value.workloads.some((workload) => {
+        if (!isObject(workload)) return true;
+        try {
+          literal(workload.podUid, 255);
+        } catch {
+          return true;
+        }
+        return (
+          !Number.isFinite(workload.validFrom) ||
+          workload.validFrom < 0 ||
+          (workload.validTo !== undefined &&
+            (!Number.isFinite(workload.validTo) ||
+              workload.validTo <= workload.validFrom))
+        );
+      }))
+  )
+    throw new Error("Invalid historical workload identity.");
   return value;
 }
 export async function fingerprint(value: unknown): Promise<string> {

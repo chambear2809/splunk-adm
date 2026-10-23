@@ -80,7 +80,7 @@ class ViewerBrowserMetadataTests(unittest.TestCase):
         # Evaluate the actual dependency-free observer without starting the
         # credentialed top-level qualification browser.
         cls.helper = source.split("async function documentMetadata(", 1)[1].split(
-            '\nconst BASE = "http://127.0.0.1:8000";', 1
+            "\nconst BASE =", 1
         )[0]
         cls.helper = "async function documentMetadata(" + cls.helper
 

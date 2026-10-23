@@ -114,6 +114,13 @@ describe("normalizeDns", () => {
       query: "api.example.test.",
       comparisonName: "api.example.test",
       shape: "transaction",
+      eventTime: 1791373500.125,
+      rowTime: 1791373500.125,
+      requestStart: 1791373500.1,
+      responseInterval: {
+        start: 1791373500.1,
+        end: 1791373500.125,
+      },
       latencySeconds: 0.025,
       attribution: "scoped_client",
     });
@@ -391,6 +398,7 @@ describe("normalizeDns", () => {
             message_type: "RESPONSE",
             src_ip: "192.0.2.10",
             reply_code: 0,
+            timestamp: 1791373490,
             answer_records: [
               {
                 owner: "api.test",
@@ -409,10 +417,66 @@ describe("normalizeDns", () => {
       [],
     );
     expect(result.records[0].answers).toHaveLength(1);
+    expect(result.records[0].eventTime).toBe(1791373500);
+    expect(result.records[0].requestStart).toBe(1791373490);
     expect(result.records[0].limitations).toContain(
       "stream_response_time_basis_unknown",
     );
     expect(result.records[0].attribution).toBe("scoped_client");
+  });
+
+  it("keeps malformed and reversed Stream timestamp/endtime intervals context-only", async () => {
+    const answer = {
+      owner: "api.test",
+      section: "answer",
+      type: "A",
+      address: "198.51.100.2",
+      ttl: 60,
+    };
+    const result = await normalizeDns(
+      "dns_stream",
+      [
+        row({
+          query: "api.test",
+          query_type: "A",
+          message_type: "RESPONSE",
+          src_ip: "192.0.2.10",
+          reply_code: 0,
+          timestamp: 1791373500.2,
+          endtime: 1791373500.1,
+          answer_records: [answer],
+        }),
+        row(
+          {
+            query: "api.test",
+            query_type: "A",
+            message_type: "RESPONSE",
+            src_ip: "192.0.2.10",
+            reply_code: 0,
+            timestamp: "invalid timestamp",
+            endtime: 1791373500.1,
+            answer_records: [answer],
+          },
+          { event_fingerprint: "d".repeat(64) },
+        ),
+      ],
+      config(),
+      selection([flow("192.0.2.10", "198.51.100.2")]),
+      [],
+    );
+    expect(result.records).toHaveLength(2);
+    expect(result.records[0].responseInterval).toBeUndefined();
+    expect(result.records[0].limitations).toContain(
+      "stream_response_interval_invalid",
+    );
+    expect(result.records[1].limitations).toContain(
+      "stream_response_interval_invalid",
+    );
+    expect(
+      result.records.every((record) =>
+        record.attributionReason.includes("stream_response_interval_invalid"),
+      ),
+    ).toBe(true);
   });
 
   it("caps oversized reported address lists and rejects nonfinite TTL entries for association", async () => {

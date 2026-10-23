@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import stream from "../../../fixtures/dns/stream-transaction.json";
-import { loadDnsEvidence } from "./dnsEvidence";
+import { buildDnsSearch, loadDnsEvidence } from "./dnsEvidence";
 import { inspectDnsRecord } from "./dnsDrilldown";
 import { validateDnsResult, type EvidenceSelection } from "./evidence";
 import type {
@@ -66,6 +66,12 @@ const configClient: EvidenceConfigClient = {
   read: async () => structuredClone(config),
 };
 describe("DNS inspection isolation and explicit exports", () => {
+  it("projects Stream 8.1.6 transaction start and response end fields", () => {
+    const search = buildDnsSearch(config.dns[0], selection);
+    expect(search).toContain('"timestamp",json_extract(_raw,"timestamp")');
+    expect(search).toContain('"endtime",json_extract(_raw,"endtime")');
+  });
+
   it("dispatches no jobs when sources are unselected or staged", async () => {
     const client: SearchClient = { search: vi.fn() };
     const cfg = {

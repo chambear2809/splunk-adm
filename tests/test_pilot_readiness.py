@@ -122,6 +122,15 @@ class PilotReadinessTest(unittest.TestCase):
             result["optional_evidence"][0]["status"], "runtime_diagnostics_not_run"
         )
 
+    def test_new_optional_placeholder_index_remains_unconfigured(self):
+        observed = snapshot()
+        observed["macros"]["adm_index_proxy_envoy"] = "index=unconfigured_optional"
+        result = analyze(observed, selected_sources={"proxy_envoy"})
+        self.assertEqual(result["selected_sources"], [])
+        self.assertEqual(
+            result["optional_evidence"][0]["configuration"], "not_configured"
+        )
+
     def test_cli_accepts_dns_source_without_changing_core_exit_or_status(self):
         output = io.StringIO()
         with redirect_stdout(output):

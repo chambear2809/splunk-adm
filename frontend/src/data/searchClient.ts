@@ -7,6 +7,7 @@ import { splunkErrors, splunkWarnings } from "../provider";
 import type { Row } from "../rows";
 import { timeError } from "./timeBounds";
 import { optionalJobs } from "./optionalJobs";
+import type { OptionalSource } from "./evidence";
 export { timeError } from "./timeBounds";
 
 export interface SearchRequest {
@@ -29,7 +30,7 @@ export interface SearchRequest {
       | "released";
     sid?: string;
   }) => void;
-  optionalSource?: "dns_stream" | "dns_hubble";
+  optionalSource?: OptionalSource;
 }
 export interface RunResult {
   rows: Row[];
@@ -171,6 +172,9 @@ export class ToolkitSearchClient implements SearchClient {
       );
     } catch {
       if (!request.optionalSource) optionalJobs.coreFinished();
+      // The SDK threw before a job handle or SID existed. Native creation is
+      // untrackable, so release browser admission without claiming cleanup.
+      request.onLifecycle?.({ state: "cleanup_unverified" });
       return Promise.reject(
         new Error("Splunk job creation could not be acknowledged."),
       );

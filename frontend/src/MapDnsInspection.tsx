@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Graph, GraphIndex } from "./graph";
 import type { Selection } from "./MapView";
-import { DnsEvidencePanel } from "./DnsEvidencePanel";
+import { EndpointEvidencePanels } from "./EndpointEvidencePanels";
 import { revalidatesOwner } from "./data/ownership";
 import { evidenceConfigClient } from "./data/evidenceConfig";
 import {
@@ -369,7 +369,7 @@ export function MapDnsInspection({
           >
             Open scoped endpoint investigation
           </a>
-          <DnsEvidencePanel selection={evidence} client={client} />
+          <EndpointEvidencePanels selection={evidence} client={client} />
         </>
       )}
     </section>
