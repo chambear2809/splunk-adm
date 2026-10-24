@@ -29,6 +29,7 @@ const base = (overrides: Partial<HealthReport> = {}): HealthReport => ({
       latest_indexed: 200000,
     })),
   ),
+  optionalEvidence: [],
   jobs: jobRows([
     ...JOB_NAMES.map((name) => ({
       kind: "job",

@@ -53,7 +53,7 @@ function fixture({
         const name = decodeURIComponent(
           path.split("conf-macros/")[1].split("?")[0],
         );
-        if (name === "adm_index_netflow")
+        if (name === "adm_index_netflow" || name === "adm_index_dns_stream")
           return unreadableIndex
             ? response({}, 403)
             : response(entry({ definition: indexDefinition }));
@@ -161,6 +161,19 @@ describe("administrator deployment settings persistence", () => {
           (probe) => probe.macro === "adm_health_quality_netflow",
         ),
       ).toBe(expected === "configured");
+    }
+  });
+  it("treats the shipped DNS placeholder index as not configured", async () => {
+    for (const [indexDefinition, expected] of [
+      ["index=unconfigured_dns", "not_configured"],
+      ["index=dns_prod", "configured"],
+      ["(index=dns_a OR index=dns_b)", "configured"],
+    ] as const) {
+      const { client } = fixture({ indexDefinition });
+      const settings = defaultExpectations();
+      settings.sources.dns_stream.state = "active";
+      const saved = await client.write(settings);
+      expect(saved.sourceConfiguration?.dns_stream).toBe(expected);
     }
   });
   it("verifies public selector coherence instead of trusting the version marker", async () => {

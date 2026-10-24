@@ -1,3 +1,5 @@
+from contextlib import redirect_stdout
+import io
 import unittest
 import subprocess
 import sys
@@ -14,6 +16,7 @@ from tools.pilot_readiness import (
     analyze,
     selected_health_probes,
     _lab_snapshot,
+    main,
 )
 
 
@@ -80,11 +83,64 @@ def snapshot():
                 for n in ALL_JOBS
             ],
         },
-        "app": {"version": "0.3.0"},
+        "app": {"version": "0.4.0"},
     }
 
 
 class PilotReadinessTest(unittest.TestCase):
+    def test_summary_remains_a_valid_cli_source(self):
+        report = analyze(snapshot(), selected_sources={"summary"})
+        self.assertEqual(report["selected_sources"], ["summary"])
+        self.assertFalse(
+            any(
+                finding["check"] == "source_selection"
+                and finding["status"] == "blocked"
+                for finding in report["findings"]
+            )
+        )
+
+    def test_optional_dns_selection_does_not_change_core_readiness_or_exit_findings(
+        self,
+    ):
+        core = analyze(snapshot(), selected_sources={"netflow"})
+        observed = snapshot()
+        observed["macros"]["adm_index_dns_stream"] = "index=Bad Name"
+        observed["source_health"].append(
+            {"name": "Splunk Stream DNS", "status": "failed", "records": "0"}
+        )
+        with_dns = analyze(observed, selected_sources={"netflow", "dns_stream"})
+        self.assertEqual(with_dns["summary"], core["summary"])
+        self.assertEqual(with_dns["findings"], core["findings"])
+        self.assertEqual(with_dns["selected_sources"], core["selected_sources"])
+        self.assertEqual(with_dns["optional_evidence"][0]["source"], "dns_stream")
+
+    def test_dns_only_selection_cannot_establish_traffic_readiness(self):
+        result = analyze(snapshot(), selected_sources={"dns_hubble"})
+        self.assertEqual(result["summary"]["status"], "unknown")
+        self.assertEqual(result["selected_sources"], [])
+        self.assertEqual(
+            result["optional_evidence"][0]["status"], "runtime_diagnostics_not_run"
+        )
+
+    def test_cli_accepts_dns_source_without_changing_core_exit_or_status(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = main(["--source", "dns_stream", "--json"])
+        report = json.loads(output.getvalue())
+        self.assertEqual(code, 2)
+        self.assertEqual(report["summary"]["status"], "unknown")
+        self.assertEqual(report["selected_sources"], [])
+        self.assertEqual(
+            report["optional_evidence"][0]["status"], "runtime_diagnostics_not_run"
+        )
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            code = main(["--source", "dns_hubble"])
+        self.assertEqual(code, 2)
+        self.assertIn("optional evidence:", output.getvalue())
+        self.assertIn("runtime_diagnostics_not_run", output.getvalue())
+
     def test_wrong_contract_enabled_writer_is_a_configuration_conflict(self):
         for contract, name in (
             (1, "ADM - Conversation rollup v2"),
@@ -158,7 +214,7 @@ class PilotReadinessTest(unittest.TestCase):
                 }
             if path.endswith("/saved/searches?count=0"):
                 return {"entry": []}
-            return {"entry": [{"content": {"version": "0.3.0"}, "acl": {}}]}
+            return {"entry": [{"content": {"version": "0.4.0"}, "acl": {}}]}
 
         class Runner:
             def __init__(self, timeout):

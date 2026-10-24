@@ -1938,3 +1938,114 @@
 .adm .atlas-changes summary {
   cursor: pointer;
 }
+
+/* Optional investigations inherit the same tokens as application maps. */
+.atlas .endpoints-page {
+  padding: 24px;
+  color: var(--adm-ink);
+  background: var(--adm-page);
+}
+.atlas :is(.endpoints-page, .dns-evidence) a {
+  color: var(--adm-link);
+}
+.atlas .endpoints-page form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-block: 16px;
+}
+.atlas :is(.endpoints-page, .dns-evidence) :is(input, select, button) {
+  font: inherit;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 4px;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+.atlas :is(.endpoints-page, .dns-evidence) :is(button, a):focus-visible {
+  outline: 3px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+.atlas :is(.endpoints-page, .dns-evidence) button:disabled {
+  opacity: 0.6;
+}
+.atlas .endpoints-page label {
+  display: grid;
+  gap: 5px;
+}
+.atlas .endpoint-diagram {
+  width: 100%;
+  max-width: 1000px;
+  height: 280px;
+  color: var(--adm-ink);
+}
+.atlas .endpoint-diagram circle {
+  fill: var(--adm-surface);
+  stroke: var(--adm-link);
+  stroke-width: 2;
+}
+.atlas .endpoint-diagram line {
+  stroke: var(--adm-muted);
+}
+.atlas .endpoint-diagram text {
+  fill: currentColor;
+  font-size: 11px;
+}
+.atlas :is(.endpoints-page, .dns-evidence) table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 16px;
+}
+.atlas :is(.endpoints-page, .dns-evidence) :is(th, td) {
+  border-bottom: 1px solid var(--adm-line);
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.atlas :is(.dns-table-scroll, .endpoint-table-scroll) {
+  max-width: 100%;
+  overflow: auto;
+}
+.atlas .endpoint-table-scroll table {
+  min-width: 1500px;
+}
+.atlas .endpoint-table-scroll :is(th, td) {
+  min-width: 90px;
+}
+.atlas .endpoint-table-scroll:focus-visible {
+  outline: 3px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+.atlas .dns-evidence {
+  margin-top: 20px;
+  overflow-wrap: anywhere;
+}
+.atlas .dns-evidence td {
+  min-width: 140px;
+}
+.atlas .dns-evidence button {
+  margin: 4px;
+}
+.dns-verification {
+  --adm-ink: #202a35;
+  --adm-page: #f4f6f8;
+  --adm-surface: #ffffff;
+  --adm-card-border: #8b98a5;
+  --adm-line: #ccd2d8;
+  --adm-muted: #576576;
+  --adm-link: #0069b4;
+  --adm-focus: #007abd;
+}
+[data-theme="dark"] .dns-verification {
+  --adm-ink: #e5edf6;
+  --adm-page: #101923;
+  --adm-surface: #1a2734;
+  --adm-card-border: #6a7f94;
+  --adm-line: #4b6074;
+  --adm-muted: #a7b8c9;
+  --adm-link: #7ec8ff;
+  --adm-focus: #a0d8ff;
+}

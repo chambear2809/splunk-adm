@@ -7,6 +7,7 @@ import {
   JOB_DEFINITIONS,
   applicableJobs,
   expectationFor,
+  isCoreSource,
   validateIndexName,
   indexNames,
   indexName,
@@ -23,6 +24,8 @@ export const INDEX_MACROS = [
   "adm_index_k8s",
   "adm_index_traces",
   "adm_index_hubble",
+  "adm_index_dns_stream",
+  "adm_index_dns_hubble",
   "adm_index_summary",
   "adm_index_catalyst",
   "adm_index_meraki",
@@ -275,10 +278,11 @@ export function setupReadiness(
       : summaryContract === 1
         ? ["adm_index_summary", "adm_summary_index_name"]
         : [];
+  const coreSelected = selected.filter(isCoreSource);
   const requiredMacros: readonly string[] = deployment
     ? [
         ...new Set([
-          ...selected.flatMap((source) => source.indexMacros),
+          ...coreSelected.flatMap((source) => source.indexMacros),
           ...summaryNames,
         ]),
       ]
@@ -304,6 +308,15 @@ export function setupReadiness(
     (deployment.state !== "configured" || !deployment.activeContract)
   )
     missingRequired.push("deployment expectations and active contract");
+  if (
+    !jobName &&
+    deployment?.state === "configured" &&
+    deployment.activeContract &&
+    coreSelected.length === 0
+  )
+    missingRequired.push(
+      "at least one core source for traffic or inventory readiness",
+    );
   if (jobName !== undefined && !definition)
     missingRequired.push("saved search is not registered");
   if (

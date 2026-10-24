@@ -4,6 +4,7 @@
   "sources": [
     {
       "id": "netflow",
+      "readinessImpact": "core",
       "label": "NetFlow",
       "healthNames": [
         "NetFlow"
@@ -49,6 +50,7 @@
     },
     {
       "id": "dcn",
+      "readinessImpact": "core",
       "label": "DC Networking",
       "healthNames": [
         "DC Networking"
@@ -89,6 +91,7 @@
     },
     {
       "id": "aci",
+      "readinessImpact": "core",
       "label": "ACI",
       "healthNames": [
         "ACI"
@@ -119,6 +122,7 @@
     },
     {
       "id": "nd",
+      "readinessImpact": "core",
       "label": "Nexus Dashboard",
       "healthNames": [
         "Nexus Dashboard"
@@ -163,6 +167,7 @@
     },
     {
       "id": "nxos",
+      "readinessImpact": "core",
       "label": "NX-OS",
       "healthNames": [
         "NX-OS"
@@ -190,6 +195,7 @@
     },
     {
       "id": "ftd",
+      "readinessImpact": "core",
       "label": "FTD",
       "healthNames": [
         "FTD"
@@ -224,6 +230,7 @@
     },
     {
       "id": "isovalent",
+      "readinessImpact": "core",
       "label": "Isovalent",
       "healthNames": [
         "Isovalent"
@@ -257,6 +264,7 @@
     },
     {
       "id": "k8s",
+      "readinessImpact": "core",
       "label": "Kubernetes",
       "healthNames": [
         "Kubernetes"
@@ -287,6 +295,7 @@
     },
     {
       "id": "traces",
+      "readinessImpact": "core",
       "label": "Traces",
       "healthNames": [
         "Traces"
@@ -315,6 +324,7 @@
     },
     {
       "id": "hubble",
+      "readinessImpact": "core",
       "label": "Hubble",
       "healthNames": [
         "Hubble"
@@ -351,7 +361,65 @@
       "probeMacro": "adm_health_source_hubble"
     },
     {
+      "id": "dns_stream",
+      "readinessImpact": "optional_evidence",
+      "label": "Splunk Stream DNS",
+      "healthNames": [
+        "Splunk Stream DNS"
+      ],
+      "indexMacros": [
+        "adm_index_dns_stream"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "dns"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 3600,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "query",
+        "host_addr",
+        "reply_code"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "dns_hubble",
+      "readinessImpact": "optional_evidence",
+      "label": "Hubble DNS L7",
+      "healthNames": [
+        "Hubble DNS L7"
+      ],
+      "indexMacros": [
+        "adm_index_dns_hubble"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "dns"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 3600,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "flow.l7.dns.query",
+        "flow.l7.dns.rcode"
+      ],
+      "probeMacro": ""
+    },
+    {
       "id": "catalyst",
+      "readinessImpact": "core",
       "label": "Catalyst client observations",
       "healthNames": [
         "Catalyst client observations",
@@ -382,6 +450,7 @@
     },
     {
       "id": "meraki",
+      "readinessImpact": "core",
       "label": "Meraki wireless associations",
       "healthNames": [
         "Meraki wireless associations",
@@ -414,6 +483,7 @@
     },
     {
       "id": "sdwan",
+      "readinessImpact": "core",
       "label": "Catalyst SD-WAN IPFIX",
       "healthNames": [
         "Catalyst SD-WAN IPFIX"
@@ -445,6 +515,7 @@
     },
     {
       "id": "summary",
+      "readinessImpact": "core",
       "label": "Summary",
       "healthNames": [
         "Summary"
@@ -483,6 +554,7 @@
     },
     {
       "id": "summary_v2",
+      "readinessImpact": "core",
       "label": "Conversation summary v2",
       "healthNames": [
         "Conversation summary v2"
@@ -517,6 +589,7 @@
     },
     {
       "id": "traffic_v2",
+      "readinessImpact": "core",
       "label": "Traffic observation summary v2",
       "healthNames": [
         "Traffic observation summary v2"
@@ -551,6 +624,7 @@
     },
     {
       "id": "profiles",
+      "readinessImpact": "core",
       "label": "Version 2 source scope profiles",
       "healthNames": [
         "Version 2 source scope profiles"
@@ -573,6 +647,7 @@
     },
     {
       "id": "profiles_catalyst",
+      "readinessImpact": "core",
       "label": "Catalyst source scope profiles",
       "healthNames": [
         "Catalyst source scope profiles"
@@ -597,6 +672,7 @@
     },
     {
       "id": "profiles_meraki",
+      "readinessImpact": "core",
       "label": "Meraki source scope profiles",
       "healthNames": [
         "Meraki source scope profiles"
@@ -621,6 +697,7 @@
     },
     {
       "id": "profiles_stream",
+      "readinessImpact": "core",
       "label": "Stream source scope profiles",
       "healthNames": [
         "Stream source scope profiles"
@@ -645,6 +722,7 @@
     },
     {
       "id": "profiles_sdwan",
+      "readinessImpact": "core",
       "label": "SD-WAN source scope profiles",
       "healthNames": [
         "SD-WAN source scope profiles"

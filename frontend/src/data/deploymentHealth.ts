@@ -4,6 +4,7 @@ import { activation } from "../../../research/cisco-pipeline-interface.json";
 /** Shared with the read-only Python readiness tool. Never infer intent from events. */
 export interface SourceDefinition {
   id: string;
+  readinessImpact?: "core" | "optional_evidence";
   label: string;
   healthNames: string[];
   probeMacro: string;
@@ -33,7 +34,7 @@ export interface JobDefinition {
   stage: string;
   prerequisiteIds: string[];
 }
-export const SOURCE_DEFINITIONS: SourceDefinition[] = registry.sources;
+export const SOURCE_DEFINITIONS = registry.sources as SourceDefinition[];
 export const JOB_DEFINITIONS: JobDefinition[] = registry.jobs;
 export const HEALTH_LOOKBACK_SECONDS = registry.probeLookbackSeconds;
 export interface HealthProbe {
@@ -95,6 +96,9 @@ export function validateIndexName(value: string): string | undefined {
     ? undefined
     : "Use a lowercase index name beginning with a letter (up to 80 letters, numbers, underscores or hyphens).";
 }
+export const isCoreSource = (source: SourceDefinition) =>
+  source.readinessImpact !== "optional_evidence";
+export const UNCONFIGURED_DNS_INDEX = "unconfigured_dns";
 const indexTerm = /^index=([a-z][a-z0-9_-]{0,79})$/;
 type IndexDefinition = { name: string; definition?: string };
 export function indexNames(macro: IndexDefinition): string[] {
@@ -249,6 +253,7 @@ export function selectedHealthProbes(
   if (snapshot?.state !== "configured" || !snapshot.activeContract) return [];
   const configuredSources = SOURCE_DEFINITIONS.filter(
     (source) =>
+      isCoreSource(source) &&
       expectationFor(snapshot, source.id) === "active" &&
       (!snapshot.sourceConfiguration ||
         snapshot.sourceConfiguration[source.id] === "configured"),

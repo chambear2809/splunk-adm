@@ -6,6 +6,7 @@ import type { DemoScenario } from "../data/demoClient";
 export const PAGES = [
   "applications",
   "map",
+  "endpoints",
   "data_health",
   "setup",
   "help",

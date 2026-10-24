@@ -10,6 +10,7 @@ export default defineConfig({
       "frontend/src/main.tsx",
       "tests/browser/harness.tsx",
       "tests/browser/map-lifecycle-harness.tsx",
+      "tests/browser/dns-evidence-harness.tsx",
     ],
   },
   plugins: [
@@ -25,6 +26,7 @@ export default defineConfig({
           if (
             ![
               "/applications",
+              "/endpoints",
               "/map",
               "/data_health",
               "/setup",

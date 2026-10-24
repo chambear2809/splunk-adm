@@ -16,7 +16,7 @@ class ScopeConfigTest(unittest.TestCase):
         scope = collections["adm_observer_scope"]
         self.assertEqual(
             {key.removeprefix("field.") for key in scope if key.startswith("field.")},
-            {"observer_kind", "observer", "scope", "cluster"},
+            {"observer_kind", "observer", "scope", "cluster", "mapping_status"},
         )
         self.assertTrue(scope.getboolean("replicate"))
         transforms = configparser.RawConfigParser()
@@ -26,8 +26,9 @@ class ScopeConfigTest(unittest.TestCase):
         self.assertEqual(definition["collection"], "adm_observer_scope")
         self.assertEqual(
             {field.strip() for field in definition["fields_list"].split(",")},
-            {"_key", "observer_kind", "observer", "scope", "cluster"},
+            {"_key", "observer_kind", "observer", "scope", "cluster", "mapping_status"},
         )
+        self.assertNotIn("mapping_status", definition["fields_list"].split(","))
         self.assertNotIn("filename", definition)
         self.assertNotIn("check_permission", definition)
         for name in ("adm_recovery_state", "adm_recovery_audit"):

@@ -1,3 +1,4 @@
+import { pageURL } from "./app/urlState";
 import { useEffect, useState } from "react";
 import TableExport from "@splunk/react-ui/Table";
 import { toolkitDefault } from "./app/interop";
@@ -122,6 +123,43 @@ export function HealthResults({ report }: { report: HealthReport }) {
           ],
         }))}
       />
+      {report.optionalEvidence.length > 0 && (
+        <section aria-labelledby="optional-dns-health">
+          <h3 id="optional-dns-health">Optional DNS evidence</h3>
+          <p className="muted small">
+            DNS evidence is supplemental. This health view checks selection and
+            index configuration only; it does not run a DNS search or treat a
+            quiet feed as a core readiness failure.
+          </p>
+          <p>
+            <a href={pageURL("endpoints")}>
+              Open endpoint investigations to inspect optional DNS
+            </a>
+          </p>
+          <HealthTable
+            headers={["Source", "Status", "Receipt", "Diagnostic"]}
+            rows={report.optionalEvidence.map((item) => ({
+              key: item.id,
+              cells: [
+                item.name,
+                item.status === "configured"
+                  ? "Selected; runtime diagnostics not run"
+                  : item.status === "not_configured"
+                    ? "Selected; index selector not configured"
+                    : item.status === "unavailable"
+                      ? "Selected; index configuration unavailable"
+                      : item.status === "staged"
+                        ? "Staged; not expected to collect"
+                        : item.status === "not_selected"
+                          ? "Not selected"
+                          : "Configuration unknown",
+                "Not checked; requires explicit address and scope",
+                `${item.diagnostic} Receipt health stays unknown until a scoped diagnostic is requested.`,
+              ],
+            }))}
+          />
+        </section>
+      )}
       <p className="muted small">
         Delay is the largest nonnegative difference between event time and index
         time in this window. It includes exporter delay and clock differences.

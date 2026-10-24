@@ -18,7 +18,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = "splunk_adm"
-EXPECTED_VERSION = "0.3.0"
+EXPECTED_VERSION = "0.4.0"
 
 # One registry defines source names, freshness and builder applicability for the
 # UI and this operator tool. Received events never select sources automatically.
@@ -38,13 +38,18 @@ SOURCES: dict[str, dict[str, Any]] = {
         "quiet": source["quiet"],
     }
     for source in REGISTRY["sources"]
-    if source["selectable"] or source["id"] == "summary"
+    if (source["selectable"] or source["id"] == "summary")
+    and source.get("readinessImpact", "core") != "optional_evidence"
 }
 BUILDER_JOBS = tuple(
     job["name"] for job in REGISTRY["jobs"] if job["stage"] == "active"
 )
 JOB_SOURCES = {job["name"]: set(job["sourceIds"]) for job in REGISTRY["jobs"]}
 JOB_DEFINITIONS = {job["name"]: job for job in REGISTRY["jobs"]}
+CLI_SOURCES = sorted(
+    {source["id"] for source in REGISTRY["sources"] if source["selectable"]}
+    | {"summary"}
+)
 PRUNE_RE = re.compile(r"^ADM - .* prune$")
 INVALID_REASONS = {
     "invalid_source_ip",
@@ -232,6 +237,14 @@ def analyze(snapshot, selected_sources=()):
             for key, item in settings["sources"].items()
             if item["state"] != "not_selected"
         }
+    selected_all = set(selected)
+    optional_selected = {
+        name
+        for name in selected_all
+        if SOURCE_DEFINITIONS.get(name, {}).get("readinessImpact")
+        == "optional_evidence"
+    }
+    selected.difference_update(optional_selected)
     contract = snapshot.get("active_contract")
     contract = contract if type(contract) is int and contract in (1, 2) else None
     findings = []
@@ -263,7 +276,7 @@ def analyze(snapshot, selected_sources=()):
             "the active data contract has not been verified",
         )
     active_sources = set()
-    for unknown in sorted(selected - SOURCES.keys()):
+    for unknown in sorted(selected_all - set(CLI_SOURCES)):
         add("source_selection", "blocked", f"unknown source: {unknown}")
     if not selected:
         add("source_selection", "unknown", "no sources selected")
@@ -793,6 +806,24 @@ def analyze(snapshot, selected_sources=()):
     status = next((s for s in ("blocked", "unknown", "warning") if counts[s]), "ready")
     return {
         "selected_sources": sorted(selected & SOURCES.keys()),
+        "optional_evidence": [
+            {
+                "source": name,
+                "state": (
+                    "active"
+                    if explicit_selection
+                    else settings["sources"].get(name, {}).get("state", "active")
+                ),
+                "status": (
+                    "staged"
+                    if not explicit_selection
+                    and settings["sources"].get(name, {}).get("state") == "staged"
+                    else "runtime_diagnostics_not_run"
+                ),
+                "message": "Optional DNS evidence does not affect core readiness; select an address and scope before requesting diagnostics.",
+            }
+            for name in sorted(optional_selected)
+        ],
         "findings": findings,
         "summary": {
             "status": status,
@@ -1031,7 +1062,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--source",
         action="append",
-        choices=sorted(SOURCES),
+        choices=CLI_SOURCES,
         help="flow/data source to include; repeat for multiple",
     )
     parser.add_argument(
@@ -1048,14 +1079,22 @@ def main(argv: list[str] | None = None) -> int:
             "use --lab for shared deployment expectations or supply at least one --source"
         )
     report = analyze(_lab_snapshot(args.source) if args.lab else {}, args.source or ())
-    print(
-        json.dumps(report, indent=2, sort_keys=True)
-        if args.json
-        else f"status: {report['summary']['status']}\n"
-        + "\n".join(
-            f"{f['status']:12} {f['check']}: {f['message']}" for f in report["findings"]
+    if args.json:
+        output = json.dumps(report, indent=2, sort_keys=True)
+    else:
+        output = (
+            f"status: {report['summary']['status']}\n"
+            + "\n".join(
+                f"{f['status']:12} {f['check']}: {f['message']}"
+                for f in report["findings"]
+            )
+            + "\noptional evidence:\n"
+            + "\n".join(
+                f"{item['status']:28} {item['source']}: {item['message']}"
+                for item in report["optional_evidence"]
+            )
         )
-    )
+    print(output)
     return (
         1
         if report["summary"]["status"] == "blocked"

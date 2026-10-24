@@ -812,6 +812,24 @@ describe("KV Store collection paging", () => {
 });
 
 describe("deployment dependent builder readiness", () => {
+  it("does not let DNS-only intent make setup ready or block through DNS selectors", async () => {
+    const snapshot = await new ToolkitSetupClient(fetcher()).read();
+    snapshot.macros = snapshot.macros.map((macro) =>
+      macro.name === "adm_index_dns_stream"
+        ? { ...macro, definition: "index=Bad Name" }
+        : macro,
+    );
+    const readiness = setupReadiness(
+      snapshot,
+      expectedDeployment("dns_stream"),
+    );
+    expect(readiness.ready).toBe(false);
+    expect(readiness.missingRequired).toContain(
+      "at least one core source for traffic or inventory readiness",
+    );
+    expect(readiness.missingRequired).not.toContain("adm_index_dns_stream");
+  });
+
   it("allows Kubernetes identity with its mapping without unrelated source requirements", async () => {
     const snapshot = await new ToolkitSetupClient(fetcher()).read();
     snapshot.observerScopes = {

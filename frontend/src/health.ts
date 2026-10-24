@@ -6,6 +6,7 @@ import {
   JOB_DEFINITIONS,
   applicableJobs,
   expectationFor,
+  isCoreSource,
   selectedQualitySources,
   selectedHealthProbes,
   type DeploymentSnapshot,
@@ -50,11 +51,27 @@ export interface HealthReport {
   deployment?: DeploymentSnapshot;
   scope?: "full" | "jobs";
   sources: SourceHealth[];
+  optionalEvidence: OptionalEvidenceHealth[];
   jobs: JobHealth[];
   quality: QualityHealth;
   qualityRequired?: boolean;
   warnings: string[];
   checkedAt: number;
+}
+export interface OptionalEvidenceHealth {
+  id: string;
+  name: string;
+  expectation: "active" | "staged" | "not_selected" | "unknown";
+  configuration: "configured" | "not_configured" | "unavailable" | "unknown";
+  receipt: "unknown";
+  status:
+    | "not_selected"
+    | "staged"
+    | "configured"
+    | "not_configured"
+    | "unavailable"
+    | "unknown";
+  diagnostic: string;
 }
 export interface QualityHealth {
   incomplete?: boolean;
@@ -193,7 +210,7 @@ export function sourceRows(
   rows: Row[],
   deployment?: DeploymentSnapshot,
 ): SourceHealth[] {
-  return SOURCE_DEFINITIONS.map((definition) => {
+  return SOURCE_DEFINITIONS.filter(isCoreSource).map((definition) => {
     const matches = rows.filter(
       (row) =>
         ["source", "summary"].includes(String(row.kind)) &&
@@ -234,6 +251,34 @@ export function sourceRows(
         matches.length > 1
           ? "Duplicate source evidence is unavailable."
           : text(r.warning),
+    };
+  });
+}
+function optionalEvidenceRows(
+  deployment?: DeploymentSnapshot,
+): OptionalEvidenceHealth[] {
+  return SOURCE_DEFINITIONS.filter(
+    (definition) => definition.readinessImpact === "optional_evidence",
+  ).map((definition) => {
+    const expectation = expectationFor(deployment, definition.id);
+    const configuration =
+      deployment?.sourceConfiguration?.[definition.id] ??
+      (expectation === "active" ? "unavailable" : "unknown");
+    const status =
+      expectation === "not_selected" || expectation === "staged"
+        ? expectation
+        : expectation === "active"
+          ? configuration
+          : "unknown";
+    return {
+      id: definition.id,
+      name: definition.label,
+      expectation,
+      configuration,
+      receipt: "unknown",
+      status,
+      diagnostic:
+        "Optional DNS evidence is shown separately. Runtime diagnostics require an explicit integration request.",
     };
   });
 }
@@ -517,6 +562,7 @@ export async function loadHealth(
     SOURCE_DEFINITIONS.some((source) => {
       if (
         !source.selectable ||
+        !isCoreSource(source) ||
         expectationFor(deployment, source.id) !== "active"
       )
         return false;
@@ -573,6 +619,7 @@ export async function loadHealth(
     deployment,
     scope,
     sources,
+    optionalEvidence: optionalEvidenceRows(deployment),
     jobs,
     quality,
     qualityRequired,
