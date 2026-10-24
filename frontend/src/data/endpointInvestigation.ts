@@ -340,7 +340,11 @@ export function buildEndpointSearch(
     throw new Error("Endpoint selection inputs must be canonical.");
   const address = literal(valid.address, 64),
     scope = literal(valid.scope, 253);
-  const t = `_time>=${valid.start} AND _time<${valid.end}`;
+  // Summary rows are bucketed by floor(adm_end/300)*300. Include the
+  // containing bucket, then use the retained interval fields below to keep
+  // attribution bounded to the requested half-open window.
+  const summaryStart = Math.floor(valid.start / 300) * 300;
+  const t = `_time>=${summaryStart} AND _time<${valid.end}`;
   const clientPredicate = scopedAddressPredicate("client_ip", [address]);
   const addressPredicate = `(${clientPredicate} OR ${scopedAddressPredicate("server_ip", [address])})`;
   if (
@@ -353,7 +357,7 @@ export function buildEndpointSearch(
     selection.trafficContract === 1
       ? "(isnull(contract_version) OR tonumber(contract_version)=1)"
       : "(tonumber(contract_version)=2)";
-  return `search (${summaryIndex}) source="adm:conversation" adm_record="conversation" ${t} | where ${contractFilter} AND ${addressPredicate} | eval adm_unprotected=if(isnull(rollup_id),1,0) | dedup rollup_id keepempty=true | eval scope=if(scope="default" AND coalesce(tostring(scope_mapping_verified),"0")!="1","unmapped:legacy-default",scope) | where scope="${scope}" | eval adm_root="${address}", adm_client=client_ip, adm_server=server_ip, adm_peer=if(${clientPredicate},server_ip,client_ip), adm_port=tonumber(server_port), adm_transport=transport, adm_first=tonumber(first_seen), adm_last=tonumber(last_seen), adm_records=tonumber(records), adm_conns=conns, adm_sampled=sampled, adm_context_capped=if(conns_capped="1",1,0), adm_direction=direction_basis, adm_source=flow_source, adm_observer=observer, adm_bcs=tonumber(bytes_c2s), adm_bsc=tonumber(bytes_s2c), adm_packets=tonumber(packets) | where isnotnull(adm_peer) | eventstats count as input_count sum(adm_unprotected) as unprotected_count | sort 0 - adm_records | head ${ENDPOINT_LIMITS.relationships + 1} | eval row_type="conversation" | appendpipe [ stats max(input_count) as input_count max(unprotected_count) as unprotected_count count as output_count | eval input_count=coalesce(input_count,0), unprotected_count=coalesce(unprotected_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>${ENDPOINT_LIMITS.relationships},1,0) | fields row_type schema_version input_count output_count input_capped output_capped unprotected_count ] | fields row_type schema_version input_count output_count input_capped output_capped unprotected_count scope adm_root adm_client adm_server adm_peer adm_port adm_transport adm_first adm_last adm_records adm_conns adm_sampled adm_context_capped adm_direction adm_source adm_observer adm_bcs adm_bsc adm_packets`;
+  return `search (${summaryIndex}) source="adm:conversation" adm_record="conversation" ${t} | where ${contractFilter} AND ${addressPredicate} | eval adm_unprotected=if(isnull(rollup_id),1,0) | dedup rollup_id keepempty=true | eval scope=if(scope="default" AND coalesce(tostring(scope_mapping_verified),"0")!="1","unmapped:legacy-default",scope) | where scope="${scope}" | eval adm_root="${address}", adm_client=client_ip, adm_server=server_ip, adm_peer=if(${clientPredicate},server_ip,client_ip), adm_port=tonumber(server_port), adm_transport=transport, adm_first=tonumber(first_seen), adm_last=tonumber(last_seen), adm_records=tonumber(records), adm_conns=conns, adm_sampled=sampled, adm_context_capped=if(conns_capped="1",1,0), adm_direction=direction_basis, adm_source=flow_source, adm_observer=observer, adm_bcs=tonumber(bytes_c2s), adm_bsc=tonumber(bytes_s2c), adm_packets=tonumber(packets) | where isnotnull(adm_peer) AND isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | eventstats count as input_count sum(adm_unprotected) as unprotected_count | sort 0 - adm_records | head ${ENDPOINT_LIMITS.relationships + 1} | eval row_type="conversation" | appendpipe [ stats max(input_count) as input_count max(unprotected_count) as unprotected_count count as output_count | eval input_count=coalesce(input_count,0), unprotected_count=coalesce(unprotected_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>${ENDPOINT_LIMITS.relationships},1,0) | fields row_type schema_version input_count output_count input_capped output_capped unprotected_count ] | fields row_type schema_version input_count output_count input_capped output_capped unprotected_count scope adm_root adm_client adm_server adm_peer adm_port adm_transport adm_first adm_last adm_records adm_conns adm_sampled adm_context_capped adm_direction adm_source adm_observer adm_bcs adm_bsc adm_packets`;
 }
 
 export function buildEndpointObservationSearch(
@@ -377,8 +381,9 @@ export function buildEndpointObservationSearch(
     throw new Error("Invalid configured summary index.");
   const address = literal(valid.address, 64),
     scope = literal(valid.scope, 253);
+  const summaryStart = Math.floor(valid.start / 300) * 300;
   const addressPredicate = `(${scopedAddressPredicate("source_ip", [address])} OR ${scopedAddressPredicate("destination_ip", [address])})`;
-  return `search (${summarySelector}) source="adm:traffic_observation" adm_record="traffic_observation" contract_version=2 | where ${addressPredicate} AND _time>=${valid.start} AND _time<${valid.end} AND scope="${scope}" AND adm_profile_status="mapped" AND records=1 AND metrics_authoritative=0 AND adm_quality_status IN ("accepted","accepted_with_warning") | eval traffic_observation_id=coalesce(rollup_id,traffic_observation_id) | streamstats count AS adm_observation_row | eval adm_observation_dedup_key=if(isnotnull(traffic_observation_id),traffic_observation_id,"unprotected:".tostring(adm_observation_row)) | dedup adm_observation_dedup_key | eval source=adm_scope_source, row_type="traffic_observation", adm_first=tonumber(first_seen), adm_last=tonumber(last_seen) | eventstats count as input_count | head 100 | appendpipe [ stats max(input_count) as input_count count as output_count | eval input_count=coalesce(input_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>100,1,0) | fields row_type schema_version input_count output_count input_capped output_capped ] | fields row_type schema_version input_count output_count input_capped output_capped scope source adm_scope_authority source_ip destination_ip source_port destination_port transport adm_first adm_last records counter_semantics metrics_authoritative adm_quality_status`;
+  return `search (${summarySelector}) source="adm:traffic_observation" adm_record="traffic_observation" contract_version=2 | where ${addressPredicate} AND _time>=${summaryStart} AND _time<${valid.end} AND scope="${scope}" AND adm_profile_status="mapped" AND records=1 AND metrics_authoritative=0 AND adm_quality_status IN ("accepted","accepted_with_warning") | eval traffic_observation_id=coalesce(rollup_id,traffic_observation_id) | streamstats count AS adm_observation_row | eval adm_observation_dedup_key=if(isnotnull(traffic_observation_id),traffic_observation_id,"unprotected:".tostring(adm_observation_row)) | dedup adm_observation_dedup_key | eval source=adm_scope_source, row_type="traffic_observation", adm_first=tonumber(first_seen), adm_last=tonumber(last_seen) | where isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | eventstats count as input_count | head 100 | appendpipe [ stats max(input_count) as input_count count as output_count | eval input_count=coalesce(input_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>100,1,0) | fields row_type schema_version input_count output_count input_capped output_capped ] | fields row_type schema_version input_count output_count input_capped output_capped scope source adm_scope_authority source_ip destination_ip source_port destination_port transport adm_first adm_last records counter_semantics metrics_authoritative adm_quality_status`;
 }
 
 export function endpointEvidenceSelection(
@@ -450,7 +455,7 @@ export async function runEndpointInvestigation(
     .join(" OR ");
   const result = await client.search({
     search: buildEndpointSearch(selection, activeIndex),
-    earliest: String(valid.start),
+    earliest: String(Math.floor(valid.start / 300) * 300),
     latest: String(valid.end),
     maxRows: ENDPOINT_LIMITS.relationships + 2,
     allowEmpty: true,
@@ -503,6 +508,8 @@ export async function runEndpointInvestigation(
       !Number.isFinite(first) ||
       !Number.isFinite(last) ||
       first < 0 ||
+      last < valid.start ||
+      first >= valid.end ||
       last < first
     )
       throw new Error(
@@ -583,7 +590,7 @@ export async function runEndpointInvestigation(
     try {
       const traffic = await client.search({
         search: buildEndpointObservationSearch(selection, activeIndex),
-        earliest: String(valid.start),
+        earliest: String(Math.floor(valid.start / 300) * 300),
         latest: String(valid.end),
         maxRows: 101,
         allowEmpty: true,
@@ -621,6 +628,9 @@ export async function runEndpointInvestigation(
           ) ||
           !Number.isFinite(first) ||
           !Number.isFinite(last) ||
+          first < 0 ||
+          last < valid.start ||
+          first >= valid.end ||
           last < first
         )
           throw new Error("Traffic observations could not be validated.");
@@ -697,6 +707,13 @@ export async function runEndpointInvestigation(
       conversations.length > ENDPOINT_LIMITS.relationships,
     warnings: [
       ...result.warnings,
+      ...(boundedConversations.some(
+        (c) => c.first < valid.start || c.last >= valid.end,
+      )
+        ? [
+            "Some summary intervals straddle the requested window. Their counters cover the full retained interval and are not prorated to this window.",
+          ]
+        : []),
       ...(unprotectedCount
         ? [
             `${unprotectedCount} legacy summary rows had no replay identifier and could not be deduplicated safely.`,

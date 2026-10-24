@@ -173,7 +173,7 @@ export class ToolkitSearchClient implements SearchClient {
     } catch {
       if (!request.optionalSource) optionalJobs.coreFinished();
       // The SDK threw before a job handle or SID existed. Native creation is
-      // untrackable, so release browser admission without claiming cleanup.
+      // untrackable, so report uncertainty and retain browser admission.
       request.onLifecycle?.({ state: "cleanup_unverified" });
       return Promise.reject(
         new Error("Splunk job creation could not be acknowledged."),
@@ -200,8 +200,8 @@ export class ToolkitSearchClient implements SearchClient {
         if (sidGraceTimer) clearTimeout(sidGraceTimer);
         request.onLifecycle?.({ state: "released", sid });
       };
-      // Server-side cleanup could not be confirmed; callers may drop their
-      // browser-local lease, but the native job is not reported as released.
+      // Server-side cleanup could not be confirmed. Keep the native lease
+      // occupied until a late cancellation or terminal status is acknowledged.
       const reportUnverified = () => {
         if (released || unverifiedReported) return;
         unverifiedReported = true;

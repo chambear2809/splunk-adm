@@ -297,6 +297,10 @@ function parseOne(
       row.host);
   const authority = scalar(authorityValue);
   if (!authority || !config.authorities.includes(authority)) return;
+  const authorityNode = !stream
+    ? scalar(pick(raw, "node_name") ?? pick(flow, "node_name"))
+    : undefined;
+  if (authorityNode !== undefined && !text(authorityNode, 1024)) return;
   const queryValue =
     pick(hubDns, "query", "query_name", "question") ??
     (stream ? raw.query : undefined);
@@ -657,9 +661,7 @@ function parseOne(
           ttlScalar <= 4294967295
             ? { ttlBasis: "rrset_scalar" as const }
             : {}),
-          authorityNode: scalar(
-            pick(raw, "node_name") ?? pick(flow, "node_name"),
-          ),
+          ...(authorityNode ? { authorityNode } : {}),
           sourceTimeBasis: "hubble_flow_time",
         }),
     eventTime: eventTimeValue,

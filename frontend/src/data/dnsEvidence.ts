@@ -35,13 +35,29 @@ const selector = (indexes: string[]) => {
 export const eventFingerprintExpression =
   "if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null())";
 /** Transport only the declared observation contract; never arbitrary TXT/payload fields. */
+const boundedJsonScalar = (value: string) =>
+  `if(isnull(${value}),null(),if(len(tostring(${value}))<=1024,tostring(${value}),substr(tostring(${value}),1,1025)))`;
+const projectedRrArray = (path: string, mv: string) => {
+  const value = (rr: string, ...keys: string[]) => {
+    const expressions = keys.map((key) => `json_extract(${rr},"${key}")`);
+    return boundedJsonScalar(
+      expressions.length === 1
+        ? expressions[0]
+        : `coalesce(${expressions.join(",")})`,
+    );
+  };
+  const type = value(mv, "type", "record_type");
+  const address = `if(upper(tostring(${type})) IN ("A","AAAA","1","28"),${value(mv, "address", "answer", "ip")},null())`;
+  const target = `if(upper(tostring(${type}))=="CNAME",${value(mv, "target", "value")},null())`;
+  return `if(oversized=1,null(),if(isnull(json_extract(_raw,"${path}")),null(),mv_to_json_array(mvmap(${mv},json_object("address",${address},"type",${type},"owner",${value(mv, "owner", "name", "rr_name")},"section",${value(mv, "section", "record_section")},"ttl",${value(mv, "ttl")},"target",${target})),true())))`;
+};
 function projectedRaw(stream: boolean): string {
   const field = (path: string) => `json_extract(_raw,"${path}")`;
   const object = (pairs: [string, string][]) =>
     `json_object(${pairs.flatMap(([key, value]) => [`"${key}"`, value]).join(",")})`;
   if (stream)
-    return object(
-      [
+    return object([
+      ...[
         "query",
         "query_type",
         "message_type",
@@ -57,12 +73,17 @@ function projectedRaw(stream: boolean): string {
         "end",
         "host_addr",
         "ttl",
-      ].map((key) => [key, field(key)]),
-    );
+      ].map((key) => [key, field(key)] as [string, string]),
+      ["answer_records", "json_extract(_dns_stream_answer_records)"],
+      ["answers", "json_extract(_dns_stream_answers)"],
+    ]);
   const dns = object(
-    ["query", "qtypes", "rcode", "ips", "cnames", "ttl", "rrtypes"].map(
-      (key) => [key, field(`flow.l7.dns.${key}`)],
-    ),
+    ["query", "qtypes", "rcode", "ips", "cnames", "ttl", "rrtypes"]
+      .map((key) => [key, field(`flow.l7.dns.${key}`)] as [string, string])
+      .concat([
+        ["answer_records", "json_extract(_dns_hubble_answer_records)"],
+        ["answers", "json_extract(_dns_hubble_answers)"],
+      ]),
   );
   const ip = object(
     ["source", "destination"].map((key) => [key, field(`flow.IP.${key}`)]),
@@ -121,6 +142,17 @@ export function buildDnsSearch(
   const clientFilter = stream
     ? scopedAddressPredicate("src_ip", selection.addresses)
     : `${scopedAddressPredicate("'flow.IP.source'", selection.addresses)} OR ${scopedAddressPredicate("'flow.IP.destination'", selection.addresses)}`;
+  const rrPath = stream ? "answer_records" : "flow.l7.dns.answer_records";
+  const answersPath = stream ? "answers" : "flow.l7.dns.answers";
+  const rrPrefix = stream ? "_dns_stream" : "_dns_hubble";
+  const rrProjection = projectedRrArray(
+    rrPath,
+    `${rrPrefix}_answer_records_mv`,
+  );
+  const answersProjection = projectedRrArray(
+    answersPath,
+    `${rrPrefix}_answers_mv`,
+  );
   return `search ${selector(config.indexes)} ${filter}
 | where ${clientFilter}
 | head ${EVIDENCE_LIMITS.input + 1}
@@ -128,6 +160,8 @@ export function buildDnsSearch(
 | eventstats count AS input_count sum(oversized) AS oversized_count
 | sort 0 - _time index event_fingerprint
 | head ${EVIDENCE_LIMITS.records}
+| eval ${rrPrefix}_answer_records_mv=if(oversized=1,null(),json_array_to_mv(json_extract(_raw,"${rrPath}"))), ${rrPrefix}_answers_mv=if(oversized=1,null(),json_array_to_mv(json_extract(_raw,"${answersPath}")))
+| eval ${rrPrefix}_answer_records=${rrProjection}, ${rrPrefix}_answers=${answersProjection}
 | eval _raw=if(oversized=1,"{}",${projectedRaw(stream)})
 | fields _raw _time _indextime host index event_fingerprint input_count oversized_count oversized
 | eval kind="dns_record"

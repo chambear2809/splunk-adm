@@ -15,14 +15,14 @@ export class OptionalJobBudget {
   private queue: Pending[] = [];
   private inflight = new Map<string, Pending>();
   private core = 0;
-  private unverified = 0;
+  private unverified = new Set<Pending>();
   private listeners = new Set<() => void>();
   get cleanupPending() {
     return this.leases.size;
   }
-  /** Leases dropped locally because server-side cleanup could not be confirmed. */
+  /** Occupied leases whose server-side cleanup could not be confirmed. */
   get cleanupUnverified() {
-    return this.unverified;
+    return this.unverified.size;
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);
@@ -86,6 +86,7 @@ export class OptionalJobBudget {
         const release = () => {
           if (this.leases.get(source) !== current) return;
           this.leases.delete(source);
+          this.unverified.delete(current);
           this.notify();
           this.drain();
         };
@@ -98,14 +99,13 @@ export class OptionalJobBudget {
               budget: { serverSeconds: 30, clientMilliseconds: 35000 },
               onLifecycle: (event) => {
                 if (event.state === "creating") creating = true;
+                if (event.state === "released") release();
                 if (
-                  event.state === "released" ||
-                  event.state === "cleanup_unverified"
+                  event.state === "cleanup_unverified" &&
+                  this.leases.get(source) === current
                 ) {
-                  if (event.state === "cleanup_unverified") {
-                    if (this.leases.get(source) === current) this.unverified++;
-                  }
-                  release();
+                  this.unverified.add(current);
+                  this.notify();
                 }
                 request.onLifecycle?.(event);
               },

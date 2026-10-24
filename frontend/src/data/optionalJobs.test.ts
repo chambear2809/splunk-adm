@@ -55,7 +55,7 @@ describe("optional DNS native execution admission", () => {
     await second;
     dispatched[1].onLifecycle?.({ state: "released" });
   });
-  it("frees the lease and counts it when cleanup could not be verified", async () => {
+  it("retains unverified leases until a late native release and still admits the other source", async () => {
     const budget = new OptionalJobBudget(),
       control = new AbortController();
     const dispatched: SearchRequest[] = [];
@@ -76,20 +76,45 @@ describe("optional DNS native execution admission", () => {
     await tick();
     control.abort();
     await first;
-    const second = budget.run("dns_stream", "two", client, request());
-    void second.catch(() => {});
+    const secondControl = new AbortController();
+    const second = budget
+      .run("dns_stream", "two", client, request(secondControl.signal))
+      .catch(() => {});
     await tick();
     expect(dispatched).toHaveLength(1);
     expect(budget.cleanupPending).toBe(1);
     dispatched[0].onLifecycle?.({ state: "cleanup_unverified" });
     await tick();
     expect(budget.cleanupUnverified).toBe(1);
-    expect(dispatched).toHaveLength(2);
+    expect(dispatched).toHaveLength(1);
     expect(budget.cleanupPending).toBe(1);
-    // A repeated report from the old lease must not count or free the replacement.
+    // Repeated uncertainty cannot release or double count this lease.
     dispatched[0].onLifecycle?.({ state: "cleanup_unverified" });
     expect(budget.cleanupUnverified).toBe(1);
     expect(budget.cleanupPending).toBe(1);
+    const otherControl = new AbortController();
+    const other = budget
+      .run("dns_hubble", "other", client, request(otherControl.signal))
+      .catch(() => {});
+    await tick();
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched[1].optionalSource).toBe("dns_hubble");
+    expect(budget.cleanupPending).toBe(2);
+    dispatched[0].onLifecycle?.({ state: "released", sid: "late-native-id" });
+    await tick();
+    expect(dispatched).toHaveLength(3);
+    expect(budget.cleanupUnverified).toBe(0);
+    expect(budget.cleanupPending).toBe(2);
+    dispatched[0].onLifecycle?.({ state: "cleanup_unverified" });
+    dispatched[0].onLifecycle?.({ state: "released" });
+    expect(budget.cleanupUnverified).toBe(0);
+    expect(budget.cleanupPending).toBe(2);
+    secondControl.abort();
+    otherControl.abort();
+    await Promise.all([second, other]);
+    dispatched[1].onLifecycle?.({ state: "released" });
+    dispatched[2].onLifecycle?.({ state: "released" });
+    expect(budget.cleanupPending).toBe(0);
   });
   it("coalesces identical inflight consumers and prioritizes core searches", async () => {
     const budget = new OptionalJobBudget();

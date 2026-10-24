@@ -2,7 +2,22 @@
 
 Date: 2026-10-23. Candidate version: 0.4.0, staged locally for qualification only. Prior KV-based local 0.3.0 package is the versioned upgrade baseline. This record covers the optional DNS/endpoint implementation against the [approved design](DNS_EVIDENCE_DESIGN.md), not a production release authorization. Enablement and disable-first rollback are in [DNS operations](operators/dns-evidence.md).
 
-## Subsequent local review corrections
+## Review of commit 738cb91 (2026-10-24 UTC)
+
+A further review found and corrected four defects in the committed implementation:
+
+- Unverified native cleanup released the browser admission lease. The lease now stays occupied until a late native cancellation or terminal/deleted status is acknowledged; repeated uncertainty does not double count it.
+- Exact dispatch/search lower bounds excluded the containing five-minute summary bucket. Conversation and V2 observation queries now include that bucket and filter by retained interval overlap. Counters remain full-interval values, with a warning when an interval straddles the requested window.
+- Live DNS projection dropped structured `answer_records` and `answers`. Both source adapters now receive bounded, allowlisted RR properties with native JSON arrays preserved, including singleton arrays. Address aliases are projected only for A/AAAA; targets only for CNAME. TXT payload properties remain excluded. Projection happens after the display cap and skips oversized records.
+- Malformed Hubble node metadata could invalidate the combined result. Normalization now rejects the malformed row and preserves valid evidence from the other source.
+
+Verification passed `npm run lint`, 55 frontend test files / 679 tests, 617 Python unit/contract tests, 125 distributed-tooling tests, 107 browser tests, Ruff check/format, build/package, release-archive validation, two built-bundle tests, and 15 upgrade helper tests (three full upgrade integration tests skipped). Browser and PTY tests required access outside the local sandbox. The independent read-only reviewer reported no remaining actionable findings in the correction diff.
+
+A fresh disposable Splunk Enterprise 10.6.0.5 lab passed seven native DNS/endpoint tests and five installed settings tests. These covered count boundaries, structured-answer projection and TXT exclusion, unaligned V1/V2 conversation and V2 observation windows, caller permissions/private shadows, native cancellation, DNS settings revisions/concurrency and disabled-write behavior. Native execution caught invalid single-argument `coalesce` generation and singleton-array collapse during implementation; both were corrected before the passing run. The lab was removed afterwards.
+
+These native checks used the source-installed app and the current frontend-generated queries. The rebuilt archive passed static release and bundle checks; the corrected archive has not received a new AppInspect, installed-archive upgrade/rollback, genuine-feed, SHC or capacity qualification. Historical archive qualifications below remain specific to their original artifacts. No production operation, commit or push was performed.
+
+## Earlier local review corrections
 
 The working tree now contains three corrections made after the previously tested 0.4.0 archive was built: the endpoint V2 reader enforces accepted source quality before counting/displaying observations and validates returned quality statuses; cancellation starts bounded status verification even when the cancellation request stalls; and endpoint links preserve proxy and locale prefixes. Regression coverage includes accepted/warning/excluded/unknown/missing quality, a stalled cancellation that later reaches terminal status, and prefixed navigation. The native query fixture also includes excluded, unknown and missing quality records as negative controls.
 

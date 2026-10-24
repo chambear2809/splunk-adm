@@ -203,6 +203,17 @@ describe("endpoint investigation contracts", () => {
       buildEndpointSearch(selection, "index=bad OR index=foo; delete"),
     ).toThrow();
   });
+  it("scans the containing summary bucket while retaining only overlapping intervals", () => {
+    const query = buildEndpointSearch(selection, "index=adm_summary_v2");
+    expect(query).toContain("_time>=0 AND _time<200");
+    expect(query).toContain("adm_last>=100 AND adm_first<200");
+    const observation = buildEndpointObservationSearch(
+      selection,
+      "index=adm_summary_v2",
+    );
+    expect(observation).toContain("_time>=0 AND _time<200");
+    expect(observation).toContain("adm_last>=100 AND adm_first<200");
+  });
   it("keeps V2 observations on their own non-authoritative query", () => {
     const query = buildEndpointObservationSearch(
       selection,
@@ -456,11 +467,20 @@ describe("endpoint investigation contracts", () => {
         { address: "10.0.0.1", scope: "prod", start: 100, end: 200 },
         new AbortController().signal,
       );
-    it("returns buckets that straddle an unaligned window edge", async () => {
-      const after = await run(250, 290);
-      expect(after.conversations[0]).toMatchObject({ first: 250, last: 290 });
-      const before = await run(10, 20);
-      expect(before.conversations[0]).toMatchObject({ first: 10, last: 20 });
+    it("returns buckets that overlap an unaligned window edge", async () => {
+      const before = await run(90, 110);
+      expect(before.conversations[0]).toMatchObject({ first: 90, last: 110 });
+      expect(before.warnings.join(" ")).toContain("not prorated");
+      const after = await run(190, 210);
+      expect(after.conversations[0]).toMatchObject({ first: 190, last: 210 });
+    });
+    it.each([
+      ["entirely before", 10, 20],
+      ["entirely after", 250, 290],
+    ])("rejects intervals %s", async (_name, first, last) => {
+      await expect(run(first, last)).rejects.toThrow(
+        "invalid conversation interval",
+      );
     });
     it.each([
       ["non-finite first", "x", 120],
@@ -556,6 +576,11 @@ describe("endpoint investigation contracts", () => {
     expect(
       (search.search as ReturnType<typeof vi.fn>).mock.calls[0][0].budget,
     ).toEqual({ serverSeconds: 30, clientMilliseconds: 35000 });
+    expect(
+      (search.search as ReturnType<typeof vi.fn>).mock.calls.map(
+        ([request]) => request.earliest,
+      ),
+    ).toEqual(["0", "0"]);
   });
   it("retains core conversations when the optional V2 observation query fails", async () => {
     const search: SearchClient = {

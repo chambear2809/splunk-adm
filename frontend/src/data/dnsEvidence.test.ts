@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import stream from "../../../fixtures/dns/stream-transaction.json";
+import hubble from "../../../fixtures/dns/hubble-response.json";
 import { buildDnsSearch, loadDnsEvidence } from "./dnsEvidence";
 import { inspectDnsRecord } from "./dnsDrilldown";
 import { validateDnsResult, type EvidenceSelection } from "./evidence";
@@ -116,6 +117,45 @@ describe("DNS inspection isolation and explicit exports", () => {
     expect(result.records).toHaveLength(1);
     expect(result.coverage.join(" ")).toMatch(/Caller-visible/);
   });
+  it.each([`worker-a/${"x".repeat(1025)}`, "worker-a/node\ninvalid"])(
+    "rejects malformed Hubble node metadata without losing successful Stream evidence (%j)",
+    async (node) => {
+      const raw = JSON.parse(hubble._raw);
+      raw.node_name = node;
+      const cfg = {
+        ...config,
+        dns: [
+          config.dns[0],
+          {
+            ...config.dns[1],
+            state: "active" as const,
+            indexes: [hubble.index],
+            authorities: ["worker-a"],
+          },
+        ],
+      };
+      const result = await loadDnsEvidence(
+        {
+          search: async (request) =>
+            envelope([
+              request.search.includes("cilium:hubble")
+                ? { ...hubble, _raw: JSON.stringify(raw) }
+                : stream,
+            ]),
+        },
+        { ...selection, addresses: ["192.0.2.10", "192.0.2.11"] },
+        new AbortController().signal,
+        { read: async () => cfg },
+      );
+      expect(result.sources.map((source) => source.state)).toEqual([
+        "complete",
+        "complete",
+      ]);
+      expect(result.sources[1].rejected).toBe(1);
+      expect(result.records).toHaveLength(1);
+      expect(result.records[0].source).toBe("dns_stream");
+    },
+  );
   it("dispatches staged sources only for explicit scoped diagnostics and suppresses association", async () => {
     const staged = {
       ...config,

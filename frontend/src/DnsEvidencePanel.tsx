@@ -152,8 +152,8 @@ export function DnsEvidencePanel({
       {unverified > 0 && (
         <p role="status">
           Splunk could not confirm cleanup of {unverified} earlier optional DNS
-          search{unverified === 1 ? "" : "es"}; the local slot was freed but the
-          search may still be running on the server.
+          search{unverified === 1 ? "" : "es"}; the execution slot remains
+          occupied until Splunk confirms completion or cancellation.
         </p>
       )}
       {result && (

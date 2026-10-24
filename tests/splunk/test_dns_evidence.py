@@ -121,14 +121,16 @@ class DnsEvidenceRuntimeTest(unittest.TestCase):
             time.sleep(0.5)
         self.fail("synthetic lab events did not reach the expected indexed count")
 
-    def _run(self, search: str, *, timeout: int = 60) -> tuple[list[dict], dict]:
+    def _run(
+        self, search: str, *, timeout: int = 60, earliest: int | None = None
+    ) -> tuple[list[dict], dict]:
         with lab._mgmt(
             "POST",
             f"/servicesNS/admin/{lab.APP}/search/v2/jobs?output_mode=json",
             {
                 "search": search,
                 "exec_mode": "normal",
-                "earliest_time": str(self.start),
+                "earliest_time": str(self.start if earliest is None else earliest),
                 "latest_time": str(self.end),
                 "max_time": "30",
                 "auto_cancel": "30",
@@ -144,7 +146,10 @@ class DnsEvidenceRuntimeTest(unittest.TestCase):
             entry = lab._json("GET", f"/services/search/v2/jobs/{sid}")["entry"][0]
             content = entry["content"]
             if content.get("dispatchState") == "FAILED":
-                self.fail("native Splunk search job failed before completion")
+                self.fail(
+                    "native Splunk search job failed before completion: "
+                    + json.dumps(content.get("messages", []))
+                )
             if content.get("isDone"):
                 break
             time.sleep(0.5)
@@ -600,6 +605,206 @@ class DnsEvidenceRuntimeTest(unittest.TestCase):
             projected = json.loads(projected)
         self.assertEqual(projected["flow"]["IP"]["source"], "2001:0db8:0:0:0:0:0:41")
         self.assertIn("dns", projected["flow"]["l7"])
+
+    def test_structured_dns_answers_survive_allowlisted_projection(self):
+        answer = {
+            "address": "203.0.113.8",
+            "type": "A",
+            "owner": "api.example.test",
+            "section": "answer",
+            "ttl": 60,
+        }
+        events = []
+        for field in ("answer_records", "answers"):
+            events.append(
+                {
+                    "time": self.now,
+                    "index": "netflow",
+                    "sourcetype": "stream:dns",
+                    "host": self.token,
+                    "event": {
+                        "src_ip": self.ipv4,
+                        "dest_ip": "192.0.2.53",
+                        "query": "api.example.test",
+                        "query_type": "A",
+                        "message_type": "RESPONSE",
+                        "reply_code": 0,
+                        "end": self.now,
+                        field: [
+                            {**answer, "txt_payload": "private-rr-content"},
+                            {
+                                "type": "TXT",
+                                "answer": "private-txt-answer",
+                                "value": "private-txt-value",
+                                "target": "private-txt-target",
+                            },
+                        ],
+                        "txt_payload": "private-root-content",
+                    },
+                }
+            )
+        events.append(
+            {
+                "time": self.now,
+                "index": "cilium_hubble",
+                "sourcetype": "cilium:hubble:flow",
+                "host": self.token,
+                "event": {
+                    "flow": {
+                        "node_name": f"{self.token}/node-a",
+                        "time": self.now,
+                        "IP": {"source": "192.0.2.53", "destination": self.ipv4},
+                        "traffic_direction": "EGRESS",
+                        "l7": {
+                            "type": "RESPONSE",
+                            "dns": {
+                                "query": "api.example.test",
+                                "qtypes": ["A"],
+                                "rcode": 0,
+                                "answers": [
+                                    {
+                                        "ip": answer["address"],
+                                        "record_type": "A",
+                                        "rr_name": answer["owner"],
+                                        "record_section": "answer",
+                                        "ttl": 60,
+                                        "txt_payload": "private-rr-content",
+                                    }
+                                ],
+                            },
+                        },
+                    }
+                },
+            }
+        )
+        self.load_rows(events)
+        self._wait_for_count(f'index=netflow host="{self.token}" | stats count', 2)
+        self._wait_for_count(
+            f'index=cilium_hubble host="{self.token}" | stats count', 1
+        )
+        _, searches = self.build_queries([])
+        for built in searches["dns"]:
+            rows, _ = self._run(built["search"])
+            records = [row for row in rows if row.get("kind") == "dns_record"]
+            self.assertEqual(len(records), 2 if built["source"] == "dns_stream" else 1)
+            for record in records:
+                raw = record["_raw"]
+                projected = json.loads(raw) if isinstance(raw, str) else raw
+                dns = (
+                    projected
+                    if built["source"] == "dns_stream"
+                    else projected["flow"]["l7"]["dns"]
+                )
+                projected_answers = dns.get("answer_records") or dns.get("answers")
+                self.assertIsInstance(projected_answers, list)
+                self.assertEqual(
+                    len(projected_answers), 2 if built["source"] == "dns_stream" else 1
+                )
+                projected_answer = projected_answers[0]
+                for key, value in answer.items():
+                    self.assertEqual(
+                        int(projected_answer[key])
+                        if key == "ttl"
+                        else projected_answer[key],
+                        value,
+                    )
+                self.assertNotIn("private-", json.dumps(projected))
+
+    def test_endpoint_unaligned_window_reads_containing_bucket(self):
+        bucket = (self.now // 300 - 2) * 300
+        self.start, self.end = bucket + 100, bucket + 200
+        events = []
+        for contract in (1, 2):
+            for first, last, suffix in (
+                (110, 120, "inside"),
+                (90, 110, "straddles"),
+                (10, 20, "before"),
+                (250, 290, "after"),
+            ):
+                events.append(
+                    {
+                        "time": bucket,
+                        "index": "adm_summary",
+                        "sourcetype": "adm:summary",
+                        "source": "adm:conversation",
+                        "host": self.token,
+                        "event": {
+                            "adm_record": "conversation",
+                            "contract_version": contract,
+                            "scope": self.token,
+                            "client_ip": self.ipv4,
+                            "server_ip": "203.0.113.8",
+                            "server_port": 443,
+                            "transport": "tcp",
+                            "rollup_id": f"{self.token}-{contract}-{suffix}",
+                            "first_seen": bucket + first,
+                            "last_seen": bucket + last,
+                            "records": 1,
+                        },
+                    }
+                )
+                if contract == 2:
+                    events.append(
+                        {
+                            "time": bucket,
+                            "index": "adm_summary",
+                            "sourcetype": "adm:summary",
+                            "source": "adm:traffic_observation",
+                            "host": self.token,
+                            "event": {
+                                "adm_record": "traffic_observation",
+                                "contract_version": 2,
+                                "scope": self.token,
+                                "rollup_id": f"{self.token}-obs-{suffix}",
+                                "source_ip": self.ipv4,
+                                "destination_ip": "203.0.113.8",
+                                "source_port": 50000,
+                                "destination_port": 443,
+                                "transport": "tcp",
+                                "first_seen": bucket + first,
+                                "last_seen": bucket + last,
+                                "records": 1,
+                                "metrics_authoritative": 0,
+                                "adm_profile_status": "mapped",
+                                "adm_quality_status": "accepted",
+                            },
+                        }
+                    )
+        self.load_rows(events)
+        # Indexing confirmation also has to include the containing bucket.
+        exact_start = self.start
+        self.start = bucket
+        try:
+            self._wait_for_count(
+                f'index=adm_summary host="{self.token}" | stats count', 12
+            )
+        finally:
+            self.start = exact_start
+        _, searches = self.build_queries([])
+        for built in searches["endpoint"]:
+            rows, _ = self._run(built["conversation"], earliest=bucket)
+            conversations = [
+                row for row in rows if row.get("row_type") == "conversation"
+            ]
+            self.assertEqual(len(conversations), 2)
+            self.assertEqual(
+                {int(row["adm_first"]) for row in conversations},
+                {bucket + 90, bucket + 110},
+            )
+            completion = [row for row in rows if row.get("row_type") == "completion"]
+            self.assertEqual(int(completion[0]["input_count"]), 2)
+            if built["observation"]:
+                observed_rows, _ = self._run(built["observation"], earliest=bucket)
+                observed = [
+                    row
+                    for row in observed_rows
+                    if row.get("row_type") == "traffic_observation"
+                ]
+                self.assertEqual(len(observed), 2)
+                self.assertEqual(
+                    {int(row["adm_first"]) for row in observed},
+                    {bucket + 90, bucket + 110},
+                )
 
     def test_endpoint_v1_v2_completion_and_v2_observation(self):
         events = [

@@ -76,6 +76,50 @@ describe("evidence contracts and completion", () => {
       ),
     ).toThrow();
   });
+  it("projects only bounded allowlisted DNS RR fields for each source", () => {
+    const streamSearch = buildDnsSearch(
+      {
+        source: "dns_stream",
+        state: "active",
+        indexes: ["dns"],
+        authorities: ["sensor-1"],
+        schemaQualified: false,
+      },
+      selection,
+    );
+    const hubbleSearch = buildDnsSearch(
+      {
+        source: "dns_hubble",
+        state: "active",
+        indexes: ["dns"],
+        authorities: ["sensor-1"],
+        schemaQualified: false,
+      },
+      selection,
+    );
+    for (const [search, path, prefix] of [
+      [streamSearch, '"answer_records"', "_dns_stream"],
+      [hubbleSearch, '"flow.l7.dns.answer_records"', "_dns_hubble"],
+    ]) {
+      expect(search).toContain(`json_array_to_mv(json_extract(_raw,${path}))`);
+      expect(search).toContain(`mvmap(${prefix}_answer_records_mv`);
+      expect(search).toContain('"address"');
+      expect(search).toContain('"target"');
+      expect(search).toContain("substr(tostring(");
+      expect(search).toContain("1,1025");
+      expect(search).toContain("mv_to_json_array(");
+      expect(search).toContain("true())");
+      expect(search).toContain("if(oversized=1,null(),json_array_to_mv(");
+      expect(search).toContain(`json_extract(${prefix}_answer_records)`);
+      expect(search).toContain("upper(tostring(");
+      expect(search).toContain('IN ("A","AAAA","1","28")');
+      expect(search).not.toContain(
+        `coalesce(json_extract(${prefix}_answer_records_mv,"ttl"))`,
+      );
+    }
+    expect(streamSearch).not.toContain('json_extract(_raw,"txt")');
+    expect(hubbleSearch).not.toContain('json_extract(_raw,"flow.l7.dns.txt")');
+  });
   const meta = (n: number) => ({
     kind: "dns_completion",
     schema_version: "1",

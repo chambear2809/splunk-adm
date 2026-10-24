@@ -69,7 +69,7 @@ describe("timeError", () => {
 });
 
 describe("bounded investigation job lifecycle", () => {
-  it("releases optional admission after synchronous SDK creation failure so retry can dispatch", async () => {
+  it("retains optional admission after untrackable SDK creation failure and queues retry", async () => {
     const budget = new OptionalJobBudget();
     runtime.create.mockImplementation(() => {
       throw new Error("SDK creation failed before a handle exists");
@@ -82,14 +82,21 @@ describe("bounded investigation job lifecycle", () => {
     await expect(
       budget.run("dns_stream", "first", client, bounded),
     ).rejects.toThrow(/could not be acknowledged/);
-    expect(budget.cleanupPending).toBe(0);
+    expect(budget.cleanupPending).toBe(1);
     expect(budget.cleanupUnverified).toBe(1);
-    await expect(
-      budget.run("dns_stream", "retry", client, bounded),
-    ).rejects.toThrow(/could not be acknowledged/);
-    expect(runtime.create).toHaveBeenCalledTimes(2);
-    expect(budget.cleanupPending).toBe(0);
-    expect(budget.cleanupUnverified).toBe(2);
+    const retryController = new AbortController();
+    const retry = budget.run("dns_stream", "retry", client, {
+      ...bounded,
+      signal: retryController.signal,
+    });
+    const cancelled = expect(retry).rejects.toThrow(/cancelled/);
+    await Promise.resolve();
+    expect(runtime.create).toHaveBeenCalledTimes(1);
+    retryController.abort();
+    await cancelled;
+    expect(runtime.create).toHaveBeenCalledTimes(1);
+    expect(budget.cleanupPending).toBe(1);
+    expect(budget.cleanupUnverified).toBe(1);
   });
   it("observes SID creation failures without an unhandled observable error", async () => {
     runtime.create.mockImplementation(() => ({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import hubbleFixture from "../../../fixtures/dns/hubble-response.json";
 import streamFixture from "../../../fixtures/dns/stream-transaction.json";
-import type { EvidenceSelection } from "./evidence";
+import { validateDnsResult, type EvidenceSelection } from "./evidence";
 import {
   normalizeDns,
   type DnsAdapterConfig,
@@ -630,6 +630,59 @@ describe("normalizeDns", () => {
       "worker-a",
       "sensor-east",
     ]);
+  });
+
+  it("rejects malformed Hubble authority metadata without invalidating another source", async () => {
+    const raw = JSON.parse(hubbleFixture._raw);
+    raw.node_name = `worker-a/${"x".repeat(1025)}`;
+    const malformed = await normalizeDns(
+      "dns_hubble",
+      [row(raw, { host: "worker-a" })],
+      config(),
+      selection(),
+      [],
+    );
+    const valid = await normalizeDns(
+      "dns_stream",
+      [streamFixture as Row],
+      config(),
+      selection(),
+      [],
+    );
+    expect(malformed).toMatchObject({ records: [], rejected: 1 });
+    expect(() =>
+      validateDnsResult({
+        schemaVersion: 1,
+        selection: selection(),
+        capturedAt: 1791373600,
+        inspectedWindow: { start: 1791369800, end: 1791373600 },
+        configurationFingerprint: selection().configurationFingerprint,
+        configurationChanged: false,
+        sources: [
+          {
+            source: "dns_stream",
+            state: "complete",
+            inputCount: 1,
+            inputCapped: false,
+            outputCapped: false,
+            rejected: valid.rejected,
+            expansionCapped: valid.expansionCapped,
+          },
+          {
+            source: "dns_hubble",
+            state: "complete",
+            inputCount: 1,
+            inputCapped: false,
+            outputCapped: false,
+            rejected: malformed.rejected,
+            expansionCapped: malformed.expansionCapped,
+          },
+        ],
+        records: valid.records,
+        outputCapped: false,
+        coverage: ["test coverage"],
+      }),
+    ).not.toThrow();
   });
 
   it("throws when the adapter receives an oversized input instead of silently implying completeness", async () => {
