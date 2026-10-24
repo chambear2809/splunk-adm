@@ -173,8 +173,14 @@ export class ToolkitSearchClient implements SearchClient {
     } catch {
       if (!request.optionalSource) optionalJobs.coreFinished();
       // The SDK threw before a job handle or SID existed. Native creation is
-      // untrackable, so report uncertainty and retain browser admission.
+      // untrackable, so report uncertainty and retain browser admission. A
+      // budgeted job auto-cancels within serverSeconds, so release afterwards.
       request.onLifecycle?.({ state: "cleanup_unverified" });
+      if (request.optionalSource && request.budget)
+        setTimeout(
+          () => request.onLifecycle?.({ state: "released" }),
+          request.budget.serverSeconds * 1000 + 5000,
+        );
       return Promise.reject(
         new Error("Splunk job creation could not be acknowledged."),
       );

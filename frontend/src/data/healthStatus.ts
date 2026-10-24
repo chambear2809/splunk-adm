@@ -18,6 +18,7 @@ import type { SearchClient } from "./searchClient";
 import {
   applicableJobs,
   expectationFor,
+  isCoreSource,
   SOURCE_DEFINITIONS,
   selectedQualitySources,
   type DeploymentSnapshot,
@@ -159,6 +160,10 @@ export function HealthProvider({
 }
 export const useHealthStatus = () => useContext(HealthContext);
 
+const isCoreSourceId = (id: string) => {
+  const definition = SOURCE_DEFINITIONS.find((entry) => entry.id === id);
+  return !definition || isCoreSource(definition);
+};
 export function healthIndicator(
   report: HealthReport | undefined,
   loading: boolean,
@@ -185,8 +190,7 @@ export function healthIndicator(
   const sources = report.sources.filter(
     (source) =>
       source.id !== undefined &&
-      SOURCE_DEFINITIONS.find((definition) => definition.id === source.id)
-        ?.readinessImpact !== "optional_evidence" &&
+      isCoreSourceId(source.id) &&
       expectationFor(report.deployment, source.id) === "active",
   );
   if (!sources.length) return "unknown";
