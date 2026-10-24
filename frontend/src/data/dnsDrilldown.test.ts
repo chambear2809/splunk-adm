@@ -65,12 +65,8 @@ const configClient: EvidenceConfigClient = {
   read: async () => structuredClone(config),
 };
 describe("DNS record drilldown window", () => {
-  it("windows on the indexed _time even when the payload end is more than a second later", async () => {
-    const slow = {
-      ...stream,
-      _raw: stream._raw.replace('"end":1791373500.125', '"end":1791373505.4'),
-    };
-    const loader: SearchClient = { search: async () => envelope([slow]) };
+  it("windows on Stream response endtime rather than request start or delayed indexing", async () => {
+    const loader: SearchClient = { search: async () => envelope([stream]) };
     const result = await loadDnsEvidence(
       loader,
       selection,
@@ -78,9 +74,11 @@ describe("DNS record drilldown window", () => {
       configClient,
     );
     const record = result.records[0];
-    expect(record.eventTime).toBeGreaterThan(record.rowTime! + 1);
-    expect(record.rowTime).toBe(1791373500.125);
-    const search = vi.fn(async () => envelope([slow]));
+    expect(record.eventTime).toBe(1791373500.125);
+    expect(record.requestStart).toBe(1791373500.1);
+    expect(record.rowTime).toBe(record.eventTime);
+    expect(record.indexedTime).toBeGreaterThan(record.eventTime);
+    const search = vi.fn(async () => envelope([stream]));
     await inspectDnsRecord(
       { search },
       selection,
@@ -91,8 +89,9 @@ describe("DNS record drilldown window", () => {
     const request = (
       search.mock.calls[0] as unknown as [{ earliest: string; latest: string }]
     )[0];
-    expect(Number(request.earliest)).toBeLessThanOrEqual(record.rowTime!);
-    expect(Number(request.latest)).toBeGreaterThanOrEqual(record.rowTime!);
+    expect(Number(request.earliest)).toBe(Math.floor(record.rowTime!) - 1);
+    expect(Number(request.latest)).toBe(Math.ceil(record.rowTime!) + 1);
+    expect(Number(request.latest)).toBeLessThan(record.indexedTime);
   });
   it("falls back to the event time when the record carries no _time", async () => {
     const loader: SearchClient = { search: async () => envelope([stream]) };

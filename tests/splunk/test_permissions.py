@@ -26,7 +26,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 EXPECTED = json.loads((HERE / "expected" / "graph.json").read_text(encoding="utf-8"))
-MGMT = "https://127.0.0.1:8089"
+MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 APP = "splunk_adm"
 ALLOWED_INDEXES = [
     "netflow",
@@ -475,7 +476,7 @@ class RestrictedViewerTest(unittest.TestCase):
                 "exec",
                 "-u",
                 "root",
-                "adm-splunk-lab",
+                CONTAINER,
                 "test",
                 "-e",
                 local_path,
@@ -487,7 +488,7 @@ class RestrictedViewerTest(unittest.TestCase):
         original_file = None
         if exists.returncode == 0:
             original_file = subprocess.check_output(
-                ["docker", "exec", "-u", "root", "adm-splunk-lab", "cat", local_path],
+                ["docker", "exec", "-u", "root", CONTAINER, "cat", local_path],
                 timeout=30,
             )
 
@@ -502,7 +503,7 @@ class RestrictedViewerTest(unittest.TestCase):
                         "exec",
                         "-u",
                         "root",
-                        "adm-splunk-lab",
+                        CONTAINER,
                         "rm",
                         "-f",
                         local_path,
@@ -519,7 +520,7 @@ class RestrictedViewerTest(unittest.TestCase):
                         "-i",
                         "-u",
                         "root",
-                        "adm-splunk-lab",
+                        CONTAINER,
                         "sh",
                         "-c",
                         'cat > "$1"',

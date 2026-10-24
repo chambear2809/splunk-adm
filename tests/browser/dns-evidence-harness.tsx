@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import { EndpointsPage } from "../../frontend/src/pages/EndpointsPage";
-import { DnsEvidencePanel } from "../../frontend/src/DnsEvidencePanel";
+import { EndpointEvidencePanels } from "../../frontend/src/EndpointEvidencePanels";
 import type {
   EvidenceConfiguration,
   EvidenceConfigClient,
@@ -44,6 +44,17 @@ const config: EvidenceConfiguration = {
       schemaQualified: false,
     },
   ],
+  supplemental: (
+    ["proxy_envoy", "aws_vpc_flow", "asset_history", "o11y_health"] as const
+  ).map((source) => ({
+    source,
+    state: "not_selected" as const,
+    indexes: [],
+    authorities: [],
+    schemaQualified: false,
+    staleAfterSeconds: 3600,
+    mappings: [],
+  })),
 };
 const configClient: EvidenceConfigClient = {
   read: async () => structuredClone(config),
@@ -162,7 +173,7 @@ createRoot(document.getElementById("root")!).render(
         end: now,
       }}
       renderEvidence={(selection) => (
-        <DnsEvidencePanel
+        <EndpointEvidencePanels
           selection={selection}
           client={client}
           configurationClient={configClient}

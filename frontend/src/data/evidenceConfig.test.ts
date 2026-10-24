@@ -25,9 +25,18 @@ function fixture({
   invalidIdentityEpoch = false,
   legacy = false,
   placeholderIndex = false,
+  optional = false,
+  optionalPlaceholder = false,
+  o11y = false,
+  invalidMms = false,
 } = {}) {
   const settings = defaultExpectations();
   if (active) settings.sources.dns_stream.state = "active";
+  if (optional) {
+    settings.sources.proxy_envoy.state = "active";
+    settings.sources.proxy_envoy.staleAfterSeconds = 1500;
+  }
+  if (o11y) settings.sources.o11y_health.state = "active";
   const deployment: DeploymentClient = {
     read: async () => ({
       state: "configured",
@@ -60,6 +69,33 @@ function fixture({
           },
         ]
       : []),
+    ...(optional
+      ? [
+          {
+            _key: "proxy",
+            observer_kind: "envoy_proxy",
+            observer: "proxy1",
+            scope: "prod",
+            cluster: "",
+            mapping_status: "verified",
+          },
+        ]
+      : []),
+    ...(o11y
+      ? [
+          {
+            _key: "o11y",
+            observer_kind: "o11y_export",
+            observer: "o11y-exporter",
+            scope: "prod",
+            cluster: "cluster-a",
+            mapping_status: "verified",
+            organization_id: "org-a",
+            realm: "us0",
+            apm_mms_id: invalidMms ? "bad,id" : "mms-123",
+          },
+        ]
+      : []),
   ];
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -87,6 +123,12 @@ function fixture({
           adm_dns_max_age_seconds: invalidBounds ? "10000000" : "3600",
           adm_dns_clock_uncertainty_seconds: "unknown",
           adm_dns_stream_schema_qualified: "0",
+          adm_index_proxy_envoy: optionalPlaceholder
+            ? "index=unconfigured_optional"
+            : "index=proxy_evidence",
+          adm_proxy_envoy_schema_qualified: "0",
+          adm_index_o11y_health: "index=atlas_o11y",
+          adm_o11y_health_schema_qualified: "1",
         };
         body = {
           settings: [
@@ -144,6 +186,9 @@ describe("caller-context evidence configuration", () => {
     const { client, fetcher } = fixture({ active: false });
     const config = await client.read(undefined, ["10.0.0.1"], "prod");
     expect(config.dns.every((s) => s.state === "not_selected")).toBe(true);
+    expect(config.supplemental?.every((s) => s.state === "not_selected")).toBe(
+      true,
+    );
     expect(
       fetcher.mock.calls.every(([url]) =>
         String(url).includes('"owner":"nobody"'),
@@ -154,6 +199,53 @@ describe("caller-context evidence configuration", () => {
         String(init?.body).includes("adm_index_dns_stream"),
       ),
     ).toBe(false);
+  });
+  it("selects only a verified optional authority and rejects its placeholder index", async () => {
+    const ready = await fixture({ active: false, optional: true }).client.read(
+      undefined,
+      [],
+      "prod",
+    );
+    expect(
+      ready.supplemental?.find((s) => s.source === "proxy_envoy"),
+    ).toMatchObject({
+      state: "active",
+      authorities: ["proxy1"],
+      indexes: ["proxy_evidence"],
+      schemaQualified: false,
+      staleAfterSeconds: 1500,
+    });
+    const placeholder = await fixture({
+      active: false,
+      optional: true,
+      optionalPlaceholder: true,
+    }).client.read(undefined, [], "prod");
+    expect(
+      placeholder.supplemental?.find((s) => s.source === "proxy_envoy")?.error,
+    ).toBeDefined();
+  });
+  it("requires an exact custom MMS ID before exposing the Observability authority", async () => {
+    const qualified = await fixture({ active: false, o11y: true }).client.read(
+      undefined,
+      [],
+      "prod",
+    );
+    expect(
+      qualified.supplemental?.find((s) => s.source === "o11y_health"),
+    ).toMatchObject({
+      state: "active",
+      authorities: ["o11y-exporter"],
+      mappings: [{ apm_mms_id: "mms-123" }],
+      schemaQualified: true,
+    });
+    const unqualified = await fixture({
+      active: false,
+      o11y: true,
+      invalidMms: true,
+    }).client.read(undefined, [], "prod");
+    expect(
+      unqualified.supplemental?.find((s) => s.source === "o11y_health")?.error,
+    ).toBeDefined();
   });
   it("uses the explicit nobody app-merged view despite a private shadow", async () => {
     const { client, fetcher } = fixture({ privateShadow: true });

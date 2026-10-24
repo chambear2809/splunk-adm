@@ -17,8 +17,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SECRETS = Path(os.environ.get("ADM_LAB_SECRETS", str(HERE / ".lab-secrets")))
-MGMT = "https://127.0.0.1:8089"
-HEC = "https://127.0.0.1:8088"
+MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
+HEC = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_HEC_PORT', '8088'))}"
 APP = "splunk_adm"
 MAX_BATCH_BYTES = 5 * 1024 * 1024
 

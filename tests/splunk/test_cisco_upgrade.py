@@ -983,7 +983,11 @@ class CiscoContractUpgradeTest(unittest.TestCase):
             self.fail("validation scenario file must be owner-only and not a symlink")
         scenario = json.loads(scenario_path.read_text(encoding="utf-8"))
 
-        api = Rest(token, uri="https://localhost:8089", ca_file=str(ca_path))
+        api = Rest(
+            token,
+            uri=f"https://localhost:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}",
+            ca_file=str(ca_path),
+        )
         migration = Migration(api, Journal(journal_path))
         # Cooperate with the repository-wide fixed-container lock. When the
         # suite is launched through tools/lab_lock.py this validates inherited

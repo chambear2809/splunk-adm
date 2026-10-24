@@ -5,9 +5,17 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 IMAGE="splunk/splunk:10.6.0.5"
-NAME="adm-splunk-lab"
-SECRETS="${ADM_LAB_SECRETS:-$HERE/.lab-secrets}"
-EXTRACTED="$ROOT/research/extracted"
+NAME="${ADM_LAB_NAME:-adm-splunk-lab}"
+WEB_PORT="${ADM_LAB_WEB_PORT:-8000}"
+MGMT_PORT="${ADM_LAB_MGMT_PORT:-8089}"
+HEC_PORT="${ADM_LAB_HEC_PORT:-8088}"
+[[ "$NAME" =~ ^adm-[a-z0-9-]+$ ]] || { echo "invalid lab container name" >&2; exit 2; }
+for port in "$WEB_PORT" "$MGMT_PORT" "$HEC_PORT"; do
+  [[ "$port" =~ ^[0-9]{2,5}$ ]] && ((port >= 1024 && port <= 65535)) || { echo "invalid lab port" >&2; exit 2; }
+done
+SECRETS="${ADM_LAB_SECRETS:-$HERE/.lab-secrets${ADM_LAB_NAME:+-$NAME}}"
+export ADM_LAB_SECRETS="$SECRETS"
+EXTRACTED="${ADM_LAB_EXTRACTED:-$ROOT/research/extracted}"
 TAS=(
   "splunk-add-on-for-stream-wire-data_816/Splunk_TA_stream_wire_data"
   "cisco-security-cloud_372/CiscoSecurityCloud"
@@ -18,7 +26,7 @@ TAS=(
 )
 VENDOR_APP="cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app"
 SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros collections ipfixmap)
-LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y)
+LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y atlas_proxy atlas_cloud atlas_asset atlas_o11y)
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
@@ -58,7 +66,7 @@ cmd_up() {
   else
     # --env-file keeps the generated password out of the process list and stdout.
     docker run -d --name "$NAME" --platform linux/amd64 \
-      -p 127.0.0.1:8000:8000 -p 127.0.0.1:8089:8089 -p 127.0.0.1:8088:8088 \
+      -p "127.0.0.1:$WEB_PORT:8000" -p "127.0.0.1:$MGMT_PORT:8089" -p "127.0.0.1:$HEC_PORT:8088" \
       -e SPLUNK_START_ARGS=--accept-license \
       -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
       --env-file "$SECRETS" \
@@ -188,9 +196,12 @@ cmd_down() {
 
 cmd_purge() {
   cmd_down
-  docker rmi "$IMAGE" >/dev/null 2>&1 || true
+  if [[ "$NAME" == "adm-splunk-lab" ]]; then
+    docker rmi "$IMAGE" >/dev/null 2>&1 || true
+    echo "Removed lab image $IMAGE."
+  fi
   rm -f "$SECRETS"
-  echo "Removed image $IMAGE and lab secrets."
+  echo "Removed lab secrets $SECRETS."
 }
 
 case "${1:-}" in

@@ -1,0 +1,8 @@
+{
+  "host": "edge-gateway-01",
+  "index": "proxy_logs",
+  "_time": "1791373500.125",
+  "_indextime": "1791373502.500",
+  "event_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "_raw": "{\"schema\":\"application_atlas.envoy_http_access.v1\",\"routing_authority\":\"prod\",\"observer_id\":\"edge-gateway-01\",\"access_log_type\":\"DownstreamEnd\",\"stream_id\":\"stream-1\",\"start_time\":\"1791373500.125\",\"duration_ms\":25,\"downstream_direct_remote_ip\":\"192.0.2.10\",\"downstream_direct_remote_port\":54321,\"downstream_direct_local_ip\":\"198.51.100.20\",\"downstream_direct_local_port\":443,\"upstream_local_ip\":\"203.0.113.2\",\"upstream_local_port\":45678,\"upstream_remote_ip\":\"203.0.113.8\",\"upstream_remote_port\":8443,\"upstream_cluster\":\"payments-v2\",\"route_name\":\"payments-route\",\"response_code\":200,\"response_flags\":\"-\",\"upstream_attempt_count\":1}"
+}

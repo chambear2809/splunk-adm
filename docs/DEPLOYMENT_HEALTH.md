@@ -1,6 +1,6 @@
 # Deployment expectations and health
 
-The source registry classifies readiness impact. Existing sources are `core`; `dns_stream` and `dns_hubble` are `optional_evidence` and default to unselected, including when old settings omit them. Optional DNS diagnostics are displayed separately and do not affect core readiness, required jobs, quality warnings or the Python readiness exit status. DNS-only selection does not establish a traffic pipeline. DNS is inspected only after an explicit scoped investigation; no background DNS macro probes are dispatched. See [DNS operations](operators/dns-evidence.md).
+The source registry classifies readiness impact. Existing sources are `core`; `dns_stream`, `dns_hubble`, `proxy_envoy`, `aws_vpc_flow`, `asset_history`, and `o11y_health` are `optional_evidence` and default to unselected, including when old settings omit them. Optional diagnostics are displayed separately and do not affect core readiness, required jobs, quality warnings or the Python readiness exit status. Optional-only selection does not establish a traffic pipeline. These sources are inspected only after an explicit scoped investigation; no background optional evidence macro probes are dispatched. See [operator handouts](operators/README.md#optional-evidence-and-endpointservice-investigations).
 
 Application Atlas uses `config/deployment-health.json` for source names, evidence
 types, cadence defaults, active contract dependencies, builder schedules and

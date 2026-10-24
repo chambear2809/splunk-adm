@@ -278,7 +278,7 @@ function optionalEvidenceRows(
       receipt: "unknown",
       status,
       diagnostic:
-        "Optional DNS evidence is shown separately. Runtime diagnostics require an explicit integration request.",
+        "Optional evidence is shown separately. Runtime diagnostics require an explicit scoped investigation.",
     };
   });
 }

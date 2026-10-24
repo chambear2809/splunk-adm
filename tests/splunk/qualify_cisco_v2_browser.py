@@ -208,7 +208,9 @@ def main():
             )
         ca = os.environ["ADM_CISCO_MIGRATION_CA_FILE"]
         lab._CTX = ssl.create_default_context(cafile=ca)
-        lab.MGMT = "https://localhost:8089"
+        lab.MGMT = (
+            f"https://localhost:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
+        )
         initialized = json.loads(args.initialization.read_text())
         raw_manifest = ROOT / initialized["raw_dir"] / "capture-manifest.json"
         if (

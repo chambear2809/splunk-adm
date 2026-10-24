@@ -15,7 +15,10 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
+# The recovery action executes inside the container, where Splunk always
+# listens on 8089. ADM_LAB_MGMT_PORT remaps only the host-facing port.
+MGMT = "https://localhost:8089"
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 STATE_PATH = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_recovery_state"
 AUDIT_PATH = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_recovery_audit"
@@ -183,7 +186,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
             "recovery",
             {
                 "enabled": "1",
-                "management_uri": "https://localhost:8089",
+                "management_uri": MGMT,
                 "ca_file": SERVER_CA,
             },
         )
@@ -312,7 +315,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
             "recovery",
             {
                 "enabled": "0",
-                "management_uri": "https://localhost:8089",
+                "management_uri": MGMT,
                 "ca_file": SERVER_CA,
             },
         )
@@ -327,7 +330,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
                 "recovery",
                 {
                     "enabled": "1",
-                    "management_uri": "https://localhost:8089",
+                    "management_uri": MGMT,
                     "ca_file": SERVER_CA,
                 },
             )

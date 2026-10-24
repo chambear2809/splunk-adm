@@ -137,10 +137,22 @@ function fingerprint(row: Row): string | undefined {
     return supplied;
   return undefined;
 }
-function eventTime(row: Row, raw: Row): number | undefined {
-  return epoch(
-    pick(raw, "event_time", "timestamp", "end", "time", "_time") ?? row._time,
-  );
+function eventTime(row: Row, raw: Row, stream: boolean): number | undefined {
+  // Stream 8.1.6 uses `timestamp` for the transaction start and `endtime` for
+  // its end. Its TA maps `endtime` to `_time`; never treat `timestamp` as the
+  // response time when the explicit end field is absent.
+  const value = stream
+    ? (pick(
+        raw,
+        "endtime",
+        "end",
+        "response_end",
+        "event_end",
+        "interval_end",
+      ) ?? row._time)
+    : (pick(raw, "event_time", "timestamp", "end", "time", "_time") ??
+      row._time);
+  return epoch(value);
 }
 function ownerFor(
   client: string | undefined,
@@ -300,9 +312,13 @@ function parseOne(
   const supportedAddressTypes = queryTypes.filter(
     (t) => t === "A" || t === "AAAA",
   );
-  const eventTimeValue = eventTime(row, stream ? raw : { ...raw, ...flow });
   const indexedTime = finite(row._indextime);
   const rowTime = epoch(row._time);
+  const eventTimeValue = eventTime(
+    row,
+    stream ? raw : { ...raw, ...flow },
+    stream,
+  );
   if (
     eventTimeValue === undefined ||
     eventTimeValue < 0 ||
@@ -421,12 +437,21 @@ function parseOne(
   const ttlQualified = config.schemaQualified;
   // A scalar Hubble TTL never gets copied onto unordered IP answers.
   // `response_time` is a latency field in Stream (microseconds), never an epoch.
-  const responseStart = epoch(
-    pick(raw, "start", "response_start", "interval_start"),
-  );
-  const responseEnd = epoch(
-    pick(raw, "end", "response_end", "event_end", "interval_end"),
-  );
+  const responseStartValue = stream
+    ? pick(raw, "timestamp", "start", "response_start", "interval_start")
+    : pick(raw, "start", "response_start", "interval_start");
+  const responseEndValue = stream
+    ? pick(raw, "endtime", "end", "response_end", "event_end", "interval_end")
+    : pick(raw, "end", "response_end", "event_end", "interval_end");
+  const responseStart = epoch(responseStartValue);
+  const responseEnd = epoch(responseEndValue);
+  const invalidStreamInterval =
+    stream &&
+    ((responseStartValue !== undefined && responseStart === undefined) ||
+      (responseEndValue !== undefined && responseEnd === undefined) ||
+      (responseStart !== undefined &&
+        responseEnd !== undefined &&
+        responseEnd < responseStart));
   const latencyRaw = finite(pick(raw, "response_time", "duration", "latency"));
   const latencySeconds =
     latencyRaw !== undefined && latencyRaw >= 0
@@ -530,6 +555,10 @@ function parseOne(
   }
   if (stream && responseEnd === undefined) {
     limitations.push("stream_response_time_basis_unknown");
+    associationSuppressed = true;
+  }
+  if (invalidStreamInterval) {
+    limitations.push("stream_response_interval_invalid");
     associationSuppressed = true;
   }
   if (reportedAddressCapped) {

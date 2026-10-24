@@ -1,9 +1,9 @@
 import type { RunResult, SearchClient, SearchRequest } from "./searchClient";
-import type { DnsSource } from "./evidence";
+import type { OptionalSource } from "./evidence";
 
 interface Pending {
   key: string;
-  source: DnsSource;
+  source: OptionalSource;
   controller: AbortController;
   consumers: Set<AbortSignal>;
   promise: Promise<RunResult>;
@@ -11,7 +11,7 @@ interface Pending {
 }
 /** Browser-local admission control; server/role quotas remain authoritative. */
 export class OptionalJobBudget {
-  private leases = new Map<DnsSource, Pending>();
+  private leases = new Map<OptionalSource, Pending>();
   private queue: Pending[] = [];
   private inflight = new Map<string, Pending>();
   private core = 0;
@@ -50,7 +50,7 @@ export class OptionalJobBudget {
     }
   }
   run(
-    source: DnsSource,
+    source: OptionalSource,
     key: string,
     client: SearchClient,
     request: SearchRequest,

@@ -11,13 +11,14 @@ import {
   jobRunAssessment,
   loadHealth,
   loadHealthJobs,
-  SOURCE_NAMES,
   JOB_NAMES,
   qualityRows,
   type HealthReport,
 } from "./health";
 import {
   defaultExpectations,
+  SOURCE_DEFINITIONS,
+  isCoreSource,
   type DeploymentSnapshot,
 } from "./data/deploymentHealth";
 import type { SearchClient } from "./data/searchClient";
@@ -62,7 +63,9 @@ describe("pipeline health", () => {
     }
   });
   it("preserves unknown values instead of inventing successful empty results", () => {
-    expect(sourceRows([])).toHaveLength(SOURCE_NAMES.length - 2);
+    expect(sourceRows([])).toHaveLength(
+      SOURCE_DEFINITIONS.filter(isCoreSource).length,
+    );
     expect(jobRows([])).toHaveLength(JOB_NAMES.length);
     expect(sourceStatus(sourceRows([])[0], now)).toBe("Unavailable");
     expect(jobStatus(jobRows([])[0], now)).toBe("Configuration unavailable");
@@ -416,10 +419,17 @@ describe("deployment health evidence", () => {
     expect(result.sources.some((source) => source.id?.startsWith("dns_"))).toBe(
       false,
     );
-    expect(result.optionalEvidence.map((item) => item.status)).toEqual([
-      "configured",
-      "not_configured",
-    ]);
+    expect(
+      result.optionalEvidence.find((item) => item.id === "dns_stream")?.status,
+    ).toBe("configured");
+    expect(
+      result.optionalEvidence.find((item) => item.id === "dns_hubble")?.status,
+    ).toBe("not_configured");
+    expect(
+      result.optionalEvidence
+        .filter((item) => !item.id.startsWith("dns_"))
+        .every((item) => item.status === "not_selected"),
+    ).toBe(true);
   });
 
   it("preserves staged V2 and unselected sources without demanding their receipt", () => {

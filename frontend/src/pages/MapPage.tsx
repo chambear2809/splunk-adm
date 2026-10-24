@@ -16,6 +16,7 @@ import type { View } from "../layout";
 import { MapView } from "../MapView";
 import { Inspector } from "../Inspector";
 import { MapDnsInspection } from "../MapDnsInspection";
+import { MapServiceHealthInspection } from "../MapServiceHealthInspection";
 import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
@@ -1071,6 +1072,16 @@ export function MapPage({
               {selection && (
                 <MapDnsInspection
                   key={`${user ?? "anonymous"}:${graph.snapshot_id}:${selection.kind}:${selection.id}:${mode}`}
+                  graph={graph}
+                  index={index}
+                  selection={selection}
+                  client={client}
+                  live={mode === "live"}
+                />
+              )}
+              {selection && (
+                <MapServiceHealthInspection
+                  key={`service-health:${graph.snapshot_id}:${selection.kind}:${selection.id}:${mode}`}
                   graph={graph}
                   index={index}
                   selection={selection}

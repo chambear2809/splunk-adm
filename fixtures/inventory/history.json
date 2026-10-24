@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "authority": "cmdb-prod",
+  "snapshot_id": "export-2026-10-23T120000Z",
+  "snapshot_at": "2026-10-23T12:00:00Z",
+  "snapshot_complete": true,
+  "records": [
+    {
+      "record_id": "assignment-web-a",
+      "revision": 1,
+      "asset_id": "asset-web-a",
+      "asset_name": "web-a",
+      "service_id": "service-checkout",
+      "service_name": "Checkout",
+      "environment": "production",
+      "owner_id": "team-commerce",
+      "owner_name": "Commerce Platform",
+      "network_id": "vpc-prod-east",
+      "scope": "prod-east",
+      "ip": "10.20.0.10",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-20T08:00:00Z",
+      "valid_to": "2026-10-21T08:00:00Z"
+    },
+    {
+      "record_id": "assignment-web-b",
+      "revision": 1,
+      "asset_id": "asset-web-b",
+      "asset_name": "web-b",
+      "service_id": "service-checkout",
+      "service_name": "Checkout",
+      "environment": "production",
+      "owner_id": "team-commerce",
+      "owner_name": "Commerce Platform",
+      "network_id": "vpc-prod-east",
+      "scope": "prod-east",
+      "ip": "10.20.0.10",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-21T08:00:00Z",
+      "valid_to": null
+    },
+    {
+      "record_id": "assignment-db-a",
+      "revision": 1,
+      "asset_id": "asset-db-a",
+      "asset_name": "db-a",
+      "service_id": "service-checkout-db",
+      "service_name": "Checkout DB",
+      "scope": "prod-east",
+      "ip": "10.20.0.20",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-10-18T00:00:00Z",
+      "valid_to": null
+    }
+  ]
+}

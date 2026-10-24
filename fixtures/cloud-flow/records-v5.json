@@ -1,0 +1,21 @@
+{
+  "contract": "AWS VPC Flow Logs custom format v5, exact fixed 29-field order",
+  "records": [
+    {
+      "id": "accepted-flow",
+      "raw": "5 203.0.113.25 10.0.1.25 49152 443 6 1791373400 1791373460 IPv4 4 1500 123456789012 vpc-0abc1234 subnet-0def1234 i-0abc1234 eni-0def1234 us-east-1 use1-az1 - - ACCEPT 19 203.0.113.25 10.0.1.25 - - 1 ingress OK"
+    },
+    {
+      "id": "skipped-capture-interval",
+      "raw": "5 - - - - - 1791373400 1791373460 - - - 123456789012 vpc-0abc1234 subnet-0def1234 - eni-0def1234 us-east-1 use1-az1 - - - - - - - - - - SKIPDATA"
+    },
+    {
+      "id": "no-data-capture-interval",
+      "raw": "5 - - - - - 1791373400 1791373460 - - - 123456789012 vpc-0abc1234 subnet-0def1234 - eni-0def1234 us-east-1 use1-az1 - - - - - - - - - - NODATA"
+    },
+    {
+      "id": "address-aware-nat-flow",
+      "raw": "5 10.0.1.25 198.51.100.9 443 51820 6 1791373400 1791373460 IPv4 7 2200 123456789012 vpc-0abc1234 subnet-0def1234 i-0abc1234 eni-0def1234 us-east-1 use1-az1 - - REJECT 2 10.0.1.25 198.51.100.9 - - 2 egress OK"
+    }
+  ]
+}

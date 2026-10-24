@@ -34,7 +34,7 @@ from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import Workload, iter_events, manifest  # noqa: E402
 from stage_lab_package import stage_package  # noqa: E402
 
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 COLLECTIONS = (
     "adm_observer_scope",
     "adm_ip_identity",
@@ -84,10 +84,31 @@ def warnings(messages):
 
 
 def validate_ports(ports):
-    for port in ("8088/tcp", "8089/tcp"):
-        bindings = ports.get(port) or []
-        if bindings != [{"HostIp": "127.0.0.1", "HostPort": port.split("/")[0]}]:
-            raise ValueError(f"Refusing benchmark: {port} must bind only to localhost")
+    for container_port, env_name, default in (
+        ("8088/tcp", "ADM_LAB_HEC_PORT", "8088"),
+        ("8089/tcp", "ADM_LAB_MGMT_PORT", "8089"),
+    ):
+        host_port = os.environ.get(env_name, default)
+        bindings = ports.get(container_port) or []
+        if bindings != [{"HostIp": "127.0.0.1", "HostPort": host_port}]:
+            raise ValueError(
+                f"Refusing benchmark: {container_port} must bind only to localhost:{host_port}"
+            )
+
+
+def validate_lab_target(lab_client=None):
+    client = lab if lab_client is None else lab_client
+    if not re.fullmatch(r"adm-[a-z0-9-]+", CONTAINER):
+        raise ValueError("Refusing benchmark: invalid lab container name")
+    for actual, env_name, default in (
+        (client.MGMT, "ADM_LAB_MGMT_PORT", "8089"),
+        (client.HEC, "ADM_LAB_HEC_PORT", "8088"),
+    ):
+        port = os.environ.get(env_name, default)
+        if not port.isascii() or not port.isdecimal() or not 1024 <= int(port) <= 65535:
+            raise ValueError(f"Refusing benchmark: invalid {env_name}")
+        if actual != f"https://127.0.0.1:{port}":
+            raise ValueError("Benchmark is restricted to the disposable localhost lab")
 
 
 def local_docker_endpoint():
@@ -267,8 +288,7 @@ def request(method, path, data=None, timeout=120):
 
 def preflight():
     local_docker_endpoint()
-    if lab.MGMT != "https://127.0.0.1:8089" or lab.HEC != "https://127.0.0.1:8088":
-        raise ValueError("Benchmark is restricted to the disposable localhost lab")
+    validate_lab_target()
     validate_ports(
         json.loads(
             command(

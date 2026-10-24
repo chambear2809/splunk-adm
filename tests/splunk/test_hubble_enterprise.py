@@ -26,7 +26,7 @@ ROOT = HERE.parents[1]
 SAMPLE = (
     ROOT / "fixtures" / "samples" / "hubble-enterprise" / "enterprise-hubble.ndjson"
 )
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 INDEX_SPL = 'index=cilium_hubble sourcetype="cilium:hubble:flow"'
 FIELDS = (

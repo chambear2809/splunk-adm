@@ -271,6 +271,16 @@ class CaptureNetworkingTest(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 require_local_lab(lab)
+        remote = SimpleNamespace(
+            MGMT="https://192.0.2.1:8089", HEC="https://192.0.2.1:8088"
+        )
+        with (
+            patch("benchmark_pipeline.local_docker_endpoint"),
+            patch("benchmark_pipeline.command") as command,
+        ):
+            with self.assertRaises(ValueError):
+                require_local_lab(remote)
+            command.assert_not_called()
 
     def test_window_rejects_search_text_and_invalid_bounds(self):
         for bounds in (
@@ -467,13 +477,14 @@ class CapturePackageFingerprintTest(unittest.TestCase):
             ),
             patch.object(networking, "ROOT", self.root),
             patch.object(networking, "require_local_lab"),
+            patch("benchmark_pipeline.CONTAINER", "adm-atlas-test"),
             patch.object(
                 networking.subprocess,
                 "check_output",
                 return_value="".join(
                     prefix + name + "\n" for name in sorted(self.installed)
                 ).encode(),
-            ),
+            ) as listing,
             patch.object(
                 networking.subprocess,
                 "run",
@@ -493,6 +504,9 @@ class CapturePackageFingerprintTest(unittest.TestCase):
             )
             self.assertEqual(docker.call_count, 1)
             self.assertIn("sha256sum", docker.call_args.args[0])
+            self.assertEqual(docker.call_args.args[0][4], "adm-atlas-test")
+            if supplied:
+                self.assertEqual(listing.call_args.args[0][2], "adm-atlas-test")
             return evidence
 
     def test_exact_archive_and_source_hashes_are_separately_bound(self):

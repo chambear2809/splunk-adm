@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { optionalJobs } from "./optionalJobs";
+import { OptionalJobBudget, optionalJobs } from "./optionalJobs";
 import {
   SearchResultLimitError,
   ToolkitSearchClient,
@@ -69,6 +69,28 @@ describe("timeError", () => {
 });
 
 describe("bounded investigation job lifecycle", () => {
+  it("releases optional admission after synchronous SDK creation failure so retry can dispatch", async () => {
+    const budget = new OptionalJobBudget();
+    runtime.create.mockImplementation(() => {
+      throw new Error("SDK creation failed before a handle exists");
+    });
+    const client = new ToolkitSearchClient();
+    const bounded = {
+      ...request(),
+      budget: { serverSeconds: 30, clientMilliseconds: 35000 },
+    };
+    await expect(
+      budget.run("dns_stream", "first", client, bounded),
+    ).rejects.toThrow(/could not be acknowledged/);
+    expect(budget.cleanupPending).toBe(0);
+    expect(budget.cleanupUnverified).toBe(1);
+    await expect(
+      budget.run("dns_stream", "retry", client, bounded),
+    ).rejects.toThrow(/could not be acknowledged/);
+    expect(runtime.create).toHaveBeenCalledTimes(2);
+    expect(budget.cleanupPending).toBe(0);
+    expect(budget.cleanupUnverified).toBe(2);
+  });
   it("observes SID creation failures without an unhandled observable error", async () => {
     runtime.create.mockImplementation(() => ({
       ...job(),

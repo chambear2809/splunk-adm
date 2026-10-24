@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
 
-const BASE = "http://127.0.0.1:8000";
+const BASE = `http://127.0.0.1:${Number(process.env.ADM_LAB_WEB_PORT || 8000)}`;
 const { ADM_VIEWER_USER: user, ADM_VIEWER_PASS: pass } = process.env;
 const scenarios = JSON.parse(process.argv[2] || "[]");
 if (!user || !pass) throw new Error("viewer credentials missing from env");

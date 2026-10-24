@@ -35,7 +35,7 @@ POLICY_FIELDS = {
     "contract_filter",
     "contract_entry",
 }
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 ARGS = EXPECTED["args"]
 CALL = ", ".join(

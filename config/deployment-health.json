@@ -418,6 +418,139 @@
       "probeMacro": ""
     },
     {
+      "id": "proxy_envoy",
+      "readinessImpact": "optional_evidence",
+      "label": "Envoy request routing",
+      "healthNames": [
+        "Envoy request routing"
+      ],
+      "indexMacros": [
+        "adm_index_proxy_envoy"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "translation"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "envoy_proxy"
+      ],
+      "requiredFields": [
+        "downstream_direct_remote_address",
+        "upstream_remote_address",
+        "start_time"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "aws_vpc_flow",
+      "readinessImpact": "optional_evidence",
+      "label": "AWS VPC Flow Logs",
+      "healthNames": [
+        "AWS VPC Flow Logs"
+      ],
+      "indexMacros": [
+        "adm_index_aws_vpc_flow"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 600,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "aws_vpc_flow"
+      ],
+      "requiredFields": [
+        "version",
+        "account-id",
+        "vpc-id",
+        "interface-id",
+        "start",
+        "end",
+        "log-status"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "asset_history",
+      "readinessImpact": "optional_evidence",
+      "label": "Asset history import",
+      "healthNames": [
+        "Asset history import"
+      ],
+      "indexMacros": [
+        "adm_index_asset_history"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "inventory"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 86400,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "asset_authority"
+      ],
+      "requiredFields": [
+        "scope",
+        "ip",
+        "asset_id",
+        "valid_from"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "o11y_health",
+      "readinessImpact": "optional_evidence",
+      "label": "Splunk Observability Cloud health",
+      "healthNames": [
+        "Splunk Observability Cloud health"
+      ],
+      "indexMacros": [
+        "adm_index_o11y_health"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "metrics",
+        "health"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "o11y_export"
+      ],
+      "requiredFields": [
+        "service.name",
+        "service.namespace",
+        "deployment.environment",
+        "realm",
+        "organization",
+        "sf_mms_id"
+      ],
+      "probeMacro": ""
+    },
+    {
       "id": "catalyst",
       "readinessImpact": "core",
       "label": "Catalyst client observations",

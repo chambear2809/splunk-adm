@@ -19,7 +19,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RAW = ROOT / "fixtures" / "raw"
 EXPECTED = json.loads((HERE / "expected" / "graph.json").read_text(encoding="utf-8"))
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 APP_DIR = "/opt/splunk/etc/apps/splunk_adm"
 
 SAVED = [

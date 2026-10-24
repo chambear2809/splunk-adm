@@ -150,6 +150,7 @@ class ViewerBrowserTest(unittest.TestCase):
                 self.assertFalse(evidence.get("incompleteWindow"), evidence)
                 self.assertTrue(evidence.get("nodesOk"), evidence)
                 self.assertTrue(evidence.get("cardsPresent"), evidence)
+                self.assertTrue(evidence.get("serviceHealthEntry"), evidence)
                 self.assertEqual(evidence.get("demoRequests"), 0, evidence)
                 self.assertIn(
                     evidence.get("scopeControls", {}).get("buildEarliest"),

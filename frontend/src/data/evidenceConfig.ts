@@ -4,6 +4,7 @@ import { deploymentClient } from "./deploymentClient";
 import {
   expectationFor,
   indexNames,
+  SOURCE_DEFINITIONS,
   UNCONFIGURED_DNS_INDEX,
   type DeploymentClient,
 } from "./deploymentHealth";
@@ -14,6 +15,7 @@ import {
   normalizeIp,
   routingScope,
   type DnsSource,
+  type SupplementalSource,
 } from "./evidence";
 import type { IdentityRecord } from "./dnsAdapters";
 
@@ -23,6 +25,22 @@ export interface ObserverMapping {
   scope: string;
   cluster: string;
   mapping_status?: string;
+  account_id?: string;
+  region?: string;
+  vpc_id?: string;
+  organization_id?: string;
+  realm?: string;
+  apm_mms_id?: string;
+}
+export interface SupplementalSourceConfiguration {
+  source: SupplementalSource;
+  state: "active" | "staged" | "not_selected";
+  indexes: string[];
+  authorities: string[];
+  schemaQualified: boolean;
+  staleAfterSeconds: number;
+  mappings: ObserverMapping[];
+  error?: string;
 }
 export interface DnsConfiguration {
   source: DnsSource;
@@ -40,6 +58,8 @@ export interface EvidenceConfiguration {
   identities: IdentityRecord[];
   identityAvailable: boolean;
   dns: DnsConfiguration[];
+  /** Optional until all callers have refreshed from the app-merged configuration. */
+  supplemental?: SupplementalSourceConfiguration[];
   maxAgeSeconds: number;
   clockUncertaintySeconds?: number;
 }
@@ -167,7 +187,7 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       sort: "_key:1",
       fields:
         name === "adm_observer_scope"
-          ? "_key,observer_kind,observer,scope,cluster,mapping_status"
+          ? "_key,observer_kind,observer,scope,cluster,mapping_status,account_id,region,vpc_id,organization_id,realm,apm_mms_id"
           : "_key,ip,scope,scope_mapping_verified,entity_kind,entity_id,valid_from,valid_end",
     });
     const value = await this.get(
@@ -227,6 +247,18 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         cluster: typeof r.cluster === "string" ? r.cluster : "",
         ...(typeof r.mapping_status === "string"
           ? { mapping_status: r.mapping_status }
+          : {}),
+        ...(typeof r.account_id === "string"
+          ? { account_id: r.account_id }
+          : {}),
+        ...(typeof r.region === "string" ? { region: r.region } : {}),
+        ...(typeof r.vpc_id === "string" ? { vpc_id: r.vpc_id } : {}),
+        ...(typeof r.organization_id === "string"
+          ? { organization_id: r.organization_id }
+          : {}),
+        ...(typeof r.realm === "string" ? { realm: r.realm } : {}),
+        ...(typeof r.apm_mms_id === "string"
+          ? { apm_mms_id: r.apm_mms_id }
           : {}),
       };
     });
@@ -383,6 +415,126 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         }
       }),
     );
+    const supplementalSpecs = [
+      [
+        "proxy_envoy",
+        "envoy_proxy",
+        "adm_index_proxy_envoy",
+        "adm_proxy_envoy_schema_qualified",
+      ],
+      [
+        "aws_vpc_flow",
+        "aws_vpc_flow",
+        "adm_index_aws_vpc_flow",
+        "adm_aws_vpc_flow_schema_qualified",
+      ],
+      [
+        "asset_history",
+        "asset_authority",
+        "adm_index_asset_history",
+        "adm_asset_history_schema_qualified",
+      ],
+      [
+        "o11y_health",
+        "o11y_export",
+        "adm_index_o11y_health",
+        "adm_o11y_health_schema_qualified",
+      ],
+    ] as const;
+    const supplemental: SupplementalSourceConfiguration[] = await Promise.all(
+      supplementalSpecs.map(
+        async ([source, kind, indexMacro, qualifiedMacro]) => {
+          const intent = expectationFor(deployment, source);
+          const state =
+            intent === "active" || intent === "staged"
+              ? intent
+              : "not_selected";
+          const definition = SOURCE_DEFINITIONS.find(
+            (entry) => entry.id === source,
+          );
+          const base: SupplementalSourceConfiguration = {
+            source,
+            state,
+            indexes: [],
+            authorities: [],
+            schemaQualified: false,
+            staleAfterSeconds:
+              deployment.settings?.sources[source]?.staleAfterSeconds ??
+              definition?.staleAfterSeconds ??
+              3600,
+            mappings: [],
+          };
+          if (state === "not_selected") return base;
+          try {
+            const indexes = indexNames({
+              name: indexMacro,
+              definition: await this.definition(indexMacro, signal),
+            });
+            if (
+              !indexes.length ||
+              indexes.length > 16 ||
+              indexes.includes("unconfigured_optional")
+            )
+              throw new Error("Optional source index selector is unavailable.");
+            const relevant = mappings.filter(
+              (row) =>
+                row.observer_kind === kind && (!scope || row.scope === scope),
+            );
+            const verified = relevant.filter((row) => {
+              try {
+                routingScope(row.scope);
+                literal(row.observer);
+                if (source === "aws_vpc_flow") {
+                  literal(row.account_id ?? "");
+                  literal(row.region ?? "");
+                  literal(row.vpc_id ?? "");
+                }
+                if (source === "o11y_health") {
+                  literal(row.organization_id ?? "");
+                  literal(row.realm ?? "");
+                  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(row.apm_mms_id ?? ""))
+                    throw new Error("Observability Cloud MMS ID is invalid.");
+                }
+              } catch {
+                return false;
+              }
+              return (
+                row.mapping_status === "verified" &&
+                row.observer === row.observer.toLowerCase() &&
+                mappings.filter(
+                  (other) =>
+                    other.observer_kind === kind &&
+                    other.observer === row.observer,
+                ).length === 1
+              );
+            });
+            const authorities = verified.map((row) => row.observer).sort();
+            if (
+              !authorities.length ||
+              authorities.length > 32 ||
+              verified.length !== relevant.length
+            )
+              throw new Error(
+                "Optional source authority mapping is missing or ambiguous.",
+              );
+            return {
+              ...base,
+              indexes,
+              authorities,
+              mappings: verified,
+              schemaQualified:
+                (await this.definition(qualifiedMacro, signal)) === "1",
+            };
+          } catch {
+            return {
+              ...base,
+              error:
+                "Optional source configuration is unavailable, unverified or conflicting.",
+            };
+          }
+        },
+      ),
+    );
     let identityAvailable = true;
     let identities: IdentityRecord[] = [];
     if (ips.length && scope) {
@@ -458,6 +610,7 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       identities,
       identityAvailable,
       dns,
+      supplemental,
       maxAgeSeconds,
       ...(clockUncertaintySeconds !== undefined
         ? { clockUncertaintySeconds }
