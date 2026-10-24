@@ -109,6 +109,12 @@ multiple namespaces suppress the entire result. Multiple verified authorities
 for the same scope and cluster also suppress the result; the UI does not pick
 one silently. Detector and alert state is not queried.
 
+The SPL projection converts Splunk's internal `_time` and `_indextime` values
+to numeric `event_time_epoch` and `indexed_time_epoch` fields before returning
+rows. The normalizer requires both values and checks that event time matches
+the capture timestamp within one second; it does not parse ambiguous display
+time strings.
+
 ## Evidence limits
 
 This is historical measured context. It does not report detector state,

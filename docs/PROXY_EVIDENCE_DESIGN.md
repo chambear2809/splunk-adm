@@ -49,7 +49,9 @@ request interval overlaps the selected time interval.
 
 The query projects only the declared event fields through `json_object`,
 retains index, host, event/index time and indexer bucket/offset fingerprint,
-marks raw events over 1 MiB oversized, limits input to 10,001 rows (10,000 plus
+and adds numeric `event_time_epoch=tonumber(_time)` for strict normalization
+even when Splunk's REST response serializes `_time` as ISO text. It then marks
+raw events over 1 MiB oversized, limits input to 10,001 rows (10,000 plus
 overflow sentinel), and returns at most 64 records plus one exact completion
 row. The common supplemental loader validates the completion envelope and
 search warnings before calling `normalizeProxyEvidence`.
@@ -61,7 +63,9 @@ out-of-window request, invalid direct peer, or no exact match to a selected
 endpoint on the allowed legs. It accepts a record with a missing stream ID. It
 keeps a missing upstream address as unknown, never substitutes `UPSTREAM_CLUSTER`
 or a configured membership list, and records retry limitations. The output
-contains no arbitrary raw event data.
+contains no arbitrary raw event data. It requires the numeric SPL projection of
+indexed `_time` and checks it against Envoy `start_time`, regardless of how the
+REST layer serialized the `_time` field.
 
 The generic loader invalidates source qualification if the settings fingerprint
 changes during capture. The panel suppresses any association claim when the
@@ -88,9 +92,14 @@ output.
 ## Qualification boundary
 
 The TypeScript normalizer and fixtures prove contract handling for synthetic
-events. They do not qualify Envoy deployment configuration, logger uniqueness,
-collector duplication, source permissions, index scan cost, timestamp parsing,
+events. The disposable lab acceptance test submits to
+`/services/collector/event` with HEC `time` from synthetic Envoy `start_time`,
+then checks indexed time and the numeric epoch alias returned alongside
+REST-formatted `_time`. That test path does not exercise the app's parsing-tier
+`props.conf` stanza, so it does not qualify timestamp extraction. Neither test
+qualifies Envoy deployment configuration, logger uniqueness, collector
+duplication, source permissions, index scan cost, production timestamp parsing,
 or deployed field availability. A source becomes usable only after a target
 operator checks the exact release/config/sample and Atlas's selected index,
-host, scope mapping, `_time` behavior, caps, and failure cases. See the
-[operator setup guide](operators/proxy-evidence.md).
+host, scope mapping, production `_time` behavior, caps, and failure cases. See
+the [operator setup guide](operators/proxy-evidence.md).

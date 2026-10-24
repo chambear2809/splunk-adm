@@ -222,12 +222,12 @@ export function buildProxySearch(
   return `search ${indexClause} sourcetype="${PROXY_SOURCETYPE}" host IN (${authorityFilter})
 | where ${jsonField("schema")}="${PROXY_SCHEMA}" AND ${jsonField("access_log_type")}="DownstreamEnd" AND ${jsonField("routing_authority")}="${literal(selection.scope)}" AND ${jsonField("observer_id")}=host AND (${searchWindowPredicate(selection)}) AND (${matchedEndpoint})
 | head ${INPUT_LIMIT + 1}
-| eval event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null()),oversized=if(len(_raw)>${RECORD_BYTES},1,0)
+| eval event_time_epoch=tonumber(_time),event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null()),oversized=if(len(_raw)>${RECORD_BYTES},1,0)
 | eventstats count AS input_count sum(oversized) AS oversized_count
 | sort 0 - _time index event_fingerprint
 | head ${OUTPUT_LIMIT}
 | eval _raw=if(oversized=1,"{}",${projected})
-| fields _raw _time _indextime host index event_fingerprint oversized input_count oversized_count
+| fields _raw _time event_time_epoch _indextime host index event_fingerprint oversized input_count oversized_count
 | eval kind="supplemental_record"
 | appendpipe [| stats count AS returned_count max(input_count) AS input_count max(oversized_count) AS oversized
   | eval kind="supplemental_completion",schema_version=1,input_count=coalesce(input_count,0),input_capped=if(input_count>${INPUT_LIMIT},1,0),oversized=coalesce(oversized,0)]`;
@@ -266,6 +266,19 @@ function numberValue(value: unknown): number | undefined {
 function requiredNumber(value: unknown): number | undefined {
   const n = numberValue(value);
   return n !== undefined && n >= 0 ? n : undefined;
+}
+
+function projectedEventTime(value: unknown): number | undefined {
+  value = first(value);
+  if (
+    (typeof value !== "number" && typeof value !== "string") ||
+    (typeof value === "string" && !/^\d{1,12}(?:\.\d{1,9})?$/.test(value))
+  )
+    return undefined;
+  const epoch = Number(value);
+  return Number.isFinite(epoch) && epoch >= 0 && epoch <= 253402300799
+    ? epoch
+    : undefined;
 }
 
 function optionalPort(value: unknown): number | undefined | null {
@@ -368,7 +381,7 @@ export function normalizeProxyEvidence(
     const scope = text(raw?.routing_authority, 253);
     const startTime = sourceTime(raw?.start_time);
     const indexedTime = requiredNumber(row._indextime);
-    const rowTime = requiredNumber(row._time);
+    const rowTime = projectedEventTime(row.event_time_epoch);
     if (
       Number(row.oversized) === 1 ||
       !raw ||

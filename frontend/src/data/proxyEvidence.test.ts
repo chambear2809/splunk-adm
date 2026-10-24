@@ -40,7 +40,11 @@ const config: SupplementalSourceConfiguration = {
   ],
 };
 
-const sourceRow = (): Row => structuredClone(fixture) as Row;
+const sourceRow = (): Row => {
+  const row = structuredClone(fixture) as Row;
+  row.event_time_epoch = Number(row._time);
+  return row;
+};
 const raw = (row: Row): Record<string, unknown> =>
   JSON.parse(String(row._raw)) as Record<string, unknown>;
 const setRaw = (row: Row, changes: Record<string, unknown>) => {
@@ -62,6 +66,8 @@ describe("Envoy proxy evidence contract", () => {
     );
     expect(search).toContain("head 10001");
     expect(search).toContain("head 64");
+    expect(search).toContain("event_time_epoch=tonumber(_time)");
+    expect(search).toContain("_raw _time event_time_epoch _indextime");
     expect(search).toContain('kind="supplemental_record"');
     expect(search).toContain('kind="supplemental_completion"');
     expect(search).toContain("returned_count");
@@ -176,7 +182,27 @@ describe("Envoy proxy evidence contract", () => {
 
   it("requires the indexed event timestamp to agree with Envoy start time", () => {
     const row = sourceRow();
-    row._time = "1791373510.000";
+    row._time = new Date((1791373500.125 + 3.125) * 1000).toISOString();
+    row.event_time_epoch = 1791373500.125 + 3.125;
+    expect(normalizeProxyEvidence([row], selection, config)).toMatchObject({
+      records: [],
+      rejected: 1,
+    });
+  });
+
+  it("uses numeric projected event time alongside native ISO _time", () => {
+    const row = sourceRow();
+    row._time = new Date(1791373500.125 * 1000).toISOString();
+    row.event_time_epoch = "1791373500.125";
+    const result = normalizeProxyEvidence([row], selection, config);
+    expect(result.rejected).toBe(0);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].eventTime).toBe(1791373500.125);
+  });
+
+  it("rejects an ISO string in the numeric event-time projection", () => {
+    const row = sourceRow();
+    row.event_time_epoch = new Date(1791373500.125 * 1000).toISOString();
     expect(normalizeProxyEvidence([row], selection, config)).toMatchObject({
       records: [],
       rejected: 1,

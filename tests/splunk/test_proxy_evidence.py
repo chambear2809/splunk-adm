@@ -90,9 +90,7 @@ class ProxyEvidenceRuntimeTest(unittest.TestCase):
             self.assertNotRegex(item["search"], r"(?i)x-forwarded-for|\bxff\b")
         return searches
 
-    def event(
-        self, stream_id: str, changes: dict | None = None, *, hec_time: bool = True
-    ) -> dict:
+    def event(self, stream_id: str, changes: dict | None = None) -> dict:
         raw = copy.deepcopy(self.template)
         raw.update(
             {
@@ -105,7 +103,7 @@ class ProxyEvidenceRuntimeTest(unittest.TestCase):
         if changes:
             raw.update(changes)
         return {
-            **({"time": self.event_time} if hec_time else {}),
+            "time": self.event_time,
             "index": INDEX,
             "sourcetype": SOURCETYPE,
             "source": self.token,
@@ -209,7 +207,7 @@ class ProxyEvidenceRuntimeTest(unittest.TestCase):
         malformed_schema_id = f"{self.token}-bad-schema"
         malformed_time_id = f"{self.token}-bad-time"
         events = [
-            self.event(matched_id, hec_time=False),
+            self.event(matched_id),
             self.event(
                 xff_only_id,
                 {
@@ -255,7 +253,12 @@ class ProxyEvidenceRuntimeTest(unittest.TestCase):
         self.assertLessEqual(
             abs(observed_time - self.event_time),
             1,
-            "the installed Envoy props stanza must parse the producer start_time",
+            "the HEC event time must match the producer start_time",
+        )
+        self.assertLessEqual(
+            abs(float(records[0]["event_time_epoch"]) - self.event_time),
+            1,
+            "the SPL numeric projection must match the producer start_time",
         )
 
         self.assertEqual(self.assert_envelope(empty_query, 0), [])

@@ -86,10 +86,16 @@ upstream endpoints as unavailable values, not as reasons to invent one.
 
 ## Splunk ingestion
 
-Set `TIME_FORMAT` on the parsing tier that assigns event timestamps to this
-sourcetype so `_time` reflects Envoy `start_time`. For Splunk Enterprise 9.2,
-the documented format for epoch seconds and three fractional digits is
-`%s.%3N` (Splunk's `%3N` differs from Envoy's `%3f`):
+Atlas requires indexed `_time` to agree with Envoy `start_time` within one
+second. Set the event time on the ingestion path that actually assigns `_time`:
+
+- For direct HEC ingestion, set the HEC event envelope's `time` value to the
+  Envoy `start_time` epoch seconds, including its fractional part. Do not rely
+  on `props.conf` timestamp extraction to override a HEC `time` value.
+- For an input path whose parsing tier extracts timestamps from the event,
+  configure `TIME_FORMAT` on that tier for this sourcetype. For Splunk
+  Enterprise 9.2, the documented format for epoch seconds and three fractional
+  digits is `%s.%3N` (Splunk's `%3N` differs from Envoy's `%3f`):
 
 ```ini
 [atlas:proxy:envoy_access]
@@ -98,11 +104,23 @@ TIME_FORMAT = %s.%3N
 MAX_TIMESTAMP_LOOKAHEAD = 20
 ```
 
-The prefix must end immediately before the timestamp digits. Verify this on
-the actual parsing tier and confirm returned `_time` agrees with the JSON
-`start_time` within one second. Atlas rejects records whose indexed event time
-does not agree. A wrong `_time` parser can also make Splunk's event-time window
-omit records before Atlas can inspect them.
+The prefix must end immediately before the timestamp digits. Verify the
+effective behavior through the production ingestion path and confirm returned
+`_time` agrees with the JSON `start_time` within one second. Splunk's REST API
+may serialize `_time` as an ISO timestamp. The SPL projects
+`event_time_epoch=tonumber(_time)` so the normalizer can strictly compare a
+numeric indexed event time to the producer time. An incorrect time assignment
+can also make Splunk's event-time window omit records before Atlas can inspect
+them.
+
+The disposable lab acceptance test submits synthetic events to
+`/services/collector/event` with the HEC envelope's `time` explicitly set from
+`start_time`. It checks that the returned `_time` matches that event time and
+that the search returns a numeric epoch alias alongside REST-formatted
+`_time`. This test path does not exercise the app's `TIME_PREFIX`/`TIME_FORMAT`
+parsing stanza, so it does not qualify timestamp extraction. Qualify that
+stanza separately on the actual parsing tier if that is the deployed ingestion
+path.
 
 ## Atlas configuration and qualification
 
@@ -123,8 +141,9 @@ Before selection, verify:
 4. IPv4/IPv6 downstream direct peers, physical listener addresses, successful
    upstream selection, no-upstream failures, retries, missing stream IDs, and
    any internal/non-IP upstream address form.
-5. `_time` parsing, event delay, clock behavior, and the target's index and
-   Splunk search-resource bounds.
+5. The production event-time path (HEC `time` or parsing-tier extraction),
+   agreement between `_time` and `start_time`, event delay, clock behavior,
+   and the target's index and Splunk search-resource bounds.
 6. Search behavior for access denied, missing indexes, malformed events,
    oversized events, quiet feeds, warnings, caps, cancellation, and a
    configuration change during capture.

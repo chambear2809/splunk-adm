@@ -323,12 +323,12 @@ export function buildO11yHealthSearch(
 | eventstats max(adm_capture_time) AS adm_latest_capture
 | where adm_capture_time=adm_latest_capture
 | head ${O11Y_HEALTH_INPUT_LIMIT + 1}
-| eval event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null()),oversized=if(len(_raw)>${O11Y_HEALTH_RECORD_BYTES},1,0)
+| eval event_time_epoch=tonumber(_time),indexed_time_epoch=tonumber(_indextime),event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null()),oversized=if(len(_raw)>${O11Y_HEALTH_RECORD_BYTES},1,0)
 | eventstats count AS input_count sum(oversized) AS oversized_count
 | sort 0 - _time index event_fingerprint
 | head ${O11Y_HEALTH_RECORD_LIMIT}
 | eval _raw=if(oversized=1,"{}",${projected})
-| fields _raw _time _indextime host index event_fingerprint oversized input_count oversized_count
+| fields _raw _time _indextime event_time_epoch indexed_time_epoch host index event_fingerprint oversized input_count oversized_count
 | eval kind="supplemental_record"
 | appendpipe [| stats count AS returned_count max(input_count) AS input_count max(oversized_count) AS oversized
   | eval kind="supplemental_completion",schema_version=1,input_count=coalesce(input_count,0),input_capped=if(input_count>${O11Y_HEALTH_INPUT_LIMIT},1,0),oversized=coalesce(oversized,0)]`;
@@ -452,9 +452,11 @@ function sourceDimensions(raw: Record<string, unknown>) {
 }
 
 function indexedTimes(row: Row, raw: Record<string, unknown>) {
-  const eventTime = numeric(row._time);
+  // Splunk's REST results can serialize `_time` as ISO text. Keep this
+  // comparison numeric by projecting the internal epoch values in SPL.
+  const eventTime = numeric(row.event_time_epoch);
   const capturedAt = numeric(raw.captured_at);
-  const indexedTime = numeric(row._indextime);
+  const indexedTime = numeric(row.indexed_time_epoch);
   if (
     eventTime === undefined ||
     capturedAt === undefined ||

@@ -78,8 +78,10 @@ const configurationClient: EvidenceConfigClient = {
 const metricRows = fixture.events.map((event, index) => ({
   kind: "supplemental_record",
   _raw: JSON.stringify(event.event),
-  _time: String(event.time),
+  _time: new Date(event.time * 1000).toISOString(),
   _indextime: String(event.time + 1),
+  event_time_epoch: String(event.time),
+  indexed_time_epoch: String(event.time + 1),
   host: event.host,
   index: "atlas_o11y",
   event_fingerprint: String(index + 1).padStart(64, "0"),

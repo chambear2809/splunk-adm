@@ -66,6 +66,8 @@ function indexedRows(events: readonly TestEnvelope[] = fixture.events): Row[] {
     _raw: JSON.stringify(envelope.event),
     _time: String(envelope.time),
     _indextime: String(envelope.time + 1),
+    event_time_epoch: String(envelope.time),
+    indexed_time_epoch: String(envelope.time + 1),
     host: envelope.host,
     index: "atlas_o11y",
     event_fingerprint: String(index + 1).padStart(64, "0"),
@@ -101,6 +103,11 @@ describe("Observability Cloud health evidence", () => {
     expect(search).toContain("head 10001");
     expect(search).toContain("head 64");
     expect(search).toContain('kind="supplemental_completion"');
+    expect(search).toContain("event_time_epoch=tonumber(_time)");
+    expect(search).toContain("indexed_time_epoch=tonumber(_indextime)");
+    expect(search).toContain(
+      "fields _raw _time _indextime event_time_epoch indexed_time_epoch",
+    );
     expect(search).toContain('"service_namespace"');
     expect(search).not.toMatch(/\|\s*(join|map|lookup)\b/i);
   });
@@ -141,6 +148,28 @@ describe("Observability Cloud health evidence", () => {
     expect(result.records[0].limitations.join(" ")).toMatch(
       /do not establish a network cause/i,
     );
+  });
+
+  it("uses the numeric epoch projection when Splunk returns ISO `_time`", () => {
+    const rows = indexedRows().map((row) => ({
+      ...row,
+      _time: new Date(Number(row._time) * 1000).toISOString(),
+    }));
+    const result = normalizeO11yHealthEvidence(rows, selection, config);
+    expect(result).toMatchObject({ rejected: 0 });
+    expect(result.records).toHaveLength(6);
+  });
+
+  it("rejects rows when the bounded numeric timestamp projection is missing", () => {
+    const rows = indexedRows().map((row) => ({
+      ...row,
+      event_time_epoch: undefined,
+      indexed_time_epoch: undefined,
+    }));
+    expect(normalizeO11yHealthEvidence(rows, selection, config)).toMatchObject({
+      records: [],
+      rejected: 6,
+    });
   });
 
   it("rejects a wrong org, realm, observer, routing scope or graph dimension", () => {
