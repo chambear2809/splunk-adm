@@ -205,13 +205,13 @@ describe("endpoint investigation contracts", () => {
   });
   it("scans the containing summary bucket while retaining only overlapping intervals", () => {
     const query = buildEndpointSearch(selection, "index=adm_summary_v2");
-    expect(query).toContain("_time>=0 AND _time<200");
+    expect(query).toContain("_time>=0 AND _time<300");
     expect(query).toContain("adm_last>=100 AND adm_first<200");
     const observation = buildEndpointObservationSearch(
       selection,
       "index=adm_summary_v2",
     );
-    expect(observation).toContain("_time>=0 AND _time<200");
+    expect(observation).toContain("_time>=0 AND _time<300");
     expect(observation).toContain("adm_last>=100 AND adm_first<200");
   });
   it("keeps V2 observations on their own non-authoritative query", () => {

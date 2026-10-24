@@ -331,7 +331,11 @@ def normalize_record(
         revision_raw = raw.get("revision", 0)
         if revision_raw in (None, ""):
             revision_raw = 0
-        if isinstance(revision_raw, bool) or not str(revision_raw).isdigit():
+        if (
+            isinstance(revision_raw, bool)
+            or not str(revision_raw).isascii()
+            or not str(revision_raw).isdigit()
+        ):
             _fail("invalid_revision", "revision must be a nonnegative integer.")
         revision = int(revision_raw)
         if revision > 2**53 - 1:
@@ -530,6 +534,10 @@ def find_conflicts(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], in
                 points[start].append(signature)
             else:
                 if end <= start:
+                    # An open interval first observed at the snapshot instant
+                    # still asserts current ownership; treat it as a point claim.
+                    if event.get("valid_to") is None:
+                        points[start].append(signature)
                     continue
                 changes[start]["start"].append(signature)
                 if math.isfinite(end):

@@ -325,6 +325,9 @@ export function parseEndpointUrl(
   });
 }
 
+const endpointSummaryLatest = (end: number) =>
+  Math.floor(end / 300) * 300 + 300;
+
 export function buildEndpointSearch(
   selection: EndpointSelection,
   summaryIndex: string,
@@ -341,10 +344,10 @@ export function buildEndpointSearch(
   const address = literal(valid.address, 64),
     scope = literal(valid.scope, 253);
   // Summary rows are bucketed by floor(adm_end/300)*300. Include the
-  // containing bucket, then use the retained interval fields below to keep
+  // buckets containing the window start and end, then use the retained interval fields below to keep
   // attribution bounded to the requested half-open window.
   const summaryStart = Math.floor(valid.start / 300) * 300;
-  const t = `_time>=${summaryStart} AND _time<${valid.end}`;
+  const t = `_time>=${summaryStart} AND _time<${endpointSummaryLatest(valid.end)}`;
   const clientPredicate = scopedAddressPredicate("client_ip", [address]);
   const addressPredicate = `(${clientPredicate} OR ${scopedAddressPredicate("server_ip", [address])})`;
   if (
@@ -383,7 +386,7 @@ export function buildEndpointObservationSearch(
     scope = literal(valid.scope, 253);
   const summaryStart = Math.floor(valid.start / 300) * 300;
   const addressPredicate = `(${scopedAddressPredicate("source_ip", [address])} OR ${scopedAddressPredicate("destination_ip", [address])})`;
-  return `search (${summarySelector}) source="adm:traffic_observation" adm_record="traffic_observation" contract_version=2 | where ${addressPredicate} AND _time>=${summaryStart} AND _time<${valid.end} AND scope="${scope}" AND adm_profile_status="mapped" AND records=1 AND metrics_authoritative=0 AND adm_quality_status IN ("accepted","accepted_with_warning") | eval traffic_observation_id=coalesce(rollup_id,traffic_observation_id) | streamstats count AS adm_observation_row | eval adm_observation_dedup_key=if(isnotnull(traffic_observation_id),traffic_observation_id,"unprotected:".tostring(adm_observation_row)) | dedup adm_observation_dedup_key | eval source=adm_scope_source, row_type="traffic_observation", adm_first=tonumber(first_seen), adm_last=tonumber(last_seen) | where isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | eventstats count as input_count | head 100 | appendpipe [ stats max(input_count) as input_count count as output_count | eval input_count=coalesce(input_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>100,1,0) | fields row_type schema_version input_count output_count input_capped output_capped ] | fields row_type schema_version input_count output_count input_capped output_capped scope source adm_scope_authority source_ip destination_ip source_port destination_port transport adm_first adm_last records counter_semantics metrics_authoritative adm_quality_status`;
+  return `search (${summarySelector}) source="adm:traffic_observation" adm_record="traffic_observation" contract_version=2 | where ${addressPredicate} AND _time>=${summaryStart} AND _time<${endpointSummaryLatest(valid.end)} AND scope="${scope}" AND adm_profile_status="mapped" AND records=1 AND metrics_authoritative=0 AND adm_quality_status IN ("accepted","accepted_with_warning") | eval traffic_observation_id=coalesce(rollup_id,traffic_observation_id) | streamstats count AS adm_observation_row | eval adm_observation_dedup_key=if(isnotnull(traffic_observation_id),traffic_observation_id,"unprotected:".tostring(adm_observation_row)) | dedup adm_observation_dedup_key | eval source=adm_scope_source, row_type="traffic_observation", adm_first=tonumber(first_seen), adm_last=tonumber(last_seen) | where isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | eventstats count as input_count | head 100 | appendpipe [ stats max(input_count) as input_count count as output_count | eval input_count=coalesce(input_count,0), row_type="completion", schema_version=1, input_capped=0, output_capped=if(input_count>100,1,0) | fields row_type schema_version input_count output_count input_capped output_capped ] | fields row_type schema_version input_count output_count input_capped output_capped scope source adm_scope_authority source_ip destination_ip source_port destination_port transport adm_first adm_last records counter_semantics metrics_authoritative adm_quality_status`;
 }
 
 export function endpointEvidenceSelection(
@@ -456,7 +459,7 @@ export async function runEndpointInvestigation(
   const result = await client.search({
     search: buildEndpointSearch(selection, activeIndex),
     earliest: String(Math.floor(valid.start / 300) * 300),
-    latest: String(valid.end),
+    latest: String(endpointSummaryLatest(valid.end)),
     maxRows: ENDPOINT_LIMITS.relationships + 2,
     allowEmpty: true,
     signal,
@@ -591,7 +594,7 @@ export async function runEndpointInvestigation(
       const traffic = await client.search({
         search: buildEndpointObservationSearch(selection, activeIndex),
         earliest: String(Math.floor(valid.start / 300) * 300),
-        latest: String(valid.end),
+        latest: String(endpointSummaryLatest(valid.end)),
         maxRows: 101,
         allowEmpty: true,
         signal,
