@@ -46,7 +46,8 @@ AUTHORITY_RE = re.compile(r"^[a-z0-9][a-z0-9._:/@-]{0,254}$")
 SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$")
 HEX_DIGEST_RE = re.compile(r"^[a-f0-9]{64}$")
 SECRET_PROPERTY_RE = re.compile(
-    r"(?:pass(?:word)?|secret|access.?token|token|credential|auth(?:orization)?|"
+    r"(?:pass(?:word)?|secret|access.?token|token|credential|authorization|"
+    r"(?:^|[^a-z0-9])auth(?:$|[^a-z0-9])|"
     r"api.?key|access.?key|private.?key|client.?secret|user(?:name)?)",
     re.IGNORECASE,
 )

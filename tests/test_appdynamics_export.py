@@ -27,9 +27,11 @@ from tools.export_appdynamics import (
     ControllerClient,
     Limits,
     _NETWORK_REQUEST_SLOT,
+    _backend_endpoint_candidates,
     _canonical,
     _outside_repository as exporter_outside_repository,
     _parse_properties,
+    _sanitize_property,
     _xml_root,
     collect_snapshot,
     main as export_main,
@@ -347,7 +349,7 @@ class AppDynamicsCollectorTests(unittest.TestCase):
         password = next(
             prop for prop in checkout["properties"] if prop["name"] == "PASSWORD"
         )
-        self.assertEqual(url["value"], "jdbc:mysql://db.example:3306/orders")
+        self.assertEqual(url["value"], "jdbc:mysql://db.example:3306")
         self.assertTrue(password["redacted"])
         self.assertIsNone(password["value"])
         self.assertNotIn("dbpass", json.dumps(bundle))
@@ -646,7 +648,13 @@ class AppDynamicsCollectorTests(unittest.TestCase):
             <value>Data Source=db.example;User Id=svc;Encrypt=true</value>
             </name-value>
             <name-value><name>URL</name>
+            <value>jdbc:sqlserver://db.example.test;databaseName=sample;user=synthetic-user;password=SYNTHETIC_SECRET</value>
+            </name-value>
+            <name-value><name>UNKNOWN_JDBC_PATH</name>
             <value>jdbc:mysql://db.example.test/sample;user=synthetic-user;password=SYNTHETIC_SECRET</value>
+            </name-value>
+            <name-value><name>UNKNOWN_JDBC_AUTHORITY</name>
+            <value>jdbc:sqlserver://db.example.test%3BdatabaseName%3Dsample%3Buser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET</value>
             </name-value>
             <name-value><name>UNKNOWN_JDBC_URL</name>
             <value>jdbc:mysql://db.example.test/sample%3B%75ser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET</value>
@@ -661,12 +669,26 @@ class AppDynamicsCollectorTests(unittest.TestCase):
         )
         properties = _parse_properties(backend)
         by_name = {item["name"]: item["value"] for item in properties}
-        self.assertEqual(by_name["CUSTOM_ENDPOINT"], "https://db.example/orders")
+        self.assertEqual(by_name["CUSTOM_ENDPOINT"], "https://db.example")
         self.assertIsNone(by_name["UNRECOGNIZED_CONNECTION"])
         self.assertIsNone(by_name["UNKNOWN_USERINFO"])
-        self.assertIsNone(by_name["URL"])
-        self.assertIsNone(by_name["UNKNOWN_JDBC_URL"])
-        self.assertIsNone(by_name["DOUBLE_ENCODED_URL"])
+        self.assertEqual(by_name["URL"], "jdbc:sqlserver://db.example.test")
+        self.assertEqual(by_name["UNKNOWN_JDBC_URL"], "jdbc:mysql://db.example.test")
+        self.assertEqual(by_name["DOUBLE_ENCODED_URL"], "https://db.example.test")
+        self.assertEqual(by_name["UNKNOWN_JDBC_PATH"], "jdbc:mysql://db.example.test")
+        self.assertEqual(
+            by_name["UNKNOWN_JDBC_AUTHORITY"], "jdbc:sqlserver://db.example.test"
+        )
+        self.assertEqual(
+            _backend_endpoint_candidates(properties),
+            [
+                {
+                    "property": "URL",
+                    "kind": "hostname_unresolved",
+                    "value": "db.example.test",
+                }
+            ],
+        )
         self.assertIsNone(by_name["AUTH"])
         encoded = json.dumps(properties)
         for secret in (
@@ -680,18 +702,32 @@ class AppDynamicsCollectorTests(unittest.TestCase):
             self.assertNotIn(secret, encoded)
 
     def test_importer_rejects_unsafe_url_path_credentials(self) -> None:
-        for unsafe_url in (
-            "jdbc:mysql://db.example.test/sample;user=synthetic-user;password=SYNTHETIC_SECRET",
-            "jdbc:mysql://db.example.test/sample%3B%75ser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET",
+        for property_name, unsafe_url in (
+            (
+                "URL",
+                "jdbc:mysql://db.example.test/sample;user=synthetic-user;password=SYNTHETIC_SECRET",
+            ),
+            (
+                "URL",
+                "jdbc:sqlserver://db.example.test;databaseName=sample;user=synthetic-user;password=SYNTHETIC_SECRET",
+            ),
+            (
+                "UNKNOWN_JDBC_STRING",
+                "jdbc:sqlserver://db.example.test%3BdatabaseName%3Dsample%3Buser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET",
+            ),
         ):
-            with self.subTest(unsafe_url=unsafe_url):
+            with self.subTest(property_name=property_name):
                 bundle, asset_manifest = collect()
                 bundle["asset_history_manifest"] = asset_manifest
                 backend = next(
                     row for row in bundle["records"] if row["record_type"] == "backend"
                 )
                 backend["properties"].append(
-                    {"name": "URL", "value": unsafe_url, "redacted": False}
+                    {
+                        "name": property_name,
+                        "value": unsafe_url,
+                        "redacted": False,
+                    }
                 )
                 fingerprint_input = dict(backend)
                 fingerprint_input.pop("record_fingerprint")
@@ -706,6 +742,21 @@ class AppDynamicsCollectorTests(unittest.TestCase):
                     with self.assertRaises(ImportErrorDetail) as raised:
                         convert_snapshot(snapshot)
                 self.assertEqual(raised.exception.code, "sensitive_property")
+
+    def test_url_sanitizer_requires_valid_dns_ip_and_port(self) -> None:
+        for invalid_url in (
+            "jdbc:sqlserver://bad_host;user=synthetic-user",
+            "https://db.example.test:0/database",
+            "https://db.example.test:65536/database",
+            "https://db.example.test:not-a-port/database",
+            "https://999.999.999.999/database",
+        ):
+            with self.subTest(invalid_url=invalid_url):
+                self.assertIsNone(_sanitize_property("URL", invalid_url))
+        self.assertEqual(
+            _sanitize_property("URL", "https://[2001:db8::1]:443/database"),
+            "https://[2001:db8::1]:443",
+        )
 
     def test_bearer_token_rejects_header_injection_and_non_ascii(self) -> None:
         for token in ("good\r\nInjected: yes", "tökén", "bad token"):

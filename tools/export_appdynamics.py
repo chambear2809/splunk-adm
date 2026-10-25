@@ -57,7 +57,8 @@ MAX_TEXT = 2_048
 IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._:/@-]{0,254}$")
 SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$")
 SECRET_PROPERTY_RE = re.compile(
-    r"(?:pass(?:word)?|secret|access.?token|token|credential|auth(?:orization)?|"
+    r"(?:pass(?:word)?|secret|access.?token|token|credential|authorization|"
+    r"(?:^|[^a-z0-9])auth(?:$|[^a-z0-9])|"
     r"api.?key|access.?key|private.?key|client.?secret|user(?:name)?)",
     re.IGNORECASE,
 )
@@ -636,28 +637,74 @@ def _sanitize_url(candidate: str) -> str | None:
     parsed_value = candidate[len(prefix) :] if prefix else candidate
     try:
         parsed = urlsplit(parsed_value)
-        if not parsed.scheme or not parsed.hostname:
+        if not parsed.scheme or not parsed.netloc:
             return None
-        decoded_path = parsed.path
+        decoded_authority = parsed.netloc
         for _ in range(3):
-            decoded = unquote(decoded_path)
-            if decoded == decoded_path:
+            decoded = unquote(decoded_authority)
+            if decoded == decoded_authority:
                 break
-            decoded_path = decoded
-        if CONNECTION_SECRET_RE.search(decoded_path) or USERINFO_RE.search(
-            decoded_path
+            decoded_authority = decoded
+        # SQL Server JDBC places semicolon parameters directly in the URL
+        # authority. Keep only the server endpoint; discard all such params.
+        authority = decoded_authority.split(";", 1)[0]
+        endpoint = urlsplit(f"{parsed.scheme}://{authority}")
+        if (
+            endpoint.path
+            or endpoint.query
+            or endpoint.fragment
+            or not endpoint.hostname
         ):
             return None
-        host = parsed.hostname
+        host = endpoint.hostname
         try:
             ip = ipaddress.ip_address(host)
-            host = f"[{ip.compressed.lower()}]" if ip.version == 6 else str(ip)
+            host = ip.compressed.lower()
+            if ip.version == 6:
+                host = f"[{host}]"
         except ValueError:
-            host = host.lower()
-        port = parsed.port
+            try:
+                host = host.encode("idna").decode("ascii").lower()
+            except UnicodeError:
+                return None
+            labels = host.split(".")
+            if (
+                not host
+                or len(host) > 253
+                or host.endswith(".")
+                or re.fullmatch(r"[0-9.]+", host)
+                or any(
+                    not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                    for label in labels
+                )
+            ):
+                return None
+        hostport = authority.rsplit("@", 1)[-1]
+        if hostport.startswith("["):
+            close_bracket = hostport.find("]")
+            if close_bracket < 0:
+                return None
+            port_suffix = hostport[close_bracket + 1 :]
+            if port_suffix and (
+                not port_suffix.startswith(":")
+                or not port_suffix[1:].isascii()
+                or not port_suffix[1:].isdigit()
+            ):
+                return None
+            if port_suffix == ":":
+                return None
+        elif ":" in hostport:
+            if hostport.count(":") != 1:
+                return None
+            raw_port = hostport.rsplit(":", 1)[1]
+            if not raw_port.isascii() or not raw_port.isdigit():
+                return None
+        port = endpoint.port
+        if port is not None and not 1 <= port <= 65_535:
+            return None
         authority = host if port is None else f"{host}:{port}"
         scheme = f"{prefix}{parsed.scheme.lower()}"
-        return f"{scheme}://{authority}{parsed.path}"
+        return f"{scheme}://{authority}"
     except ValueError:
         return None
 
