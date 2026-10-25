@@ -667,6 +667,45 @@ class RestrictedViewerTest(unittest.TestCase):
             self._viewer_json("GET", collection + "?" + query)[1], [mapping]
         )
 
+    def test_optional_index_evidence_remains_subject_to_caller_permissions(self):
+        marker = "optional-acl-" + secrets.token_hex(8)
+        now = int(time.time())
+        targets = (
+            ("atlas_o11y", "atlas:o11y_health"),
+            ("atlas_o11y", "atlas:o11y_detector_event"),
+            ("atlas_asset", "adm:appdynamics_inventory"),
+        )
+        self.lab._hec_post(
+            b"\n".join(
+                json.dumps(
+                    {
+                        "time": now,
+                        "index": index,
+                        "source": marker,
+                        "sourcetype": sourcetype,
+                        "event": {"acl_probe": marker},
+                    }
+                ).encode()
+                for index, sourcetype in targets
+            )
+        )
+        query = f'search (index=atlas_o11y OR index=atlas_asset) source="{marker}"'
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            rows = self.lab.search(query, now - 60, now + 60)
+            if len(rows) == len(targets):
+                break
+            time.sleep(0.5)
+        else:
+            self.fail("Admin did not find all optional-index permission probes")
+        try:
+            visible = self._viewer_search(
+                query, now - 60, now + 60, allow_warnings=True
+            )
+        except SearchRejected:
+            return
+        self.assertEqual(visible, [], "Optional source searches exposed a denied index")
+
     def test_shared_deployment_settings_are_readable_but_not_viewer_writable(self):
         collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
         key = "deployment-permission-probe-" + secrets.token_hex(8)
