@@ -63,12 +63,30 @@ def task_identity() -> tuple[str, str] | None:
     return task, name
 
 
+def local_docker_endpoint() -> str:
+    """Pin task operations to a local daemon before creating any resource."""
+    context = os.environ.get("DOCKER_CONTEXT")
+    endpoint = os.environ.get("DOCKER_HOST") if not context else None
+    if not endpoint:
+        command = ["docker", "context", "inspect"]
+        if context:
+            command.append(context)
+        command.extend(["--format", "{{.Endpoints.docker.Host}}"])
+        endpoint = subprocess.check_output(command, text=True, timeout=30).strip()
+    if not endpoint.startswith("unix:///"):
+        raise LabError("task labs require a local Docker Unix socket")
+    os.environ.pop("DOCKER_CONTEXT", None)
+    os.environ["DOCKER_HOST"] = endpoint
+    return endpoint
+
+
 def verify_target() -> None:
     """Task labs refuse operations against an unowned or misrouted container."""
     identity = task_identity()
     if identity is None:
         return
     task, name = identity
+    local_docker_endpoint()
     result = subprocess.run(
         ["docker", "inspect", name],
         capture_output=True,
@@ -115,6 +133,7 @@ def task_resources(remove: bool = False) -> None:
     if identity is None:
         return
     task, name = identity
+    local_docker_endpoint()
     for kind, suffix in (("network", "net"), ("volume", "etc"), ("volume", "var")):
         resource = f"{name}-{suffix}"
         inventory = subprocess.run(
@@ -362,7 +381,9 @@ def main(argv: list[str]) -> int:
         return 2
     cmd, rest = argv[0], argv[1:]
     try:
-        if cmd == "verify-target":
+        if cmd == "local-docker-endpoint":
+            print(local_docker_endpoint())
+        elif cmd == "verify-target":
             verify_target()
         elif cmd == "init-resources":
             task_resources()

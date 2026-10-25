@@ -23,6 +23,8 @@ class TaskLabTest(unittest.TestCase):
     def setUp(self):
         self.environment = patch.dict(
             os.environ,
+            DOCKER_HOST="unix:///synthetic-task-docker.sock",
+            DOCKER_CONTEXT="",
             ADM_LAB_TASK="test-task",
             ADM_LAB_NAME="adm-test-task-one",
             ADM_LAB_WEB_PORT="28000",
@@ -118,6 +120,29 @@ class TaskLabTest(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             self.assertEqual(run.call_args.args[0][1:3], ["network", "inspect"])
 
+    def test_remote_daemon_is_refused_before_resource_access(self):
+        with (
+            patch.dict(os.environ, DOCKER_HOST="tcp://remote:2376"),
+            patch.object(lab.subprocess, "run") as run,
+        ):
+            with self.assertRaisesRegex(lab.LabError, "local Docker"):
+                lab.task_resources()
+            run.assert_not_called()
+
+    def test_context_takes_precedence_and_is_pinned(self):
+        with (
+            patch.dict(
+                os.environ, DOCKER_CONTEXT="selected", DOCKER_HOST="tcp://ignored:2376"
+            ),
+            patch.object(
+                lab.subprocess, "check_output", return_value="unix:///local.sock\n"
+            ) as output,
+        ):
+            self.assertEqual(lab.local_docker_endpoint(), "unix:///local.sock")
+            self.assertIn("selected", output.call_args.args[0])
+            self.assertNotIn("DOCKER_CONTEXT", os.environ)
+            self.assertEqual(os.environ["DOCKER_HOST"], "unix:///local.sock")
+
     def test_invalid_identity_never_reaches_docker(self):
         for name in ("adm-splunk-lab", "other", "adm-../foreign"):
             with (
@@ -180,6 +205,8 @@ class TaskLabShellTest(unittest.TestCase):
                 os.environ,
                 PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
                 ADM_LAB_NAME="adm-shell-refusal-" + uuid.uuid4().hex,
+                DOCKER_HOST="unix:///synthetic-task-docker.sock",
+                DOCKER_CONTEXT="",
                 ADM_LAB_TASK="foreign-task",
                 ADM_LAB_SECRETS=str(secret),
                 TEST_DOCKER_LOG=str(workspace / "docker.jsonl"),

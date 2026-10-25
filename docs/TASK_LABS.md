@@ -20,6 +20,10 @@ Worktree-local `dist/` outputs and explicit migration journal/report paths keep
 runtime and evidence independent. Shared downloaded archives may be read as
 immutable input; extraction and generated fixture output must stay task-local.
 
+Task operations require a local Docker Unix socket. The effective context takes
+precedence over `DOCKER_HOST`; after verification, shell and Python operations
+pin the same endpoint and refuse remote TCP/SSH contexts.
+
 `lab.sh up` creates a network `<name>-net` and named volumes `<name>-etc` and
 `<name>-var`. Container, network and volumes carry `org.splunk-adm.task` and
 `org.splunk-adm.lab` labels. Existing resources with different labels are refused.
