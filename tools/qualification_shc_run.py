@@ -45,6 +45,19 @@ V2_WRITERS = ("ADM - Conversation rollup v2", "ADM - Traffic observation rollup 
 NXOS_FIXTURE = "fixtures/raw-networking/nxos_inventory.ndjson"
 NXOS_FIXTURE_SHA256 = "50d220da8aaebd3e5449f8d4430b263731578aa27e9e205cabbe8e7aec94d3fd"
 NXOS_EVENT_WINDOW = (1792293814, 1792295615)
+MIGRATION_SOURCE_FILES = (
+    "tools/cisco_contract_migration.py",
+    "tools/cisco_migration/__init__.py",
+    "tools/cisco_migration/common.py",
+    "tools/cisco_migration/journal.py",
+    "tools/cisco_migration/cli.py",
+    "tools/cisco_migration/core.py",
+    "tools/cisco_migration/evidence.py",
+    "tools/cisco_migration/dispatch.py",
+    "tools/cisco_migration/history.py",
+    "tools/cisco_migration/cutover.py",
+    "tools/cisco_migration/recovery.py",
+)
 ISOVALENT_CONFIG_SHA256 = {
     "props.conf": "39f2787b8fe7fefd1cdc17eb3a7b381085ed3add83a1f59ace85ef7769d98f0f",
     "transforms.conf": "6f023133a01bca6e968028a863cc278235ae81701b9631f5699321aab34db330",
@@ -113,6 +126,14 @@ V2_UNMAPPED_TOPOLOGY_WARNINGS = (
     "No retained Catalyst client history is available; enable and backfill the source-qualified history builder before expecting Catalyst attachment context.",
     "Nexus Dashboard fabric labels are not yet correlated into V2 inventory; flow observations remain available separately.",
 )
+
+
+def migration_source_hashes(source_root: Path) -> dict[str, str]:
+    """Bind every migration entrypoint and implementation module to qualification."""
+    return {
+        relative: hashlib.sha256((source_root / relative).read_bytes()).hexdigest()
+        for relative in MIGRATION_SOURCE_FILES
+    }
 
 
 class SavedSearchDeadline(RuntimeError):
@@ -1009,11 +1030,7 @@ class Driver:
                 (self.source / "tools/qualification_shc_run.py").read_bytes()
             ).hexdigest()
         )
-        self.lab.state["test_hashes"]["tools/cisco_contract_migration.py"] = (
-            hashlib.sha256(
-                (self.source / "tools/cisco_contract_migration.py").read_bytes()
-            ).hexdigest()
-        )
+        self.lab.state["test_hashes"].update(migration_source_hashes(self.source))
         for relative in (
             "tests/splunk/expected/aci_graph.json",
             "tests/splunk/expected/aci_topology.json",

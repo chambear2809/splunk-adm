@@ -5,13 +5,18 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from tools.gen_raw_fixtures import (
     AciScenario,
+    GENERATOR_SOURCE_FILES,
     aci_outputs,
     epoch,
+    generator_source_hashes,
+    main as fixture_main,
     parse,
     previous_aci_scenario,
 )
@@ -33,6 +38,24 @@ def _timestamps(value):
 
 
 class PreviousDemoTest(unittest.TestCase):
+    def test_aci_previous_cli_preserves_output_bytes_and_redirect_seam(self):
+        expected = aci_outputs(AciScenario(previous_aci_scenario(SCENARIO)))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            with patch("tools.gen_raw_fixtures.ACI_PREV_RAW", output):
+                self.assertEqual(fixture_main(["--scenario", "aci-prev"]), 0)
+
+            self.assertEqual(
+                {path.name for path in output.glob("*.ndjson")}, set(expected)
+            )
+            for name, events in expected.items():
+                ordered = sorted(events, key=lambda event: event["time"])
+                content = "".join(
+                    json.dumps(event, separators=(",", ":"), ensure_ascii=False) + "\n"
+                    for event in ordered
+                )
+                self.assertEqual((output / name).read_text(), content, name)
+
     def test_previous_scenario_is_equal_prior_window_and_omits_blocked_conversation(
         self,
     ):
@@ -129,6 +152,11 @@ class PreviousDemoTest(unittest.TestCase):
         )
         accepted_generator_hashes = {provenance["generator_sha256"]}
         generator_review = provenance.get("reviewed_generator_compatibility")
+        current_generator_sources = generator_source_hashes(ROOT)
+        if "generator_source_sha256" in provenance:
+            self.assertEqual(
+                provenance["generator_source_sha256"], current_generator_sources
+            )
         if generator_review is not None:
             self.assertEqual(
                 generator_review["captured_generator_sha256"],
@@ -139,6 +167,15 @@ class PreviousDemoTest(unittest.TestCase):
             )
             self.assertTrue(generator_review["reason"])
             accepted_generator_hashes.add(generator_review["reviewed_generator_sha256"])
+            self.assertEqual(
+                generator_review["reviewed_generator_source_sha256"],
+                current_generator_sources,
+            )
+            self.assertTrue(generator_review["byte_equivalence"]["all_scenarios"])
+            self.assertEqual(
+                generator_review["prior_reviews"][0]["reviewed_generator_sha256"],
+                "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
+            )
         self.assertIn(
             hashlib.sha256(
                 (ROOT / "tools/gen_raw_fixtures.py").read_bytes()
@@ -188,6 +225,29 @@ class PreviousDemoTest(unittest.TestCase):
                 path.read_text().replace("definition = old", "definition = changed")
             )
             self.assertNotEqual(previous, source_hash(path))
+
+    def test_generator_source_hashes_cover_every_extracted_module(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in GENERATOR_SOURCE_FILES:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(relative)
+
+            before = generator_source_hashes(root)
+            self.assertEqual(set(before), set(GENERATOR_SOURCE_FILES))
+            changed = root / "tools/raw_fixtures/aci.py"
+            changed.write_text(changed.read_text() + "# changed\n")
+            after = generator_source_hashes(root)
+
+            self.assertNotEqual(
+                before["tools/raw_fixtures/aci.py"],
+                after["tools/raw_fixtures/aci.py"],
+            )
+            self.assertEqual(
+                before["tools/gen_raw_fixtures.py"],
+                after["tools/gen_raw_fixtures.py"],
+            )
 
     @staticmethod
     def _adm_graph_output_fields():
