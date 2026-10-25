@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Graph, GraphIndex } from "./graph";
 import type { Selection } from "./MapView";
+import { O11yDetectorEventsPanel } from "./O11yDetectorEventsPanel";
 import { O11yHealthPanel } from "./O11yHealthPanel";
 import {
   evidenceConfigClient,
@@ -159,11 +160,13 @@ export function MapServiceHealthInspection({
       )}
       {error && <p role="alert">{error}</p>}
       {healthSelection && (
-        <O11yHealthPanel
-          key={JSON.stringify(healthSelection)}
-          selection={healthSelection}
-          client={client}
-        />
+        <div key={JSON.stringify(healthSelection)}>
+          <O11yHealthPanel selection={healthSelection} client={client} />
+          <O11yDetectorEventsPanel
+            selection={healthSelection}
+            client={client}
+          />
+        </div>
       )}
     </section>
   );
