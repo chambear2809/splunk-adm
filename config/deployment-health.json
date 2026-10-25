@@ -877,6 +877,72 @@
       "observerKinds": [],
       "requiredFields": [],
       "probeMacro": "adm_health_network_profile_rows"
+    },
+    {
+      "id": "o11y_detector_events",
+      "readinessImpact": "optional_evidence",
+      "label": "Splunk Observability Cloud detector events",
+      "healthNames": [
+        "Splunk Observability Cloud detector events"
+      ],
+      "indexMacros": [
+        "adm_index_o11y_detector_events"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "events"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "o11y_detector"
+      ],
+      "requiredFields": [
+        "detector_id",
+        "event_id",
+        "event_timestamp",
+        "organization_id",
+        "realm"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "appdynamics_inventory",
+      "readinessImpact": "optional_evidence",
+      "label": "Splunk AppDynamics inventory",
+      "healthNames": [
+        "Splunk AppDynamics inventory"
+      ],
+      "indexMacros": [
+        "adm_index_appdynamics_inventory"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "inventory"
+      ],
+      "cadenceSeconds": 3600,
+      "staleAfterSeconds": 86400,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "appd_controller"
+      ],
+      "requiredFields": [
+        "controller_authority",
+        "application_id",
+        "snapshot_id",
+        "snapshot_at",
+        "snapshot_complete"
+      ],
+      "probeMacro": ""
     }
   ],
   "jobs": [

@@ -31,7 +31,45 @@ export interface ObserverMapping {
   organization_id?: string;
   realm?: string;
   apm_mms_id?: string;
+  detector_ids?: string;
+  controller_origin?: string;
+  observability_origin?: string;
 }
+/** Operator-configured origin only; event-provided URLs never enter this boundary. */
+export function configuredHttpsOrigin(value: string): string {
+  const origin = new URL(value);
+  if (
+    origin.protocol !== "https:" ||
+    !origin.hostname ||
+    origin.username ||
+    origin.password ||
+    origin.search ||
+    origin.hash ||
+    (value !== origin.origin && value !== `${origin.origin}/`)
+  )
+    throw new Error(
+      "Configure one HTTPS origin without credentials, path, query or fragment.",
+    );
+  return origin.origin;
+}
+
+/** A detector binding selects opaque IDs, independently of metric MMS identity. */
+export function configuredDetectorIds(value: string): string[] {
+  const ids: unknown = JSON.parse(value);
+  if (
+    !Array.isArray(ids) ||
+    !ids.length ||
+    ids.length > 16 ||
+    !ids.every(
+      (id): id is string =>
+        typeof id === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(id),
+    ) ||
+    new Set(ids).size !== ids.length
+  )
+    throw new Error("Configure one to 16 unique literal detector IDs.");
+  return [...ids].sort();
+}
+
 export interface SupplementalSourceConfiguration {
   source: SupplementalSource;
   state: "active" | "staged" | "not_selected";
@@ -260,6 +298,15 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         ...(typeof r.apm_mms_id === "string"
           ? { apm_mms_id: r.apm_mms_id }
           : {}),
+        ...(typeof r.detector_ids === "string"
+          ? { detector_ids: r.detector_ids }
+          : {}),
+        ...(typeof r.controller_origin === "string"
+          ? { controller_origin: r.controller_origin }
+          : {}),
+        ...(typeof r.observability_origin === "string"
+          ? { observability_origin: r.observability_origin }
+          : {}),
       };
     });
     const sharedSummary =
@@ -440,6 +487,18 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         "adm_index_o11y_health",
         "adm_o11y_health_schema_qualified",
       ],
+      [
+        "o11y_detector_events",
+        "o11y_detector",
+        "adm_index_o11y_detector_events",
+        "adm_o11y_detector_events_schema_qualified",
+      ],
+      [
+        "appdynamics_inventory",
+        "appd_controller",
+        "adm_index_appdynamics_inventory",
+        "adm_appdynamics_inventory_schema_qualified",
+      ],
     ] as const;
     const supplemental: SupplementalSourceConfiguration[] = await Promise.all(
       supplementalSpecs.map(
@@ -488,6 +547,20 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
                   literal(row.account_id ?? "");
                   literal(row.region ?? "");
                   literal(row.vpc_id ?? "");
+                }
+                if (
+                  source === "appdynamics_inventory" &&
+                  row.controller_origin !== undefined
+                )
+                  configuredHttpsOrigin(row.controller_origin);
+                if (source === "o11y_detector_events") {
+                  literal(row.organization_id ?? "");
+                  literal(row.cluster);
+                  if (!/^[a-z][a-z0-9-]{1,15}$/.test(row.realm ?? ""))
+                    throw new Error("Invalid Observability realm.");
+                  configuredDetectorIds(row.detector_ids ?? "");
+                  if (row.observability_origin !== undefined)
+                    configuredHttpsOrigin(row.observability_origin);
                 }
                 if (source === "o11y_health") {
                   literal(row.organization_id ?? "");
