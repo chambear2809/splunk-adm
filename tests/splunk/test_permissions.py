@@ -617,6 +617,56 @@ class RestrictedViewerTest(unittest.TestCase):
         )
         self.assertEqual(self.lab._json("GET", collection), before)
 
+    def test_optional_integration_mapping_projection_and_viewer_acl(self):
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        admin_password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
+        key = "optional-mapping-probe-" + secrets.token_hex(8)
+        self.addCleanup(self._delete_probe, collection, key, admin_password)
+        mapping = {
+            "_key": key,
+            "observer_kind": "o11y_detector",
+            "observer": "optional-probe",
+            "scope": "optional-probe",
+            "cluster": "probe-cluster",
+            "mapping_status": "verified",
+            "organization_id": "probe-org",
+            "realm": "us0",
+            "detector_ids": '["probe-detector"]',
+            "controller_origin": "https://controller.example.test",
+            "observability_origin": "https://app.us0.signalfx.com",
+        }
+        status, _ = _response(
+            "POST",
+            collection,
+            "admin",
+            admin_password,
+            json.dumps(mapping).encode(),
+            "application/json",
+        )
+        self.assertIn(status, (200, 201))
+        query = urllib.parse.urlencode(
+            {
+                "query": json.dumps({"_key": key}),
+                "fields": ",".join(mapping),
+                "limit": "1",
+            }
+        )
+        status, visible = self._viewer_json("GET", collection + "?" + query)
+        self.assertEqual(status, 200)
+        self.assertEqual(visible, [mapping])
+        self.assertDenied(
+            "POST",
+            collection + "/" + key,
+            json.dumps({"controller_origin": "https://changed.example.test"}).encode(),
+            "application/json",
+        )
+        self.assertDenied("DELETE", collection + "/" + key)
+        self.assertEqual(
+            self._viewer_json("GET", collection + "?" + query)[1], [mapping]
+        )
+
     def test_shared_deployment_settings_are_readable_but_not_viewer_writable(self):
         collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
         key = "deployment-permission-probe-" + secrets.token_hex(8)

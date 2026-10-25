@@ -225,7 +225,7 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       sort: "_key:1",
       fields:
         name === "adm_observer_scope"
-          ? "_key,observer_kind,observer,scope,cluster,mapping_status,account_id,region,vpc_id,organization_id,realm,apm_mms_id"
+          ? "_key,observer_kind,observer,scope,cluster,mapping_status,account_id,region,vpc_id,organization_id,realm,apm_mms_id,detector_ids,controller_origin,observability_origin"
           : "_key,ip,scope,scope_mapping_verified,entity_kind,entity_id,valid_from,valid_end",
     });
     const value = await this.get(

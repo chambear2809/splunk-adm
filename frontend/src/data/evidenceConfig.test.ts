@@ -207,6 +207,18 @@ function fixture({
               },
             ];
       else throw Error("unexpected request");
+      if (path.includes("storage/collections/data/") && Array.isArray(body)) {
+        // KV returns only requested fields: a parser-only mock would hide a
+        // missing browser REST projection even when fixtures contain the data.
+        const fields = new Set(
+          (url.searchParams.get("fields") ?? "").split(","),
+        );
+        body = body.map((row: Record<string, unknown>) =>
+          Object.fromEntries(
+            Object.entries(row).filter(([key]) => fields.has(key)),
+          ),
+        );
+      }
       return {
         ok: true,
         status: 200,
