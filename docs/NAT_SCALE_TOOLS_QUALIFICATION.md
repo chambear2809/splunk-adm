@@ -120,6 +120,38 @@ The separate existing pipeline smoke workload also completed its builders,
 rollup, summary and graph searches: 19 events became visible, with 8 graph nodes
 and 10 edges. This is a small local functional regression check.
 
+## Tool modularization
+
+Implementation commit `754d04c` retains the legacy entrypoints and their CLI
+help/import surfaces. Migration responsibilities are in
+`tools/cisco_migration/{common,journal,core,evidence,dispatch,history,cutover,recovery,cli}.py`;
+fixture responsibilities are in
+`tools/raw_fixtures/{common,nxos,aci,networking,cli}.py`.
+The facade-defined `Migration` preserves the qualification source-path check,
+while compatibility shims retain the observed constant and API-factory test
+seams. [Module map and compatibility evidence](TOOL_MODULARIZATION.md) explains
+the dependencies and remaining verification boundaries.
+
+All 63 fixture files matched the captured pre-refactor bytes: 11 NX-OS,
+20 ACI, 9 prior-window ACI, and 23 explicitly anchored networking files.
+Both CLI help outputs matched their baselines. Root independently checked
+147/148 migration and 95/96 generator function ASTs unchanged, with only the
+forwarding `main` functions differing; all original top-level value expressions
+were retained except the necessary `ROOT` parent offset. Structural comparison
+does not prove import/global semantics, so it supplements the runtime tests.
+
+Worker checks passed: migration 177, fencing 7, upgrade harness 21, previous
+demo 6, networking capture 16, fixture drift 3, offline SHC qualification 126,
+and task-lab safety 11. Source closure hashes now include every extracted
+implementation file in future capture/qualification records. Root verified the
+historical prior-window capture unchanged outside its explicit generator
+compatibility review and confirmed prior review history was retained.
+
+Dedicated migration Docker validation and integrated acceptance remain pending.
+The live rehearsal uses a task-local CA/server certificate with loopback SANs,
+owner-only session/scenario/journal files and an authentic V1 scheduler slice;
+it preserves TLS verification and readiness gates.
+
 ## Integrated acceptance
 
 Pending integration and final package validation. Historical qualification records remain bound to
