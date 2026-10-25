@@ -701,7 +701,7 @@ class NatEvidenceTest(unittest.TestCase):
             bucket_start + 300,
         )
         self.wait_for_exact_search_count(
-            '| `adm_index_summary` source="adm:conversation" '
+            'search `adm_index_summary` source="adm:conversation" '
             f"scope={json.dumps(self.graph_scope)} | stats count AS count",
             bucket_start,
             bucket_start + 300,
