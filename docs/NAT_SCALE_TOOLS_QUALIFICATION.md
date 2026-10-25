@@ -157,7 +157,7 @@ actual eStreamer end-time output is unqualified. V2 does not project this field,
 and this task does not qualify NAT evidence preservation through V1-to-V2
 cutover. V2 activation requires an equivalent schema path.
 
-Worker offline checks passed 195 focused frontend tests, lint/build and focused
+Worker offline checks passed 196 focused frontend tests, lint/build and focused
 Python lint/compilation checks. Dedicated NAT Docker validation is pending.
 Historical capture fields remain unchanged; a separate macro compatibility
 review records the no-NAT fixture contract without claiming recapture.
@@ -193,6 +193,22 @@ Dedicated migration Docker validation and integrated acceptance remain pending.
 The live rehearsal uses a task-local CA/server certificate with loopback SANs,
 owner-only session/scenario/journal files and an authentic V1 scheduler slice;
 it preserves TLS verification and readiness gates.
+
+## Independent review
+
+The independent reviewer runtime was verified as `gpt-6-astra` / `medium`.
+Initial source review reproduced one P2 import regression: the fixture facade's
+legacy `aci(s)` builder was shadowed by a private CLI module import. Root fixed
+it in `be74b61`, added a direct callable/output regression and audited every
+original top-level callable import. Twenty-six targeted compatibility checks
+passed. The reviewer independently confirmed the fix, all seven current source
+hashes, ordered prior reviews and unchanged historical capture data. No further
+consequential finding was reported in that correction.
+
+The reviewer independently passed 56 benchmark and 11 task-lab safety checks,
+checked source documentation and retained measurements, and requested an
+integrated end-to-end NAT graph/cap/bounds/rows-to-graph check. Final approval
+still awaits completed integrated Docker and final-candidate evidence.
 
 ## Integrated acceptance
 
