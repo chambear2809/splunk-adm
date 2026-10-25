@@ -50,6 +50,13 @@ if ! python3 "$ROOT/tools/lab_lock.py" --root "$ROOT" --check-owned; then
   exec python3 "$ROOT/tools/lab_lock.py" --root "$ROOT" -- "$0" "$@"
 fi
 
+# Pin shell Docker calls to the same local daemon checked by the Python client.
+if [[ -n "$TASK" ]]; then
+  DOCKER_HOST="$(py local-docker-endpoint)"
+  export DOCKER_HOST
+  unset DOCKER_CONTEXT
+fi
+
 wait_healthy() {
   local deadline=$((SECONDS + 1200)) status
   while ((SECONDS < deadline)); do
