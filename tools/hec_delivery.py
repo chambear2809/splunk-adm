@@ -147,6 +147,10 @@ def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _reject_json_constant(_value: str) -> None:
+    raise ValueError("Non-standard JSON number")
+
+
 def _read_capture_file(source_path: Path) -> bytes:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
@@ -323,11 +327,15 @@ def _load_capture(source_path: Path, source_id: str) -> _Capture:
         if len(line) > LINE_MAX_BYTES:
             raise DeliveryError("Capture contains an oversized record.")
         try:
-            envelope = json.loads(line, object_pairs_hook=_unique_json_object)
+            envelope = json.loads(
+                line,
+                object_pairs_hook=_unique_json_object,
+                parse_constant=_reject_json_constant,
+            )
         except (
             UnicodeDecodeError,
             json.JSONDecodeError,
-            _DuplicateJSONKeyError,
+            ValueError,
         ):
             raise DeliveryError("Capture contains invalid JSON.") from None
         if not isinstance(envelope, dict) or not isinstance(
@@ -485,6 +493,7 @@ def _checkpoint_template(capture: _Capture, path: Path) -> dict[str, Any]:
         "ack_channel": None,
         "ack_id": None,
         "ack_batch_end": None,
+        "ack_mode": None,
         "checkpoint_recovered": False,
         "last_error_code": None,
         "delivery_endpoint": None,
@@ -523,8 +532,12 @@ def _read_checkpoint(path: Path) -> dict[str, Any] | None:
     if raw is None or not raw.endswith(b"\n"):
         return None
     try:
-        parsed = json.loads(raw, object_pairs_hook=_unique_json_object)
-    except (UnicodeDecodeError, json.JSONDecodeError, _DuplicateJSONKeyError):
+        parsed = json.loads(
+            raw,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         return None
     if (
         not isinstance(parsed, dict)
@@ -592,6 +605,35 @@ def _checkpoint_matches(state: Mapping[str, Any], capture: _Capture) -> bool:
             or isinstance(state.get("delivery_endpoint"), str)
         )
     )
+
+
+def _terminal_checkpoint(state: Mapping[str, Any], capture: _Capture) -> bool:
+    batch_count = len(_record_batches(capture.lines))
+    next_index = state.get("next_record_index")
+    accepted_batches = state.get("accepted_batches")
+    if (
+        isinstance(next_index, bool)
+        or not isinstance(next_index, int)
+        or next_index != len(capture.lines)
+        or isinstance(accepted_batches, bool)
+        or not isinstance(accepted_batches, int)
+        or accepted_batches != batch_count
+        or state.get("ack_id") is not None
+        or state.get("ack_batch_end") is not None
+    ):
+        return False
+    if state.get("ack_mode") == "off":
+        return (
+            state.get("status") == "http_accepted_unverified"
+            and state.get("http_accepted_unverified") is True
+            and state.get("indexer_acknowledged") is False
+        )
+    if state.get("ack_mode") == "enterprise":
+        return (
+            state.get("status") == "indexer_acknowledged_not_searchable"
+            and state.get("indexer_acknowledged") is True
+        )
+    return False
 
 
 def _all_spool_bytes(spool: Path) -> int:
@@ -664,12 +706,7 @@ def enqueue_capture(
                     if area == "accepted" and (
                         state is None
                         or not _checkpoint_matches(state, stored)
-                        or state.get("status")
-                        not in {
-                            "http_accepted_unverified",
-                            "indexer_acknowledged_not_searchable",
-                            "acknowledgment_mode_required",
-                        }
+                        or not _terminal_checkpoint(state, stored)
                     ):
                         raise DeliveryError(
                             "Accepted capture has no valid terminal checkpoint; source input remains preserved."
@@ -985,8 +1022,12 @@ def _successful_hec_response(response: _HTTPResponse) -> tuple[int | None, int |
             response.status, response.status == 429 or response.status >= 500
         )
     try:
-        parsed = json.loads(response.body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        parsed = json.loads(
+            response.body,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         raise DeliveryError(
             "HEC returned an invalid response; capture remains pending."
         ) from None
@@ -1110,6 +1151,10 @@ def _move_terminal_capture_to_accepted(
     state: dict[str, Any],
 ) -> None:
     """Finish a terminal checkpoint move after a crash without resending."""
+    if not _terminal_checkpoint(state, capture):
+        raise DeliveryError(
+            "Capture lacks evidence for terminal delivery; pending data was preserved."
+        )
     if path.parent.name != "pending":
         return
     accepted_path = _capture_path(spool, capture, "accepted")
@@ -1173,10 +1218,20 @@ def _poll_ack(
         if not 200 <= response.status < 300:
             return None
         try:
-            parsed = json.loads(response.body)
+            parsed = json.loads(
+                response.body,
+                object_pairs_hook=_unique_json_object,
+                parse_constant=_reject_json_constant,
+            )
             acknowledgements = parsed["acks"]
             result = acknowledgements.get(str(ack_id))
-        except (KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError):
+        except (
+            KeyError,
+            TypeError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            ValueError,
+        ):
             return None
         if result is True:
             return True
@@ -1206,13 +1261,6 @@ def _send_capture(
     source_id = path.name.split("-", 1)[0]
     capture = _capture_from_path(path, source_id)
     checkpoint, state = _recover_checkpoint(spool, capture, path)
-    if state.get("status") in {
-        "http_accepted_unverified",
-        "indexer_acknowledged_not_searchable",
-        "acknowledgment_mode_required",
-    }:
-        _move_terminal_capture_to_accepted(spool, path, capture, checkpoint, state)
-        return str(state["status"]), 0, 0
     bound_endpoint = state.get("delivery_endpoint")
     if bound_endpoint is None:
         state["delivery_endpoint"] = endpoint
@@ -1227,6 +1275,35 @@ def _send_capture(
         )
 
     batches = _record_batches(capture.lines)
+    bound_mode = state.get("ack_mode")
+    if bound_mode is None:
+        next_index = state.get("next_record_index", 0)
+        if (
+            next_index != 0
+            or state.get("accepted_batches", 0) != 0
+            or state.get("ack_id") is not None
+            or state.get("http_accepted_unverified") is True
+            or state.get("indexer_acknowledged") is True
+        ):
+            raise DeliveryError(
+                "Delivery mode cannot be established after progress; pending data was preserved."
+            )
+        state["ack_mode"] = ack_mode
+        _write_checkpoint(checkpoint, state)
+    elif bound_mode != ack_mode:
+        raise DeliveryError(
+            "Capture is already bound to another HEC acknowledgment mode; pending data was preserved."
+        )
+    if state.get("status") in {
+        "http_accepted_unverified",
+        "indexer_acknowledged_not_searchable",
+    }:
+        if not _terminal_checkpoint(state, capture):
+            raise DeliveryError(
+                "Terminal checkpoint lacks complete delivery evidence; pending data was preserved."
+            )
+        _move_terminal_capture_to_accepted(spool, path, capture, checkpoint, state)
+        return str(state["status"]), 0, 0
     if state.get("ack_id") is not None:
         channel = state.get("ack_channel")
         end_index = state.get("ack_batch_end")
@@ -1285,6 +1362,13 @@ def _send_capture(
         or not 0 <= next_index <= len(capture.lines)
     ):
         raise DeliveryError("Delivery checkpoint index is invalid.")
+    accepted_batches = state.get("accepted_batches", 0)
+    if (
+        isinstance(accepted_batches, bool)
+        or not isinstance(accepted_batches, int)
+        or not 0 <= accepted_batches <= len(batches)
+    ):
+        raise DeliveryError("Delivery checkpoint batch count is invalid.")
     for batch_start, batch_end, body in batches:
         if batch_end <= next_index:
             continue
@@ -1410,10 +1494,30 @@ def _send_capture(
                 return str(state["status"]), attempted_batches, accepted_batches
 
     if state.get("next_record_index") == len(capture.lines):
+        accepted_batches = state.get("accepted_batches")
+        if (
+            isinstance(accepted_batches, bool)
+            or not isinstance(accepted_batches, int)
+            or accepted_batches != len(batches)
+        ):
+            raise DeliveryError(
+                "Delivery checkpoint has incomplete batch evidence; pending data was preserved."
+            )
         if ack_mode == "enterprise":
+            if (
+                state.get("indexer_acknowledged") is not True
+                or state.get("ack_id") is not None
+                or state.get("ack_batch_end") is not None
+            ):
+                raise DeliveryError(
+                    "Enterprise acknowledgment is incomplete; pending data was preserved."
+                )
             state["status"] = "indexer_acknowledged_not_searchable"
-            state["indexer_acknowledged"] = True
         else:
+            if state.get("indexer_acknowledged") is True:
+                raise DeliveryError(
+                    "Indexer acknowledgment mode changed; pending data was preserved."
+                )
             state["status"] = "http_accepted_unverified"
         state["last_error_code"] = None
         _write_checkpoint(checkpoint, state)

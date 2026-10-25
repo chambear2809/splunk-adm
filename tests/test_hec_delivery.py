@@ -116,6 +116,35 @@ class HecDeliveryTest(unittest.TestCase):
             sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
         self.assertEqual(self.input.read_bytes(), original)
 
+    def test_enqueue_rejects_nonstandard_json_numbers(self):
+        self.input.write_text(
+            '{"time":1,"source":"source-a","sourcetype":"atlas:test",'
+            '"event":{"capture_id":"nonstandard-number","value":NaN}}\n',
+            encoding="utf-8",
+        )
+        original = self.input.read_bytes()
+        with self.assertRaisesRegex(sender.DeliveryError, "invalid JSON"):
+            sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        self.assertEqual(self.input.read_bytes(), original)
+
+    def test_hec_and_ack_responses_reject_duplicate_keys(self):
+        with self.assertRaisesRegex(sender.DeliveryError, "invalid response"):
+            sender._successful_hec_response(
+                response(b'{"text":"Success","code":1,"code":0}')
+            )
+        ack_result = sender._poll_ack(
+            origin="https://hec.example.test",
+            channel="00000000-0000-0000-0000-000000000000",
+            ack_id=9,
+            token="test-token",
+            timeout_seconds=1,
+            ssl_context=sender._context(None),
+            ack_wait_seconds=0,
+            poll_interval_seconds=1,
+            post_json=lambda *args: response(b'{"acks":{"9":false,"9":true}}'),
+        )
+        self.assertIsNone(ack_result)
+
     @unittest.skipUnless(hasattr(os, "mkfifo"), "named pipes are unavailable")
     def test_enqueue_rejects_named_pipe_without_blocking(self):
         fifo = self.root / "capture.fifo"
@@ -587,6 +616,83 @@ class HecDeliveryTest(unittest.TestCase):
         self.assertEqual(calls, [])
         self.assertEqual(recovered.pending_captures, 0)
         self.assertTrue(accepted_path.exists())
+
+    def _enqueue_multibatch_ack_capture(self, capture_id: str) -> None:
+        rows = [
+            envelope(
+                {"capture_id": capture_id, "record_id": f"row-{index}"},
+                padding=53_000,
+            )
+            for index in range(5)
+        ]
+        capture(self.input, *rows)
+        sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+
+    def _accept_first_batch_without_enterprise_ack(
+        self, capture_id: str
+    ) -> list[bytes]:
+        self._enqueue_multibatch_ack_capture(capture_id)
+        calls = []
+
+        def post(url, body, token, timeout, context, channel=None):
+            calls.append(body)
+            return response(b'{"text":"Success","code":0,"ackId":7}')
+
+        result = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            ack_mode="off",
+            post_json=post,
+        )
+        self.assertEqual(result.pending_captures, 1)
+        self.assertEqual(result.failed_captures, 1)
+        self.assertEqual(len(calls), 1)
+        checkpoint = next((self.spool / "checkpoints").glob("*.json"))
+        state = sender._read_checkpoint(checkpoint)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state["next_record_index"], 4)
+        self.assertEqual(state["ack_mode"], "off")
+        return calls
+
+    def test_mode_required_multibatch_capture_sends_remaining_batch_before_terminal(
+        self,
+    ):
+        self._accept_first_batch_without_enterprise_ack("mode-required")
+        calls = []
+
+        def post(url, body, token, timeout, context, channel=None):
+            calls.append(body)
+            return response()
+
+        result = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            ack_mode="off",
+            post_json=post,
+        )
+        self.assertEqual(result.pending_captures, 0)
+        self.assertEqual(len(calls), 1)
+        self.assertNotIn(b'"row-0"', calls[0])
+        self.assertIn(b'"row-4"', calls[0])
+        self.assertEqual(sender.spool_status(self.spool).http_accepted_unverified, 1)
+
+    def test_ack_mode_change_after_partial_acceptance_fails_closed(self):
+        self._accept_first_batch_without_enterprise_ack("mode-drift")
+        calls = []
+        result = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            ack_mode="enterprise",
+            post_json=lambda *args: calls.append(args) or response(),
+        )
+        self.assertEqual(calls, [])
+        self.assertEqual(result.pending_captures, 1)
+        self.assertEqual(result.indexer_acknowledged_captures, 0)
+        self.assertFalse(list((self.spool / "accepted").glob("*.ndjson")))
 
     def test_acknowledgment_parser_accepts_documented_and_runtime_field_spelling(self):
         self.assertEqual(
