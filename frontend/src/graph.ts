@@ -862,6 +862,9 @@ export function parseGraph(value: unknown): Graph {
           !e.vlan_observations.every(validVlanObservation))) ||
       (e.vlan_observations_truncated !== undefined &&
         typeof e.vlan_observations_truncated !== "boolean") ||
+      ((e.nat_observations !== undefined ||
+        e.nat_observations_truncated !== undefined) &&
+        e.relationship !== "communicates_with") ||
       (e.nat_observations !== undefined &&
         !natObservationsInWindow(e.nat_observations)) ||
       (e.nat_observations_truncated !== undefined &&
