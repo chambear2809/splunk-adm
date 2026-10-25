@@ -159,6 +159,26 @@ class ScheduledCaptureTests(unittest.TestCase):
         self.assertEqual(hec_delivery.spool_status(self.spool).pending_captures, 1)
         self.assertEqual(len(self.captures), 1)
 
+    def test_corrupt_durable_copy_never_discards_the_last_valid_source(self):
+        def interrupted_receipt(*args, **kwargs):
+            hec_delivery.enqueue_capture(*args, **kwargs)
+            raise Interrupted()
+
+        interrupted_queue = SimpleNamespace(
+            spool_status=hec_delivery.spool_status, enqueue_capture=interrupted_receipt
+        )
+        with self.assertRaises(Interrupted):
+            self.run_capture(delivery=interrupted_queue)
+        pending = self.state / "pending.ndjson"
+        original = pending.read_bytes()
+        queued = next((self.spool / "pending").glob("*.ndjson"))
+        queued.write_bytes(b"")
+        with self.assertRaises(hec_delivery.DeliveryError):
+            self.run_capture(delivery=hec_delivery, token="")
+        self.assertEqual(pending.read_bytes(), original)
+        self.assertEqual(queued.read_bytes(), b"")
+        self.assertEqual(len(self.captures), 1)
+
     def test_capacity_preflight_prevents_source_capture(self):
         for key, value in (
             ("capacity_captures", 0),
