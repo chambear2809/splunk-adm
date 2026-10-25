@@ -92,22 +92,25 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
 
         cls.lab = lab
         subprocess.run([str(HERE / "lab.sh"), "reset"], check=True, capture_output=True)
-        cls.netflow_expected = GOLDEN["netflow"]["installed_search_facts"]["records"]
-        cls.netflow_count = cls.lab.load(
-            [
-                FIXTURES / "inputs" / "stream_netflow.ndjson",
-                FIXTURES / "inputs" / "stream_netflow_late.ndjson",
+        if os.environ.get("ADM_LAB_PROCESSOR_HEALTH_ONLY") != "1":
+            cls.netflow_expected = GOLDEN["netflow"]["installed_search_facts"][
+                "records"
             ]
-        )
-        cls.wait_for_count(
-            'index=netflow sourcetype="stream:netflow" | stats count AS count',
-            cls.netflow_count,
-        )
-        cls.netflow_rows = cls.lab.search(
-            "`adm_flows_netflow` | table _time host source sourcetype index exporter_ip seqnumber src_ip src_port dest_ip dest_port protoid bytes packets exporter_sampling_interval timestamp endtime input_snmpidx output_snmpidx adm_observer adm_exporter adm_transport adm_sampling adm_bytes_fwd adm_packets adm_start adm_end adm_in_ifindex adm_out_ifindex",
-            "0",
-            "2000000000",
-        )
+            cls.netflow_count = cls.lab.load(
+                [
+                    FIXTURES / "inputs" / "stream_netflow.ndjson",
+                    FIXTURES / "inputs" / "stream_netflow_late.ndjson",
+                ]
+            )
+            cls.wait_for_count(
+                'index=netflow sourcetype="stream:netflow" | stats count AS count',
+                cls.netflow_count,
+            )
+            cls.netflow_rows = cls.lab.search(
+                "`adm_flows_netflow` | table _time host source sourcetype index exporter_ip seqnumber src_ip src_port dest_ip dest_port protoid bytes packets exporter_sampling_interval timestamp endtime input_snmpidx output_snmpidx adm_observer adm_exporter adm_transport adm_sampling adm_bytes_fwd adm_packets adm_start adm_end adm_in_ifindex adm_out_ifindex",
+                "0",
+                "2000000000",
+            )
 
         cls.health_config, cls.health_selection, cls.health_capture = cls.health_case()
         cls.lab._hec_post(
@@ -115,6 +118,11 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
                 json.dumps(event, separators=(",", ":")).encode()
                 for event in cls.health_capture
             )
+        )
+        cls.health_indexed_rows = cls.lab.search(
+            'index=atlas_o11y sourcetype="atlas:o11y_health" host="o11y-observer-prod" | table _raw',
+            "0",
+            "2000000000",
         )
         cls.health_search = _health_helper(
             {"selection": cls.health_selection, "config": cls.health_config}
@@ -318,6 +326,23 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
         self.assertEqual(len(normalized), 6)
         self.assertEqual(normalized[-1]["kind"], "export_completion")
         self.assertEqual(normalized[-1]["expectedRecordCount"], 5)
+
+        indexed_events = [
+            json.loads(_first(row["_raw"]))
+            if isinstance(_first(row.get("_raw")), str)
+            else _first(row.get("_raw"))
+            for row in self.health_indexed_rows
+        ]
+        indexed_metrics = [
+            event for event in indexed_events if event.get("event_type") == "metric"
+        ]
+        required_nulls = GOLDEN["o11y_health_v1"]["required_null_fields"]
+        self.assertEqual(len(indexed_metrics), 5)
+        for event in indexed_metrics:
+            for field in required_nulls:
+                with self.subTest(signal=event["signal_label"], field=field):
+                    self.assertIn(field, event)
+                    self.assertIsNone(event[field])
 
         expected = {
             event["event"].get("signal_label"): event["event"]

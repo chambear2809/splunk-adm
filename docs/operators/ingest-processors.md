@@ -37,7 +37,10 @@ readback pass on the target tenant.
    sourcetype partitions and one destination per pipeline. Do not apply a
    second matching pipeline or add a `branch`/`thru` output. A pipeline
    `where` is filtering: filtered data drops instead of reaching the unmatched
-   fallback.
+   fallback. Observability detector-event and AppDynamics sourcetypes are
+   outside these v1 partitions; keep them on direct routes or qualify the
+   product-specific unmatched/default route separately before redirecting
+   those sources to this input.
 
 ## Preview and runtime qualification
 
@@ -53,13 +56,16 @@ Include these cases:
   interface indexes unchanged.
 - All five health metrics and the final `export_completion` record. Confirm
   the event time still equals `captured_at`, metric values and units are
-  unchanged, and the completion count remains five.
+  unchanged, and the completion count remains five. Each metric fixture also
+  has explicit JSON nulls for `pod_uid`, `container_name`, `host_name`, and
+  `jvm_memory_pool_name`; verify preview and indexed readback retain these
+  keys as null.
 - One structured HEC event with top-level `fields` outside `event`, such as the
   OTel boundary fixture. OTel is not a selected production pipeline; this case
   only verifies the envelope boundary on the receiver/runtime.
-- An event containing an explicit JSON null and a request with duplicate JSON
-  keys. These are not covered by the selected source fixtures. Record receiver
-  responses and output behavior; do not infer it from the offline validator.
+- A request with duplicate JSON keys. The offline validator rejects ambiguous
+  duplicate-key input, but that does not establish receiver/runtime behavior.
+  Record receiver response and counters for the selected product version.
 - An unknown sourcetype, a malformed JSON request, and a destination outage.
   Check the documented unmatched route, request errors, drop/fallback
   counters, queue/backpressure metrics, and sender retry behavior.

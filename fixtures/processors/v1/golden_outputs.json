@@ -1904,27 +1904,27 @@
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[0]",
         "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
-        "event_sha256": "05d8b9af765dae1121666754e3227f2af9d278ef2ddb4704c81fcc7d7c873a95"
+        "event_sha256": "ac85cc2822f8ca53f5daf059b7c1a81b14cb9f46df4d85aefca2b46463ab27f6"
       },
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[1]",
         "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
-        "event_sha256": "3d5c98a383d4f08b8d0a5cd6498229fde8e336c2ddcac6d1485fca70dd6058f5"
+        "event_sha256": "60f7aa02381d0236232e69a1f5027cc71787dbc6ecaa4fa936588fcf7d3bcde7"
       },
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[2]",
         "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
-        "event_sha256": "e8e37628965a1616c10ee92e85959085825922a8a849724226cd9cbac13a27fb"
+        "event_sha256": "96d92b48a180e8dfb203965e763ef2be477cbb2e74f4db3d82fdbbac71aca53b"
       },
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[3]",
         "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
-        "event_sha256": "5e3736f6a1749600a376c2278e800897deb698a59a8e5fa1a9939e7dc680bf7e"
+        "event_sha256": "76ef7c54b3d52fafd4a63f477978056f164e927f40023909f9ba6aa1ed890c03"
       },
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[4]",
         "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
-        "event_sha256": "4018dd3297b663810db15ca762c016b81b9f2642f2e298adbfd9e0ecde896afc"
+        "event_sha256": "32101acc2574085bfc02480b7f69a42ac0cf8da31f6fe9dd546fccb8c7ca0583"
       },
       {
         "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[5]",
@@ -1944,6 +1944,18 @@
       "capture_id": "o11y-capture-001",
       "expected_record_count": 5,
       "completion_event_is_final": true
+    },
+    "required_null_fields": [
+      "pod_uid",
+      "container_name",
+      "host_name",
+      "jvm_memory_pool_name"
+    ],
+    "required_null_values": {
+      "pod_uid": null,
+      "container_name": null,
+      "host_name": null,
+      "jvm_memory_pool_name": null
     }
   },
   "otel_hec_external_fields": {

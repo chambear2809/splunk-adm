@@ -5,6 +5,12 @@ These files are optional SPL2 templates for two narrow data partitions:
 - `stream:netflow` from Splunk Stream, routed to `netflow`.
 - `atlas:o11y_health` v1 capture events, routed to `atlas_o11y`.
 
+Observability detector-event sourcetypes and AppDynamics sourcetypes are
+outside these v1 partitions. Route those sources directly to their existing
+destination, or qualify their product-specific unmatched/default route
+separately before sending them through the same processor input. The v1
+profiles do not establish their coverage or fallback behavior.
+
 Edge Processor and Ingest Processor have separate deployment profiles and
 templates. Each template is a one-destination pass-through that changes only
 the destination `index` metadata. It does not extract, rename, aggregate,
@@ -59,14 +65,20 @@ macro together before enabling the source.
 identity in top-level HEC `fields`, outside `event`. The contract checks that
 boundary and its provenance. OTel is not a selected v1 processor partition.
 
-No selected source fixture contains an explicit JSON `null`. The identity
-templates contain no field-removal or serialization command, but null-value
-round-trip behavior and JSON byte formatting remain external runtime checks.
-Input fixtures with duplicate JSON keys are rejected by the offline validator
-as ambiguous; the behavior of a real HEC/processor version is not inferred
-from that rejection. Templates do not deduplicate retries. One route prevents
-pipeline fan-out, but sender retries can still create duplicate indexed
-events; no exactly-once delivery claim is made.
+Every health metric fixture event contains the four optional dimension keys
+`pod_uid`, `container_name`, `host_name`, and `jvm_memory_pool_name` as explicit
+JSON `null`, matching the current `tools/export_o11y_health.py` producer. The
+offline validator requires those keys to exist with null values and hashes the
+event including them; a regression removes or coerces them and must fail.
+This verifies the fixture and golden semantic contract. It does not qualify
+Edge/Ingest runtime serialization or prove indexed processor output retains
+the nulls; preview and indexed readback still need to verify that behavior.
+JSON byte order and whitespace also remain runtime checks. Input fixtures with
+duplicate JSON keys are rejected by the offline validator as ambiguous; the
+behavior of a real HEC/processor version is not inferred from that rejection.
+Templates do not deduplicate retries. One route prevents pipeline fan-out, but
+sender retries can still create duplicate indexed events; no exactly-once
+delivery claim is made.
 
 The checked-in golden file fingerprints semantic JSON values using sorted-key
 canonical JSON. It does not test serialized key order or execute SPL2.

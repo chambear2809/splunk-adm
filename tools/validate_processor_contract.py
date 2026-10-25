@@ -321,6 +321,35 @@ def _validate_profiles(root: Path) -> list[str]:
             descriptor.get("enabled_by_default") is False,
             f"{product}: profile must remain optional",
         )
+        _require(
+            descriptor.get("scope_exclusions")
+            == [
+                "Observability detector-event sourcetypes",
+                "AppDynamics sourcetypes",
+                "All other sourcetypes outside the two selected partitions",
+            ],
+            f"{product}: out-of-scope source families must remain explicit",
+        )
+        _require(
+            "directly or separately qualify"
+            in descriptor.get("excluded_input_handling", ""),
+            f"{product}: excluded sources need a separate route or fallback qualification",
+        )
+        _require(
+            descriptor.get("serialization", {}).get("explicit_null_fields")
+            == {
+                "pod_uid": None,
+                "container_name": None,
+                "host_name": None,
+                "jvm_memory_pool_name": None,
+            },
+            f"{product}: health optional null fields must be documented",
+        )
+        _require(
+            descriptor.get("serialization", {}).get("runtime_null_roundtrip")
+            == "unqualified; verify explicit nulls in product preview and indexed readback before qualification.",
+            f"{product}: runtime null round-trip must remain unqualified",
+        )
         behavior = descriptor.get("behavior")
         _require(isinstance(behavior, dict), f"{product}: behavior section missing")
         for disabled in ("filtering_enabled", "fanout_enabled", "masking_enabled"):
@@ -567,6 +596,21 @@ def validate_processor_contract(root: Path) -> dict[str, Any]:
         and health_expected["metadata_contract"].get("input_index_absent") is True,
         "health index routing expectation missing",
     )
+    required_null_fields = [
+        "pod_uid",
+        "container_name",
+        "host_name",
+        "jvm_memory_pool_name",
+    ]
+    _require(
+        health_expected.get("required_null_fields") == required_null_fields,
+        "health optional null-field list changed",
+    )
+    _require(
+        health_expected.get("required_null_values")
+        == {field: None for field in required_null_fields},
+        "health golden output must encode the optional fields as JSON null",
+    )
     labels: list[str] = []
     completion: list[dict[str, Any]] = []
     health_hashes = health_expected.get("required_event_hashes", [])
@@ -602,15 +646,16 @@ def validate_processor_contract(root: Path) -> dict[str, Any]:
             f"{label}: health golden input order changed",
         )
         _require(
-            expected.get("event_sha256") == canonical_sha256(event),
-            f"{label}: health event differs from golden output",
-        )
-        _require(
             expected.get("output_metadata_sha256")
             == _output_metadata_digest(envelope, "atlas_o11y"),
             f"{label}: health HEC metadata differs from golden output",
         )
         if event.get("event_type") == "metric":
+            for field in required_null_fields:
+                _require(
+                    field in event and event[field] is None,
+                    f"{label}: health optional field {field} must remain explicit JSON null",
+                )
             labels.append(event.get("signal_label"))
             _require(
                 event.get("unit")
@@ -623,6 +668,10 @@ def validate_processor_contract(root: Path) -> dict[str, Any]:
             completion.append(event)
         else:
             raise ProcessorContractError(f"{label}: unexpected health event type")
+        _require(
+            expected.get("event_sha256") == canonical_sha256(event),
+            f"{label}: health event differs from golden output",
+        )
     _require(
         len(labels) == health_expected.get("expected_metric_count"),
         "health metric count changed",
@@ -741,6 +790,7 @@ def validate_processor_contract(root: Path) -> dict[str, Any]:
         "netflow_records": len(netflow_records),
         "health_metric_records": len(labels),
         "health_completion_records": len(completion),
+        "health_explicit_null_fields": required_null_fields,
         "otel_external_fields_records": len(otel_copy),
         "negative_json_inputs_rejected": 2,
         "runtime_qualification": {

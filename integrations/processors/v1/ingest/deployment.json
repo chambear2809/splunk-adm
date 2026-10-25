@@ -81,6 +81,20 @@
     "duplicate_json_key_runtime_behavior": "unqualified; the offline fixture validator rejects ambiguous duplicate keys",
     "producer_retries_may_duplicate_events": true,
     "exactly_once_delivery_claimed": false,
-    "pipeline_changes_no_event_body_fields": true
-  }
+    "pipeline_changes_no_event_body_fields": true,
+    "explicit_null_fields": {
+      "pod_uid": null,
+      "container_name": null,
+      "host_name": null,
+      "jvm_memory_pool_name": null
+    },
+    "offline_null_contract": "Every selected health metric fixture explicitly carries these nulls; the offline validator enforces key presence and JSON null values.",
+    "runtime_null_roundtrip": "unqualified; verify explicit nulls in product preview and indexed readback before qualification."
+  },
+  "scope_exclusions": [
+    "Observability detector-event sourcetypes",
+    "AppDynamics sourcetypes",
+    "All other sourcetypes outside the two selected partitions"
+  ],
+  "excluded_input_handling": "Route excluded sources directly or separately qualify the product-specific unmatched/default route before sending them through the same processor input."
 }

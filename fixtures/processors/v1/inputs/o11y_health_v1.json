@@ -36,7 +36,11 @@
         "logical_timestamp": 1792763980,
         "value": 18,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "pod_uid": null,
+        "container_name": null,
+        "host_name": null,
+        "jvm_memory_pool_name": null
       }
     },
     {
@@ -74,7 +78,11 @@
         "value": 2,
         "sf_service": "checkout-api",
         "sf_environment": "production",
-        "sf_error": "true"
+        "sf_error": "true",
+        "pod_uid": null,
+        "container_name": null,
+        "host_name": null,
+        "jvm_memory_pool_name": null
       }
     },
     {
@@ -111,7 +119,11 @@
         "logical_timestamp": 1792763980,
         "value": 25000000,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "pod_uid": null,
+        "container_name": null,
+        "host_name": null,
+        "jvm_memory_pool_name": null
       }
     },
     {
@@ -145,7 +157,11 @@
         "logical_timestamp": 1792763980,
         "value": 0.42,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "pod_uid": null,
+        "container_name": null,
+        "host_name": null,
+        "jvm_memory_pool_name": null
       }
     },
     {
@@ -179,7 +195,11 @@
         "logical_timestamp": 1792763980,
         "value": 134217728,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "pod_uid": null,
+        "container_name": null,
+        "host_name": null,
+        "jvm_memory_pool_name": null
       }
     },
     {

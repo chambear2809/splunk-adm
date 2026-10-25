@@ -25,12 +25,13 @@
   },
   "provenance": {
     "stream_netflow": "Byte-for-byte copies of the TA-grounded synthetic HEC envelopes from fixtures/raw/stream_netflow.ndjson and fixtures/raw/late/stream_netflow.ndjson; includes TCP, UDP, ICMP, and late-export records.",
-    "atlas_o11y_health_v1": "Byte-for-byte copy of the existing synthetic completed health capture from fixtures/o11y/complete.json; this remains the existing v1 contract.",
+    "atlas_o11y_health_v1": "Derived from the existing completed health capture in fixtures/o11y/complete.json; each metric includes the four optional dimension keys emitted explicitly as JSON null by tools/export_o11y_health.py: pod_uid, container_name, host_name, and jvm_memory_pool_name.",
     "otel_external_hec_fields_boundary_case": "Byte-for-byte copy of the first synthetic OTel HEC envelope from fixtures/raw/otel_traces.ndjson. It validates the metadata boundary only; no OTel pipeline is selected."
   },
   "limitations": [
     "These fixtures do not execute SPL2 or prove Edge Processor or Ingest Processor runtime behavior.",
     "A runtime processor output must be captured from a supported product version and compared with these expected semantic facts before qualification.",
-    "Duplicate-key JSON is rejected as ambiguous by this offline validator; behavior of a real HEC receiver must be qualified on the selected product version."
+    "Duplicate-key JSON is rejected as ambiguous by this offline validator; behavior of a real HEC receiver must be qualified on the selected product version.",
+    "The health fixture and offline semantic validator preserve explicit JSON null values; Edge/Ingest runtime serialization and indexed readback of those values remain unqualified."
   ]
 }

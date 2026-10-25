@@ -75,6 +75,58 @@ class ProcessorContractTest(unittest.TestCase):
             ):
                 validate_processor_contract(root)
 
+    def test_health_optional_nulls_are_golden_and_reject_removal_or_coercion(self):
+        fields = ["pod_uid", "container_name", "host_name", "jvm_memory_pool_name"]
+        fixture_path = ROOT / "fixtures/processors/v1/inputs/o11y_health_v1.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        golden = json.loads(
+            (ROOT / "fixtures/processors/v1/golden_outputs.json").read_text(
+                encoding="utf-8"
+            )
+        )["o11y_health_v1"]
+        self.assertEqual(golden["required_null_fields"], fields)
+        self.assertEqual(
+            golden["required_null_values"], {field: None for field in fields}
+        )
+        for envelope in fixture["events"]:
+            if envelope["event"].get("event_type") == "metric":
+                for field in fields:
+                    with self.subTest(
+                        signal=envelope["event"]["signal_label"], field=field
+                    ):
+                        self.assertIn(field, envelope["event"])
+                        self.assertIsNone(envelope["event"][field])
+
+        for mutation in ("remove", "coerce"):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                shutil.copytree(ROOT / "integrations", root / "integrations")
+                shutil.copytree(
+                    ROOT / "fixtures" / "processors", root / "fixtures" / "processors"
+                )
+                copied = root / "fixtures/processors/v1/inputs/o11y_health_v1.json"
+                changed = json.loads(copied.read_text(encoding="utf-8"))
+                metric = next(
+                    item["event"]
+                    for item in changed["events"]
+                    if item["event"].get("event_type") == "metric"
+                )
+                if mutation == "remove":
+                    metric.pop("pod_uid")
+                else:
+                    metric["pod_uid"] = "not-null"
+                copied.write_text(
+                    json.dumps(changed, indent=2) + "\n", encoding="utf-8"
+                )
+                with self.assertRaisesRegex(
+                    ProcessorContractError,
+                    "health optional field pod_uid must remain explicit JSON null",
+                ):
+                    validate_processor_contract(root)
+
     def test_manifest_negative_inputs_are_not_valid_json(self):
         manifest = json.loads(
             (ROOT / "fixtures/processors/v1/manifest.json").read_text(encoding="utf-8")
