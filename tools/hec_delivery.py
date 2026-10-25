@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
 import http.client
+import ipaddress
 import json
 import math
 import os
@@ -21,6 +22,7 @@ from pathlib import Path
 import re
 import socket
 import ssl
+import stat
 import sys
 import tempfile
 import threading
@@ -37,7 +39,7 @@ SPOOL_MAX_PENDING_RECORDS = 1_000_000
 CAPTURE_MAX_RECORDS = 10_000
 CAPTURE_MAX_BYTES = 67_108_864
 BATCH_MAX_BYTES = 262_144
-LINE_MAX_BYTES = 1_048_576
+LINE_MAX_BYTES = 65_535
 HTTP_TIMEOUT_SECONDS = 30
 HTTP_ATTEMPTS = 3
 DEFAULT_ACK_WAIT_SECONDS = 30
@@ -64,6 +66,10 @@ class SpoolCapacityError(DeliveryError):
 
 class SpoolBusyError(DeliveryError):
     """Another sender or queue operation currently owns the spool lock."""
+
+
+class _DuplicateJSONKeyError(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -130,6 +136,101 @@ def _literal_capture_key(value: Any) -> str:
     ):
         raise DeliveryError("Capture lacks one valid capture_id or snapshot_id.")
     return value
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise _DuplicateJSONKeyError
+        result[key] = value
+    return result
+
+
+def _read_capture_file(source_path: Path) -> bytes:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(source_path, flags)
+    except OSError:
+        raise DeliveryError("Capture path must be a readable regular file.") from None
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise DeliveryError("Capture path must be a regular file.")
+            if before.st_size <= 0 or before.st_size > CAPTURE_MAX_BYTES:
+                raise DeliveryError("Capture exceeds the configured byte limit.")
+            content = handle.read(CAPTURE_MAX_BYTES + 1)
+            after = os.fstat(handle.fileno())
+    except DeliveryError:
+        raise
+    except OSError:
+        raise DeliveryError("Capture file could not be read.") from None
+    identity_before = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    identity_after = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if (
+        len(content) > CAPTURE_MAX_BYTES
+        or len(content) != before.st_size
+        or identity_before != identity_after
+    ):
+        raise DeliveryError("Capture changed or exceeded the configured byte limit.")
+    return content
+
+
+def _read_bounded_file(path: Path, maximum: int) -> bytes | None:
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError:
+        return None
+    except OSError:
+        raise DeliveryError("Spool checkpoint path is invalid.") from None
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode) or before.st_size > maximum:
+                return None
+            content = handle.read(maximum + 1)
+            after = os.fstat(handle.fileno())
+    except OSError:
+        raise DeliveryError("Spool checkpoint path is invalid.") from None
+    before_identity = (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+        before.st_ctime_ns,
+    )
+    after_identity = (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+        after.st_ctime_ns,
+    )
+    if (
+        len(content) > maximum
+        or len(content) != before.st_size
+        or before_identity != after_identity
+    ):
+        return None
+    return content
 
 
 def _resolved_spool(path: Path) -> Path:
@@ -203,16 +304,8 @@ class _SpoolLock:
 
 def _load_capture(source_path: Path, source_id: str) -> _Capture:
     source_id = _safe_source_id(source_id)
-    if source_path.is_symlink() or not source_path.is_file():
-        raise DeliveryError("Capture path must be a regular file.")
-    try:
-        byte_count = source_path.stat().st_size
-        if byte_count <= 0 or byte_count > CAPTURE_MAX_BYTES:
-            raise DeliveryError("Capture exceeds the configured byte limit.")
-        content = source_path.read_bytes()
-    except OSError:
-        raise DeliveryError("Capture file could not be read.") from None
-    if len(content) != byte_count or not content.endswith(b"\n"):
+    content = _read_capture_file(source_path)
+    if not content.endswith(b"\n"):
         raise DeliveryError("Capture is truncated or lacks a final newline.")
     split_lines = content.splitlines()
     if not split_lines or any(not line for line in split_lines):
@@ -226,8 +319,12 @@ def _load_capture(source_path: Path, source_id: str) -> _Capture:
         if len(line) > LINE_MAX_BYTES:
             raise DeliveryError("Capture contains an oversized record.")
         try:
-            envelope = json.loads(line)
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            envelope = json.loads(line, object_pairs_hook=_unique_json_object)
+        except (
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            _DuplicateJSONKeyError,
+        ):
             raise DeliveryError("Capture contains invalid JSON.") from None
         if not isinstance(envelope, dict) or not isinstance(
             envelope.get("event"), dict
@@ -333,6 +430,12 @@ def _fsync_directory(path: Path) -> None:
 
 
 def _atomic_write(path: Path, content: bytes, mode: int = 0o600) -> None:
+    spool = path.parent.parent
+    if _all_spool_bytes(spool) + len(content) > SPOOL_MAX_BYTES:
+        raise SpoolCapacityError(
+            "total_spool_bytes",
+            "Spool byte limit reached; existing entries were preserved.",
+        )
     temporary: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -357,6 +460,10 @@ def _atomic_write(path: Path, content: bytes, mode: int = 0o600) -> None:
 
 
 def _checkpoint_template(capture: _Capture, path: Path) -> dict[str, Any]:
+    try:
+        queued_at = int(path.stat().st_mtime)
+    except OSError:
+        queued_at = int(time.time())
     return {
         "version": 1,
         "source_id": capture.source_id,
@@ -376,39 +483,53 @@ def _checkpoint_template(capture: _Capture, path: Path) -> dict[str, Any]:
         "ack_batch_end": None,
         "checkpoint_recovered": False,
         "last_error_code": None,
+        "delivery_endpoint": None,
+        "queued_at": queued_at,
         "updated_at": int(time.time()),
     }
 
 
+def _checkpoint_checksum(state: Mapping[str, Any]) -> str:
+    payload = {key: value for key, value in state.items() if key != "checksum"}
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _write_checkpoint(path: Path, state: Mapping[str, Any]) -> None:
+    _atomic_write(path, _checkpoint_content(state))
+
+
+def _checkpoint_content(state: Mapping[str, Any]) -> bytes:
     updated = dict(state)
     updated["updated_at"] = int(time.time())
-    _atomic_write(
-        path,
-        json.dumps(updated, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        + b"\n",
+    updated.pop("checksum", None)
+    updated["checksum"] = _checkpoint_checksum(updated)
+    return (
+        json.dumps(
+            updated, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        + b"\n"
     )
 
 
 def _read_checkpoint(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
+    raw = _read_bounded_file(path, 65_536)
+    if raw is None or not raw.endswith(b"\n"):
         return None
-    if path.is_symlink() or not path.is_file():
-        raise DeliveryError("Spool checkpoint path is invalid.")
     try:
-        raw = path.read_bytes()
-        if len(raw) > 65_536 or not raw.endswith(b"\n"):
-            return None
-        parsed = json.loads(raw)
-        if (
-            not isinstance(parsed, dict)
-            or isinstance(parsed.get("version"), bool)
-            or parsed.get("version") != 1
-        ):
-            return None
-        return parsed
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        parsed = json.loads(raw, object_pairs_hook=_unique_json_object)
+    except (UnicodeDecodeError, json.JSONDecodeError, _DuplicateJSONKeyError):
         return None
+    if (
+        not isinstance(parsed, dict)
+        or isinstance(parsed.get("version"), bool)
+        or parsed.get("version") != 1
+        or parsed.get("checksum") != _checkpoint_checksum(parsed)
+    ):
+        return None
+    return parsed
 
 
 def _store_capture(spool: Path, capture: _Capture, *, area: str = "pending") -> Path:
@@ -419,6 +540,11 @@ def _store_capture(spool: Path, capture: _Capture, *, area: str = "pending") -> 
         if not destination.is_file():
             raise DeliveryError("Spool capture path is invalid.")
         return destination
+    if _all_spool_bytes(spool) + 2 * len(capture.content) > SPOOL_MAX_BYTES:
+        raise SpoolCapacityError(
+            "total_spool_bytes",
+            "Spool byte limit reached; finalized input remains at its source path.",
+        )
     temporary: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -457,6 +583,10 @@ def _checkpoint_matches(state: Mapping[str, Any], capture: _Capture) -> bool:
         and state.get("capture_digest") == capture.digest
         and state.get("record_count") == len(capture.lines)
         and state.get("byte_count") == len(capture.content)
+        and (
+            state.get("delivery_endpoint") is None
+            or isinstance(state.get("delivery_endpoint"), str)
+        )
     )
 
 
@@ -505,6 +635,9 @@ def enqueue_capture(
         spool, capture.source_id, capture.capture_key, capture.digest
     )
     with _SpoolLock(spool):
+        checkpoint_reservation = len(
+            _checkpoint_content(_checkpoint_template(capture, target))
+        )
         # A capture identity is immutable. If a retry changes source bytes,
         # preserve the conflict evidence separately and refuse to send it.
         for area in ("pending", "accepted", "quarantine"):
@@ -533,7 +666,12 @@ def enqueue_capture(
                         True,
                     )
                 conflict_target = _capture_path(spool, capture, "quarantine")
-                if _all_spool_bytes(spool) + len(capture.content) > SPOOL_MAX_BYTES:
+                if (
+                    _all_spool_bytes(spool)
+                    + 2 * len(capture.content)
+                    + checkpoint_reservation
+                    > SPOOL_MAX_BYTES
+                ):
                     raise SpoolCapacityError(
                         "total_spool_bytes",
                         "Spool is full; conflicting input remains at its source path.",
@@ -558,7 +696,10 @@ def enqueue_capture(
                 "pending_records",
                 "Spool record limit reached; no new capture was accepted.",
             )
-        if _all_spool_bytes(spool) + len(capture.content) > SPOOL_MAX_BYTES:
+        if (
+            _all_spool_bytes(spool) + 2 * len(capture.content) + checkpoint_reservation
+            > SPOOL_MAX_BYTES
+        ):
             raise SpoolCapacityError(
                 "total_spool_bytes",
                 "Spool byte limit reached; no new capture was accepted.",
@@ -605,14 +746,21 @@ def _parse_endpoint(value: str) -> tuple[str, str]:
     if parsed.path in ("", "/"):
         event_path = "/services/collector/event"
     elif parsed.path == "/services/collector":
-        event_path = "/services/collector/event"
+        # Splunk Edge Ingest accepts the structured event envelope on this
+        # route. Preserve an explicitly configured route; only a bare origin
+        # defaults to the Enterprise `/event` endpoint.
+        event_path = parsed.path
     elif parsed.path == "/services/collector/event":
         event_path = parsed.path
     else:
         raise DeliveryError(
             "HEC endpoint path is not a supported collector event route."
         )
-    origin = urlunsplit(("https", parsed.netloc, "", "", ""))
+    host = hostname.lower()
+    if ":" in host:
+        host = f"[{host}]"
+    authority = host if port in (None, 443) else f"{host}:{port}"
+    origin = urlunsplit(("https", authority, "", "", ""))
     return origin + event_path, origin
 
 
@@ -657,19 +805,113 @@ def _post_json(
         or parsed.username
         or parsed.password
         or parsed.fragment
-        or not parsed.path.startswith("/services/collector/")
+        or parsed.path
+        not in {
+            "/services/collector",
+            "/services/collector/event",
+            "/services/collector/ack",
+        }
     ):
         raise DeliveryError("HEC endpoint is invalid.")
     path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
-    connection = http.client.HTTPSConnection(
+    target_port = port or 443
+    deadline = time.monotonic() + timeout_seconds
+    addresses: list[tuple[Any, ...]] = []
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        resolved: list[list[tuple[Any, ...]]] = []
+        resolve_error: list[OSError] = []
+        resolution_finished = threading.Event()
+
+        def resolve() -> None:
+            try:
+                resolved.append(
+                    socket.getaddrinfo(hostname, target_port, type=socket.SOCK_STREAM)
+                )
+            except OSError as error:
+                resolve_error.append(error)
+            finally:
+                resolution_finished.set()
+
+        threading.Thread(target=resolve, daemon=True, name="atlas-hec-dns").start()
+        if not resolution_finished.wait(timeout_seconds):
+            raise _HTTPFailure(0, True) from None
+        if resolve_error or not resolved or not resolved[0]:
+            raise _HTTPFailure(0, True) from None
+        addresses = resolved[0]
+    else:
+        if address.version == 4:
+            addresses = [
+                (
+                    socket.AF_INET,
+                    socket.SOCK_STREAM,
+                    socket.IPPROTO_TCP,
+                    "",
+                    (str(address), target_port),
+                )
+            ]
+        else:
+            addresses = [
+                (
+                    socket.AF_INET6,
+                    socket.SOCK_STREAM,
+                    socket.IPPROTO_TCP,
+                    "",
+                    (str(address), target_port, 0, 0),
+                )
+            ]
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise _HTTPFailure(0, True) from None
+
+    active_socket: socket.socket | None = None
+    connection: http.client.HTTPSConnection
+
+    class BoundedHTTPSConnection(http.client.HTTPSConnection):
+        def connect(self) -> None:
+            nonlocal active_socket
+            last_error: OSError | None = None
+            for family, kind, protocol, _canonical_name, address_tuple in addresses:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("HEC request deadline expired")
+                raw = socket.socket(family, kind, protocol)
+                raw.settimeout(max(0.001, deadline - time.monotonic()))
+                self.sock = raw
+                active_socket = raw
+                try:
+                    raw.connect(address_tuple)
+                    wrapped = ssl_context.wrap_socket(
+                        raw, server_hostname=hostname, do_handshake_on_connect=False
+                    )
+                    self.sock = wrapped
+                    active_socket = wrapped
+                    wrapped.settimeout(max(0.001, deadline - time.monotonic()))
+                    wrapped.do_handshake()
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError("HEC request deadline expired")
+                    return
+                except OSError as error:
+                    last_error = error
+                    try:
+                        raw.close()
+                    except OSError:
+                        pass
+                    self.sock = None
+                    active_socket = None
+            if last_error is not None:
+                raise last_error
+            raise TimeoutError("HEC request deadline expired")
+
+    connection = BoundedHTTPSConnection(
         hostname,
-        port=port,
-        timeout=timeout_seconds,
+        port=target_port,
+        timeout=remaining,
         context=ssl_context,
     )
 
     def abort_request() -> None:
-        sock = connection.sock
+        sock = connection.sock or active_socket
         if sock is not None:
             try:
                 sock.shutdown(socket.SHUT_RDWR)
@@ -683,11 +925,12 @@ def _post_json(
         while not request_finished.wait(0.05):
             abort_request()
 
-    timer = threading.Timer(timeout_seconds, abort_until_finished)
+    timer = threading.Timer(remaining, abort_until_finished)
     timer.daemon = True
     timer.start()
     try:
         connection.request("POST", path, body=body, headers=headers)
+        active_socket = connection.sock or active_socket
         response = connection.getresponse()
         response_body = response.read(65_537)
         if len(response_body) > 65_536:
@@ -724,12 +967,26 @@ def _successful_hec_response(response: _HTTPResponse) -> tuple[int | None, int |
     code = parsed.get("code") if isinstance(parsed, dict) else None
     if not isinstance(parsed, dict) or isinstance(code, bool) or code not in (0, "0"):
         raise DeliveryError("HEC rejected the batch; capture remains pending.")
-    ack_id = parsed.get("ackID")
-    if ack_id is not None and (
-        isinstance(ack_id, bool) or not isinstance(ack_id, int) or ack_id < 0
-    ):
-        raise DeliveryError("HEC returned an invalid acknowledgment ID.")
-    return ack_id, parsed.get("code")
+    # Splunk's current Enterprise documentation uses ``ackID`` while the
+    # supported 10.6 runtime returns ``ackId``. Normalize both forms, but do
+    # not silently pick one if a response contains conflicting aliases.
+    ack_values = [parsed[key] for key in ("ackID", "ackId") if key in parsed]
+    normalized: list[int] = []
+    for value in ack_values:
+        if isinstance(value, bool):
+            raise DeliveryError("HEC returned an invalid acknowledgment ID.")
+        if isinstance(value, int):
+            number = value
+        elif isinstance(value, str) and re.fullmatch(r"[0-9]{1,20}", value):
+            number = int(value)
+        else:
+            raise DeliveryError("HEC returned an invalid acknowledgment ID.")
+        if number < 0:
+            raise DeliveryError("HEC returned an invalid acknowledgment ID.")
+        normalized.append(number)
+    if len(set(normalized)) > 1:
+        raise DeliveryError("HEC returned conflicting acknowledgment IDs.")
+    return (normalized[0] if normalized else None), parsed.get("code")
 
 
 def _context(ca_bundle: str | None) -> ssl.SSLContext:
@@ -785,7 +1042,9 @@ def _recover_checkpoint(
     if checkpoint.exists() and (
         state is None or not _checkpoint_matches(state, capture)
     ):
-        corrupt = checkpoint.with_name(f"{checkpoint.name}.corrupt.{int(time.time())}")
+        corrupt = checkpoint.with_name(
+            f"{checkpoint.name}.corrupt.{int(time.time())}.{uuid.uuid4().hex}"
+        )
         try:
             os.replace(checkpoint, corrupt)
             _fsync_directory(checkpoint.parent)
@@ -882,6 +1141,14 @@ def _send_capture(
         "acknowledgment_mode_required",
     }:
         return str(state["status"]), 0, 0
+    bound_endpoint = state.get("delivery_endpoint")
+    if bound_endpoint is None:
+        state["delivery_endpoint"] = endpoint
+        _write_checkpoint(checkpoint, state)
+    elif bound_endpoint != endpoint:
+        raise DeliveryError(
+            "Capture is already bound to another HEC endpoint; pending data was preserved."
+        )
     if ack_mode == "enterprise" and origin.lower().endswith(".splunkcloud.com"):
         raise DeliveryError(
             "HEC indexer acknowledgment is unavailable for direct Splunk Cloud delivery."
@@ -1135,9 +1402,14 @@ def _spool_status_locked(spool: Path) -> SpoolStatus:
             if area == "quarantine":
                 quarantined += 1
             if area == "pending":
-                updated = state.get("updated_at")
-                if isinstance(updated, int) and not isinstance(updated, bool):
-                    age = max(0, now - updated)
+                queued_at = state.get("queued_at")
+                if isinstance(queued_at, int) and not isinstance(queued_at, bool):
+                    age = max(0, now - queued_at)
+                    oldest = age if oldest is None else max(oldest, age)
+                else:
+                    # Checkpoints written before `queued_at` used the pending
+                    # file's creation time; retry updates must not reset age.
+                    age = max(0, now - int(path.stat().st_mtime))
                     oldest = age if oldest is None else max(oldest, age)
     return SpoolStatus(
         pending_captures=pending_captures,
