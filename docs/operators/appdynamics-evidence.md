@@ -86,12 +86,19 @@ the shared durable sender; it owns retries, checkpoints and HEC TLS behavior.
 python3 -m tools.hec_delivery enqueue \
   --input /var/tmp/appdynamics.hec.ndjson \
   --source-id appdynamics_inventory
-python3 -m tools.hec_delivery enqueue \
-  --input /var/tmp/appdynamics-asset-history.hec.ndjson \
-  --source-id appdynamics_asset_history
+if [ -s /var/tmp/appdynamics-asset-history.hec.ndjson ]; then
+  python3 -m tools.hec_delivery enqueue \
+    --input /var/tmp/appdynamics-asset-history.hec.ndjson \
+    --source-id appdynamics_asset_history
+fi
 python3 -m tools.hec_delivery status
 python3 -m tools.hec_delivery send
 ```
+
+A complete empty inventory still produces its hierarchy snapshot record.
+When the import report has `asset_history_records=0`, the asset-history output
+is empty and must not be enqueued. It contains no address claims and does not
+retire earlier observations.
 
 Provide `ATLAS_HEC_URL`, `ATLAS_HEC_TOKEN` and `ATLAS_HEC_SPOOL_DIR` through
 the controlled runtime environment. Configure `ATLAS_HEC_CA_BUNDLE` if the
