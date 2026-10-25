@@ -1,0 +1,12 @@
+<applications>
+  <application>
+    <id>101</id>
+    <name>Checkout</name>
+    <description></description>
+  </application>
+  <application>
+    <id>202</id>
+    <name>Inventory</name>
+    <description></description>
+  </application>
+</applications>

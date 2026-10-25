@@ -1,0 +1,27 @@
+<backends>
+  <backend>
+    <id>55</id>
+    <name>Checkout MySQL</name>
+    <exitPointType>JDBC</exitPointType>
+    <properties>
+      <name-value><id>0</id><name>HOST</name><value>10.20.0.17</value></name-value>
+      <name-value><id>0</id><name>PORT</name><value>3306</value></name-value>
+      <name-value><id>0</id><name>URL</name><value>jdbc:mysql://dbuser:dbpass@db.example:3306/orders?password=query-secret</value></name-value>
+      <name-value><id>0</id><name>PASSWORD</name><value>property-secret</value></name-value>
+      <name-value><id>0</id><name>VENDOR</name><value>MySQL</value></name-value>
+    </properties>
+    <applicationComponentNodeId>3</applicationComponentNodeId>
+    <tierId>7</tierId>
+  </backend>
+  <backend>
+    <id>56</id>
+    <name>Unresolved Payments</name>
+    <exitPointType>HTTP</exitPointType>
+    <properties>
+      <name-value><id>0</id><name>HOST</name><value>payments-db.internal</value></name-value>
+      <name-value><id>0</id><name>PORT</name><value>443</value></name-value>
+    </properties>
+    <applicationComponentNodeId>0</applicationComponentNodeId>
+    <tierId>0</tierId>
+  </backend>
+</backends>
