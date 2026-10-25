@@ -62,8 +62,11 @@ exercise ACI, FTD, Nexus Dashboard, LLDP, Kubernetes attachment resolution,
 other inventory sources, mixed-source collisions, or distributed search. The
 `above` run fetches exactly one sentinel row beyond the 20,000-row limit; the
 search job is reported as limit-exceeded while the benchmark records the
-expected application rejection as a successful boundary check if every other
-correctness and completion condition passes.
+expected over-limit outcome as a successful boundary check if every other
+correctness and completion condition passes. `application_accepts_rows` is a
+static comparison of retrieved row count with the source-defined parser
+constant. This benchmark does not run the React parser or browser, so it does
+not directly test live UI rejection.
 
 Because the reviewed fixture shapes contain no CDP/ACI/LLDP adjacency and no
 `show interface snmp-ifindex` output, the expected metadata warning set has
@@ -91,7 +94,10 @@ metrics remain `null`, never zero. A failed page, short page, bad final count,
 preview, early finalization, event/result truncation, drops, row mismatch or
 unexpected dispatch state leaves the attempt visible as failed or incomplete.
 Each run also records attempted and acknowledged HEC batches so a failed ingest
-does not disappear from the evidence.
+does not disappear from the evidence. Here “acknowledged” means the HEC request
+returned HTTP success with HEC `code=0`; it does not mean indexer
+acknowledgment was enabled or polled. Separate Splunk visibility searches
+record the indexed event count and identities.
 
 ## Running offline checks and local measurements
 
