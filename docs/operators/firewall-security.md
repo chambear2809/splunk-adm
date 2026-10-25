@@ -9,7 +9,7 @@ For source selection and release limits, see [deployment options](deployment-opt
 - [ ] An eStreamer client certificate from FMC for the Splunk input host.
 - [ ] The Cisco Security Cloud eStreamer input configured for connection events.
 - [ ] Connection logging enabled on the access-control rules that carry application traffic.
-- [ ] A sample of NAT'd connection events so we can check which addresses the events record.
+- [ ] A sanitized sample of NAT'd connection events so we can check which addresses the deployed FMC/FTD actually emits.
 
 ## Configuration
 
@@ -32,7 +32,11 @@ The equivalent `inputs.conf` keys are `fmc_host`, `fmc_port`, `event_types`, `so
 
 ## NAT
 
-The add-on does not extract a translated (post-NAT) address or port from FTD connection events, so the map cannot yet link a public VIP or SNAT address on the firewall to the internal endpoint behind it. Send us events for one DNAT and one SNAT connection. If FMC can include the translated initiator/responder addresses and ports in eStreamer connection events for your version, tell us how it is enabled.
+Cisco's eStreamer ConnectionEvent field set documents `NAT_InitiatorIP`, `NAT_InitiatorPort`, `NAT_ResponderIP` and `NAT_ResponderPort` as translated tuple fields. `OriginalInitiatorIP` is a separate field; the app does not label `InitiatorIP` categorically as the original endpoint. Cisco notes passthrough tunnel events can report tunnel endpoints in the base initiator/responder fields. The inspected TA versions request a `DetailFieldSet` containing these fields, but their explicit `props.conf` mappings do not add NAT aliases. Splunk's default automatic JSON extraction can expose raw JSON values, so Application Atlas conditionally preserves a complete, changed tuple from the same event.
+
+This evidence is shown on the existing firewall conversation with its mapped scope, reporting device, event fingerprint, event time and Splunk receipt time. Incomplete, malformed, multivalue, unmapped or unchanged tuples are not shown. It does not change traffic counters, join observations across events or devices, or select a Kubernetes/load-balancer backend. V2 is staged and does not currently project this field. The local synthetic fixture validates parsing only; representative live eStreamer emission has not been qualified. Send sanitized events for one DNAT and one SNAT connection so the deployed FMC/FTD version, settings and emitted values can be confirmed.
+
+Field references: [Cisco Connection Event field definitions](https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740/c_available_fqe.html), [Cisco eStreamer OutputFieldSet protocol](https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740/c_estreamer_protocol.html), [Splunk automatic JSON extraction](https://help.splunk.com/en/splunk-cloud-platform/manage-knowledge-objects/knowledge-management-manual/10.4.2604/use-the-configuration-files-to-configure-field-extractions/configure-automatic-key-value-field-extraction), and the inspected local package paths in [TA package analysis](../TA_PACKAGE_ANALYSIS.md#cisco-security-cloud-four-requested-products-in-one-package).
 
 ## How to verify
 
@@ -60,4 +64,4 @@ Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-s
 
 ## Sources
 
-Cisco Security Cloud 3.7.2: `default/inputs.conf:44-50`, `README/inputs.conf.spec` (`sbg_fw_estreamer_input`), `appserver/static/js/build/globalConfig.json` (E-Streamer fields and event types), `default/props.conf:985` (field mappings); NAT gap: `docs/TA_PACKAGE_ANALYSIS.md`.
+Cisco Security Cloud 3.6.5 and 3.7.2: `bin/CiscoSecurityCloud/fw_estreamer/utils.py` requests `DetailFieldSet` for ConnectionEvent; `default/inputs.conf:44-50`, `README/inputs.conf.spec` (`sbg_fw_estreamer_input`), `appserver/static/js/build/globalConfig.json` (E-Streamer fields and event types), `default/props.conf:985` (initiator/responder aliases only). See [TA package analysis](../TA_PACKAGE_ANALYSIS.md#cisco-security-cloud-four-requested-products-in-one-package) for the inspected field-set definition and live-emission limitation.

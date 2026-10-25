@@ -100,6 +100,54 @@ const inspector = (
   );
 
 describe("network evidence inspectors", () => {
+  it("shows same-event FTD tuples with their direction and separate original-IP field", () => {
+    const graph = handoffGraph();
+    const edge = graph.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+        reported_original_initiator_ip: "198.51.100.8",
+      },
+    ];
+    edge.nat_observations_truncated = true;
+    const html = inspector(graph, { kind: "edge", id: edge.id });
+    expect(html).toContain("Firewall translation evidence");
+    expect(html).toContain("Initiator → Responder");
+    expect(html).toContain("Reported tuple 198.51.100.8:51400");
+    expect(html).toContain("NAT translated tuple 192.0.2.44:35000");
+    expect(html).toContain(
+      "Cisco reported OriginalInitiatorIP 198.51.100.8 (separate field)",
+    );
+    expect(html).toContain("Scope firewall-prod · Device 192.0.2.1");
+    expect(html).toContain("Event fingerprint");
+    expect(html).toContain(
+      "additional evidence for this window may have been omitted",
+    );
+    expect(html).not.toContain("Original tuple");
+    expect(
+      graph.edges.filter((item) => item.relationship === "forwards_to"),
+    ).toHaveLength(1);
+  });
+
   it("withholds aggregate backend and receiving-node fields for partial client handoffs", () => {
     const graph = handoffGraph();
     const edge = graph.edges.find(

@@ -90,6 +90,46 @@ describe("diffGraphs", () => {
     });
   });
 
+  it("detects changed FTD NAT evidence within an otherwise stable edge", () => {
+    const previousEdge: GraphEdge = {
+      ...edge("same"),
+      relationship: "communicates_with",
+      nat_observations: [
+        {
+          source_authority: "cisco:sfw:estreamer",
+          event_type: "ConnectionEvent",
+          scope: "firewall-prod",
+          scope_mapping_verified: true,
+          device_ip: "192.0.2.1",
+          event_fingerprint: "a".repeat(64),
+          event_time: 1_791_373_808,
+          received_time: 1_791_373_809,
+          protocol: "tcp",
+          direction: "initiator_to_responder",
+          reported_initiator_ip: "198.51.100.8",
+          reported_initiator_port: 51400,
+          reported_responder_ip: "203.0.113.10",
+          reported_responder_port: 443,
+          translated_initiator_ip: "192.0.2.44",
+          translated_initiator_port: 35000,
+          translated_responder_ip: "203.0.113.10",
+          translated_responder_port: 443,
+        },
+      ],
+    };
+    const currentEdge = structuredClone(previousEdge);
+    currentEdge.nat_observations![0].translated_initiator_ip = "192.0.2.45";
+    currentEdge.nat_observations_truncated = true;
+    expect(
+      diffGraphs(graph([], [previousEdge]), graph([], [currentEdge]))
+        .changedEdges,
+    ).toHaveLength(1);
+    expect(
+      diffGraphs(graph([], [previousEdge]), graph([], [currentEdge]))
+        .changedEdges[0].current.nat_observations_truncated,
+    ).toBe(true);
+  });
+
   it("ignores pod UID, generated label, and replacement address churn", () => {
     const oldPod = node("pod/old-uid", "workload", {
       label: "api-abc12",

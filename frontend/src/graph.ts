@@ -1,4 +1,5 @@
 import { isoTime } from "./time";
+import { usableNatIp } from "./ip";
 export type NodeKind = "service" | "workload" | "endpoint" | "client";
 export type Relationship =
   | "calls"
@@ -176,6 +177,10 @@ export interface GraphEdge {
   vlan_observations?: VlanObservation[];
   /** NetFlow discarded additional VLAN contexts for this edge. */
   vlan_observations_truncated?: boolean;
+  /** Cisco FTD eStreamer translation evidence contained in the same event. */
+  nat_observations?: NatObservation[];
+  /** More same-event translation observations existed than were returned. */
+  nat_observations_truncated?: boolean;
   /** Flow observations are evidence at observation points, not adjacency or packet routes. */
   traffic_observations?: TrafficObservation[];
   attachment_evidence?: AttachmentEvidence[];
@@ -208,12 +213,35 @@ export interface VlanObservation {
   first_seen: number;
   last_seen: number;
 }
+export interface NatObservation {
+  source_authority: "cisco:sfw:estreamer";
+  event_type: "ConnectionEvent";
+  scope: string;
+  scope_mapping_verified: true;
+  device_ip: string;
+  event_fingerprint: string;
+  event_time: number;
+  received_time: number;
+  protocol: "tcp" | "udp" | "sctp";
+  direction: "initiator_to_responder";
+  reported_initiator_ip: string;
+  reported_initiator_port: number;
+  reported_responder_ip: string;
+  reported_responder_port: number;
+  translated_initiator_ip: string;
+  translated_initiator_port: number;
+  translated_responder_ip: string;
+  translated_responder_port: number;
+  reported_original_initiator_ip?: string;
+}
 export interface Graph {
   schema_version: 1;
   snapshot_id: string;
   generated_at: string;
   demo: boolean;
   window: { start: string; end: string };
+  /** Exact Splunk event-time bounds for NAT evidence; omitted on older/no-NAT snapshots. */
+  nat_event_window?: { start: number; end: number };
   boundary: {
     id: string;
     service: string;
@@ -365,6 +393,75 @@ export const validVlanObservation = (v: unknown): v is VlanObservation => {
     v.last_seen >= v.first_seen
   );
 };
+export const validNatObservation = (v: unknown): v is NatObservation => {
+  if (!object(v)) return false;
+  const allowed = new Set([
+    "source_authority",
+    "event_type",
+    "scope",
+    "scope_mapping_verified",
+    "device_ip",
+    "event_fingerprint",
+    "event_time",
+    "received_time",
+    "protocol",
+    "direction",
+    "reported_initiator_ip",
+    "reported_initiator_port",
+    "reported_responder_ip",
+    "reported_responder_port",
+    "translated_initiator_ip",
+    "translated_initiator_port",
+    "translated_responder_ip",
+    "translated_responder_port",
+    "reported_original_initiator_ip",
+  ]);
+  const text = (x: unknown, limit = 2048): x is string =>
+    typeof x === "string" && x.length > 0 && x.length <= limit;
+  const port = (x: unknown) =>
+    Number.isInteger(x) && (x as number) >= 1 && (x as number) <= 65535;
+  if (Object.keys(v).some((key) => !allowed.has(key))) return false;
+  if (
+    v.source_authority !== "cisco:sfw:estreamer" ||
+    v.event_type !== "ConnectionEvent" ||
+    !text(v.scope) ||
+    !v.scope.trim() ||
+    v.scope.trim().toLowerCase().startsWith("unmapped:") ||
+    v.scope_mapping_verified !== true ||
+    !usableNatIp(v.device_ip) ||
+    typeof v.event_fingerprint !== "string" ||
+    !/^[0-9a-f]{64}$/.test(v.event_fingerprint) ||
+    !validEpochSeconds(v.event_time) ||
+    !Number.isInteger(v.event_time) ||
+    !validEpochSeconds(v.received_time) ||
+    !Number.isInteger(v.received_time) ||
+    !["tcp", "udp", "sctp"].includes(v.protocol as string) ||
+    v.direction !== "initiator_to_responder" ||
+    !usableNatIp(v.reported_initiator_ip) ||
+    !port(v.reported_initiator_port) ||
+    !usableNatIp(v.reported_responder_ip) ||
+    !port(v.reported_responder_port) ||
+    !usableNatIp(v.translated_initiator_ip) ||
+    !port(v.translated_initiator_port) ||
+    !usableNatIp(v.translated_responder_ip) ||
+    !port(v.translated_responder_port) ||
+    (v.reported_original_initiator_ip !== undefined &&
+      !usableNatIp(v.reported_original_initiator_ip))
+  )
+    return false;
+  return (
+    v.reported_initiator_ip !== v.translated_initiator_ip ||
+    v.reported_initiator_port !== v.translated_initiator_port ||
+    v.reported_responder_ip !== v.translated_responder_ip ||
+    v.reported_responder_port !== v.translated_responder_port
+  );
+};
+export const validNatObservations = (v: unknown): v is NatObservation[] =>
+  Array.isArray(v) &&
+  v.length <= 32 &&
+  v.every(validNatObservation) &&
+  new Set(v.map((observation) => observation.event_fingerprint)).size ===
+    v.length;
 const TRAFFIC_TEXT_FIELDS = [
   "source",
   "source_authority",
@@ -625,6 +722,24 @@ export function parseGraph(value: unknown): Graph {
     !strings(c.warnings)
   )
     throw new Error("Snapshot coverage is invalid.");
+  const natWindow = value.nat_event_window;
+  let exactNatWindow: { start: number; end: number } | undefined;
+  if (
+    natWindow !== undefined &&
+    (!object(natWindow) ||
+      !number(natWindow.start) ||
+      !number(natWindow.end) ||
+      natWindow.start >= natWindow.end)
+  )
+    throw new Error("Snapshot NAT evidence time window is invalid.");
+  if (object(natWindow))
+    exactNatWindow = {
+      start: natWindow.start as number,
+      end: natWindow.end as number,
+    };
+  const windowStart =
+    exactNatWindow?.start ?? Date.parse(w.start as string) / 1000;
+  const windowEnd = exactNatWindow?.end ?? Date.parse(w.end as string) / 1000;
   if (
     !Array.isArray(value.nodes) ||
     value.nodes.length > 500 ||
@@ -633,6 +748,13 @@ export function parseGraph(value: unknown): Graph {
   )
     throw new Error(
       "Graph exceeds the pilot limit (500 nodes / 2,000 edges). Narrow the time range or namespace.",
+    );
+  const natObservationsInWindow = (v: unknown) =>
+    validNatObservations(v) &&
+    v.every(
+      (observation) =>
+        observation.event_time >= windowStart &&
+        observation.event_time < windowEnd,
     );
   const kinds = new Map<string, NodeKind>();
   const endpointKinds = new Map<string, unknown>();
@@ -734,6 +856,10 @@ export function parseGraph(value: unknown): Graph {
           !e.vlan_observations.every(validVlanObservation))) ||
       (e.vlan_observations_truncated !== undefined &&
         typeof e.vlan_observations_truncated !== "boolean") ||
+      (e.nat_observations !== undefined &&
+        !natObservationsInWindow(e.nat_observations)) ||
+      (e.nat_observations_truncated !== undefined &&
+        typeof e.nat_observations_truncated !== "boolean") ||
       (e.traffic_observations !== undefined &&
         (!Array.isArray(e.traffic_observations) ||
           e.traffic_observations.length > 64 ||

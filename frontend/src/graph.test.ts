@@ -302,6 +302,149 @@ describe("parseGraph", () => {
     expect(() => parseGraph(g)).toThrow(/invalid relationships/);
   });
 
+  it("accepts only complete, changed, scoped FTD NAT observations", () => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ];
+    expect(
+      parseGraph(g).edges.find((item) => item.id === edge.id)?.nat_observations,
+    ).toHaveLength(1);
+
+    edge.nat_observations[0].scope_mapping_verified = false;
+    expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+
+  it("validates FTD NAT evidence against the selected half-open time window", () => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    const start = Date.parse(g.window.start) / 1000;
+    const end = Date.parse(g.window.end) / 1000;
+    const observation = {
+      source_authority: "cisco:sfw:estreamer" as const,
+      event_type: "ConnectionEvent" as const,
+      scope: "firewall-prod",
+      scope_mapping_verified: true as const,
+      device_ip: "192.0.2.1",
+      event_fingerprint: "a".repeat(64),
+      event_time: start,
+      received_time: end,
+      protocol: "tcp" as const,
+      direction: "initiator_to_responder" as const,
+      reported_initiator_ip: "198.51.100.8",
+      reported_initiator_port: 51400,
+      reported_responder_ip: "203.0.113.10",
+      reported_responder_port: 443,
+      translated_initiator_ip: "192.0.2.44",
+      translated_initiator_port: 35000,
+      translated_responder_ip: "203.0.113.10",
+      translated_responder_port: 443,
+    };
+    edge.nat_observations = [
+      observation,
+      {
+        ...observation,
+        event_fingerprint: "b".repeat(64),
+        event_time: end - 1,
+      },
+    ];
+    expect(() => parseGraph(g)).not.toThrow();
+
+    for (const eventTime of [start - 1, end]) {
+      const invalid = structuredClone(g);
+      invalid.edges.find(
+        (candidate: { id: string }) => candidate.id === edge.id,
+      ).nat_observations[0].event_time = eventTime;
+      expect(() => parseGraph(invalid)).toThrow(/invalid relationships/);
+    }
+  });
+
+  it("uses exact fractional NAT bounds instead of the rounded display window", () => {
+    const graph = clone();
+    const edge = edgeOf(graph, "communicates_with");
+    const displayStart = Math.floor(Date.parse(graph.window.start) / 1000);
+    const displayEnd = Math.floor(Date.parse(graph.window.end) / 1000);
+    const observation = {
+      source_authority: "cisco:sfw:estreamer" as const,
+      event_type: "ConnectionEvent" as const,
+      scope: "firewall-prod",
+      scope_mapping_verified: true as const,
+      device_ip: "192.0.2.1",
+      event_fingerprint: "c".repeat(64),
+      event_time: displayEnd,
+      received_time: displayEnd + 1,
+      protocol: "tcp" as const,
+      direction: "initiator_to_responder" as const,
+      reported_initiator_ip: "198.51.100.8",
+      reported_initiator_port: 51400,
+      reported_responder_ip: "203.0.113.10",
+      reported_responder_port: 443,
+      translated_initiator_ip: "192.0.2.44",
+      translated_initiator_port: 35000,
+      translated_responder_ip: "203.0.113.10",
+      translated_responder_port: 443,
+    };
+    graph.nat_event_window = {
+      start: displayStart + 0.25,
+      end: displayEnd + 0.0005,
+    };
+    edge.nat_observations = [observation];
+    expect(() => parseGraph(graph)).not.toThrow();
+
+    graph.nat_event_window.end = displayEnd;
+    expect(() => parseGraph(graph)).toThrow(/invalid relationships/);
+  });
+
+  it("rejects conflicting FTD NAT tuples with one event fingerprint", () => {
+    const g = clone();
+    const edge = edgeOf(g, "communicates_with");
+    const observation = {
+      source_authority: "cisco:sfw:estreamer" as const,
+      event_type: "ConnectionEvent" as const,
+      scope: "firewall-prod",
+      scope_mapping_verified: true as const,
+      device_ip: "192.0.2.1",
+      event_fingerprint: "a".repeat(64),
+      event_time: 1_791_373_808,
+      received_time: 1_791_373_809,
+      protocol: "tcp" as const,
+      direction: "initiator_to_responder" as const,
+      reported_initiator_ip: "198.51.100.8",
+      reported_initiator_port: 51400,
+      reported_responder_ip: "203.0.113.10",
+      reported_responder_port: 443,
+      translated_initiator_ip: "192.0.2.44",
+      translated_initiator_port: 35000,
+      translated_responder_ip: "203.0.113.10",
+      translated_responder_port: 443,
+    };
+    edge.nat_observations = [
+      observation,
+      { ...observation, translated_initiator_ip: "192.0.2.45" },
+    ];
+    expect(() => parseGraph(g)).toThrow(/invalid relationships/);
+  });
+
   it("accepts only documented attachment evidence text and finite scalar fields", () => {
     const g = clone();
     const edge = edgeOf(g, "communicates_with");
