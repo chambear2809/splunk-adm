@@ -347,14 +347,31 @@ def _decode_page(response: _HTTPResponse) -> list[dict[str, Any]]:
             response.status, response.status == 429 or response.status >= 500
         )
     try:
-        parsed = json.loads(response.body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+        parsed = json.loads(
+            response.body,
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_reject_json_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
         raise DetectorExportError("Observability returned invalid JSON.") from None
     if not isinstance(parsed, list) or any(
         not isinstance(item, dict) for item in parsed
     ):
         raise DetectorExportError("Detector events response is not an event array.")
     return parsed
+
+
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError
+        result[key] = value
+    return result
+
+
+def _reject_json_constant(_value: str) -> None:
+    raise ValueError("Non-standard JSON number")
 
 
 def _context(ca_bundle: str | None) -> ssl.SSLContext:

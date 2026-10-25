@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import json
+import os
 from pathlib import Path
 import stat
 import tempfile
@@ -312,6 +315,78 @@ class DetectorEventExportTest(unittest.TestCase):
                 ),
                 captured_at=1_800_000_901,
             )
+
+    def test_duplicate_keys_and_nonfinite_constants_fail_collection(self):
+        malformed_pages = (
+            b'[{"timestamp":1800000000000,"id":"original","id":"overwritten"}]',
+            b'[{"timestamp":1800000000000,"id":"nested",'
+            b'"dimensions":{"cluster":"east","cluster":"west"}}]',
+            b'[{"timestamp":NaN,"id":"nan"}]',
+            b'[{"timestamp":Infinity,"id":"infinity"}]',
+            b'[{"timestamp":-Infinity,"id":"negative-infinity"}]',
+        )
+        for body in malformed_pages:
+            with (
+                self.subTest(body=body),
+                self.assertRaisesRegex(export.DetectorExportError, "invalid JSON"),
+            ):
+                export.collect_detector_events(
+                    request(detector_ids=("detector_A",)),
+                    "token",
+                    get_json=lambda *args, body=body: export._HTTPResponse(200, body),
+                    captured_at=1_800_000_901,
+                )
+
+    def test_malformed_api_json_never_publishes_a_finalized_capture(self):
+        duplicate_body = (
+            b'[{"timestamp":1799999999000,"id":"original","id":"overwritten"}]'
+        )
+        original_collect = export.collect_detector_events
+
+        def collect_with_duplicate_response(request_arg, token, *, ca_bundle=None):
+            return original_collect(
+                request_arg,
+                token,
+                ca_bundle=ca_bundle,
+                get_json=lambda *args: export._HTTPResponse(200, duplicate_body),
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "capture.ndjson"
+            args = [
+                "--observer",
+                "o11y-detector-prod",
+                "--organization-id",
+                "org-demo-01",
+                "--realm",
+                "us0",
+                "--scope",
+                "prod-east",
+                "--cluster",
+                "eks-prod-east",
+                "--detector-id",
+                "detector_A",
+                "--start",
+                "2026-10-24T00:00:00Z",
+                "--end",
+                "2026-10-24T00:15:00Z",
+                "--output",
+                str(output),
+            ]
+            with (
+                patch.dict(
+                    os.environ, {"SPLUNK_OBSERVABILITY_TOKEN": "unit-test-token"}
+                ),
+                patch.object(
+                    export,
+                    "collect_detector_events",
+                    side_effect=collect_with_duplicate_response,
+                ),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(io.StringIO()),
+            ):
+                self.assertEqual(export.main(args), 1)
+            self.assertFalse(output.exists())
 
     def test_event_cap_is_detected_without_publishing_a_partial_capture(self):
         with (
