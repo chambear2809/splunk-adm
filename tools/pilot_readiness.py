@@ -18,7 +18,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = "splunk_adm"
-EXPECTED_VERSION = "0.4.0"
+EXPECTED_VERSION = "0.5.0"
 
 # One registry defines source names, freshness and builder applicability for the
 # UI and this operator tool. Received events never select sources automatically.

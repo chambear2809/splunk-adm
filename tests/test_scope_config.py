@@ -28,6 +28,9 @@ class ScopeConfigTest(unittest.TestCase):
                 "organization_id",
                 "realm",
                 "apm_mms_id",
+                "detector_ids",
+                "controller_origin",
+                "observability_origin",
             },
         )
         self.assertTrue(scope.getboolean("replicate"))
@@ -51,6 +54,9 @@ class ScopeConfigTest(unittest.TestCase):
                 "organization_id",
                 "realm",
                 "apm_mms_id",
+                "detector_ids",
+                "controller_origin",
+                "observability_origin",
             },
         )
         self.assertNotIn("mapping_status", definition["fields_list"].split(","))

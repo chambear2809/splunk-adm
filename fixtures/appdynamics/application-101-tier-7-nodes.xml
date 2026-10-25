@@ -1,0 +1,22 @@
+<nodes>
+  <node>
+    <id>3</id>
+    <name>checkout-node</name>
+    <type>Java</type>
+    <tierId>7</tierId>
+    <tierName>API</tierName>
+    <machineId>9</machineId>
+    <machineName>shared-host</machineName>
+    <machineOSType>Linux</machineOSType>
+    <machineAgentPresent>true</machineAgentPresent>
+    <machineAgentVersion>Machine Agent 24.1</machineAgentVersion>
+    <appAgentPresent>true</appAgentPresent>
+    <appAgentVersion>Java Agent 24.1</appAgentVersion>
+    <ipAddresses>
+      <ipAddress>10.20.0.17</ipAddress>
+      <ipAddress>2001:db8::17</ipAddress>
+      <ipAddress>fe80::42%eth0</ipAddress>
+    </ipAddresses>
+    <agentType>APP_AGENT</agentType>
+  </node>
+</nodes>

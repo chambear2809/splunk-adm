@@ -30,6 +30,20 @@ describe("shared deployment expectations", () => {
     expect(expectationFor(deployment([]), "netflow")).toBe("not_selected");
     expect(applicableJobs(deployment([]))).toEqual([]);
   });
+  it("keeps new integrations optional for fresh and pre-integration settings", () => {
+    const snapshot = deployment([]);
+    for (const source of ["o11y_detector_events", "appdynamics_inventory"]) {
+      expect(expectationFor(snapshot, source)).toBe("not_selected");
+      delete snapshot.settings!.sources[source];
+      expect(expectationFor(snapshot, source)).toBe("not_selected");
+    }
+    const selected = deployment([
+      "o11y_detector_events",
+      "appdynamics_inventory",
+    ]);
+    expect(applicableJobs(selected)).toEqual([]);
+    expect(validateExpectations(snapshot.settings)).toEqual(snapshot.settings);
+  });
   it("requires only dependencies of partial sources and the active contract", () => {
     expect(applicableJobs(deployment(["nxos"])).map((job) => job.id)).toEqual([
       "interfaces",

@@ -19,9 +19,9 @@ from pathlib import Path
 MAX_MEMBERS = 10_000
 MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
-# Five optional evidence workflows add narrowly scoped inspection code to the
-# existing single-IIFE Atlas page. Keep an enforced budget with modest headroom.
-MAX_ATLAS_GZIP_BYTES = 660 * 1024
+# Optional AppDynamics/detector inspection extends the existing single-IIFE page.
+# Same-runtime baseline and measured growth are recorded in the evidence contract.
+MAX_ATLAS_GZIP_BYTES = 670 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
