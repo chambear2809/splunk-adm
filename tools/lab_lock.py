@@ -12,6 +12,7 @@ import contextlib
 import functools
 import json
 import os
+import re
 import signal
 import stat
 import subprocess
@@ -37,11 +38,15 @@ class LabLockError(RuntimeError):
 
 
 def default_lock_path(_root: str | os.PathLike[str]) -> Path:
-    """Return the stable lab lock path shared by this user's checkouts."""
+    """Coordinate each named lab across checkouts, retaining the default lock."""
 
-    # The lab uses one fixed container name and host ports, so clones of the
-    # repository must coordinate too. UID separation avoids cross-user clashes.
-    return Path("/tmp") / f"splunk-adm-lab-{os.getuid()}.lock"
+    name = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
+    if not re.fullmatch(r"adm-[a-z0-9-]+", name):
+        raise LabLockError("invalid lab container name")
+    # Named labs must also use distinct ports/secrets. The same container name
+    # still shares a lock across clones; unnamed callers retain the legacy key.
+    suffix = "" if name == "adm-splunk-lab" else f"-{name}"
+    return Path("/tmp") / f"splunk-adm-lab-{os.getuid()}{suffix}.lock"
 
 
 def _pid_alive(pid: int) -> bool:

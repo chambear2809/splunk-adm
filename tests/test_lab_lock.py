@@ -30,6 +30,30 @@ class LabLockTest(unittest.TestCase):
             default_lock_path("/clone-one"), default_lock_path("/clone-two")
         )
 
+    def test_named_labs_have_separate_stable_locks(self):
+        with patch.dict(os.environ, {"ADM_LAB_NAME": "adm-atlas-observability"}):
+            first = default_lock_path("/clone-one")
+            self.assertEqual(first, default_lock_path("/clone-two"))
+        with patch.dict(os.environ, {"ADM_LAB_NAME": "adm-atlas-appdynamics"}):
+            second = default_lock_path("/clone-one")
+        self.assertNotEqual(first, second)
+
+    def test_default_name_retains_legacy_lock(self):
+        with patch.dict(os.environ, {"ADM_LAB_NAME": "adm-splunk-lab"}):
+            self.assertEqual(
+                default_lock_path("/clone"),
+                Path("/tmp") / f"splunk-adm-lab-{os.getuid()}.lock",
+            )
+
+    def test_invalid_lab_name_is_rejected(self):
+        for name in ("", "../other", "adm-a/b", "other", "adm-Upper"):
+            with (
+                self.subTest(name=name),
+                patch.dict(os.environ, {"ADM_LAB_NAME": name}),
+            ):
+                with self.assertRaisesRegex(LabLockError, "invalid lab container name"):
+                    default_lock_path("/clone")
+
     def test_independent_process_is_rejected_and_nested_child_is_allowed(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "lab.lock"
