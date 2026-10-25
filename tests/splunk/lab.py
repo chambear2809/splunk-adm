@@ -109,13 +109,21 @@ def task_resources(remove: bool = False) -> None:
     name = os.environ["ADM_LAB_NAME"]
     for kind, suffix in (("network", "net"), ("volume", "etc"), ("volume", "var")):
         resource = f"{name}-{suffix}"
-        result = subprocess.run(
-            ["docker", kind, "inspect", resource],
+        inventory = subprocess.run(
+            ["docker", kind, "ls", "--format", "{{.Name}}"],
             capture_output=True,
             text=True,
             timeout=30,
+            check=True,
         )
-        if result.returncode == 0:
+        if resource in inventory.stdout.splitlines():
+            result = subprocess.run(
+                ["docker", kind, "inspect", resource],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=True,
+            )
             labels = json.loads(result.stdout)[0].get("Labels") or {}
             if (
                 labels.get("org.splunk-adm.task") != task
