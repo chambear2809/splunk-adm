@@ -127,6 +127,41 @@ The separate existing pipeline smoke workload also completed its builders,
 rollup, summary and graph searches: 19 events became visible, with 8 graph nodes
 and 10 edges. This is a small local functional regression check.
 
+## Same-event FTD NAT evidence
+
+NAT source commits `b464ad2` and `8cd02f3` conditionally retain complete,
+changed, single-valued reported and translated FTD tuples on the existing V1
+conversation. [The data contract](DATA_LAYER.md) and
+[firewall operator guide](operators/firewall-security.md) bind the field
+semantics to reviewed Cisco Security Cloud 3.6.5/3.7.2 material, Cisco's FQE 7.4
+ConnectionEvent definitions, and Splunk JSON extraction behavior. Raw deployed
+emission remains unqualified; the old categorical statement that the TA cannot
+expose translated fields was corrected.
+
+Evidence retains mapped routing scope, reporting device IP, indexed-event
+fingerprint, event time, receipt time and initiator-to-responder roles.
+`OriginalInitiatorIP` remains a separate optional field; the reported tuple is
+not assumed to be universally original, particularly for tunnel events.
+Missing, malformed, multivalue, unusable, unmapped and unchanged tuples do not
+become translation observations. Equivalent IPv6 spellings are compared by
+address value. Each observation is filtered to the selected half-open time
+window before aggregation; exact numeric evidence bounds retain fractional
+precision in portable validation/exports. A 32-observation cap remains explicit
+in inspector, portable/CSV evidence and graph comparisons.
+
+The change adds no translated conversation or traffic counter and no endpoint
+alias or backend hand-off. Cross-event/native-key lifecycle correlation,
+counter deduplication across separate observations, and load-balancer/backend
+attribution remain unsupported. This normalizer retains no distinct close time;
+actual eStreamer end-time output is unqualified. V2 does not project this field,
+and this task does not qualify NAT evidence preservation through V1-to-V2
+cutover. V2 activation requires an equivalent schema path.
+
+Worker offline checks passed 195 focused frontend tests, lint/build and focused
+Python lint/compilation checks. Dedicated NAT Docker validation is pending.
+Historical capture fields remain unchanged; a separate macro compatibility
+review records the no-NAT fixture contract without claiming recapture.
+
 ## Tool modularization
 
 Implementation commit `754d04c` retains the legacy entrypoints and their CLI
