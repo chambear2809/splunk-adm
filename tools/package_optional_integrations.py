@@ -13,7 +13,10 @@ import tarfile
 
 
 PATHS = (
+    "LICENSE",
+    "NOTICE",
     "tools/export_o11y_health.py",
+    "tools/capture_o11y_health.py",
     "tools/export_o11y_detector_events.py",
     "tools/hec_delivery.py",
     "tools/export_appdynamics.py",
