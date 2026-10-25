@@ -159,7 +159,7 @@ export function buildDetectorEventsSearch(
 | appendpipe [| stats count AS returned_count max(input_count) AS input_count max(source_scan_count) AS source_scan_count max(source_scan_invalid_count) AS source_scan_invalid_count max(oversized_count) AS oversized
 | eval kind="supplemental_completion",schema_version=1,input_count=coalesce(input_count,0),input_capped=if(input_count>${EVIDENCE_LIMITS.input},1,0),source_scan_count=coalesce(source_scan_count,0),source_scan_capped=if(source_scan_count>${EVIDENCE_LIMITS.input},1,0),oversized=coalesce(oversized,0)]`;
 }
-function text(value: unknown, max = 1024): string | undefined {
+function text(value: unknown, max = 512): string | undefined {
   return typeof value === "string" &&
     value.length > 0 &&
     value.length <= max &&

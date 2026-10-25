@@ -1,3 +1,4 @@
+import { O11yNavigationPanel } from "./O11yNavigationPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   loadO11yHealthEvidence,
@@ -233,6 +234,18 @@ export function O11yHealthPanel({
               </a>
             </p>
           )}
+          <details>
+            <summary>
+              Product navigation and exact investigation context
+            </summary>
+            <O11yNavigationPanel
+              selection={selection}
+              realm={completion.realm}
+              organizationId={completion.organizationId}
+              configuredOrigin={result?.observabilityOrigin}
+              apmMmsId={completion.apmMmsId}
+            />
+          </details>
         </div>
       )}
       {result?.state === "complete" && result.records.length > 0 && (

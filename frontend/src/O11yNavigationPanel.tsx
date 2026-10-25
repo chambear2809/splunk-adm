@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   buildO11yNavigation,
   type O11yNavigationInput,
@@ -7,6 +7,7 @@ import {
 /** Manual Observability Cloud destinations with exact context kept visible. */
 export function O11yNavigationPanel(props: O11yNavigationInput) {
   const model = buildO11yNavigation(props);
+  const navigationId = useId();
   const [copyStatus, setCopyStatus] = useState("");
 
   const copyContext = async () => {
@@ -114,8 +115,8 @@ export function O11yNavigationPanel(props: O11yNavigationInput) {
       <ol className="o11y-navigation-products">
         {model.actions.map((action) => (
           <li key={action.product}>
-            <section aria-labelledby={`o11y-navigation-${action.product}`}>
-              <h4 id={`o11y-navigation-${action.product}`}>{action.title}</h4>
+            <section aria-labelledby={`${navigationId}-${action.product}`}>
+              <h4 id={`${navigationId}-${action.product}`}>{action.title}</h4>
               <p>
                 <strong>In product:</strong> {action.location}
               </p>
@@ -168,9 +169,8 @@ export function O11yNavigationPanel(props: O11yNavigationInput) {
         ))}
       </ol>
       <p>
-        Detector and incident IDs are displayed for manual lookup only. Atlas
-        does not query Observability Cloud alerts or infer that an event belongs
-        to this service.
+        Detector and incident IDs are for manual lookup. Event history does not
+        establish current incident state or an event-to-service association.
       </p>
     </section>
   );

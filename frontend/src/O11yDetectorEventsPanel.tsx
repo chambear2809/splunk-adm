@@ -1,3 +1,4 @@
+import { O11yNavigationPanel } from "./O11yNavigationPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ServiceHealthSelection } from "./data/evidence";
 import {
@@ -181,6 +182,29 @@ export function O11yDetectorEventsPanel({
               </table>
             </div>
           )}
+          <details>
+            <summary>
+              Product navigation and exact investigation context
+            </summary>
+            <p>
+              APM, infrastructure and log context comes from the selected graph
+              service; detector events are not attributed to that service.
+            </p>
+            <O11yNavigationPanel
+              selection={selection}
+              realm={capture.realm}
+              organizationId={capture.organizationId}
+              configuredOrigin={capture.origin}
+              detectorIds={capture.detectorIds}
+              incidentIds={[
+                ...new Set(
+                  capture.events
+                    .map((event) => event.incidentId)
+                    .filter((id): id is string => Boolean(id)),
+                ),
+              ]}
+            />
+          </details>
         </>
       )}
       <details>

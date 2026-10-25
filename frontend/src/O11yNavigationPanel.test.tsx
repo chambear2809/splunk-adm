@@ -22,6 +22,22 @@ const selection: ServiceHealthSelection = {
 };
 
 describe("Observability Cloud navigation panel", () => {
+  it("keeps product headings uniquely labelled when health and event navigation coexist", () => {
+    const props = { selection, realm: "us1", organizationId: "org-123" };
+    const html = renderToStaticMarkup(
+      <>
+        <O11yNavigationPanel {...props} />
+        <O11yNavigationPanel {...props} />
+      </>,
+    );
+    const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+    const labels = [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.every((label) => ids.includes(label))).toBe(true);
+  });
   it("shows exact service/time/native IDs and manual product destinations", () => {
     const html = renderToStaticMarkup(
       <O11yNavigationPanel

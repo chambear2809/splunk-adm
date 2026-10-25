@@ -1,3 +1,4 @@
+import { configuredHttpsOrigin as validatedOrigin } from "./evidenceConfig";
 import {
   literal,
   validText,
@@ -51,20 +52,8 @@ const MAX_NATIVE_IDS = 64;
 
 /** Accept only an explicit HTTPS origin, never a route, credential, or query. */
 export function configuredHttpsOrigin(value: string): string | undefined {
-  if (!value || value !== value.trim()) return undefined;
   try {
-    const url = new URL(value);
-    if (
-      url.protocol !== "https:" ||
-      !url.hostname ||
-      url.username ||
-      url.password ||
-      (url.pathname !== "" && url.pathname !== "/") ||
-      url.search ||
-      url.hash
-    )
-      return undefined;
-    return url.origin;
+    return validatedOrigin(value);
   } catch {
     return undefined;
   }

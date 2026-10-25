@@ -34,6 +34,7 @@ processor runtime.
 Follow the source guides before collecting or selecting evidence:
 
 - [Historical health and scheduling](operators/o11y-health.md).
+- [Product navigation and reciprocal APM data links](operators/o11y-navigation.md).
 - [Configured detector event history](operators/o11y-detector-events.md).
 - [AppDynamics current inventory and backend candidates](operators/appdynamics-evidence.md).
 - [Edge Processor and Ingest Processor profiles](operators/ingest-processors.md).

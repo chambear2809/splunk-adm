@@ -1,8 +1,8 @@
 # Navigate between Atlas and Splunk Observability Cloud
 
 Application Atlas provides manual navigation context for APM, infrastructure,
-logs, detectors and incidents. It does not call the Observability Cloud API or
-claim that a detector or incident belongs to the selected service. The selected
+logs, detectors and incidents. The browser reads indexed captures; external
+collectors use the documented read-only APIs. Navigation does not claim that a detector or incident belongs to the selected service. The selected
 Atlas graph service supplies the exact service, environment, cluster and
 Kubernetes namespace. Optional OTel service namespace and APM MMS ID are shown
 separately; neither is substituted for Kubernetes namespace.

@@ -29,6 +29,7 @@ PATHS = (
     "fixtures/processors",
     "docs/processors",
     "docs/operators/o11y-health.md",
+    "docs/operators/o11y-navigation.md",
     "docs/operators/o11y-detector-events.md",
     "docs/operators/appdynamics-evidence.md",
     "docs/operators/ingest-processors.md",
