@@ -287,6 +287,20 @@ class NatEvidenceTest(unittest.TestCase):
             time.sleep(1)
         self.fail("FTD NAT fixture events did not become searchable")
 
+    def wait_for_exact_search_count(
+        self, spl: str, earliest: float, latest: float, expected: int, label: str
+    ) -> None:
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline:
+            rows = lab.search(spl, earliest, latest)
+            count = int(rows[0]["count"]) if rows else 0
+            if count == expected:
+                return
+            if count > expected:
+                self.fail(f"{label} count is {count}, expected exactly {expected}")
+            time.sleep(1)
+        self.fail(f"{label} did not reach exactly {expected} searchable rows")
+
     def rollups(self) -> dict[str, dict]:
         rows = lab.search(
             "| `adm_conversation_rollup` "
@@ -636,9 +650,10 @@ class NatEvidenceTest(unittest.TestCase):
         root["time"] = bucket_start + 5
         root["source"] = self.token
         root_event = json.loads(root["event"])
+        root_trace_id = uuid.uuid4().hex
         root_event.update(
             {
-                "trace_id": uuid.uuid4().hex,
+                "trace_id": root_trace_id,
                 "span_id": uuid.uuid4().hex[:16],
                 "parent_span_id": "",
                 "start_time": (bucket_start + 5) * 1_000_000_000,
@@ -668,6 +683,14 @@ class NatEvidenceTest(unittest.TestCase):
         lab._hec_post(body)
         self.loaded += len(events)
         self.wait_for_events()
+        self.wait_for_exact_search_count(
+            f"index=otel_traces source={json.dumps(self.token)} "
+            f"trace_id={json.dumps(root_trace_id)} | stats count AS count",
+            bucket_start,
+            bucket_start + 300,
+            1,
+            "TA-shaped OTel root span",
+        )
 
         scopes_literal = json.dumps(self.graph_scope)
         lab.search(
@@ -676,6 +699,14 @@ class NatEvidenceTest(unittest.TestCase):
             '| collect index=`adm_summary_index_name` source="adm:conversation"',
             bucket_start,
             bucket_start + 300,
+        )
+        self.wait_for_exact_search_count(
+            '| `adm_index_summary` source="adm:conversation" '
+            f"scope={json.dumps(self.graph_scope)} | stats count AS count",
+            bucket_start,
+            bucket_start + 300,
+            3,
+            "graph-test conversation summaries",
         )
 
         args = {
@@ -731,6 +762,7 @@ class NatEvidenceTest(unittest.TestCase):
         self.assertEqual(len(base_edges), 1)
         self.assertEqual(len(cap_edges), 1)
         self.assertEqual(len(window_edges), 1)
+        self.assertEqual(len(full_edges), 3)
         self.assertEqual(
             {edge["relationship"] for edge in full["edges"]},
             {"communicates_with"},
