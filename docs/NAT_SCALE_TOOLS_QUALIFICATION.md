@@ -98,7 +98,8 @@ expected metadata warnings matched. The workload has no link-discovery or SNMP
 ifIndex input. `dropCount=0` and `eventIsTruncated=false` were present;
 `resultIsTruncated` was omitted and is recorded as unavailable. The 20,000-row
 application cap was modeled from source, not exercised in a live browser. This
-is local response-boundary evidence, not production capacity or qualification
+is local response-boundary evidence; it does not measure NAT-enriched flow
+aggregation. It is not production capacity or qualification
 of the bound under representative load.
 
 Sampled whole-container peaks were 5,873,917,952 / 5,922,373,632 /

@@ -4,7 +4,8 @@ This note records the application limits traced for this task and the narrow
 local workload used to measure topology-search behavior. It distinguishes
 offline contract checks, local Docker/Splunk measurements, and production
 qualification. The included workload is NX-OS-only and must not be read as a
-mixed-source or production capacity claim.
+mixed-source or production capacity claim. NAT-enriched flow aggregation and
+its evidence-collection cost were not measured by this topology workload.
 
 ## Limits and paging traced in the application
 

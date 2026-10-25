@@ -240,7 +240,7 @@ export interface Graph {
   generated_at: string;
   demo: boolean;
   window: { start: string; end: string };
-  /** Exact Splunk event-time bounds for NAT evidence; omitted on older/no-NAT snapshots. */
+  /** Numeric Splunk addinfo bounds, subject to platform precision; absent on older/no-NAT snapshots. */
   nat_event_window?: { start: number; end: number };
   boundary: {
     id: string;
