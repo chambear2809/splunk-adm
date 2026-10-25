@@ -13,6 +13,7 @@ from unittest.mock import patch
 
 from tools import capture_o11y_health as scheduled
 from tools import export_o11y_health as exporter
+from tools import hec_delivery
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -129,6 +130,34 @@ class ScheduledCaptureTests(unittest.TestCase):
         self.assertEqual(self.captures, [(3000, 3300), (3300, 3600)])
         self.assertEqual(self.state.stat().st_mode & 0o777, 0o700)
         self.assertEqual((self.state / "state.json").stat().st_mode & 0o777, 0o600)
+
+    def test_actual_common_queue_owns_private_capture_after_handoff(self):
+        result = self.run_capture(delivery=hec_delivery)
+        self.assertFalse(result["searchable"])
+        status = hec_delivery.spool_status(self.spool)
+        self.assertEqual((status.pending_captures, status.pending_records), (1, 1))
+        self.assertEqual(status.http_accepted_unverified, 0)
+        self.assertFalse((self.state / "pending.ndjson").exists())
+        queued = list((self.spool / "pending").glob("*.ndjson"))
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(queued[0].stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.spool.stat().st_mode & 0o777, 0o700)
+
+    def test_actual_common_queue_replay_after_interrupted_receipt(self):
+        def interrupted_receipt(*args, **kwargs):
+            hec_delivery.enqueue_capture(*args, **kwargs)
+            raise Interrupted()
+
+        interrupted_queue = SimpleNamespace(
+            spool_status=hec_delivery.spool_status, enqueue_capture=interrupted_receipt
+        )
+        with self.assertRaises(Interrupted):
+            self.run_capture(delivery=interrupted_queue)
+        self.assertTrue((self.state / "pending.ndjson").exists())
+        result = self.run_capture(delivery=hec_delivery, token="")
+        self.assertTrue(result["queue_duplicate"])
+        self.assertEqual(hec_delivery.spool_status(self.spool).pending_captures, 1)
+        self.assertEqual(len(self.captures), 1)
 
     def test_capacity_preflight_prevents_source_capture(self):
         for key, value in (
