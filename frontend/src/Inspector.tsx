@@ -8,6 +8,7 @@ import {
   type GraphEdge,
   type GraphIndex,
   type GraphNode,
+  type NatObservation,
   type TrafficObservation,
 } from "./graph";
 import {
@@ -146,8 +147,9 @@ function Facts({ rows }: { rows: [string, React.ReactNode][] }) {
   );
 }
 
-const evidenceTime = (raw?: string) => {
-  if (!raw || !/^\d+(?:\.\d+)?$/.test(raw)) return undefined;
+const evidenceTime = (raw?: string | number) => {
+  if (raw === undefined || raw === "" || !/^\d+(?:\.\d+)?$/.test(String(raw)))
+    return undefined;
   const date = new Date(Number(raw) * 1000);
   return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
 };
@@ -364,6 +366,63 @@ function TrafficEvidence({
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+function NatEvidence({
+  observations,
+  truncated,
+}: {
+  observations: NatObservation[];
+  truncated?: boolean;
+}) {
+  if (!observations.length && !truncated) return null;
+  const endpoint = (ip: string, port: number) =>
+    `${ip.includes(":") ? `[${ip}]` : ip}:${port}`;
+  return (
+    <section aria-label="Firewall translation evidence">
+      <h3>
+        Firewall translation evidence{" "}
+        <span className="count">{observations.length}</span>
+      </h3>
+      <p className="muted small">
+        Each item is one Cisco FTD ConnectionEvent reporting both tuples. The
+        reported connection tuple is not labeled as original; a reported
+        OriginalInitiatorIP is shown separately. This evidence stays attached to
+        the conversation and does not establish a load-balancer backend or
+        correlate events across observers.
+      </p>
+      <ul className="seen-list">
+        {observations.map((o) => (
+          <li key={o.event_fingerprint}>
+            <b>{o.protocol.toUpperCase()} · Initiator → Responder</b>
+            <small>
+              {`Reported tuple ${endpoint(o.reported_initiator_ip, o.reported_initiator_port)} → ${endpoint(o.reported_responder_ip, o.reported_responder_port)}`}
+              <br />
+              {`NAT translated tuple ${endpoint(o.translated_initiator_ip, o.translated_initiator_port)} → ${endpoint(o.translated_responder_ip, o.translated_responder_port)}`}
+              {o.reported_original_initiator_ip && (
+                <>
+                  <br />
+                  {`Cisco reported OriginalInitiatorIP ${o.reported_original_initiator_ip} (separate field)`}
+                </>
+              )}
+              <br />
+              {`Authority ${o.source_authority} · Scope ${o.scope} · Device ${o.device_ip}`}
+              <br />
+              {`Event ${evidenceTime(o.event_time) ?? "unavailable"} · Received ${evidenceTime(o.received_time) ?? "unavailable"}`}
+              <br />
+              {`Event fingerprint ${o.event_fingerprint}`}
+            </small>
+          </li>
+        ))}
+      </ul>
+      {truncated && (
+        <p className="muted small">
+          The source summary or selected graph reached its 32-observation cap;
+          additional evidence for this window may have been omitted.
+        </p>
+      )}
     </section>
   );
 }
@@ -774,6 +833,12 @@ export function Inspector({
         </>
       )}
       {conv && <VlanEvidence edges={[edge]} topo={topo} index={index} />}
+      {conv && (
+        <NatEvidence
+          observations={edge.nat_observations ?? []}
+          truncated={edge.nat_observations_truncated}
+        />
+      )}
       {(conv || trafficObservation) && edge.traffic_observations && (
         <TrafficEvidence observations={edge.traffic_observations} />
       )}

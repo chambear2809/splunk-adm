@@ -12,7 +12,7 @@ A load balancer or proxy can terminate the client connection and open another. T
 
 | Stage | Evidence | Role and limitation |
 | --- | --- | --- |
-| Firewall / edge | FTD connection tuple, device, zones/interfaces, time; pre/post-NAT tuple | Policy and connection observation. The inspected Security Cloud TA extracts no translated tuple, so a public VIP is not yet linked to its backend. |
+| Firewall / edge | FTD reported connection tuple, device, zones/interfaces, time; separately documented same-event `NAT_*` translated tuple when emitted | Policy and connection observation. Translation evidence stays on the existing firewall conversation; it does not resolve or select a load-balancer backend, and live FMC/FTD emission remains deployment-conditional. |
 | Physical fabric | Stream NetFlow tuple, exporter, ingress/egress interfaces, sampling; NX-OS CDP neighbors | Observations plus inventory topology. Exporters don't prove hop order. Host-facing ifIndex names need `show interface snmp-ifindex`. |
 | ACI attachment | Endpoint IP/MAC, attachment path DN, tenant, EPG, VM, validity history | Endpoint attachment, not packet forwarding proof. |
 | Nexus Dashboard | Fabric flow records with leaf and interface; endpoint change events | Fabric-level observations and attachment changes. |

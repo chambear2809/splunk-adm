@@ -222,6 +222,50 @@ describe("requiredFlowsCsv", () => {
     expect(output).toContain('""vlan"":120');
     expect(output).toContain(']",1,');
   });
+
+  it("labels native addinfo bounds with NAT evidence", () => {
+    const graphWithNat = structuredClone(graph);
+    const edge = graphWithNat.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    graphWithNat.nat_event_window = {
+      start: 1791373500.25,
+      end: 1791374400.0005,
+    };
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ];
+    edge.nat_observations_truncated = true;
+    const output = requiredFlowsCsv(
+      graphWithNat,
+      indexGraph(graphWithNat),
+      indexTopology(demoTopology("nxos")),
+    );
+    expect(FLOW_COLUMNS).toContain("nat_window_start");
+    expect(FLOW_COLUMNS).toContain("nat_window_end");
+    expect(output).toContain(
+      '",1,1791373500.25,1791374400.0005,native-addinfo,',
+    );
+  });
 });
 
 describe("contextEvidenceCsv", () => {
@@ -273,15 +317,100 @@ describe("contextEvidenceCsv", () => {
         raw_bytes_in: 123,
       },
     ];
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ];
+    edge.nat_observations_truncated = true;
+    contextGraph.nat_event_window = {
+      start: 1791373500.25,
+      end: 1791374400.0005,
+    };
     const csv = contextEvidenceCsv(contextGraph);
     const lines = csv.trimEnd().split("\r\n");
     expect(lines[0]).toBe(CONTEXT_EVIDENCE_COLUMNS.join(","));
-    expect(lines).toHaveLength(3);
+    expect(lines).toHaveLength(4);
     expect(csv).toContain("attachment_evidence");
     expect(csv).toContain("traffic_observation");
+    expect(csv).toContain("nat_observation");
+    expect(csv).toContain("evidence_truncated");
+    expect(csv).toContain(",nat_observation,1,");
+    expect(csv).toContain("Cisco FTD eStreamer ConnectionEvent");
+    expect(csv).toContain('""translated_initiator_ip"":""192.0.2.44""');
+    expect(csv).toContain(
+      '""nat_event_window"":{""start"":1791373500.25,""end"":1791374400.0005}',
+    );
+    expect(csv).toContain('""nat_event_window_basis"":""native-addinfo""');
     expect(csv).toContain("MR-AP-01");
     expect(csv).toContain('""ssid_number"":7');
     expect(csv).toContain('""raw_bytes_in"":123');
     expect(csv).toContain("meraki-nxos");
+  });
+
+  it("exports an explicit marker when all capped NAT evidence was omitted", () => {
+    const contextGraph = structuredClone(demoGraph("nxos"));
+    const edge = contextGraph.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.nat_observations_truncated = true;
+    contextGraph.nat_event_window = {
+      start: 1791373500.25,
+      end: 1791374400.0005,
+    };
+    const csv = contextEvidenceCsv(contextGraph);
+    expect(csv).toContain("nat_observations_truncated,1");
+    expect(csv).toContain('""truncated"":true');
+    expect(csv).toContain('""nat_event_window_basis"":""native-addinfo""');
+  });
+
+  it("labels legacy displayed-window fallback in NAT evidence exports", () => {
+    const contextGraph = structuredClone(demoGraph("nxos"));
+    const edge = contextGraph.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ];
+
+    const csv = contextEvidenceCsv(contextGraph);
+
+    expect(csv).toContain('""nat_event_window_basis"":""displayed-window""');
   });
 });

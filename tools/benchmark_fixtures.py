@@ -13,7 +13,7 @@ import hashlib
 import ipaddress
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -187,6 +187,7 @@ def iter_events(config):
         span_ids = [hexadecimal("span", index, role, length=16) for role in range(3)]
         for role, template in enumerate(templates()[2]):
             envelope = copy.deepcopy(template)
+            envelope["time"] = BASE + 1
             backend = role == 2
             service = f"backend-{index}" if backend else "frontend"
             envelope["event"].update(
@@ -213,6 +214,21 @@ def iter_events(config):
 def manifest(config):
     flows = config.pods * config.flow_copies * config.observer_copies
     pods = 1 + config.pods * config.history
+    traces = 3 * config.pods
+    template_hashes = {
+        name: hashlib.sha256((RAW / name).read_bytes()).hexdigest()
+        for name in TEMPLATES
+    }
+    identity = json.dumps(
+        {
+            "schema": "adm-pipeline-workload-v1",
+            "configuration": asdict(config),
+            "templates": template_hashes,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    generated_events = pods + flows + traces
     used = {
         (i + j) % config.exporters
         for i in range(config.pods)
@@ -220,10 +236,10 @@ def manifest(config):
     }
     return {
         "expected": {
-            "events": pods + flows + 3 * config.pods,
+            "events": generated_events,
             "flows": flows,
             "pod_events": pods,
-            "traces": 3 * config.pods,
+            "traces": traces,
             "flow_bytes": 300 * flows,
             "graph_bytes": 300 * config.pods * config.flow_copies,
             "graph_connections": config.pods * config.connections_per_pair,
@@ -238,6 +254,28 @@ def manifest(config):
             "environment": "demo",
             "cluster": CLUSTER,
             "namespace": "shop",
+        },
+        "workload_id": hashlib.sha256(identity).hexdigest(),
+        "generator_schema": "adm-pipeline-workload-v1",
+        "cardinality": {
+            "input_events": generated_events,
+            "graph_nodes": 2 * (config.pods + 1),
+            "graph_edges": 3 * config.pods + 1,
+            "graph_rows": 2 * (config.pods + 1) + 3 * config.pods + 2,
+            "flow_observations": flows,
+            "logical_connections": config.pods * config.connections_per_pair,
+            "identity_history_rows": pods,
+            "trace_spans": traces,
+        },
+        "source_mix": {
+            "kube:object:pods": pods,
+            "stream:netflow": flows,
+            "otel:traces": traces,
+        },
+        "input_time_range": {
+            "earliest": str(BASE - 600 - (config.history - 1) * 3600),
+            "latest": str(BASE + 1),
+            "basis": "synthetic HEC event time; UTC epoch seconds",
         },
         "window": {"earliest": str(BASE - 300), "latest": str(BASE + 600)},
         "scope_rows": [
@@ -257,8 +295,10 @@ def manifest(config):
             }
             for i in range(config.exporters)
         ],
-        "template_sha256": {
-            name: hashlib.sha256((RAW / name).read_bytes()).hexdigest()
-            for name in TEMPLATES
+        "provenance": {
+            "template_files": [f"fixtures/raw/{name}" for name in TEMPLATES],
+            "template_sha256": template_hashes,
+            "fields_contract": "fixtures/raw/FIELDS.md",
         },
+        "template_sha256": template_hashes,
     }

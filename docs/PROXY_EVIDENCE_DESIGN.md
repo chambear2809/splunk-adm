@@ -13,9 +13,13 @@ qualification evidence.
 This first adapter targets Envoy request logs. Existing Hubble translated-tuple
 and L7 handoff evidence remains in the graph's separate client-handoff path;
 the Envoy adapter does not reinterpret or merge it. The FTD translation gap
-remains open: FTD NAT connection records and generic load-balancer access logs
-are unsupported until their original/translated tuple, connection identity and
-scope semantics are qualified in a separate source contract.
+has a narrow same-event path: complete, changed Cisco FTD `NAT_*` tuples may
+appear as evidence on the existing firewall conversation, as documented in
+[the data layer contract](DATA_LAYER.md#ftd-nat-evidence). This does not join
+FTD events to Envoy requests or identify a load-balancer backend. Cross-event
+FTD correlation remains unsupported until native connection-ID reuse/window
+semantics and deployment scope are qualified; generic load-balancer access logs
+remain unsupported pending their own source contract.
 
 Each event is one HCM `DownstreamEnd` HTTP stream log. It includes:
 

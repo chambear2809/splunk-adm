@@ -4,6 +4,7 @@ import type {
   GraphEdge,
   GraphIndex,
   GraphNode,
+  NatObservation,
   TrafficObservation,
 } from "./graph";
 import {
@@ -63,6 +64,11 @@ export const FLOW_COLUMNS = [
   "handoff",
   "vlan_observations",
   "vlan_observations_truncated",
+  "nat_observations",
+  "nat_observations_truncated",
+  "nat_window_start",
+  "nat_window_end",
+  "nat_window_basis",
   "client_attachment_source",
   "client_attachment_authority",
   "client_routing_domain",
@@ -92,6 +98,22 @@ export function requiredFlowsCsv(
   index: GraphIndex,
   topo: TopologyIndex,
 ): string {
+  const natWindowValues = (
+    edge: GraphEdge,
+  ): [string | number, string | number, string] => {
+    if (!edge.nat_observations?.length && !edge.nat_observations_truncated)
+      return ["", "", ""];
+    const nativeAddinfoWindow = graph.nat_event_window;
+    const bounds = nativeAddinfoWindow ?? {
+      start: Date.parse(graph.window.start) / 1000,
+      end: Date.parse(graph.window.end) / 1000,
+    };
+    return [
+      bounds.start,
+      bounds.end,
+      nativeAddinfoWindow ? "native-addinfo" : "displayed-window",
+    ];
+  };
   const node = (id: string) => index.node.get(id);
   const leaf = (raw?: string, context = {}) => {
     if (!raw) return "";
@@ -156,6 +178,9 @@ export function requiredFlowsCsv(
           : handoffBasis,
         e.vlan_observations?.length ? JSON.stringify(e.vlan_observations) : "",
         e.vlan_observations_truncated ? "1" : "",
+        e.nat_observations?.length ? JSON.stringify(e.nat_observations) : "",
+        e.nat_observations_truncated ? "1" : "",
+        ...natWindowValues(e),
         node(e.source)?.attributes?.access_platform ?? "",
         node(e.source)?.attributes?.source_authority ?? "",
         node(e.source)?.attributes?.routing_domain ?? "",
@@ -182,6 +207,7 @@ export const CONTEXT_EVIDENCE_COLUMNS = [
   "source_id",
   "target_id",
   "evidence_kind",
+  "evidence_truncated",
   "source",
   "source_authority",
   "client_source",
@@ -195,13 +221,23 @@ export const CONTEXT_EVIDENCE_COLUMNS = [
 /** Export the original per-edge context records without merging node summaries. */
 export function contextEvidenceCsv(graph: Graph): string {
   const rows: string[] = [];
+  const natWindow = graph.nat_event_window ?? {
+    start: Date.parse(graph.window.start) / 1000,
+    end: Date.parse(graph.window.end) / 1000,
+  };
+  const natWindowBasis = graph.nat_event_window
+    ? "native-addinfo"
+    : "displayed-window";
   const append = (
     edge: GraphEdge,
-    evidenceKind: "attachment_evidence" | "traffic_observation",
-    value: AttachmentEvidence | TrafficObservation,
+    evidenceKind:
+      "attachment_evidence" | "traffic_observation" | "nat_observation",
+    value: AttachmentEvidence | TrafficObservation | NatObservation,
   ) => {
-    const observation = evidenceKind === "traffic_observation";
-    const item = value as AttachmentEvidence & TrafficObservation;
+    const observation = evidenceKind !== "attachment_evidence";
+    const item = value as AttachmentEvidence &
+      TrafficObservation &
+      NatObservation;
     rows.push(
       csvRow([
         edge.id,
@@ -209,14 +245,29 @@ export function contextEvidenceCsv(graph: Graph): string {
         edge.source,
         edge.target,
         evidenceKind,
-        observation ? item.source : undefined,
+        evidenceKind === "nat_observation" && edge.nat_observations_truncated
+          ? "1"
+          : "",
+        evidenceKind === "nat_observation"
+          ? "Cisco FTD eStreamer ConnectionEvent"
+          : evidenceKind === "traffic_observation"
+            ? item.source
+            : undefined,
         observation ? item.source_authority : undefined,
         observation ? undefined : item.client_source,
         observation ? undefined : item.client_authority,
         observation ? item.scope : undefined,
         observation ? item.cluster : undefined,
         observation ? item.mapping_status : undefined,
-        JSON.stringify(value),
+        JSON.stringify(
+          evidenceKind === "nat_observation"
+            ? {
+                nat_observation: value,
+                nat_event_window: natWindow,
+                nat_event_window_basis: natWindowBasis,
+              }
+            : value,
+        ),
       ]),
     );
   };
@@ -225,6 +276,32 @@ export function contextEvidenceCsv(graph: Graph): string {
       append(edge, "attachment_evidence", attachment);
     for (const observation of edge.traffic_observations ?? [])
       append(edge, "traffic_observation", observation);
+    for (const observation of edge.nat_observations ?? [])
+      append(edge, "nat_observation", observation);
+    if (edge.nat_observations_truncated && !edge.nat_observations?.length) {
+      rows.push(
+        csvRow([
+          edge.id,
+          edge.relationship,
+          edge.source,
+          edge.target,
+          "nat_observations_truncated",
+          "1",
+          "Cisco FTD eStreamer ConnectionEvent",
+          "cisco:sfw:estreamer",
+          "",
+          "",
+          "",
+          "",
+          "",
+          JSON.stringify({
+            truncated: true,
+            nat_event_window: natWindow,
+            nat_event_window_basis: natWindowBasis,
+          }),
+        ]),
+      );
+    }
   }
   return [csvRow([...CONTEXT_EVIDENCE_COLUMNS]), ...rows].join("\r\n") + "\r\n";
 }

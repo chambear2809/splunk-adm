@@ -8,6 +8,27 @@ import { MAX_ROWS, rowsToGraph, type Row } from "./rows";
 const args = demo.args;
 const rows = (): Row[] => structuredClone(demo.rows) as Row[];
 const graph = () => rowsToGraph(rows(), args, { demo: true });
+const natObservation = () => ({
+  source_authority: "cisco:sfw:estreamer",
+  event_type: "ConnectionEvent",
+  scope: "firewall-prod",
+  scope_mapping_verified: true,
+  device_ip: "192.0.2.1",
+  event_fingerprint: "a".repeat(64),
+  event_time: 1_791_373_808,
+  received_time: 1_791_373_809,
+  protocol: "tcp",
+  direction: "initiator_to_responder",
+  reported_initiator_ip: "198.51.100.8",
+  reported_initiator_port: 51400,
+  reported_responder_ip: "203.0.113.10",
+  reported_responder_port: 443,
+  translated_initiator_ip: "192.0.2.44",
+  translated_initiator_port: 35000,
+  translated_responder_ip: "203.0.113.10",
+  translated_responder_port: 443,
+  reported_original_initiator_ip: "198.51.100.8",
+});
 
 describe("rowsToGraph on captured lab rows", () => {
   const g = graph();
@@ -22,6 +43,7 @@ describe("rowsToGraph on captured lab rows", () => {
       start: "2026-10-07T11:45:00.000Z",
       end: "2026-10-07T12:00:00.000Z",
     });
+    expect(g.nat_event_window).toBeUndefined();
     const m = expected.meta;
     expect(g.coverage.conversations).toBe(Number(m.conversations_in_scope));
     expect(g.coverage.matched_conversations).toBe(
@@ -105,6 +127,133 @@ describe("rowsToGraph validation", () => {
     expect(
       rowsToGraph(r, args).edges.find((x) => x.id === e.id)?.vlan_observations,
     ).toHaveLength(1);
+  });
+
+  it("parses single-event firewall translation evidence without altering the edge", () => {
+    const r = rows();
+    const edge = r.find((x) => x.relationship === "communicates_with")!;
+    const metaRow = r.find((x) => x.row_type === "meta")!;
+    metaRow.nat_window_start = "1791373500.25";
+    metaRow.nat_window_end = "1791374400.0005";
+    edge.nat_observations = JSON.stringify([natObservation()]);
+    edge.nat_observations_truncated = "1";
+    const parsed = rowsToGraph(r, args).edges.find(
+      (candidate) => candidate.id === edge.id,
+    )!;
+    expect(parsed.count).toBe(Number(edge.count));
+    expect(parsed.bytes).toBe(Number(edge.bytes));
+    expect(parsed.nat_observations).toEqual([natObservation()]);
+    expect(parsed.nat_observations_truncated).toBe(true);
+    expect(rowsToGraph(r, args).nat_event_window).toEqual({
+      start: 1791373500.25,
+      end: 1791374400.0005,
+    });
+  });
+
+  it("rejects firewall translation evidence on non-conversation edges", () => {
+    const r = rows();
+    const call = r.find(
+      (row) => row.row_type === "edge" && row.relationship === "calls",
+    )!;
+    call.nat_observations = JSON.stringify([natObservation()]);
+    expect(() => rowsToGraph(r, args)).toThrow(/invalid relationships/);
+  });
+
+  it.each([
+    ["ambiguous scope", { scope_mapping_verified: false }],
+    ["unmapped scope", { scope: "unmapped:device" }],
+    ["multivalue scope", { scope: ["firewall-prod", "other"] }],
+    ["multivalue port", { translated_initiator_port: [35000, 35001] }],
+    ["invalid port", { translated_initiator_port: 0 }],
+    ["port above 65535", { translated_initiator_port: 65536 }],
+    [
+      "compressed and expanded equivalent IPv6 tuple",
+      {
+        reported_initiator_ip: "2001:DB8::1",
+        translated_initiator_ip: "2001:0db8:0:0:0:0:0:1",
+        translated_initiator_port: 51400,
+      },
+    ],
+    [
+      "case equivalent IPv6 tuple",
+      {
+        reported_initiator_ip: "2001:DB8::1",
+        translated_initiator_ip: "2001:db8::1",
+        translated_initiator_port: 51400,
+      },
+    ],
+    ["fractional event time", { event_time: 1_791_373_808.5 }],
+    ["fractional receipt time", { received_time: 1_791_373_809.5 }],
+    ["limited broadcast IP", { translated_initiator_ip: "255.255.255.255" }],
+    ["multicast IP", { reported_responder_ip: "224.0.0.1" }],
+    ["unspecified device IP", { device_ip: "0.0.0.0" }],
+    ["unsupported protocol", { protocol: "gre" }],
+    ["unsupported authority", { source_authority: "unknown" }],
+    [
+      "unchanged tuple",
+      {
+        translated_initiator_ip: "198.51.100.8",
+        translated_initiator_port: 51400,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ],
+  ])("rejects firewall NAT evidence with %s", (_reason, override) => {
+    const r = rows();
+    r.find((x) => x.relationship === "communicates_with")!.nat_observations =
+      JSON.stringify([{ ...natObservation(), ...override }]);
+    expect(() => rowsToGraph(r, args)).toThrow();
+  });
+
+  it.each([
+    ["incomplete bounds", "1791373500.25", undefined],
+    ["reversed bounds", "1791374400.5", "1791373500.25"],
+    ["broadened bounds", "1791373499.25", "1791374401.25"],
+    ["shifted bounds", "1791373501.25", "1791374401.25"],
+    ["mismatched start", "1791373499.75", "1791374400.5"],
+    ["mismatched end", "1791373500.25", "1791374401.5"],
+  ])("rejects invalid NAT time window metadata: %s", (_name, start, end) => {
+    const r = rows();
+    const edge = r.find((x) => x.relationship === "communicates_with")!;
+    const metaRow = r.find((x) => x.row_type === "meta")!;
+    edge.nat_observations = JSON.stringify([natObservation()]);
+    metaRow.nat_window_start = start;
+    if (end !== undefined) metaRow.nat_window_end = end;
+    expect(() => rowsToGraph(r, args)).toThrow(/NAT evidence time window/);
+  });
+
+  it.each([
+    ["no observations", false],
+    ["truncation only", true],
+  ])("rejects misaligned metadata with %s", (_name, truncated) => {
+    const r = rows();
+    const edge = r.find((x) => x.relationship === "communicates_with")!;
+    const metaRow = r.find((x) => x.row_type === "meta")!;
+    metaRow.nat_window_start = "1791373499.25";
+    metaRow.nat_window_end = "1791374401.25";
+    if (truncated) edge.nat_observations_truncated = "1";
+
+    expect(() => rowsToGraph(r, args)).toThrow(/NAT evidence time window/);
+  });
+
+  it("rejects more than 32 firewall NAT observations on one edge", () => {
+    const r = rows();
+    r.find((x) => x.relationship === "communicates_with")!.nat_observations =
+      JSON.stringify(Array.from({ length: 33 }, () => natObservation()));
+    expect(() => rowsToGraph(r, args)).toThrow(/nat_observations/);
+  });
+
+  it("rejects conflicting tuples that reuse one opaque event fingerprint", () => {
+    const r = rows();
+    r.find((x) => x.relationship === "communicates_with")!.nat_observations =
+      JSON.stringify([
+        natObservation(),
+        {
+          ...natObservation(),
+          translated_initiator_ip: "192.0.2.45",
+        },
+      ]);
+    expect(() => rowsToGraph(r, args)).toThrow(/nat_observations/);
   });
 
   it("reads network-client endpoint facts and separated traffic observations in schema v1", () => {

@@ -10,11 +10,13 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import configparser
+from collections import Counter
 import hashlib
 import json
 import os
 import platform
 import re
+import signal
 import statistics
 import subprocess
 import sys
@@ -35,6 +37,16 @@ from benchmark_fixtures import Workload, iter_events, manifest  # noqa: E402
 from stage_lab_package import stage_package  # noqa: E402
 
 CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
+DEFAULT_RESULT_LIMIT = 20_000
+MAX_RESULT_LIMIT = 100_000
+DEFAULT_RESULT_PAGE_SIZE = 10_000
+MAX_RESULT_PAGE_SIZE = 20_000
+LAB_RESET_TIMEOUT_SECONDS = 900
+LAB_RESET_DOCKER_TIMEOUT_SECONDS = 30
+PROCESS_TERMINATION_GRACE_SECONDS = 5
+SERVER_INFO_TIMEOUT_SECONDS = 15
+MAX_SERVER_INFO_RESPONSE_BYTES = 64 * 1024
+SERVER_INFO_FIELDS = ("version", "build", "product_type")
 COLLECTIONS = (
     "adm_observer_scope",
     "adm_ip_identity",
@@ -71,8 +83,148 @@ def command(*args):
     return subprocess.check_output(args, text=True, timeout=30).strip()
 
 
+class LabResetTimeout(TimeoutError):
+    """A bounded reset subprocess ended without proving the lab's final state."""
+
+    def __init__(self, operation, timeout_seconds, host_process_group_stopped):
+        self.operation = operation
+        self.timeout_seconds = timeout_seconds
+        self.host_process_group_stopped = host_process_group_stopped
+        termination = (
+            "host process group stopped"
+            if host_process_group_stopped
+            else "host process-group termination could not be confirmed"
+        )
+        super().__init__(
+            f"{operation} timed out after {timeout_seconds}s; {termination}; "
+            "lab reset state is uncertain"
+        )
+
+
+def _process_group_exists(process_group_id):
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def _wait_for_process_group_exit(process_group_id, timeout):
+    deadline = time.monotonic() + timeout
+    while True:
+        exists = _process_group_exists(process_group_id)
+        if exists is False:
+            return True
+        if exists is None or time.monotonic() >= deadline:
+            return False
+        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+
+
+def _terminate_process_group(process):
+    """Stop and confirm only the reset child session, preserving the parent lock."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        # Still make a best effort with SIGKILL below.
+        pass
+    try:
+        process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        pass
+
+    # The group leader may exit on TERM while a descendant ignores it. Check
+    # the process group independently of communicate()/the leader's exit.
+    exists = _process_group_exists(process.pid)
+    if exists is None:
+        return False
+    if exists:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            return False
+        if not _wait_for_process_group_exit(
+            process.pid, PROCESS_TERMINATION_GRACE_SECONDS
+        ):
+            return False
+
+    try:
+        process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return False
+    return (
+        process.returncode is not None and _process_group_exists(process.pid) is False
+    )
+
+
+def _run_bounded_subprocess(args, *, timeout, operation, **kwargs):
+    """Run reset work in a child process group with a finite deadline."""
+    process = subprocess.Popen(args, start_new_session=True, **kwargs)
+    try:
+        process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stopped = _terminate_process_group(process)
+        raise LabResetTimeout(operation, timeout, stopped) from None
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, args)
+    return subprocess.CompletedProcess(args, process.returncode)
+
+
 def truth(value):
     return value is True or str(value).lower() in ("1", "true")
+
+
+def metric_integer(value):
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+        return int(value)
+    return None
+
+
+def metric_number(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 and number < float("inf") else None
+
+
+def metric_flag(value):
+    if isinstance(value, bool):
+        return value
+    if type(value) is int and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in ("0", "1", "false", "true"):
+        return value.strip().lower() in ("1", "true")
+    return None
+
+
+def job_metrics(content):
+    drop_count = metric_integer(content.get("dropCount"))
+    return {
+        "run_seconds": metric_number(content.get("runDuration")),
+        "scan_count": metric_integer(content.get("scanCount")),
+        "event_count": metric_integer(content.get("eventCount")),
+        "result_count": metric_integer(content.get("resultCount")),
+        "disk_usage_bytes": metric_integer(content.get("diskUsage")),
+        "drop_count": drop_count,
+        "event_is_truncated": metric_flag(content.get("eventIsTruncated")),
+        "result_is_truncated": metric_flag(content.get("resultIsTruncated")),
+        "result_is_streaming": metric_flag(content.get("resultIsStreaming")),
+        "performance": content.get("performance")
+        if isinstance(content.get("performance"), dict)
+        else None,
+    }
 
 
 def warnings(messages):
@@ -98,6 +250,8 @@ def validate_ports(ports):
 
 def validate_lab_target(lab_client=None):
     client = lab if lab_client is None else lab_client
+    if os.environ.get("ADM_LAB_TASK"):
+        client.verify_target()
     if not re.fullmatch(r"adm-[a-z0-9-]+", CONTAINER):
         raise ValueError("Refusing benchmark: invalid lab container name")
     for actual, env_name, default in (
@@ -109,6 +263,23 @@ def validate_lab_target(lab_client=None):
             raise ValueError(f"Refusing benchmark: invalid {env_name}")
         if actual != f"https://127.0.0.1:{port}":
             raise ValueError("Benchmark is restricted to the disposable localhost lab")
+
+
+def non_task_docker_activity():
+    running = [
+        json.loads(line)
+        for line in command("docker", "ps", "--format", "{{json .}}").splitlines()
+        if line.strip()
+    ]
+    return [
+        {
+            "name": entry.get("Names", "unknown"),
+            "image": entry.get("Image", "unknown"),
+            "status": entry.get("Status", "unknown"),
+        }
+        for entry in running
+        if entry.get("Names") != CONTAINER
+    ]
 
 
 def local_docker_endpoint():
@@ -286,20 +457,89 @@ def request(method, path, data=None, timeout=120):
         return json.load(response)
 
 
+def _unavailable_server_info(reason):
+    return {
+        "available": False,
+        "version": None,
+        "build": None,
+        "product_type": None,
+        "unavailable_fields": list(SERVER_INFO_FIELDS),
+        "availability_reason": reason,
+    }
+
+
+def parse_server_info(payload):
+    """Extract only the documented native Splunk identity fields."""
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return _unavailable_server_info("invalid_response")
+    matches = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("name") == "server-info"
+    ]
+    if len(matches) != 1 or not isinstance(matches[0].get("content"), dict):
+        return _unavailable_server_info("server_info_entry_missing")
+
+    content = matches[0]["content"]
+    values = {}
+    for field in SERVER_INFO_FIELDS:
+        value = content.get(field)
+        if (
+            isinstance(value, str)
+            and value.strip()
+            and len(value.strip()) <= 256
+            and not any(ord(char) < 32 for char in value)
+        ):
+            values[field] = value.strip()
+        else:
+            values[field] = None
+    unavailable_fields = [field for field, value in values.items() if value is None]
+    return {
+        "available": not unavailable_fields,
+        **values,
+        "unavailable_fields": unavailable_fields,
+        "availability_reason": "fields_missing" if unavailable_fields else None,
+    }
+
+
+def capture_server_info():
+    """Capture bounded, read-only identity metadata without retaining other fields."""
+    try:
+        with lab._mgmt(
+            "GET",
+            "/services/server/info?output_mode=json&count=1",
+            timeout=SERVER_INFO_TIMEOUT_SECONDS,
+        ) as response:
+            payload = response.read(MAX_SERVER_INFO_RESPONSE_BYTES + 1)
+    except TimeoutError:
+        return _unavailable_server_info("request_timeout")
+    except Exception:
+        # Endpoint errors may include response bodies; keep only a safe status.
+        return _unavailable_server_info("request_failed")
+
+    if len(payload) > MAX_SERVER_INFO_RESPONSE_BYTES:
+        return _unavailable_server_info("response_too_large")
+    try:
+        decoded = json.loads(payload)
+    except (TypeError, ValueError):
+        return _unavailable_server_info("invalid_json")
+    return parse_server_info(decoded)
+
+
 def preflight():
     local_docker_endpoint()
     validate_lab_target()
-    validate_ports(
-        json.loads(
-            command(
-                "docker",
-                "inspect",
-                "--format",
-                "{{json .NetworkSettings.Ports}}",
-                CONTAINER,
-            )
+    port_bindings = json.loads(
+        command(
+            "docker",
+            "inspect",
+            "--format",
+            "{{json .NetworkSettings.Ports}}",
+            CONTAINER,
         )
     )
+    validate_ports(port_bindings)
     info = json.loads(command("docker", "info", "--format", "{{json .}}"))
     image = command("docker", "inspect", "--format", "{{.Config.Image}}", CONTAINER)
     if image != "splunk/splunk:10.6.0.5":
@@ -308,8 +548,77 @@ def preflight():
     limits = json.loads(
         command("docker", "inspect", "--format", "{{json .HostConfig}}", CONTAINER)
     )
+    labels = (
+        json.loads(
+            command(
+                "docker", "inspect", "--format", "{{json .Config.Labels}}", CONTAINER
+            )
+        )
+        or {}
+    )
+    mounts = (
+        json.loads(
+            command("docker", "inspect", "--format", "{{json .Mounts}}", CONTAINER)
+        )
+        or []
+    )
+    networks = (
+        json.loads(
+            command(
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .NetworkSettings.Networks}}",
+                CONTAINER,
+            )
+        )
+        or {}
+    )
+    network_mode = command(
+        "docker", "inspect", "--format", "{{.HostConfig.NetworkMode}}", CONTAINER
+    )
+    non_task_activity = non_task_docker_activity()
+    other_images = Counter(entry["image"] for entry in non_task_activity)
+    package = os.environ.get("ADM_LAB_PACKAGE")
+    native_server_info = capture_server_info()
     return {
+        "container_id": command("docker", "inspect", "--format", "{{.Id}}", CONTAINER),
+        "lab_configuration": {
+            "task": os.environ.get("ADM_LAB_TASK"),
+            "lab_name": CONTAINER,
+            "docker_endpoint": os.environ.get("DOCKER_HOST"),
+            "ownership_labels": {
+                key: labels.get(key)
+                for key in ("org.splunk-adm.task", "org.splunk-adm.lab")
+            },
+            "network_mode": network_mode,
+            "networks": sorted(networks),
+            "volume_mounts": [
+                {
+                    "type": mount.get("Type"),
+                    "name": mount.get("Name"),
+                    "destination": mount.get("Destination"),
+                }
+                for mount in mounts
+                if mount.get("Destination") in ("/opt/splunk/etc", "/opt/splunk/var")
+            ],
+            "port_bindings": port_bindings,
+        },
+        "preexisting_running_containers": {
+            "count_excluding_this_lab": sum(other_images.values()),
+            "images_excluding_this_lab": dict(sorted(other_images.items())),
+            "containers_excluding_this_lab": non_task_activity,
+            "collection_method": "docker ps before measurement; all non-task containers left running",
+            "limits": "Docker activity only; native host-process activity was not attributed by this harness",
+        },
         "installed_default_sha256": installed_fingerprints(),
+        "package": {
+            "archive_name": Path(package).name if package else None,
+            "archive_sha256": hashlib.sha256(Path(package).read_bytes()).hexdigest()
+            if package
+            else None,
+            "installed_defaults_basis": "provided_package" if package else "source",
+        },
         "host_architecture": platform.machine(),
         "python": platform.python_version(),
         "docker_architecture": info.get("Architecture"),
@@ -317,10 +626,27 @@ def preflight():
         "docker_memory_bytes": info.get("MemTotal"),
         "image": image,
         "image_id": image_id,
+        "splunk_server_info": native_server_info,
+        "splunk_server_info_capture": {
+            "request_timeout_seconds": SERVER_INFO_TIMEOUT_SECONDS,
+            "max_response_bytes": MAX_SERVER_INFO_RESPONSE_BYTES,
+        },
         "container_memory_limit_bytes": limits.get("Memory"),
         "container_nano_cpus": limits.get("NanoCpus"),
         "container_platform": "linux/amd64 (lab.sh)",
         "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS",
+        "resource_diagnostics": {
+            "per_search_cpu_seconds": None,
+            "per_search_rss_bytes": None,
+            "per_indexer_cpu_or_io": None,
+            "note": "The lab exposes whole-container memory and Splunk job metrics; it does not expose per-search CPU/RSS or production indexer diagnostics in this harness.",
+        },
+        "cache_conditions": {
+            "filesystem_and_search_cache_flushed": False,
+            "first_query": "first measured query after ingestion and correctness checks; not a cold-cache measurement",
+            "repeated_queries": "subsequent requests share the running Splunk container and host caches",
+            "host_load_isolated": False,
+        },
     }
 
 
@@ -369,8 +695,23 @@ class MemorySampler:
 
 
 class Runner:
-    def __init__(self, timeout):
+    def __init__(
+        self,
+        timeout,
+        result_limit=DEFAULT_RESULT_LIMIT,
+        page_size=DEFAULT_RESULT_PAGE_SIZE,
+    ):
+        if type(result_limit) is not int or not 1 <= result_limit <= MAX_RESULT_LIMIT:
+            raise ValueError(
+                f"result_limit must be an integer in 1..{MAX_RESULT_LIMIT}"
+            )
+        if type(page_size) is not int or not 1 <= page_size <= MAX_RESULT_PAGE_SIZE:
+            raise ValueError(
+                f"page_size must be an integer in 1..{MAX_RESULT_PAGE_SIZE}"
+            )
         self.timeout = timeout
+        self.result_limit = result_limit
+        self.page_size = page_size
         self.jobs = []
         self.lock = threading.Lock()
 
@@ -392,7 +733,14 @@ class Runner:
             return value
 
         sid = None
-        record = {"name": name, "status": "failed"}
+        record = {
+            "name": name,
+            "status": "failed",
+            "result_pages": [],
+            "result_page_count": 0,
+            "fetched_rows": 0,
+            "result_retrieval_seconds": None,
+        }
         rows = []
         try:
             if saved:
@@ -423,6 +771,18 @@ class Runner:
                 content = api("GET", f"/services/search/v2/jobs/{sid}")["entry"][0][
                     "content"
                 ]
+                metrics = job_metrics(content)
+                record.update(
+                    dispatch_state=content.get("dispatchState"),
+                    is_done=metric_flag(content.get("isDone")),
+                    is_failed=metric_flag(content.get("isFailed")),
+                    is_finalized=metric_flag(content.get("isFinalized")),
+                    metrics=metrics,
+                    metrics_unavailable=[
+                        key for key, value in metrics.items() if value is None
+                    ],
+                    warnings=warnings(content.get("messages")),
+                )
                 if content.get("dispatchState") == "FAILED" or truth(
                     content.get("isFailed")
                 ):
@@ -434,22 +794,124 @@ class Runner:
                 if time.monotonic() - started > self.timeout:
                     raise TimeoutError(f"Search exceeded {self.timeout}s")
                 time.sleep(0.25)
-            result = api("GET", f"/services/search/v2/jobs/{sid}/results?count=0")
-            rows = result.get("results", [])
-            notes = warnings(content.get("messages")) + warnings(result.get("messages"))
+            result_count = metric_integer(content.get("resultCount"))
+            retrieval_limit = self.result_limit + 1
+            target_rows = (
+                min(result_count, retrieval_limit)
+                if result_count is not None
+                else min(self.page_size, retrieval_limit)
+            )
+            retrieval_started = time.monotonic()
+            page_notes = []
+            page_records = []
+            offset = 0
+            while offset < target_rows:
+                requested = min(self.page_size, target_rows - offset)
+                page = api(
+                    "GET",
+                    f"/services/search/v2/jobs/{sid}/results?count={requested}&offset={offset}",
+                )
+                page_rows = page.get("results")
+                if not isinstance(page_rows, list):
+                    raise ValueError("Splunk returned invalid search results")
+                page_records.append(
+                    {
+                        "offset": offset,
+                        "requested_count": requested,
+                        "returned_count": len(page_rows),
+                        "preview": metric_flag(page.get("preview")),
+                    }
+                )
+                page_notes.extend(warnings(page.get("messages")))
+                if truth(page.get("preview")):
+                    page_notes.append("Preview results returned")
+                remaining = retrieval_limit - len(rows)
+                rows.extend(page_rows[:remaining])
+                if len(page_rows) > requested:
+                    page_notes.append("Splunk exceeded a requested result page size")
+                if len(page_rows) < requested:
+                    page_notes.append(
+                        "Result pagination ended before the requested row count"
+                    )
+                    break
+                offset += min(len(page_rows), requested)
+                record.update(
+                    result_pages=page_records,
+                    result_page_count=len(page_records),
+                    fetched_rows=len(rows),
+                    result_retrieval_seconds=round(
+                        time.monotonic() - retrieval_started, 4
+                    ),
+                )
+            notes = warnings(content.get("messages")) + page_notes
+            dispatch_state = content.get("dispatchState")
+            if not isinstance(dispatch_state, str) or not dispatch_state:
+                notes.append("Search dispatch state is unavailable")
+            elif dispatch_state.upper() != "DONE":
+                notes.append(f"Search dispatch state is {dispatch_state}")
+            if not truth(content.get("isDone")):
+                notes.append("Search job is not marked done")
             if truth(content.get("isFinalized")):
                 notes.append("Search was finalized early")
-            if int(content.get("resultCount", -1)) != len(rows):
-                notes.append("Fetched row count differs from final result count")
-            if truth(result.get("preview")):
-                notes.append("Preview results returned")
+            if result_count is None:
+                notes.append("Final result count is unavailable or invalid")
+            elif result_count > self.result_limit:
+                notes.append(
+                    f"Final result count exceeds configured limit {self.result_limit}; retrieval is bounded to {self.result_limit + 1} rows"
+                )
+            if result_count is not None and result_count != len(rows):
+                if (
+                    result_count > self.result_limit
+                    and len(rows) == self.result_limit + 1
+                ):
+                    notes.append("Fetched only the bounded result-limit sentinel rows")
+                else:
+                    notes.append("Fetched row count differs from final result count")
+            if len(rows) > self.result_limit + 1:
+                notes.append("Splunk exceeded the requested result retrieval bound")
+            drop_count = metrics["drop_count"]
+            if content.get("dropCount") is not None and drop_count is None:
+                notes.append("Dropped-event count is invalid")
+            elif drop_count is not None and drop_count > 0:
+                notes.append(f"Search dropped {drop_count} events")
+            event_is_truncated = metrics["event_is_truncated"]
+            result_is_truncated = metrics["result_is_truncated"]
+            if event_is_truncated is True:
+                notes.append("Search events were truncated")
+            if result_is_truncated is True:
+                notes.append("Search results were truncated")
+            metrics["result_count"] = result_count
             record.update(
                 status="complete" if not notes else "incomplete",
                 warnings=list(dict.fromkeys(notes)),
-                run_seconds=float(content.get("runDuration", 0)),
-                result_count=len(rows),
-                scan_count=int(content.get("scanCount", 0)),
-                event_count=int(content.get("eventCount", 0)),
+                dispatch_state=dispatch_state,
+                is_done=metric_flag(content.get("isDone")),
+                is_failed=metric_flag(content.get("isFailed")),
+                is_finalized=metric_flag(content.get("isFinalized")),
+                result_limit=self.result_limit,
+                result_limit_exceeded=result_count is not None
+                and result_count > self.result_limit,
+                fetched_rows=len(rows),
+                result_page_size=self.page_size,
+                result_pages=page_records,
+                result_page_count=len(page_records),
+                result_retrieval_seconds=round(time.monotonic() - retrieval_started, 4),
+                metrics=metrics,
+                metrics_unavailable=[
+                    key for key, value in metrics.items() if value is None
+                ],
+                run_seconds=metrics["run_seconds"],
+                result_count=metrics["result_count"],
+                scan_count=metrics["scan_count"],
+                event_count=metrics["event_count"],
+                disk_usage_bytes=metrics["disk_usage_bytes"],
+                scan_events_per_second=(
+                    metrics["scan_count"] / metrics["run_seconds"]
+                    if metrics["scan_count"] is not None
+                    and metrics["run_seconds"] is not None
+                    and metrics["run_seconds"] > 0
+                    else None
+                ),
             )
         except Exception as exc:
             record["error"] = str(exc)[:2000]
@@ -481,7 +943,17 @@ def require(condition, message):
 def wait_count(runner, query, expected, timeout=180):
     deadline = time.monotonic() + timeout
     while True:
-        rows, job = runner.search("index-visibility", query + " | stats count AS count")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Timed out waiting for {expected} searchable events")
+        original_timeout = runner.timeout
+        runner.timeout = min(original_timeout, remaining)
+        try:
+            rows, job = runner.search(
+                "index-visibility", query + " | stats count AS count"
+            )
+        finally:
+            runner.timeout = original_timeout
         require(job["status"] == "complete", "Incomplete ingestion check")
         actual = int(rows[0]["count"])
         if actual == expected:
@@ -493,14 +965,15 @@ def wait_count(runner, query, expected, timeout=180):
 
 
 def reset_lab(scope_rows):
-    subprocess.run(
+    _run_bounded_subprocess(
         [str(ROOT / "tests/splunk/lab.sh"), "reset"],
-        check=True,
+        timeout=LAB_RESET_TIMEOUT_SECONDS,
+        operation="lab.sh reset",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     # Benchmarks own this disposable lab. Do not inherit test overrides or enabled schedules.
-    subprocess.run(
+    _run_bounded_subprocess(
         [
             "docker",
             "exec",
@@ -511,7 +984,10 @@ def reset_lab(scope_rows):
             "-f",
             "/opt/splunk/etc/apps/splunk_adm/local/macros.conf",
         ],
-        check=True,
+        timeout=LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        operation="remove local macros override",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
     deadline = time.monotonic() + 120
@@ -626,12 +1102,31 @@ def run_case(name, config, concurrency, repeats, timeout):
         "manifest": meta,
         "status": "failed",
         "jobs": [],
+        "lab_reset": {
+            "status": "not_started",
+            "timeout_seconds": LAB_RESET_TIMEOUT_SECONDS,
+            "docker_exec_timeout_seconds": LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        },
     }
     runner = Runner(timeout)
     print(f"{name}: resetting disposable lab", flush=True)
     memory = None
     try:
-        reset_lab(meta["scope_rows"])
+        try:
+            reset_lab(meta["scope_rows"])
+        except Exception as exc:
+            result["lab_reset"].update(
+                status="failed",
+                lab_state="uncertain",
+                error=str(exc)[:1000],
+                host_process_group_stopped=(
+                    exc.host_process_group_stopped
+                    if isinstance(exc, LabResetTimeout)
+                    else None
+                ),
+            )
+            raise
+        result["lab_reset"].update(status="complete", lab_state="ready")
         with MemorySampler() as memory:
             started = time.monotonic()
             start = int(time.time()) - 1
@@ -843,6 +1338,8 @@ def main(argv=None):
             "concurrency": args.concurrency,
             "repeats": args.repeats,
             "timeout": args.timeout,
+            "lab_reset_timeout_seconds": LAB_RESET_TIMEOUT_SECONDS,
+            "lab_reset_docker_exec_timeout_seconds": LAB_RESET_DOCKER_TIMEOUT_SECONDS,
         },
         "cases": [],
     }

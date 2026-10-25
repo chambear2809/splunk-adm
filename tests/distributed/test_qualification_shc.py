@@ -1825,6 +1825,28 @@ class DriverTests(unittest.TestCase):
         self.lab.state["support_files"] = contract["support_files"]
         return contract
 
+    def test_migration_source_hashes_include_all_extracted_modules(self):
+        source = Path(self.temp.name) / "migration-source"
+        for relative in runner.MIGRATION_SOURCE_FILES:
+            path = source / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(relative)
+
+        before = runner.migration_source_hashes(source)
+        self.assertEqual(set(before), set(runner.MIGRATION_SOURCE_FILES))
+        implementation = source / "tools/cisco_migration/core.py"
+        implementation.write_text(implementation.read_text() + "# changed\n")
+        after = runner.migration_source_hashes(source)
+
+        self.assertNotEqual(
+            before["tools/cisco_migration/core.py"],
+            after["tools/cisco_migration/core.py"],
+        )
+        self.assertEqual(
+            before["tools/cisco_contract_migration.py"],
+            after["tools/cisco_contract_migration.py"],
+        )
+
     def bootstrap_state(self):
         self.lab.directory.mkdir()
         (self.lab.directory / "evidence").mkdir()

@@ -22,6 +22,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+from gen_raw_fixtures import GENERATOR_SOURCE_FILES, generator_source_hashes  # noqa: E402
 from lab_lock import with_lab_lock  # noqa: E402
 
 APPS = {
@@ -618,6 +619,7 @@ def evidence_fingerprints(
         "generator_sha256": hashlib.sha256(
             (ROOT / "tools/gen_raw_fixtures.py").read_bytes()
         ).hexdigest(),
+        "generator_source_sha256": generator_source_hashes(ROOT),
     }
 
 
@@ -641,7 +643,7 @@ def capture(
     if not raw_files:
         raise RuntimeError("raw Cisco scenario files are missing")
     files = [
-        ROOT / "tools/gen_raw_fixtures.py",
+        *(ROOT / relative for relative in GENERATOR_SOURCE_FILES),
         raw_dir / "scenario.json",
         raw_dir / "source-profiles.json",
         raw_dir / "capture-manifest.json",
@@ -669,6 +671,10 @@ def capture(
             )
         },
         "initialized_lab": current_evidence,
+        "generator_sha256": hashlib.sha256(
+            (ROOT / "tools/gen_raw_fixtures.py").read_bytes()
+        ).hexdigest(),
+        "generator_source_sha256": generator_source_hashes(ROOT),
         "initialization_sha256": hashlib.sha256(
             initialization.read_bytes()
         ).hexdigest(),
