@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from tools import export_o11y_detector_events as export
+from tools import hec_delivery
 
 
 def request(**changes) -> export.DetectorExportRequest:
@@ -199,6 +200,56 @@ class DetectorEventExportTest(unittest.TestCase):
         self.assertNotIn("apm_mms_id", records[0])
         self.assertGreaterEqual(len(calls), 4)
 
+    def test_preserves_stop_manual_resolution_and_unknown_lifecycle_values(self):
+        events = [
+            source_event("stopped", eventType="CLEAR", anomalyState="STOPPED"),
+            source_event(
+                "manual",
+                eventType="CLEAR",
+                anomalyState="MANUALLY_RESOLVED",
+            ),
+            source_event(
+                "future",
+                eventType="FUTURE_EVENT_TYPE",
+                anomalyState="FUTURE_STATE",
+                extensionField={"source": "verbatim"},
+            ),
+        ]
+        records = export.collect_detector_events(
+            request(detector_ids=("detector_A",)),
+            "token",
+            get_json=lambda *args: export._HTTPResponse(
+                200, json.dumps(events).encode()
+            ),
+            captured_at=1_800_000_901,
+        )
+        by_id = {record["event_id"]: record for record in records}
+        self.assertEqual(by_id["stopped"]["anomaly_state"], "STOPPED")
+        self.assertEqual(by_id["manual"]["anomaly_state"], "MANUALLY_RESOLVED")
+        self.assertEqual(by_id["future"]["anomaly_state"], "FUTURE_STATE")
+        self.assertEqual(by_id["future"]["source_event_type"], "FUTURE_EVENT_TYPE")
+        self.assertEqual(
+            by_id["future"]["source_event_json"],
+            export._canonical_json(events[2]),
+        )
+
+    def test_selected_interval_boundaries_are_inclusive(self):
+        events = [
+            source_event("at-start", timestamp=1_800_000_000_000),
+            source_event("at-end", timestamp=1_800_000_900_000),
+        ]
+        records = export.collect_detector_events(
+            request(detector_ids=("detector_A",)),
+            "token",
+            get_json=lambda *args: export._HTTPResponse(
+                200, json.dumps(events).encode()
+            ),
+            captured_at=1_800_000_901,
+        )
+        self.assertEqual(
+            {record["event_id"] for record in records}, {"at-start", "at-end"}
+        )
+
     def test_exact_duplicate_pages_deduplicate_but_conflicting_ids_fail(self):
         repeated = source_event("repeat")
         pages = iter([[repeated], [repeated], []])
@@ -228,6 +279,7 @@ class DetectorEventExportTest(unittest.TestCase):
     def test_wrong_detector_out_of_window_and_malformed_page_fail_closed(self):
         for event in (
             source_event("outside", timestamp=1_799_999_999_000),
+            source_event("after-end", timestamp=1_800_000_900_001),
             source_event("wrong", detector_id="another-detector"),
         ):
             with (
@@ -278,6 +330,57 @@ class DetectorEventExportTest(unittest.TestCase):
                             else [source_event("two", timestamp=1_800_000_200_000)]
                         ).encode(),
                     ),
+                )
+
+    def test_api_detector_ceiling_is_not_mistaken_for_complete_history(self):
+        req = request(detector_ids=("detector_A",))
+        events = [source_event("one"), source_event("two", timestamp=1_800_000_200_000)]
+        with (
+            patch.object(export, "MAX_EVENTS_PER_CAPTURE", 10_000),
+            patch.object(export, "API_MAX_EVENTS_PER_DETECTOR", 2),
+            patch.object(export, "PAGE_SIZE", 2),
+            self.assertRaisesRegex(export.DetectorExportError, "complete history"),
+        ):
+            export.collect_detector_events(
+                req,
+                "token",
+                get_json=lambda *args: export._HTTPResponse(
+                    200, json.dumps(events).encode()
+                ),
+                captured_at=1_800_000_901,
+            )
+
+    def test_event_rows_plus_completion_fit_shared_sender_capture_limit(self):
+        self.assertEqual(
+            export.MAX_EVENTS_PER_CAPTURE + 1, hec_delivery.CAPTURE_MAX_RECORDS
+        )
+        req = request(detector_ids=("detector_A",))
+        source_events = [source_event("one"), source_event("two")]
+        with patch.object(export, "MAX_EVENTS_PER_CAPTURE", 2):
+            records = export._event_records(
+                req,
+                {"detector_A": source_events},
+                "capture-two-events",
+                1_800_000_901,
+            )
+            content = export.render_hec_ndjson(
+                req,
+                records,
+                captured_at=1_800_000_901,
+                capture_id="capture-two-events",
+            )
+        self.assertEqual(len(content.splitlines()), 3)
+
+    def test_header_unsafe_or_oversized_tokens_are_rejected_before_request(self):
+        for token in ("bad\nheader", "bad\theader", "bad-é", "x" * 8193):
+            with (
+                self.subTest(token_length=len(token)),
+                self.assertRaisesRegex(ValueError, "SPLUNK_OBSERVABILITY_TOKEN"),
+            ):
+                export.collect_detector_events(
+                    request(detector_ids=("detector_A",)),
+                    token,
+                    get_json=lambda *args: self.fail("request must not be made"),
                 )
 
     def test_completion_is_explicit_for_empty_interval_and_retains_capture_window(self):

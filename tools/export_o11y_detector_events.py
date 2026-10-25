@@ -35,7 +35,8 @@ SOURCETYPE = "atlas:o11y_detector_event"
 MAX_WINDOW_SECONDS = 86_400
 MAX_DETECTORS = 16
 PAGE_SIZE = 1_000
-MAX_EVENTS_PER_CAPTURE = 10_000
+API_MAX_EVENTS_PER_DETECTOR = 10_000
+MAX_EVENTS_PER_CAPTURE = 9_999  # one completion row fits the shared sender cap
 MAX_CAPTURE_BYTES = 64 * 1024 * 1024
 MAX_EVENT_BYTES = 65_536  # app TRUNCATE boundary including the JSONL newline
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
@@ -521,7 +522,12 @@ def collect_detector_events(
 ) -> list[dict[str, Any]]:
     """Read all configured detector event pages for one closed UTC interval."""
     request.validate()
-    if not isinstance(token, str) or not token or "\n" in token or "\r" in token:
+    if (
+        not isinstance(token, str)
+        or not token
+        or len(token) > 8192
+        or any(ord(character) < 33 or ord(character) > 126 for character in token)
+    ):
         raise ValueError("SPLUNK_OBSERVABILITY_TOKEN is required")
     ssl_context = _context(ca_bundle)
     captured = int(time.time()) if captured_at is None else captured_at
@@ -574,6 +580,10 @@ def collect_detector_events(
                     "Detector events response exceeded the requested page size."
                 )
             events.extend(page)
+            if len(events) >= API_MAX_EVENTS_PER_DETECTOR:
+                raise DetectorExportError(
+                    "Detector reached the API event limit; complete history cannot be verified."
+                )
             total += len(page)
             if total > MAX_EVENTS_PER_CAPTURE:
                 raise DetectorExportError("Detector export exceeded the event cap.")

@@ -154,15 +154,23 @@ milliseconds, nonnegative `offset`, and `limit` (default 50). Its retrieve
 guide describes offset/limit pagination; the detector API reference caps one
 response at 10,000 events. Atlas requests at most 1,000 events per page,
 accepts at most 16 configured detector IDs, one interval of at most 24 hours,
-and 10,000 events per capture total. The exporter limits individual responses
-to 16 MiB, a full multi-page run to five minutes, the final capture to 64 MiB,
-and each record to 65,535 bytes plus newline.
+and 9,999 source events per capture plus one completion row. If one detector
+reaches the API's 10,000-event ceiling, the exporter fails closed because the
+route cannot prove whether older or additional events were truncated. The
+exporter limits individual responses to 16 MiB, a full multi-page run to five
+minutes, the final capture to 64 MiB, and each record to 65,535 bytes plus
+newline. The Atlas browser projection separately caps inspection at 64 rows
+including completion; larger captures can still be searched directly in
+Splunk but are not partially rendered in the panel.
 
 The event API returns observations, while incidents are retrieved separately
 and represent collections of events. Detector events include trigger and
-clear observations; the source stores each event, the explicitly configured
-detector list, and an exact observed-row count in its completion row. It does
-not fetch current incident state or reconstruct lifecycle intervals.
+clear observations; anomaly states such as `ANOMALOUS`, `OK`,
+`MANUALLY_RESOLVED`, and `STOPPED` are preserved as returned, along with
+unknown future source values and the canonical raw event. The source stores
+each event, the explicitly configured detector list, and an exact observed-row
+count in its completion row. It does not fetch current incident state or
+reconstruct lifecycle intervals.
 Organization, realm, routing scope, cluster and selected detector IDs are
 configuration context only. This source makes no service or MMS association.
 The API reference permits the `read_only` role for event retrieval; use an

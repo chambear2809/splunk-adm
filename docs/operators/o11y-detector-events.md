@@ -16,8 +16,11 @@ not enumerate all detectors. The API reference documents inclusive `from` and
 default). This exporter requests pages of at most 1,000 events and pages by
 offset until the selected detector returns a short page. Splunk documents a
 maximum of 10,000 events from this operation even if more are present. Atlas
-also caps one capture at 10,000 events across all configured detectors, so a
-larger result is rejected rather than represented as complete.
+cannot prove one detector's complete history after reaching this API ceiling,
+even if the next offset returns an empty page, so it fails that capture
+closed. Atlas also caps one export at 9,999 source events across all configured
+detectors plus one completion row; this keeps the HEC capture within the
+shared sender's 10,000-row cap.
 
 One capture accepts 1–16 unique detector IDs and one closed interval no longer
 than 24 hours. The request timeout is configurable from 1–300 seconds; the
@@ -26,6 +29,9 @@ whole multi-page capture is limited to five minutes. Responses are limited to
 newline. Requests that exceed a cap fail without publishing a partial file.
 Observability Cloud retains its events for 12 months; the exporter does not
 extend that retention. Plan the local Splunk index retention separately.
+Atlas's browser inspection admits at most 64 rows total, including completion
+(63 detector events plus one completion event). A larger delivered capture
+remains searchable in Splunk but is not partially shown in the Atlas panel.
 
 The event route and the incident routes are different. Splunk describes a
 detector incident as a collection of events and separately exposes an
@@ -38,6 +44,13 @@ fill a missing clear, or carry an event forward as current state. A selection's
 service is graph-boundary context only. Configured organization, realm, scope,
 cluster and detector IDs pin the source. No service or MMS attribution is
 claimed.
+
+The API defines anomaly states including `ANOMALOUS`, `OK`,
+`MANUALLY_RESOLVED`, and `STOPPED`. Atlas retains the exact returned
+`anomalyState` and `eventType` values, including values introduced by the
+source after this schema was written. For example, `STOPPED` remains a
+reported lifecycle observation; Atlas does not reinterpret it as a clear or
+derive present detector state.
 
 ## Access and source configuration
 
