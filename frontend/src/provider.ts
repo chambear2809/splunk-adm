@@ -166,6 +166,12 @@ const request = (
   maxRows,
   signal,
 });
+const hasSubMillisecondPrecision = (value?: string): boolean => {
+  const fractionalDigits = /^\d+\.(\d+)$/.exec(value ?? "")?.[1];
+  return (
+    fractionalDigits !== undefined && /[1-9]/.test(fractionalDigits.slice(3))
+  );
+};
 export function loadLive(
   client: SearchClient,
   input: LiveRequest,
@@ -174,6 +180,13 @@ export function loadLive(
   let search: string;
   try {
     search = buildGraphSearch(input);
+    if (
+      hasSubMillisecondPrecision(input.earliest) ||
+      hasSubMillisecondPrecision(input.latest)
+    )
+      throw new Error(
+        "Absolute graph time bounds must use millisecond precision or coarser.",
+      );
   } catch (e) {
     return Promise.reject(e);
   }

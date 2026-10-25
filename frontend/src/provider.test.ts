@@ -153,6 +153,32 @@ describe("loadLive", () => {
     ).rejects.toThrow();
     expect(called).toBe(false);
   });
+  it.each([
+    { earliest: "1791373500.0005", latest: "1791374400" },
+    { earliest: "1791373500.0015", latest: "1791374400" },
+    { earliest: "1791373500", latest: "1791374400.0005" },
+    { earliest: "1791373500", latest: "1791374400.0015" },
+    { earliest: "1791373500.00000001", latest: "1791374400" },
+  ])(
+    "rejects unsupported absolute precision before dispatch: %j",
+    async (bounds) => {
+      const client = fake(demo.rows);
+      await expect(
+        loadLive(client, { ...ok, ...bounds }, new AbortController().signal),
+      ).rejects.toThrow(/millisecond precision/);
+      expect(client.seen).toBeUndefined();
+    },
+  );
+  it.each([
+    { earliest: "1791373500.001", latest: "1791374400.5" },
+    { earliest: "1791373500.001000", latest: "1791374400.500000" },
+    { earliest: "1791373500.0000", latest: "1791374400.0000" },
+    { earliest: "-1h@m", latest: "now" },
+  ])("preserves supported graph bounds: %j", async (bounds) => {
+    const client = fake(demo.rows);
+    await loadLive(client, { ...ok, ...bounds }, new AbortController().signal);
+    expect(client.seen).toMatchObject(bounds);
+  });
   it("passes abort signal through", async () => {
     const client = fake(demo.rows);
     const controller = new AbortController();
