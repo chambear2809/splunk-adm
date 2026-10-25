@@ -1,0 +1,36 @@
+{
+  "schema": "application_atlas.processor_fixtures.v1",
+  "qualification": "offline_semantic_expectations_only",
+  "selected_sourcetypes": [
+    "stream:netflow",
+    "atlas:o11y_health"
+  ],
+  "inputs": {
+    "stream_netflow": [
+      "fixtures/processors/v1/inputs/stream_netflow.ndjson",
+      "fixtures/processors/v1/inputs/stream_netflow_late.ndjson"
+    ],
+    "atlas_o11y_health_v1": [
+      "fixtures/processors/v1/inputs/o11y_health_v1.json"
+    ],
+    "otel_external_hec_fields_boundary_case": [
+      "fixtures/processors/v1/inputs/otel_trace_with_hec_fields.ndjson"
+    ]
+  },
+  "expected_output_fingerprints": "fixtures/processors/v1/golden_outputs.json",
+  "negative_inputs": {
+    "duplicate_json_key": "fixtures/processors/v1/inputs/duplicate_json_key.ndjson",
+    "malformed_json": "fixtures/processors/v1/inputs/malformed_json.ndjson",
+    "unmatched_sourcetype": "fixtures/processors/v1/inputs/unmatched_sourcetype.ndjson"
+  },
+  "provenance": {
+    "stream_netflow": "Byte-for-byte copies of the TA-grounded synthetic HEC envelopes from fixtures/raw/stream_netflow.ndjson and fixtures/raw/late/stream_netflow.ndjson; includes TCP, UDP, ICMP, and late-export records.",
+    "atlas_o11y_health_v1": "Byte-for-byte copy of the existing synthetic completed health capture from fixtures/o11y/complete.json; this remains the existing v1 contract.",
+    "otel_external_hec_fields_boundary_case": "Byte-for-byte copy of the first synthetic OTel HEC envelope from fixtures/raw/otel_traces.ndjson. It validates the metadata boundary only; no OTel pipeline is selected."
+  },
+  "limitations": [
+    "These fixtures do not execute SPL2 or prove Edge Processor or Ingest Processor runtime behavior.",
+    "A runtime processor output must be captured from a supported product version and compared with these expected semantic facts before qualification.",
+    "Duplicate-key JSON is rejected as ambiguous by this offline validator; behavior of a real HEC receiver must be qualified on the selected product version."
+  ]
+}

@@ -1,0 +1,1 @@
+$pipeline = | from $source | eval index="atlas_o11y" | into $destination;

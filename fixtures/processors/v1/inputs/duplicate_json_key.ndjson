@@ -1,0 +1,1 @@
+{"time":1791373141,"host":"stream-fwd-01","source":"stream:netflow","sourcetype":"stream:netflow","index":"netflow","event":{"src_ip":"10.42.0.20","src_ip":"10.42.0.21","dest_ip":"10.42.0.50","protoid":6,"bytes":300,"packets":1}}

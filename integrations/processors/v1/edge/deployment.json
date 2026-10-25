@@ -1,0 +1,116 @@
+{
+  "schema": "application_atlas.processor_profile.v1",
+  "id": "edge_processor",
+  "spl2_profile": "edgeProcessor",
+  "runtime_qualification": "unqualified",
+  "enabled_by_default": false,
+  "supported_control_planes": [
+    {
+      "platform": "Splunk Cloud Platform",
+      "minimum_version": "9.0.2209",
+      "requirements": [
+        "The tenant must be provisioned in a region that supports Edge Processors.",
+        "The Edge Processor service must be activated for the tenant.",
+        "Record the deployed Edge Processor instance version during qualification."
+      ]
+    },
+    {
+      "platform": "Splunk Enterprise",
+      "minimum_version": "10.0",
+      "docs_version_checked": "10.6",
+      "requirements": [
+        "Enable the Data Management control plane and Edge Processor service.",
+        "The repository's installed Splunk baseline is Enterprise 10.6.0.5; Edge Processor itself is not installed in the local qualification lab."
+      ],
+      "documented_cloud_receiver_versions_from_enterprise_control_plane": [
+        "9.1.x",
+        "9.2.x",
+        "9.3.x",
+        "10.0.x"
+      ]
+    }
+  ],
+  "input": {
+    "transport": "HTTP Event Collector",
+    "format": "structured HEC JSON event envelope; JSON Lines is one envelope per line",
+    "selected_endpoint": "/services/collector",
+    "raw_endpoint_supported": true,
+    "supported_endpoints": [
+      "/services/collector",
+      "/services/collector/raw"
+    ],
+    "selected_endpoint_reason": "Atlas inputs are JSON HEC event envelopes. Splunk documents /services/collector/raw for raw payloads and warns JSON data might not be transformed as expected there.",
+    "event_metadata_preserved": [
+      "time",
+      "host",
+      "source",
+      "sourcetype",
+      "fields"
+    ],
+    "indexer_acknowledgement": "disabled on HEC tokens used with the Edge Processor",
+    "event_body_contract": "The structured HEC event object remains the event body. SPL2 changes only destination index metadata; runtime semantic preservation must be confirmed with product preview and indexed readback."
+  },
+  "destinations": {
+    "connected_splunk_platform": "Splunk-to-Splunk (S2S)",
+    "non_connected_splunk_platform": [
+      "Splunk-to-Splunk (S2S)",
+      "HTTP Event Collector (HEC)"
+    ],
+    "selected_destination": "one Splunk platform index destination per pipeline; use the connected indexer S2S destination where available",
+    "hec_indexer_acknowledgement": "disabled when HEC is selected"
+  },
+  "pipelines": [
+    {
+      "id": "stream_netflow_v1",
+      "spl2": "stream_netflow.spl2",
+      "partition_sourcetype": "stream:netflow",
+      "partition_conditions": [
+        {
+          "field": "sourcetype",
+          "operator": "equals",
+          "value": "stream:netflow"
+        }
+      ],
+      "partition_scope_note": "Configure this condition in the pipeline builder. Do not add it as a SPL2 where filter; unmatched data must remain eligible for the Edge default destination.",
+      "target_index": "netflow",
+      "destination_count": 1,
+      "preserve_input_host_source_sourcetype_time": true
+    },
+    {
+      "id": "atlas_o11y_health_v1",
+      "spl2": "atlas_o11y_health.spl2",
+      "partition_sourcetype": "atlas:o11y_health",
+      "partition_conditions": [
+        {
+          "field": "sourcetype",
+          "operator": "equals",
+          "value": "atlas:o11y_health"
+        }
+      ],
+      "partition_scope_note": "Configure this condition in the pipeline builder. Do not add it as a SPL2 where filter; unmatched data must remain eligible for the Edge default destination.",
+      "target_index": "atlas_o11y",
+      "destination_count": 1,
+      "operator_requirement": "Set adm_index_o11y_health to index=atlas_o11y, or change this template target index and the macro together before activation.",
+      "preserve_input_host_source_sourcetype_time": true
+    }
+  ],
+  "behavior": {
+    "filtering_enabled": false,
+    "fanout_enabled": false,
+    "masking_enabled": false,
+    "masking_reason": "The selected traffic tuple, ports, timestamps, sampling/counters, health identity, metric values, and completion evidence are all consumed by Atlas; no field in these selected contracts can be masked without reducing required evidence.",
+    "unmatched_input": "A valid event outside all applied pipeline partitions is sent to the Edge Processor's configured default destination. If no default destination is configured, it is dropped.",
+    "pipeline_filtered_input": "Dropped; these templates contain no filtering command.",
+    "malformed_hec_input": "Not assigned a pipeline fallback by this profile. Validate HEC request rejection and source-side error counters on the selected Edge Processor version.",
+    "delivery_guarantee": "No application-level delivery guarantee is claimed. Edge Processor persistent queues and destination counters must be monitored."
+  },
+  "serialization": {
+    "sourcetype_partition_in_pipeline_builder": true,
+    "single_destination_per_pipeline": true,
+    "event_json_byte_order_preservation": "unqualified; canonical fixture hashes cover JSON semantics only",
+    "duplicate_json_key_runtime_behavior": "unqualified; the offline fixture validator rejects ambiguous duplicate keys",
+    "producer_retries_may_duplicate_events": true,
+    "exactly_once_delivery_claimed": false,
+    "pipeline_changes_no_event_body_fields": true
+  }
+}

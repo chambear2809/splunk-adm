@@ -1,0 +1,86 @@
+{
+  "schema": "application_atlas.processor_profile.v1",
+  "id": "ingest_processor",
+  "spl2_profile": "ingestProcessor",
+  "runtime_qualification": "unqualified",
+  "enabled_by_default": false,
+  "platform": "Splunk Cloud Platform",
+  "availability": "Activated Splunk Cloud capability; not available on Splunk Enterprise.",
+  "minimum_platform_version": "9.1.2308",
+  "input": {
+    "transport": "HTTP Event Collector or Splunk forwarder",
+    "default_hec_port": 8088,
+    "forwarder_port": 9997,
+    "selected_format": "structured HEC JSON event envelope with event payload, HEC metadata, and optional flat fields metadata",
+    "endpoint_path": "Use the structured HEC event endpoint advertised for the connected tenant. The current Ingest Processor documentation identifies HEC input and port 8088 but does not specify a /services/collector/raw input contract; do not configure /raw for these JSON envelopes.",
+    "raw_endpoint_supported": false,
+    "indexer_acknowledgement": "Disabled on HEC tokens feeding Ingest Processor; useACK=false for forwarders feeding Ingest Processor.",
+    "event_metadata_preserved": [
+      "time",
+      "host",
+      "source",
+      "sourcetype",
+      "fields"
+    ],
+    "event_body_contract": "The structured HEC event object remains the event body. SPL2 changes only destination index metadata; runtime semantic preservation must be confirmed with product preview and indexed readback."
+  },
+  "destination": {
+    "selected_destination": "Connected Splunk Cloud Platform index",
+    "index_routing": "The pipeline sets the target index explicitly. Confirm the index exists and the connected service account can write to it.",
+    "delivery_guarantee": "Ingest Processor provides no data delivery guarantees; high backpressure or a prolonged destination outage can cause data loss."
+  },
+  "pipelines": [
+    {
+      "id": "stream_netflow_v1",
+      "spl2": "stream_netflow.spl2",
+      "partition_sourcetype": "stream:netflow",
+      "partition_conditions": [
+        {
+          "field": "sourcetype",
+          "operator": "equals",
+          "value": "stream:netflow"
+        }
+      ],
+      "partition_scope_note": "Configure this condition in the Ingest Processor pipeline builder; this is the source partition, not a SPL2 where filter. Confirm stream:netflow is registered as a source type with the intended event breaking rules.",
+      "target_index": "netflow",
+      "destination_count": 1,
+      "preserve_input_host_source_sourcetype_time": true
+    },
+    {
+      "id": "atlas_o11y_health_v1",
+      "spl2": "atlas_o11y_health.spl2",
+      "partition_sourcetype": "atlas:o11y_health",
+      "partition_conditions": [
+        {
+          "field": "sourcetype",
+          "operator": "equals",
+          "value": "atlas:o11y_health"
+        }
+      ],
+      "partition_scope_note": "Configure this condition in the Ingest Processor pipeline builder; this is the source partition, not a SPL2 where filter. Confirm atlas:o11y_health is registered as a source type with the intended event breaking rules.",
+      "target_index": "atlas_o11y",
+      "destination_count": 1,
+      "operator_requirement": "Set adm_index_o11y_health to index=atlas_o11y, or change this template target index and the macro together before activation.",
+      "preserve_input_host_source_sourcetype_time": true
+    }
+  ],
+  "behavior": {
+    "filtering_enabled": false,
+    "fanout_enabled": false,
+    "masking_enabled": false,
+    "masking_reason": "The selected traffic tuple, ports, timestamps, sampling/counters, health identity, metric values, and completion evidence are all consumed by Atlas; no field in these selected contracts can be masked without reducing required evidence.",
+    "unmatched_input": "A valid event that matches no applied partition is sent to the non-configurable splunk_indexer destination. Preserve the source index or set an explicit target index so unmatched data does not fall through to the platform default index.",
+    "pipeline_filtered_input": "Dropped; these templates contain no filtering command.",
+    "malformed_hec_input": "Not assigned an unmatched-partition fallback by this profile. Validate HEC rejection and processor/input counters on the selected tenant version.",
+    "qualification_note": "An Ingest Processor preview and Splunk Cloud indexed readback are required before claiming runtime equivalence."
+  },
+  "serialization": {
+    "sourcetype_partition_in_pipeline_builder": true,
+    "single_destination_per_pipeline": true,
+    "event_json_byte_order_preservation": "unqualified; canonical fixture hashes cover JSON semantics only",
+    "duplicate_json_key_runtime_behavior": "unqualified; the offline fixture validator rejects ambiguous duplicate keys",
+    "producer_retries_may_duplicate_events": true,
+    "exactly_once_delivery_claimed": false,
+    "pipeline_changes_no_event_body_fields": true
+  }
+}
