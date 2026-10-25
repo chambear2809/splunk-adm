@@ -121,7 +121,11 @@ cleanup in `104986f` and `cbd1c6d`; 51 focused benchmark tests passed, including
 real child that ignores TERM after its parent exits. Reset timeouts retain an
 uncertain-state report and stop without an automatic retry. Host-group cleanup
 cannot prove Docker daemon-side exec completion. These guards do not retag or
-extend the earlier measurements.
+extend the earlier measurements. A later bounded `server/info` preflight
+records native version/build/product type when available, with explicit
+unavailable status otherwise; 56 final benchmark-focused tests passed. Older
+immutable reports have only the image tag/digest and are not retroactively
+assigned native server metadata.
 
 The separate existing pipeline smoke workload also completed its builders,
 rollup, summary and graph searches: 19 events became visible, with 8 graph nodes
@@ -129,7 +133,7 @@ and 10 edges. This is a small local functional regression check.
 
 ## Same-event FTD NAT evidence
 
-NAT source commits `b464ad2` and `8cd02f3` conditionally retain complete,
+NAT source through `f72f3cd` conditionally retains complete,
 changed, single-valued reported and translated FTD tuples on the existing V1
 conversation. [The data contract](DATA_LAYER.md) and
 [firewall operator guide](operators/firewall-security.md) bind the field
@@ -189,10 +193,18 @@ implementation file in future capture/qualification records. Root verified the
 historical prior-window capture unchanged outside its explicit generator
 compatibility review and confirmed prior review history was retained.
 
-Dedicated migration Docker validation and integrated acceptance remain pending.
-The live rehearsal uses a task-local CA/server certificate with loopback SANs,
-owner-only session/scenario/journal files and an authentic V1 scheduler slice;
-it preserves TLS verification and readiness gates.
+The worker's dedicated migration Docker rehearsal passed two tests in 579.684
+seconds using source `754d04c` and the retained baseline archive SHA-256 above.
+It used a task-local CA/server certificate with loopback SANs, owner-only inputs
+and authentic scheduler receipt slices, preserving TLS verification and
+readiness gates. It exercised staged validation, interruption after a verified
+cutover mutation, resume and rollback. The journal reached `rolled_back`, with
+complete rollback and verified V1 recovery. A native V2 history cycle was
+accepted for an empty source expectation, and rollback restored that writer's
+original disabled state. The V1 pause gap was empty; matching empty fingerprints
+do not establish nonempty gap recovery. Initial TLS/scheduler setup attempts and
+the completed run remain separately retained, bound to their actual inputs.
+Final integrated package acceptance is recorded below.
 
 ## Independent review
 
