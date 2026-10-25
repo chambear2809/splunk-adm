@@ -45,6 +45,10 @@ NO_LINK_WARNING = (
 )
 
 
+def utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+
 @dataclass(frozen=True)
 class TopologyWorkload:
     name: str
@@ -379,10 +383,12 @@ def load_events(workload: TopologyWorkload, progress=None):
 
 def run_case(name, workload, timeout, result_limit):
     meta = manifest(workload)
+    case_started = time.monotonic()
     result = {
         "name": name,
         "workload": meta,
         "status": "failed",
+        "case_started_at": utc_now(),
         "jobs": [],
         "input_progress": {},
         "non_task_docker_activity": {},
@@ -408,6 +414,8 @@ def run_case(name, workload, timeout, result_limit):
             result["non_task_docker_activity"]["before_search"] = (
                 bench.non_task_docker_activity()
             )
+            search_started = time.monotonic()
+            result["search_started_at"] = utc_now()
             try:
                 rows, job = runner.search(
                     f"topology-{name}",
@@ -416,6 +424,10 @@ def run_case(name, workload, timeout, result_limit):
                     window["latest"],
                 )
             finally:
+                result["search_completed_at"] = utc_now()
+                result["search_wall_seconds"] = round(
+                    time.monotonic() - search_started, 4
+                )
                 try:
                     result["non_task_docker_activity"]["after_search"] = (
                         bench.non_task_docker_activity()
@@ -458,6 +470,8 @@ def run_case(name, workload, timeout, result_limit):
         if memory is not None:
             result.update(memory.metrics())
         result["jobs"] = runner.jobs
+        result["case_completed_at"] = utc_now()
+        result["case_wall_seconds"] = round(time.monotonic() - case_started, 4)
     return result
 
 
@@ -471,7 +485,7 @@ def write_report(path: Path, report):
         "",
         "These are local Docker Splunk search measurements for a deterministic NX-OS-only workload. They do not qualify mixed-source topology, a production deployment, or a service-level objective. The 20,001-row case is fetched only as a one-row-over-limit diagnostic sentinel; the application contract rejects it.",
         "",
-        "| Case | Input events | Devices | Interfaces | Search rows | App result | Search wall seconds | Job run seconds | Scan count | Container peak MiB | Status |",
+        "| Case | Input events | Devices | Interfaces | Actual/expected rows | App result | Search wall seconds | Job run seconds | Scan count | Container peak MiB | Status |",
         "| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |",
     ]
     for case in report["cases"]:
@@ -484,7 +498,7 @@ def write_report(path: Path, report):
                 events=case.get("input_event_count", "—"),
                 devices=expected["devices"],
                 interfaces=expected["interfaces"],
-                rows=expected["result_rows"],
+                rows=f"{job.get('result_count', '—')}/{expected['result_rows']}",
                 app_result="accepted"
                 if expected["application_accepts"]
                 else "rejected",
@@ -544,6 +558,11 @@ def main(argv=None):
         parser.error(f"result-limit must be 1..{bench.MAX_RESULT_LIMIT}")
 
     environment = bench.preflight()
+    environment["preflight_captured_at"] = utc_now()
+    environment["phase_note"] = (
+        "Task lab startup and package installation completed before this measurement window; setup time is excluded from topology search timings."
+    )
+    measurement_started_at = utc_now()
     cases = []
     for name in args.cases:
         devices, interfaces = CASES[name]
@@ -555,7 +574,14 @@ def main(argv=None):
         )
         cases.append(case)
         report = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": utc_now(),
+            "measurement_window": {
+                "started_at": measurement_started_at,
+                "last_case_completed_at": case.get("case_completed_at"),
+                "startup_and_install_included": False,
+                "case_wall_includes_reset_ingestion_and_visibility_wait": True,
+                "search_wall_is_recorded_separately_per_case": True,
+            },
             "measurement_class": "local-docker-splunk-search",
             "github_revision": command("git", "-C", str(ROOT), "rev-parse", "HEAD"),
             "git_dirty": bool(command("git", "-C", str(ROOT), "status", "--porcelain")),

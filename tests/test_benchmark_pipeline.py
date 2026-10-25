@@ -3,6 +3,7 @@
 import tempfile
 import hashlib
 import io
+import json
 import tarfile
 from types import SimpleNamespace
 import os
@@ -107,6 +108,28 @@ class BenchmarkPipelineTest(unittest.TestCase):
             self.assertRaises(ValueError),
         ):
             bench.local_docker_endpoint()
+
+    def test_non_task_activity_snapshot_excludes_owned_container(self):
+        entries = [
+            {"Names": bench.CONTAINER, "Image": "task-splunk", "Status": "Up"},
+            {
+                "Names": "other-collector",
+                "Image": "collector-image:tag",
+                "Status": "Up 1 day",
+            },
+        ]
+        output = "\n".join(json.dumps(entry) for entry in entries)
+        with patch.object(bench, "command", return_value=output):
+            self.assertEqual(
+                bench.non_task_docker_activity(),
+                [
+                    {
+                        "name": "other-collector",
+                        "image": "collector-image:tag",
+                        "status": "Up 1 day",
+                    }
+                ],
+            )
 
     def test_saved_search_overrides_cannot_change_queries(self):
         bench.validate_saved_overrides(

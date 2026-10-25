@@ -359,17 +359,16 @@ def request(method, path, data=None, timeout=120):
 def preflight():
     local_docker_endpoint()
     validate_lab_target()
-    validate_ports(
-        json.loads(
-            command(
-                "docker",
-                "inspect",
-                "--format",
-                "{{json .NetworkSettings.Ports}}",
-                CONTAINER,
-            )
+    port_bindings = json.loads(
+        command(
+            "docker",
+            "inspect",
+            "--format",
+            "{{json .NetworkSettings.Ports}}",
+            CONTAINER,
         )
     )
+    validate_ports(port_bindings)
     info = json.loads(command("docker", "info", "--format", "{{json .}}"))
     image = command("docker", "inspect", "--format", "{{.Config.Image}}", CONTAINER)
     if image != "splunk/splunk:10.6.0.5":
@@ -378,11 +377,61 @@ def preflight():
     limits = json.loads(
         command("docker", "inspect", "--format", "{{json .HostConfig}}", CONTAINER)
     )
+    labels = (
+        json.loads(
+            command(
+                "docker", "inspect", "--format", "{{json .Config.Labels}}", CONTAINER
+            )
+        )
+        or {}
+    )
+    mounts = (
+        json.loads(
+            command("docker", "inspect", "--format", "{{json .Mounts}}", CONTAINER)
+        )
+        or []
+    )
+    networks = (
+        json.loads(
+            command(
+                "docker",
+                "inspect",
+                "--format",
+                "{{json .NetworkSettings.Networks}}",
+                CONTAINER,
+            )
+        )
+        or {}
+    )
+    network_mode = command(
+        "docker", "inspect", "--format", "{{.HostConfig.NetworkMode}}", CONTAINER
+    )
     non_task_activity = non_task_docker_activity()
     other_images = Counter(entry["image"] for entry in non_task_activity)
     package = os.environ.get("ADM_LAB_PACKAGE")
     return {
         "container_id": command("docker", "inspect", "--format", "{{.Id}}", CONTAINER),
+        "lab_configuration": {
+            "task": os.environ.get("ADM_LAB_TASK"),
+            "lab_name": CONTAINER,
+            "docker_endpoint": os.environ.get("DOCKER_HOST"),
+            "ownership_labels": {
+                key: labels.get(key)
+                for key in ("org.splunk-adm.task", "org.splunk-adm.lab")
+            },
+            "network_mode": network_mode,
+            "networks": sorted(networks),
+            "volume_mounts": [
+                {
+                    "type": mount.get("Type"),
+                    "name": mount.get("Name"),
+                    "destination": mount.get("Destination"),
+                }
+                for mount in mounts
+                if mount.get("Destination") in ("/opt/splunk/etc", "/opt/splunk/var")
+            ],
+            "port_bindings": port_bindings,
+        },
         "preexisting_running_containers": {
             "count_excluding_this_lab": sum(other_images.values()),
             "images_excluding_this_lab": dict(sorted(other_images.items())),
