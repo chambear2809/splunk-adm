@@ -75,7 +75,11 @@ The integration lab installed baseline archive SHA-256
 `ca5140664818dec913e9355febc5e5939bb588da71a44d70bacbc205d122477e`, restarted,
 and returned the expected `makeresults` smoke row. A foreign task label was
 refused. The verified lab was stopped before granting performance its slot.
-These are baseline/infrastructure results, not final integrated acceptance.
+Live refusal checks also exercised `up`, `install`, `reset`, `down`, `purge`,
+`btool` and search with a foreign task label: each refused before mutation,
+retaining the original container ID/state and credential file. A Docker-free
+shell regression covers the same entrypoints. These are baseline/infrastructure
+results, not final integrated acceptance.
 
 ## Workstream results
 

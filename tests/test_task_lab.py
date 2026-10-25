@@ -5,7 +5,11 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import sys
+import tempfile
 import unittest
+import uuid
 from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location(
@@ -142,3 +146,88 @@ class TaskLabTest(unittest.TestCase):
             with self.assertRaises(lab.LabError):
                 lab._mgmt("POST", "/services/server/control/restart")
             read.assert_not_called()
+
+
+class TaskLabShellTest(unittest.TestCase):
+    def test_every_lifecycle_refuses_foreign_task_before_docker_mutation(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            here = workspace / "tests/splunk"
+            here.mkdir(parents=True)
+            (workspace / "tools").mkdir()
+            for filename in ("lab.sh", "lab.py"):
+                shutil.copy2(root / "tests/splunk" / filename, here / filename)
+            shutil.copy2(root / "tools/lab_lock.py", workspace / "tools/lab_lock.py")
+            fake_bin = workspace / "bin"
+            fake_bin.mkdir()
+            docker = fake_bin / "docker"
+            docker.write_text(
+                f"#!{sys.executable}\n"
+                "import json,os,sys\n"
+                "from pathlib import Path\n"
+                "with Path(os.environ['TEST_DOCKER_LOG']).open('a') as out:\n"
+                " out.write(json.dumps(sys.argv[1:])+'\\n')\n"
+                "if sys.argv[1:] != ['inspect',os.environ['ADM_LAB_NAME']]:\n"
+                " raise SystemExit('Docker mutation must never be reached')\n"
+                "print(json.dumps([{'Config':{'Labels':{'org.splunk-adm.task':'actual-owner','org.splunk-adm.lab':os.environ['ADM_LAB_NAME']}}}]))\n"
+            )
+            docker.chmod(0o755)
+            secret = workspace / "credentials"
+            secret.write_text("synthetic-placeholder")
+            secret.chmod(0o600)
+            environment = dict(
+                os.environ,
+                PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
+                ADM_LAB_NAME="adm-shell-refusal-" + uuid.uuid4().hex,
+                ADM_LAB_TASK="foreign-task",
+                ADM_LAB_SECRETS=str(secret),
+                TEST_DOCKER_LOG=str(workspace / "docker.jsonl"),
+            )
+            for key in (
+                "SPLUNK_ADM_LAB_LOCK_PATH",
+                "SPLUNK_ADM_LAB_LOCK_PID",
+                "SPLUNK_ADM_LAB_LOCK_TOKEN",
+            ):
+                environment.pop(key, None)
+            try:
+                for action in (
+                    "up",
+                    "install",
+                    "reset",
+                    "down",
+                    "purge",
+                    "btool",
+                    "search",
+                ):
+                    with self.subTest(action=action):
+                        args = ["bash", str(here / "lab.sh"), action]
+                        if action == "search":
+                            args.append("| makeresults")
+                        result = subprocess.run(
+                            args,
+                            env=environment,
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                        )
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertIn("refusing unowned task lab", result.stderr)
+                        self.assertEqual(secret.read_text(), "synthetic-placeholder")
+                operations = [
+                    json.loads(line)
+                    for line in (workspace / "docker.jsonl").read_text().splitlines()
+                ]
+                self.assertTrue(operations)
+                self.assertTrue(
+                    all(
+                        op == ["inspect", environment["ADM_LAB_NAME"]]
+                        for op in operations
+                    )
+                )
+            finally:
+                lock = (
+                    Path("/tmp")
+                    / f"splunk-adm-lab-{os.getuid()}-{environment['ADM_LAB_NAME']}.lock"
+                )
+                lock.unlink(missing_ok=True)
