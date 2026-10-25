@@ -342,7 +342,7 @@ class NatEvidenceTest(unittest.TestCase):
         scope_list = ",".join(
             json.dumps(scope)
             for name, scope in self.scopes.items()
-            if name not in ("unmapped", "reported_invalid")
+            if name not in ("unmapped", "reported_invalid", "eventtype")
         )
         rows = lab.search(
             f"| `adm_conversation_rollup` | where scope IN ({scope_list}) {projection}",
@@ -375,7 +375,7 @@ class NatEvidenceTest(unittest.TestCase):
         rows = self.rollups()
         self.assertEqual(
             len(rows),
-            len(self.scopes) - 1,
+            len(self.scopes) - 2,
             f"rollup scopes differ: {sorted(rows)}",
         )
         base = rows[self.scopes["base"]]
@@ -440,7 +440,6 @@ class NatEvidenceTest(unittest.TestCase):
             "protocol",
             "time_format",
             "unchanged",
-            "eventtype",
         ):
             with self.subTest(name=name):
                 row = rows[self.scopes[name]]
@@ -459,6 +458,36 @@ class NatEvidenceTest(unittest.TestCase):
         self.assertEqual(str(bad_reported[0]["adm_ftd_nat_ips_valid"]), "0")
         self.assertEqual(str(bad_reported[0]["adm_ftd_nat_changed"]), "0")
         self.assertNotIn("adm_nat_observation", bad_reported[0])
+
+        # The FTD source selector requires EventType="ConnectionEvent". Keep
+        # the array receipt visible and prove this non-singleton does not enter
+        # normalized or rolled-up conversation data.
+        eventtype_raw = lab.search(
+            f"index=cisco_secure_fw source={json.dumps(self.token)} "
+            f"DeviceIP={json.dumps(self.devices['eventtype'])} | table _raw",
+            self.start - 60,
+            self.start + 600,
+        )
+        self.assertEqual(len(eventtype_raw), 1)
+        self.assertEqual(
+            json.loads(eventtype_raw[0]["_raw"])["EventType"],
+            ["ConnectionEvent", "OtherEvent"],
+        )
+        eventtype_normalized = lab.search(
+            "| `adm_flows` "
+            f"| where adm_observer={json.dumps(self.devices['eventtype'])} "
+            "| table adm_observer adm_quality_status adm_nat_observation",
+            self.start - 60,
+            self.start + 600,
+        )
+        self.assertEqual(eventtype_normalized, [])
+        eventtype_rollup = lab.search(
+            "| `adm_conversation_rollup` "
+            f"| where scope={json.dumps(self.scopes['eventtype'])} | table scope observer",
+            self.start - 60,
+            self.start + 600,
+        )
+        self.assertEqual(eventtype_rollup, [])
 
         unmapped = [
             row
