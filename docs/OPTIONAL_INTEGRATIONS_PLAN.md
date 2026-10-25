@@ -77,7 +77,7 @@ Existing indexed evidence is retained under operator retention policy.
 
 | Owner | Mutable paths |
 | --- | --- |
-| Coordinator | Shared evidence/config types and tests; source registry; macros/props/collections/lookup projection; frontend registration; packaging/CI; lab isolation; scheduled capture/queue wrapper and tests; integration qualification records |
+| Coordinator | Shared evidence/config types and tests; source registry; macros/props/collections/lookup projection; frontend registration; packaging/CI; lab isolation; scheduled capture/queue wrapper and verified SDK transport with tests; integration qualification records |
 | Observability worker | Health exporter/normalizer/panel and tests; common HEC delivery; detector exporter/query/panel/fixtures/tests; Observability operator/design docs |
 | AppDynamics worker | Controller collector/importer; AppDynamics query/panel/fixtures/tests; AppDynamics operator/design docs |
 | Processor worker | `integrations/processors/v1/`, `fixtures/processors/`, processor validator/tests and processor docs |

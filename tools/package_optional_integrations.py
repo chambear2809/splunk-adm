@@ -17,6 +17,7 @@ PATHS = (
     "NOTICE",
     "tools/export_o11y_health.py",
     "tools/capture_o11y_health.py",
+    "tools/o11y_transport.py",
     "tools/export_o11y_detector_events.py",
     "tools/hec_delivery.py",
     "tools/export_appdynamics.py",

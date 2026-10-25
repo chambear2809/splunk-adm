@@ -62,3 +62,18 @@ Like the manual rehearsal, this validates absolute-slice recovery and resumed
 scheduling, not native catch-up. A failing scheduled run does not block any
 push or pull request; check the Actions run history (and the
 `pipeline-rehearsal-evidence` artifact) for it directly.
+
+## Optional SignalFlow transport checks
+
+The Python job installs the existing pinned `tools/requirements-o11y.txt`
+runtime before unit tests. `tests/test_o11y_transport.py` runs the actual SDK
+against disposable loopback TLS/SSE servers with generated private test CAs
+outside the repository. It verifies certificate and hostname rejection, no
+redirect credential forwarding, deadlines before headers and during a slow
+body, response caps, no reconnect after truncation, and the normal SDK
+end-of-channel path. OpenSSL generates the temporary certificates; no source
+credentials or real Observability requests are used. This is protocol and
+implementation evidence, not qualification of a real organization or realm.
+
+For local Python checks, use a dedicated virtual environment and install
+`tools/requirements-o11y.txt` there before running the transport tests.
