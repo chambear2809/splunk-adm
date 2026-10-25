@@ -86,6 +86,18 @@ is sampled from cgroup v2 `memory.current` about once per second; this is a
 whole-container sample that includes Splunk processes and cache, not an exact
 per-search peak.
 
+Preflight also makes a read-only GET to Splunk's `server/info` REST endpoint,
+with a 15-second request timeout and a 64 KiB response cap. It retains only
+`version`, `build`, and `product_type`; endpoint errors, missing fields, and
+oversized or malformed responses are reported as unavailable without stopping
+preflight. The endpoint can return other instance details, including license
+and host identifiers, which the report does not retain. See Splunk's
+[`server/info` endpoint documentation](https://help.splunk.com/en/splunk-enterprise/leverage-rest-apis/rest-api-reference/10.6/introspection-endpoints/introspection-endpoint-descriptions).
+
+The retained boundary and graph reports produced before this field was added
+include the Splunk image tag and image ID, but did not capture native server
+version, build, or product type. Those reports remain unchanged.
+
 Each job records client wall time; Splunk `runDuration`, `scanCount`,
 `eventCount`, `resultCount`, `diskUsage`, `dropCount`, truncation/streaming
 flags and the `performance` object when present; dispatch/finalization state;
