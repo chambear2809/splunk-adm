@@ -4,6 +4,7 @@ import subprocess
 import sys
 import time
 import unittest
+import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -37,6 +38,46 @@ class LabLockTest(unittest.TestCase):
         with patch.dict(os.environ, {"ADM_LAB_NAME": "adm-atlas-appdynamics"}):
             second = default_lock_path("/clone-one")
         self.assertNotEqual(first, second)
+
+    def test_named_labs_run_concurrently_but_same_lab_remains_exclusive(self):
+        name = "adm-lock-test-" + uuid.uuid4().hex
+        code = (
+            "from tools.lab_lock import LabLock\nwith LabLock():\n print('acquired')\n"
+        )
+        with patch.dict(os.environ, {"ADM_LAB_NAME": name}):
+            first_path = default_lock_path("/clone-one")
+            self.addCleanup(lambda: first_path.unlink(missing_ok=True))
+            with LabLock():
+                # Clear inherited ownership so this is an independent worker.
+                environment = os.environ.copy()
+                for key in (
+                    "SPLUNK_ADM_LAB_LOCK_TOKEN",
+                    "SPLUNK_ADM_LAB_LOCK_PATH",
+                    "SPLUNK_ADM_LAB_LOCK_PID",
+                ):
+                    environment.pop(key, None)
+                rejected = subprocess.run(
+                    [sys.executable, "-c", code],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertNotEqual(rejected.returncode, 0)
+                self.assertIn("already locked", rejected.stderr)
+                environment["ADM_LAB_NAME"] = name + "-second"
+                with patch.dict(os.environ, {"ADM_LAB_NAME": name + "-second"}):
+                    second_path = default_lock_path("/clone-two")
+                self.addCleanup(lambda: second_path.unlink(missing_ok=True))
+                allowed = subprocess.run(
+                    [sys.executable, "-c", code],
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(allowed.returncode, 0, allowed.stderr)
+                self.assertIn("acquired", allowed.stdout)
 
     def test_default_name_retains_legacy_lock(self):
         with patch.dict(os.environ, {"ADM_LAB_NAME": "adm-splunk-lab"}):
