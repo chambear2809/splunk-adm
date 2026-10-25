@@ -730,19 +730,24 @@ export function parseGraph(value: unknown): Graph {
     throw new Error("Snapshot coverage is invalid.");
   const natWindow = value.nat_event_window;
   let exactNatWindow: { start: number; end: number } | undefined;
-  if (
-    natWindow !== undefined &&
-    (!object(natWindow) ||
-      !number(natWindow.start) ||
-      !number(natWindow.end) ||
-      natWindow.start >= natWindow.end)
-  )
-    throw new Error("Snapshot NAT evidence time window is invalid.");
-  if (object(natWindow))
+  if (natWindow !== undefined) {
+    if (!object(natWindow))
+      throw new Error("Snapshot NAT evidence time window is invalid.");
+    const start = natWindow.start;
+    const end = natWindow.end;
+    if (
+      !number(start) ||
+      !number(end) ||
+      start >= end ||
+      Math.floor(start) !== Date.parse(w.start as string) / 1000 ||
+      Math.floor(end) !== Date.parse(w.end as string) / 1000
+    )
+      throw new Error("Snapshot NAT evidence time window is invalid.");
     exactNatWindow = {
-      start: natWindow.start as number,
-      end: natWindow.end as number,
+      start,
+      end,
     };
+  }
   const windowStart =
     exactNatWindow?.start ?? Date.parse(w.start as string) / 1000;
   const windowEnd = exactNatWindow?.end ?? Date.parse(w.end as string) / 1000;

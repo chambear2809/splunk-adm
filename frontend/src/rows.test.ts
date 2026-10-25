@@ -208,6 +208,10 @@ describe("rowsToGraph validation", () => {
   it.each([
     ["incomplete bounds", "1791373500.25", undefined],
     ["reversed bounds", "1791374400.5", "1791373500.25"],
+    ["broadened bounds", "1791373499.25", "1791374401.25"],
+    ["shifted bounds", "1791373501.25", "1791374401.25"],
+    ["mismatched start", "1791373499.75", "1791374400.5"],
+    ["mismatched end", "1791373500.25", "1791374401.5"],
   ])("rejects invalid NAT time window metadata: %s", (_name, start, end) => {
     const r = rows();
     const edge = r.find((x) => x.relationship === "communicates_with")!;
@@ -215,6 +219,20 @@ describe("rowsToGraph validation", () => {
     edge.nat_observations = JSON.stringify([natObservation()]);
     metaRow.nat_window_start = start;
     if (end !== undefined) metaRow.nat_window_end = end;
+    expect(() => rowsToGraph(r, args)).toThrow(/NAT evidence time window/);
+  });
+
+  it.each([
+    ["no observations", false],
+    ["truncation only", true],
+  ])("rejects misaligned metadata with %s", (_name, truncated) => {
+    const r = rows();
+    const edge = r.find((x) => x.relationship === "communicates_with")!;
+    const metaRow = r.find((x) => x.row_type === "meta")!;
+    metaRow.nat_window_start = "1791373499.25";
+    metaRow.nat_window_end = "1791374401.25";
+    if (truncated) edge.nat_observations_truncated = "1";
+
     expect(() => rowsToGraph(r, args)).toThrow(/NAT evidence time window/);
   });
 

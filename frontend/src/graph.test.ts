@@ -443,6 +443,68 @@ describe("parseGraph", () => {
     expect(() => parseGraph(graph)).toThrow(/invalid relationships/);
   });
 
+  it.each([
+    [
+      "broadened",
+      (start: number, end: number) => ({ start: start - 1, end: end + 1 }),
+    ],
+    [
+      "shifted",
+      (start: number, end: number) => ({ start: start + 1, end: end + 1 }),
+    ],
+    [
+      "mismatched start",
+      (start: number, end: number) => ({ start: start - 0.25, end: end + 0.5 }),
+    ],
+    [
+      "mismatched end",
+      (start: number, end: number) => ({ start: start + 0.25, end: end + 1.5 }),
+    ],
+  ])(
+    "rejects %s NAT bounds that do not match the displayed window",
+    (_name, makeBounds) => {
+      const graph = clone();
+      const displayStart = Math.floor(Date.parse(graph.window.start) / 1000);
+      const displayEnd = Math.floor(Date.parse(graph.window.end) / 1000);
+      graph.nat_event_window = makeBounds(displayStart, displayEnd);
+
+      expect(() => parseGraph(graph)).toThrow(
+        /Snapshot NAT evidence time window is invalid/,
+      );
+    },
+  );
+
+  it.each([
+    ["no observations", false],
+    ["truncation only", true],
+  ])("validates display alignment with %s", (_name, truncated) => {
+    const graph = clone();
+    const edge = edgeOf(graph, "communicates_with");
+    const displayStart = Math.floor(Date.parse(graph.window.start) / 1000);
+    const displayEnd = Math.floor(Date.parse(graph.window.end) / 1000);
+    graph.nat_event_window = {
+      start: displayStart - 1,
+      end: displayEnd + 1,
+    };
+    if (truncated) edge.nat_observations_truncated = true;
+
+    expect(() => parseGraph(graph)).toThrow(
+      /Snapshot NAT evidence time window is invalid/,
+    );
+  });
+
+  it("accepts a fractional NAT end within the displayed end second", () => {
+    const graph = clone();
+    const displayStart = Math.floor(Date.parse(graph.window.start) / 1000);
+    const displayEnd = Math.floor(Date.parse(graph.window.end) / 1000);
+    graph.nat_event_window = {
+      start: displayStart + 0.25,
+      end: displayEnd + 0.5,
+    };
+
+    expect(() => parseGraph(graph)).not.toThrow();
+  });
+
   it("rejects conflicting FTD NAT tuples with one event fingerprint", () => {
     const g = clone();
     const edge = edgeOf(g, "communicates_with");
