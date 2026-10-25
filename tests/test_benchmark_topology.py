@@ -1,10 +1,13 @@
 """Deterministic NX-OS topology search workloads and boundary checks."""
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from tools import benchmark_pipeline as bench
+from tools import benchmark_topology as topology
 from tools.benchmark_topology import (
     CASES,
     EXPECTED_META_WARNINGS,
@@ -185,6 +188,46 @@ class BenchmarkTopologyTest(unittest.TestCase):
         self.assertEqual(progress["hec_events_acknowledged"], 1)
         self.assertEqual(progress["last_batch_acknowledgement"], "unknown")
         self.assertEqual(len(progress["generated_prefix_sha256"]), 64)
+
+    def test_reset_timeout_is_reported_and_stops_without_retrying_next_case(self):
+        pipeline = topology.bench
+        timeout = pipeline.LabResetTimeout(
+            "lab.sh reset", pipeline.LAB_RESET_TIMEOUT_SECONDS, True
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "topology.json"
+            with (
+                patch(
+                    "lab_lock.default_lock_path", return_value=Path(directory) / "lock"
+                ),
+                patch.object(pipeline, "preflight", return_value={}),
+                patch.object(pipeline, "reset_lab", side_effect=timeout) as reset,
+                patch.object(topology, "command", return_value="test-revision"),
+            ):
+                status = topology.main(
+                    [
+                        "--reset-lab",
+                        "--cases",
+                        "below",
+                        "at",
+                        "--output",
+                        str(output),
+                    ]
+                )
+
+            self.assertEqual(status, 1)
+            reset.assert_called_once_with([])
+            report = json.loads(output.read_text())
+            self.assertEqual(len(report["cases"]), 1)
+            case = report["cases"][0]
+            self.assertEqual(case["status"], "failed")
+            self.assertEqual(case["lab_reset"]["status"], "failed")
+            self.assertEqual(case["lab_reset"]["lab_state"], "uncertain")
+            self.assertTrue(case["lab_reset"]["process_group_stopped"])
+            self.assertIn("state is uncertain", case["error"])
+            markdown = output.with_suffix(".md").read_text()
+            self.assertIn("not evaluated", markdown)
+            self.assertIn("reinitialize the disposable lab", markdown)
 
     def test_workload_rejects_boolean_and_over_budget_counts(self):
         for devices, interfaces in ((True, 1), (2, 1), (10_000, 10_001), (1, True)):

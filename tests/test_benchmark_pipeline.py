@@ -7,9 +7,10 @@ import json
 import tarfile
 from types import SimpleNamespace
 import os
+import signal
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from tools import benchmark_pipeline as bench
 
@@ -83,6 +84,50 @@ class BenchmarkPipelineTest(unittest.TestCase):
         ):
             with self.assertRaisesRegex(RuntimeError, "unowned"):
                 bench.validate_lab_target()
+
+    def test_bounded_reset_subprocess_timeout_terminates_only_its_process_group(self):
+        process = SimpleNamespace(pid=4321, returncode=-signal.SIGTERM)
+        process.communicate = Mock(
+            side_effect=[bench.subprocess.TimeoutExpired("reset", 10), (None, None)]
+        )
+        with (
+            patch.object(bench.subprocess, "Popen", return_value=process) as popen,
+            patch.object(bench.os, "killpg") as killpg,
+            self.assertRaises(bench.LabResetTimeout) as raised,
+        ):
+            bench._run_bounded_subprocess(
+                ["reset"], timeout=10, operation="lab.sh reset"
+            )
+        self.assertEqual(raised.exception.operation, "lab.sh reset")
+        self.assertEqual(raised.exception.timeout_seconds, 10)
+        self.assertTrue(raised.exception.process_group_stopped)
+        self.assertIn("state is uncertain", str(raised.exception))
+        popen.assert_called_once_with(["reset"], start_new_session=True)
+        self.assertEqual(process.communicate.call_args_list[0].kwargs, {"timeout": 10})
+        self.assertEqual(
+            process.communicate.call_args_list[1].kwargs,
+            {"timeout": bench.PROCESS_TERMINATION_GRACE_SECONDS},
+        )
+        killpg.assert_called_once_with(process.pid, signal.SIGTERM)
+
+    def test_reset_subprocesses_have_finite_phase_deadlines(self):
+        with (
+            patch.object(bench, "_run_bounded_subprocess") as run_process,
+            patch.object(bench.lab, "_json", side_effect=[{}, {"entry": []}]),
+            patch.object(bench, "COLLECTIONS", ()),
+            patch.object(bench, "seed_scope") as seed_scope,
+        ):
+            bench.reset_lab([])
+        self.assertEqual(run_process.call_count, 2)
+        self.assertEqual(
+            run_process.call_args_list[0].kwargs["timeout"],
+            bench.LAB_RESET_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(
+            run_process.call_args_list[1].kwargs["timeout"],
+            bench.LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        )
+        seed_scope.assert_called_once_with([])
 
     def test_docker_endpoint_precedence_and_pinning(self):
         with (

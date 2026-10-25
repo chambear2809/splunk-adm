@@ -135,6 +135,15 @@ Docker/Splunk evidence for the exact recorded image, package, source, workload
 and host conditions. Filesystem and Splunk caches are not flushed; other
 containers and host collectors remain active, so contention is uncontrolled.
 
+Reset setup is separately bounded: `lab.sh reset` has a 900-second deadline
+and the benchmark's Docker macro-override cleanup command has a 30-second
+deadline. A timeout triggers process-group termination; the case report records
+whether that termination was confirmed. Since a reset can stop Splunk or clear only some
+indexes before timing out, the lab state is marked uncertain. The run does not
+retry or proceed to another case; verify and reinitialize the disposable lab
+before starting a new run. The benchmark's cooperative lab lock remains held
+by the parent runner while it records the failed case.
+
 ## Production qualification remains separate
 
 Offline correctness is not a benchmark. A local Docker run is not a production

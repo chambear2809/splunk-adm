@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import re
+import signal
 import statistics
 import subprocess
 import sys
@@ -40,6 +41,9 @@ DEFAULT_RESULT_LIMIT = 20_000
 MAX_RESULT_LIMIT = 100_000
 DEFAULT_RESULT_PAGE_SIZE = 10_000
 MAX_RESULT_PAGE_SIZE = 20_000
+LAB_RESET_TIMEOUT_SECONDS = 900
+LAB_RESET_DOCKER_TIMEOUT_SECONDS = 30
+PROCESS_TERMINATION_GRACE_SECONDS = 5
 COLLECTIONS = (
     "adm_observer_scope",
     "adm_ip_identity",
@@ -74,6 +78,62 @@ CASES = {
 
 def command(*args):
     return subprocess.check_output(args, text=True, timeout=30).strip()
+
+
+class LabResetTimeout(TimeoutError):
+    """A bounded reset subprocess ended without proving the lab's final state."""
+
+    def __init__(self, operation, timeout_seconds, process_group_stopped):
+        self.operation = operation
+        self.timeout_seconds = timeout_seconds
+        self.process_group_stopped = process_group_stopped
+        termination = (
+            "process group stopped"
+            if process_group_stopped
+            else "process-group termination could not be confirmed"
+        )
+        super().__init__(
+            f"{operation} timed out after {timeout_seconds}s; {termination}; "
+            "lab reset state is uncertain"
+        )
+
+
+def _terminate_process_group(process):
+    """Stop a reset command and its children while leaving the caller's lock alive."""
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True
+    except OSError:
+        return False
+    try:
+        process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+        return True
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            return False
+        try:
+            process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+            return True
+        except subprocess.TimeoutExpired:
+            return False
+
+
+def _run_bounded_subprocess(args, *, timeout, operation, **kwargs):
+    """Run reset work in a child process group with a finite deadline."""
+    process = subprocess.Popen(args, start_new_session=True, **kwargs)
+    try:
+        process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        stopped = _terminate_process_group(process)
+        raise LabResetTimeout(operation, timeout, stopped) from None
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, args)
+    return subprocess.CompletedProcess(args, process.returncode)
 
 
 def truth(value):
@@ -788,14 +848,15 @@ def wait_count(runner, query, expected, timeout=180):
 
 
 def reset_lab(scope_rows):
-    subprocess.run(
+    _run_bounded_subprocess(
         [str(ROOT / "tests/splunk/lab.sh"), "reset"],
-        check=True,
+        timeout=LAB_RESET_TIMEOUT_SECONDS,
+        operation="lab.sh reset",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     # Benchmarks own this disposable lab. Do not inherit test overrides or enabled schedules.
-    subprocess.run(
+    _run_bounded_subprocess(
         [
             "docker",
             "exec",
@@ -806,7 +867,10 @@ def reset_lab(scope_rows):
             "-f",
             "/opt/splunk/etc/apps/splunk_adm/local/macros.conf",
         ],
-        check=True,
+        timeout=LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        operation="remove local macros override",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
     deadline = time.monotonic() + 120
@@ -921,12 +985,31 @@ def run_case(name, config, concurrency, repeats, timeout):
         "manifest": meta,
         "status": "failed",
         "jobs": [],
+        "lab_reset": {
+            "status": "not_started",
+            "timeout_seconds": LAB_RESET_TIMEOUT_SECONDS,
+            "docker_exec_timeout_seconds": LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        },
     }
     runner = Runner(timeout)
     print(f"{name}: resetting disposable lab", flush=True)
     memory = None
     try:
-        reset_lab(meta["scope_rows"])
+        try:
+            reset_lab(meta["scope_rows"])
+        except Exception as exc:
+            result["lab_reset"].update(
+                status="failed",
+                lab_state="uncertain",
+                error=str(exc)[:1000],
+                process_group_stopped=(
+                    exc.process_group_stopped
+                    if isinstance(exc, LabResetTimeout)
+                    else None
+                ),
+            )
+            raise
+        result["lab_reset"].update(status="complete", lab_state="ready")
         with MemorySampler() as memory:
             started = time.monotonic()
             start = int(time.time()) - 1
@@ -1138,6 +1221,8 @@ def main(argv=None):
             "concurrency": args.concurrency,
             "repeats": args.repeats,
             "timeout": args.timeout,
+            "lab_reset_timeout_seconds": LAB_RESET_TIMEOUT_SECONDS,
+            "lab_reset_docker_exec_timeout_seconds": LAB_RESET_DOCKER_TIMEOUT_SECONDS,
         },
         "cases": [],
     }

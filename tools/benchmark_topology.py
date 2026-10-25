@@ -398,13 +398,32 @@ def run_case(name, workload, timeout, result_limit):
         "status": "failed",
         "case_started_at": utc_now(),
         "jobs": [],
+        "lab_reset": {
+            "status": "not_started",
+            "timeout_seconds": bench.LAB_RESET_TIMEOUT_SECONDS,
+            "docker_exec_timeout_seconds": bench.LAB_RESET_DOCKER_TIMEOUT_SECONDS,
+        },
         "input_progress": {},
         "non_task_docker_activity": {},
     }
     runner = bench.Runner(timeout, result_limit=result_limit)
     memory = None
     try:
-        bench.reset_lab([])
+        try:
+            bench.reset_lab([])
+        except Exception as exc:
+            result["lab_reset"].update(
+                status="failed",
+                lab_state="uncertain",
+                error=str(exc)[:1000],
+                process_group_stopped=(
+                    exc.process_group_stopped
+                    if isinstance(exc, bench.LabResetTimeout)
+                    else None
+                ),
+            )
+            raise
+        result["lab_reset"].update(status="complete", lab_state="ready")
         with bench.MemorySampler() as memory:
             started = time.monotonic()
             count, digest = load_events(workload, result["input_progress"])
@@ -491,7 +510,7 @@ def write_report(path: Path, report):
         "",
         f"Generated: {report['generated_at']}",
         "",
-        "These are local Docker Splunk search measurements for a deterministic NX-OS-only workload. They do not qualify mixed-source topology, a production deployment, or a service-level objective. The 20,001-row case is fetched only as a one-row-over-limit diagnostic sentinel; the application contract rejects it.",
+        "These are local Docker Splunk search measurements for a deterministic NX-OS-only workload. They do not qualify mixed-source topology, a production deployment, or a service-level objective. The 20,001-row case is fetched only as a one-row-over-limit diagnostic sentinel; the reported application result is a static row-limit comparison, not a live UI test.",
         "",
         "| Case | Input events | Devices | Interfaces | Actual/expected rows | App result | Search wall seconds | Job run seconds | Scan count | Container peak MiB | Status |",
         "| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | --- |",
@@ -507,9 +526,13 @@ def write_report(path: Path, report):
                 devices=expected["devices"],
                 interfaces=expected["interfaces"],
                 rows=f"{job.get('result_count', '—')}/{expected['result_rows']}",
-                app_result="accepted"
-                if expected["application_accepts"]
-                else "rejected",
+                app_result=(
+                    "not evaluated"
+                    if "application_accepts_rows" not in case
+                    else "accepted"
+                    if case["application_accepts_rows"]
+                    else "over limit (modeled)"
+                ),
                 wall=job.get("wall_seconds", "—"),
                 run=job.get("run_seconds", "—"),
                 scans=job.get("scan_count", "—"),
@@ -530,7 +553,7 @@ def write_report(path: Path, report):
     lines.extend(
         [
             "",
-            "The adjacent JSON binds each workload and Splunk job to the source/template hashes, package SHA-256, image ID, container resource limits, correctness identity hashes, warnings, and available metrics. Per-search CPU/RSS and per-indexer I/O were unavailable; sampled memory is whole-container cgroup memory and includes cache. Host collectors and other containers were left running, so host contention was uncontrolled.",
+            "The adjacent JSON binds each workload and Splunk job to the source/template hashes, package SHA-256, image ID, container resource limits, correctness identity hashes, warnings, and available metrics. A reset subprocess timeout is recorded as a failed case with uncertain lab state; the runner stops without retrying or starting another case. Verify and reinitialize the disposable lab before a new run. Per-search CPU/RSS and per-indexer I/O were unavailable; sampled memory is whole-container cgroup memory and includes cache. Host collectors and other containers were left running, so host contention was uncontrolled.",
             "",
         ]
     )
@@ -609,6 +632,8 @@ def main(argv=None):
             "parameters": {
                 "timeout_seconds": args.timeout,
                 "result_limit": args.result_limit,
+                "lab_reset_timeout_seconds": bench.LAB_RESET_TIMEOUT_SECONDS,
+                "lab_reset_docker_exec_timeout_seconds": bench.LAB_RESET_DOCKER_TIMEOUT_SECONDS,
             },
             "source_sha256": {
                 str(path.relative_to(ROOT)): hashlib.sha256(
@@ -627,6 +652,8 @@ def main(argv=None):
         }
         write_report(args.output, report)
         print(f"{name}: {case['status']}", flush=True)
+        if case.get("lab_reset", {}).get("status") == "failed":
+            return 1
         if case["status"] != "complete":
             return 1
     return 0
