@@ -686,18 +686,28 @@ class RestrictedViewerTest(unittest.TestCase):
                         "event": {"acl_probe": marker},
                     }
                 ).encode()
-                for index, sourcetype in targets
+                for index, sourcetype in (
+                    *targets,
+                    ("netflow", "adm:optional_acl_probe"),
+                )
             )
         )
-        query = f'search (index=atlas_o11y OR index=atlas_asset) source="{marker}"'
+        query = f'(index=atlas_o11y OR index=atlas_asset) source="{marker}"'
+        allowed_query = f'index=netflow source="{marker}"'
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             rows = self.lab.search(query, now - 60, now + 60)
-            if len(rows) == len(targets):
+            allowed = self.lab.search(allowed_query, now - 60, now + 60)
+            if len(rows) == len(targets) and len(allowed) == 1:
                 break
             time.sleep(0.5)
         else:
             self.fail("Admin did not find all optional-index permission probes")
+        self.assertEqual(
+            len(self._viewer_search(allowed_query, now - 60, now + 60)),
+            1,
+            "Viewer must find the allowed-index positive control",
+        )
         try:
             visible = self._viewer_search(
                 query, now - 60, now + 60, allow_warnings=True
