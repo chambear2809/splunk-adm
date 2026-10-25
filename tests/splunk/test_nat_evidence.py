@@ -318,9 +318,26 @@ class NatEvidenceTest(unittest.TestCase):
     def rollups(self) -> dict[str, dict]:
         projection = (
             "| table adm_record scope client_ip server_ip server_port transport "
-            "observer bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated"
+            "observer scope_mapping_verified bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated"
         )
         window = (self.start - 60, self.start + 600)
+        unmapped_flow = lab.search(
+            "| `adm_flows` "
+            f"| where adm_observer={json.dumps(self.devices['unmapped'])} "
+            "| table adm_observer adm_scope adm_scope_unmapped adm_quality_status adm_quality_errors adm_nat_observation",
+            *window,
+        )
+        self.assertEqual(
+            len(unmapped_flow),
+            1,
+            f"owned unmapped normalized flow missing or duplicated: {unmapped_flow!r}",
+        )
+        self.assertTrue(unmapped_flow[0]["adm_scope"].startswith("unmapped:"))
+        self.assertEqual(str(unmapped_flow[0]["adm_scope_unmapped"]), "1")
+        self.assertEqual(
+            unmapped_flow[0]["adm_quality_status"], "accepted_with_warning"
+        )
+        self.assertNotIn("adm_nat_observation", unmapped_flow[0])
         scope_list = ",".join(
             json.dumps(scope)
             for name, scope in self.scopes.items()
@@ -340,6 +357,9 @@ class NatEvidenceTest(unittest.TestCase):
             1,
             f"owned unmapped observer missing or duplicated: {unmapped!r}",
         )
+        self.assertTrue(unmapped[0]["scope"].startswith("unmapped:"))
+        self.assertEqual(str(unmapped[0]["scope_mapping_verified"]), "0")
+        self.assertNotIn("nat_observations", unmapped[0])
         rows.extend(unmapped)
         return {row["scope"]: row for row in rows}
 
