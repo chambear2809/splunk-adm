@@ -101,11 +101,28 @@ class TaskLabTest(unittest.TestCase):
         result = subprocess.CompletedProcess(
             [], 0, json.dumps([{"Labels": {"org.splunk-adm.task": "other"}}])
         )
-        with patch.object(lab.subprocess, "run", return_value=result) as run:
+        with patch.object(
+            lab.subprocess,
+            "run",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, "adm-test-task-one-net\n"),
+                result,
+            ],
+        ) as run:
             with self.assertRaisesRegex(lab.LabError, "unowned"):
                 lab.task_resources(remove=True)
-            self.assertEqual(run.call_count, 1)
+            self.assertEqual(run.call_count, 2)
             self.assertEqual(run.call_args.args[0][1:3], ["network", "inspect"])
+
+    def test_daemon_failure_does_not_count_as_absent_resources(self):
+        with patch.object(
+            lab.subprocess,
+            "run",
+            side_effect=subprocess.CalledProcessError(1, "docker"),
+        ) as run:
+            with self.assertRaises(subprocess.CalledProcessError):
+                lab.task_resources(remove=True)
+            self.assertEqual(run.call_count, 1)
 
     def test_failed_ownership_check_precedes_authentication(self):
         with (
