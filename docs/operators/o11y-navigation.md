@@ -38,6 +38,16 @@ joined to detector/incident events by service name, MMS ID, or another display
 label. APM MMS ID is context only. Splunk documents Incidents as a controlled
 availability feature, so its presence and access can depend on the tenant.
 
+The exported `incident_id` is the detector event's native `incidentId`, an
+alert-lifecycle identifier shared by trigger and clear observations. Use it
+while reviewing the originating detector, event or alert details. Splunk does
+not document equivalence between this identifier and identifiers in the newer
+cross-alert Incidents dashboard. If that dashboard is enabled, explore it
+independently by Entity, Environment and incident name; do not join its entries
+to the exported ID by assumption. See [alert message
+variables](https://help.splunk.com/en/splunk-observability-cloud/create-alerts-detectors-and-service-level-objectives/create-alerts-and-detectors/alert-message-variables-reference)
+and the [detector Incidents API](https://dev.splunk.com/observability/reference/api/incidents/latest).
+
 ## Add a reciprocal APM data link to Atlas
 
 Splunk global data links can be exposed for APM services, traces and spans. An
