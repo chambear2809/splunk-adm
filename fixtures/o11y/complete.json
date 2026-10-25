@@ -36,7 +36,8 @@
         "logical_timestamp": 1792763980,
         "value": 18,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "record_id": "fdc622bd56ba41a168835f28779245f04ed1516f628655e977d4b11efa24750b"
       }
     },
     {
@@ -74,7 +75,8 @@
         "value": 2,
         "sf_service": "checkout-api",
         "sf_environment": "production",
-        "sf_error": "true"
+        "sf_error": "true",
+        "record_id": "adc50e5a6fd4176d7ce72ca1b413eda83bc824d510dc68d3a7d82c6fc0d8d938"
       }
     },
     {
@@ -111,7 +113,8 @@
         "logical_timestamp": 1792763980,
         "value": 25000000,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "record_id": "e4ae59d6bdfe8bd1af00be344bea3216c18e1d811188397c5efd55690f7ca093"
       }
     },
     {
@@ -145,7 +148,8 @@
         "logical_timestamp": 1792763980,
         "value": 0.42,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "record_id": "d0bbffda769b8520c0b7f1995833b7d1f1258c0885eec30cd15e07a510636bb4"
       }
     },
     {
@@ -179,7 +183,8 @@
         "logical_timestamp": 1792763980,
         "value": 134217728,
         "sf_service": "checkout-api",
-        "sf_environment": "production"
+        "sf_environment": "production",
+        "record_id": "aaf2b636923ed3d8d4c679026ee71a8eadf7cc827bd109e8463dd4b88c7ea742"
       }
     },
     {
@@ -207,7 +212,8 @@
         "sf_dimensionalized": "true",
         "sf_mms_id": "checkout_service_mms_v1",
         "expected_record_count": 5,
-        "signals_with_data": 5
+        "signals_with_data": 5,
+        "record_id": "78695ce206703967b05df3c34dc4d92b7b81fab03214e1878e152e1f5108b12d"
       }
     }
   ]

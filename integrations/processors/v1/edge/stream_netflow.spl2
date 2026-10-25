@@ -1,0 +1,1 @@
+$pipeline = | from $source | eval index="netflow" | into $destination;

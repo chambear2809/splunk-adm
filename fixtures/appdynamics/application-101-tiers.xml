@@ -1,0 +1,9 @@
+<tiers>
+  <tier>
+    <id>7</id>
+    <name>API</name>
+    <type>Application Server</type>
+    <agentType>APP_AGENT</agentType>
+    <numberOfNodes>1</numberOfNodes>
+  </tier>
+</tiers>

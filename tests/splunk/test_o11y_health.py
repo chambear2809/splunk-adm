@@ -276,6 +276,12 @@ class O11yHealthRuntimeTest(unittest.TestCase):
             },
         )
 
+    def test_legacy_v1_capture_remains_readable_after_upgrade(self):
+        legacy = FIXTURE.with_name("complete-v1-pre-record-id.json")
+        self.template = copy.deepcopy(json.loads(legacy.read_text())["events"])
+        self.assertTrue(all("record_id" not in row["event"] for row in self.template))
+        self.test_indexed_metrics_require_exact_authority_and_source_completion()
+
     def test_same_graph_identity_with_multiple_otel_namespaces_is_ambiguous(self):
         events = self.capture()
         events.extend(

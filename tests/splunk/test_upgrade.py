@@ -1061,9 +1061,18 @@ class UpgradeIntegrationTest(unittest.TestCase):
         )
         # An operator attestation must survive a verified rerun of the migration.
         attested_key = self.legacy_scope_keys[0]
+        optional_mapping = {
+            "mapping_status": "verified",
+            "detector_ids": '["upgrade-detector"]',
+            "controller_origin": "https://controller.example.test",
+            "observability_origin": "https://app.us0.signalfx.com",
+        }
+        assignments = ", ".join(
+            f"{key}={json.dumps(value)}" for key, value in optional_mapping.items()
+        )
         self.lab.search(
             f'| inputlookup adm_observer_scope | search _key="{attested_key}" '
-            '| eval mapping_status="verified" '
+            f"| eval {assignments} "
             "| outputlookup append=true key_field=_key adm_observer_scope"
         )
         rerun = self.lab.search(migration)
@@ -1071,10 +1080,10 @@ class UpgradeIntegrationTest(unittest.TestCase):
         self.assertEqual(
             self.lab.search(
                 f'| inputlookup adm_observer_scope | search _key="{attested_key}" '
-                "| table _key mapping_status"
+                "| table _key mapping_status detector_ids controller_origin observability_origin"
             ),
-            [{"_key": attested_key, "mapping_status": "verified"}],
-            "migration rerun must not drop mapping_status",
+            [{"_key": attested_key, **optional_mapping}],
+            "migration rerun must preserve attestation and optional integration configuration",
         )
         self.assertEqual(
             self._docker_file(

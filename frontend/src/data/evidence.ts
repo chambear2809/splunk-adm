@@ -15,7 +15,12 @@ export const EVIDENCE_LIMITS = {
 } as const;
 export type DnsSource = "dns_stream" | "dns_hubble";
 export type SupplementalSource =
-  "proxy_envoy" | "aws_vpc_flow" | "asset_history" | "o11y_health";
+  | "proxy_envoy"
+  | "aws_vpc_flow"
+  | "asset_history"
+  | "o11y_health"
+  | "o11y_detector_events"
+  | "appdynamics_inventory";
 export type OptionalSource = DnsSource | SupplementalSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {

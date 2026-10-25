@@ -37,12 +37,12 @@ organization, dimensions, units and one known service have been qualified.
    required dimension causes the complete export to fail closed. Values use
    ratio (`1`) and bytes (`By`) units respectively.
 5. Configure a dedicated HEC input and Splunk index for the export. Submit
-   each JSON Lines record as a complete HEC event envelope with sourcetype
-   `atlas:o11y_health`; the ingestion job must preserve the outer `event`
-   payload and report failures. A plain file monitor on this output is
-   unsupported: it indexes the HEC envelope itself rather than unwrapping
-   `event` into the searchable source fields. Set HEC/index routing outside
-   the exporter. The exporter only creates a local, atomic file and never
+   each JSON Lines record as a complete structured HEC event envelope with
+   sourcetype `atlas:o11y_health`; the ingestion job must preserve the outer
+   `event` payload. Route through the HEC token's default index or explicit
+   HEC routing because the exporter does not include an `index` field. A plain
+   file monitor is unsupported: it indexes the HEC envelope instead of
+   unwrapping `event`. The exporter creates an atomic local file and never
    submits it to Splunk.
 
 ## Run and verify the exporter
@@ -82,6 +82,78 @@ capture if multiple OTel service namespaces match. Each capture publishes at
 most 63 metric rows plus a completion row. The output path is new-only and
 created mode 0600; schedule cleanup and retention for the spool directory.
 
+## Schedule capture and delivery
+
+For recurring captures, use the stateful wrapper. It stores its identity config
+and state in operator-owned paths outside Git checkouts and enqueues finalized
+captures through the shared durable sender:
+
+```sh
+python -m tools.capture_o11y_health \
+  --config /etc/atlas/o11y-health.json \
+  --state-dir /var/lib/atlas/o11y-capture \
+  --window-seconds 300 \
+  --lag-seconds 120
+```
+
+Provide `SPLUNK_OBSERVABILITY_TOKEN` from the secret manager and set
+`ATLAS_HEC_SPOOL_DIR` in the protected process environment. The config is
+version 1 and contains source identity fields only; it holds no endpoint or
+credential. Schedule this command once per minute. Each invocation handles at
+most one contiguous, settled interval; the first run starts at the latest
+settled interval and later runs catch up in order. State is bound to the
+identity config, spool and cadence. If capture or queueing is interrupted, the
+wrapper reuses the finalized pending file and idempotently checks queue
+acceptance before removing it. Spool exhaustion pauses new captures and keeps
+the pending file for recovery.
+
+The wrapper's default 300-second capture interval is matched only when the
+Atlas service map uses that exact UTC start and end. The health search requires
+`capture_window_start` and `capture_window_end` to equal the selected graph
+interval; it does not combine adjacent captures or add their bucket counts.
+To inspect a scheduled capture, set the map's custom time range to the exact
+start and end recorded in its completion event. An arbitrary rolling 15-minute
+window, or a differently aligned five-minute window, will not match. To inspect
+another interval, make a bounded one-shot export with explicit `--start` and
+`--end` values for that interval (maximum 24 hours), then search using the same
+interval in the service map.
+
+The capture wrapper only produces and queues captures. Run the common HEC
+sender separately with `ATLAS_HEC_URL`, `ATLAS_HEC_TOKEN`, and
+`ATLAS_HEC_SPOOL_DIR` supplied through a protected environment:
+
+```sh
+python -m tools.hec_delivery send
+python -m tools.hec_delivery status
+```
+
+Keep `ATLAS_HEC_TOKEN` out of scripts, configs, command arguments and logs.
+Place the spool outside all Git checkouts; its defaults cap it at 1 GiB,
+10,000 pending captures and 1,000,000 pending records. One send invocation
+handles at most 100 captures or five minutes. A capture is capped at 10,000
+rows and 64 MiB; each JSONL record is at most 65,535 bytes plus newline and
+batches are at most 256 KiB. Delivery uses verified HTTPS, refuses redirects,
+and is at-least-once across a crash after HEC accepts a batch.
+
+The first delivery attempt binds each pending capture to the canonical HEC URL
+and acknowledgment mode. Keep both unchanged while that capture is pending.
+If either must change after partial delivery, the sender fails closed and
+preserves its checkpoint and queued file. To recover, retain the original
+spool, copy the exact queued JSONL capture to a separate private recovery path,
+configure the intended URL and `--ack-mode` with a new spool, then enqueue that
+copy under the same source ID. The new spool replays from the beginning, so
+previously accepted batches can be delivered again; keep capture and record
+IDs for downstream deduplication and verify indexed readback. Do not edit a
+checkpoint or delete the original queued capture to force a destination or
+mode change. Keep the original spool until the recovered capture is verified.
+
+Use an Enterprise `/services/collector/event` input for the normal HEC route.
+An explicitly configured structured `/services/collector` route is preserved
+for Splunk Edge Ingest; leave indexer acknowledgments off for that route. HEC
+HTTP acceptance and Enterprise indexer acknowledgment do not prove that a
+search can read the event. Verify the dedicated index with a search after
+delivery. A final file is not discarded when queueing or HEC delivery fails.
+
 Validate that one indexed file has the exact number of source metric rows and
 one final `export_completion` event. A completed capture can be empty. It
 records `expected_record_count=0` and `signals_with_data=0` rather than
@@ -114,6 +186,12 @@ Set `adm_index_o11y_health` to the dedicated index and enable
 verified organizations/realms for one scope and cluster fail closed. Configure
 one unambiguous authority for the selected service scope; Atlas does not
 offer an authority picker in this version.
+
+If `observability_origin` is configured on the verified observer mapping, it
+must be an HTTPS origin without user information, path, query or fragment.
+Atlas uses it only for source navigation. Otherwise the UI links to the realm's
+Observability Cloud application root; it does not construct a metric, chart or
+detector deep link from event content.
 
 The service map joins against the graph boundary's exact service name,
 environment, cluster and Kubernetes namespace. `service.namespace` is a

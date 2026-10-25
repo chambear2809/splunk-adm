@@ -29,6 +29,10 @@ function fixture({
   optionalPlaceholder = false,
   o11y = false,
   invalidMms = false,
+  detector = false,
+  appd = false,
+  detectorIds = '["detector-1"]',
+  controllerOrigin = "https://controller.example.test",
 } = {}) {
   const settings = defaultExpectations();
   if (active) settings.sources.dns_stream.state = "active";
@@ -37,6 +41,8 @@ function fixture({
     settings.sources.proxy_envoy.staleAfterSeconds = 1500;
   }
   if (o11y) settings.sources.o11y_health.state = "active";
+  if (detector) settings.sources.o11y_detector_events.state = "active";
+  if (appd) settings.sources.appdynamics_inventory.state = "staged";
   const deployment: DeploymentClient = {
     read: async () => ({
       state: "configured",
@@ -96,6 +102,34 @@ function fixture({
           },
         ]
       : []),
+    ...(detector
+      ? [
+          {
+            _key: "detector",
+            observer_kind: "o11y_detector",
+            observer: "detector-exporter",
+            scope: "prod",
+            cluster: "cluster-a",
+            mapping_status: "verified",
+            organization_id: "org-a",
+            realm: "us0",
+            detector_ids: detectorIds,
+          },
+        ]
+      : []),
+    ...(appd
+      ? [
+          {
+            _key: "controller",
+            observer_kind: "appd_controller",
+            observer: "controller-a",
+            scope: "prod",
+            cluster: "",
+            mapping_status: "verified",
+            controller_origin: controllerOrigin,
+          },
+        ]
+      : []),
   ];
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -129,6 +163,10 @@ function fixture({
           adm_proxy_envoy_schema_qualified: "0",
           adm_index_o11y_health: "index=atlas_o11y",
           adm_o11y_health_schema_qualified: "1",
+          adm_index_o11y_detector_events: "index=atlas_o11y",
+          adm_o11y_detector_events_schema_qualified: "0",
+          adm_index_appdynamics_inventory: "index=atlas_asset",
+          adm_appdynamics_inventory_schema_qualified: "0",
         };
         body = {
           settings: [
@@ -169,6 +207,18 @@ function fixture({
               },
             ];
       else throw Error("unexpected request");
+      if (path.includes("storage/collections/data/") && Array.isArray(body)) {
+        // KV returns only requested fields: a parser-only mock would hide a
+        // missing browser REST projection even when fixtures contain the data.
+        const fields = new Set(
+          (url.searchParams.get("fields") ?? "").split(","),
+        );
+        body = body.map((row: Record<string, unknown>) =>
+          Object.fromEntries(
+            Object.entries(row).filter(([key]) => fields.has(key)),
+          ),
+        );
+      }
       return {
         ok: true,
         status: 200,
@@ -246,6 +296,95 @@ describe("caller-context evidence configuration", () => {
     expect(
       unqualified.supplemental?.find((s) => s.source === "o11y_health")?.error,
     ).toBeDefined();
+  });
+  it("admits selected detector bindings independently of metric MMS identity", async () => {
+    const config = await fixture({ active: false, detector: true }).client.read(
+      undefined,
+      [],
+      "prod",
+    );
+    expect(
+      config.supplemental?.find((s) => s.source === "o11y_detector_events"),
+    ).toMatchObject({
+      state: "active",
+      authorities: ["detector-exporter"],
+      schemaQualified: false,
+      mappings: [{ detector_ids: '["detector-1"]' }],
+    });
+    for (const detectorIds of [
+      "[]",
+      '["duplicate","duplicate"]',
+      '["bad/id"]',
+      "null",
+      '"id"',
+      "not json",
+    ]) {
+      const rejected = await fixture({
+        active: false,
+        detector: true,
+        detectorIds,
+      }).client.read(undefined, [], "prod");
+      expect(
+        rejected.supplemental?.find((s) => s.source === "o11y_detector_events")
+          ?.error,
+      ).toBeDefined();
+      expect(rejected.summaryIndexes).toEqual(["adm_summary"]);
+    }
+  });
+  it("rejects unsafe Controller navigation origins without blocking core configuration", async () => {
+    const accepted = await fixture({ active: false, appd: true }).client.read(
+      undefined,
+      [],
+      "prod",
+    );
+    expect(
+      accepted.supplemental?.find((s) => s.source === "appdynamics_inventory"),
+    ).toMatchObject({
+      state: "staged",
+      schemaQualified: false,
+      mappings: [{ controller_origin: "https://controller.example.test" }],
+    });
+    for (const controllerOrigin of [
+      "http://controller.example.test",
+      "https://user:password@controller.example.test",
+      "https://controller.example.test/path",
+      "https://controller.example.test?token=unsafe",
+      "https://controller.example.test#fragment",
+      " https://controller.example.test",
+      "javascript:alert(1)",
+    ]) {
+      const rejected = await fixture({
+        active: false,
+        appd: true,
+        controllerOrigin,
+      }).client.read(undefined, [], "prod");
+      expect(
+        rejected.supplemental?.find((s) => s.source === "appdynamics_inventory")
+          ?.error,
+      ).toBeDefined();
+      expect(rejected.summaryIndexes).toEqual(["adm_summary"]);
+    }
+  });
+  it("changes the configuration fingerprint when a Controller origin or detector binding changes", async () => {
+    const first = await fixture({
+      active: false,
+      appd: true,
+      detector: true,
+    }).client.read(undefined, [], "prod");
+    const moved = await fixture({
+      active: false,
+      appd: true,
+      detector: true,
+      controllerOrigin: "https://other-controller.example.test",
+    }).client.read(undefined, [], "prod");
+    const rebound = await fixture({
+      active: false,
+      appd: true,
+      detector: true,
+      detectorIds: '["detector-2"]',
+    }).client.read(undefined, [], "prod");
+    expect(first.fingerprint).not.toEqual(moved.fingerprint);
+    expect(first.fingerprint).not.toEqual(rebound.fingerprint);
   });
   it("uses the explicit nobody app-merged view despite a private shadow", async () => {
     const { client, fetcher } = fixture({ privateShadow: true });

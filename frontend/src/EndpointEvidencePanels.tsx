@@ -5,6 +5,7 @@ import { DnsEvidencePanel } from "./DnsEvidencePanel";
 import { ProxyEvidenceInspection } from "./ProxyEvidencePanel";
 import { CloudFlowEvidencePanel } from "./CloudFlowEvidencePanel";
 import { InventoryEvidencePanel } from "./InventoryEvidencePanel";
+import { AppDynamicsEvidenceInspection } from "./AppDynamicsEvidencePanel";
 
 /** The existing scoped endpoint and map investigation owns all optional evidence. */
 export function EndpointEvidencePanels({
@@ -34,6 +35,11 @@ export function EndpointEvidencePanels({
         configurationClient={configurationClient}
       />
       <InventoryEvidencePanel
+        selection={selection}
+        client={client}
+        configurationClient={configurationClient}
+      />
+      <AppDynamicsEvidenceInspection
         selection={selection}
         client={client}
         configurationClient={configurationClient}

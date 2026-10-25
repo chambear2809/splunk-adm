@@ -1,0 +1,18 @@
+<nodes>
+  <node>
+    <id>3</id>
+    <name>inventory-node</name>
+    <type>Java</type>
+    <tierId>8</tierId>
+    <tierName>Worker</tierName>
+    <machineId>10</machineId>
+    <machineName>shared-host</machineName>
+    <machineOSType>Linux</machineOSType>
+    <machineAgentPresent>true</machineAgentPresent>
+    <appAgentPresent>true</appAgentPresent>
+    <ipAddresses>
+      <ipAddress>10.20.0.17</ipAddress>
+    </ipAddresses>
+    <agentType>APP_AGENT</agentType>
+  </node>
+</nodes>

@@ -617,6 +617,105 @@ class RestrictedViewerTest(unittest.TestCase):
         )
         self.assertEqual(self.lab._json("GET", collection), before)
 
+    def test_optional_integration_mapping_projection_and_viewer_acl(self):
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        admin_password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
+        key = "optional-mapping-probe-" + secrets.token_hex(8)
+        self.addCleanup(self._delete_probe, collection, key, admin_password)
+        mapping = {
+            "_key": key,
+            "observer_kind": "o11y_detector",
+            "observer": "optional-probe",
+            "scope": "optional-probe",
+            "cluster": "probe-cluster",
+            "mapping_status": "verified",
+            "organization_id": "probe-org",
+            "realm": "us0",
+            "detector_ids": '["probe-detector"]',
+            "controller_origin": "https://controller.example.test",
+            "observability_origin": "https://app.us0.signalfx.com",
+        }
+        status, _ = _response(
+            "POST",
+            collection,
+            "admin",
+            admin_password,
+            json.dumps(mapping).encode(),
+            "application/json",
+        )
+        self.assertIn(status, (200, 201))
+        query = urllib.parse.urlencode(
+            {
+                "query": json.dumps({"_key": key}),
+                "fields": ",".join(mapping),
+                "limit": "1",
+            }
+        )
+        status, visible = self._viewer_json("GET", collection + "?" + query)
+        self.assertEqual(status, 200)
+        self.assertEqual(visible, [mapping])
+        self.assertDenied(
+            "POST",
+            collection + "/" + key,
+            json.dumps({"controller_origin": "https://changed.example.test"}).encode(),
+            "application/json",
+        )
+        self.assertDenied("DELETE", collection + "/" + key)
+        self.assertEqual(
+            self._viewer_json("GET", collection + "?" + query)[1], [mapping]
+        )
+
+    def test_optional_index_evidence_remains_subject_to_caller_permissions(self):
+        marker = "optional-acl-" + secrets.token_hex(8)
+        now = int(time.time())
+        targets = (
+            ("atlas_o11y", "atlas:o11y_health"),
+            ("atlas_o11y", "atlas:o11y_detector_event"),
+            ("atlas_asset", "adm:appdynamics_inventory"),
+        )
+        self.lab._hec_post(
+            b"\n".join(
+                json.dumps(
+                    {
+                        "time": now,
+                        "index": index,
+                        "source": marker,
+                        "sourcetype": sourcetype,
+                        "event": {"acl_probe": marker},
+                    }
+                ).encode()
+                for index, sourcetype in (
+                    *targets,
+                    ("netflow", "adm:optional_acl_probe"),
+                )
+            )
+        )
+        query = f'(index=atlas_o11y OR index=atlas_asset) source="{marker}"'
+        allowed_query = f'index=netflow source="{marker}"'
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            rows = self.lab.search(query, now - 60, now + 60)
+            allowed = self.lab.search(allowed_query, now - 60, now + 60)
+            if len(rows) == len(targets) and len(allowed) == 1:
+                break
+            time.sleep(0.5)
+        else:
+            self.fail("Admin did not find all optional-index permission probes")
+        self.assertEqual(
+            len(self._viewer_search(allowed_query, now - 60, now + 60)),
+            1,
+            "Viewer must find the allowed-index positive control",
+        )
+        try:
+            visible = self._viewer_search(
+                query, now - 60, now + 60, allow_warnings=True
+            )
+        except SearchRejected:
+            return
+        self.assertEqual(visible, [], "Optional source searches exposed a denied index")
+
     def test_shared_deployment_settings_are_readable_but_not_viewer_writable(self):
         collection = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_deployment_settings"
         key = "deployment-permission-probe-" + secrets.token_hex(8)

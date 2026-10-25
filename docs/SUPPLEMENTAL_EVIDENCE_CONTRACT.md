@@ -37,3 +37,14 @@ AWS mappings additionally pin account ID, Region and VPC ID. Service health auth
 Final validation uses one task-owned disposable lab against the final package. Synthetic fixtures and lab ingestion establish implementation behavior, not production source qualification.
 
 The existing Splunk page ships as one IIFE. The five optional inspection paths lift its measured gzip size to 665,855 bytes in the final candidate build, 255 bytes over the former 650 KiB release budget. The enforced release ceiling is raised proportionately to 660 KiB; it remains a hard package check. A future split loader can reduce the shared initial download, but it requires a separately reviewed Splunk page loading change.
+
+For the optional integrations in 0.5.0, the same baseline commit
+`b8f05490f3df8352ff88f9b803ca39d7df3a14d5` rebuilt with Node 22.13.0 and the
+unchanged lockfile measures 666,623 gzip bytes using the release check's Python
+gzip calculation. The initial integrated AppDynamics and detector inspection
+build measures 676,261 bytes: 9,638 bytes (1.45%) of growth, and 421 bytes above
+the prior 660 KiB ceiling. The hard ceiling is 670 KiB (686,080 bytes), a 10 KiB
+increase covering these two bounded inspection paths with modest headroom.
+The final package measurement and exact archive hashes belong in
+`OPTIONAL_INTEGRATIONS_QUALIFICATION.md`. No runtime dependency was upgraded,
+and external collectors remain outside the Splunk app archive.

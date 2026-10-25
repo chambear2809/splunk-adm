@@ -1,10 +1,46 @@
 import type { Graph } from "../graph";
-import type { EvidenceConfiguration } from "./evidenceConfig";
+import {
+  configuredDetectorIds,
+  type EvidenceConfiguration,
+  type ObserverMapping,
+} from "./evidenceConfig";
 import {
   routingScope,
   validateServiceHealthSelection,
   type ServiceHealthSelection,
 } from "./evidence";
+
+function eligibleMapping(mapping: ObserverMapping, cluster: string): boolean {
+  if (
+    !mapping.organization_id ||
+    !mapping.realm ||
+    mapping.mapping_status !== "verified" ||
+    mapping.cluster !== cluster
+  )
+    return false;
+  if (mapping.observer_kind === "o11y_export") return true;
+  if (mapping.observer_kind !== "o11y_detector") return false;
+  try {
+    configuredDetectorIds(mapping.detector_ids ?? "");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Detector context can be selected independently of measured-health collection. */
+export function serviceEvidenceScopes(
+  config: EvidenceConfiguration,
+  cluster: string,
+): string[] {
+  return [
+    ...new Set(
+      config.mappings
+        .filter((mapping) => eligibleMapping(mapping, cluster))
+        .map((mapping) => mapping.scope),
+    ),
+  ].sort();
+}
 
 /** Only the graph boundary carries all four qualified service dimensions. */
 export function serviceHealthSelection(
@@ -26,13 +62,13 @@ export function serviceHealthSelection(
     root?.kind !== "service" ||
     !config.mappings.some(
       (mapping) =>
-        mapping.observer_kind === "o11y_export" &&
-        mapping.mapping_status === "verified" &&
-        mapping.scope === scope &&
-        mapping.cluster === graph.boundary.cluster,
+        eligibleMapping(mapping, graph.boundary.cluster) &&
+        mapping.scope === scope,
     )
   )
-    throw new Error("A verified service and health authority are required.");
+    throw new Error(
+      "A verified service and configured Observability evidence authority are required.",
+    );
   return validateServiceHealthSelection({
     schemaVersion: 1,
     workflow: "service",
@@ -46,7 +82,7 @@ export function serviceHealthSelection(
       namespace: graph.boundary.namespace,
     },
     identityBasis:
-      "Exact graph-boundary service name, environment, cluster and Kubernetes namespace; health remains source-specific.",
+      "Exact graph-boundary service name, environment, cluster and Kubernetes namespace; metric health and configured detector context remain source-specific.",
     configurationFingerprint: config.fingerprint,
   });
 }

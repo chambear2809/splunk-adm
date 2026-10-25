@@ -27,6 +27,7 @@ describe("scoped endpoint evidence", () => {
     expect(html).toContain("Proxy evidence");
     expect(html).toContain("AWS VPC Flow Logs");
     expect(html).toContain("Asset history");
+    expect(html).toContain("Inspect AppDynamics inventory");
     expect(search).not.toHaveBeenCalled();
   });
 });

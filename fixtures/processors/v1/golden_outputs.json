@@ -1,0 +1,1992 @@
+{
+  "schema": "application_atlas.processor_golden_outputs.v1",
+  "qualification": "offline_semantic_expectations_only",
+  "processors_executed": false,
+  "canonical_hash": "UTF-8 JSON with sorted object keys, compact separators, arrays in source order; this fingerprints semantic JSON values, not serialized byte order.",
+  "netflow": {
+    "source_fixtures": [
+      "fixtures/processors/v1/inputs/stream_netflow.ndjson",
+      "fixtures/processors/v1/inputs/stream_netflow_late.ndjson"
+    ],
+    "expected_record_count": 42,
+    "required_event_fields": [
+      "timestamp",
+      "endtime",
+      "exporter_ip",
+      "src_ip",
+      "dest_ip",
+      "protoid",
+      "bytes",
+      "packets",
+      "exporter_sampling_interval"
+    ],
+    "required_event_hashes": [
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:1",
+        "output_metadata_sha256": "d7c426bb9e09cc1a4774d9ebfff411030be0549d8da0114614030b6f2fc8602b",
+        "event_sha256": "dcf7affede342e910853506817b4bf15cdb59277ad7afbdf0ed4d7390fa3cc1d"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:2",
+        "output_metadata_sha256": "d7c426bb9e09cc1a4774d9ebfff411030be0549d8da0114614030b6f2fc8602b",
+        "event_sha256": "02c6802faa6176f051806c5e90beb89202446ad498f878a1a6c2d18d91b6ba06"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:3",
+        "output_metadata_sha256": "7c152ea88ccd1e0b4225d8ba26e2151eb464e5a02fb65bf84ff28380adc17bd0",
+        "event_sha256": "98ddb483a34352db34f4ac7b053f80ea4cffcb17b67f99cfc79027c3450ae6f9"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:4",
+        "output_metadata_sha256": "7c152ea88ccd1e0b4225d8ba26e2151eb464e5a02fb65bf84ff28380adc17bd0",
+        "event_sha256": "bb2f5983b43e6bc4548b1bda4631b4e1e5b972e5dedb4248d0390d873d2d5370"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:5",
+        "output_metadata_sha256": "7c152ea88ccd1e0b4225d8ba26e2151eb464e5a02fb65bf84ff28380adc17bd0",
+        "event_sha256": "8ec644ab0adb8a19b4a14378ee7bcedf75940bd4c125660b8ad166b79abb06c2"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:6",
+        "output_metadata_sha256": "7c152ea88ccd1e0b4225d8ba26e2151eb464e5a02fb65bf84ff28380adc17bd0",
+        "event_sha256": "6fb74363a3fce776894f089d5e04b59c10b4caede217496697d9340b6f9e3850"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:7",
+        "output_metadata_sha256": "a9adb8eed854b2e6b1ec80ab99beccfd08482bb91f0b5536909439a3abbdbe66",
+        "event_sha256": "b44acbdbe13561b1f923020723b09d6d1d7ecf55ac83a1e5692a2e3ea9b9c171"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:8",
+        "output_metadata_sha256": "a9adb8eed854b2e6b1ec80ab99beccfd08482bb91f0b5536909439a3abbdbe66",
+        "event_sha256": "66a456a513f52c8ea8088c9c8a108aed99f63d0553c5dc469c2c46f4f4aa9675"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:9",
+        "output_metadata_sha256": "a9adb8eed854b2e6b1ec80ab99beccfd08482bb91f0b5536909439a3abbdbe66",
+        "event_sha256": "ade3bb1c9eea14a621725114fca1b2b35bfcc307fa87b564f32891d008d16f20"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:10",
+        "output_metadata_sha256": "a9adb8eed854b2e6b1ec80ab99beccfd08482bb91f0b5536909439a3abbdbe66",
+        "event_sha256": "c1f54bfea6ccf1f18e482a4c06ee3080a90348e6dab6d94f3e00dfe4ef22fe7f"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:11",
+        "output_metadata_sha256": "fc3196b177e86e9a359920ab81799a5cb2c46ca4d688e36be271136e33d278c0",
+        "event_sha256": "74fdcd404ea2ada1ad95abbd3a5af88e687edf8b010a9602914f4ff3817f4834"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:12",
+        "output_metadata_sha256": "fc3196b177e86e9a359920ab81799a5cb2c46ca4d688e36be271136e33d278c0",
+        "event_sha256": "f0edf36b81ce29bcd06c7ab5234f453242845f6d5d2312b123912b4149996b16"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:13",
+        "output_metadata_sha256": "fc3196b177e86e9a359920ab81799a5cb2c46ca4d688e36be271136e33d278c0",
+        "event_sha256": "85099f1ee930b29ceda4138c59a46e5657cd3d617422d74b3f103c00b53ccd4b"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:14",
+        "output_metadata_sha256": "fc3196b177e86e9a359920ab81799a5cb2c46ca4d688e36be271136e33d278c0",
+        "event_sha256": "27bc092665bd2efa31f8939cced9af68c9205db914410dfc0d58e9492126c169"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:15",
+        "output_metadata_sha256": "7656aba03efe48854a676ace924c0af1c6dde62c0e95ff2733cbd983e435942d",
+        "event_sha256": "4347e89f9820f5c803da11be3a61c5d956b757df99691ef41ec804e38b824f23"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:16",
+        "output_metadata_sha256": "7656aba03efe48854a676ace924c0af1c6dde62c0e95ff2733cbd983e435942d",
+        "event_sha256": "de2cce431a00744d51f6665b0004b4c139b74bce0af93bac99f971fe2fc07834"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:17",
+        "output_metadata_sha256": "7656aba03efe48854a676ace924c0af1c6dde62c0e95ff2733cbd983e435942d",
+        "event_sha256": "3e8391f84354ea6a83cbda0a9aaba985c1525599342c50f8a8f0942898ed2ddd"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:18",
+        "output_metadata_sha256": "7656aba03efe48854a676ace924c0af1c6dde62c0e95ff2733cbd983e435942d",
+        "event_sha256": "0a879293c84f14e00a82b1ceabd811c8514468b94802d6e9b41c870064cef358"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:19",
+        "output_metadata_sha256": "5e3d3f1a985dbdf8f14216930a83c1764f2697fb2f9564cccf438702511a3d08",
+        "event_sha256": "2e5a30dfc8ef3b054a896a6341dd08b3ee86ac86ea0cc50fa52dab22a72a1f29"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:20",
+        "output_metadata_sha256": "5e3d3f1a985dbdf8f14216930a83c1764f2697fb2f9564cccf438702511a3d08",
+        "event_sha256": "0f3227926586cb75d9647b80981980b64d46e7fdbecfa05465048861cdc4face"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:21",
+        "output_metadata_sha256": "ce3dd591384cc9e336a7962a0faac316615fce3ac088b977b66ac4880c733691",
+        "event_sha256": "be0c347b4fee6e17ae99ec1110e8249ddba8a976cea49c45afa8d09475d62558"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:22",
+        "output_metadata_sha256": "ce3dd591384cc9e336a7962a0faac316615fce3ac088b977b66ac4880c733691",
+        "event_sha256": "a18502b59d5b4a12de36c5e535c63b5aa2d2e4b83bd02d9d96b1b5faaf94b283"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:23",
+        "output_metadata_sha256": "f9369f76871f305d0e821c26382b5b19ce5fc5766f1a686a683e581a26a0512b",
+        "event_sha256": "33be3bdb5265161bcbf40444ca1fd4f3be036d58c7710a732951fb65bff57cb7"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:24",
+        "output_metadata_sha256": "f9369f76871f305d0e821c26382b5b19ce5fc5766f1a686a683e581a26a0512b",
+        "event_sha256": "433c34e61f86a15def3bb51e685e9de3dbed3440961b4cfb9505c97b211136d2"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:25",
+        "output_metadata_sha256": "f9369f76871f305d0e821c26382b5b19ce5fc5766f1a686a683e581a26a0512b",
+        "event_sha256": "c5c7447b82be438771353053daa26a7f7235579ca476a0e1af09ad30a9dee1ca"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:26",
+        "output_metadata_sha256": "f9369f76871f305d0e821c26382b5b19ce5fc5766f1a686a683e581a26a0512b",
+        "event_sha256": "b1f692721d45948ab8e01017bd0465e1601d08b72f2ae6719e8e51c4285725a2"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:27",
+        "output_metadata_sha256": "34ee9d8b08b6c344c341a13b255e79de705b62c505b800baeae08f45c20bae63",
+        "event_sha256": "d06d13124c18b65df0ad0fbea4a2273ec487e9c64e3a0bde77fa364d16dc5b34"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:28",
+        "output_metadata_sha256": "34ee9d8b08b6c344c341a13b255e79de705b62c505b800baeae08f45c20bae63",
+        "event_sha256": "9c68f20be522d64ec9ac1073831ab582f135be1298421f4eb5b3d5c75007aa7c"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:29",
+        "output_metadata_sha256": "acf3d8c1420712a06b7c6712cac63f05e8cf17e27ab39d253b2f2a37e646da05",
+        "event_sha256": "a74f3f75040d682ec3ca43be9754e2fd458144422af8af0036d25bd58d13343d"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:30",
+        "output_metadata_sha256": "acf3d8c1420712a06b7c6712cac63f05e8cf17e27ab39d253b2f2a37e646da05",
+        "event_sha256": "abc61217910be8fb16fb249093a04920510c2c01848db02d1a2729be41595cca"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:31",
+        "output_metadata_sha256": "da25ad8b1042948404c75477b39c178a2c33ea5b8dc9489fffb04f6806be4595",
+        "event_sha256": "8ec63526174d48d671d9c8ab70a991132af11ef63f1be24da7d0ecef0f52c4c9"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:32",
+        "output_metadata_sha256": "da25ad8b1042948404c75477b39c178a2c33ea5b8dc9489fffb04f6806be4595",
+        "event_sha256": "d9a7eadf3f1ad3c88447e0d9126b59416564a5915b0a773e23af0e69888e25b0"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:33",
+        "output_metadata_sha256": "b158b9da5a0a25eab85e87e58e0b6dc209609b451df8a52d99a1c1fd6fb33eb9",
+        "event_sha256": "02fcb0c1b135185bc34bcbad9b6a82aaed104c80dedd6f8f315a16a202861a34"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:34",
+        "output_metadata_sha256": "b158b9da5a0a25eab85e87e58e0b6dc209609b451df8a52d99a1c1fd6fb33eb9",
+        "event_sha256": "b01eec33ba3a63ed56b562f9125f8a011d9731aba4eca26354ad9ad55746ff4a"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:35",
+        "output_metadata_sha256": "b158b9da5a0a25eab85e87e58e0b6dc209609b451df8a52d99a1c1fd6fb33eb9",
+        "event_sha256": "30adc1779a982645d222eff9c4c34a747e92dc3cc2f2e0383dea1b68555447b6"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:36",
+        "output_metadata_sha256": "b158b9da5a0a25eab85e87e58e0b6dc209609b451df8a52d99a1c1fd6fb33eb9",
+        "event_sha256": "cfb3280d943662f0789b27ebc01c4f92ff45657dfeac3e8bbb92a2133245600b"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:37",
+        "output_metadata_sha256": "42db554e5c1850a968a3792c1e827f8811a05615edc0f390afd49f78bb02b0b4",
+        "event_sha256": "8166bcb8fba8a332e86171b4ef4d1f1505eb4cc56062d47fd351b7694bff91a8"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:38",
+        "output_metadata_sha256": "42db554e5c1850a968a3792c1e827f8811a05615edc0f390afd49f78bb02b0b4",
+        "event_sha256": "dbc8611e430da1b4bb4139f4e1d75245f3c3531ff369f92d85d1884ca51d7603"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:39",
+        "output_metadata_sha256": "42db554e5c1850a968a3792c1e827f8811a05615edc0f390afd49f78bb02b0b4",
+        "event_sha256": "37fe0e41005a006fc65cc3255601f2414e93a53e6aa1c2ed0fa301955fb1c971"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:40",
+        "output_metadata_sha256": "42db554e5c1850a968a3792c1e827f8811a05615edc0f390afd49f78bb02b0b4",
+        "event_sha256": "ac3a479a29c2696dfbbe4937984efd65fa907a0a43de7a07610ffd7051f22de9"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow_late.ndjson:1",
+        "output_metadata_sha256": "9b20a9e4055c3e381893f09803dfaa445d656e60c8084340b26b43e61c443785",
+        "event_sha256": "5982bc98d2f3acf2fe91a6a91b5b5bbc2e28f7bc2ccf433c55a8549d879d6978"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow_late.ndjson:2",
+        "output_metadata_sha256": "9b20a9e4055c3e381893f09803dfaa445d656e60c8084340b26b43e61c443785",
+        "event_sha256": "0ea922641746214442a11b13736f01662a8e19a5b38d5d257e9642cf17224625"
+      }
+    ],
+    "samples": [
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:1",
+        "facts": {
+          "src_ip": "10.42.0.20",
+          "src_port": 43001,
+          "dest_ip": "10.42.0.50",
+          "dest_port": 8080,
+          "protoid": 6,
+          "bytes": 300,
+          "packets": 1,
+          "timestamp": "2026-10-07T11:39:00.000000Z",
+          "endtime": "2026-10-07T11:39:01.000000Z"
+        }
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:27",
+        "facts": {
+          "src_ip": "10.42.0.20",
+          "dest_ip": "10.20.30.40",
+          "protoid": 1,
+          "bytes": 336,
+          "packets": 1,
+          "ports_absent": true,
+          "timestamp": "2026-10-07T11:51:00.000000Z",
+          "endtime": "2026-10-07T11:51:04.000000Z"
+        }
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/stream_netflow_late.ndjson:1",
+        "facts": {
+          "src_ip": "10.99.0.7",
+          "src_port": 52011,
+          "dest_ip": "10.42.0.50",
+          "dest_port": 8080,
+          "protoid": 6,
+          "bytes": 45,
+          "packets": 1,
+          "timestamp": "2026-10-07T11:52:00.500000Z",
+          "endtime": "2026-10-07T11:52:01.000000Z"
+        }
+      }
+    ],
+    "metadata_contract": {
+      "host": "stream-fwd-01",
+      "source": "stream:netflow",
+      "sourcetype": "stream:netflow",
+      "target_index": "netflow",
+      "time_is_preserved": true
+    },
+    "installed_search_facts": {
+      "search_macro": "adm_flows_netflow",
+      "purpose": "Expected direct-ingestion facts for installed TA/search validation only; not Edge or Ingest Processor output.",
+      "records": [
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:1",
+          "metadata": {
+            "time": 1791373141.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.50",
+            "protoid": 6,
+            "bytes": 300,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:39:00.000000Z",
+            "endtime": "2026-10-07T11:39:01.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 43001,
+            "dest_port": 8080,
+            "seqnumber": 1009
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 300,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373140.0,
+            "adm_end_epoch": 1791373141.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:2",
+          "metadata": {
+            "time": 1791373141.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.50",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 200,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:39:00.000000Z",
+            "endtime": "2026-10-07T11:39:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 8080,
+            "dest_port": 43001,
+            "seqnumber": 1010
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 200,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373140.0,
+            "adm_end_epoch": 1791373141.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:3",
+          "metadata": {
+            "time": 1791373681.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.60",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 400,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:48:00.000000Z",
+            "endtime": "2026-10-07T11:48:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 40100,
+            "dest_port": 8080,
+            "seqnumber": 1013
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 400,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373680.0,
+            "adm_end_epoch": 1791373681.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:4",
+          "metadata": {
+            "time": 1791373681.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.60",
+            "protoid": 6,
+            "bytes": 250,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:48:00.000000Z",
+            "endtime": "2026-10-07T11:48:01.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 40100,
+            "seqnumber": 1014
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 250,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373680.0,
+            "adm_end_epoch": 1791373681.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:5",
+          "metadata": {
+            "time": 1791373681.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.60",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 400,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:48:00.000000Z",
+            "endtime": "2026-10-07T11:48:01.000000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 40100,
+            "dest_port": 8080,
+            "seqnumber": 1013
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 400,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373680.0,
+            "adm_end_epoch": 1791373681.0,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:6",
+          "metadata": {
+            "time": 1791373681.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.60",
+            "protoid": 6,
+            "bytes": 250,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:48:00.000000Z",
+            "endtime": "2026-10-07T11:48:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 8080,
+            "dest_port": 40100,
+            "seqnumber": 1014
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 250,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373680.0,
+            "adm_end_epoch": 1791373681.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:7",
+          "metadata": {
+            "time": 1791373808.45,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.50",
+            "protoid": 6,
+            "bytes": 700,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.360000Z",
+            "endtime": "2026-10-07T11:50:08.450000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 43123,
+            "dest_port": 8080,
+            "seqnumber": 1005
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 700,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.36,
+            "adm_end_epoch": 1791373808.45,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:8",
+          "metadata": {
+            "time": 1791373808.45,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.50",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 300,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.360000Z",
+            "endtime": "2026-10-07T11:50:08.450000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 8080,
+            "dest_port": 43123,
+            "seqnumber": 1006
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 300,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.36,
+            "adm_end_epoch": 1791373808.45,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:9",
+          "metadata": {
+            "time": 1791373808.45,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.50",
+            "protoid": 6,
+            "bytes": 700,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.360000Z",
+            "endtime": "2026-10-07T11:50:08.450000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 43123,
+            "dest_port": 8080,
+            "seqnumber": 1005
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 700,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.36,
+            "adm_end_epoch": 1791373808.45,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:10",
+          "metadata": {
+            "time": 1791373808.45,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.50",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 300,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.360000Z",
+            "endtime": "2026-10-07T11:50:08.450000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 43123,
+            "seqnumber": 1006
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 300,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.36,
+            "adm_end_epoch": 1791373808.45,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:11",
+          "metadata": {
+            "time": 1791373808.48,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.70",
+            "protoid": 6,
+            "bytes": 900,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.370000Z",
+            "endtime": "2026-10-07T11:50:08.480000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 41500,
+            "dest_port": 50051,
+            "seqnumber": 1017
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 900,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.37,
+            "adm_end_epoch": 1791373808.48,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:12",
+          "metadata": {
+            "time": 1791373808.48,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.70",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 3300,
+            "packets": 3,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.370000Z",
+            "endtime": "2026-10-07T11:50:08.480000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 50051,
+            "dest_port": 41500,
+            "seqnumber": 1018
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 3300,
+            "adm_packets": 3,
+            "adm_start_epoch": 1791373808.37,
+            "adm_end_epoch": 1791373808.48,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:13",
+          "metadata": {
+            "time": 1791373808.48,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.70",
+            "protoid": 6,
+            "bytes": 900,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.370000Z",
+            "endtime": "2026-10-07T11:50:08.480000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 41500,
+            "dest_port": 50051,
+            "seqnumber": 1017
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 900,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.37,
+            "adm_end_epoch": 1791373808.48,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:14",
+          "metadata": {
+            "time": 1791373808.48,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.70",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 3300,
+            "packets": 3,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.370000Z",
+            "endtime": "2026-10-07T11:50:08.480000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 50051,
+            "dest_port": 41500,
+            "seqnumber": 1018
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 3300,
+            "adm_packets": 3,
+            "adm_start_epoch": 1791373808.37,
+            "adm_end_epoch": 1791373808.48,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:15",
+          "metadata": {
+            "time": 1791373808.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.30",
+            "protoid": 6,
+            "bytes": 800,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.500000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 43121,
+            "dest_port": 8080,
+            "seqnumber": 1001
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 800,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.5,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:16",
+          "metadata": {
+            "time": 1791373808.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.30",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 5200,
+            "packets": 4,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.500000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 8080,
+            "dest_port": 43121,
+            "seqnumber": 1002
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 5200,
+            "adm_packets": 4,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.5,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:17",
+          "metadata": {
+            "time": 1791373808.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.30",
+            "protoid": 6,
+            "bytes": 800,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.500000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 43121,
+            "dest_port": 8080,
+            "seqnumber": 1001
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 800,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.5,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:18",
+          "metadata": {
+            "time": 1791373808.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.30",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 5200,
+            "packets": 4,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.500000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 43121,
+            "seqnumber": 1002
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 5200,
+            "adm_packets": 4,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.5,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:19",
+          "metadata": {
+            "time": 1791373808.65,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.20.30.40",
+            "protoid": 6,
+            "bytes": 2100,
+            "packets": 2,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.400000Z",
+            "endtime": "2026-10-07T11:50:08.650000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 43130,
+            "dest_port": 5432,
+            "seqnumber": 1007
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 2100,
+            "adm_packets": 2,
+            "adm_start_epoch": 1791373808.4,
+            "adm_end_epoch": 1791373808.65,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:20",
+          "metadata": {
+            "time": 1791373808.65,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.20.30.40",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 18000,
+            "packets": 13,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.400000Z",
+            "endtime": "2026-10-07T11:50:08.650000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 5432,
+            "dest_port": 43130,
+            "seqnumber": 1008
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 18000,
+            "adm_packets": 13,
+            "adm_start_epoch": 1791373808.4,
+            "adm_end_epoch": 1791373808.65,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:21",
+          "metadata": {
+            "time": 1791373808.69,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.40",
+            "dest_ip": "203.0.113.40",
+            "protoid": 6,
+            "bytes": 450,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.450000Z",
+            "endtime": "2026-10-07T11:50:08.690000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 43200,
+            "dest_port": 443,
+            "seqnumber": 1007
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 450,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.45,
+            "adm_end_epoch": 1791373808.69,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:22",
+          "metadata": {
+            "time": 1791373808.69,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "203.0.113.40",
+            "dest_ip": "10.42.0.40",
+            "protoid": 6,
+            "bytes": 3100,
+            "packets": 3,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.450000Z",
+            "endtime": "2026-10-07T11:50:08.690000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 443,
+            "dest_port": 43200,
+            "seqnumber": 1008
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 3100,
+            "adm_packets": 3,
+            "adm_start_epoch": 1791373808.45,
+            "adm_end_epoch": 1791373808.69,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:23",
+          "metadata": {
+            "time": 1791373808.7,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.40",
+            "protoid": 6,
+            "bytes": 1600,
+            "packets": 2,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.700000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 43122,
+            "dest_port": 8080,
+            "seqnumber": 1003
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 1600,
+            "adm_packets": 2,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.7,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:24",
+          "metadata": {
+            "time": 1791373808.7,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.40",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 700,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.700000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 8080,
+            "dest_port": 43122,
+            "seqnumber": 1004
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 700,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.7,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:25",
+          "metadata": {
+            "time": 1791373808.7,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.40",
+            "protoid": 6,
+            "bytes": 1600,
+            "packets": 2,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.700000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 43122,
+            "dest_port": 8080,
+            "seqnumber": 1003
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 1600,
+            "adm_packets": 2,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.7,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:26",
+          "metadata": {
+            "time": 1791373808.7,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.40",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 700,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:50:08.350000Z",
+            "endtime": "2026-10-07T11:50:08.700000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 43122,
+            "seqnumber": 1004
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 700,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373808.35,
+            "adm_end_epoch": 1791373808.7,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:27",
+          "metadata": {
+            "time": 1791373864.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.20.30.40",
+            "protoid": 1,
+            "bytes": 336,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:51:00.000000Z",
+            "endtime": "2026-10-07T11:51:04.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "seqnumber": 1019
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "icmp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 336,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373860.0,
+            "adm_end_epoch": 1791373864.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:28",
+          "metadata": {
+            "time": 1791373864.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.20.30.40",
+            "dest_ip": "10.42.0.20",
+            "protoid": 1,
+            "bytes": 336,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:51:00.000000Z",
+            "endtime": "2026-10-07T11:51:04.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "seqnumber": 1020
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "icmp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 336,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373860.0,
+            "adm_end_epoch": 1791373864.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:29",
+          "metadata": {
+            "time": 1791373920.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.99.0.7",
+            "dest_ip": "10.42.0.50",
+            "protoid": 6,
+            "bytes": 45,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:52:00.000000Z",
+            "endtime": "2026-10-07T11:52:00.500000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 52011,
+            "dest_port": 8080,
+            "seqnumber": 1009
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 45,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373920.0,
+            "adm_end_epoch": 1791373920.5,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:30",
+          "metadata": {
+            "time": 1791373920.5,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.50",
+            "dest_ip": "10.99.0.7",
+            "protoid": 6,
+            "bytes": 30,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:52:00.000000Z",
+            "endtime": "2026-10-07T11:52:00.500000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 52011,
+            "seqnumber": 1011
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 30,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373920.0,
+            "adm_end_epoch": 1791373920.5,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:31",
+          "metadata": {
+            "time": 1791373982.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.10.20.11",
+            "dest_ip": "10.10.20.12",
+            "protoid": 17,
+            "bytes": 5400,
+            "packets": 4,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:53:00.000000Z",
+            "endtime": "2026-10-07T11:53:02.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 40001,
+            "dest_port": 8472,
+            "seqnumber": 1011
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "udp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 5400,
+            "adm_packets": 4,
+            "adm_start_epoch": 1791373980.0,
+            "adm_end_epoch": 1791373982.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:32",
+          "metadata": {
+            "time": 1791373982.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.10.20.12",
+            "dest_ip": "10.10.20.11",
+            "protoid": 17,
+            "bytes": 3900,
+            "packets": 3,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:53:00.000000Z",
+            "endtime": "2026-10-07T11:53:02.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 62095,
+            "dest_port": 8472,
+            "seqnumber": 1012
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "udp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 3900,
+            "adm_packets": 3,
+            "adm_start_epoch": 1791373980.0,
+            "adm_end_epoch": 1791373982.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:33",
+          "metadata": {
+            "time": 1791374101.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.10.20.13",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 120,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:55:00.000000Z",
+            "endtime": "2026-10-07T11:55:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 51000,
+            "dest_port": 8080,
+            "seqnumber": 1021
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 120,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374100.0,
+            "adm_end_epoch": 1791374101.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:34",
+          "metadata": {
+            "time": 1791374101.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.10.20.13",
+            "protoid": 6,
+            "bytes": 80,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:55:00.000000Z",
+            "endtime": "2026-10-07T11:55:01.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 51000,
+            "seqnumber": 1022
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 80,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374100.0,
+            "adm_end_epoch": 1791374101.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:35",
+          "metadata": {
+            "time": 1791374101.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.10.20.13",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 120,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:55:00.000000Z",
+            "endtime": "2026-10-07T11:55:01.000000Z",
+            "input_snmpidx": 436213760,
+            "output_snmpidx": 436232192,
+            "src_port": 51000,
+            "dest_port": 8080,
+            "seqnumber": 1019
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 120,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374100.0,
+            "adm_end_epoch": 1791374101.0,
+            "adm_in_ifindex": 436213760,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:36",
+          "metadata": {
+            "time": 1791374101.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.10.20.13",
+            "protoid": 6,
+            "bytes": 80,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:55:00.000000Z",
+            "endtime": "2026-10-07T11:55:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213760,
+            "src_port": 8080,
+            "dest_port": 51000,
+            "seqnumber": 1020
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 80,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374100.0,
+            "adm_end_epoch": 1791374101.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213760
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:37",
+          "metadata": {
+            "time": 1791374161.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.60",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 410,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:56:00.000000Z",
+            "endtime": "2026-10-07T11:56:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436212736,
+            "src_port": 40200,
+            "dest_port": 8080,
+            "seqnumber": 1015
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 410,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374160.0,
+            "adm_end_epoch": 1791374161.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436212736
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:38",
+          "metadata": {
+            "time": 1791374161.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.11",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.60",
+            "protoid": 6,
+            "bytes": 260,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:56:00.000000Z",
+            "endtime": "2026-10-07T11:56:01.000000Z",
+            "input_snmpidx": 436212736,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 40200,
+            "seqnumber": 1016
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.11",
+            "adm_exporter": "192.0.2.11",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 260,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374160.0,
+            "adm_end_epoch": 1791374161.0,
+            "adm_in_ifindex": 436212736,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:39",
+          "metadata": {
+            "time": 1791374161.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.60",
+            "dest_ip": "10.42.0.20",
+            "protoid": 6,
+            "bytes": 410,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:56:00.000000Z",
+            "endtime": "2026-10-07T11:56:01.000000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 40200,
+            "dest_port": 8080,
+            "seqnumber": 1015
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 410,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374160.0,
+            "adm_end_epoch": 1791374161.0,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow.ndjson:40",
+          "metadata": {
+            "time": 1791374161.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.20",
+            "dest_ip": "10.42.0.60",
+            "protoid": 6,
+            "bytes": 260,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:56:00.000000Z",
+            "endtime": "2026-10-07T11:56:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 8080,
+            "dest_port": 40200,
+            "seqnumber": 1016
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 260,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791374160.0,
+            "adm_end_epoch": 1791374161.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow_late.ndjson:1",
+          "metadata": {
+            "time": 1791373921.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.99.0.7",
+            "dest_ip": "10.42.0.50",
+            "protoid": 6,
+            "bytes": 45,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:52:00.500000Z",
+            "endtime": "2026-10-07T11:52:01.000000Z",
+            "input_snmpidx": 436232192,
+            "output_snmpidx": 436213248,
+            "src_port": 52011,
+            "dest_port": 8080,
+            "seqnumber": 1010
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 45,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373920.5,
+            "adm_end_epoch": 1791373921.0,
+            "adm_in_ifindex": 436232192,
+            "adm_out_ifindex": 436213248
+          }
+        },
+        {
+          "input": "fixtures/processors/v1/inputs/stream_netflow_late.ndjson:2",
+          "metadata": {
+            "time": 1791373921.0,
+            "host": "stream-fwd-01",
+            "source": "stream:netflow",
+            "sourcetype": "stream:netflow",
+            "index": "netflow"
+          },
+          "raw": {
+            "exporter_ip": "192.0.2.12",
+            "src_ip": "10.42.0.50",
+            "dest_ip": "10.99.0.7",
+            "protoid": 6,
+            "bytes": 30,
+            "packets": 1,
+            "exporter_sampling_interval": 1,
+            "timestamp": "2026-10-07T11:52:00.500000Z",
+            "endtime": "2026-10-07T11:52:01.000000Z",
+            "input_snmpidx": 436213248,
+            "output_snmpidx": 436232192,
+            "src_port": 8080,
+            "dest_port": 52011,
+            "seqnumber": 1012
+          },
+          "normalized": {
+            "adm_observer": "192.0.2.12",
+            "adm_exporter": "192.0.2.12",
+            "adm_transport": "tcp",
+            "adm_sampling": 1,
+            "adm_bytes_fwd": 30,
+            "adm_packets": 1,
+            "adm_start_epoch": 1791373920.5,
+            "adm_end_epoch": 1791373921.0,
+            "adm_in_ifindex": 436213248,
+            "adm_out_ifindex": 436232192
+          }
+        }
+      ]
+    }
+  },
+  "o11y_health_v1": {
+    "source_fixture": "fixtures/processors/v1/inputs/o11y_health_v1.json",
+    "expected_record_count": 6,
+    "expected_metric_count": 5,
+    "expected_completion_count": 1,
+    "expected_signal_labels": [
+      "container_cpu_utilization",
+      "jvm_memory_used",
+      "request_count",
+      "request_errors",
+      "request_latency_p90"
+    ],
+    "expected_units": {
+      "container_cpu_utilization": "1",
+      "jvm_memory_used": "By",
+      "request_count": "count",
+      "request_errors": "count",
+      "request_latency_p90": "ns"
+    },
+    "required_event_hashes": [
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[0]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "ac85cc2822f8ca53f5daf059b7c1a81b14cb9f46df4d85aefca2b46463ab27f6"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[1]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "60f7aa02381d0236232e69a1f5027cc71787dbc6ecaa4fa936588fcf7d3bcde7"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[2]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "96d92b48a180e8dfb203965e763ef2be477cbb2e74f4db3d82fdbbac71aca53b"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[3]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "76ef7c54b3d52fafd4a63f477978056f164e927f40023909f9ba6aa1ed890c03"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[4]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "32101acc2574085bfc02480b7f69a42ac0cf8da31f6fe9dd546fccb8c7ca0583"
+      },
+      {
+        "input": "fixtures/processors/v1/inputs/o11y_health_v1.json:events[5]",
+        "output_metadata_sha256": "87b6d327de6c85a43ad9c91f76bf574ce856d2c7bd34220acb42803037f69016",
+        "event_sha256": "9d4e25a62a9acaf2e29178944f0575ac1ca42405988fec14b47e5b4f3566f5b4"
+      }
+    ],
+    "metadata_contract": {
+      "host": "o11y-observer-prod",
+      "source": "atlas:o11y_health/export",
+      "sourcetype": "atlas:o11y_health",
+      "target_index": "atlas_o11y",
+      "input_index_absent": true,
+      "time_is_preserved": true
+    },
+    "completion_contract": {
+      "capture_id": "o11y-capture-001",
+      "expected_record_count": 5,
+      "completion_event_is_final": true
+    },
+    "required_null_fields": [
+      "pod_uid",
+      "container_name",
+      "host_name",
+      "jvm_memory_pool_name"
+    ],
+    "required_null_values": {
+      "pod_uid": null,
+      "container_name": null,
+      "host_name": null,
+      "jvm_memory_pool_name": null
+    }
+  },
+  "otel_hec_external_fields": {
+    "source_fixture": "fixtures/processors/v1/inputs/otel_trace_with_hec_fields.ndjson:1",
+    "expected_record_count": 1,
+    "metadata_contract": {
+      "host": "node-a",
+      "source": "kubernetes",
+      "sourcetype": "otel:traces",
+      "index": "otel_traces",
+      "time": 1791373808.25
+    },
+    "external_fields_sha256": "c82d21554d2cff45278290b83d3fd4b4bf91401f0599da4bcc01172ebca3803e",
+    "external_fields": {
+      "service.name": "frontend",
+      "deployment.environment.name": "demo",
+      "k8s.cluster.name": "demo-cluster",
+      "k8s.namespace.name": "shop",
+      "k8s.node.name": "node-a",
+      "k8s.pod.name": "frontend-7d9c6b5f4-x2k8p",
+      "k8s.pod.uid": "7f1e2d3c-4b5a-4968-8776-655443322101",
+      "k8s.pod.labels.app": "frontend"
+    },
+    "event_sha256": "3da29be3f6223ab7497afda25f8af59dc8de39a83664e74e2198e31ab5743cbf",
+    "identity_fields_remain_outside_event": [
+      "service.name",
+      "deployment.environment.name",
+      "k8s.cluster.name",
+      "k8s.namespace.name"
+    ],
+    "scope_note": "This fixture validates the HEC envelope boundary. OTel is not a selected processor pipeline in this v1 profile; no OTel processing support is implied.",
+    "input_bytes_sha256": "9dc2eb99b287811d7912f213f4a25c64d812c4749bbd7f196767b4554ba1885e"
+  }
+}
