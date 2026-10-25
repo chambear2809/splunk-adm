@@ -58,6 +58,7 @@ function edgeComparable(edge: GraphEdge): unknown {
     attachment_evidence: evidenceSet(edge.attachment_evidence),
     traffic_observations: evidenceSet(edge.traffic_observations),
     vlan_observations: evidenceSet(edge.vlan_observations),
+    nat_observations: evidenceSet(edge.nat_observations),
     client_handoffs: evidenceSet(
       edge.client_handoffs?.map((record) => ({
         ...record,

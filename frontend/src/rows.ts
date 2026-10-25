@@ -5,6 +5,7 @@ import {
   CLIENT_HANDOFF_COVERAGES,
   parseGraph,
   validVlanString,
+  validNatObservations,
   validTrafficObservation,
   RELATIONSHIPS,
   type AclAction,
@@ -15,6 +16,7 @@ import {
   type GraphEdge,
   type GraphNode,
   type VlanObservation,
+  type NatObservation,
   type TrafficObservation,
   type HandoffBasis,
   type ClientHandoffCoverage,
@@ -160,6 +162,29 @@ function toEdge(row: Row): GraphEdge {
       fail(`edge ${edge.id} vlan_observations must be an array`);
     edge.vlan_observations = parsed as VlanObservation[];
   }
+  const natRaw = one(row, "nat_observations");
+  if (natRaw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(natRaw);
+    } catch {
+      fail(`edge ${edge.id} nat_observations must be valid JSON`);
+    }
+    const normalized = Array.isArray(parsed)
+      ? parsed.map((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item))
+            return item;
+          return Object.fromEntries(
+            Object.entries(item).filter(
+              ([, value]) => value !== null && value !== "Null" && value !== "",
+            ),
+          );
+        })
+      : parsed;
+    if (!validNatObservations(normalized))
+      fail(`edge ${edge.id} nat_observations has an invalid observation`);
+    edge.nat_observations = normalized as NatObservation[];
+  }
   const trafficRaw = one(row, "traffic_observations");
   if (trafficRaw !== undefined) {
     let parsed: unknown;
@@ -238,6 +263,9 @@ function toEdge(row: Row): GraphEdge {
   const vlanTruncated = oneOf(row, "vlan_observations_truncated", ["0", "1"]);
   if (vlanTruncated !== undefined)
     edge.vlan_observations_truncated = vlanTruncated === "1";
+  const natTruncated = oneOf(row, "nat_observations_truncated", ["0", "1"]);
+  if (natTruncated !== undefined)
+    edge.nat_observations_truncated = natTruncated === "1";
   const port = count(row, "server_port");
   if (port !== undefined) edge.server_port = port;
   const transport = one(row, "transport");
@@ -402,6 +430,15 @@ export function rowsToGraph(
     start: epochIso(meta, "window_start"),
     end: epochIso(meta, "window_end"),
   };
+  const natWindowStart = count(meta, "nat_window_start");
+  const natWindowEnd = count(meta, "nat_window_end");
+  if (
+    (natWindowStart === undefined) !== (natWindowEnd === undefined) ||
+    (natWindowStart !== undefined &&
+      natWindowEnd !== undefined &&
+      natWindowStart >= natWindowEnd)
+  )
+    fail("meta NAT evidence time window is incomplete or invalid");
   const generatedAt = epochIso(meta, "generated_at");
   return parseGraph({
     schema_version: 1,
@@ -409,6 +446,9 @@ export function rowsToGraph(
     generated_at: generatedAt,
     demo: options.demo ?? false,
     window,
+    ...(natWindowStart !== undefined && natWindowEnd !== undefined
+      ? { nat_event_window: { start: natWindowStart, end: natWindowEnd } }
+      : {}),
     boundary: {
       id: boundaryId,
       ...args,

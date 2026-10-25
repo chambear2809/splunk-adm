@@ -2,6 +2,11 @@ import type { GraphEdge, GraphIndex } from "./graph";
 import type { TrafficObservation } from "./graph";
 import { csvRow } from "./csv";
 import { contractSummary } from "./glossary";
+import { strictIp } from "./ip";
+export { strictIp };
+
+const full = (pattern: RegExp, value: string) =>
+  pattern.exec(value)?.[0] === value;
 
 export interface SearchWindow {
   start: string;
@@ -13,35 +18,6 @@ export interface FlowTuple {
   port: number;
   transport: string;
 }
-const full = (pattern: RegExp, value: string) =>
-  pattern.exec(value)?.[0] === value;
-const ipv4 = (value: string) =>
-  full(/(?:0|[1-9]\d{0,2})(?:\.(?:0|[1-9]\d{0,2})){3}/, value) &&
-  value.split(".").every((part) => Number(part) <= 255);
-function ipv6(value: string): boolean {
-  let normalized = value.toLowerCase();
-  if (normalized.includes(".")) {
-    const tail = /^(.*:)([^:]+)$/.exec(normalized);
-    if (!tail || !ipv4(tail[2])) return false;
-    const octets = tail[2].split(".").map(Number);
-    normalized = `${tail[1]}${((octets[0] << 8) | octets[1]).toString(16)}:${((octets[2] << 8) | octets[3]).toString(16)}`;
-  }
-  const pieces = normalized.split("::");
-  if (pieces.length > 2) return false;
-  const validSide = (side: string) =>
-    !side || side.split(":").every((part) => full(/[0-9a-f]{1,4}/, part));
-  if (!pieces.every(validSide)) return false;
-  const units = pieces.reduce(
-    (sum, side) => sum + (side ? side.split(":").length : 0),
-    0,
-  );
-  return pieces.length === 2 ? units < 8 : units === 8;
-}
-export const strictIp = (value: string): boolean =>
-  typeof value === "string" &&
-  value.length >= 2 &&
-  value.length <= 45 &&
-  (ipv4(value) || ipv6(value));
 const epoch = (value: string): string => {
   if (
     typeof value !== "string" ||
