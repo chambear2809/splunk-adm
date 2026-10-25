@@ -152,9 +152,18 @@ become translation observations. Equivalent IPv6 spellings are compared by
 address value. Each observation is filtered to the selected half-open time
 window before aggregation. Numeric evidence bounds retain the precision
 reported by Splunk in portable validation/exports. On this tested image,
-`addinfo` truncates boundaries to milliseconds even when the job retains the
-requested sub-millisecond bound. Finer requests can therefore conservatively
-omit an observation; the original finer bound is not recovered. A
+`addinfo` truncates both measured boundaries to milliseconds even when the
+job retains the requested sub-millisecond bound. The helper can therefore widen
+the effective lower bound or narrow the upper bound. Native indexed-summary
+searching also returned the same three rows at a bucket start and that start
+plus 0.0005 seconds; the proposed native-earliest protection was disproved and
+is not counted as acceptance. The app now rejects absolute graph bounds with
+nonzero digits beyond milliseconds before dispatch. It preserves harmless
+trailing zeros and relative syntax, whose bounds remain server-resolved.
+Direct `adm_graph(4)` callers must supply millisecond-aligned absolute bounds;
+finer original-request precision at either end is unsupported and cannot be
+recovered from `addinfo`. Numeric export labels identify native bounds, not
+exact original-request precision. A
 32-observation cap remains explicit
 in inspector, portable/CSV evidence and graph comparisons.
 
@@ -173,7 +182,26 @@ Boolean field assignments; the test also mishandled an OTel fixture object and
 assumed `addinfo` retained sub-millisecond bounds. That immutable attempt remains
 separate from corrected validation. The precision probe retained the requested
 job bounds while measuring `addinfo` outcomes at +0.0005, +0.001, +0.0015 and
-+0.5 seconds. Corrected package validation is pending.
++0.5 seconds.
+
+The corrected worker app source `f722633` and archive SHA-256
+`d8bdc00fc70b3537e123e527434d9bc78f67185b11844330ea89b95bb4891d0b`
+passed all four live tests with test source `dfb34cb`. Real `adm_graph` output
+passed frontend `rowsToGraph` validation: each of the three windows had six
+nodes and three communication edges; a 33-event case retained 32 observations
+with a truncation flag, with the same traffic/counts as its no-NAT counterpart.
+Window evidence counts were three for the full bucket, two through `N+0.5`,
+and one through exact `N`. No translated-address node or backend edge appeared.
+Malformed reported IPs were excluded by quality checks. A multi-value EventType
+was present in raw input but excluded by the existing FTD source selector;
+the owned unmapped observer remained present with no NAT evidence. Test setup
+corrections and their unsuccessful attempts remain separately retained.
+The successful report's structured source/archive fields identify `f722633`;
+a legacy limit sentence saying `f72` is stale. A responder-only DNAT follow-up
+also passed on that archive with test source `9ee64ef`: the initiator tuple was
+unchanged, the responder changed from `10.42.0.21:443` to `10.42.0.99:8443`, and
+the graph retained three communication edges with no translated-destination
+node or backend attribution. Final integrated package validation remains pending.
 Historical capture fields remain unchanged; a separate macro compatibility
 review records the no-NAT fixture contract without claiming recapture.
 
@@ -236,6 +264,14 @@ Follow-up test review found missing OTel/summary index-visibility waits and an
 insufficient total-edge assertion. Bounded read-only waits and an exact edge
 count were added, and the reviewer confirmed the corrected summary base-search
 syntax. These test corrections do not turn a failed native run into acceptance.
+The reviewer independently verified the successful four-case and responder-only
+DNAT evidence, including source/archive hashes, cap and boundary behavior.
+A real-summary probe disproved the proposed sub-millisecond native-earliest
+protection. Root added a graph-only pre-dispatch precision guard in `54113b7`;
+51 focused provider/time-bound/search-client tests passed, including rejected
+bounds with zero dispatch and supported bounds passed unchanged. The reviewer
+accepted that correction. Final approval awaits complete integrated validation
+and reconciled native-bound export labels/documentation.
 
 ## Integrated acceptance
 
