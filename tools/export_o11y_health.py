@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import math
 import os
@@ -23,6 +24,11 @@ import time
 from typing import Any, Callable, Iterable, Mapping
 import uuid
 
+if __package__:
+    from .o11y_transport import make_client as _verified_make_client
+else:  # invoked as `python tools/export_o11y_health.py`
+    from o11y_transport import make_client as _verified_make_client
+
 
 SCHEMA = "application_atlas.o11y_health.v1"
 SOURCETYPE = "atlas:o11y_health"
@@ -32,6 +38,7 @@ MAX_DATA_POINTS = 10_000
 MAX_METRIC_RECORDS = 63  # one completion event makes the Splunk cap 64
 MAX_INPUT_TIMESERIES = 10_000
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_HEC_LINE_BYTES = 65_535
 DEFAULT_TIMEOUT_SECONDS = 30
 
 SERVICE_DIMENSIONS = (
@@ -379,6 +386,27 @@ def collect_capture(
         )
 
     output = []
+    capture_key = {
+        "schema": SCHEMA,
+        "observer": request.observer,
+        "organization_id": request.organization_id,
+        "realm": request.realm,
+        "scope": request.scope,
+        "service_name": request.service_name,
+        "environment": request.environment,
+        "cluster": request.cluster,
+        "kubernetes_namespace": request.kubernetes_namespace,
+        "apm_mms_id": request.apm_mms_id,
+        "service_namespace": request.service_namespace,
+        "window": [request.start, request.end],
+    }
+    capture_id = str(
+        uuid.uuid5(
+            uuid.NAMESPACE_URL,
+            "application-atlas:o11y-health:v1:"
+            + json.dumps(capture_key, sort_keys=True, separators=(",", ":")),
+        )
+    )
     for entry in sorted(
         latest.values(),
         key=lambda row: (row["spec"].label, row["dimensions"]["service.namespace"]),
@@ -388,7 +416,12 @@ def collect_capture(
         event = {
             "schema": SCHEMA,
             "event_type": "metric",
-            "capture_id": "",  # filled after capture identity is allocated
+            "capture_id": capture_id,
+            "record_id": _health_record_id(
+                capture_id,
+                spec.label,
+                dims,
+            ),
             "captured_at": captured,
             "capture_window_start": request.start,
             "capture_window_end": request.end,
@@ -429,14 +462,12 @@ def collect_capture(
 
     if len(output) > MAX_METRIC_RECORDS:
         raise ValueError("SignalFlow result exceeded the metric record cap")
-    capture_id = str(uuid.uuid4())
-    for event in output:
-        event["capture_id"] = capture_id
     output.append(
         {
             "schema": SCHEMA,
             "event_type": "export_completion",
             "capture_id": capture_id,
+            "record_id": _health_record_id(capture_id, "export_completion"),
             "captured_at": captured,
             "capture_window_start": request.start,
             "capture_window_end": request.end,
@@ -457,6 +488,21 @@ def collect_capture(
         }
     )
     return output
+
+
+def _health_record_id(
+    capture_id: str,
+    label: str,
+    dimensions: Mapping[str, str] | None = None,
+) -> str:
+    """Return stable semantic identity, independent of retry and index location."""
+    identity = {
+        "capture_id": capture_id,
+        "label": label,
+        "dimensions": dict(sorted((dimensions or {}).items())),
+    }
+    canonical = json.dumps(identity, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _resolution_seconds(request: ExportRequest) -> int:
@@ -486,7 +532,10 @@ def render_hec_ndjson(
             "sourcetype": SOURCETYPE,
             "event": event,
         }
-        lines.append(json.dumps(envelope, ensure_ascii=False, separators=(",", ":")))
+        line = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
+        if len(line.encode("utf-8")) > MAX_HEC_LINE_BYTES:
+            raise ValueError("one HEC event exceeds the app's record-size boundary")
+        lines.append(line)
     rendered = "\n".join(lines) + "\n"
     if len(rendered.encode("utf-8")) > MAX_OUTPUT_BYTES:
         raise ValueError("completed export exceeds the output byte cap")
@@ -530,15 +579,14 @@ def publish_atomic(path: Path, rendered: str) -> None:
             os.unlink(temporary_name)
 
 
-def _make_sdk_client(token: str, realm: str, timeout_seconds: int) -> Any:
-    try:
-        from signalfx.signalflow import SignalFlowClient
-    except ImportError as error:  # pragma: no cover - depends on operator install
-        raise RuntimeError(
-            f"install signalflow-client-python=={SDK_VERSION}"
-        ) from error
-    endpoint = f"https://stream.{realm}.observability.splunkcloud.com"
-    return SignalFlowClient(token=token, endpoint=endpoint, timeout=timeout_seconds)
+def _make_sdk_client(
+    token: str,
+    realm: str,
+    timeout_seconds: int,
+    ca_bundle: str | None = None,
+) -> Any:
+    selected_ca = ca_bundle or os.environ.get("ATLAS_O11Y_CA_BUNDLE") or None
+    return _verified_make_client(token, realm, timeout_seconds, selected_ca)
 
 
 class _EndOfChannelTracker:
@@ -590,13 +638,19 @@ def run_export(
     output: Path,
     *,
     token: str,
-    client_factory: Callable[[str, str, int], Any] = _make_sdk_client,
+    client_factory: Callable[..., Any] = _make_sdk_client,
     captured_at: int | None = None,
+    ca_bundle: str | None = None,
 ) -> list[dict[str, Any]]:
     request.validate()
     if not token:
         raise ValueError("SPLUNK_OBSERVABILITY_TOKEN is required")
-    client = client_factory(token, request.realm, request.timeout_seconds)
+    if client_factory is _make_sdk_client:
+        client = client_factory(
+            token, request.realm, request.timeout_seconds, ca_bundle
+        )
+    else:
+        client = client_factory(token, request.realm, request.timeout_seconds)
     computation: Any = None
     end_tracker = _EndOfChannelTracker()
     timed_out = threading.Event()
@@ -681,6 +735,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", required=True, type=_parse_time)
     parser.add_argument("--end", required=True, type=_parse_time)
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--ca-bundle", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     request = ExportRequest(
@@ -700,7 +755,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     token = os.environ.get("SPLUNK_OBSERVABILITY_TOKEN", "")
     try:
-        events = run_export(request, args.output, token=token)
+        events = run_export(
+            request,
+            args.output,
+            token=token,
+            ca_bundle=str(args.ca_bundle) if args.ca_bundle else None,
+        )
     except Exception:
         # SDK errors can include request/transport context. Keep output generic
         # so credentials and source payloads are never copied to a terminal log.

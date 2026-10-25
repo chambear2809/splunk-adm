@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   loadO11yHealthEvidence,
+  observabilityOrigin,
   type O11yHealthObservation,
   type O11yHealthResult,
 } from "./data/o11yHealth";
@@ -26,11 +27,6 @@ function metricTitle(record: O11yHealthObservation): string {
     default:
       return "Unknown metric";
   }
-}
-
-function productUrl(realm: string): string | undefined {
-  if (!/^[a-z][a-z0-9]{0,7}$/.test(realm)) return undefined;
-  return `https://app.${realm}.observability.splunkcloud.com/`;
 }
 
 function MetricRows({ records }: { records: O11yHealthObservation[] }) {
@@ -167,7 +163,9 @@ export function O11yHealthPanel({
   const completion = result?.records.find(
     (record) => record.kind === "export_completion",
   );
-  const url = productUrl(completion?.realm ?? "");
+  const url = result
+    ? observabilityOrigin(completion?.realm ?? "", result.observabilityOrigin)
+    : undefined;
   return (
     <section
       className="o11y-health inspector-body"
@@ -212,6 +210,12 @@ export function O11yHealthPanel({
           Missing data is not zero or healthy.
         </p>
       )}
+      {result?.replayDuplicates ? (
+        <p role="status">
+          Ignored {result.replayDuplicates} exact repeated health record
+          {result.replayDuplicates === 1 ? "" : "s"} from HEC replay.
+        </p>
+      ) : null}
       {completion && (
         <div>
           <p role="status">
@@ -223,7 +227,9 @@ export function O11yHealthPanel({
           {url && (
             <p>
               <a href={url} target="_blank" rel="noreferrer">
-                Open Observability Cloud realm {completion.realm}
+                {result?.observabilityOrigin
+                  ? "Open configured Observability Cloud origin"
+                  : `Open Observability Cloud realm ${completion.realm}`}
               </a>
             </p>
           )}

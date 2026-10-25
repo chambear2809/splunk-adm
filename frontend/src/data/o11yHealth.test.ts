@@ -4,6 +4,7 @@ import {
   buildO11yHealthSearch,
   loadO11yHealthEvidence,
   normalizeO11yHealthEvidence,
+  observabilityOrigin,
 } from "./o11yHealth";
 import type { ServiceHealthSelection } from "./evidence";
 import type {
@@ -87,6 +88,22 @@ function withEventChanges(
 }
 
 describe("Observability Cloud health evidence", () => {
+  it("builds navigation only from a valid realm or configured HTTPS origin", () => {
+    expect(observabilityOrigin("us0")).toBe(
+      "https://app.us0.observability.splunkcloud.com/",
+    );
+    expect(observabilityOrigin("us0", "https://o11y.example.test")).toBe(
+      "https://o11y.example.test",
+    );
+    expect(observabilityOrigin("us-east-1")).toBeUndefined();
+    expect(
+      observabilityOrigin("us0", "https://o11y.example.test/path"),
+    ).toBeUndefined();
+    expect(
+      observabilityOrigin("us0", "http://o11y.example.test"),
+    ).toBeUndefined();
+  });
+
   it("builds an exact, projected and bounded search for one verified org and realm", () => {
     const search = buildO11yHealthSearch(config, selection);
     expect(search).toContain('index=atlas_o11y sourcetype="atlas:o11y_health"');
@@ -143,11 +160,44 @@ describe("Observability Cloud health evidence", () => {
       "payments",
     );
     expect(result.records[0].apmMmsId).toBe("checkout_service_mms_v1");
+    expect(result.records[0].recordId).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.replayDuplicates).toBe(0);
     expect(result.records[3].apmMmsId).toBeUndefined();
     expect(result.records[3].sourceDimensions?.sfMmsId).toBeUndefined();
     expect(result.records[0].limitations.join(" ")).toMatch(
       /do not establish a network cause/i,
     );
+  });
+
+  it("accepts exact metric and completion replays but rejects conflicting replays", () => {
+    const original = indexedRows();
+    const exactDuplicates = [
+      ...original,
+      { ...original[0], event_fingerprint: "f".repeat(64) },
+      { ...original.at(-1)!, event_fingerprint: "e".repeat(64) },
+    ];
+    const replay = normalizeO11yHealthEvidence(
+      exactDuplicates,
+      selection,
+      config,
+    );
+    expect(replay).toMatchObject({ rejected: 0, replayDuplicates: 2 });
+    expect(replay.records).toHaveLength(6);
+
+    const conflict = {
+      ...original[0],
+      _raw: JSON.stringify({
+        ...(JSON.parse(String(original[0]._raw)) as Record<string, unknown>),
+        value: 999,
+      }),
+      event_fingerprint: "d".repeat(64),
+    };
+    const conflicting = normalizeO11yHealthEvidence(
+      [...original, conflict],
+      selection,
+      config,
+    );
+    expect(conflicting).toMatchObject({ records: [], rejected: 1 });
   });
 
   it("uses the numeric epoch projection when Splunk returns ISO `_time`", () => {
@@ -272,6 +322,57 @@ describe("Observability Cloud health evidence", () => {
     expect(
       normalizeO11yHealthEvidence(indexedRows(), qualified, config).rejected,
     ).toBe(0);
+  });
+
+  it("uses only the operator-configured HTTPS origin for navigation", async () => {
+    const rows = indexedRows();
+    const supplemental: SupplementalSourceConfiguration = {
+      ...config,
+      mappings: [
+        {
+          ...config.mappings[0],
+          observability_origin: "https://observability.example.test",
+        },
+      ],
+    };
+    const configuration: EvidenceConfiguration = {
+      fingerprint: selection.configurationFingerprint,
+      trafficContract: 1,
+      summaryIndexes: ["adm_summary"],
+      mappings: supplemental.mappings,
+      identities: [],
+      identityAvailable: true,
+      dns: [],
+      maxAgeSeconds: 3600,
+      supplemental: [supplemental],
+    };
+    const client: SearchClient = {
+      search: vi.fn(async () => ({
+        rows: [
+          ...rows.map((row) => ({ ...row, kind: "supplemental_record" })),
+          {
+            kind: "supplemental_completion",
+            schema_version: "1",
+            input_count: String(rows.length),
+            returned_count: String(rows.length),
+            input_capped: "0",
+            oversized: "0",
+          },
+        ],
+        errors: [],
+        warnings: [],
+      })),
+    };
+    const result = await loadO11yHealthEvidence(
+      client,
+      selection,
+      new AbortController().signal,
+      { read: async () => configuration },
+    );
+    expect(result.state).toBe("complete");
+    expect(result.observabilityOrigin).toBe(
+      "https://observability.example.test",
+    );
   });
 
   it("rejects unqualified or multiply mapped Observability Cloud authorities", () => {

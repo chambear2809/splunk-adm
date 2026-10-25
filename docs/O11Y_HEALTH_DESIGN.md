@@ -25,6 +25,16 @@ private SDK channel members is tied to the pinned 1.3.9 source and is covered
 by fake-SDK tests; update those tests and verify the new SDK before changing
 the pin.
 
+The client factory uses the SDK's SSE transport through
+`tools/o11y_transport.py`, not its default WebSocket transport. The adapter
+checks the installed package version, bounds the SignalFlow program and
+response, and limits the whole request and one-shot stream. It verifies the
+TLS certificate and hostname, uses the fixed realm endpoint, disables
+redirects and ambient proxies, and does not reconnect a capture. `--ca-bundle`
+or `ATLAS_O11Y_CA_BUNDLE` can add an operator-managed CA without disabling
+verification. A transport error or incomplete stream never publishes a
+capture.
+
 Only `SPLUNK_OBSERVABILITY_TOKEN` is read for authentication. It must be
 injected by the operator's secret manager or protected process environment;
 do not pass it as a command argument, place it in Splunk config, or commit it.
@@ -127,9 +137,67 @@ dimension set, the exact units and timestamps, the collector's runtime
 dimensions, the index and retention, and a known service against source UI
 evidence.
 
+## Detector-event source
+
+The separate `o11y_detector_events` source calls the official v2
+`GET /detector/{id}/events` route on
+`https://api.<realm>.observability.splunkcloud.com` with `X-SF-TOKEN`. The
+current API reference specifies inclusive `from` and `to` values in Unix
+milliseconds, nonnegative `offset`, and `limit` (default 50). Its retrieve
+guide describes offset/limit pagination; the detector API reference caps one
+response at 10,000 events. Atlas requests at most 1,000 events per page,
+accepts at most 16 configured detector IDs, one interval of at most 24 hours,
+and 10,000 events per capture total. The exporter limits individual responses
+to 16 MiB, a full multi-page run to five minutes, the final capture to 64 MiB,
+and each record to 65,535 bytes plus newline.
+
+The event API returns observations, while incidents are retrieved separately
+and represent collections of events. Detector events include trigger and
+clear observations; the source stores each event, the explicitly configured
+detector list, and an exact observed-row count in its completion row. It does
+not fetch current incident state or reconstruct lifecycle intervals.
+Organization, realm, routing scope, cluster and selected detector IDs are
+configuration context only. This source makes no service or MMS association.
+The API reference permits the `read_only` role for event retrieval; use an
+organization API access token assigned that role and store it in
+`SPLUNK_OBSERVABILITY_TOKEN`. Do not use an ingest token.
+
+Splunk documents 12-month retention for Observability Cloud events. The
+operator configures retention for the destination Splunk index separately.
+See [`o11y-detector-events.md`](operators/o11y-detector-events.md) for the
+operator procedure and source references.
+
+## Durable HEC delivery
+
+Both exporters produce structured HEC event envelopes, but neither sets an
+index or sends the event. A separate scheduled process can enqueue the
+finalized JSONL capture through `tools.hec_delivery` and deliver from its
+private spool. Source IDs namespace capture IDs and snapshot IDs, allowing the
+sender to serve multiple Atlas producers without changing their event data.
+Queueing is at-least-once; exhausted capacity, endpoint drift, transport
+failure and corrupt progress preserve queued source rows.
+
+The spool defaults to 1 GiB, 10,000 pending captures, and 1,000,000 pending
+records. A capture can contain at most 10,000 rows and 64 MiB; a JSONL row is
+at most 65,535 bytes plus newline and a POST batch at most 256 KiB. Each send
+invocation handles at most 100 captures or 300 seconds. Spool paths must be
+owner-private and outside every Git checkout. The sender verifies TLS, refuses
+redirects and ambient proxies, bounds DNS and full request time, and binds
+partial progress to the configured endpoint. A corrupt checkpoint checksum
+replays conservatively from the first row. `status` reports queue counts, HTTP
+acceptance and indexer acknowledgment separately; only a search confirms
+indexed readback.
+
+The standard Enterprise route is `/services/collector/event`. An explicitly
+configured structured `/services/collector` path is preserved for Splunk Edge
+Ingest, with HEC acknowledgment disabled. If an exporter omits the HEC `index`
+property, route events through the token's dedicated default index or explicit
+index routing.
+
 ## Source references and version basis
 
 - The official [`signalflow-client-python` repository](https://github.com/signalfx/signalflow-client-python) documents the standalone client import, endpoint, token and stream API. The implementation pin is version `1.3.9`; that exact package source was inspected for the historical `execute` arguments, message end state, and metadata behavior. The old [`signalfx-python` repository](https://github.com/signalfx/signalfx-python) says its SignalFlow code migrated and is deprecated.
 - Splunk's [Monitoring MetricSets reference](https://help.splunk.com/en/splunk-observability-cloud/monitor-application-performance/analyze-services-with-span-tags-and-metricsets/learn-about-monitoring-metricsets) documents `service.request`, histogram count and percentile operations, available default dimensions, and custom MMS dimensions.
 - Splunk's [histogram reference](https://help.splunk.com/en/splunk-observability-cloud/manage-data/metrics-metadata-and-events/metrics-events-and-metadata/histogram-metrics) documents histogram statistics. The prior non-histogram `service.request.duration.ns.p90` name is the basis for the `ns` unit in this versioned OTel APM contract; qualify the tenant's produced MMS before enabling it.
 - Splunk's [SignalFlow functions reference](https://dev.splunk.com/observability/docs/signalflow/functions/) documents the SignalFlow expression model; aggregation methods group by named dimensions. The exact tenancy-specific dimensions and units still require external qualification.
+- Splunk's [detector events API reference](https://dev.splunk.com/observability/reference/api/detectors/latest), [retrieve data guide](https://dev.splunk.com/observability/docs/apibasics/retrieve_data_basics/), [event retention guide](https://help.splunk.com/en/splunk-observability-cloud/manage-data/metrics-metadata-and-events/metrics-events-and-metadata/events), and [custom role capabilities](https://help.splunk.com/en/splunk-observability-cloud/administer/user-and-team-management/manage-roles/custom-roles) ground the detector route, pagination, event semantics, retention and read access.

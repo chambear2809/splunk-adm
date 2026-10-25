@@ -8,6 +8,7 @@ import stat
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from tools import export_o11y_health as export
 
@@ -139,6 +140,22 @@ class FakeClient:
 
 
 class O11yExporterTest(unittest.TestCase):
+    def test_sdk_factory_uses_optional_task_ca_bundle(self):
+        client = object()
+        with (
+            patch.object(export, "_verified_make_client", return_value=client) as make,
+            patch.dict("os.environ", {"ATLAS_O11Y_CA_BUNDLE": "/tmp/task-ca.pem"}),
+        ):
+            self.assertIs(export._make_sdk_client("test-token", "us0", 30), client)
+        make.assert_called_once_with("test-token", "us0", 30, "/tmp/task-ca.pem")
+
+        with (
+            patch.object(export, "_verified_make_client", return_value=client) as make,
+            patch.dict("os.environ", {"ATLAS_O11Y_CA_BUNDLE": "/tmp/task-ca.pem"}),
+        ):
+            export._make_sdk_client("test-token", "us0", 30, "/tmp/explicit-ca.pem")
+        make.assert_called_once_with("test-token", "us0", 30, "/tmp/explicit-ca.pem")
+
     def test_request_program_projects_exact_identity_and_known_metric_contract(self):
         query = export.build_signalflow_program(request(), 10)
         self.assertIn('histogram("service.request"', query)
@@ -178,6 +195,15 @@ class O11yExporterTest(unittest.TestCase):
         self.assertEqual(len(metrics), 5)
         self.assertEqual(completion["expected_record_count"], 5)
         self.assertEqual(completion["signals_with_data"], 5)
+        self.assertTrue(
+            all(
+                len(item["record_id"]) == 64
+                and all(
+                    character in "0123456789abcdef" for character in item["record_id"]
+                )
+                for item in result
+            )
+        )
         by_label = {item["signal_label"]: item for item in metrics}
         self.assertEqual(by_label["request_count"]["value"], 18)
         self.assertEqual(by_label["request_count"]["unit"], "count")
@@ -194,6 +220,24 @@ class O11yExporterTest(unittest.TestCase):
         self.assertEqual(completion["sf_mms_id"], request().apm_mms_id)
         self.assertEqual(
             by_label["request_count"]["metric_source_basis"], "sf_originatingMetric"
+        )
+
+    def test_retrying_same_query_and_window_keeps_capture_and_record_ids_stable(self):
+        first = export.collect_capture(
+            request(),
+            FakeComputation(),
+            captured_at=1_792_764_000,
+            normal_end=lambda: True,
+        )
+        second = export.collect_capture(
+            request(),
+            FakeComputation(),
+            captured_at=1_792_764_000,
+            normal_end=lambda: True,
+        )
+        self.assertEqual(
+            [(row["capture_id"], row["record_id"]) for row in first],
+            [(row["capture_id"], row["record_id"]) for row in second],
         )
 
     def test_records_actual_coarsened_resolution_and_rejects_missing_resolution(self):
@@ -313,6 +357,21 @@ class O11yExporterTest(unittest.TestCase):
             self.assertEqual(kwargs["start"], int(request().start * 1000))
             self.assertEqual(kwargs["stop"], int(request().end * 1000))
             self.assertTrue(kwargs["immediate"])
+            oversized_events = [
+                {
+                    "capture_id": "capture-size-test",
+                    "captured_at": 1_792_764_000,
+                    "event_type": "metric",
+                    "padding": "x" * 65_500,
+                },
+                {
+                    "capture_id": "capture-size-test",
+                    "captured_at": 1_792_764_000,
+                    "event_type": "export_completion",
+                },
+            ]
+            with self.assertRaisesRegex(ValueError, "record-size boundary"):
+                export.render_hec_ndjson(request(), oversized_events)
             with self.assertRaises(FileExistsError):
                 export.publish_atomic(target, "replacement\n")
             self.assertEqual(target.read_text(encoding="utf-8").splitlines(), lines)

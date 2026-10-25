@@ -1,5 +1,6 @@
 import type { Row } from "../rows";
 import {
+  configuredHttpsOrigin,
   evidenceConfigClient,
   type EvidenceConfigClient,
   type SupplementalSourceConfiguration,
@@ -24,6 +25,22 @@ export const O11Y_HEALTH_SOURCETYPE = "atlas:o11y_health";
 export const O11Y_HEALTH_RECORD_LIMIT = EVIDENCE_LIMITS.records;
 export const O11Y_HEALTH_INPUT_LIMIT = EVIDENCE_LIMITS.input;
 export const O11Y_HEALTH_RECORD_BYTES = EVIDENCE_LIMITS.recordBytes;
+
+/** Return a verified configured origin or the realm's Observability app root. */
+export function observabilityOrigin(
+  realm: string,
+  configured?: string,
+): string | undefined {
+  if (configured !== undefined) {
+    try {
+      return configuredHttpsOrigin(configured);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!/^[a-z][a-z0-9]{0,7}$/.test(realm)) return undefined;
+  return `https://app.${realm}.observability.splunkcloud.com/`;
+}
 
 const OBSERVER_KIND = "o11y_export";
 const COVERAGE = [
@@ -93,6 +110,7 @@ export interface O11yHealthObservation {
   apmMmsId?: string;
   index: string;
   eventFingerprint: string;
+  recordId: string;
   eventTime: number;
   indexedTime: number;
   captureId: string;
@@ -134,12 +152,15 @@ export interface O11yHealthResult {
   inspectedWindow: EvidenceWindow;
   configurationFingerprint: string;
   configurationChanged: boolean;
+  /** Configured authority origin; never inferred from event content. */
+  observabilityOrigin?: string;
   state: "not_selected" | "staged" | "complete" | "unavailable";
   schemaQualified: boolean;
   inputCount: number;
   inputCapped: boolean;
   outputCapped: boolean;
   rejected: number;
+  replayDuplicates: number;
   oversized: number;
   records: O11yHealthObservation[];
   coverage: string[];
@@ -197,6 +218,7 @@ function sourceAuthority(
   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(apmMmsId))
     throw new Error("The mapped APM MMS ID is invalid.");
   routingScope(mapping.scope);
+  const mappedOrigin = observabilityOrigin(realm, mapping.observability_origin);
   if (
     config.authorities.filter((authority) => authority === mapping.observer)
       .length !== 1 ||
@@ -214,6 +236,7 @@ function sourceAuthority(
     organizationId: mapping.organization_id!,
     realm,
     apmMmsId,
+    ...(mappedOrigin ? { observabilityOrigin: mappedOrigin } : {}),
   };
 }
 
@@ -241,6 +264,7 @@ const PROJECTED_FIELDS = [
   "schema",
   "event_type",
   "capture_id",
+  "record_id",
   "captured_at",
   "capture_window_start",
   "capture_window_end",
@@ -336,6 +360,20 @@ export function buildO11yHealthSearch(
 
 function first(value: unknown): unknown {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function canonicalJson(value: unknown): string {
+  const canonicalize = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(canonicalize);
+    if (isObject(item))
+      return Object.fromEntries(
+        Object.keys(item)
+          .sort()
+          .map((key) => [key, canonicalize(item[key])]),
+      );
+    return item;
+  };
+  return JSON.stringify(canonicalize(value));
 }
 
 function text(value: unknown, max = 1024): string | undefined {
@@ -474,22 +512,31 @@ export function normalizeO11yHealthEvidence(
   rows: readonly Row[],
   input: ServiceHealthSelection,
   config: SupplementalSourceConfiguration,
-): { records: O11yHealthObservation[]; rejected: number } {
+): {
+  records: O11yHealthObservation[];
+  rejected: number;
+  replayDuplicates: number;
+} {
   const selection = validateServiceHealthSelection(input);
   const authority = sourceAuthority(config, selection);
   if (rows.length > O11Y_HEALTH_INPUT_LIMIT)
     throw new Error(
       "Observability Cloud normalizer input exceeds its row cap.",
     );
-  if (rows.length === 0) return { records: [], rejected: 0 };
+  if (rows.length === 0)
+    return { records: [], rejected: 0, replayDuplicates: 0 };
 
   let rejected = 0;
+  let replayDuplicates = 0;
   let completionCount = 0;
   let expectedRecords: number | undefined;
   let signalsWithData: number | undefined;
   let captureId: string | undefined;
   let capturedAt: number | undefined;
-  const identities = new Set<string>();
+  const recordsById = new Map<
+    string,
+    { canonical: string; eventTime: number; host: string }
+  >();
   const metrics: O11yHealthObservation[] = [];
   let completion: O11yHealthObservation | undefined;
   for (const row of rows) {
@@ -520,7 +567,8 @@ export function normalizeO11yHealthEvidence(
       continue;
     }
     const id = text(raw.capture_id, 128);
-    if (!id) {
+    const recordId = text(raw.record_id, 64);
+    if (!id || !recordId || !/^[a-f0-9]{64}$/.test(recordId)) {
       rejected++;
       continue;
     }
@@ -534,12 +582,25 @@ export function normalizeO11yHealthEvidence(
       continue;
     }
     capturedAt = times.capturedAt;
-    const key = `${index}:${eventFingerprint}`;
-    if (identities.has(key)) {
+    const canonical = canonicalJson(raw);
+    const previousRecord = recordsById.get(recordId);
+    if (previousRecord) {
+      if (
+        previousRecord.canonical === canonical &&
+        previousRecord.eventTime === times.eventTime &&
+        previousRecord.host === host
+      ) {
+        replayDuplicates++;
+        continue;
+      }
       rejected++;
       continue;
     }
-    identities.add(key);
+    recordsById.set(recordId, {
+      canonical,
+      eventTime: times.eventTime,
+      host,
+    });
     const common = {
       schemaVersion: 1 as const,
       source: "o11y_health" as const,
@@ -550,6 +611,7 @@ export function normalizeO11yHealthEvidence(
       realm: authority.realm,
       index,
       eventFingerprint,
+      recordId,
       eventTime: times.eventTime,
       indexedTime: times.indexedTime,
       captureId: id,
@@ -665,7 +727,11 @@ export function normalizeO11yHealthEvidence(
     captureId === undefined ||
     !completion
   )
-    return { records: [], rejected: Math.max(1, rejected) };
+    return {
+      records: [],
+      rejected: Math.max(1, rejected),
+      replayDuplicates,
+    };
   const observedLabels = new Set(metrics.map((record) => record.signalLabel));
   const serviceNamespaces = new Set(
     metrics.map((record) => record.sourceDimensions?.serviceNamespace),
@@ -675,8 +741,8 @@ export function normalizeO11yHealthEvidence(
     serviceNamespaces.size > 1 ||
     serviceNamespaces.has(undefined)
   )
-    return { records: [], rejected: 1 };
-  return { records: [...metrics, completion], rejected: 0 };
+    return { records: [], rejected: 1, replayDuplicates };
+  return { records: [...metrics, completion], rejected: 0, replayDuplicates };
 }
 
 function makeBase(
@@ -702,6 +768,7 @@ function makeBase(
     inputCapped: false,
     outputCapped: false,
     rejected: 0,
+    replayDuplicates: 0,
     oversized: 0,
     records: [],
     coverage: [...COVERAGE],
@@ -739,6 +806,10 @@ export async function loadO11yHealthEvidence(
   let stage: NonNullable<O11yHealthResult["errorCode"]> = "configuration";
   try {
     const search = buildO11yHealthSearch(source, selection);
+    base.observabilityOrigin = sourceAuthority(
+      source,
+      selection,
+    ).observabilityOrigin;
     const now = Date.now() / 1000;
     const searchKey = await fingerprint([
       config.fingerprint,
@@ -793,6 +864,7 @@ export async function loadO11yHealthEvidence(
     base.inputCapped = envelope.inputCapped;
     base.outputCapped = envelope.outputCapped;
     base.rejected = normalized.rejected;
+    base.replayDuplicates = normalized.replayDuplicates;
     base.oversized = envelope.oversized;
     base.records = normalized.records;
   } catch {
