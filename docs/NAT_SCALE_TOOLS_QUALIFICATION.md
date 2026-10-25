@@ -275,5 +275,36 @@ and reconciled native-bound export labels/documentation.
 
 ## Integrated acceptance
 
-Pending integration and final package validation. Historical qualification records remain bound to
-their original sources and packages; they are not evidence for this candidate.
+The first frozen integrated source `93bbc4c` passed lint, formatting, packaging,
+release verification, 847 frontend tests, 816 Python tests, 126 distributed
+contract tests and 111 browser tests. Its retained archive SHA-256 is
+`4d103021e05b5f091c8ee7002fe098cabd34a5830ac81ad332f0bd1cb8c8e0d2`.
+The dedicated integration lab installed that exact archive; the installed
+macro SHA-256 matched source `29197a19727a0ce497b6adb8aadc3fca0706bb820037c9a5d0834c7dc6bba04b`.
+Native server metadata reports Splunk Enterprise 10.6.0.5, build `86587d4e3b27`.
+
+Its full Splunk run completed 438 discovered tests in 2601.545 seconds:
+428 passed, eight skipped, one import error and one helper failure. This was a
+failed command and is retained as such. The external evidence wrapper omitted
+the repository root from Python's import path, so AppDynamics could not import
+`tools`; the standard module invocation supplies that root. The NAT helper's
+stdout failed strict JSON decoding; the exact captured Splunk rows passed three
+fresh parser replays. The helper now silences Vite logging while retaining
+nonzero/stderr failures; no output-line filtering or assertion weakening was
+added. Both affected modules require final-package reruns.
+
+The eight skips were three opt-in pruning cases, the separately controlled
+migration rehearsal, two unavailable distributed-SHC cases, verified HEC TLS
+without its CA bundle, and a real-release rollback without a distinct-version
+baseline archive. The retained baseline app is also version 0.5.0 and cannot
+satisfy that distinct-release condition.
+
+Independent review subsequently found that a portable snapshot could supply
+NAT bounds unrelated to its displayed window. Correction `5d87855` requires
+each native bound's floor to match its displayed epoch bound, including empty
+and truncation-only snapshots, while retaining valid fractional carriers and
+legacy behavior. The reviewer accepted the correction and its 121 focused
+graph/row tests. A rebuilt final archive, unchanged-backend proof, affected
+native NAT/AppDynamics/browser checks and nonempty-gap migration rehearsal
+remain pending. Earlier records retain their original source/package bindings.
+
