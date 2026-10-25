@@ -16,12 +16,14 @@ import os
 import re
 import ssl
 import sys
+import threading
 import time
 import uuid
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from xml.parsers import expat
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import (
@@ -55,10 +57,18 @@ SECRET_PROPERTY_RE = re.compile(
     r"(?:pass(?:word)?|secret|token|credential|authorization|api.?key|access.?key|user(?:name)?)",
     re.IGNORECASE,
 )
+CONNECTION_SECRET_RE = re.compile(
+    r"(?:^|[;,\s])(?:user(?:\s*(?:name|id)|name|_?id)?|uid|password|passwd|pwd|token|secret|"
+    r"credential|api[_-]?key)\s*[:=]\s*[^;,\s]*",
+    re.IGNORECASE,
+)
+USERINFO_RE = re.compile(r"(?:^|[/])[^/@:\s]+:[^/@\s]+@")
+URL_PREFIX_RE = re.compile(r"^(?:jdbc:)?[A-Za-z][A-Za-z0-9+.-]*://", re.IGNORECASE)
 HOST_PROPERTY_NAMES = {"HOST", "HOSTNAME", "IP", "ADDRESS", "SERVER", "ENDPOINT"}
 URL_PROPERTY_NAMES = {"URL", "URI", "CONNECTION_URL", "CONNECTION_STRING"}
 PORT_PROPERTY_NAMES = {"PORT", "SERVER_PORT"}
 TEMP_INPUT_PREFIX = ".appdynamics-"
+_NETWORK_REQUEST_SLOT = threading.Lock()
 
 
 class CollectionError(Exception):
@@ -115,11 +125,23 @@ def _tag_name(value: str) -> str:
 
 
 def _xml_root(payload: bytes, expected: str) -> ET.Element:
-    upper = payload[: min(len(payload), 4096)].upper()
-    if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
-        raise CollectionError("invalid_response")
     try:
+        # Expat honors the document encoding and invokes this before processing
+        # declarations or expanding entity references.
+        def reject_doctype(*_args: Any) -> None:
+            raise CollectionError("invalid_response")
+
+        parser = expat.ParserCreate()
+        parser.StartDoctypeDeclHandler = reject_doctype
+        parser.EntityDeclHandler = reject_doctype
+        parser.ExternalEntityRefHandler = lambda *_args: 0
+        parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+        parser.Parse(payload, True)
         root = ET.fromstring(payload)
+    except CollectionError:
+        raise
+    except expat.ExpatError as exc:
+        raise CollectionError("invalid_response") from exc
     except ET.ParseError as exc:
         raise CollectionError("invalid_response") from exc
     if _tag_name(root.tag) != expected:
@@ -243,6 +265,7 @@ class ControllerClient:
         self.limits: Limits | None = None
         self.total_bytes = 0
         self.request_attempts = 0
+        self._request_timed_out = False
 
     def _url(self, path: str) -> str:
         if not path.startswith("/controller/") or "?" in path or "#" in path:
@@ -257,46 +280,108 @@ class ControllerClient:
         body: bytes | None = None,
         bearer: str | None = None,
     ) -> bytes:
+        if self._request_timed_out:
+            raise CollectionError("transport_timeout")
         self.request_attempts += 1
         if self.request_attempts > MAX_REQUEST_ATTEMPTS:
             raise CollectionError("request_limit")
-        if self.limits is not None and self.monotonic() > self.limits.deadline:
-            raise CollectionError("collection_timeout")
+        remaining: float | None = None
+        if self.limits is not None:
+            remaining = self.limits.deadline - self.monotonic()
+            if remaining <= 0:
+                raise CollectionError("collection_timeout")
+        timeout = (
+            float(REQUEST_TIMEOUT_SECONDS)
+            if remaining is None
+            else min(float(REQUEST_TIMEOUT_SECONDS), remaining)
+        )
+        timeout_error = (
+            "collection_timeout"
+            if remaining is not None and remaining <= REQUEST_TIMEOUT_SECONDS
+            else "transport_timeout"
+        )
         headers = {"Accept": "application/json" if body else "application/xml"}
         if body is not None:
             headers["Content-Type"] = "application/x-www-form-urlencoded"
         if bearer:
             headers["Authorization"] = f"Bearer {bearer}"
         request = Request(self._url(path), data=body, headers=headers, method=method)
-        try:
-            with self.opener.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                if response.status != 200:
-                    raise CollectionError("http_status")
-                chunks: list[bytes] = []
-                response_bytes = 0
-                while True:
-                    if (
-                        self.limits is not None
-                        and self.monotonic() > self.limits.deadline
-                    ):
-                        raise CollectionError("collection_timeout")
-                    chunk = response.read(
-                        min(64 * 1024, MAX_RESPONSE_BYTES + 1 - response_bytes)
+        if not _NETWORK_REQUEST_SLOT.acquire(blocking=False):
+            raise CollectionError("request_in_progress")
+        completed = threading.Event()
+        result: list[bytes | CollectionError] = []
+        response_holder: list[Any] = []
+
+        def perform_request() -> None:
+            try:
+                with self.opener.open(request, timeout=timeout) as response:
+                    response_holder.append(response)
+                    if response.status != 200:
+                        raise CollectionError("http_status")
+                    chunks: list[bytes] = []
+                    response_bytes = 0
+                    while True:
+                        if (
+                            self.limits is not None
+                            and self.monotonic() >= self.limits.deadline
+                        ):
+                            raise CollectionError("collection_timeout")
+                        chunk = response.read(
+                            min(64 * 1024, MAX_RESPONSE_BYTES + 1 - response_bytes)
+                        )
+                        if not chunk:
+                            break
+                        chunks.append(chunk)
+                        response_bytes += len(chunk)
+                        if response_bytes > MAX_RESPONSE_BYTES:
+                            raise CollectionError("response_size_limit")
+                result.append(b"".join(chunks))
+            except HTTPError as exc:
+                result.append(
+                    CollectionError(
+                        "redirect_rejected" if 300 <= exc.code < 400 else "http_status",
+                        status=exc.code,
                     )
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                    response_bytes += len(chunk)
-                    if response_bytes > MAX_RESPONSE_BYTES:
-                        raise CollectionError("response_size_limit")
-                payload = b"".join(chunks)
-        except HTTPError as exc:
-            raise CollectionError(
-                "redirect_rejected" if 300 <= exc.code < 400 else "http_status",
-                status=exc.code,
-            ) from exc
-        except (URLError, TimeoutError, OSError) as exc:
+                )
+            except CollectionError as exc:
+                result.append(exc)
+            except (URLError, TimeoutError, OSError):
+                result.append(CollectionError("transport_error"))
+            except Exception:
+                # Do not surface transport-library exception text. It can
+                # include request details that should never reach CLI output.
+                result.append(CollectionError("transport_error"))
+            finally:
+                _NETWORK_REQUEST_SLOT.release()
+                completed.set()
+
+        # urllib's timeout is an inactivity timeout, and name resolution may
+        # block outside it. A daemon worker makes this caller bound real. Once
+        # one call times out, poison the client so stranded workers cannot
+        # accumulate through retries or later requests.
+        worker = threading.Thread(target=perform_request, daemon=True)
+        request_started = time.monotonic()
+        try:
+            worker.start()
+        except Exception as exc:
+            _NETWORK_REQUEST_SLOT.release()
             raise CollectionError("transport_error") from exc
+        wait_seconds = max(0.0, timeout - (time.monotonic() - request_started))
+        if not completed.wait(wait_seconds):
+            self._request_timed_out = True
+            for response in response_holder:
+                try:
+                    response.close()
+                except Exception:
+                    pass
+            raise CollectionError(timeout_error)
+        worker.join()
+        if not result:
+            raise CollectionError("transport_error")
+        outcome = result[0]
+        if isinstance(outcome, CollectionError):
+            raise outcome
+        payload = outcome
         if len(payload) > MAX_RESPONSE_BYTES:
             raise CollectionError("response_size_limit")
         self.total_bytes += len(payload)
@@ -331,7 +416,12 @@ class ControllerClient:
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise CollectionError("invalid_token_response") from exc
         token = token_data.get("access_token") if isinstance(token_data, dict) else None
-        if not isinstance(token, str) or not token or len(token) > 4096:
+        if (
+            not isinstance(token, str)
+            or not token
+            or len(token) > 4096
+            or not re.fullmatch(r"[A-Za-z0-9._~+/-]+=*", token)
+        ):
             raise CollectionError("invalid_token_response")
         expires_in = token_data.get("expires_in")
         if (
@@ -383,9 +473,24 @@ def _sanitize_property(name: str, value: str | None) -> str | None:
         ):
             return None
         return candidate
-    if upper_name not in URL_PROPERTY_NAMES:
-        return value
     candidate = value.strip()
+    if upper_name not in URL_PROPERTY_NAMES:
+        if URL_PREFIX_RE.match(candidate):
+            return _sanitize_url(candidate)
+        # Unrecognized properties can still contain connection credentials.
+        # Drop ambiguous strings instead of indexing values that may be secrets.
+        if (
+            "jdbc:" in candidate.lower()
+            or "://" in candidate
+            or CONNECTION_SECRET_RE.search(candidate)
+            or USERINFO_RE.search(candidate)
+        ):
+            return None
+        return value
+    return _sanitize_url(candidate)
+
+
+def _sanitize_url(candidate: str) -> str | None:
     prefix = "jdbc:" if candidate.lower().startswith("jdbc:") else ""
     parsed_value = candidate[len(prefix) :] if prefix else candidate
     try:
@@ -902,8 +1007,10 @@ def _atomic_write(path: Path, content: bytes, *, overwrite: bool) -> None:
 
 def _outside_repository(path: Path) -> Path:
     resolved = path.resolve()
-    repository = Path(__file__).resolve().parents[1]
-    if resolved == repository or repository in resolved.parents:
+    if any(
+        (parent / ".git").exists() or (parent / ".git").is_symlink()
+        for parent in (resolved, *resolved.parents)
+    ):
         raise CollectionError("output_must_be_outside_repository")
     return resolved
 
@@ -964,6 +1071,12 @@ def main(argv: list[str] | None = None) -> int:
     except OSError:
         print(
             json.dumps({"status": "failed", "error": "output_error"}), file=sys.stderr
+        )
+        return 2
+    except Exception:
+        print(
+            json.dumps({"status": "failed", "error": "collection_failed"}),
+            file=sys.stderr,
         )
         return 2
 

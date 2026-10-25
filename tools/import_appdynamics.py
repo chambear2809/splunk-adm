@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import re
 import sys
@@ -39,6 +40,7 @@ from tools.import_asset_history import (
 MAX_INPUT_BYTES = 50 * 1024 * 1024
 MAX_RECORDS = 10_000
 MAX_REPORT_BYTES = 2 * 1024 * 1024
+MAX_HEC_LINE_BYTES = 65_535
 AUTHORITY_RE = re.compile(r"^[a-z0-9][a-z0-9._:/@-]{0,254}$")
 SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$")
 HEX_DIGEST_RE = re.compile(r"^[a-f0-9]{64}$")
@@ -136,13 +138,31 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("non-finite JSON number")
+    return number
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     try:
-        size = path.stat().st_size
-        if size > MAX_INPUT_BYTES:
+        # Bound the allocation itself; a stat followed by read_bytes is subject
+        # to growth between the size check and the read.
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_INPUT_BYTES + 1)
+        if len(raw) > MAX_INPUT_BYTES:
             raise ImportErrorDetail("input_size_limit")
-        raw = path.read_bytes()
-        root = json.loads(raw, object_pairs_hook=_unique_object)
+        root = json.loads(
+            raw,
+            object_pairs_hook=_unique_object,
+            parse_constant=_reject_json_constant,
+            parse_float=_finite_json_float,
+        )
     except ImportErrorDetail:
         raise
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
@@ -169,10 +189,13 @@ def _text(value: Any, *, required: bool = True, max_length: int = 2048) -> str |
 def _number(value: Any, *, integer: bool = False, minimum: float = 0) -> float | int:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ImportErrorDetail("invalid_number")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ImportErrorDetail("invalid_number")
     if (
         value < minimum
         or value > 253_402_300_799
-        or not float(value).is_integer()
+        or isinstance(value, float)
+        and not value.is_integer()
         and integer
     ):
         raise ImportErrorDetail("invalid_number")
@@ -489,16 +512,17 @@ def _validate_bundle(
 def render_appdynamics_ndjson(records: list[dict[str, Any]]) -> str:
     lines = []
     for event in records:
-        lines.append(
-            _canonical(
-                {
-                    "time": event["snapshot_at"],
-                    "source": SOURCE,
-                    "sourcetype": SOURCETYPE,
-                    "event": event,
-                }
-            ).decode("utf-8")
+        line = _canonical(
+            {
+                "time": event["snapshot_at"],
+                "source": SOURCE,
+                "sourcetype": SOURCETYPE,
+                "event": event,
+            }
         )
+        if len(line) > MAX_HEC_LINE_BYTES:
+            raise ImportErrorDetail("record_size_limit")
+        lines.append(line.decode("utf-8"))
     rendered = "\n".join(lines) + "\n"
     if len(rendered.encode("utf-8")) > MAX_OUTPUT_BYTES:
         raise ImportErrorDetail("output_size_limit")
@@ -575,6 +599,12 @@ def _asset_history_output(manifest: dict[str, Any]) -> tuple[str, int, int]:
                 raise ImportErrorDetail("asset_history_authority_mismatch")
             _conflicts, conflict_count = find_conflicts(rows)
             text = render_asset_history_ndjson(rows)
+            if any(
+                len(line.encode("utf-8")) > MAX_HEC_LINE_BYTES
+                for line in text.split("\n")
+                if line
+            ):
+                raise ImportErrorDetail("record_size_limit")
             if len(text.encode("utf-8")) > MAX_OUTPUT_BYTES:
                 raise ImportErrorDetail("asset_history_output_size_limit")
             return text, conflict_count, len(rows)
@@ -588,8 +618,10 @@ def _asset_history_output(manifest: dict[str, Any]) -> tuple[str, int, int]:
 
 def _outside_repository(path: Path) -> Path:
     resolved = path.resolve()
-    repository = Path(__file__).resolve().parents[1]
-    if resolved == repository or repository in resolved.parents:
+    if any(
+        (parent / ".git").exists() or (parent / ".git").is_symlink()
+        for parent in (resolved, *resolved.parents)
+    ):
         raise ImportErrorDetail("output_must_be_outside_repository")
     return resolved
 
@@ -717,6 +749,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except OSError:
         print(json.dumps({"status": "failed", "error": "io_error"}), file=sys.stderr)
+        return 2
+    except Exception:
+        print(
+            json.dumps({"status": "failed", "error": "import_failed"}),
+            file=sys.stderr,
+        )
         return 2
 
 

@@ -60,7 +60,10 @@ application/tier/node/backend and 10,000-record caps. It retries only HTTP
 limit breach fails the whole snapshot. The importer rejects mismatched schema,
 authority, scope, snapshot times, record counts, fingerprints, identity
 references, IP data or backend associations. It validates the Asset History
-manifest against the same node records before writing either output.
+manifest against the same node records before writing either output. The
+importer caps accepted snapshot input at 50 MiB and rejects a record whose
+rendered HEC line exceeds 65,535 bytes, so Splunk does not silently truncate a
+large evidence record.
 
 Review the sanitized validation summary. `asset_history_conflict_count` reports
 shared-IP ambiguity; it is not a reason to merge distinct node IDs. Snapshot

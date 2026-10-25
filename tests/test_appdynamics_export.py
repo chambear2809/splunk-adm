@@ -1,23 +1,41 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import threading
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 from urllib.request import Request
+from xml.etree import ElementTree as ET
 
 from tools.export_appdynamics import (
     CollectionError,
+    ControllerClient,
+    Limits,
+    _NETWORK_REQUEST_SLOT,
+    _outside_repository as exporter_outside_repository,
+    _parse_properties,
+    _xml_root,
     collect_snapshot,
+    main as export_main,
 )
 from tools.import_appdynamics import (
     ImportErrorDetail,
+    MAX_HEC_LINE_BYTES,
+    _asset_history_output,
+    _number,
+    _outside_repository as importer_outside_repository,
+    _read_json,
     convert_snapshot,
     main as import_main,
+    render_appdynamics_ndjson,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -417,6 +435,245 @@ class AppDynamicsCollectorTests(unittest.TestCase):
             self.assertFalse(asset_output.exists())
             self.assertFalse((root / "second-report.json").exists())
             self.assertIn('"error": "output_exists"', stderr.getvalue())
+
+    def test_xml_rejects_late_and_utf16_doctypes(self) -> None:
+        late_doctype = (
+            b'<?xml version="1.0"?>'
+            + b" " * 5000
+            + b"<!DOCTYPE applications [<!ENTITY x 'expanded'>]>"
+            + b"<applications>&x;</applications>"
+        )
+        utf16_doctype = (
+            '<?xml version="1.0" encoding="UTF-16"?>'
+            + " " * 5000
+            + "<!DOCTYPE applications [<!ENTITY x 'expanded'>]>"
+            + "<applications>&x;</applications>"
+        ).encode("utf-16")
+        for payload in (late_doctype, utf16_doctype):
+            with self.subTest(encoding=payload[:2]), self.assertRaises(CollectionError):
+                _xml_root(payload, "applications")
+
+    def test_importer_rejects_nonfinite_numbers_and_json_constants(self) -> None:
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(value=value), self.assertRaises(ImportErrorDetail):
+                _number(value)
+
+        with tempfile.TemporaryDirectory(prefix="atlas-appd-test-") as directory:
+            snapshot = Path(directory) / "nonfinite.json"
+            for encoded in ('{"value":NaN}', '{"value":1e400}'):
+                snapshot.write_text(encoded, encoding="ascii")
+                with (
+                    self.subTest(encoded=encoded),
+                    self.assertRaises(ImportErrorDetail) as raised,
+                ):
+                    _read_json(snapshot)
+                self.assertEqual(raised.exception.code, "invalid_json")
+
+    def test_importer_bounds_file_read_and_hec_record_lines(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="atlas-appd-test-") as directory:
+            snapshot = Path(directory) / "oversized.json"
+            snapshot.write_bytes(b" " * 17)
+            with patch("tools.import_appdynamics.MAX_INPUT_BYTES", 16):
+                with self.assertRaises(ImportErrorDetail) as too_large:
+                    _read_json(snapshot)
+        self.assertEqual(too_large.exception.code, "input_size_limit")
+
+        with self.assertRaises(ImportErrorDetail) as appd_line:
+            render_appdynamics_ndjson(
+                [{"snapshot_at": 1, "large_value": "x" * MAX_HEC_LINE_BYTES}]
+            )
+        self.assertEqual(appd_line.exception.code, "record_size_limit")
+
+        with (
+            patch(
+                "tools.import_appdynamics.prepare",
+                return_value=([], {"authority": "appd-prod"}, 0, 0),
+            ),
+            patch("tools.import_appdynamics.find_conflicts", return_value=([], 0)),
+            patch(
+                "tools.import_appdynamics.render_asset_history_ndjson",
+                return_value="x" * (MAX_HEC_LINE_BYTES + 1),
+            ),
+        ):
+            with self.assertRaises(ImportErrorDetail) as asset_line:
+                _asset_history_output({"authority": "appd-prod", "records": []})
+        self.assertEqual(asset_line.exception.code, "record_size_limit")
+
+    def test_unknown_backend_connection_values_do_not_retain_credentials(self) -> None:
+        backend = ET.fromstring(
+            """<backend><properties>
+            <name-value><name>CUSTOM_ENDPOINT</name>
+            <value>https://url-user:url-pass@db.example/orders?token=query-secret</value>
+            </name-value>
+            <name-value><name>UNRECOGNIZED_CONNECTION</name>
+            <value>Data Source=db.example;User Id=svc;Password=connection-secret</value>
+            </name-value>
+            <name-value><name>UNKNOWN_USERINFO</name>
+            <value>Data Source=db.example;User Id=svc;Encrypt=true</value>
+            </name-value>
+            </properties></backend>"""
+        )
+        properties = _parse_properties(backend)
+        by_name = {item["name"]: item["value"] for item in properties}
+        self.assertEqual(by_name["CUSTOM_ENDPOINT"], "https://db.example/orders")
+        self.assertIsNone(by_name["UNRECOGNIZED_CONNECTION"])
+        self.assertIsNone(by_name["UNKNOWN_USERINFO"])
+        encoded = json.dumps(properties)
+        for secret in ("url-user", "url-pass", "query-secret", "connection-secret"):
+            self.assertNotIn(secret, encoded)
+
+    def test_bearer_token_rejects_header_injection_and_non_ascii(self) -> None:
+        for token in ("good\r\nInjected: yes", "tökén", "bad token"):
+
+            class TokenOpener:
+                def open(self, request: Request, timeout: float) -> Response:
+                    return Response(
+                        json.dumps({"access_token": token, "expires_in": 300}).encode(
+                            "utf-8"
+                        )
+                    )
+
+            client = ControllerClient(
+                "https://controller.example.test",
+                "reader",
+                "customer",
+                "secret",
+                opener=TokenOpener(),
+            )
+            with (
+                self.subTest(token=token),
+                self.assertRaises(CollectionError) as raised,
+            ):
+                client.authenticate()
+            self.assertEqual(raised.exception.code, "invalid_token_response")
+
+    def test_request_wall_clock_timeout_covers_headers_and_body(self) -> None:
+        class SlowHeaders:
+            def __init__(self) -> None:
+                self.release = threading.Event()
+
+            def open(self, request: Request, timeout: float) -> Response:
+                self.release.wait(2)
+                return Response(b"<applications/>")
+
+        class SlowBodyResponse(Response):
+            def __init__(self, body: bytes, release: threading.Event) -> None:
+                super().__init__(body)
+                self.release = release
+
+            def read(self, size: int = -1) -> bytes:
+                self.release.wait(2)
+                return super().read(size)
+
+        class SlowBody:
+            def __init__(self) -> None:
+                self.release = threading.Event()
+
+            def open(self, request: Request, timeout: float) -> Response:
+                return SlowBodyResponse(b"<applications/>", self.release)
+
+        for opener in (SlowHeaders(), SlowBody()):
+            client = ControllerClient(
+                "https://controller.example.test",
+                "reader",
+                "customer",
+                "secret",
+                opener=opener,
+            )
+            with patch("tools.export_appdynamics.REQUEST_TIMEOUT_SECONDS", 0.05):
+                started = time.monotonic()
+                with self.assertRaises(CollectionError) as raised:
+                    client._request("GET", "/controller/rest/applications")
+                elapsed = time.monotonic() - started
+            self.assertEqual(raised.exception.code, "transport_timeout")
+            self.assertLess(elapsed, 0.3)
+            opener.release.set()
+            deadline = time.monotonic() + 1
+            while _NETWORK_REQUEST_SLOT.locked() and time.monotonic() < deadline:
+                time.sleep(0.001)
+            self.assertFalse(_NETWORK_REQUEST_SLOT.locked())
+
+    def test_request_timeout_is_capped_by_collection_deadline(self) -> None:
+        class SlowOpener:
+            timeout: float | None = None
+
+            def __init__(self) -> None:
+                self.release = threading.Event()
+
+            def open(self, request: Request, timeout: float) -> Response:
+                self.timeout = timeout
+                self.release.wait(2)
+                return Response(b"<applications/>")
+
+        opener = SlowOpener()
+        client = ControllerClient(
+            "https://controller.example.test",
+            "reader",
+            "customer",
+            "secret",
+            opener=opener,
+        )
+        client.limits = Limits(deadline=time.monotonic() + 0.05)
+        with patch("tools.export_appdynamics.REQUEST_TIMEOUT_SECONDS", 20):
+            with self.assertRaises(CollectionError) as raised:
+                client._request("GET", "/controller/rest/applications")
+        self.assertEqual(raised.exception.code, "collection_timeout")
+        self.assertIsNotNone(opener.timeout)
+        self.assertLessEqual(opener.timeout or 1, 0.05)
+        opener.release.set()
+        deadline = time.monotonic() + 1
+        while _NETWORK_REQUEST_SLOT.locked() and time.monotonic() < deadline:
+            time.sleep(0.001)
+        self.assertFalse(_NETWORK_REQUEST_SLOT.locked())
+
+    def test_output_paths_inside_any_git_worktree_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="atlas-appd-git-") as directory:
+            checkout = Path(directory) / "sibling-worktree"
+            nested = checkout / "output"
+            nested.mkdir(parents=True)
+            (checkout / ".git").write_text("gitdir: /tmp/example", encoding="utf-8")
+            for check in (exporter_outside_repository, importer_outside_repository):
+                with (
+                    self.subTest(check=check.__module__),
+                    self.assertRaises((CollectionError, ImportErrorDetail)),
+                ):
+                    check(nested / "evidence.json")
+
+    def test_export_cli_sanitizes_unexpected_collection_errors(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="atlas-appd-test-") as directory:
+            output = Path(directory) / "snapshot.json"
+            stderr = StringIO()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "APPD_API_CLIENT_NAME": "reader",
+                        "APPD_ACCOUNT_NAME": "customer",
+                        "APPD_CLIENT_SECRET": "cli-secret-must-not-print",
+                    },
+                ),
+                patch(
+                    "tools.export_appdynamics.collect_snapshot",
+                    side_effect=ValueError("cli-secret-must-not-print malformed API"),
+                ),
+                redirect_stderr(stderr),
+            ):
+                code = export_main(
+                    [
+                        "--controller-origin",
+                        "https://controller.example.test",
+                        "--authority",
+                        "appd-prod",
+                        "--scope",
+                        "prod-east",
+                        "--output",
+                        str(output),
+                    ]
+                )
+        self.assertEqual(code, 2)
+        self.assertIn('"error": "collection_failed"', stderr.getvalue())
+        self.assertNotIn("cli-secret-must-not-print", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":

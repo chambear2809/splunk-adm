@@ -31,6 +31,11 @@ Node addresses are canonical IP literals. IPv4-mapped IPv6 is canonicalized to I
 
 Backend discovery is modeled application inventory, not a traffic log. The [default backend discovery documentation](https://help.splunk.com/en/appdynamics-saas/application-performance-monitoring/26.3.0/configure-instrumentation/backend-detection-rules/default-automatic-backend-discovery) describes backend discovery from type and properties. The collector derives endpoint candidates only from allowlisted host, URL and port properties, removes URL credentials/query/fragment, labels unresolved names without DNS lookup, and redacts secret-like property names. Positive reported tier/node IDs are called `verified_node` only when they identify exactly one node within that same complete application snapshot. Zero/missing IDs remain `application_scope_only`; positive unmatched IDs remain `unverified_reported_ids`. Neither a candidate endpoint nor a verified model association proves that a request used the backend.
 
+Credential-bearing URLs and connection strings are sanitized or dropped even
+when their property names are not on the endpoint allowlist. The importer caps
+accepted snapshot input at 50 MiB and rejects any rendered HEC event line above
+65,535 bytes rather than allowing index-time truncation.
+
 ## Search and completeness
 
 The browser search uses the configured AppDynamics index selector and verified `appd_controller` authority mappings for the selected routing scope. It scans only the configured freshness window, independent of the traffic selection's historical window. It selects the latest snapshot per Controller and fails closed on tied latest snapshots, invalid rows, mismatched record counts, duplicate IDs, conflicting copies of one fingerprint, skew mismatch, or a source scan above 10,000 rows. It focuses results to exact selected-IP node records, their application/tier ancestors and backends from those applications. The focused result is capped at 64 rows. Any input/output cap, unqualified schema, changed configuration or rejected row suppresses relationships.
