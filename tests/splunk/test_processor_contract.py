@@ -16,6 +16,8 @@ import subprocess
 import sys
 import time
 import unittest
+import uuid
+from unittest.mock import Mock, patch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -120,8 +122,21 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
                 for event in cls.health_capture
             )
         )
+        cls.health_observer = cls.health_capture[0]["event"]["observer_id"]
+        cls.health_capture_id = cls.health_capture[0]["event"]["capture_id"]
+        # HEC acceptance is not indexed-readback evidence; poll the exact capture
+        # before either bounded query can cache an incomplete result.
+        cls.wait_for_exact_count(
+            'index=atlas_o11y sourcetype="atlas:o11y_health" '
+            f'host="{cls.health_observer}" '
+            "| spath input=_raw path=capture_id output=adm_test_capture_id "
+            f'| search adm_test_capture_id="{cls.health_capture_id}" '
+            "| stats count AS count",
+            expected=6,
+        )
         cls.health_indexed_rows = cls.lab.search(
-            'index=atlas_o11y sourcetype="atlas:o11y_health" host="o11y-observer-prod" | table _raw',
+            'index=atlas_o11y sourcetype="atlas:o11y_health" '
+            f'host="{cls.health_observer}" | table _raw',
             "0",
             "2000000000",
         )
@@ -163,6 +178,26 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
         )
 
     @classmethod
+    def wait_for_exact_count(
+        cls, search: str, expected: int, timeout: float = 60
+    ) -> None:
+        deadline = time.monotonic() + timeout
+        count = 0
+        while time.monotonic() < deadline:
+            rows = cls.lab.search(search, "0", "2000000000")
+            count = int(rows[0].get("count", 0)) if rows else 0
+            if count == expected:
+                return
+            if count > expected:
+                raise AssertionError(
+                    f"expected exactly {expected} uniquely scoped health events, got {count}"
+                )
+            time.sleep(1)
+        raise AssertionError(
+            f"only {count} of {expected} uniquely scoped health events were indexed"
+        )
+
+    @classmethod
     def health_case(cls) -> tuple[dict, dict, list[dict]]:
         source = copy.deepcopy(HEALTH["events"])
         now = int(time.time())
@@ -181,6 +216,14 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
             if event.get("event_type") == "metric":
                 event["logical_timestamp"] = window["end"] - 5
             events.append(envelope)
+
+        unique_id = uuid.uuid4().hex[:12]
+        observer = f"{events[0]['event']['observer_id']}-{unique_id}"
+        capture_id = f"{events[0]['event']['capture_id']}-{unique_id}"
+        for envelope in events:
+            envelope["host"] = observer
+            envelope["event"]["observer_id"] = observer
+            envelope["event"]["capture_id"] = capture_id
 
         first_event = events[0]["event"]
         observer = first_event["observer_id"]
@@ -374,6 +417,46 @@ class ProcessorInstalledSearchTest(unittest.TestCase):
                 )
                 self.assertEqual(record["organizationId"], event["organization_id"])
                 self.assertEqual(record["realm"], event["realm"])
+
+
+class ProcessorIndexedReadbackWaitTest(unittest.TestCase):
+    """The health gate polls indexed counts and rejects duplicate capture rows."""
+
+    def test_health_capture_scope_is_unique_per_run(self):
+        first = ProcessorInstalledSearchTest.health_case()[2]
+        second = ProcessorInstalledSearchTest.health_case()[2]
+        self.assertEqual(len(first), 6)
+        self.assertNotEqual(
+            first[0]["event"]["observer_id"], second[0]["event"]["observer_id"]
+        )
+        self.assertNotEqual(
+            first[0]["event"]["capture_id"], second[0]["event"]["capture_id"]
+        )
+        self.assertTrue(
+            all(item["host"] == item["event"]["observer_id"] for item in first)
+        )
+
+    def test_waits_for_exact_indexed_health_count(self):
+        lab = Mock()
+        lab.search.side_effect = [[{"count": "4"}], [{"count": "6"}]]
+        with (
+            patch.object(ProcessorInstalledSearchTest, "lab", lab, create=True),
+            patch.object(time, "sleep"),
+        ):
+            ProcessorInstalledSearchTest.wait_for_exact_count("unique capture query", 6)
+        self.assertEqual(lab.search.call_count, 2)
+        self.assertEqual(
+            lab.search.call_args.args, ("unique capture query", "0", "2000000000")
+        )
+
+    def test_does_not_accept_more_than_the_expected_capture_count(self):
+        lab = Mock()
+        lab.search.return_value = [{"count": "7"}]
+        with (
+            patch.object(ProcessorInstalledSearchTest, "lab", lab, create=True),
+            self.assertRaisesRegex(AssertionError, "expected exactly 6"),
+        ):
+            ProcessorInstalledSearchTest.wait_for_exact_count("unique capture query", 6)
 
 
 if __name__ == "__main__":
