@@ -157,6 +157,22 @@ describe("rowsToGraph validation", () => {
     ["multivalue port", { translated_initiator_port: [35000, 35001] }],
     ["invalid port", { translated_initiator_port: 0 }],
     ["port above 65535", { translated_initiator_port: 65536 }],
+    [
+      "compressed and expanded equivalent IPv6 tuple",
+      {
+        reported_initiator_ip: "2001:DB8::1",
+        translated_initiator_ip: "2001:0db8:0:0:0:0:0:1",
+        translated_initiator_port: 51400,
+      },
+    ],
+    [
+      "case equivalent IPv6 tuple",
+      {
+        reported_initiator_ip: "2001:DB8::1",
+        translated_initiator_ip: "2001:db8::1",
+        translated_initiator_port: 51400,
+      },
+    ],
     ["fractional event time", { event_time: 1_791_373_808.5 }],
     ["fractional receipt time", { received_time: 1_791_373_809.5 }],
     ["limited broadcast IP", { translated_initiator_ip: "255.255.255.255" }],

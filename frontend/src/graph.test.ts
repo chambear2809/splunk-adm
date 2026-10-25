@@ -379,6 +379,34 @@ describe("parseGraph", () => {
     }
   });
 
+  it("accepts a real IPv6 address translation", () => {
+    const graph = clone();
+    const edge = edgeOf(graph, "communicates_with");
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "d".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "2001:db8::1",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "2001:db8::3",
+        reported_responder_port: 443,
+        translated_initiator_ip: "2001:db8::2",
+        translated_initiator_port: 51400,
+        translated_responder_ip: "2001:db8::3",
+        translated_responder_port: 443,
+      },
+    ];
+    expect(() => parseGraph(graph)).not.toThrow();
+  });
+
   it("uses exact fractional NAT bounds instead of the rounded display window", () => {
     const graph = clone();
     const edge = edgeOf(graph, "communicates_with");

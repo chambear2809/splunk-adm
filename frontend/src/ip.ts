@@ -29,6 +29,27 @@ function ipv6Words(value: string): number[] | undefined {
   return words.map((word) => Number.parseInt(word, 16));
 }
 
+/** Compare IP literals by address value, including equivalent IPv6 spellings. */
+export const sameNatIp = (left: string, right: string): boolean => {
+  const leftIsV4 = ipv4(left);
+  const rightIsV4 = ipv4(right);
+  if (leftIsV4 || rightIsV4) {
+    if (!leftIsV4 || !rightIsV4) return false;
+    const leftOctets = left.split(".");
+    const rightOctets = right.split(".");
+    return leftOctets.every(
+      (octet, index) => Number(octet) === Number(rightOctets[index]),
+    );
+  }
+  const leftWords = ipv6Words(left);
+  const rightWords = ipv6Words(right);
+  return Boolean(
+    leftWords &&
+    rightWords &&
+    leftWords.every((word, index) => word === rightWords[index]),
+  );
+};
+
 export const strictIp = (value: string): boolean =>
   typeof value === "string" &&
   value.length >= 2 &&

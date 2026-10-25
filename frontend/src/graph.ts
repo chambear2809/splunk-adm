@@ -1,5 +1,5 @@
 import { isoTime } from "./time";
-import { usableNatIp } from "./ip";
+import { sameNatIp, usableNatIp } from "./ip";
 export type NodeKind = "service" | "workload" | "endpoint" | "client";
 export type Relationship =
   | "calls"
@@ -450,9 +450,15 @@ export const validNatObservation = (v: unknown): v is NatObservation => {
   )
     return false;
   return (
-    v.reported_initiator_ip !== v.translated_initiator_ip ||
+    !sameNatIp(
+      v.reported_initiator_ip as string,
+      v.translated_initiator_ip as string,
+    ) ||
     v.reported_initiator_port !== v.translated_initiator_port ||
-    v.reported_responder_ip !== v.translated_responder_ip ||
+    !sameNatIp(
+      v.reported_responder_ip as string,
+      v.translated_responder_ip as string,
+    ) ||
     v.reported_responder_port !== v.translated_responder_port
   );
 };

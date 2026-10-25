@@ -32,6 +32,9 @@ class NatEvidenceTest(unittest.TestCase):
             "base": self.token + "-base",
             "nat": self.token + "-nat",
             "mapped": self.token + "-mapped",
+            "ipv6_compressed": self.token + "-ipv6-compressed",
+            "ipv6_case": self.token + "-ipv6-case",
+            "ipv6_changed": self.token + "-ipv6-changed",
             "time_format": self.token + "-time-format",
             "cap": self.token + "-cap",
             "multi": self.token + "-multi",
@@ -51,6 +54,9 @@ class NatEvidenceTest(unittest.TestCase):
             "base": "192.0.2.10",
             "nat": "192.0.2.11",
             "mapped": "192.0.2.23",
+            "ipv6_compressed": "192.0.2.27",
+            "ipv6_case": "192.0.2.28",
+            "ipv6_changed": "192.0.2.29",
             "time_format": "192.0.2.24",
             "cap": "192.0.2.12",
             "multi": "192.0.2.13",
@@ -111,6 +117,26 @@ class NatEvidenceTest(unittest.TestCase):
         mapped_event["NAT_InitiatorIP"] = "::ffff:192.0.2.44"
         mapped["event"] = json.dumps(mapped_event, separators=(",", ":"))
         events.append(mapped)
+        for index, (name, reported_ip, translated_ip) in enumerate(
+            (
+                (
+                    "ipv6_compressed",
+                    "2001:db8::1",
+                    "2001:0db8:0:0:0:0:0:1",
+                ),
+                ("ipv6_case", "2001:DB8::1", "2001:db8::1"),
+                ("ipv6_changed", "2001:db8::1", "2001:db8::2"),
+            ),
+            start=17,
+        ):
+            ipv6 = self.envelope(name, base_event, index, nat=True)
+            ipv6_event = json.loads(ipv6["event"])
+            ipv6_event["InitiatorIP"] = reported_ip
+            ipv6_event["NAT_InitiatorIP"] = translated_ip
+            ipv6_event["NAT_InitiatorPort"] = ipv6_event["InitiatorPort"]
+            ipv6_event["OriginalInitiatorIP"] = reported_ip
+            ipv6["event"] = json.dumps(ipv6_event, separators=(",", ":"))
+            events.append(ipv6)
         malformed_time = self.envelope("time_format", base_event, 14, nat=True)
         malformed_time_event = json.loads(malformed_time["event"])
         malformed_time_event["FirstPacketSecond"] = f"{self.start}.5"
@@ -246,7 +272,7 @@ class NatEvidenceTest(unittest.TestCase):
     def rollups(self) -> dict[str, dict]:
         rows = lab.search(
             "| `adm_conversation_rollup` "
-            f'| where scope IN ("{self.scopes["base"]}","{self.scopes["nat"]}","{self.scopes["mapped"]}","{self.scopes["time_format"]}","{self.scopes["cap"]}","{self.scopes["multi"]}","{self.scopes["port"]}","{self.scopes["port_high"]}","{self.scopes["sentinel"]}","{self.scopes["unspecified"]}","{self.scopes["unspecified_expanded"]}","{self.scopes["port_format"]}","{self.scopes["invalid_ip"]}","{self.scopes["protocol"]}","{self.scopes["unchanged"]}","{self.scopes["eventtype"]}") OR like(scope,"unmapped:%") '
+            f'| where scope IN ("{self.scopes["base"]}","{self.scopes["nat"]}","{self.scopes["mapped"]}","{self.scopes["ipv6_compressed"]}","{self.scopes["ipv6_case"]}","{self.scopes["ipv6_changed"]}","{self.scopes["time_format"]}","{self.scopes["cap"]}","{self.scopes["multi"]}","{self.scopes["port"]}","{self.scopes["port_high"]}","{self.scopes["sentinel"]}","{self.scopes["unspecified"]}","{self.scopes["unspecified_expanded"]}","{self.scopes["port_format"]}","{self.scopes["invalid_ip"]}","{self.scopes["protocol"]}","{self.scopes["unchanged"]}","{self.scopes["eventtype"]}") OR like(scope,"unmapped:%") '
             "| table adm_record scope client_ip server_ip server_port transport "
             "bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated",
             self.start - 60,
@@ -300,11 +326,17 @@ class NatEvidenceTest(unittest.TestCase):
         mapped = rows[self.scopes["mapped"]]
         mapped_observation = json.loads(mapped["nat_observations"])[0]
         self.assertEqual(mapped_observation["translated_initiator_ip"], "192.0.2.44")
+        ipv6_changed = rows[self.scopes["ipv6_changed"]]
+        ipv6_observation = json.loads(ipv6_changed["nat_observations"])[0]
+        self.assertEqual(ipv6_observation["reported_initiator_ip"], "2001:db8::1")
+        self.assertEqual(ipv6_observation["translated_initiator_ip"], "2001:db8::2")
 
         for name in (
             "multi",
             "port",
             "port_high",
+            "ipv6_compressed",
+            "ipv6_case",
             "sentinel",
             "unspecified",
             "unspecified_expanded",
