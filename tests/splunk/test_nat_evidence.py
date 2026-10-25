@@ -7,8 +7,10 @@ live FMC/FTD eStreamer emission. Run with the task-owned lab environment.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
+import subprocess
 import time
 import unittest
 import urllib.parse
@@ -19,6 +21,8 @@ import lab
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures" / "raw-nat-ftd" / "ftd_connection_nat.ndjson"
+OTEL_FIXTURE = ROOT / "fixtures" / "raw" / "otel_traces.ndjson"
+FRONTEND_VALIDATOR = ROOT / "tests" / "splunk" / "validate_nat_graph.mjs"
 
 
 @unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires disposable Splunk lab")
@@ -78,14 +82,28 @@ class NatEvidenceTest(unittest.TestCase):
         self.wait_for_events()
 
     def cleanup_scopes(self) -> None:
+        graph_scope = getattr(self, "graph_scope", None)
+        scopes = list(self.scopes.values())
+        if graph_scope:
+            scopes.append(graph_scope)
         query = urllib.parse.urlencode(
-            {"query": json.dumps({"scope": {"$in": list(self.scopes.values())}})}
+            {"query": json.dumps({"scope": {"$in": scopes}})}
         )
         response = lab._mgmt(
             "DELETE",
             f"/servicesNS/nobody/{lab.APP}/storage/collections/data/adm_observer_scope?{query}",
         )
         response.close()
+        identity_keys = getattr(self, "graph_identity_keys", [])
+        if identity_keys:
+            identity_query = urllib.parse.urlencode(
+                {"query": json.dumps({"_key": {"$in": identity_keys}})}
+            )
+            response = lab._mgmt(
+                "DELETE",
+                f"/servicesNS/nobody/{lab.APP}/storage/collections/data/adm_ip_identity?{identity_query}",
+            )
+            response.close()
 
     def register_scopes(self) -> None:
         rows = [
@@ -419,3 +437,352 @@ class NatEvidenceTest(unittest.TestCase):
             filtered_events(selected_end + 0.0005, [selected_start, selected_end]),
             [selected_start, selected_end],
         )
+
+    def _graph_test_event(
+        self,
+        template: dict,
+        device_ip: str,
+        event_time: int,
+        connection_id: int,
+        server_ip: str,
+        *,
+        initiator_ip: str = "198.51.100.8",
+        nat: bool,
+    ) -> dict:
+        envelope = self.envelope("base", template, connection_id, nat=nat)
+        event = json.loads(envelope["event"])
+        event.update(
+            {
+                "DeviceIP": device_ip,
+                "FirstPacketSecond": event_time,
+                "InitiatorIP": initiator_ip,
+                "InitiatorPort": 51400,
+                "ResponderIP": server_ip,
+                "ResponderPort": 443,
+            }
+        )
+        if nat:
+            event.update(
+                {
+                    "NAT_InitiatorIP": "192.0.2.44",
+                    "NAT_InitiatorPort": 35000,
+                    "NAT_ResponderIP": server_ip,
+                    "NAT_ResponderPort": 443,
+                    "OriginalInitiatorIP": initiator_ip,
+                }
+            )
+        else:
+            for key in (
+                "NAT_InitiatorIP",
+                "NAT_InitiatorPort",
+                "NAT_ResponderIP",
+                "NAT_ResponderPort",
+                "OriginalInitiatorIP",
+            ):
+                event.pop(key, None)
+        envelope.update(
+            {
+                "time": event_time,
+                "host": device_ip,
+                "event": json.dumps(event, separators=(",", ":")),
+            }
+        )
+        return envelope
+
+    def _register_graph_inputs(
+        self, device_ips: dict[str, str], event_time: int, cluster: str
+    ) -> None:
+        """Add one isolated routing scope and two TA-shaped Pod identities."""
+        self.graph_scope = f"{self.token}-graph"
+        self.graph_identity_keys = []
+        scope_rows = [
+            {
+                "observer_kind": "firewall",
+                "observer": device_ip,
+                "scope": self.graph_scope,
+                "cluster": "",
+            }
+            for device_ip in device_ips.values()
+        ]
+        scope_data = json.dumps(json.dumps(scope_rows, separators=(",", ":")))
+        lab.search(
+            f"| makeresults format=json data={scope_data} "
+            "| eval observer_kind=lower(observer_kind), observer=lower(observer), "
+            "_key=sha256(json_array(observer_kind, observer)) "
+            "| fields _key observer_kind observer scope cluster "
+            "| outputlookup append=true key_field=_key adm_observer_scope"
+        )
+
+        identities = []
+        for suffix, address in (("cap", "10.42.0.20"), ("window", "10.42.0.21")):
+            entity_id = f"{self.token}-{suffix}"
+            identities.append(
+                {
+                    "source": "k8s_pods",
+                    "entity_kind": "pod",
+                    "entity_id": entity_id,
+                    "entity_name": f"nat-{suffix}",
+                    "ip": address,
+                    "scope": self.graph_scope,
+                    "scope_mapping_verified": 1,
+                    "cluster": cluster,
+                    "namespace": "shop",
+                    "node": "node-nat-test",
+                    "priority": 1,
+                    "valid_from": event_time - 600,
+                    "first_seen": event_time - 600,
+                    "last_seen": event_time + 600,
+                    "ek": f"pod:{cluster}/{entity_id}",
+                }
+            )
+        identity_data = json.dumps(json.dumps(identities, separators=(",", ":")))
+        lab.search(
+            f"| makeresults format=json data={identity_data} "
+            "| eval _key=sha256(json_array(scope, ip, entity_id)) "
+            "| `adm_identity_desc` "
+            "| fields _key ip scope scope_mapping_verified source entity_kind "
+            "entity_id entity_name priority valid_from valid_to valid_end first_seen "
+            "last_seen cluster namespace node ek desc "
+            "| outputlookup append=true key_field=_key adm_ip_identity"
+        )
+        self.graph_identity_keys = [
+            row["_key"]
+            for row in lab.search(
+                "| inputlookup adm_ip_identity "
+                f"| search scope={json.dumps(self.graph_scope)} "
+                "| table _key"
+            )
+        ]
+        self.assertEqual(len(self.graph_identity_keys), len(identities))
+
+    def _frontend_graphs(self, cases: list[dict]) -> list[dict]:
+        payload = json.dumps({"cases": cases}, separators=(",", ":"))
+        result = subprocess.run(
+            ["node", str(FRONTEND_VALIDATOR)],
+            cwd=ROOT,
+            input=payload,
+            text=True,
+            capture_output=True,
+            timeout=90,
+            check=False,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"rowsToGraph validation failed: {result.stderr.strip()}",
+        )
+        try:
+            graphs = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            self.fail(f"rowsToGraph validator returned invalid JSON: {error}")
+        self.assertEqual(len(graphs), len(cases))
+        return graphs
+
+    def test_adm_graph_nat_cap_and_fractional_window_reach_frontend_without_new_edges(
+        self,
+    ):
+        template_row = json.loads(FIXTURE.read_text("utf-8").splitlines()[0])
+        template = json.loads(template_row["event"])
+        bucket_start = (int(time.time()) // 300) * 300
+        event_time = bucket_start + 60
+        cluster = f"nat-{uuid.uuid4().hex[:12]}"
+        devices = {
+            "base": "192.0.2.30",
+            "cap": "192.0.2.31",
+            "window": "192.0.2.32",
+        }
+        self._register_graph_inputs(devices, event_time, cluster)
+
+        events = [
+            self._graph_test_event(
+                template,
+                devices["base"],
+                event_time - 1,
+                1000 + index,
+                "10.42.0.20",
+                initiator_ip="198.51.100.8",
+                nat=False,
+            )
+            for index in range(33)
+        ]
+        events.extend(
+            self._graph_test_event(
+                template,
+                devices["cap"],
+                event_time - 1,
+                2000 + index,
+                "10.42.0.20",
+                initiator_ip="198.51.100.9",
+                nat=True,
+            )
+            for index in range(33)
+        )
+        events.extend(
+            self._graph_test_event(
+                template,
+                devices["window"],
+                observed_time,
+                3000 + index,
+                "10.42.0.21",
+                initiator_ip="198.51.100.10",
+                nat=True,
+            )
+            for index, observed_time in enumerate(
+                (event_time - 1, event_time, event_time + 1)
+            )
+        )
+
+        root = json.loads(OTEL_FIXTURE.read_text("utf-8").splitlines()[0])
+        root["time"] = bucket_start + 5
+        root["source"] = self.token
+        root_event = json.loads(root["event"])
+        root_event.update(
+            {
+                "trace_id": uuid.uuid4().hex,
+                "span_id": uuid.uuid4().hex[:16],
+                "parent_span_id": "",
+                "start_time": (bucket_start + 5) * 1_000_000_000,
+                "end_time": (bucket_start + 5) * 1_000_000_000 + 100_000_000,
+            }
+        )
+        root_fields = dict(root["fields"])
+        root_fields.update(
+            {
+                "service.name": "frontend",
+                "deployment.environment.name": "demo",
+                "k8s.cluster.name": cluster,
+                "k8s.namespace.name": "shop",
+                "k8s.pod.uid": f"{self.token}-frontend",
+            }
+        )
+        root["event"] = json.dumps(root_event, separators=(",", ":"))
+        root["fields"] = root_fields
+
+        body = (
+            b"\n".join(
+                json.dumps(event, separators=(",", ":")).encode()
+                for event in [*events, root]
+            )
+            + b"\n"
+        )
+        lab._hec_post(body)
+        self.loaded += len(events)
+        self.wait_for_events()
+
+        scopes_literal = json.dumps(self.graph_scope)
+        lab.search(
+            "| `adm_conversation_rollup` "
+            f"| where scope IN ({scopes_literal}) "
+            '| collect index=`adm_summary_index_name` source="adm:conversation"',
+            bucket_start,
+            bucket_start + 300,
+        )
+
+        args = {
+            "service": "frontend",
+            "environment": "demo",
+            "cluster": cluster,
+            "namespace": "shop",
+        }
+
+        def graph_rows(latest: float) -> list[dict]:
+            return lab.search(
+                '| `adm_graph("frontend","demo","' + cluster + '","shop")`',
+                bucket_start,
+                latest,
+            )
+
+        full_rows = graph_rows(bucket_start + 300)
+        fractional_rows = graph_rows(event_time + 0.0005)
+        exact_rows = graph_rows(event_time)
+        full, fractional, exact = self._frontend_graphs(
+            [
+                {"rows": full_rows, "args": args},
+                {"rows": fractional_rows, "args": args},
+                {"rows": exact_rows, "args": args},
+            ]
+        )
+
+        def communication_edges(graph: dict) -> list[dict]:
+            return [
+                edge
+                for edge in graph["edges"]
+                if edge["relationship"] == "communicates_with"
+            ]
+
+        full_edges = communication_edges(full)
+        base_edges = [
+            edge
+            for edge in full_edges
+            if edge["target"] == f"pod:{cluster}/{self.token}-cap"
+            and not edge.get("nat_observations")
+        ]
+        cap_edges = [
+            edge
+            for edge in full_edges
+            if edge["target"] == f"pod:{cluster}/{self.token}-cap"
+            and edge.get("nat_observations_truncated")
+        ]
+        window_edges = [
+            edge
+            for edge in full_edges
+            if edge["target"] == f"pod:{cluster}/{self.token}-window"
+        ]
+        self.assertEqual(len(base_edges), 1)
+        self.assertEqual(len(cap_edges), 1)
+        self.assertEqual(len(window_edges), 1)
+        self.assertEqual(
+            {edge["relationship"] for edge in full["edges"]},
+            {"communicates_with"},
+            "FTD translation evidence must not invent forwards_to/backend edges",
+        )
+        base_edge, cap_edge = base_edges[0], cap_edges[0]
+        self.assertEqual(base_edge["count"], 1)
+        self.assertEqual(cap_edge["count"], 1)
+        self.assertEqual(base_edge["bytes"], 33 * (620 + 4800))
+        self.assertEqual(cap_edge["bytes"], base_edge["bytes"])
+        self.assertEqual(len(cap_edge["nat_observations"]), 32)
+        self.assertTrue(cap_edge["nat_observations_truncated"])
+        self.assertEqual(
+            {item["scope"] for item in cap_edge["nat_observations"]},
+            {self.graph_scope},
+        )
+        self.assertTrue(
+            all(
+                item["source_authority"] == "cisco:sfw:estreamer"
+                and item["event_time"] == event_time - 1
+                for item in cap_edge["nat_observations"]
+            )
+        )
+        self.assertEqual(full["nat_event_window"]["start"], bucket_start)
+        self.assertEqual(full["nat_event_window"]["end"], bucket_start + 300)
+
+        def window_observations(graph: dict) -> list[dict]:
+            matching_edges = [
+                edge
+                for edge in communication_edges(graph)
+                if edge["target"] == f"pod:{cluster}/{self.token}-window"
+            ]
+            self.assertEqual(len(matching_edges), 1)
+            return matching_edges[0].get("nat_observations", [])
+
+        fractional_observations = window_observations(fractional)
+        exact_observations = window_observations(exact)
+        self.assertEqual(
+            sorted(item["event_time"] for item in fractional_observations),
+            [event_time - 1, event_time],
+        )
+        self.assertEqual(
+            sorted(item["event_time"] for item in exact_observations),
+            [event_time - 1],
+        )
+        self.assertEqual(fractional["nat_event_window"]["start"], bucket_start)
+        self.assertTrue(
+            math.isclose(
+                fractional["nat_event_window"]["end"],
+                event_time + 0.0005,
+                rel_tol=0,
+                abs_tol=0.000001,
+            )
+        )
+        self.assertEqual(exact["nat_event_window"]["end"], event_time)
