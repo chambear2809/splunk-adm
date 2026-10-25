@@ -316,19 +316,40 @@ class NatEvidenceTest(unittest.TestCase):
         self.fail(f"{label} did not reach exactly {expected} searchable rows")
 
     def rollups(self) -> dict[str, dict]:
-        rows = lab.search(
-            "| `adm_conversation_rollup` "
-            f"| where scope IN ({','.join(json.dumps(scope) for name, scope in self.scopes.items() if name not in ('unmapped', 'reported_invalid'))}) OR observer={json.dumps('ftd:' + self.devices['unmapped'])} "
+        projection = (
             "| table adm_record scope client_ip server_ip server_port transport "
-            "observer bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated",
-            self.start - 60,
-            self.start + 600,
+            "observer bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated"
         )
+        window = (self.start - 60, self.start + 600)
+        scope_list = ",".join(
+            json.dumps(scope)
+            for name, scope in self.scopes.items()
+            if name not in ("unmapped", "reported_invalid")
+        )
+        rows = lab.search(
+            f"| `adm_conversation_rollup` | where scope IN ({scope_list}) {projection}",
+            *window,
+        )
+        unmapped = lab.search(
+            "| `adm_conversation_rollup` "
+            f"| where observer={json.dumps('ftd:' + self.devices['unmapped'])} {projection}",
+            *window,
+        )
+        self.assertEqual(
+            len(unmapped),
+            1,
+            f"owned unmapped observer missing or duplicated: {unmapped!r}",
+        )
+        rows.extend(unmapped)
         return {row["scope"]: row for row in rows}
 
     def test_explicit_tuples_are_metadata_only_and_reject_ambiguous_values(self):
         rows = self.rollups()
-        self.assertEqual(len(rows), len(self.scopes) - 1)
+        self.assertEqual(
+            len(rows),
+            len(self.scopes) - 1,
+            f"rollup scopes differ: {sorted(rows)}",
+        )
         base = rows[self.scopes["base"]]
         nat = rows[self.scopes["nat"]]
         self.assertEqual(base["adm_record"], "conversation")
@@ -761,7 +782,7 @@ class NatEvidenceTest(unittest.TestCase):
 
         def graph_rows(latest: float) -> list[dict]:
             return lab.search(
-                '| `adm_graph("frontend","demo","' + cluster + '","shop")`',
+                '`adm_graph("frontend","demo","' + cluster + '","shop")`',
                 bucket_start,
                 latest,
             )
