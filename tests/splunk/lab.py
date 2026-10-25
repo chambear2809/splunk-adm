@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import secrets
 import ssl
 import subprocess
@@ -54,7 +55,11 @@ def verify_target() -> None:
     if not task:
         return
     name = os.environ.get("ADM_LAB_NAME", "")
-    if not name.startswith("adm-") or name == "adm-splunk-lab":
+    if (
+        not re.fullmatch(r"[a-z0-9-]+", task)
+        or not re.fullmatch(r"adm-[a-z0-9-]+", name)
+        or name == "adm-splunk-lab"
+    ):
         raise LabError("invalid task lab identity")
     result = subprocess.run(
         ["docker", "inspect", name],
@@ -70,7 +75,21 @@ def verify_target() -> None:
         or labels.get("org.splunk-adm.lab") != name
     ):
         raise LabError("refusing unowned task lab")
-    bindings = target.get("HostConfig", {}).get("PortBindings", {})
+    host = target.get("HostConfig", {})
+    if host.get("NetworkMode") != name + "-net":
+        raise LabError("refusing task lab with mismatched network")
+    expected_mounts = {
+        "/opt/splunk/etc": name + "-etc",
+        "/opt/splunk/var": name + "-var",
+    }
+    mounts = {item.get("Destination"): item for item in target.get("Mounts", [])}
+    for destination, volume in expected_mounts.items():
+        if (
+            mounts.get(destination, {}).get("Name") != volume
+            or mounts[destination].get("Type") != "volume"
+        ):
+            raise LabError("refusing task lab with mismatched volumes")
+    bindings = host.get("PortBindings", {})
     for internal, variable, default in (
         ("8000/tcp", "ADM_LAB_WEB_PORT", "8000"),
         ("8089/tcp", "ADM_LAB_MGMT_PORT", "8089"),
