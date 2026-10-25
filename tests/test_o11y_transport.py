@@ -263,6 +263,45 @@ class TransportTests(unittest.TestCase):
         self.assertNotIn("PRIVATE-SOURCE-PAYLOAD", str(failure.exception))
         self.assertNotIn("PRIVATE-SOURCE-PAYLOAD", errors.getvalue())
 
+    def test_dns_delay_obeys_caller_deadline_without_late_authentication(self):
+        original = socket.getaddrinfo
+        release = threading.Event()
+
+        def delayed(_host, _port, *args, **kwargs):
+            release.wait(timeout=5)
+            return original("127.0.0.1", 9, *args, **kwargs)
+
+        client = transport.make_client("test-token", "us0", 1)
+        self.addCleanup(client.close)
+        try:
+            with patch.object(socket, "getaddrinfo", delayed):
+                start = time.monotonic()
+                with self.assertRaises(transport.TransportError):
+                    client.execute("A=data('test').publish()", start=1000, stop=2000)
+                self.assertLess(time.monotonic() - start, 2)
+                client.close()
+                release.set()
+                client._transport._streams[0].thread.join(timeout=1)
+                self.assertFalse(client._transport._streams[0].thread.is_alive())
+        finally:
+            release.set()
+
+    def test_unsupported_sdk_and_oversized_program_are_rejected(self):
+        with patch.object(transport, "version", return_value="unsupported"):
+            with self.assertRaisesRegex(transport.TransportError, "pinned"):
+                transport.make_client("test-token", "us0", 1)
+        client = transport.make_client("test-token", "us0", 1)
+        self.addCleanup(client.close)
+        with patch.object(
+            socket,
+            "getaddrinfo",
+            side_effect=AssertionError("No HTTP request should start"),
+        ):
+            with self.assertRaisesRegex(transport.TransportError, "byte cap"):
+                client.execute(
+                    "x" * (transport.MAX_PROGRAM_BYTES + 1), start=1000, stop=2000
+                )
+
     def test_invalid_realm_credential_and_timeout_are_rejected_before_network(self):
         for token, realm, timeout in (
             ("test-token", "us0/elsewhere", 1),

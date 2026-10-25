@@ -8,6 +8,7 @@ automatic stream reconnects. No network request is made by importing this file.
 from __future__ import annotations
 
 import http.client
+from importlib.metadata import version
 import json
 import queue
 import re
@@ -28,6 +29,8 @@ from urllib.request import (
 
 
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_PROGRAM_BYTES = 65_536
+SDK_VERSION = "1.3.9"
 CHUNK_BYTES = 65_536
 _EVENTS = {
     "control-message",
@@ -255,6 +258,8 @@ def make_client(
         or not 1 <= timeout_seconds <= 300
     ):
         raise TransportError("Invalid SignalFlow realm or timeout.")
+    if version("signalflow-client-python") != SDK_VERSION:
+        raise TransportError("Install the supported pinned SignalFlow SDK version.")
     context = ssl.create_default_context(cafile=ca_bundle)
     if not context.check_hostname or context.verify_mode != ssl.CERT_REQUIRED:
         raise TransportError(
@@ -321,7 +326,11 @@ def make_client(
                         for key, value in fields.items()
                     }
                 )
-            content = body.encode("utf-8") if isinstance(body, str) else body
+            if not isinstance(body, str):
+                raise TransportError("SignalFlow program must be bounded text.")
+            content = body.encode("utf-8")
+            if len(content) > MAX_PROGRAM_BYTES:
+                raise TransportError("SignalFlow program exceeds its byte cap.")
             stream = _ResponseStream(url, content, token, timeout_seconds, context)
             self._streams.append(stream)
             stream.wait_headers()
