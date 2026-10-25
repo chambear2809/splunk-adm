@@ -201,7 +201,7 @@ a legacy limit sentence saying `f72` is stale. A responder-only DNAT follow-up
 also passed on that archive with test source `9ee64ef`: the initiator tuple was
 unchanged, the responder changed from `10.42.0.21:443` to `10.42.0.99:8443`, and
 the graph retained three communication edges with no translated-destination
-node or backend attribution. Final integrated package validation remains pending.
+node or backend attribution. Final integrated validation is recorded below.
 Historical capture fields remain unchanged; a separate macro compatibility
 review records the no-NAT fixture contract without claiming recapture.
 
@@ -258,8 +258,8 @@ consequential finding was reported in that correction.
 
 The reviewer independently passed 56 benchmark and 11 task-lab safety checks,
 checked source documentation and retained measurements, and requested an
-integrated end-to-end NAT graph/cap/bounds/rows-to-graph check. Final approval
-still awaits completed integrated Docker and final-candidate evidence.
+integrated end-to-end NAT graph/cap/bounds/rows-to-graph check. The completed
+final-candidate checks are recorded below.
 Follow-up test review found missing OTel/summary index-visibility waits and an
 insufficient total-edge assertion. Bounded read-only waits and an exact edge
 count were added, and the reviewer confirmed the corrected summary base-search
@@ -270,8 +270,9 @@ A real-summary probe disproved the proposed sub-millisecond native-earliest
 protection. Root added a graph-only pre-dispatch precision guard in `54113b7`;
 51 focused provider/time-bound/search-client tests passed, including rejected
 bounds with zero dispatch and supported bounds passed unchanged. The reviewer
-accepted that correction. Final approval awaits complete integrated validation
-and reconciled native-bound export labels/documentation.
+accepted that correction and the reconciled native-bound export labels. Final
+evidence and the documentation-only reconciliation return to the reviewer
+before publication; approval, CI and merge status belong to the PR record.
 
 ## Integrated acceptance
 
@@ -291,7 +292,7 @@ the repository root from Python's import path, so AppDynamics could not import
 stdout failed strict JSON decoding; the exact captured Splunk rows passed three
 fresh parser replays. The helper now silences Vite logging while retaining
 nonzero/stderr failures; no output-line filtering or assertion weakening was
-added. Both affected modules require final-package reruns.
+added. Both affected modules passed their final-package reruns below.
 
 The eight skips were three opt-in pruning cases, the separately controlled
 migration rehearsal, two unavailable distributed-SHC cases, verified HEC TLS
@@ -304,7 +305,55 @@ NAT bounds unrelated to its displayed window. Correction `5d87855` requires
 each native bound's floor to match its displayed epoch bound, including empty
 and truncation-only snapshots, while retaining valid fractional carriers and
 legacy behavior. The reviewer accepted the correction and its 121 focused
-graph/row tests. A rebuilt final archive, unchanged-backend proof, affected
-native NAT/AppDynamics/browser checks and nonempty-gap migration rehearsal
-remain pending. Earlier records retain their original source/package bindings.
+graph/row tests. Earlier records retain their original source/package bindings.
 
+The final implementation source `e1825b8` passed all ten offline gates:
+860 frontend tests, 816 Python tests, 126 distributed contract tests,
+18 offline upgrade cases (three live cases skipped), and 111 browser tests,
+plus lint/type/format, packaging and release checks. The browser run used
+`CI=1` to require a fresh owned test server. The retained archive SHA-256 is
+`2773e42c0c856ae8b168887c014b654ae77820d874c7cde81ecebda058d63d2d`.
+Compared with the earlier tested `93bbc4c` archive, only `atlas.js` and the
+`app.conf` build timestamp changed; all backend and SPL files are byte-identical.
+The exact final archive passed installation, identity and btool checks, then
+four native NAT cases, the complete AppDynamics module and the native V2
+browser module. Actual Splunk rows and parsed frontend graphs are retained.
+
+The same final archive passed the controlled migration rehearsal: two tests in
+1209.192 seconds, with strict TLS, authentic schedules and owner-only inputs.
+It exercised interruption after a verified mutation, resume, completed V2
+cutover, and rollback. The final journal is `rolled_back`, rollback is `complete`
+and V1 recovery is `verified`. The injected pause-gap row was absent before
+rollback and aged beyond the resumed scheduler's lookback; one verified manual
+writer recovered exactly the source-derived row, with no scheduler duplicate.
+Original selectors and writer states were restored. All 79 nonprivate runtime
+artifacts are retained with hashes in
+`integration/final-migration-evidence-manifest.json`.
+The accepted native V2 conversation/traffic cycles at 21:05 UTC and history
+cycle at 21:06 UTC have empty expected and retained results. They establish
+scheduler/reconciliation behavior, not nonempty V2 scheduled processing. The
+separate pause-gap tuple has one record, 1,540 bytes and five packets, with zero
+V1 retained rows before rollback.
+
+The TLS setup's REST restart left Splunk stopped in the exact owned integration
+container. Before a migration journal existed, target/container identity and
+stopped status were verified, the service was started without reset/reinstall,
+and strict task-CA/localhost verification passed. Original diagnostics and
+recovery results remain retained separately from migration acceptance.
+
+Evidence remains outside disposable worktrees at
+`~/.codex/task-evidence/nat-scale-20261025/`. It includes original failed runs,
+per-source offline reports, immutable packages and sidecars, package byte
+comparison, final native graph rows, TLS recovery diagnostics, scheduler proofs,
+the terminal migration journal and result artifacts. Current retained credential
+and session values were checked against 432 text artifacts with no matches;
+private inputs are excluded and scheduled for exact-path cleanup. Historical
+purged values were unavailable for that scan.
+
+Worker labs have been purged and their absence independently checked. The
+integration lab remains owned until final review/publication finishes; the
+reviewer lab was reserved but never created. Publication and post-merge cleanup
+follow the reviewed manifest, retaining evidence and preserving the primary
+checkout, unrelated worktree and pre-existing Docker resources. Production
+capacity, Splunk Cloud/distributed deployment, real vendor-emission qualification,
+NAT aggregation cost and the explicitly skipped cases remain unverified.
