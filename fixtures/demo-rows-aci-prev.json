@@ -104,9 +104,9 @@
     },
     "reviewed_generator_compatibility": {
       "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
-      "reviewed_generator_sha256": "66bf0fa2c3758c79b847ec7872429bd46be8404279a9a3aa8c505770a714902f",
+      "reviewed_generator_sha256": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
       "reviewed_generator_source_sha256": {
-        "tools/gen_raw_fixtures.py": "66bf0fa2c3758c79b847ec7872429bd46be8404279a9a3aa8c505770a714902f",
+        "tools/gen_raw_fixtures.py": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
         "tools/raw_fixtures/__init__.py": "2f32d2aea4cfdd25ebb6be23b1c6cee5a2135828f14ebd02ab2569aabe85e980",
         "tools/raw_fixtures/common.py": "0f7824aeba0c33ff2a9c5351e37f321f41e98645e6584d8c94020832593b0a68",
         "tools/raw_fixtures/nxos.py": "fae1e35f0e397226f599afef7e063fec3124d348f0be143086c81b6d2e6052a6",
@@ -115,13 +115,71 @@
         "tools/raw_fixtures/cli.py": "5f41c0c14d4d02b655165a7d2f01e8ec84f6fd243129f6f2d4363f69b1468a8f"
       },
       "method": "static review only; no recapture",
-      "reason": "The generator was split into shared, NX-OS, ACI, networking, and CLI modules behind its original entrypoint. With unchanged inputs and the networking clock anchored at 2026-10-25T12:00:00Z, every file from NX-OS, ACI, ACI prior-window, and networking generation is byte-identical to the pre-refactor output manifest. This preserves the historical capture without claiming a new live capture.",
+      "reason": "The generator was split into shared, NX-OS, ACI, networking, and CLI modules behind its original entrypoint. With unchanged inputs and the networking clock anchored at 2026-10-25T12:00:00Z, every file from NX-OS, ACI, ACI prior-window, and networking generation is byte-identical to the pre-refactor output manifest. This preserves the historical capture without claiming a new live capture. Independent review corrected a facade export collision: private CLI implementation modules are excluded so the original aci(s) builder remains callable. CLI generation and captured fixture outputs remain unchanged; no recapture is claimed.",
       "prior_reviews": [
         {
           "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
           "reviewed_generator_sha256": "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
           "method": "static review only; no recapture",
           "reason": "The revision changes only the NX-OS nxversion Row_info shape and --output-dir plumbing. aci_outputs(previous_aci_scenario()) is byte-identical (857 events) under the captured and reviewed generators, so the captured rows remain valid. No new live capture is claimed."
+        },
+        {
+          "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
+          "reviewed_generator_sha256": "66bf0fa2c3758c79b847ec7872429bd46be8404279a9a3aa8c505770a714902f",
+          "reviewed_generator_source_sha256": {
+            "tools/gen_raw_fixtures.py": "66bf0fa2c3758c79b847ec7872429bd46be8404279a9a3aa8c505770a714902f",
+            "tools/raw_fixtures/__init__.py": "2f32d2aea4cfdd25ebb6be23b1c6cee5a2135828f14ebd02ab2569aabe85e980",
+            "tools/raw_fixtures/common.py": "0f7824aeba0c33ff2a9c5351e37f321f41e98645e6584d8c94020832593b0a68",
+            "tools/raw_fixtures/nxos.py": "fae1e35f0e397226f599afef7e063fec3124d348f0be143086c81b6d2e6052a6",
+            "tools/raw_fixtures/aci.py": "7ebccc7a6f716c761b796bc6e955e73514764d551e66c7a05208e59122ec3c5e",
+            "tools/raw_fixtures/networking.py": "2598900d01130dcfeaf80a37d45c013b742a766c5975df19960ace5066db6d42",
+            "tools/raw_fixtures/cli.py": "5f41c0c14d4d02b655165a7d2f01e8ec84f6fd243129f6f2d4363f69b1468a8f"
+          },
+          "method": "static review only; no recapture",
+          "reason": "The generator was split into shared, NX-OS, ACI, networking, and CLI modules behind its original entrypoint. With unchanged inputs and the networking clock anchored at 2026-10-25T12:00:00Z, every file from NX-OS, ACI, ACI prior-window, and networking generation is byte-identical to the pre-refactor output manifest. This preserves the historical capture without claiming a new live capture.",
+          "byte_equivalence": {
+            "baseline_commit": "96db6c6baedc706fc272b34f89b676e79411fadf",
+            "input_sha256": {
+              "tools/gen_raw_fixtures.py": "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
+              "fixtures/raw/scenario.json": "ac68d0e466c06ed51f44cbed447a1857a19178630710fe9b402b69207d08d728",
+              "fixtures/raw-aci/scenario.json": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
+              "fixtures/raw-aci/edge-cases.json": "09226ab92a7c063f63bade18ea0faf53e3bfd6675e55dbcfc39c7869a9ab261d",
+              "fixtures/raw-networking/scenario.json": "8f0ab2a8012b7ed36c353354fd22c2886c84a0a1435cb5f7c56264f4e8afdafc",
+              "fixtures/raw-networking/source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467",
+              "fixtures/raw-networking/FIELDS.md": "83a848c09b522351d6a5aebc809fdd9031b31f83f7f16f4054b137335051c5f0"
+            },
+            "scenarios": {
+              "nxos": {
+                "byte_identical": true,
+                "file_count": 11,
+                "output_manifest_sha256": "1670d14e57e417f91a16d5cd9f0e28e85dee7cea0b148778a6a7f1dd6704ac3b",
+                "base_time": null,
+                "mismatches": []
+              },
+              "aci": {
+                "byte_identical": true,
+                "file_count": 20,
+                "output_manifest_sha256": "ce4c0a9c4098f87a824d66786db45c6f85b63fbff0eae86a335d246565ddb1fc",
+                "base_time": null,
+                "mismatches": []
+              },
+              "aci-prev": {
+                "byte_identical": true,
+                "file_count": 9,
+                "output_manifest_sha256": "c397ceae1298b426c725338a4ea3439e5a510522677f3410ed726b47564f540f",
+                "base_time": null,
+                "mismatches": []
+              },
+              "networking": {
+                "byte_identical": true,
+                "file_count": 23,
+                "output_manifest_sha256": "ae9cbd13be50eb8eed179e813af18750e36fe9b7383a4e2e39fec2f57fa3276a",
+                "base_time": "2026-10-25T12:00:00Z",
+                "mismatches": []
+              }
+            },
+            "all_scenarios": true
+          }
         }
       ],
       "byte_equivalence": {

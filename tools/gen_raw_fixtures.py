@@ -23,11 +23,16 @@ _aci = _import_module(f"{_package_name}.aci")
 _networking = _import_module(f"{_package_name}.networking")
 _cli = _import_module(f"{_package_name}.cli")
 
-# Keep the established import surface while builder responsibilities are modular.
-for _source in (_common, _nxos, _aci, _networking, _cli):
+# Keep the established import surface without exposing private package modules.
+# In particular, cli.aci is a module while the legacy aci symbol is a builder.
+_implementation_modules = (_common, _nxos, _aci, _networking, _cli)
+for _source in _implementation_modules:
     for _symbol in dir(_source):
-        if not _symbol.startswith("__"):
-            globals()[_symbol] = getattr(_source, _symbol)
+        _value = getattr(_source, _symbol)
+        if not _symbol.startswith("__") and not any(
+            _value is _implementation for _implementation in _implementation_modules
+        ):
+            globals()[_symbol] = _value
 
 ROOT = _common.ROOT
 GENERATOR_SOURCE_FILES = (
