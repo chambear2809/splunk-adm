@@ -29,6 +29,7 @@ from tools.export_appdynamics import (
     SOURCE,
     SOURCETYPE,
     _canonical,
+    _sanitize_property,
 )
 from tools.import_asset_history import (
     BatchImportError,
@@ -45,7 +46,8 @@ AUTHORITY_RE = re.compile(r"^[a-z0-9][a-z0-9._:/@-]{0,254}$")
 SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$")
 HEX_DIGEST_RE = re.compile(r"^[a-f0-9]{64}$")
 SECRET_PROPERTY_RE = re.compile(
-    r"(?:pass(?:word)?|secret|token|credential|authorization|api.?key|access.?key|user(?:name)?)",
+    r"(?:pass(?:word)?|secret|access.?token|token|credential|auth(?:orization)?|"
+    r"api.?key|access.?key|private.?key|client.?secret|user(?:name)?)",
     re.IGNORECASE,
 )
 RECORD_TYPES = {"snapshot", "application", "tier", "node", "backend"}
@@ -455,6 +457,8 @@ def _validate_bundle(
                 redacted = prop.get("redacted")
                 if not isinstance(redacted, bool):
                     raise ImportErrorDetail("invalid_properties")
+                if value is not None and _sanitize_property(name or "", value) != value:
+                    raise ImportErrorDetail("sensitive_property")
                 if SECRET_PROPERTY_RE.search(name or "") and (
                     not redacted or value is not None
                 ):

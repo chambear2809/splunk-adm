@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shutil
+import socket
+import ssl
+import subprocess
 import tempfile
 import threading
 import time
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
@@ -20,6 +27,7 @@ from tools.export_appdynamics import (
     ControllerClient,
     Limits,
     _NETWORK_REQUEST_SLOT,
+    _canonical,
     _outside_repository as exporter_outside_repository,
     _parse_properties,
     _xml_root,
@@ -40,6 +48,7 @@ from tools.import_appdynamics import (
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures" / "appdynamics"
+CONTROLLER_HOST = "controller.integration.test"
 
 
 class CounterClock:
@@ -123,6 +132,131 @@ def collect(opener: FakeOpener | None = None, *, authority: str = "appd-prod"):
 
 
 class AppDynamicsCollectorTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        executable = shutil.which("openssl")
+        if not executable:
+            raise unittest.SkipTest("OpenSSL is required for local TLS tests")
+        cls.tls_directory = tempfile.TemporaryDirectory(prefix="atlas-appd-tls-")
+        cls.addClassCleanup(cls.tls_directory.cleanup)
+        cls.tls_key = Path(cls.tls_directory.name) / "controller.key"
+        cls.tls_cert = Path(cls.tls_directory.name) / "controller.pem"
+        subprocess.run(
+            [
+                executable,
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                f"/CN={CONTROLLER_HOST}",
+                "-addext",
+                f"subjectAltName=DNS:{CONTROLLER_HOST}",
+                "-keyout",
+                str(cls.tls_key),
+                "-out",
+                str(cls.tls_cert),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+
+    @contextmanager
+    def tls_controller(self, behavior: str = "complete"):
+        requests: list[tuple[str, dict[str, str], bytes]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *_args: Any) -> None:
+                pass
+
+            def handle_controller_request(self) -> None:
+                body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+                requests.append((self.path, dict(self.headers.items()), body))
+                if behavior == "slow_headers":
+                    for byte in b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n":
+                        self.connection.sendall(bytes((byte,)))
+                        time.sleep(0.03)
+                    return
+                if behavior == "redirect":
+                    self.send_response(302)
+                    self.send_header("Location", "/controller/steal")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                is_auth = self.path.endswith("/oauth/access_token")
+                payload = (
+                    b'{"access_token":"actual-local-token","expires_in":300}'
+                    if is_auth
+                    else b"<applications/>"
+                )
+                self.send_response(200)
+                self.send_header(
+                    "Content-Type", "application/json" if is_auth else "application/xml"
+                )
+                self.send_header(
+                    "Content-Length",
+                    str(len(payload) * 20 if behavior == "slow_body" else len(payload)),
+                )
+                self.send_header("Connection", "close")
+                self.end_headers()
+                if behavior == "slow_body":
+                    for byte in payload * 20:
+                        self.wfile.write(bytes((byte,)))
+                        self.wfile.flush()
+                        time.sleep(0.04)
+                    return
+                self.wfile.write(payload)
+
+            def do_GET(self) -> None:
+                try:
+                    self.handle_controller_request()
+                except (OSError, ssl.SSLError):
+                    pass
+
+            def do_POST(self) -> None:
+                try:
+                    self.handle_controller_request()
+                except (OSError, ssl.SSLError):
+                    pass
+
+        class Server(ThreadingHTTPServer):
+            daemon_threads = True
+
+            def handle_error(self, *_args: Any) -> None:
+                pass
+
+        server = Server(("127.0.0.1", 0), Handler)
+        server_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        server_context.load_cert_chain(self.tls_cert, self.tls_key)
+        server.socket = server_context.wrap_socket(server.socket, server_side=True)
+        server_thread = threading.Thread(
+            target=lambda: server.serve_forever(poll_interval=0.01), daemon=True
+        )
+        server_thread.start()
+        original_getaddrinfo = socket.getaddrinfo
+
+        def resolve(host: str, port: int, *args: Any, **kwargs: Any) -> Any:
+            if host == CONTROLLER_HOST:
+                return original_getaddrinfo("127.0.0.1", port, *args, **kwargs)
+            return original_getaddrinfo(host, port, *args, **kwargs)
+
+        context = ssl.create_default_context(cafile=str(self.tls_cert))
+        origin = f"https://{CONTROLLER_HOST}:{server.server_port}"
+        try:
+            with patch.object(socket, "getaddrinfo", resolve):
+                yield requests, origin, context
+        finally:
+            server.shutdown()
+            server.server_close()
+            server_thread.join(timeout=2)
+
     def test_collects_documented_read_only_model_and_current_node_ip_manifest(
         self,
     ) -> None:
@@ -178,7 +312,7 @@ class AppDynamicsCollectorTests(unittest.TestCase):
         self.assertTrue(
             all(request.method in {"GET", "POST"} for request, _ in opener.calls)
         )
-        self.assertTrue(all(timeout == 20 for _request, timeout in opener.calls))
+        self.assertTrue(all(0 < timeout <= 20 for _request, timeout in opener.calls))
 
     def test_backend_ids_are_verified_only_against_same_snapshot_and_secrets_are_redacted(
         self,
@@ -511,6 +645,18 @@ class AppDynamicsCollectorTests(unittest.TestCase):
             <name-value><name>UNKNOWN_USERINFO</name>
             <value>Data Source=db.example;User Id=svc;Encrypt=true</value>
             </name-value>
+            <name-value><name>URL</name>
+            <value>jdbc:mysql://db.example.test/sample;user=synthetic-user;password=SYNTHETIC_SECRET</value>
+            </name-value>
+            <name-value><name>UNKNOWN_JDBC_URL</name>
+            <value>jdbc:mysql://db.example.test/sample%3B%75ser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET</value>
+            </name-value>
+            <name-value><name>DOUBLE_ENCODED_URL</name>
+            <value>https://db.example.test/sample%253Baccess_token%253DSYNTHETIC_SECRET</value>
+            </name-value>
+            <name-value><name>AUTH</name>
+            <value>SYNTHETIC_SECRET</value>
+            </name-value>
             </properties></backend>"""
         )
         properties = _parse_properties(backend)
@@ -518,9 +664,48 @@ class AppDynamicsCollectorTests(unittest.TestCase):
         self.assertEqual(by_name["CUSTOM_ENDPOINT"], "https://db.example/orders")
         self.assertIsNone(by_name["UNRECOGNIZED_CONNECTION"])
         self.assertIsNone(by_name["UNKNOWN_USERINFO"])
+        self.assertIsNone(by_name["URL"])
+        self.assertIsNone(by_name["UNKNOWN_JDBC_URL"])
+        self.assertIsNone(by_name["DOUBLE_ENCODED_URL"])
+        self.assertIsNone(by_name["AUTH"])
         encoded = json.dumps(properties)
-        for secret in ("url-user", "url-pass", "query-secret", "connection-secret"):
+        for secret in (
+            "url-user",
+            "url-pass",
+            "query-secret",
+            "connection-secret",
+            "synthetic-user",
+            "SYNTHETIC_SECRET",
+        ):
             self.assertNotIn(secret, encoded)
+
+    def test_importer_rejects_unsafe_url_path_credentials(self) -> None:
+        for unsafe_url in (
+            "jdbc:mysql://db.example.test/sample;user=synthetic-user;password=SYNTHETIC_SECRET",
+            "jdbc:mysql://db.example.test/sample%3B%75ser%3Dsynthetic-user%3Bpassword%3DSYNTHETIC_SECRET",
+        ):
+            with self.subTest(unsafe_url=unsafe_url):
+                bundle, asset_manifest = collect()
+                bundle["asset_history_manifest"] = asset_manifest
+                backend = next(
+                    row for row in bundle["records"] if row["record_type"] == "backend"
+                )
+                backend["properties"].append(
+                    {"name": "URL", "value": unsafe_url, "redacted": False}
+                )
+                fingerprint_input = dict(backend)
+                fingerprint_input.pop("record_fingerprint")
+                backend["record_fingerprint"] = hashlib.sha256(
+                    _canonical(fingerprint_input)
+                ).hexdigest()
+                with tempfile.TemporaryDirectory(
+                    prefix="atlas-appd-test-"
+                ) as directory:
+                    snapshot = Path(directory) / "unsafe-url.json"
+                    snapshot.write_text(json.dumps(bundle), encoding="utf-8")
+                    with self.assertRaises(ImportErrorDetail) as raised:
+                        convert_snapshot(snapshot)
+                self.assertEqual(raised.exception.code, "sensitive_property")
 
     def test_bearer_token_rejects_header_injection_and_non_ascii(self) -> None:
         for token in ("good\r\nInjected: yes", "tökén", "bad token"):
@@ -625,6 +810,134 @@ class AppDynamicsCollectorTests(unittest.TestCase):
         while _NETWORK_REQUEST_SLOT.locked() and time.monotonic() < deadline:
             time.sleep(0.001)
         self.assertFalse(_NETWORK_REQUEST_SLOT.locked())
+
+    def test_real_https_transport_verifies_tls_and_ignores_ambient_proxy(self) -> None:
+        with self.tls_controller() as (requests, origin, context):
+            with patch.dict(
+                os.environ,
+                {
+                    "HTTPS_PROXY": "http://127.0.0.1:9",
+                    "https_proxy": "http://127.0.0.1:9",
+                    "HTTP_PROXY": "http://127.0.0.1:9",
+                    "http_proxy": "http://127.0.0.1:9",
+                    "NO_PROXY": "",
+                    "no_proxy": "",
+                },
+            ):
+                client = ControllerClient(
+                    origin,
+                    "readonly-client",
+                    "customer-account",
+                    "local-test-secret",
+                    ssl_context=context,
+                )
+                client.authenticate()
+                payload, _observed_at = client.get_xml("/controller/rest/applications")
+        self.assertEqual(payload, b"<applications/>")
+        self.assertEqual(len(requests), 2)
+        self.assertTrue(requests[0][0].endswith("/oauth/access_token"))
+        self.assertIn("client_secret=local-test-secret", requests[0][2].decode())
+        self.assertEqual(
+            requests[1][1].get("Authorization"), "Bearer actual-local-token"
+        )
+
+    def test_real_https_untrusted_certificate_sends_no_controller_credentials(
+        self,
+    ) -> None:
+        with self.tls_controller() as (requests, origin, _trusted_context):
+            client = ControllerClient(
+                origin,
+                "readonly-client",
+                "customer-account",
+                "local-test-secret",
+            )
+            with self.assertRaises(CollectionError) as raised:
+                client.authenticate()
+        self.assertEqual(raised.exception.code, "transport_error")
+        self.assertEqual(requests, [])
+
+    def test_real_https_redirect_is_rejected_without_following(self) -> None:
+        with self.tls_controller("redirect") as (requests, origin, context):
+            client = ControllerClient(
+                origin,
+                "readonly-client",
+                "customer-account",
+                "local-test-secret",
+                ssl_context=context,
+            )
+            with self.assertRaises(CollectionError) as raised:
+                client.authenticate()
+        self.assertEqual(raised.exception.code, "redirect_rejected")
+        self.assertEqual(len(requests), 1)
+        self.assertTrue(requests[0][0].endswith("/oauth/access_token"))
+
+    def test_real_tls_deadline_interrupts_slow_headers_and_body(self) -> None:
+        for behavior in ("slow_headers", "slow_body"):
+            with self.subTest(behavior=behavior):
+                with self.tls_controller(behavior) as (requests, origin, context):
+                    client = ControllerClient(
+                        origin,
+                        "readonly-client",
+                        "customer-account",
+                        "local-test-secret",
+                        ssl_context=context,
+                    )
+                    client.limits = Limits(deadline=time.monotonic() + 0.15)
+                    started = time.monotonic()
+                    with self.assertRaises(CollectionError) as raised:
+                        client._request(
+                            "GET", "/controller/rest/applications", bearer="test-token"
+                        )
+                    elapsed = time.monotonic() - started
+                    self.assertEqual(raised.exception.code, "collection_timeout")
+                    self.assertLess(elapsed, 0.6)
+                    self.assertTrue(requests)
+
+    def test_real_tls_dns_delay_cannot_send_credentials_after_timeout(self) -> None:
+        release = threading.Event()
+        entered_resolution = threading.Event()
+        with self.tls_controller() as (requests, origin, context):
+            original_getaddrinfo = socket.getaddrinfo
+
+            def delayed_resolution(
+                host: str, port: int, *args: Any, **kwargs: Any
+            ) -> Any:
+                if host == CONTROLLER_HOST:
+                    entered_resolution.set()
+                    release.wait(2)
+                return original_getaddrinfo(host, port, *args, **kwargs)
+
+            client = ControllerClient(
+                origin,
+                "readonly-client",
+                "customer-account",
+                "local-test-secret",
+                ssl_context=context,
+            )
+            client.limits = Limits(deadline=time.monotonic() + 0.15)
+            try:
+                with patch.object(socket, "getaddrinfo", delayed_resolution):
+                    started = time.monotonic()
+                    with self.assertRaises(CollectionError) as raised:
+                        client._request(
+                            "POST",
+                            "/controller/api/oauth/access_token",
+                            body=b"client_secret=late-secret",
+                        )
+                    elapsed = time.monotonic() - started
+                    self.assertEqual(raised.exception.code, "collection_timeout")
+                    self.assertLess(elapsed, 0.6)
+                    self.assertTrue(entered_resolution.wait(0.2))
+                    release.set()
+                    deadline = time.monotonic() + 1
+                    while (
+                        _NETWORK_REQUEST_SLOT.locked() and time.monotonic() < deadline
+                    ):
+                        time.sleep(0.001)
+                    self.assertFalse(_NETWORK_REQUEST_SLOT.locked())
+            finally:
+                release.set()
+        self.assertEqual(requests, [])
 
     def test_output_paths_inside_any_git_worktree_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="atlas-appd-git-") as directory:

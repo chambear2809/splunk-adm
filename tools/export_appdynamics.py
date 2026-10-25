@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import ipaddress
 import json
 import os
 import re
 import ssl
+import socket
 import sys
 import threading
 import time
@@ -25,10 +27,11 @@ from pathlib import Path
 from typing import Any, Callable
 from xml.parsers import expat
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import unquote, urlencode, urlsplit
 from urllib.request import (
     HTTPRedirectHandler,
     HTTPSHandler,
+    ProxyHandler,
     Request,
     build_opener,
 )
@@ -54,12 +57,14 @@ MAX_TEXT = 2_048
 IDENTIFIER_RE = re.compile(r"^[a-z0-9][a-z0-9._:/@-]{0,254}$")
 SCOPE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$")
 SECRET_PROPERTY_RE = re.compile(
-    r"(?:pass(?:word)?|secret|token|credential|authorization|api.?key|access.?key|user(?:name)?)",
+    r"(?:pass(?:word)?|secret|access.?token|token|credential|auth(?:orization)?|"
+    r"api.?key|access.?key|private.?key|client.?secret|user(?:name)?)",
     re.IGNORECASE,
 )
 CONNECTION_SECRET_RE = re.compile(
-    r"(?:^|[;,\s])(?:user(?:\s*(?:name|id)|name|_?id)?|uid|password|passwd|pwd|token|secret|"
-    r"credential|api[_-]?key)\s*[:=]\s*[^;,\s]*",
+    r"(?:^|[;,/\s])(?:user(?:\s*(?:name|id)|name|_?id)?|uid|password|passwd|pwd|pass|"
+    r"access[_-]?token|token|secret|client[_-]?secret|credential|auth(?:orization)?|"
+    r"api[_-]?key|access[_-]?key|private[_-]?key)\s*[:=]\s*[^;,\s]*",
     re.IGNORECASE,
 )
 USERINFO_RE = re.compile(r"(?:^|[/])[^/@:\s]+:[^/@\s]+@")
@@ -234,6 +239,47 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+class _RequestControl:
+    """Deadline/cancellation state shared with one HTTPS request worker."""
+
+    def __init__(self, timeout: float, context: ssl.SSLContext):
+        self.deadline = time.monotonic() + timeout
+        self.context = context
+        self.cancelled = threading.Event()
+        self.socket: socket.socket | ssl.SSLSocket | None = None
+
+    def remaining(self) -> float:
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0 or self.cancelled.is_set():
+            raise CollectionError("request_timeout")
+        return remaining
+
+    def track_socket(self, current: socket.socket | ssl.SSLSocket) -> None:
+        self.socket = current
+        try:
+            self.remaining()
+        except CollectionError:
+            self._shutdown(current)
+            raise
+
+    @staticmethod
+    def _shutdown(current: socket.socket | ssl.SSLSocket) -> None:
+        try:
+            current.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        try:
+            current.close()
+        except OSError:
+            pass
+
+    def cancel(self) -> None:
+        self.cancelled.set()
+        current = self.socket
+        if current is not None:
+            self._shutdown(current)
+
+
 class ControllerClient:
     """HTTPS-only client that pins every request to one configured origin."""
 
@@ -248,6 +294,7 @@ class ControllerClient:
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         opener: Any | None = None,
+        ssl_context: ssl.SSLContext | None = None,
     ) -> None:
         self.origin = _safe_origin(origin)
         self.api_client = _safe_text(api_client, required=True)
@@ -258,9 +305,13 @@ class ControllerClient:
         self.clock = clock
         self.monotonic = monotonic
         self.sleep = sleep
-        self.opener = opener or build_opener(
-            HTTPSHandler(context=ssl.create_default_context()), NoRedirect()
-        )
+        self.opener = opener
+        self.ssl_context = ssl_context or ssl.create_default_context()
+        if (
+            not self.ssl_context.check_hostname
+            or self.ssl_context.verify_mode != ssl.CERT_REQUIRED
+        ):
+            raise CollectionError("invalid_tls_configuration")
         self.token: str | None = None
         self.limits: Limits | None = None
         self.total_bytes = 0
@@ -310,22 +361,97 @@ class ControllerClient:
             raise CollectionError("request_in_progress")
         completed = threading.Event()
         result: list[bytes | CollectionError] = []
-        response_holder: list[Any] = []
+        control = _RequestControl(timeout, self.ssl_context)
+
+        def make_https_opener() -> Any:
+            class Connection(http.client.HTTPSConnection):
+                def connect(connection_self) -> None:
+                    control.remaining()
+                    if connection_self._tunnel_host:
+                        raise CollectionError("transport_error")
+                    raw_socket = None
+                    last_error: OSError | None = None
+                    for (
+                        family,
+                        socktype,
+                        proto,
+                        _canonname,
+                        address,
+                    ) in socket.getaddrinfo(
+                        connection_self.host,
+                        connection_self.port,
+                        0,
+                        socket.SOCK_STREAM,
+                    ):
+                        control.remaining()
+                        candidate = socket.socket(family, socktype, proto)
+                        try:
+                            if connection_self.source_address:
+                                candidate.bind(connection_self.source_address)
+                            candidate.settimeout(control.remaining())
+                            candidate.connect(address)
+                            control.remaining()
+                            raw_socket = candidate
+                            break
+                        except OSError as exc:
+                            last_error = exc
+                            candidate.close()
+                    if raw_socket is None:
+                        if last_error is not None:
+                            raise last_error
+                        raise OSError("Controller hostname did not resolve")
+                    connection_self.sock = raw_socket
+                    control.track_socket(raw_socket)
+                    connection_self.sock = control.context.wrap_socket(
+                        raw_socket,
+                        server_hostname=connection_self.host,
+                        do_handshake_on_connect=False,
+                    )
+                    control.track_socket(connection_self.sock)
+                    connection_self.sock.settimeout(control.remaining())
+                    connection_self.sock.do_handshake()
+                    control.remaining()
+
+                def send(connection_self, data: Any) -> None:
+                    control.remaining()
+                    super().send(data)
+                    control.remaining()
+
+            def connection(host: str, **kwargs: Any) -> Connection:
+                kwargs["timeout"] = control.remaining()
+                kwargs["context"] = control.context
+                result_connection = Connection(host, **kwargs)
+                return result_connection
+
+            class Handler(HTTPSHandler):
+                def https_open(handler_self, current: Request) -> Any:
+                    return handler_self.do_open(connection, current)
+
+            # An explicit empty proxy map prevents urllib from inheriting
+            # ambient HTTP(S)_PROXY settings or forwarding Controller auth.
+            return build_opener(ProxyHandler({}), NoRedirect(), Handler())
 
         def perform_request() -> None:
+            response = None
             try:
-                with self.opener.open(request, timeout=timeout) as response:
-                    response_holder.append(response)
+                opener = self.opener if self.opener is not None else make_https_opener()
+                control.remaining()
+                response = opener.open(request, timeout=control.remaining())
+                with response:
+                    control.remaining()
                     if response.status != 200:
                         raise CollectionError("http_status")
+                    response_headers = getattr(response, "headers", {})
+                    content_length = response_headers.get("Content-Length")
+                    if content_length is not None and (
+                        not content_length.isdecimal()
+                        or int(content_length) > MAX_RESPONSE_BYTES
+                    ):
+                        raise CollectionError("response_size_limit")
                     chunks: list[bytes] = []
                     response_bytes = 0
                     while True:
-                        if (
-                            self.limits is not None
-                            and self.monotonic() >= self.limits.deadline
-                        ):
-                            raise CollectionError("collection_timeout")
+                        control.remaining()
                         chunk = response.read(
                             min(64 * 1024, MAX_RESPONSE_BYTES + 1 - response_bytes)
                         )
@@ -343,43 +469,58 @@ class ControllerClient:
                         status=exc.code,
                     )
                 )
+                try:
+                    exc.close()
+                except OSError:
+                    pass
             except CollectionError as exc:
                 result.append(exc)
             except (URLError, TimeoutError, OSError):
-                result.append(CollectionError("transport_error"))
+                result.append(
+                    CollectionError(
+                        timeout_error
+                        if control.cancelled.is_set()
+                        or time.monotonic() >= control.deadline
+                        else "transport_error"
+                    )
+                )
             except Exception:
                 # Do not surface transport-library exception text. It can
                 # include request details that should never reach CLI output.
                 result.append(CollectionError("transport_error"))
             finally:
-                _NETWORK_REQUEST_SLOT.release()
-                completed.set()
+                try:
+                    if response is not None:
+                        response.close()
+                except Exception:
+                    pass
+                finally:
+                    _NETWORK_REQUEST_SLOT.release()
+                    completed.set()
 
-        # urllib's timeout is an inactivity timeout, and name resolution may
-        # block outside it. A daemon worker makes this caller bound real. Once
-        # one call times out, poison the client so stranded workers cannot
-        # accumulate through retries or later requests.
+        # The worker bounds urllib's blocking parser, while the custom HTTPS
+        # connection tracks the raw socket so caller cancellation interrupts
+        # a stalled read. If DNS outlives the deadline, connect checks the
+        # cancelled control before TLS or any authenticated request bytes.
         worker = threading.Thread(target=perform_request, daemon=True)
-        request_started = time.monotonic()
         try:
             worker.start()
         except Exception as exc:
             _NETWORK_REQUEST_SLOT.release()
             raise CollectionError("transport_error") from exc
-        wait_seconds = max(0.0, timeout - (time.monotonic() - request_started))
+        wait_seconds = max(0.0, control.deadline - time.monotonic())
         if not completed.wait(wait_seconds):
             self._request_timed_out = True
-            for response in response_holder:
-                try:
-                    response.close()
-                except Exception:
-                    pass
+            control.cancel()
             raise CollectionError(timeout_error)
         worker.join()
         if not result:
             raise CollectionError("transport_error")
         outcome = result[0]
         if isinstance(outcome, CollectionError):
+            if outcome.code == "request_timeout":
+                self._request_timed_out = True
+                raise CollectionError(timeout_error)
             raise outcome
         payload = outcome
         if len(payload) > MAX_RESPONSE_BYTES:
@@ -496,6 +637,16 @@ def _sanitize_url(candidate: str) -> str | None:
     try:
         parsed = urlsplit(parsed_value)
         if not parsed.scheme or not parsed.hostname:
+            return None
+        decoded_path = parsed.path
+        for _ in range(3):
+            decoded = unquote(decoded_path)
+            if decoded == decoded_path:
+                break
+            decoded_path = decoded
+        if CONNECTION_SECRET_RE.search(decoded_path) or USERINFO_RE.search(
+            decoded_path
+        ):
             return None
         host = parsed.hostname
         try:
