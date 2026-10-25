@@ -9,6 +9,11 @@ NAME="${ADM_LAB_NAME:-adm-splunk-lab}"
 WEB_PORT="${ADM_LAB_WEB_PORT:-8000}"
 MGMT_PORT="${ADM_LAB_MGMT_PORT:-8089}"
 HEC_PORT="${ADM_LAB_HEC_PORT:-8088}"
+TASK="${ADM_LAB_TASK:-}"
+if [[ -n "$TASK" ]]; then
+  [[ "$TASK" =~ ^[a-z0-9-]+$ && "$NAME" != "adm-splunk-lab" ]] || { echo "invalid task lab identity" >&2; exit 2; }
+  [[ "$WEB_PORT" != "$MGMT_PORT" && "$WEB_PORT" != "$HEC_PORT" && "$MGMT_PORT" != "$HEC_PORT" ]] || { echo "lab ports must differ" >&2; exit 2; }
+fi
 [[ "$NAME" =~ ^adm-[a-z0-9-]+$ ]] || { echo "invalid lab container name" >&2; exit 2; }
 for port in "$WEB_PORT" "$MGMT_PORT" "$HEC_PORT"; do
   [[ "$port" =~ ^[0-9]{2,5}$ ]] && ((port >= 1024 && port <= 65535)) || { echo "invalid lab port" >&2; exit 2; }
@@ -59,13 +64,24 @@ wait_healthy() {
   return 1
 }
 
+verify_owned() {
+  [[ -z "$TASK" ]] || py verify-target
+}
+
 cmd_up() {
   py init-secrets
   if docker inspect "$NAME" >/dev/null 2>&1; then
+    verify_owned
     docker start "$NAME" >/dev/null
   else
     # --env-file keeps the generated password out of the process list and stdout.
-    docker run -d --name "$NAME" --platform linux/amd64 \
+    local labels=()
+    if [[ -n "$TASK" ]]; then
+      py init-resources
+      labels=(--label "org.splunk-adm.task=$TASK" --label "org.splunk-adm.lab=$NAME"
+        --network "$NAME-net" -v "$NAME-etc:/opt/splunk/etc" -v "$NAME-var:/opt/splunk/var")
+    fi
+    docker run -d --name "$NAME" --platform linux/amd64 "${labels[@]}" \
       -p "127.0.0.1:$WEB_PORT:8000" -p "127.0.0.1:$MGMT_PORT:8089" -p "127.0.0.1:$HEC_PORT:8088" \
       -e SPLUNK_START_ARGS=--accept-license \
       -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
@@ -94,6 +110,7 @@ copy_ta() {
 }
 
 cmd_install() {
+  verify_owned
   local stage ta
   STAGE="$(mktemp -d)"
   stage="$STAGE"
@@ -179,6 +196,7 @@ PY
 }
 
 cmd_reset() {
+  verify_owned
   local splunk="/opt/splunk/bin/splunk" index
   docker exec -u splunk "$NAME" "$splunk" stop >/dev/null
   for index in "${LAB_INDEXES[@]}"; do
@@ -190,7 +208,11 @@ cmd_reset() {
 }
 
 cmd_down() {
-  docker rm -f -v "$NAME" >/dev/null 2>&1 || true
+  if docker inspect "$NAME" >/dev/null 2>&1; then
+    verify_owned
+    docker rm -f -v "$NAME" >/dev/null
+  fi
+  [[ -z "$TASK" ]] || py remove-resources
   echo "Removed container $NAME and its volumes."
 }
 
@@ -210,7 +232,7 @@ case "${1:-}" in
   load) shift; py load "$@" ;;
   search) shift; py search "$@" ;;
   saved) shift; py saved "$@" ;;
-  btool) docker exec -u splunk "$NAME" /opt/splunk/bin/splunk btool check ;;
+  btool) verify_owned; docker exec -u splunk "$NAME" /opt/splunk/bin/splunk btool check ;;
   reset) cmd_reset ;;
   down) cmd_down ;;
   purge) cmd_purge ;;

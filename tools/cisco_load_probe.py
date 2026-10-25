@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import json
 import hashlib
 import math
+import os
 from pathlib import Path
 import re
 import signal
@@ -32,7 +33,7 @@ import lab  # noqa: E402
 from lab_lock import run_main, with_lab_lock  # noqa: E402
 from capture_networking_fixtures import require_complete, require_local_lab  # noqa: E402
 
-CONTAINER = "adm-splunk-lab"
+CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 SAVED_SEARCHES = (
     "ADM - Network client history builder",
     "ADM - Conversation rollup v2",

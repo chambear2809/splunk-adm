@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import ssl
+import subprocess
 import sys
 import time
 import urllib.error
@@ -16,7 +17,22 @@ import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-SECRETS = Path(os.environ.get("ADM_LAB_SECRETS", str(HERE / ".lab-secrets")))
+SECRETS = Path(
+    os.environ.get(
+        "ADM_LAB_SECRETS",
+        str(
+            HERE
+            / (
+                ".lab-secrets"
+                + (
+                    "-" + os.environ["ADM_LAB_NAME"]
+                    if os.environ.get("ADM_LAB_NAME")
+                    else ""
+                )
+            )
+        ),
+    )
+)
 MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
 HEC = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_HEC_PORT', '8088'))}"
 APP = "splunk_adm"
@@ -30,6 +46,86 @@ _CTX.verify_mode = ssl.CERT_NONE
 
 class LabError(RuntimeError):
     pass
+
+
+def verify_target() -> None:
+    """Task labs refuse operations against an unowned or misrouted container."""
+    task = os.environ.get("ADM_LAB_TASK")
+    if not task:
+        return
+    name = os.environ.get("ADM_LAB_NAME", "")
+    if not name.startswith("adm-") or name == "adm-splunk-lab":
+        raise LabError("invalid task lab identity")
+    result = subprocess.run(
+        ["docker", "inspect", name],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    target = json.loads(result.stdout)[0]
+    labels = target.get("Config", {}).get("Labels") or {}
+    if (
+        labels.get("org.splunk-adm.task") != task
+        or labels.get("org.splunk-adm.lab") != name
+    ):
+        raise LabError("refusing unowned task lab")
+    bindings = target.get("HostConfig", {}).get("PortBindings", {})
+    for internal, variable, default in (
+        ("8000/tcp", "ADM_LAB_WEB_PORT", "8000"),
+        ("8089/tcp", "ADM_LAB_MGMT_PORT", "8089"),
+        ("8088/tcp", "ADM_LAB_HEC_PORT", "8088"),
+    ):
+        if bindings.get(internal) != [
+            {"HostIp": "127.0.0.1", "HostPort": os.environ.get(variable, default)}
+        ]:
+            raise LabError("refusing task lab with mismatched loopback ports")
+
+
+def task_resources(remove: bool = False) -> None:
+    """Create or remove only resources bearing the task and lab labels."""
+    task = os.environ.get("ADM_LAB_TASK")
+    if not task:
+        return
+    name = os.environ["ADM_LAB_NAME"]
+    for kind, suffix in (("network", "net"), ("volume", "etc"), ("volume", "var")):
+        resource = f"{name}-{suffix}"
+        result = subprocess.run(
+            ["docker", kind, "inspect", resource],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            labels = json.loads(result.stdout)[0].get("Labels") or {}
+            if (
+                labels.get("org.splunk-adm.task") != task
+                or labels.get("org.splunk-adm.lab") != name
+            ):
+                raise LabError("refusing unowned task resource")
+            if remove:
+                subprocess.run(
+                    ["docker", kind, "rm", resource],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    timeout=30,
+                )
+        elif not remove:
+            subprocess.run(
+                [
+                    "docker",
+                    kind,
+                    "create",
+                    "--label",
+                    f"org.splunk-adm.task={task}",
+                    "--label",
+                    f"org.splunk-adm.lab={name}",
+                    resource,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                timeout=30,
+            )
 
 
 def init_secrets() -> None:
@@ -66,6 +162,7 @@ def _open(req: urllib.request.Request, timeout: float = 120):
 
 
 def _mgmt(method: str, path: str, data: dict | None = None, timeout: float = 120):
+    verify_target()
     s = read_secrets()
     auth = base64.b64encode(f"admin:{s['SPLUNK_PASSWORD']}".encode()).decode()
     body = urllib.parse.urlencode(data, doseq=True).encode() if data else None
@@ -107,6 +204,7 @@ def restart() -> None:
 
 
 def _hec_post(body: bytes, query: str = "") -> dict:
+    verify_target()
     token = read_secrets()["HEC_TOKEN"]
     req = urllib.request.Request(
         f"{HEC}/services/collector/event{query}",
@@ -229,7 +327,13 @@ def main(argv: list[str]) -> int:
         return 2
     cmd, rest = argv[0], argv[1:]
     try:
-        if cmd == "init-secrets":
+        if cmd == "verify-target":
+            verify_target()
+        elif cmd == "init-resources":
+            task_resources()
+        elif cmd == "remove-resources":
+            task_resources(remove=True)
+        elif cmd == "init-secrets":
             init_secrets()
         elif cmd == "wait":
             wait_ready()
