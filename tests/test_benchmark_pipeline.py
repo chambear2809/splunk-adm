@@ -86,6 +86,206 @@ class BenchmarkPipelineTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "unowned"):
                 bench.validate_lab_target()
 
+    def test_server_info_parser_keeps_only_native_identity_fields(self):
+        parsed = bench.parse_server_info(
+            {
+                "entry": [
+                    {
+                        "name": "server-info",
+                        "content": {
+                            "version": "10.6.0.5",
+                            "build": "abc123",
+                            "product_type": "enterprise",
+                            "licenseKeys": ["private-license"],
+                            "host": "internal-host",
+                            "guid": "private-guid",
+                        },
+                    }
+                ]
+            }
+        )
+        self.assertEqual(
+            parsed,
+            {
+                "available": True,
+                "version": "10.6.0.5",
+                "build": "abc123",
+                "product_type": "enterprise",
+                "unavailable_fields": [],
+                "availability_reason": None,
+            },
+        )
+
+    def test_server_info_parser_reports_missing_fields_and_invalid_shapes(self):
+        partial = bench.parse_server_info(
+            {"entry": [{"name": "server-info", "content": {"version": "10.6"}}]}
+        )
+        self.assertFalse(partial["available"])
+        self.assertEqual(partial["version"], "10.6")
+        self.assertEqual(partial["build"], None)
+        self.assertEqual(partial["product_type"], None)
+        self.assertEqual(partial["unavailable_fields"], ["build", "product_type"])
+        self.assertEqual(partial["availability_reason"], "fields_missing")
+        self.assertEqual(
+            bench.parse_server_info({"entry": []})["availability_reason"],
+            "server_info_entry_missing",
+        )
+        self.assertEqual(
+            bench.parse_server_info([])["availability_reason"], "invalid_response"
+        )
+
+    def test_server_info_capture_uses_finite_read_only_request_and_byte_cap(self):
+        payload = json.dumps(
+            {
+                "entry": [
+                    {
+                        "name": "server-info",
+                        "content": {
+                            "version": "10.6.0.5",
+                            "build": "abc123",
+                            "product_type": "enterprise",
+                            "licenseKeys": ["private-license"],
+                        },
+                    }
+                ]
+            }
+        ).encode()
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, amount):
+                self.amount = amount
+                return payload
+
+        response = Response()
+        with patch.object(bench.lab, "_mgmt", return_value=response) as mgmt:
+            parsed = bench.capture_server_info()
+        mgmt.assert_called_once_with(
+            "GET",
+            "/services/server/info?output_mode=json&count=1",
+            timeout=bench.SERVER_INFO_TIMEOUT_SECONDS,
+        )
+        self.assertEqual(response.amount, bench.MAX_SERVER_INFO_RESPONSE_BYTES + 1)
+        self.assertTrue(parsed["available"])
+        self.assertNotIn("licenseKeys", json.dumps(parsed))
+
+    def test_server_info_capture_retains_safe_unavailable_reasons(self):
+        with patch.object(
+            bench.lab, "_mgmt", side_effect=TimeoutError("private response text")
+        ) as mgmt:
+            timed_out = bench.capture_server_info()
+        mgmt.assert_called_once()
+        self.assertEqual(timed_out["availability_reason"], "request_timeout")
+        self.assertNotIn("private response text", json.dumps(timed_out))
+
+        with patch.object(
+            bench.lab, "_mgmt", side_effect=RuntimeError("sensitive body")
+        ):
+            failed = bench.capture_server_info()
+        self.assertEqual(failed["availability_reason"], "request_failed")
+        self.assertNotIn("sensitive body", json.dumps(failed))
+
+        class InvalidResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, _amount):
+                return b"not-json"
+
+        with patch.object(bench.lab, "_mgmt", return_value=InvalidResponse()):
+            invalid = bench.capture_server_info()
+        self.assertEqual(invalid["availability_reason"], "invalid_json")
+
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self, amount):
+                self.amount = amount
+                return b"x" * amount
+
+        response = Response()
+        with patch.object(bench.lab, "_mgmt", return_value=response):
+            oversized = bench.capture_server_info()
+        self.assertEqual(oversized["availability_reason"], "response_too_large")
+        self.assertEqual(response.amount, bench.MAX_SERVER_INFO_RESPONSE_BYTES + 1)
+
+    def test_preflight_records_native_server_info_separately_from_image_identity(self):
+        ports = {
+            "8088/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8088"}],
+            "8089/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8089"}],
+        }
+        docker_info = {"Architecture": "aarch64", "NCPU": 12, "MemTotal": 8192}
+        formats = {
+            "{{json .NetworkSettings.Ports}}": ports,
+            "{{json .HostConfig}}": {"Memory": 0, "NanoCpus": 0},
+            "{{json .Config.Labels}}": {},
+            "{{json .Mounts}}": [],
+            "{{json .NetworkSettings.Networks}}": {"test-net": {}},
+            "{{.HostConfig.NetworkMode}}": "test-net",
+            "{{.Config.Image}}": "splunk/splunk:10.6.0.5",
+            "{{.Image}}": "sha256:test-image",
+            "{{.Id}}": "test-container",
+        }
+
+        def fake_command(*args):
+            if args[:2] == ("docker", "info"):
+                return json.dumps(docker_info)
+            if args[:2] == ("docker", "inspect"):
+                return (
+                    json.dumps(formats[args[3]])
+                    if args[3].startswith("{{json")
+                    else formats[args[3]]
+                )
+            raise AssertionError(f"Unexpected command: {args}")
+
+        server_info = {
+            "available": True,
+            "version": "10.6.0.5",
+            "build": "abc123",
+            "product_type": "enterprise",
+            "unavailable_fields": [],
+            "availability_reason": None,
+        }
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ADM_LAB_PACKAGE": "",
+                    "ADM_LAB_HEC_PORT": "8088",
+                    "ADM_LAB_MGMT_PORT": "8089",
+                },
+            ),
+            patch.object(bench, "local_docker_endpoint"),
+            patch.object(bench, "validate_lab_target"),
+            patch.object(bench, "command", side_effect=fake_command),
+            patch.object(bench, "non_task_docker_activity", return_value=[]),
+            patch.object(bench, "installed_fingerprints", return_value={}),
+            patch.object(bench, "capture_server_info", return_value=server_info),
+        ):
+            result = bench.preflight()
+        self.assertEqual(result["image"], "splunk/splunk:10.6.0.5")
+        self.assertEqual(result["image_id"], "sha256:test-image")
+        self.assertEqual(result["splunk_server_info"], server_info)
+        self.assertEqual(
+            result["splunk_server_info_capture"],
+            {
+                "request_timeout_seconds": bench.SERVER_INFO_TIMEOUT_SECONDS,
+                "max_response_bytes": bench.MAX_SERVER_INFO_RESPONSE_BYTES,
+            },
+        )
+
     def test_bounded_reset_subprocess_timeout_terminates_only_its_process_group(self):
         process = SimpleNamespace(pid=4321, returncode=-signal.SIGTERM)
         process.communicate = Mock(

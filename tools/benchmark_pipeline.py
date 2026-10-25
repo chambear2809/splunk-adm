@@ -44,6 +44,9 @@ MAX_RESULT_PAGE_SIZE = 20_000
 LAB_RESET_TIMEOUT_SECONDS = 900
 LAB_RESET_DOCKER_TIMEOUT_SECONDS = 30
 PROCESS_TERMINATION_GRACE_SECONDS = 5
+SERVER_INFO_TIMEOUT_SECONDS = 15
+MAX_SERVER_INFO_RESPONSE_BYTES = 64 * 1024
+SERVER_INFO_FIELDS = ("version", "build", "product_type")
 COLLECTIONS = (
     "adm_observer_scope",
     "adm_ip_identity",
@@ -454,6 +457,76 @@ def request(method, path, data=None, timeout=120):
         return json.load(response)
 
 
+def _unavailable_server_info(reason):
+    return {
+        "available": False,
+        "version": None,
+        "build": None,
+        "product_type": None,
+        "unavailable_fields": list(SERVER_INFO_FIELDS),
+        "availability_reason": reason,
+    }
+
+
+def parse_server_info(payload):
+    """Extract only the documented native Splunk identity fields."""
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return _unavailable_server_info("invalid_response")
+    matches = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("name") == "server-info"
+    ]
+    if len(matches) != 1 or not isinstance(matches[0].get("content"), dict):
+        return _unavailable_server_info("server_info_entry_missing")
+
+    content = matches[0]["content"]
+    values = {}
+    for field in SERVER_INFO_FIELDS:
+        value = content.get(field)
+        if (
+            isinstance(value, str)
+            and value.strip()
+            and len(value.strip()) <= 256
+            and not any(ord(char) < 32 for char in value)
+        ):
+            values[field] = value.strip()
+        else:
+            values[field] = None
+    unavailable_fields = [field for field, value in values.items() if value is None]
+    return {
+        "available": not unavailable_fields,
+        **values,
+        "unavailable_fields": unavailable_fields,
+        "availability_reason": "fields_missing" if unavailable_fields else None,
+    }
+
+
+def capture_server_info():
+    """Capture bounded, read-only identity metadata without retaining other fields."""
+    try:
+        with lab._mgmt(
+            "GET",
+            "/services/server/info?output_mode=json&count=1",
+            timeout=SERVER_INFO_TIMEOUT_SECONDS,
+        ) as response:
+            payload = response.read(MAX_SERVER_INFO_RESPONSE_BYTES + 1)
+    except TimeoutError:
+        return _unavailable_server_info("request_timeout")
+    except Exception:
+        # Endpoint errors may include response bodies; keep only a safe status.
+        return _unavailable_server_info("request_failed")
+
+    if len(payload) > MAX_SERVER_INFO_RESPONSE_BYTES:
+        return _unavailable_server_info("response_too_large")
+    try:
+        decoded = json.loads(payload)
+    except (TypeError, ValueError):
+        return _unavailable_server_info("invalid_json")
+    return parse_server_info(decoded)
+
+
 def preflight():
     local_docker_endpoint()
     validate_lab_target()
@@ -507,6 +580,7 @@ def preflight():
     non_task_activity = non_task_docker_activity()
     other_images = Counter(entry["image"] for entry in non_task_activity)
     package = os.environ.get("ADM_LAB_PACKAGE")
+    native_server_info = capture_server_info()
     return {
         "container_id": command("docker", "inspect", "--format", "{{.Id}}", CONTAINER),
         "lab_configuration": {
@@ -552,6 +626,11 @@ def preflight():
         "docker_memory_bytes": info.get("MemTotal"),
         "image": image,
         "image_id": image_id,
+        "splunk_server_info": native_server_info,
+        "splunk_server_info_capture": {
+            "request_timeout_seconds": SERVER_INFO_TIMEOUT_SECONDS,
+            "max_response_bytes": MAX_SERVER_INFO_RESPONSE_BYTES,
+        },
         "container_memory_limit_bytes": limits.get("Memory"),
         "container_nano_cpus": limits.get("NanoCpus"),
         "container_platform": "linux/amd64 (lab.sh)",
