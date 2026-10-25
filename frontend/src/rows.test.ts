@@ -150,6 +150,15 @@ describe("rowsToGraph validation", () => {
     });
   });
 
+  it("rejects firewall translation evidence on non-conversation edges", () => {
+    const r = rows();
+    const call = r.find(
+      (row) => row.row_type === "edge" && row.relationship === "calls",
+    )!;
+    call.nat_observations = JSON.stringify([natObservation()]);
+    expect(() => rowsToGraph(r, args)).toThrow(/invalid relationships/);
+  });
+
   it.each([
     ["ambiguous scope", { scope_mapping_verified: false }],
     ["unmapped scope", { scope: "unmapped:device" }],
