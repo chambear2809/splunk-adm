@@ -30,6 +30,7 @@ class NatEvidenceTest(unittest.TestCase):
     """Verify tuple preservation does not add traffic or handoff rows."""
 
     _used_device_ips: set[str] = set()
+    _owned_unmapped_probes: list[dict] = []
 
     def setUp(self) -> None:
         self.token = "nat-evidence-" + uuid.uuid4().hex[:12]
@@ -360,6 +361,13 @@ class NatEvidenceTest(unittest.TestCase):
         self.assertTrue(unmapped[0]["scope"].startswith("unmapped:"))
         self.assertEqual(str(unmapped[0]["scope_mapping_verified"]), "0")
         self.assertNotIn("nat_observations", unmapped[0])
+        type(self)._owned_unmapped_probes.append(
+            {
+                "observer_ip": self.devices["unmapped"],
+                "normalized_flow": unmapped_flow[0],
+                "rollup": unmapped[0],
+            }
+        )
         rows.extend(unmapped)
         return {row["scope"]: row for row in rows}
 
