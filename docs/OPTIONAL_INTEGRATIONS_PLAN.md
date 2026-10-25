@@ -77,10 +77,10 @@ Existing indexed evidence is retained under operator retention policy.
 
 | Owner | Mutable paths |
 | --- | --- |
-| Coordinator | Shared evidence/config types and tests; source registry; macros/props/collections/lookup projection; frontend registration; packaging/CI; lab isolation; scheduled capture/queue wrapper and verified SDK transport with tests; detector query/panel/browser and installed tests (explicit reassignment); integration qualification records |
-| Observability worker | Health exporter/normalizer/panel and tests; common HEC delivery; detector exporter/fixture/Python tests; navigation and Observability operator/design docs |
+| Coordinator | Shared evidence/config types and tests; source registry; macros/props/collections/lookup projection; frontend registration including navigation integration; packaging/CI; lab isolation; scheduled capture/queue wrapper and verified SDK transport with tests; detector query/panel/browser and installed tests (explicit reassignment); integration qualification records |
+| Observability worker | Health exporter/normalizer and tests; common HEC delivery; detector exporter/fixture/Python tests; Observability collection/delivery operator/design docs |
 | AppDynamics worker | Controller collector/importer; AppDynamics query/panel/fixtures/tests; AppDynamics operator/design docs |
-| Processor worker | `integrations/processors/v1/`, `fixtures/processors/`, processor validator/tests and processor docs |
+| Processor worker | `integrations/processors/v1/`, `fixtures/processors/`, processor validator/tests and processor docs; new isolated Observability navigation helper/component/tests and navigation operator guide (explicit reassignment after processor completion) |
 | Independent reviewer | Review/release records and PR metadata only; no feature/test fixes |
 
 Workers use separate task-owned managed worktrees and containers, unique ports,
