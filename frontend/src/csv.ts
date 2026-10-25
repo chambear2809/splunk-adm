@@ -103,12 +103,16 @@ export function requiredFlowsCsv(
   ): [string | number, string | number, string] => {
     if (!edge.nat_observations?.length && !edge.nat_observations_truncated)
       return ["", "", ""];
-    const exact = graph.nat_event_window;
-    const bounds = exact ?? {
+    const nativeAddinfoWindow = graph.nat_event_window;
+    const bounds = nativeAddinfoWindow ?? {
       start: Date.parse(graph.window.start) / 1000,
       end: Date.parse(graph.window.end) / 1000,
     };
-    return [bounds.start, bounds.end, exact ? "exact" : "displayed-window"];
+    return [
+      bounds.start,
+      bounds.end,
+      nativeAddinfoWindow ? "native-addinfo" : "displayed-window",
+    ];
   };
   const node = (id: string) => index.node.get(id);
   const leaf = (raw?: string, context = {}) => {
@@ -221,6 +225,9 @@ export function contextEvidenceCsv(graph: Graph): string {
     start: Date.parse(graph.window.start) / 1000,
     end: Date.parse(graph.window.end) / 1000,
   };
+  const natWindowBasis = graph.nat_event_window
+    ? "native-addinfo"
+    : "displayed-window";
   const append = (
     edge: GraphEdge,
     evidenceKind:
@@ -257,7 +264,7 @@ export function contextEvidenceCsv(graph: Graph): string {
             ? {
                 nat_observation: value,
                 nat_event_window: natWindow,
-                nat_event_window_exact: graph.nat_event_window !== undefined,
+                nat_event_window_basis: natWindowBasis,
               }
             : value,
         ),
@@ -290,7 +297,7 @@ export function contextEvidenceCsv(graph: Graph): string {
           JSON.stringify({
             truncated: true,
             nat_event_window: natWindow,
-            nat_event_window_exact: graph.nat_event_window !== undefined,
+            nat_event_window_basis: natWindowBasis,
           }),
         ]),
       );
