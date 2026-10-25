@@ -27,6 +27,7 @@ ARGS = {
 }
 
 sys.path.insert(0, str(ROOT / "tools"))
+from gen_raw_fixtures import generator_source_hashes  # noqa: E402
 from lab_lock import with_lab_lock  # noqa: E402
 
 
@@ -97,6 +98,7 @@ def capture(earliest: str, latest: str, initialize: bool = False) -> dict:
             "macro_sha256": hashlib.sha256(macro.encode()).hexdigest(),
             "macro_file_sha256": source_hash(MACROS),
             "generator_sha256": source_hash(ROOT / "tools/gen_raw_fixtures.py"),
+            "generator_source_sha256": generator_source_hashes(ROOT),
             "scenario_sha256": source_hash(ROOT / "fixtures/raw-aci/scenario.json"),
             "raw_scenario": "dist/phase8-raw-aci-prev (derived from fixtures/raw-aci/scenario.json)",
             "method": "tests/splunk/lab.py search against initialized lab",

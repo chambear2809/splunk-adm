@@ -108,6 +108,10 @@ class CaptureNetworkingTest(unittest.TestCase):
             )
             (root / "tools").mkdir()
             (root / "tools/gen_raw_fixtures.py").write_text("# fixture generator\n")
+            for relative in networking.GENERATOR_SOURCE_FILES:
+                source = root / relative
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_text("# fixture generator source\n")
             raw = root / "raw"
             raw.mkdir()
             for name in ("scenario.json", "source-profiles.json"):
@@ -406,6 +410,10 @@ class CapturePackageFingerprintTest(unittest.TestCase):
             (self.app / "default" / name).write_bytes(content)
         (self.root / "tools").mkdir()
         (self.root / "tools/gen_raw_fixtures.py").write_text("# synthetic generator\n")
+        for relative in networking.GENERATOR_SOURCE_FILES:
+            source = self.root / relative
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text("# synthetic generator source\n")
         self.raw = self.root / "raw"
         self.raw.mkdir()
         for name in ("scenario.json", "source-profiles.json"):
@@ -533,6 +541,22 @@ class CapturePackageFingerprintTest(unittest.TestCase):
         self.assertNotEqual(
             result["source_default_sha256"]["app.conf"],
             result["installed_default_sha256"]["app.conf"],
+        )
+
+    def test_generator_implementation_closure_is_bound(self):
+        self.write_archive()
+        before = self.fingerprint()
+        implementation = self.root / "tools/raw_fixtures/aci.py"
+        implementation.write_text(implementation.read_text() + "# changed\n")
+        after = self.fingerprint()
+
+        self.assertEqual(
+            set(before["generator_source_sha256"]),
+            set(networking.GENERATOR_SOURCE_FILES),
+        )
+        self.assertNotEqual(
+            before["generator_source_sha256"]["tools/raw_fixtures/aci.py"],
+            after["generator_source_sha256"]["tools/raw_fixtures/aci.py"],
         )
 
     def test_archive_source_query_drift_is_rejected(self):
