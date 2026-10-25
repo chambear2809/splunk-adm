@@ -116,6 +116,13 @@ requires both exact known workload warnings and rejects unexpected warnings.
 The corrected three-case report is
 `performance/topology-boundary-corrected-b1b9f08.json` in retained evidence.
 
+Post-measurement review added bounded reset subprocesses and host process-group
+cleanup in `104986f` and `cbd1c6d`; 51 focused benchmark tests passed, including a
+real child that ignores TERM after its parent exits. Reset timeouts retain an
+uncertain-state report and stop without an automatic retry. Host-group cleanup
+cannot prove Docker daemon-side exec completion. These guards do not retag or
+extend the earlier measurements.
+
 The separate existing pipeline smoke workload also completed its builders,
 rollup, summary and graph searches: 19 events became visible, with 8 graph nodes
 and 10 edges. This is a small local functional regression check.
