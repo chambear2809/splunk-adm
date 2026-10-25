@@ -12,6 +12,7 @@ for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
 const { cases } = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 const server = await createServer({
   configFile: resolve(repositoryRoot, "vite.config.ts"),
+  logLevel: "silent",
   server: { middlewareMode: true, hmr: false, watch: null },
   appType: "custom",
 });
