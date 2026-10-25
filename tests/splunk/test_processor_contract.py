@@ -20,6 +20,9 @@ import unittest
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 FIXTURES = ROOT / "fixtures" / "processors" / "v1"
+sys.path.insert(0, str(ROOT / "tools"))
+from lab_lock import LabLock  # noqa: E402
+
 GOLDEN = json.loads((FIXTURES / "golden_outputs.json").read_text(encoding="utf-8"))
 HEALTH = json.loads(
     (FIXTURES / "inputs" / "o11y_health_v1.json").read_text(encoding="utf-8")
@@ -74,18 +77,16 @@ def _health_helper(payload: dict) -> str | dict:
 
 
 @unittest.skipUnless(
-    os.environ.get("ADM_LAB") == "1", "requires the assigned disposable Splunk lab"
+    os.environ.get("ADM_LAB") == "1",
+    "requires ADM_LAB=1 and the configured disposable Splunk lab",
 )
 class ProcessorInstalledSearchTest(unittest.TestCase):
     """Assert direct fixture records still produce the checked-in Atlas facts."""
 
     @classmethod
     def setUpClass(cls):
-        cls.container = os.environ.get("ADM_LAB_NAME", "")
-        if not cls.container.startswith("adm-atlas-proc-"):
-            raise RuntimeError(
-                "processor comparison requires its task-owned adm-atlas-proc-* lab"
-            )
+        if not LabLock(ROOT).check_owned():
+            raise RuntimeError("run this suite under tools/lab_lock.py")
 
         sys.path.insert(0, str(HERE))
         import lab
