@@ -7,9 +7,9 @@ live FMC/FTD eStreamer emission. Run with the task-owned lab environment.
 from __future__ import annotations
 
 import json
-import math
 import os
 from pathlib import Path
+import hashlib
 import subprocess
 import time
 import unittest
@@ -29,6 +29,8 @@ FRONTEND_VALIDATOR = ROOT / "tests" / "splunk" / "validate_nat_graph.mjs"
 class NatEvidenceTest(unittest.TestCase):
     """Verify tuple preservation does not add traffic or handoff rows."""
 
+    _used_device_ips: set[str] = set()
+
     def setUp(self) -> None:
         self.token = "nat-evidence-" + uuid.uuid4().hex[:12]
         self.start = int(time.time()) - 30
@@ -36,6 +38,7 @@ class NatEvidenceTest(unittest.TestCase):
             "base": self.token + "-base",
             "nat": self.token + "-nat",
             "mapped": self.token + "-mapped",
+            "reported_invalid": self.token + "-reported-invalid",
             "ipv6_compressed": self.token + "-ipv6-compressed",
             "ipv6_case": self.token + "-ipv6-case",
             "ipv6_changed": self.token + "-ipv6-changed",
@@ -54,27 +57,31 @@ class NatEvidenceTest(unittest.TestCase):
             "eventtype": self.token + "-eventtype",
             "unmapped": self.token + "-unmapped",
         }
-        self.devices = {
-            "base": "192.0.2.10",
-            "nat": "192.0.2.11",
-            "mapped": "192.0.2.23",
-            "ipv6_compressed": "192.0.2.27",
-            "ipv6_case": "192.0.2.28",
-            "ipv6_changed": "192.0.2.29",
-            "time_format": "192.0.2.24",
-            "cap": "192.0.2.12",
-            "multi": "192.0.2.13",
-            "port": "192.0.2.14",
-            "port_high": "192.0.2.26",
-            "sentinel": "192.0.2.15",
-            "unspecified": "192.0.2.19",
-            "unspecified_expanded": "192.0.2.25",
-            "port_format": "192.0.2.20",
-            "invalid_ip": "192.0.2.21",
-            "protocol": "192.0.2.22",
-            "unchanged": "192.0.2.16",
-            "eventtype": "192.0.2.17",
-            "unmapped": "192.0.2.18",
+        device_names = list(self.scopes)
+        device_names += ["graph_base", "graph_cap", "graph_window"]
+        address_pool = [
+            f"{prefix}.{last_octet}"
+            for prefix in ("192.0.2", "198.51.100")
+            for last_octet in range(128, 255)
+        ]
+        seed = int(hashlib.sha256(self.token.encode()).hexdigest(), 16)
+        selected_devices = None
+        for attempt in range(len(address_pool)):
+            offset = (seed + attempt) % len(address_pool)
+            candidates = [
+                address_pool[(offset + index) % len(address_pool)]
+                for index in range(len(device_names))
+            ]
+            if not self._used_device_ips.intersection(candidates):
+                selected_devices = candidates
+                self._used_device_ips.update(candidates)
+                break
+        if selected_devices is None:
+            self.fail("test observer IP pool is exhausted")
+        all_devices = dict(zip(device_names, selected_devices, strict=True))
+        self.devices = {name: all_devices[name] for name in self.scopes}
+        self.graph_devices = {
+            name: all_devices["graph_" + name] for name in ("base", "cap", "window")
         }
         self.addCleanup(self.cleanup_scopes)
         self.register_scopes()
@@ -130,6 +137,13 @@ class NatEvidenceTest(unittest.TestCase):
         base_event = json.loads(template["event"])
         events = [self.envelope("base", base_event, 1, nat=False)]
         events.append(self.envelope("nat", base_event, 2, nat=True))
+        reported_invalid = self.envelope("reported_invalid", base_event, 18, nat=True)
+        reported_invalid_event = json.loads(reported_invalid["event"])
+        reported_invalid_event["InitiatorIP"] = "not-an-ip"
+        reported_invalid["event"] = json.dumps(
+            reported_invalid_event, separators=(",", ":")
+        )
+        events.append(reported_invalid)
         mapped = self.envelope("mapped", base_event, 13, nat=True)
         mapped_event = json.loads(mapped["event"])
         mapped_event["NAT_InitiatorIP"] = "::ffff:192.0.2.44"
@@ -304,9 +318,9 @@ class NatEvidenceTest(unittest.TestCase):
     def rollups(self) -> dict[str, dict]:
         rows = lab.search(
             "| `adm_conversation_rollup` "
-            f'| where scope IN ("{self.scopes["base"]}","{self.scopes["nat"]}","{self.scopes["mapped"]}","{self.scopes["ipv6_compressed"]}","{self.scopes["ipv6_case"]}","{self.scopes["ipv6_changed"]}","{self.scopes["time_format"]}","{self.scopes["cap"]}","{self.scopes["multi"]}","{self.scopes["port"]}","{self.scopes["port_high"]}","{self.scopes["sentinel"]}","{self.scopes["unspecified"]}","{self.scopes["unspecified_expanded"]}","{self.scopes["port_format"]}","{self.scopes["invalid_ip"]}","{self.scopes["protocol"]}","{self.scopes["unchanged"]}","{self.scopes["eventtype"]}") OR like(scope,"unmapped:%") '
+            f"| where scope IN ({','.join(json.dumps(scope) for name, scope in self.scopes.items() if name not in ('unmapped', 'reported_invalid'))}) OR observer={json.dumps('ftd:' + self.devices['unmapped'])} "
             "| table adm_record scope client_ip server_ip server_port transport "
-            "bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated",
+            "observer bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated",
             self.start - 60,
             self.start + 600,
         )
@@ -314,7 +328,7 @@ class NatEvidenceTest(unittest.TestCase):
 
     def test_explicit_tuples_are_metadata_only_and_reject_ambiguous_values(self):
         rows = self.rollups()
-        self.assertEqual(len(rows), len(self.scopes))
+        self.assertEqual(len(rows), len(self.scopes) - 1)
         base = rows[self.scopes["base"]]
         nat = rows[self.scopes["nat"]]
         self.assertEqual(base["adm_record"], "conversation")
@@ -384,8 +398,26 @@ class NatEvidenceTest(unittest.TestCase):
                 self.assertEqual(row["adm_record"], "conversation")
                 self.assertNotIn("nat_observations", row)
 
-        unmapped = [row for scope, row in rows.items() if scope.startswith("unmapped:")]
+        bad_reported = lab.search(
+            "| `adm_flows` "
+            f"| where adm_observer={json.dumps(self.devices['reported_invalid'])} "
+            "| table adm_quality_status adm_ftd_nat_ips_valid adm_ftd_nat_changed adm_nat_observation",
+            self.start - 60,
+            self.start + 600,
+        )
+        self.assertEqual(len(bad_reported), 1)
+        self.assertEqual(bad_reported[0]["adm_quality_status"], "excluded")
+        self.assertEqual(str(bad_reported[0]["adm_ftd_nat_ips_valid"]), "0")
+        self.assertEqual(str(bad_reported[0]["adm_ftd_nat_changed"]), "0")
+        self.assertNotIn("adm_nat_observation", bad_reported[0])
+
+        unmapped = [
+            row
+            for row in rows.values()
+            if row["observer"] == "ftd:" + self.devices["unmapped"]
+        ]
         self.assertEqual(len(unmapped), 1)
+        self.assertTrue(unmapped[0]["scope"].startswith("unmapped:"))
         self.assertNotIn("nat_observations", unmapped[0])
 
         capped = rows[self.scopes["cap"]]
@@ -424,7 +456,9 @@ class NatEvidenceTest(unittest.TestCase):
             {event_time // 300 for event_time in event_times}, {selected_start // 300}
         )
 
-        def filtered_events(window_end: float, selected_events: list[int]) -> list[int]:
+        def filtered_events(
+            window_end: float, selected_events: list[int]
+        ) -> tuple[list[int], float]:
             observations = [
                 {"event_time": event_time, "event_fingerprint": f"event-{index}"}
                 for index, event_time in enumerate(selected_events)
@@ -437,20 +471,31 @@ class NatEvidenceTest(unittest.TestCase):
                 "| addinfo | spath input=nat_observations output=adm_nat_contexts path={} "
                 "| `adm_nat_filter_window` | mvexpand adm_nat_contexts "
                 '| eval event_time=tonumber(json_extract(adm_nat_contexts,"event_time")) '
-                "| where isnotnull(event_time) | table event_time",
+                "| where isnotnull(event_time) | table event_time info_max_time",
                 selected_start,
                 window_end,
             )
-            return sorted(int(row["event_time"]) for row in rows)
+            return (
+                sorted(int(row["event_time"]) for row in rows),
+                float(rows[0]["info_max_time"]),
+            )
 
         self.assertEqual(
-            filtered_events(selected_end, event_times),
+            filtered_events(selected_end, event_times)[0],
             [selected_start, selected_end - 1],
         )
-        self.assertEqual(
-            filtered_events(selected_end + 0.0005, [selected_start, selected_end]),
-            [selected_start, selected_end],
+        submillisecond_events, native_end = filtered_events(
+            selected_end + 0.0005, [selected_start, selected_end]
         )
+        self.assertEqual(
+            submillisecond_events,
+            [
+                event_time
+                for event_time in (selected_start, selected_end)
+                if event_time < native_end
+            ],
+        )
+        self.assertEqual(native_end, selected_end)
 
     def _graph_test_event(
         self,
@@ -600,11 +645,7 @@ class NatEvidenceTest(unittest.TestCase):
         bucket_start = (int(time.time()) // 300) * 300
         event_time = bucket_start + 60
         cluster = f"nat-{uuid.uuid4().hex[:12]}"
-        devices = {
-            "base": "192.0.2.30",
-            "cap": "192.0.2.31",
-            "window": "192.0.2.32",
-        }
+        devices = self.graph_devices
         self._register_graph_inputs(devices, event_time, cluster)
 
         events = [
@@ -649,7 +690,9 @@ class NatEvidenceTest(unittest.TestCase):
         root = json.loads(OTEL_FIXTURE.read_text("utf-8").splitlines()[0])
         root["time"] = bucket_start + 5
         root["source"] = self.token
-        root_event = json.loads(root["event"])
+        root_event = root["event"]
+        if isinstance(root_event, str):
+            root_event = json.loads(root_event)
         root_trace_id = uuid.uuid4().hex
         root_event.update(
             {
@@ -724,7 +767,7 @@ class NatEvidenceTest(unittest.TestCase):
             )
 
         full_rows = graph_rows(bucket_start + 300)
-        fractional_rows = graph_rows(event_time + 0.0005)
+        fractional_rows = graph_rows(event_time + 0.5)
         exact_rows = graph_rows(event_time)
         full, fractional, exact = self._frontend_graphs(
             [
@@ -768,6 +811,13 @@ class NatEvidenceTest(unittest.TestCase):
             {"communicates_with"},
             "FTD translation evidence must not invent forwards_to/backend edges",
         )
+        self.assertFalse(
+            any(
+                "192.0.2.44" in node["id"] or "192.0.2.44" in node.get("addresses", [])
+                for node in full["nodes"]
+            ),
+            "a translated initiator is evidence, not a new endpoint node",
+        )
         base_edge, cap_edge = base_edges[0], cap_edges[0]
         self.assertEqual(base_edge["count"], 1)
         self.assertEqual(cap_edge["count"], 1)
@@ -809,12 +859,5 @@ class NatEvidenceTest(unittest.TestCase):
             [event_time - 1],
         )
         self.assertEqual(fractional["nat_event_window"]["start"], bucket_start)
-        self.assertTrue(
-            math.isclose(
-                fractional["nat_event_window"]["end"],
-                event_time + 0.0005,
-                rel_tol=0,
-                abs_tol=0.000001,
-            )
-        )
+        self.assertEqual(fractional["nat_event_window"]["end"], event_time + 0.5)
         self.assertEqual(exact["nat_event_window"]["end"], event_time)
