@@ -30,6 +30,7 @@ class NatEvidenceTest(unittest.TestCase):
     """Verify tuple preservation does not add traffic or handoff rows."""
 
     _used_device_ips: set[str] = set()
+    _owned_unmapped_probes: list[dict] = []
 
     def setUp(self) -> None:
         self.token = "nat-evidence-" + uuid.uuid4().hex[:12]
@@ -316,19 +317,67 @@ class NatEvidenceTest(unittest.TestCase):
         self.fail(f"{label} did not reach exactly {expected} searchable rows")
 
     def rollups(self) -> dict[str, dict]:
-        rows = lab.search(
-            "| `adm_conversation_rollup` "
-            f"| where scope IN ({','.join(json.dumps(scope) for name, scope in self.scopes.items() if name not in ('unmapped', 'reported_invalid'))}) OR observer={json.dumps('ftd:' + self.devices['unmapped'])} "
+        projection = (
             "| table adm_record scope client_ip server_ip server_port transport "
-            "observer bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated",
-            self.start - 60,
-            self.start + 600,
+            "observer scope_mapping_verified bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated"
         )
+        window = (self.start - 60, self.start + 600)
+        unmapped_flow = lab.search(
+            "| `adm_flows` "
+            f"| where adm_observer={json.dumps(self.devices['unmapped'])} "
+            "| table adm_observer adm_scope adm_scope_unmapped adm_quality_status adm_quality_errors adm_nat_observation",
+            *window,
+        )
+        self.assertEqual(
+            len(unmapped_flow),
+            1,
+            f"owned unmapped normalized flow missing or duplicated: {unmapped_flow!r}",
+        )
+        self.assertTrue(unmapped_flow[0]["adm_scope"].startswith("unmapped:"))
+        self.assertEqual(str(unmapped_flow[0]["adm_scope_unmapped"]), "1")
+        self.assertEqual(
+            unmapped_flow[0]["adm_quality_status"], "accepted_with_warning"
+        )
+        self.assertNotIn("adm_nat_observation", unmapped_flow[0])
+        scope_list = ",".join(
+            json.dumps(scope)
+            for name, scope in self.scopes.items()
+            if name not in ("unmapped", "reported_invalid")
+        )
+        rows = lab.search(
+            f"| `adm_conversation_rollup` | where scope IN ({scope_list}) {projection}",
+            *window,
+        )
+        unmapped = lab.search(
+            "| `adm_conversation_rollup` "
+            f"| where observer={json.dumps('ftd:' + self.devices['unmapped'])} {projection}",
+            *window,
+        )
+        self.assertEqual(
+            len(unmapped),
+            1,
+            f"owned unmapped observer missing or duplicated: {unmapped!r}",
+        )
+        self.assertTrue(unmapped[0]["scope"].startswith("unmapped:"))
+        self.assertEqual(str(unmapped[0]["scope_mapping_verified"]), "0")
+        self.assertNotIn("nat_observations", unmapped[0])
+        type(self)._owned_unmapped_probes.append(
+            {
+                "observer_ip": self.devices["unmapped"],
+                "normalized_flow": unmapped_flow[0],
+                "rollup": unmapped[0],
+            }
+        )
+        rows.extend(unmapped)
         return {row["scope"]: row for row in rows}
 
     def test_explicit_tuples_are_metadata_only_and_reject_ambiguous_values(self):
         rows = self.rollups()
-        self.assertEqual(len(rows), len(self.scopes) - 1)
+        self.assertEqual(
+            len(rows),
+            len(self.scopes) - 1,
+            f"rollup scopes differ: {sorted(rows)}",
+        )
         base = rows[self.scopes["base"]]
         nat = rows[self.scopes["nat"]]
         self.assertEqual(base["adm_record"], "conversation")
@@ -761,7 +810,7 @@ class NatEvidenceTest(unittest.TestCase):
 
         def graph_rows(latest: float) -> list[dict]:
             return lab.search(
-                '| `adm_graph("frontend","demo","' + cluster + '","shop")`',
+                '`adm_graph("frontend","demo","' + cluster + '","shop")`',
                 bucket_start,
                 latest,
             )
