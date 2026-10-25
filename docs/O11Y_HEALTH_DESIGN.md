@@ -107,6 +107,13 @@ metric record count and number of signals that returned data. Zero available
 signals still produce a complete empty capture; they do not indicate healthy
 telemetry.
 
+New producers include a SHA-256 `record_id` for every metric and completion
+event. The v1 reader remains compatible with captures produced before that
+additive field existed: it uses Splunk's indexed `event_fingerprint`
+(`sha256(index, _bkt, _cd)`) as the legacy record identity, and accepts a replay
+only when the canonical event, event time and host agree. A present but
+malformed `record_id` is rejected; it does not fall back to the legacy rule.
+
 The browser projection is an allowlisted JSON field set, capped at 64 input
 rows and one selected capture. Normalization requires the completion event,
 matching capture ID/times/window and expected metric count, one unique

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import fixture from "../../../fixtures/o11y/complete.json";
+import legacyFixture from "../../../fixtures/o11y/complete-v1-pre-record-id.json";
 import {
   buildO11yHealthSearch,
   loadO11yHealthEvidence,
@@ -169,6 +170,39 @@ describe("Observability Cloud health evidence", () => {
     );
   });
 
+  it("keeps baseline v1 captures readable with fingerprint-based identity", () => {
+    const rows = indexedRows(legacyFixture.events as TestEnvelope[]);
+    const result = normalizeO11yHealthEvidence(rows, selection, config);
+    expect(result).toMatchObject({ rejected: 0, replayDuplicates: 0 });
+    expect(result.records).toHaveLength(6);
+    expect(result.records[0].recordId).toBe(
+      `legacy:${rows[0].event_fingerprint}`,
+    );
+
+    const exactReplay = normalizeO11yHealthEvidence(
+      [...rows, { ...rows[0] }],
+      selection,
+      config,
+    );
+    expect(exactReplay).toMatchObject({ rejected: 0, replayDuplicates: 1 });
+
+    const conflictingReplay = normalizeO11yHealthEvidence(
+      [
+        ...rows,
+        {
+          ...rows[0],
+          _raw: JSON.stringify({
+            ...(JSON.parse(String(rows[0]._raw)) as Record<string, unknown>),
+            value: 999,
+          }),
+        },
+      ],
+      selection,
+      config,
+    );
+    expect(conflictingReplay).toMatchObject({ records: [], rejected: 1 });
+  });
+
   it("accepts exact metric and completion replays but rejects conflicting replays", () => {
     const original = indexedRows();
     const exactDuplicates = [
@@ -198,6 +232,11 @@ describe("Observability Cloud health evidence", () => {
       config,
     );
     expect(conflicting).toMatchObject({ records: [], rejected: 1 });
+
+    const malformedIdentity = withEventChanges(0, { record_id: "bad" });
+    expect(
+      normalizeO11yHealthEvidence(malformedIdentity, selection, config),
+    ).toMatchObject({ records: [], rejected: 1 });
   });
 
   it("uses the numeric epoch projection when Splunk returns ISO `_time`", () => {

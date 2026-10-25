@@ -567,8 +567,18 @@ export function normalizeO11yHealthEvidence(
       continue;
     }
     const id = text(raw.capture_id, 128);
-    const recordId = text(raw.record_id, 64);
-    if (!id || !recordId || !/^[a-f0-9]{64}$/.test(recordId)) {
+    const suppliedRecordId = raw.record_id;
+    const recordId =
+      suppliedRecordId === undefined || suppliedRecordId === null
+        ? `legacy:${eventFingerprint}`
+        : text(suppliedRecordId, 64);
+    if (
+      !id ||
+      !recordId ||
+      (suppliedRecordId !== undefined &&
+        suppliedRecordId !== null &&
+        !/^[a-f0-9]{64}$/.test(recordId))
+    ) {
       rejected++;
       continue;
     }
