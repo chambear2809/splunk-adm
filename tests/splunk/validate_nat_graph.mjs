@@ -11,7 +11,7 @@ const { createServer } = await import(pathToFileURL(vitePath).href);
 const { cases } = JSON.parse(readFileSync(0, "utf8"));
 const server = await createServer({
   configFile: resolve(repositoryRoot, "vite.config.ts"),
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false, watch: null },
   appType: "custom",
 });
 
