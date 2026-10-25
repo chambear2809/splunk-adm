@@ -133,7 +133,7 @@ and 10 edges. This is a small local functional regression check.
 
 ## Same-event FTD NAT evidence
 
-NAT source through `f72f3cd` conditionally retains complete,
+The NAT implementation conditionally retains complete,
 changed, single-valued reported and translated FTD tuples on the existing V1
 conversation. [The data contract](DATA_LAYER.md) and
 [firewall operator guide](operators/firewall-security.md) bind the field
@@ -149,8 +149,12 @@ not assumed to be universally original, particularly for tunnel events.
 Missing, malformed, multivalue, unusable, unmapped and unchanged tuples do not
 become translation observations. Equivalent IPv6 spellings are compared by
 address value. Each observation is filtered to the selected half-open time
-window before aggregation; exact numeric evidence bounds retain fractional
-precision in portable validation/exports. A 32-observation cap remains explicit
+window before aggregation. Numeric evidence bounds retain the precision
+reported by Splunk in portable validation/exports. On this tested image,
+`addinfo` truncates boundaries to milliseconds even when the job retains the
+requested sub-millisecond bound. Finer requests can therefore conservatively
+omit an observation; the original finer bound is not recovered. A
+32-observation cap remains explicit
 in inspector, portable/CSV evidence and graph comparisons.
 
 The change adds no translated conversation or traffic counter and no endpoint
@@ -162,7 +166,13 @@ and this task does not qualify NAT evidence preservation through V1-to-V2
 cutover. V2 activation requires an equivalent schema path.
 
 Worker offline checks passed 196 focused frontend tests, lint/build and focused
-Python lint/compilation checks. Dedicated NAT Docker validation is pending.
+Python lint/compilation checks. The first dedicated live run of `f72f3cd` failed
+(three errors, one failure across four tests). Native SPL rejected direct
+Boolean field assignments; the test also mishandled an OTel fixture object and
+assumed `addinfo` retained sub-millisecond bounds. That immutable attempt remains
+separate from corrected validation. The precision probe retained the requested
+job bounds while measuring `addinfo` outcomes at +0.0005, +0.001, +0.0015 and
++0.5 seconds. Corrected package validation is pending.
 Historical capture fields remain unchanged; a separate macro compatibility
 review records the no-NAT fixture contract without claiming recapture.
 
@@ -221,6 +231,10 @@ The reviewer independently passed 56 benchmark and 11 task-lab safety checks,
 checked source documentation and retained measurements, and requested an
 integrated end-to-end NAT graph/cap/bounds/rows-to-graph check. Final approval
 still awaits completed integrated Docker and final-candidate evidence.
+Follow-up test review found missing OTel/summary index-visibility waits and an
+insufficient total-edge assertion. Bounded read-only waits and an exact edge
+count were added, and the reviewer confirmed the corrected summary base-search
+syntax. These test corrections do not turn a failed native run into acceptance.
 
 ## Integrated acceptance
 
