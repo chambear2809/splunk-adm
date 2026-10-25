@@ -585,6 +585,7 @@ class NatEvidenceTest(unittest.TestCase):
         *,
         initiator_ip: str = "198.51.100.8",
         nat: bool,
+        nat_responder_only: bool = False,
     ) -> dict:
         envelope = self.envelope("base", template, connection_id, nat=nat)
         event = json.loads(envelope["event"])
@@ -601,10 +602,14 @@ class NatEvidenceTest(unittest.TestCase):
         if nat:
             event.update(
                 {
-                    "NAT_InitiatorIP": "192.0.2.44",
-                    "NAT_InitiatorPort": 35000,
-                    "NAT_ResponderIP": server_ip,
-                    "NAT_ResponderPort": 443,
+                    "NAT_InitiatorIP": (
+                        initiator_ip if nat_responder_only else "192.0.2.44"
+                    ),
+                    "NAT_InitiatorPort": 51400 if nat_responder_only else 35000,
+                    "NAT_ResponderIP": "10.42.0.99"
+                    if nat_responder_only
+                    else server_ip,
+                    "NAT_ResponderPort": 8443 if nat_responder_only else 443,
                     "OriginalInitiatorIP": initiator_ip,
                 }
             )
@@ -759,6 +764,7 @@ class NatEvidenceTest(unittest.TestCase):
                 "10.42.0.21",
                 initiator_ip="198.51.100.10",
                 nat=True,
+                nat_responder_only=True,
             )
             for index, observed_time in enumerate(
                 (event_time - 1, event_time, event_time + 1)
@@ -928,6 +934,27 @@ class NatEvidenceTest(unittest.TestCase):
 
         fractional_observations = window_observations(fractional)
         exact_observations = window_observations(exact)
+        full_window_observations = window_observations(full)
+        self.assertEqual(len(full_window_observations), 3)
+        self.assertTrue(
+            all(
+                item["reported_initiator_ip"] == item["translated_initiator_ip"]
+                and item["reported_initiator_port"] == item["translated_initiator_port"]
+                and item["reported_responder_ip"] == "10.42.0.21"
+                and item["reported_responder_port"] == 443
+                and item["translated_responder_ip"] == "10.42.0.99"
+                and item["translated_responder_port"] == 8443
+                for item in full_window_observations
+            ),
+            "DNAT evidence must preserve an unchanged initiator and the changed responder tuple",
+        )
+        self.assertFalse(
+            any(
+                "10.42.0.99" in node["id"] or "10.42.0.99" in node.get("addresses", [])
+                for node in full["nodes"]
+            ),
+            "a translated responder is evidence, not a new endpoint node",
+        )
         self.assertEqual(
             sorted(item["event_time"] for item in fractional_observations),
             [event_time - 1, event_time],
