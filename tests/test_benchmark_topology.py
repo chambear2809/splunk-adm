@@ -7,8 +7,10 @@ from unittest.mock import patch
 from tools import benchmark_pipeline as bench
 from tools.benchmark_topology import (
     CASES,
+    EXPECTED_META_WARNINGS,
     MAX_TOPOLOGY_ROWS,
     NO_LINK_WARNING,
+    NO_IFINDEX_WARNING,
     TopologyWorkload,
     device_id,
     expected_interface_ids,
@@ -100,7 +102,7 @@ class BenchmarkTopologyTest(unittest.TestCase):
                 "devices": "2",
                 "links": "0",
                 "interfaces": "3",
-                "warnings": [NO_LINK_WARNING],
+                "warnings": [NO_LINK_WARNING, NO_IFINDEX_WARNING],
             },
         ]
         self.assertEqual(topology_check(rows, workload), [])
@@ -108,6 +110,17 @@ class BenchmarkTopologyTest(unittest.TestCase):
         warnings = topology_check(malformed, workload)
         self.assertTrue(any("interface rows" in warning for warning in warnings))
         self.assertTrue(any("result rows" in warning for warning in warnings))
+        wrong_warning = rows.copy()
+        wrong_warning[-1] = {
+            **wrong_warning[-1],
+            "warnings": list(EXPECTED_META_WARNINGS) + ["unexpected warning"],
+        }
+        self.assertTrue(
+            any(
+                "warnings differ" in warning
+                for warning in topology_check(wrong_warning, workload)
+            )
+        )
 
     def test_expected_one_row_over_limit_is_a_complete_boundary_measurement(self):
         result_limit = MAX_TOPOLOGY_ROWS

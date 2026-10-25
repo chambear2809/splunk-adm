@@ -65,6 +65,12 @@ search job is reported as limit-exceeded while the benchmark records the
 expected application rejection as a successful boundary check if every other
 correctness and completion condition passes.
 
+Because the reviewed fixture shapes contain no CDP/ACI/LLDP adjacency and no
+`show interface snmp-ifindex` output, the expected metadata warning set has
+exactly two entries: no switch links collected, and SNMP ifIndex known only for
+CDP-connected ports. The correctness oracle requires this exact set and rejects
+extra or changed warnings; it does not suppress warnings generally.
+
 The runner accepts only a local Docker Unix socket and localhost Splunk
 management/HEC bindings. It verifies the task lab's ownership label when
 `ADM_LAB_TASK` is set, binds installed app defaults to the source or selected

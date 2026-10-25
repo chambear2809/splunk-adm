@@ -43,6 +43,12 @@ NO_LINK_WARNING = (
     "No switch-to-switch links (CDP, ACI fabricLink or fabric LLDP) were collected, "
     "so candidate paths between switches cannot be drawn."
 )
+NO_IFINDEX_WARNING = (
+    "SNMP ifIndex is known only for CDP-connected ports. NetFlow interfaces on "
+    "other ports are shown by ifIndex unless 'show interface snmp-ifindex' "
+    "output is collected."
+)
+EXPECTED_META_WARNINGS = (NO_LINK_WARNING, NO_IFINDEX_WARNING)
 
 
 def utc_now():
@@ -222,7 +228,7 @@ def manifest(workload: TopologyWorkload):
             "device_id_sha256": identity_sha256(device_ids),
             "interface_id_count": len(interface_ids),
             "interface_id_sha256": identity_sha256(interface_ids),
-            "meta_warnings": [NO_LINK_WARNING],
+            "meta_warnings": list(EXPECTED_META_WARNINGS),
             "application_limit_rows": MAX_TOPOLOGY_ROWS,
             "application_accepts": result_rows <= MAX_TOPOLOGY_ROWS,
         },
@@ -307,7 +313,9 @@ def topology_check(rows, workload: TopologyWorkload):
                     f"Topology meta {key} {actual} != expected {expected[key]}"
                 )
         if _warning_values(meta.get("warnings")) != expected["meta_warnings"]:
-            notes.append("Topology warnings differ from the expected no-link warning")
+            notes.append(
+                "Topology warnings differ from the expected NX-OS-only warning set"
+            )
     return notes
 
 
