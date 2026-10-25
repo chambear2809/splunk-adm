@@ -61,6 +61,22 @@ network/volume mismatch, invalid identities, authentication ordering, and Docker
 inventory failure. Existing named-lock concurrency and private staging tests
 remain in use. See [task lab procedure](TASK_LABS.md).
 
+## Baseline verification
+
+Before workstream integration, frontend lint/type checks, 787 Vitest tests,
+111 Playwright tests, package build and release verification passed. Python
+lint/format passed; 779 offline tests passed after installing the repository's
+pinned `signalflow-client-python==1.3.9` in a task-local virtual environment.
+The first run lacked that dependency and was not counted as a passing run.
+125 distributed tests and 18 offline upgrade cases (three live cases skipped)
+also passed.
+
+The integration lab installed baseline archive SHA-256
+`ca5140664818dec913e9355febc5e5939bb588da71a44d70bacbc205d122477e`, restarted,
+and returned the expected `makeresults` smoke row. A foreign task label was
+refused. The verified lab was stopped before granting performance its slot.
+These are baseline/infrastructure results, not final integrated acceptance.
+
 ## Workstream results
 
 Pending integrated acceptance. Historical qualification records remain bound to
