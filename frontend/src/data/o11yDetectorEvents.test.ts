@@ -131,6 +131,65 @@ describe("detector event history", () => {
       ).rejected,
     ).toBeGreaterThan(0);
   });
+  it("keeps colliding native event IDs separate for distinct configured detectors", () => {
+    const detectorIds = [first.detector_id, "second_detector"];
+    const source = structuredClone(detectorSource);
+    source.mappings[0].detector_ids = JSON.stringify(detectorIds);
+    const input = rows();
+    input.forEach((row) => {
+      const raw = JSON.parse(String(row._raw));
+      raw.configured_detector_ids = detectorIds;
+      row._raw = JSON.stringify(raw);
+    });
+    const second = JSON.parse(String(input[0]._raw));
+    second.record_id = "f".repeat(64);
+    second.detector_id = detectorIds[1];
+    second.source_event_json = JSON.stringify({
+      ...JSON.parse(second.source_event_json),
+      detectorId: detectorIds[1],
+    });
+    input[1]._raw = JSON.stringify(second);
+    const normalized = normalizeDetectorEvents(
+      input,
+      detectorSelection,
+      source,
+    );
+    expect(normalized.rejected).toBe(0);
+    expect(normalized.capture?.events.map((event) => event.eventId)).toEqual([
+      "event-trigger-001",
+      "event-trigger-001",
+    ]);
+    expect(
+      new Set(normalized.capture?.events.map((event) => event.detectorId)).size,
+    ).toBe(2);
+  });
+  it("preserves point events on both inclusive interval boundaries without carrying state", () => {
+    const input = rows();
+    [detectorSelection.window.start, detectorSelection.window.end].forEach(
+      (time, index) => {
+        const raw = JSON.parse(String(input[index]._raw));
+        raw.event_timestamp_ms = time * 1000;
+        raw.source_event_json = JSON.stringify({
+          ...JSON.parse(raw.source_event_json),
+          timestamp: time * 1000,
+        });
+        input[index]._raw = JSON.stringify(raw);
+      },
+    );
+    const normalized = normalizeDetectorEvents(
+      input,
+      detectorSelection,
+      detectorSource,
+    );
+    expect(normalized.rejected).toBe(0);
+    expect(
+      normalized.capture?.events.map((event) => event.timestampMs),
+    ).toEqual([
+      detectorSelection.window.start * 1000,
+      detectorSelection.window.end * 1000,
+    ]);
+    expect(normalized.capture).not.toHaveProperty("incidentState");
+  });
   it.each([
     "missing completion",
     "missing event",
