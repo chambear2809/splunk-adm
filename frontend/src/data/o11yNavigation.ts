@@ -7,7 +7,12 @@ import {
 } from "./evidence";
 
 export type O11yNavigationProduct =
-  "apm" | "infrastructure" | "logs" | "detectors" | "incidents";
+  | "apm"
+  | "infrastructure"
+  | "logs"
+  | "detectors"
+  | "alert_lifecycle"
+  | "incidents";
 
 export interface O11yNavigationInput {
   selection: ServiceHealthSelection;
@@ -102,7 +107,7 @@ function contextText(input: {
     `APM MMS ID: ${input.apmMmsId ?? "not provided"}`,
     `Selected time window (UTC): ${input.startUtc} to ${input.endUtc}`,
     `Detector IDs: ${input.detectorIds.length ? input.detectorIds.join(", ") : "not provided"}`,
-    `Incident IDs: ${input.incidentIds.length ? input.incidentIds.join(", ") : "not provided"}`,
+    `Detector alert-lifecycle incident IDs: ${input.incidentIds.length ? input.incidentIds.join(", ") : "not provided"}`,
   ];
   return lines.join("\n");
 }
@@ -179,12 +184,22 @@ export function buildO11yNavigation(
       linkLabel: "Open realm for detectors",
     },
     {
+      product: "alert_lifecycle",
+      title: "Detector event and alert lifecycle",
+      location: "Alerts → originating detector, event or alert details",
+      instructions:
+        "These native incidentId values identify detector alert lifecycles and can be shared by trigger and clear observations. Review them with the originating detector/event/alert; they do not reconstruct interval state or identify entries in the newer Incidents dashboard.",
+      ids: incidentIds,
+      href,
+      linkLabel: "Open realm for detector event details",
+    },
+    {
       product: "incidents",
-      title: "Incidents",
+      title: "Incidents dashboard (independent)",
       location: "Incidents dashboard (if enabled for the organization)",
       instructions:
-        "Use Entity and Environment filters with the selected time range. The documented incident table searches by incident name; supplied IDs remain available for manual lookup.",
-      ids: incidentIds,
+        "Explore this newer cross-alert dashboard independently by Entity, Environment and incident name. Atlas does not map detector alert-lifecycle IDs to this dashboard, and supplies none to this action.",
+      ids: [],
       href,
       linkLabel: "Open realm for incidents",
     },

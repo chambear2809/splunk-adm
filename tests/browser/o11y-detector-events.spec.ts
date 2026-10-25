@@ -16,7 +16,7 @@ const searches = (page: import("@playwright/test").Page) =>
     () => (window as DetectorTestWindow).__O11Y_DETECTOR_TEST__?.searches ?? [],
   );
 
-test("cancelling an detector event search leaves the panel retryable", async ({
+test("cancelling a detector event search leaves the panel retryable", async ({
   page,
 }) => {
   await page.goto("/tests/browser/o11y-detector-events.html");
@@ -59,6 +59,29 @@ test("cancelling an detector event search leaves the panel retryable", async ({
     }),
   ).toContainText("event-trigger-001");
   await expect(page.getByText("Detector source: complete")).toBeVisible();
+  await page
+    .getByText("Product navigation and exact investigation context", {
+      exact: true,
+    })
+    .click();
+  const navigation = page.getByRole("region", {
+    name: "Observability Cloud product navigation",
+  });
+  await expect(
+    navigation.getByRole("heading", {
+      name: "Detector event and alert lifecycle",
+    }),
+  ).toBeVisible();
+  const independent = navigation
+    .getByRole("heading", { name: "Incidents dashboard (independent)" })
+    .locator("..");
+  await expect(independent).toContainText("receives no detector lifecycle IDs");
+  await expect(independent).not.toContainText("incident-001");
+  await expect(
+    navigation
+      .getByRole("heading", { name: "Detector event and alert lifecycle" })
+      .locator(".."),
+  ).toContainText("incident-001");
   expect(await searches(page)).toMatchObject([
     { aborted: true, released: true },
     { aborted: false, released: true },

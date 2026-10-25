@@ -130,7 +130,9 @@ export function O11yNavigationPanel(props: O11yNavigationInput) {
                 <div>
                   <p>
                     <strong>
-                      {action.product === "detectors" ? "Detector" : "Incident"}{" "}
+                      {action.product === "detectors"
+                        ? "Detector"
+                        : "Detector alert-lifecycle incident"}{" "}
                       IDs
                     </strong>
                   </p>
@@ -147,7 +149,9 @@ export function O11yNavigationPanel(props: O11yNavigationInput) {
                 <p>No detector IDs were supplied.</p>
               )}
               {action.ids.length === 0 && action.product === "incidents" && (
-                <p>No incident IDs were supplied.</p>
+                <p>
+                  This independent dashboard receives no detector lifecycle IDs.
+                </p>
               )}
               {action.href ? (
                 <a

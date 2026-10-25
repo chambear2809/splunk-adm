@@ -67,7 +67,8 @@ describe("Observability Cloud navigation panel", () => {
       "Infrastructure navigators",
       "Logs",
       "Detectors and alerts",
-      "Incidents",
+      "Incidents dashboard (independent)",
+      "Detector event and alert lifecycle",
     ])
       expect(html).toContain(product);
     expect(html).toContain(

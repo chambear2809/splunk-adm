@@ -40,6 +40,7 @@ describe("Observability Cloud navigation context", () => {
       "infrastructure",
       "logs",
       "detectors",
+      "alert_lifecycle",
       "incidents",
     ]);
     expect(
@@ -117,13 +118,18 @@ describe("Observability Cloud navigation context", () => {
     expect(model.copyText).toContain("APM MMS ID: checkout_mms_v1");
     expect(model.copyText).toContain("pod-uid-001");
     expect(model.copyText).toContain("detector-abc, detector-def");
-    expect(model.copyText).toContain("Incident IDs: incident-xyz");
+    expect(model.copyText).toContain(
+      "Detector alert-lifecycle incident IDs: incident-xyz",
+    );
     expect(
       model.actions.find((action) => action.product === "detectors")?.ids,
     ).toEqual(["detector-abc", "detector-def"]);
     expect(
-      model.actions.find((action) => action.product === "incidents")?.ids,
+      model.actions.find((action) => action.product === "alert_lifecycle")?.ids,
     ).toEqual(["incident-xyz"]);
+    expect(
+      model.actions.find((action) => action.product === "incidents")?.ids,
+    ).toEqual([]);
     expect(
       model.actions.every((action) => !action.href?.includes("detector-abc")),
     ).toBe(true);
