@@ -114,6 +114,16 @@ class TaskLabTest(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
             self.assertEqual(run.call_args.args[0][1:3], ["network", "inspect"])
 
+    def test_invalid_identity_never_reaches_docker(self):
+        for name in ("adm-splunk-lab", "other", "adm-../foreign"):
+            with (
+                patch.dict(os.environ, ADM_LAB_NAME=name),
+                patch.object(lab.subprocess, "run") as run,
+            ):
+                with self.assertRaisesRegex(lab.LabError, "identity"):
+                    lab.task_resources(remove=True)
+                run.assert_not_called()
+
     def test_daemon_failure_does_not_count_as_absent_resources(self):
         with patch.object(
             lab.subprocess,
