@@ -82,6 +82,8 @@ admission, identity/time rules, delivery semantics and rollback. New integration
 ship unselected and unqualified. Follow each operator guide before selecting a
 source; a successful HEC response is separate from indexed evidence validation.
 See [current qualification and external limits](docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md).
+The separate [external toolkit guide](docs/OPTIONAL_INTEGRATIONS_TOOLKIT.md)
+describes installation, command entry points and safe local state placement.
 
 ## Operator setup skills
 

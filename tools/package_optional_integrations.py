@@ -33,6 +33,7 @@ PATHS = (
     "docs/operators/appdynamics-evidence.md",
     "docs/operators/ingest-processors.md",
     "docs/OPTIONAL_INTEGRATIONS_PLAN.md",
+    "docs/OPTIONAL_INTEGRATIONS_TOOLKIT.md",
     "docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md",
     "docs/O11Y_HEALTH_DESIGN.md",
     "docs/APPDYNAMICS_EVIDENCE_DESIGN.md",
