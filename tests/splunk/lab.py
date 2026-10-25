@@ -49,11 +49,10 @@ class LabError(RuntimeError):
     pass
 
 
-def verify_target() -> None:
-    """Task labs refuse operations against an unowned or misrouted container."""
+def task_identity() -> tuple[str, str] | None:
     task = os.environ.get("ADM_LAB_TASK")
     if not task:
-        return
+        return None
     name = os.environ.get("ADM_LAB_NAME", "")
     if (
         not re.fullmatch(r"[a-z0-9-]+", task)
@@ -61,6 +60,15 @@ def verify_target() -> None:
         or name == "adm-splunk-lab"
     ):
         raise LabError("invalid task lab identity")
+    return task, name
+
+
+def verify_target() -> None:
+    """Task labs refuse operations against an unowned or misrouted container."""
+    identity = task_identity()
+    if identity is None:
+        return
+    task, name = identity
     result = subprocess.run(
         ["docker", "inspect", name],
         capture_output=True,
@@ -103,10 +111,10 @@ def verify_target() -> None:
 
 def task_resources(remove: bool = False) -> None:
     """Create or remove only resources bearing the task and lab labels."""
-    task = os.environ.get("ADM_LAB_TASK")
-    if not task:
+    identity = task_identity()
+    if identity is None:
         return
-    name = os.environ["ADM_LAB_NAME"]
+    task, name = identity
     for kind, suffix in (("network", "net"), ("volume", "etc"), ("volume", "var")):
         resource = f"{name}-{suffix}"
         inventory = subprocess.run(
