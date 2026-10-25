@@ -107,6 +107,17 @@ wrapper reuses the finalized pending file and idempotently checks queue
 acceptance before removing it. Spool exhaustion pauses new captures and keeps
 the pending file for recovery.
 
+The wrapper's default 300-second capture interval is matched only when the
+Atlas service map uses that exact UTC start and end. The health search requires
+`capture_window_start` and `capture_window_end` to equal the selected graph
+interval; it does not combine adjacent captures or add their bucket counts.
+To inspect a scheduled capture, set the map's custom time range to the exact
+start and end recorded in its completion event. An arbitrary rolling 15-minute
+window, or a differently aligned five-minute window, will not match. To inspect
+another interval, make a bounded one-shot export with explicit `--start` and
+`--end` values for that interval (maximum 24 hours), then search using the same
+interval in the service map.
+
 The capture wrapper only produces and queues captures. Run the common HEC
 sender separately with `ATLAS_HEC_URL`, `ATLAS_HEC_TOKEN`, and
 `ATLAS_HEC_SPOOL_DIR` supplied through a protected environment:
@@ -123,6 +134,18 @@ handles at most 100 captures or five minutes. A capture is capped at 10,000
 rows and 64 MiB; each JSONL record is at most 65,535 bytes plus newline and
 batches are at most 256 KiB. Delivery uses verified HTTPS, refuses redirects,
 and is at-least-once across a crash after HEC accepts a batch.
+
+The first delivery attempt binds each pending capture to the canonical HEC URL
+and acknowledgment mode. Keep both unchanged while that capture is pending.
+If either must change after partial delivery, the sender fails closed and
+preserves its checkpoint and queued file. To recover, retain the original
+spool, copy the exact queued JSONL capture to a separate private recovery path,
+configure the intended URL and `--ack-mode` with a new spool, then enqueue that
+copy under the same source ID. The new spool replays from the beginning, so
+previously accepted batches can be delivered again; keep capture and record
+IDs for downstream deduplication and verify indexed readback. Do not edit a
+checkpoint or delete the original queued capture to force a destination or
+mode change. Keep the original spool until the recovered capture is verified.
 
 Use an Enterprise `/services/collector/event` input for the normal HEC route.
 An explicitly configured structured `/services/collector` route is preserved
