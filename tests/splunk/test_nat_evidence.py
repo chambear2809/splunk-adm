@@ -643,7 +643,7 @@ class NatEvidenceTest(unittest.TestCase):
         template_row = json.loads(FIXTURE.read_text("utf-8").splitlines()[0])
         template = json.loads(template_row["event"])
         bucket_start = (int(time.time()) // 300) * 300
-        event_time = bucket_start + 60
+        event_time = min(max(int(time.time()), bucket_start + 10), bucket_start + 297)
         cluster = f"nat-{uuid.uuid4().hex[:12]}"
         devices = self.graph_devices
         self._register_graph_inputs(devices, event_time, cluster)
