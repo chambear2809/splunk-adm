@@ -7,7 +7,10 @@ import {
   type EvidenceConfiguration,
 } from "./data/evidenceConfig";
 import type { ServiceHealthSelection } from "./data/evidence";
-import { serviceHealthSelection } from "./data/serviceHealthSelection";
+import {
+  serviceEvidenceScopes,
+  serviceHealthSelection,
+} from "./data/serviceHealthSelection";
 import type { SearchClient } from "./data/searchClient";
 
 /** Health belongs to the exact boundary service; graph labels alone are insufficient. */
@@ -57,20 +60,9 @@ export function MapServiceHealthInspection({
     return cancel;
   }, [identity, cancel]);
   if (!live || !client || !supported) return null;
-  const scopes = [
-    ...new Set(
-      config?.mappings
-        .filter(
-          (row) =>
-            row.observer_kind === "o11y_export" &&
-            row.mapping_status === "verified" &&
-            row.cluster === graph.boundary.cluster &&
-            row.organization_id &&
-            row.realm,
-        )
-        .map((row) => row.scope) ?? [],
-    ),
-  ].sort();
+  const scopes = config
+    ? serviceEvidenceScopes(config, graph.boundary.cluster)
+    : [];
   const prepare = async () => {
     cancel();
     const controller = new AbortController();
@@ -83,24 +75,11 @@ export function MapServiceHealthInspection({
       const next = await evidenceConfigClient.read(controller.signal);
       if (controller.signal.aborted || current !== generation.current) return;
       setConfig(next);
-      const options = [
-        ...new Set(
-          next.mappings
-            .filter(
-              (row) =>
-                row.observer_kind === "o11y_export" &&
-                row.mapping_status === "verified" &&
-                row.cluster === graph.boundary.cluster &&
-                row.organization_id &&
-                row.realm,
-            )
-            .map((row) => row.scope),
-        ),
-      ];
+      const options = serviceEvidenceScopes(next, graph.boundary.cluster);
       if (options.length === 1) setScope(options[0]);
       if (!options.length)
         setError(
-          "No verified Observability Cloud authority maps to this service cluster.",
+          "No verified Observability health or detector binding maps to this service cluster.",
         );
     } catch {
       if (current === generation.current)

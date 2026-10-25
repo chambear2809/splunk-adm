@@ -31,6 +31,9 @@ For example, a client reaches a Kubernetes LoadBalancer address and the applicat
 | [**Optional DNS evidence**](docs/operators/dns-evidence.md) | Scoped endpoint investigations and supplemental resolution context | Customer-managed Stream DNS or Hubble DNS L7; verified source scope, caller access and target qualification. |
 | [**Splunk Enterprise**](docs/operators/splunk-platform.md)                         | Search, correlation, history and the Atlas interface                                   | Healthy KV Store; source and summary indexes; index permissions and routing-scope mappings.                                          |
 | [**Splunk Stream + NetFlow/IPFIX exporters**](docs/operators/network-stream.md)    | Connections, ports, traffic counters and observing devices                             | Stream add-ons, a receiver and an enabled NetFlow stream; endpoint, time, exporter, interface and sampling fields.                   |
+| [**Splunk Observability Cloud — optional**](docs/operators/o11y-health.md) | Indexed historical metric captures and separately selected detector events | External server-side collection, private durable HEC spool, exact authority/detector bindings and target qualification. Event history does not establish historical incident state. |
+| [**Splunk AppDynamics — optional**](docs/operators/appdynamics-evidence.md) | Current node/IP inventory and application-scoped backend candidates | Explicit Controller authority, read-only Application Model APIs, completed bounded snapshots and caller-visible indexes. Inventory does not prove calls or historical IP ownership. |
+| [**Edge / Ingest Processor templates — optional**](docs/operators/ingest-processors.md) | Conservative Stream NetFlow and Atlas health routing profiles | Product-specific deployment/transport settings and runtime preview qualification. Offline golden fixtures do not execute SPL2. |
 | [**Cisco ACI / APIC**](docs/operators/aci-network.md)                              | Endpoint identity, EPG/bridge-domain context, candidate fabric paths and policy intent | DC Networking add-on, read-only APIC access, and endpoint, topology and policy inputs.                                               |
 | [**Nexus Dashboard / NX-OS**](docs/operators/aci-network.md)                       | Flow, endpoint, device and interface context                                           | DC Networking add-on; applicable flow/endpoint inputs and device/interface/neighbor collection.                                      |
 | [**Kubernetes + Splunk OTel Collector**](docs/operators/kubernetes-platform.md)    | Pod/workload identity and Service/backend history                                      | Cluster identity, RBAC, object watches with initial state, and HEC delivery to Splunk.                                               |
@@ -66,11 +69,19 @@ Open the localhost URL; the captured synthetic demos need no Splunk connection.
 
 **Use your data:** follow the [operator setup sequence](docs/operators/splunk-setup-guide.md). Atlas reads indexed data; operators configure collectors, indexes, permissions, scopes and deployment expectations. Searches and settings writes ship disabled; settings persistence requires deployment qualification. V2 activation follows the [migration procedure](docs/CISCO_CONTRACT_MIGRATION.md).
 
-**Develop/package:** `npm run lint`, `npm test`, `npm run package` (requires `tar`). The archive and checksum appear in `dist/`. See [build/lab requirements](docs/PILOT.md) and [CI](docs/CI.md).
+**Develop/package:** `npm run lint`, `npm test`, `npm run package` (requires `tar`). The app archive and checksum appear in `dist/`. `npm run package` also produces a separate `application-atlas-integrations-<version>.tar.gz` for optional external collectors and processor templates; it installs no runtime or schedule in Splunk. See [build/lab requirements](docs/PILOT.md) and [CI](docs/CI.md).
 
 ## Project status
 
 Recorded qualification covers **Splunk Enterprise 10.6.0.5** with synthetic data: standalone execution, V2 migration and bounded same-host SHC validation. Production capacity/topology, real controller/exporter collection, customer pilots and Splunk Cloud runtime/vetting remain unqualified. SHC validation does not authorize V2 cutover there. See [qualification evidence and limits](docs/ATLAS_FINAL_QUALIFICATION.md).
+
+## Optional integrations
+
+The [integration contract](docs/OPTIONAL_INTEGRATIONS_PLAN.md) records source
+admission, identity/time rules, delivery semantics and rollback. New integrations
+ship unselected and unqualified. Follow each operator guide before selecting a
+source; a successful HEC response is separate from indexed evidence validation.
+See [current qualification and external limits](docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md).
 
 ## Operator setup skills
 

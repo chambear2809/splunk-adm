@@ -83,7 +83,7 @@ def snapshot():
                 for n in ALL_JOBS
             ],
         },
-        "app": {"version": "0.4.0"},
+        "app": {"version": "0.5.0"},
     }
 
 
@@ -223,7 +223,7 @@ class PilotReadinessTest(unittest.TestCase):
                 }
             if path.endswith("/saved/searches?count=0"):
                 return {"entry": []}
-            return {"entry": [{"content": {"version": "0.4.0"}, "acl": {}}]}
+            return {"entry": [{"content": {"version": "0.5.0"}, "acl": {}}]}
 
         class Runner:
             def __init__(self, timeout):

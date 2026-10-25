@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Graph } from "../graph";
 import type { EvidenceConfiguration } from "./evidenceConfig";
-import { serviceHealthSelection } from "./serviceHealthSelection";
+import {
+  serviceEvidenceScopes,
+  serviceHealthSelection,
+} from "./serviceHealthSelection";
 
 const graph = {
   snapshot_id: "snapshot",
@@ -45,6 +48,45 @@ describe("service health selection", () => {
       namespace: "ns-a",
     });
     expect(selection.workloads).toBeUndefined();
+  });
+  it("supports separately configured detector context without a metric MMS mapping", () => {
+    const detectorConfig = {
+      ...config,
+      mappings: [
+        {
+          ...config.mappings[0],
+          observer_kind: "o11y_detector",
+          detector_ids: '["detector-a"]',
+        },
+      ],
+    };
+    expect(serviceEvidenceScopes(detectorConfig, "cluster-a")).toEqual([
+      "prod-net",
+    ]);
+    expect(
+      serviceHealthSelection(
+        graph,
+        graph.boundary.root_node_id,
+        "prod-net",
+        detectorConfig,
+      ).service.name,
+    ).toBe("api");
+    expect(serviceEvidenceScopes(detectorConfig, "another-cluster")).toEqual(
+      [],
+    );
+    const invalid = {
+      ...detectorConfig,
+      mappings: [{ ...detectorConfig.mappings[0], detector_ids: "[]" }],
+    };
+    expect(serviceEvidenceScopes(invalid, "cluster-a")).toEqual([]);
+    expect(() =>
+      serviceHealthSelection(
+        graph,
+        graph.boundary.root_node_id,
+        "prod-net",
+        invalid,
+      ),
+    ).toThrow();
   });
   it("rejects other nodes and unverified or conflicting scopes", () => {
     expect(() =>
