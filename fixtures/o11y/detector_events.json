@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic observed detector trigger and clear events for one configured detector.",
+  "events": [
+    {
+      "event": {
+        "anomaly_state": "ANOMALOUS",
+        "capture_id": "862845ee-efe2-4cac-ad7e-87e5a3fad924",
+        "capture_window_end": 1792763990,
+        "capture_window_start": 1792763000,
+        "captured_at": 1792764000,
+        "cluster": "eks-prod-east",
+        "configured_detector_ids": [
+          "detector_checkout_latency"
+        ],
+        "detector_id": "detector_checkout_latency",
+        "detector_label": "latency_p90",
+        "event_id": "event-trigger-001",
+        "event_timestamp_ms": 1792763300000,
+        "event_type": "detector_event",
+        "incident_id": "incident-001",
+        "observer_id": "o11y-detector-prod",
+        "organization_id": "org-demo-01",
+        "realm": "us0",
+        "record_id": "ec2c7f2c11120311b7da4801a2faaa7f28b2602d6b011a140d14796453424042",
+        "routing_scope": "prod-east",
+        "rule_id": "rule-p90-high",
+        "schema": "application_atlas.o11y_detector_event.v1",
+        "severity": "Critical",
+        "source_event_json": "{\"anomalyState\":\"ANOMALOUS\",\"detectLabel\":\"latency_p90\",\"detectorId\":\"detector_checkout_latency\",\"eventType\":\"ALERT\",\"id\":\"event-trigger-001\",\"incidentId\":\"incident-001\",\"inputs\":{\"A\":250000000},\"ruleId\":\"rule-p90-high\",\"severity\":\"Critical\",\"timestamp\":1792763300000}",
+        "source_event_type": "ALERT"
+      },
+      "host": "o11y-detector-prod",
+      "source": "atlas:o11y_detector_events/export",
+      "sourcetype": "atlas:o11y_detector_event",
+      "time": 1792764000
+    },
+    {
+      "event": {
+        "anomaly_state": "OK",
+        "capture_id": "862845ee-efe2-4cac-ad7e-87e5a3fad924",
+        "capture_window_end": 1792763990,
+        "capture_window_start": 1792763000,
+        "captured_at": 1792764000,
+        "cluster": "eks-prod-east",
+        "configured_detector_ids": [
+          "detector_checkout_latency"
+        ],
+        "detector_id": "detector_checkout_latency",
+        "detector_label": "latency_p90",
+        "event_id": "event-clear-002",
+        "event_timestamp_ms": 1792763450000,
+        "event_type": "detector_event",
+        "incident_id": "incident-001",
+        "observer_id": "o11y-detector-prod",
+        "organization_id": "org-demo-01",
+        "realm": "us0",
+        "record_id": "b30748c0aa0c501ca80eb496336a97c00b60e8a4ea7a3dd7fdd66fb459f774b7",
+        "routing_scope": "prod-east",
+        "rule_id": "rule-p90-high",
+        "schema": "application_atlas.o11y_detector_event.v1",
+        "severity": "Critical",
+        "source_event_json": "{\"anomalyState\":\"OK\",\"detectLabel\":\"latency_p90\",\"detectorId\":\"detector_checkout_latency\",\"eventType\":\"CLEAR\",\"id\":\"event-clear-002\",\"incidentId\":\"incident-001\",\"inputs\":{\"A\":140000000},\"ruleId\":\"rule-p90-high\",\"severity\":\"Critical\",\"timestamp\":1792763450000}",
+        "source_event_type": "CLEAR"
+      },
+      "host": "o11y-detector-prod",
+      "source": "atlas:o11y_detector_events/export",
+      "sourcetype": "atlas:o11y_detector_event",
+      "time": 1792764000
+    },
+    {
+      "event": {
+        "capture_id": "862845ee-efe2-4cac-ad7e-87e5a3fad924",
+        "capture_window_end": 1792763990,
+        "capture_window_start": 1792763000,
+        "captured_at": 1792764000,
+        "cluster": "eks-prod-east",
+        "configured_detector_ids": [
+          "detector_checkout_latency"
+        ],
+        "event_type": "export_completion",
+        "expected_record_count": 2,
+        "observer_id": "o11y-detector-prod",
+        "organization_id": "org-demo-01",
+        "realm": "us0",
+        "record_id": "d33f5a41c00cb031ff570862673ce3123e582ec2f0f106cfe3f58855c2b6bd13",
+        "routing_scope": "prod-east",
+        "schema": "application_atlas.o11y_detector_event.v1"
+      },
+      "host": "o11y-detector-prod",
+      "source": "atlas:o11y_detector_events/export",
+      "sourcetype": "atlas:o11y_detector_event",
+      "time": 1792764000
+    }
+  ]
+}
