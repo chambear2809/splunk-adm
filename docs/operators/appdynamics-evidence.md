@@ -83,14 +83,14 @@ Asset History schema. Route both through your approved HEC receiver and use
 the shared durable sender; it owns retries, checkpoints and HEC TLS behavior.
 
 ```sh
-python3 tools.hec_delivery.py enqueue \
+python3 -m tools.hec_delivery enqueue \
   --input /var/tmp/appdynamics.hec.ndjson \
   --source-id appdynamics_inventory
-python3 tools.hec_delivery.py enqueue \
+python3 -m tools.hec_delivery enqueue \
   --input /var/tmp/appdynamics-asset-history.hec.ndjson \
   --source-id appdynamics_asset_history
-python3 tools.hec_delivery.py status
-python3 tools.hec_delivery.py send
+python3 -m tools.hec_delivery status
+python3 -m tools.hec_delivery send
 ```
 
 Provide `ATLAS_HEC_URL`, `ATLAS_HEC_TOKEN` and `ATLAS_HEC_SPOOL_DIR` through
