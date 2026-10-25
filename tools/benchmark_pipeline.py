@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import configparser
+from collections import Counter
 import hashlib
 import json
 import os
@@ -35,6 +36,10 @@ from benchmark_fixtures import Workload, iter_events, manifest  # noqa: E402
 from stage_lab_package import stage_package  # noqa: E402
 
 CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
+DEFAULT_RESULT_LIMIT = 20_000
+MAX_RESULT_LIMIT = 100_000
+DEFAULT_RESULT_PAGE_SIZE = 10_000
+MAX_RESULT_PAGE_SIZE = 20_000
 COLLECTIONS = (
     "adm_observer_scope",
     "adm_ip_identity",
@@ -75,6 +80,52 @@ def truth(value):
     return value is True or str(value).lower() in ("1", "true")
 
 
+def metric_integer(value):
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, str) and re.fullmatch(r"\d+", value.strip()):
+        return int(value)
+    return None
+
+
+def metric_number(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number >= 0 and number < float("inf") else None
+
+
+def metric_flag(value):
+    if isinstance(value, bool):
+        return value
+    if type(value) is int and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str) and value.strip().lower() in ("0", "1", "false", "true"):
+        return value.strip().lower() in ("1", "true")
+    return None
+
+
+def job_metrics(content):
+    drop_count = metric_integer(content.get("dropCount"))
+    return {
+        "run_seconds": metric_number(content.get("runDuration")),
+        "scan_count": metric_integer(content.get("scanCount")),
+        "event_count": metric_integer(content.get("eventCount")),
+        "result_count": metric_integer(content.get("resultCount")),
+        "disk_usage_bytes": metric_integer(content.get("diskUsage")),
+        "drop_count": drop_count,
+        "event_is_truncated": metric_flag(content.get("eventIsTruncated")),
+        "result_is_truncated": metric_flag(content.get("resultIsTruncated")),
+        "result_is_streaming": metric_flag(content.get("resultIsStreaming")),
+        "performance": content.get("performance")
+        if isinstance(content.get("performance"), dict)
+        else None,
+    }
+
+
 def warnings(messages):
     return [
         f"{m.get('type', 'UNKNOWN')}: {m.get('text', '')}"
@@ -98,6 +149,8 @@ def validate_ports(ports):
 
 def validate_lab_target(lab_client=None):
     client = lab if lab_client is None else lab_client
+    if os.environ.get("ADM_LAB_TASK"):
+        client.verify_target()
     if not re.fullmatch(r"adm-[a-z0-9-]+", CONTAINER):
         raise ValueError("Refusing benchmark: invalid lab container name")
     for actual, env_name, default in (
@@ -109,6 +162,23 @@ def validate_lab_target(lab_client=None):
             raise ValueError(f"Refusing benchmark: invalid {env_name}")
         if actual != f"https://127.0.0.1:{port}":
             raise ValueError("Benchmark is restricted to the disposable localhost lab")
+
+
+def non_task_docker_activity():
+    running = [
+        json.loads(line)
+        for line in command("docker", "ps", "--format", "{{json .}}").splitlines()
+        if line.strip()
+    ]
+    return [
+        {
+            "name": entry.get("Names", "unknown"),
+            "image": entry.get("Image", "unknown"),
+            "status": entry.get("Status", "unknown"),
+        }
+        for entry in running
+        if entry.get("Names") != CONTAINER
+    ]
 
 
 def local_docker_endpoint():
@@ -308,8 +378,26 @@ def preflight():
     limits = json.loads(
         command("docker", "inspect", "--format", "{{json .HostConfig}}", CONTAINER)
     )
+    non_task_activity = non_task_docker_activity()
+    other_images = Counter(entry["image"] for entry in non_task_activity)
+    package = os.environ.get("ADM_LAB_PACKAGE")
     return {
+        "container_id": command("docker", "inspect", "--format", "{{.Id}}", CONTAINER),
+        "preexisting_running_containers": {
+            "count_excluding_this_lab": sum(other_images.values()),
+            "images_excluding_this_lab": dict(sorted(other_images.items())),
+            "containers_excluding_this_lab": non_task_activity,
+            "collection_method": "docker ps before measurement; all non-task containers left running",
+            "limits": "Docker activity only; native host-process activity was not attributed by this harness",
+        },
         "installed_default_sha256": installed_fingerprints(),
+        "package": {
+            "archive_name": Path(package).name if package else None,
+            "archive_sha256": hashlib.sha256(Path(package).read_bytes()).hexdigest()
+            if package
+            else None,
+            "installed_defaults_basis": "provided_package" if package else "source",
+        },
         "host_architecture": platform.machine(),
         "python": platform.python_version(),
         "docker_architecture": info.get("Architecture"),
@@ -321,6 +409,18 @@ def preflight():
         "container_nano_cpus": limits.get("NanoCpus"),
         "container_platform": "linux/amd64 (lab.sh)",
         "memory_measurement": "Sampled cgroup v2 memory.current; entire container including cache, not per-search RSS",
+        "resource_diagnostics": {
+            "per_search_cpu_seconds": None,
+            "per_search_rss_bytes": None,
+            "per_indexer_cpu_or_io": None,
+            "note": "The lab exposes whole-container memory and Splunk job metrics; it does not expose per-search CPU/RSS or production indexer diagnostics in this harness.",
+        },
+        "cache_conditions": {
+            "filesystem_and_search_cache_flushed": False,
+            "first_query": "first measured query after ingestion and correctness checks; not a cold-cache measurement",
+            "repeated_queries": "subsequent requests share the running Splunk container and host caches",
+            "host_load_isolated": False,
+        },
     }
 
 
@@ -369,8 +469,23 @@ class MemorySampler:
 
 
 class Runner:
-    def __init__(self, timeout):
+    def __init__(
+        self,
+        timeout,
+        result_limit=DEFAULT_RESULT_LIMIT,
+        page_size=DEFAULT_RESULT_PAGE_SIZE,
+    ):
+        if type(result_limit) is not int or not 1 <= result_limit <= MAX_RESULT_LIMIT:
+            raise ValueError(
+                f"result_limit must be an integer in 1..{MAX_RESULT_LIMIT}"
+            )
+        if type(page_size) is not int or not 1 <= page_size <= MAX_RESULT_PAGE_SIZE:
+            raise ValueError(
+                f"page_size must be an integer in 1..{MAX_RESULT_PAGE_SIZE}"
+            )
         self.timeout = timeout
+        self.result_limit = result_limit
+        self.page_size = page_size
         self.jobs = []
         self.lock = threading.Lock()
 
@@ -392,7 +507,14 @@ class Runner:
             return value
 
         sid = None
-        record = {"name": name, "status": "failed"}
+        record = {
+            "name": name,
+            "status": "failed",
+            "result_pages": [],
+            "result_page_count": 0,
+            "fetched_rows": 0,
+            "result_retrieval_seconds": None,
+        }
         rows = []
         try:
             if saved:
@@ -423,6 +545,18 @@ class Runner:
                 content = api("GET", f"/services/search/v2/jobs/{sid}")["entry"][0][
                     "content"
                 ]
+                metrics = job_metrics(content)
+                record.update(
+                    dispatch_state=content.get("dispatchState"),
+                    is_done=metric_flag(content.get("isDone")),
+                    is_failed=metric_flag(content.get("isFailed")),
+                    is_finalized=metric_flag(content.get("isFinalized")),
+                    metrics=metrics,
+                    metrics_unavailable=[
+                        key for key, value in metrics.items() if value is None
+                    ],
+                    warnings=warnings(content.get("messages")),
+                )
                 if content.get("dispatchState") == "FAILED" or truth(
                     content.get("isFailed")
                 ):
@@ -434,22 +568,124 @@ class Runner:
                 if time.monotonic() - started > self.timeout:
                     raise TimeoutError(f"Search exceeded {self.timeout}s")
                 time.sleep(0.25)
-            result = api("GET", f"/services/search/v2/jobs/{sid}/results?count=0")
-            rows = result.get("results", [])
-            notes = warnings(content.get("messages")) + warnings(result.get("messages"))
+            result_count = metric_integer(content.get("resultCount"))
+            retrieval_limit = self.result_limit + 1
+            target_rows = (
+                min(result_count, retrieval_limit)
+                if result_count is not None
+                else min(self.page_size, retrieval_limit)
+            )
+            retrieval_started = time.monotonic()
+            page_notes = []
+            page_records = []
+            offset = 0
+            while offset < target_rows:
+                requested = min(self.page_size, target_rows - offset)
+                page = api(
+                    "GET",
+                    f"/services/search/v2/jobs/{sid}/results?count={requested}&offset={offset}",
+                )
+                page_rows = page.get("results")
+                if not isinstance(page_rows, list):
+                    raise ValueError("Splunk returned invalid search results")
+                page_records.append(
+                    {
+                        "offset": offset,
+                        "requested_count": requested,
+                        "returned_count": len(page_rows),
+                        "preview": metric_flag(page.get("preview")),
+                    }
+                )
+                page_notes.extend(warnings(page.get("messages")))
+                if truth(page.get("preview")):
+                    page_notes.append("Preview results returned")
+                remaining = retrieval_limit - len(rows)
+                rows.extend(page_rows[:remaining])
+                if len(page_rows) > requested:
+                    page_notes.append("Splunk exceeded a requested result page size")
+                if len(page_rows) < requested:
+                    page_notes.append(
+                        "Result pagination ended before the requested row count"
+                    )
+                    break
+                offset += min(len(page_rows), requested)
+                record.update(
+                    result_pages=page_records,
+                    result_page_count=len(page_records),
+                    fetched_rows=len(rows),
+                    result_retrieval_seconds=round(
+                        time.monotonic() - retrieval_started, 4
+                    ),
+                )
+            notes = warnings(content.get("messages")) + page_notes
+            dispatch_state = content.get("dispatchState")
+            if not isinstance(dispatch_state, str) or not dispatch_state:
+                notes.append("Search dispatch state is unavailable")
+            elif dispatch_state.upper() != "DONE":
+                notes.append(f"Search dispatch state is {dispatch_state}")
+            if not truth(content.get("isDone")):
+                notes.append("Search job is not marked done")
             if truth(content.get("isFinalized")):
                 notes.append("Search was finalized early")
-            if int(content.get("resultCount", -1)) != len(rows):
-                notes.append("Fetched row count differs from final result count")
-            if truth(result.get("preview")):
-                notes.append("Preview results returned")
+            if result_count is None:
+                notes.append("Final result count is unavailable or invalid")
+            elif result_count > self.result_limit:
+                notes.append(
+                    f"Final result count exceeds configured limit {self.result_limit}; retrieval is bounded to {self.result_limit + 1} rows"
+                )
+            if result_count is not None and result_count != len(rows):
+                if (
+                    result_count > self.result_limit
+                    and len(rows) == self.result_limit + 1
+                ):
+                    notes.append("Fetched only the bounded result-limit sentinel rows")
+                else:
+                    notes.append("Fetched row count differs from final result count")
+            if len(rows) > self.result_limit + 1:
+                notes.append("Splunk exceeded the requested result retrieval bound")
+            drop_count = metrics["drop_count"]
+            if content.get("dropCount") is not None and drop_count is None:
+                notes.append("Dropped-event count is invalid")
+            elif drop_count is not None and drop_count > 0:
+                notes.append(f"Search dropped {drop_count} events")
+            event_is_truncated = metrics["event_is_truncated"]
+            result_is_truncated = metrics["result_is_truncated"]
+            if event_is_truncated is True:
+                notes.append("Search events were truncated")
+            if result_is_truncated is True:
+                notes.append("Search results were truncated")
+            metrics["result_count"] = result_count
             record.update(
                 status="complete" if not notes else "incomplete",
                 warnings=list(dict.fromkeys(notes)),
-                run_seconds=float(content.get("runDuration", 0)),
-                result_count=len(rows),
-                scan_count=int(content.get("scanCount", 0)),
-                event_count=int(content.get("eventCount", 0)),
+                dispatch_state=dispatch_state,
+                is_done=metric_flag(content.get("isDone")),
+                is_failed=metric_flag(content.get("isFailed")),
+                is_finalized=metric_flag(content.get("isFinalized")),
+                result_limit=self.result_limit,
+                result_limit_exceeded=result_count is not None
+                and result_count > self.result_limit,
+                fetched_rows=len(rows),
+                result_page_size=self.page_size,
+                result_pages=page_records,
+                result_page_count=len(page_records),
+                result_retrieval_seconds=round(time.monotonic() - retrieval_started, 4),
+                metrics=metrics,
+                metrics_unavailable=[
+                    key for key, value in metrics.items() if value is None
+                ],
+                run_seconds=metrics["run_seconds"],
+                result_count=metrics["result_count"],
+                scan_count=metrics["scan_count"],
+                event_count=metrics["event_count"],
+                disk_usage_bytes=metrics["disk_usage_bytes"],
+                scan_events_per_second=(
+                    metrics["scan_count"] / metrics["run_seconds"]
+                    if metrics["scan_count"] is not None
+                    and metrics["run_seconds"] is not None
+                    and metrics["run_seconds"] > 0
+                    else None
+                ),
             )
         except Exception as exc:
             record["error"] = str(exc)[:2000]
@@ -481,7 +717,17 @@ def require(condition, message):
 def wait_count(runner, query, expected, timeout=180):
     deadline = time.monotonic() + timeout
     while True:
-        rows, job = runner.search("index-visibility", query + " | stats count AS count")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError(f"Timed out waiting for {expected} searchable events")
+        original_timeout = runner.timeout
+        runner.timeout = min(original_timeout, remaining)
+        try:
+            rows, job = runner.search(
+                "index-visibility", query + " | stats count AS count"
+            )
+        finally:
+            runner.timeout = original_timeout
         require(job["status"] == "complete", "Incomplete ingestion check")
         actual = int(rows[0]["count"])
         if actual == expected:
