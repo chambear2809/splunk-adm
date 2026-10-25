@@ -83,14 +83,14 @@ def command(*args):
 class LabResetTimeout(TimeoutError):
     """A bounded reset subprocess ended without proving the lab's final state."""
 
-    def __init__(self, operation, timeout_seconds, process_group_stopped):
+    def __init__(self, operation, timeout_seconds, host_process_group_stopped):
         self.operation = operation
         self.timeout_seconds = timeout_seconds
-        self.process_group_stopped = process_group_stopped
+        self.host_process_group_stopped = host_process_group_stopped
         termination = (
-            "process group stopped"
-            if process_group_stopped
-            else "process-group termination could not be confirmed"
+            "host process group stopped"
+            if host_process_group_stopped
+            else "host process-group termination could not be confirmed"
         )
         super().__init__(
             f"{operation} timed out after {timeout_seconds}s; {termination}; "
@@ -98,29 +98,67 @@ class LabResetTimeout(TimeoutError):
         )
 
 
+def _process_group_exists(process_group_id):
+    try:
+        os.killpg(process_group_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return None
+    return True
+
+
+def _wait_for_process_group_exit(process_group_id, timeout):
+    deadline = time.monotonic() + timeout
+    while True:
+        exists = _process_group_exists(process_group_id)
+        if exists is False:
+            return True
+        if exists is None or time.monotonic() >= deadline:
+            return False
+        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+
+
 def _terminate_process_group(process):
-    """Stop a reset command and its children while leaving the caller's lock alive."""
+    """Stop and confirm only the reset child session, preserving the parent lock."""
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
-        return True
+        pass
     except OSError:
-        return False
+        # Still make a best effort with SIGKILL below.
+        pass
     try:
         process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
-        return True
     except subprocess.TimeoutExpired:
+        pass
+
+    # The group leader may exit on TERM while a descendant ignores it. Check
+    # the process group independently of communicate()/the leader's exit.
+    exists = _process_group_exists(process.pid)
+    if exists is None:
+        return False
+    if exists:
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
-            return True
+            pass
         except OSError:
             return False
-        try:
-            process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
-            return True
-        except subprocess.TimeoutExpired:
+        if not _wait_for_process_group_exit(
+            process.pid, PROCESS_TERMINATION_GRACE_SECONDS
+        ):
             return False
+
+    try:
+        process.communicate(timeout=PROCESS_TERMINATION_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return False
+    return (
+        process.returncode is not None and _process_group_exists(process.pid) is False
+    )
 
 
 def _run_bounded_subprocess(args, *, timeout, operation, **kwargs):
@@ -1002,8 +1040,8 @@ def run_case(name, config, concurrency, repeats, timeout):
                 status="failed",
                 lab_state="uncertain",
                 error=str(exc)[:1000],
-                process_group_stopped=(
-                    exc.process_group_stopped
+                host_process_group_stopped=(
+                    exc.host_process_group_stopped
                     if isinstance(exc, LabResetTimeout)
                     else None
                 ),

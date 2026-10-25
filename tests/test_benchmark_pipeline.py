@@ -8,6 +8,7 @@ import tarfile
 from types import SimpleNamespace
 import os
 import signal
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -88,11 +89,20 @@ class BenchmarkPipelineTest(unittest.TestCase):
     def test_bounded_reset_subprocess_timeout_terminates_only_its_process_group(self):
         process = SimpleNamespace(pid=4321, returncode=-signal.SIGTERM)
         process.communicate = Mock(
-            side_effect=[bench.subprocess.TimeoutExpired("reset", 10), (None, None)]
+            side_effect=[
+                bench.subprocess.TimeoutExpired("reset", 10),
+                (None, None),
+                (None, None),
+            ]
         )
+
+        def signal_group(_process_group, signum):
+            if signum == 0:
+                raise ProcessLookupError
+
         with (
             patch.object(bench.subprocess, "Popen", return_value=process) as popen,
-            patch.object(bench.os, "killpg") as killpg,
+            patch.object(bench.os, "killpg", side_effect=signal_group) as killpg,
             self.assertRaises(bench.LabResetTimeout) as raised,
         ):
             bench._run_bounded_subprocess(
@@ -100,7 +110,7 @@ class BenchmarkPipelineTest(unittest.TestCase):
             )
         self.assertEqual(raised.exception.operation, "lab.sh reset")
         self.assertEqual(raised.exception.timeout_seconds, 10)
-        self.assertTrue(raised.exception.process_group_stopped)
+        self.assertTrue(raised.exception.host_process_group_stopped)
         self.assertIn("state is uncertain", str(raised.exception))
         popen.assert_called_once_with(["reset"], start_new_session=True)
         self.assertEqual(process.communicate.call_args_list[0].kwargs, {"timeout": 10})
@@ -108,7 +118,62 @@ class BenchmarkPipelineTest(unittest.TestCase):
             process.communicate.call_args_list[1].kwargs,
             {"timeout": bench.PROCESS_TERMINATION_GRACE_SECONDS},
         )
-        killpg.assert_called_once_with(process.pid, signal.SIGTERM)
+        self.assertEqual(
+            process.communicate.call_args_list[2].kwargs,
+            {"timeout": bench.PROCESS_TERMINATION_GRACE_SECONDS},
+        )
+        self.assertEqual(
+            [call.args[1] for call in killpg.call_args_list], [signal.SIGTERM, 0, 0]
+        )
+
+    def test_timed_out_parent_cannot_leave_term_ignoring_child_in_process_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            child_pid_path = Path(directory) / "child.pid"
+            child_code = (
+                "import signal, time; "
+                "signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"
+            )
+            parent_code = (
+                "import pathlib, signal, subprocess, sys, time; "
+                f"child = subprocess.Popen([sys.executable, '-c', {child_code!r}]); "
+                f"pathlib.Path({str(child_pid_path)!r}).write_text(str(child.pid)); "
+                "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0)); "
+                "time.sleep(60)"
+            )
+            timed_out = None
+            try:
+                with self.assertRaises(bench.LabResetTimeout) as raised:
+                    bench._run_bounded_subprocess(
+                        [sys.executable, "-c", parent_code],
+                        timeout=1,
+                        operation="test reset parent",
+                        stdout=bench.subprocess.DEVNULL,
+                        stderr=bench.subprocess.DEVNULL,
+                    )
+                timed_out = raised.exception
+                child_pid = int(child_pid_path.read_text())
+                status = bench.subprocess.run(
+                    ["ps", "-o", "stat=", "-p", str(child_pid)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                ).stdout.strip()
+                self.assertFalse(status and not status.startswith("Z"))
+            finally:
+                if child_pid_path.exists():
+                    child_pid = int(child_pid_path.read_text())
+                    status = bench.subprocess.run(
+                        ["ps", "-o", "stat=", "-p", str(child_pid)],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=2,
+                    ).stdout.strip()
+                    if status and not status.startswith("Z"):
+                        os.kill(child_pid, signal.SIGKILL)
+            self.assertIsNotNone(timed_out)
+            self.assertTrue(timed_out.host_process_group_stopped)
 
     def test_reset_subprocesses_have_finite_phase_deadlines(self):
         with (

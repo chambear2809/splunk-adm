@@ -137,12 +137,14 @@ containers and host collectors remain active, so contention is uncontrolled.
 
 Reset setup is separately bounded: `lab.sh reset` has a 900-second deadline
 and the benchmark's Docker macro-override cleanup command has a 30-second
-deadline. A timeout triggers process-group termination; the case report records
-whether that termination was confirmed. Since a reset can stop Splunk or clear only some
-indexes before timing out, the lab state is marked uncertain. The run does not
-retry or proceed to another case; verify and reinitialize the disposable lab
-before starting a new run. The benchmark's cooperative lab lock remains held
-by the parent runner while it records the failed case.
+deadline. A timeout triggers host process-group termination; the case report
+records whether the host group disappearance was confirmed. That confirmation
+does not prove that the Docker daemon stopped a `docker exec` already running
+inside the container. Since a reset can stop Splunk or clear only some indexes
+before timing out, the lab state is marked uncertain. The run does not retry or
+proceed to another case; verify and reinitialize the disposable lab before
+starting a new run. The benchmark's cooperative lab lock remains held by the
+parent runner while it records the failed case.
 
 ## Production qualification remains separate
 

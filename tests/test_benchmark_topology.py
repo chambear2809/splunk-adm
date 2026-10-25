@@ -223,7 +223,7 @@ class BenchmarkTopologyTest(unittest.TestCase):
             self.assertEqual(case["status"], "failed")
             self.assertEqual(case["lab_reset"]["status"], "failed")
             self.assertEqual(case["lab_reset"]["lab_state"], "uncertain")
-            self.assertTrue(case["lab_reset"]["process_group_stopped"])
+            self.assertTrue(case["lab_reset"]["host_process_group_stopped"])
             self.assertIn("state is uncertain", case["error"])
             markdown = output.with_suffix(".md").read_text()
             self.assertIn("not evaluated", markdown)

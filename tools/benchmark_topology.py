@@ -416,8 +416,8 @@ def run_case(name, workload, timeout, result_limit):
                 status="failed",
                 lab_state="uncertain",
                 error=str(exc)[:1000],
-                process_group_stopped=(
-                    exc.process_group_stopped
+                host_process_group_stopped=(
+                    exc.host_process_group_stopped
                     if isinstance(exc, bench.LabResetTimeout)
                     else None
                 ),
