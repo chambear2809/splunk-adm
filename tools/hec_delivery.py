@@ -151,6 +151,8 @@ def _read_capture_file(source_path: Path) -> bytes:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        flags |= os.O_NONBLOCK
     try:
         descriptor = os.open(source_path, flags)
     except OSError:
@@ -195,6 +197,8 @@ def _read_bounded_file(path: Path, maximum: int) -> bytes | None:
     flags = os.O_RDONLY
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        flags |= os.O_NONBLOCK
     try:
         descriptor = os.open(path, flags)
     except FileNotFoundError:
@@ -647,10 +651,32 @@ def enqueue_capture(
                 if existing_path.is_symlink() or not existing_path.is_file():
                     raise DeliveryError("Spool capture entry is invalid.")
                 if existing_path.name == target.name:
+                    stored = _capture_from_path(existing_path, capture.source_id)
+                    if (
+                        stored.capture_key != capture.capture_key
+                        or stored.capture_key_field != capture.capture_key_field
+                        or stored.digest != capture.digest
+                    ):
+                        raise DeliveryError(
+                            "Stored capture failed its immutable identity check; source input remains preserved."
+                        )
                     state = _read_checkpoint(checkpoint)
-                    if state is None:
+                    if area == "accepted" and (
+                        state is None
+                        or not _checkpoint_matches(state, stored)
+                        or state.get("status")
+                        not in {
+                            "http_accepted_unverified",
+                            "indexer_acknowledged_not_searchable",
+                            "acknowledgment_mode_required",
+                        }
+                    ):
+                        raise DeliveryError(
+                            "Accepted capture has no valid terminal checkpoint; source input remains preserved."
+                        )
+                    if area == "pending" and state is None:
                         _write_checkpoint(
-                            checkpoint, _checkpoint_template(capture, existing_path)
+                            checkpoint, _checkpoint_template(stored, existing_path)
                         )
                     if area == "quarantine":
                         raise CaptureConflictError(
@@ -1021,6 +1047,14 @@ def _record_batches(lines: tuple[bytes, ...]) -> list[tuple[int, int, bytes]]:
 
 def _capture_from_path(path: Path, source_id: str) -> _Capture:
     capture = _load_capture(path, source_id)
+    match = re.fullmatch(
+        rf"{re.escape(source_id)}-[0-9a-f]{{32}}-([0-9a-f]{{64}})\.ndjson",
+        path.name,
+    )
+    if match is None or match.group(1) != capture.digest:
+        raise DeliveryError(
+            "Queued capture bytes do not match their immutable spool identity."
+        )
     return _Capture(
         capture.capture_key,
         capture.capture_key_field,
@@ -1066,6 +1100,43 @@ def _recover_checkpoint(
 
 def _ack_url(origin: str, channel: str) -> str:
     return origin + "/services/collector/ack?channel=" + quote(channel, safe="")
+
+
+def _move_terminal_capture_to_accepted(
+    spool: Path,
+    path: Path,
+    capture: _Capture,
+    checkpoint: Path,
+    state: dict[str, Any],
+) -> None:
+    """Finish a terminal checkpoint move after a crash without resending."""
+    if path.parent.name != "pending":
+        return
+    accepted_path = _capture_path(spool, capture, "accepted")
+    if accepted_path.exists():
+        accepted_capture = _capture_from_path(accepted_path, capture.source_id)
+        if accepted_capture.digest != capture.digest:
+            raise DeliveryError(
+                "Accepted capture conflicts with its pending copy; both were preserved."
+            )
+        try:
+            path.unlink()
+            _fsync_directory(path.parent)
+        except OSError:
+            raise DeliveryError(
+                "Duplicate pending capture could not be removed after acceptance."
+            ) from None
+    else:
+        try:
+            os.replace(path, accepted_path)
+            _fsync_directory(path.parent)
+            _fsync_directory(accepted_path.parent)
+        except OSError:
+            raise DeliveryError(
+                "Terminal capture could not be moved to accepted storage."
+            ) from None
+    state["capture_file"] = accepted_path.name
+    _write_checkpoint(checkpoint, state)
 
 
 def _poll_ack(
@@ -1140,6 +1211,7 @@ def _send_capture(
         "indexer_acknowledged_not_searchable",
         "acknowledgment_mode_required",
     }:
+        _move_terminal_capture_to_accepted(spool, path, capture, checkpoint, state)
         return str(state["status"]), 0, 0
     bound_endpoint = state.get("delivery_endpoint")
     if bound_endpoint is None:
@@ -1242,10 +1314,9 @@ def _send_capture(
                 ack_id, _ = _successful_hec_response(response)
                 if ack_mode == "enterprise":
                     if ack_id is None:
-                        state["next_record_index"] = batch_end
-                        state["accepted_batches"] = (
-                            int(state.get("accepted_batches", 0)) + 1
-                        )
+                        # HEC accepted this request but supplied no ACK ID, so
+                        # we cannot prove indexing. Leave the checkpoint at
+                        # this batch's start and replay it on restart.
                         state["http_accepted_unverified"] = True
                         state["status"] = "acknowledgment_id_missing"
                         state["last_error_code"] = "acknowledgment_id_missing"
@@ -1346,17 +1417,7 @@ def _send_capture(
             state["status"] = "http_accepted_unverified"
         state["last_error_code"] = None
         _write_checkpoint(checkpoint, state)
-        accepted_path = _capture_path(spool, capture, "accepted")
-        if path.parent.name == "pending" and not accepted_path.exists():
-            try:
-                os.replace(path, accepted_path)
-                _fsync_directory(path.parent)
-                _fsync_directory(accepted_path.parent)
-                state["capture_file"] = accepted_path.name
-                _write_checkpoint(checkpoint, state)
-            except OSError:
-                # File and checkpoint remain available in pending for recovery.
-                pass
+        _move_terminal_capture_to_accepted(spool, path, capture, checkpoint, state)
         return str(state["status"]), attempted_batches, accepted_batches
     return str(state.get("status", "pending")), attempted_batches, accepted_batches
 

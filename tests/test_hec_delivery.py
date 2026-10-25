@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import socket
@@ -115,6 +116,19 @@ class HecDeliveryTest(unittest.TestCase):
             sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
         self.assertEqual(self.input.read_bytes(), original)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "named pipes are unavailable")
+    def test_enqueue_rejects_named_pipe_without_blocking(self):
+        fifo = self.root / "capture.fifo"
+        os.mkfifo(fifo)
+        with self.assertRaisesRegex(sender.DeliveryError, "regular file"):
+            sender.enqueue_capture(fifo, self.spool, source_id="o11y_health")
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "named pipes are unavailable")
+    def test_checkpoint_reader_rejects_named_pipe_without_blocking(self):
+        fifo = self.root / "checkpoint.fifo"
+        os.mkfifo(fifo)
+        self.assertIsNone(sender._read_bounded_file(fifo, maximum=1024))
+
     def test_enqueue_rejects_lines_that_cannot_fit_app_truncate_boundary(self):
         self.input.write_text(
             json.dumps(
@@ -211,6 +225,51 @@ class HecDeliveryTest(unittest.TestCase):
         status = sender.spool_status(self.spool)
         self.assertEqual(status.pending_captures, 1)
         self.assertEqual(status.quarantined_captures, 1)
+
+    def test_duplicate_enqueue_rejects_corrupted_pending_capture(self):
+        capture(self.input, envelope({"capture_id": "corrupt-pending"}))
+        original = self.input.read_bytes()
+        receipt = sender.enqueue_capture(
+            self.input, self.spool, source_id="o11y_health"
+        )
+        queued = Path(receipt.queued_path)
+        queued.write_bytes(b"")
+        with self.assertRaises(sender.DeliveryError):
+            sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        self.assertEqual(self.input.read_bytes(), original)
+
+    def test_duplicate_enqueue_rejects_valid_json_with_wrong_spool_digest(self):
+        capture(self.input, envelope({"capture_id": "corrupt-valid-json"}))
+        original = self.input.read_bytes()
+        receipt = sender.enqueue_capture(
+            self.input, self.spool, source_id="o11y_health"
+        )
+        queued = Path(receipt.queued_path)
+        queued.write_bytes(original.replace(b"corrupt-valid-json", b"altered-json"))
+        with self.assertRaisesRegex(sender.DeliveryError, "immutable spool identity"):
+            sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        self.assertEqual(self.input.read_bytes(), original)
+
+    def test_duplicate_enqueue_rejects_corrupted_accepted_capture(self):
+        capture(self.input, envelope({"capture_id": "corrupt-accepted"}))
+        original = self.input.read_bytes()
+        sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            post_json=lambda *args: response(),
+        )
+        accepted_path = sender._capture_path(
+            self.spool,
+            sender._load_capture(self.input, "o11y_health"),
+            "accepted",
+        )
+        self.assertTrue(accepted_path.exists())
+        accepted_path.write_bytes(b"")
+        with self.assertRaises(sender.DeliveryError):
+            sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        self.assertEqual(self.input.read_bytes(), original)
 
     def test_capacity_error_is_typed_and_preserves_the_finalized_input(self):
         capture(self.input, envelope({"capture_id": "one"}))
@@ -435,6 +494,100 @@ class HecDeliveryTest(unittest.TestCase):
             sender.spool_status(self.spool).indexer_acknowledged_not_searchable, 1
         )
 
+    def test_missing_ack_id_replays_only_unacknowledged_batch_after_restart(self):
+        rows = [
+            envelope(
+                {"capture_id": "missing-ack", "record_id": f"row-{index}"},
+                padding=53_000,
+            )
+            for index in range(5)
+        ]
+        capture(self.input, *rows)
+        sender.enqueue_capture(self.input, self.spool, source_id="o11y_health")
+        first_calls = []
+
+        def first_post(url, body, token, timeout, context, channel=None):
+            first_calls.append((url, body))
+            if "/ack?channel=" in url:
+                return response(b'{"acks":{"9":true}}')
+            if b'"row-4"' in body:
+                return response(b'{"text":"Success","code":0}')
+            return response(b'{"text":"Success","code":0,"ackId":9}')
+
+        first = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            ack_mode="enterprise",
+            post_json=first_post,
+        )
+        self.assertEqual(first.pending_captures, 1)
+        self.assertEqual(first.indexer_acknowledged_captures, 0)
+        self.assertEqual(
+            len([call for call in first_calls if "/ack?channel=" in call[0]]), 1
+        )
+        checkpoint = next((self.spool / "checkpoints").glob("*.json"))
+        state = sender._read_checkpoint(checkpoint)
+        self.assertIsNotNone(state)
+        assert state is not None
+        self.assertEqual(state["next_record_index"], 4)
+        self.assertEqual(state["status"], "acknowledgment_id_missing")
+
+        resumed_calls = []
+
+        def resumed_post(url, body, token, timeout, context, channel=None):
+            resumed_calls.append((url, body))
+            if "/ack?channel=" in url:
+                return response(b'{"acks":{"10":true}}')
+            return response(b'{"text":"Success","code":0,"ackId":10}')
+
+        resumed = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            ack_mode="enterprise",
+            post_json=resumed_post,
+        )
+        self.assertEqual(resumed.pending_captures, 0)
+        self.assertEqual(resumed.indexer_acknowledged_captures, 1)
+        self.assertEqual(len(resumed_calls), 2)
+        self.assertNotIn(b'"row-0"', resumed_calls[0][1])
+        self.assertIn(b'"row-4"', resumed_calls[0][1])
+
+    def test_terminal_checkpoint_recovers_crash_before_capture_move(self):
+        capture(self.input, envelope({"capture_id": "move-recovery"}))
+        receipt = sender.enqueue_capture(
+            self.input, self.spool, source_id="o11y_health"
+        )
+        pending_path = Path(receipt.queued_path)
+        accepted_path = pending_path.parent.parent / "accepted" / pending_path.name
+
+        def fail_capture_move(source, destination):
+            if Path(source) == pending_path and Path(destination) == accepted_path:
+                raise OSError("injected crash before move")
+            return original_replace(source, destination)
+
+        original_replace = sender.os.replace
+        with patch.object(sender.os, "replace", side_effect=fail_capture_move):
+            result = sender.deliver_pending(
+                self.spool,
+                endpoint="https://hec.example.test/services/collector/event",
+                token="test-token",
+                post_json=lambda *args: response(),
+            )
+        self.assertEqual(result.pending_captures, 1)
+        self.assertTrue(pending_path.exists())
+        calls = []
+        recovered = sender.deliver_pending(
+            self.spool,
+            endpoint="https://hec.example.test/services/collector/event",
+            token="test-token",
+            post_json=lambda *args: calls.append(args) or response(),
+        )
+        self.assertEqual(calls, [])
+        self.assertEqual(recovered.pending_captures, 0)
+        self.assertTrue(accepted_path.exists())
+
     def test_acknowledgment_parser_accepts_documented_and_runtime_field_spelling(self):
         self.assertEqual(
             sender._successful_hec_response(
@@ -475,7 +628,8 @@ class HecDeliveryTest(unittest.TestCase):
             post_json=post,
         )
         self.assertEqual(first.pending_captures, 1)
-        self.assertEqual(again.pending_captures, 1)
+        self.assertEqual(again.pending_captures, 0)
+        self.assertEqual(sender.spool_status(self.spool).http_accepted_unverified, 1)
         self.assertEqual(len(calls), 1)
 
     def test_endpoint_requires_tls_and_supported_path(self):
