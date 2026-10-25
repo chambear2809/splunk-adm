@@ -223,7 +223,7 @@ describe("requiredFlowsCsv", () => {
     expect(output).toContain(']",1,');
   });
 
-  it("exports exact selected time bounds with NAT evidence", () => {
+  it("labels native addinfo bounds with NAT evidence", () => {
     const graphWithNat = structuredClone(graph);
     const edge = graphWithNat.edges.find(
       (candidate) => candidate.relationship === "communicates_with",
@@ -262,7 +262,9 @@ describe("requiredFlowsCsv", () => {
     );
     expect(FLOW_COLUMNS).toContain("nat_window_start");
     expect(FLOW_COLUMNS).toContain("nat_window_end");
-    expect(output).toContain(']",1,1791373500.25,1791374400.0005,exact,');
+    expect(output).toContain(
+      '",1,1791373500.25,1791374400.0005,native-addinfo,',
+    );
   });
 });
 
@@ -356,7 +358,7 @@ describe("contextEvidenceCsv", () => {
     expect(csv).toContain(
       '""nat_event_window"":{""start"":1791373500.25,""end"":1791374400.0005}',
     );
-    expect(csv).toContain('""nat_event_window_exact"":true');
+    expect(csv).toContain('""nat_event_window_basis"":""native-addinfo""');
     expect(csv).toContain("MR-AP-01");
     expect(csv).toContain('""ssid_number"":7');
     expect(csv).toContain('""raw_bytes_in"":123');
@@ -376,6 +378,39 @@ describe("contextEvidenceCsv", () => {
     const csv = contextEvidenceCsv(contextGraph);
     expect(csv).toContain("nat_observations_truncated,1");
     expect(csv).toContain('""truncated"":true');
-    expect(csv).toContain('""nat_event_window_exact"":true');
+    expect(csv).toContain('""nat_event_window_basis"":""native-addinfo""');
+  });
+
+  it("labels legacy displayed-window fallback in NAT evidence exports", () => {
+    const contextGraph = structuredClone(demoGraph("nxos"));
+    const edge = contextGraph.edges.find(
+      (candidate) => candidate.relationship === "communicates_with",
+    )!;
+    edge.nat_observations = [
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "firewall-prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1_791_373_808,
+        received_time: 1_791_373_809,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ];
+
+    const csv = contextEvidenceCsv(contextGraph);
+
+    expect(csv).toContain('""nat_event_window_basis"":""displayed-window""');
   });
 });
