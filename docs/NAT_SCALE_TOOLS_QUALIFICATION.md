@@ -81,7 +81,46 @@ retaining the original container ID/state and credential file. A Docker-free
 shell regression covers the same entrypoints. These are baseline/infrastructure
 results, not final integrated acceptance.
 
-## Workstream results
+## Search measurement results
 
-Pending integrated acceptance. Historical qualification records remain bound to
+Tooling source `b1b9f083950f70fb5f43fc3e59bccb2ef4054320` measured the retained
+baseline app archive identified above. These measurements are not rebound to a
+later package. See [methodology and source limits](SPLUNK_SEARCH_PERFORMANCE.md).
+
+| Expected / fetched topology rows | Input events / scan count | Splunk run seconds | Search wall seconds | Result pages | Boundary outcome |
+| --- | --- | --- | --- | --- | --- |
+| 19,999 | 19,998 | 2.106 | 2.5573 | 2 | Complete within modeled cap |
+| 20,000 | 19,999 | 2.052 | 2.5282 | 2 | Complete within modeled cap |
+| 20,001 | 20,000 | 1.983 | 2.2606 | 3 | Extra sentinel detected; job result marked incomplete for application use |
+
+All three jobs reached `DONE`; exact device/interface identities and the two
+expected metadata warnings matched. The workload has no link-discovery or SNMP
+ifIndex input. `dropCount=0` and `eventIsTruncated=false` were present;
+`resultIsTruncated` was omitted and is recorded as unavailable. The 20,000-row
+application cap was modeled from source, not exercised in a live browser. This
+is local response-boundary evidence, not production capacity or qualification
+of the bound under representative load.
+
+Sampled whole-container peaks were 5,873,917,952 / 5,922,373,632 /
+5,933,101,056 bytes, including cache and unrelated Splunk processes; these are
+not per-search RSS. Other task labs were stopped and heavy worker tests paused.
+Three pre-existing collectors remained running; host CPU, I/O and caches were
+uncontrolled. Each case reset its data and used one measured search. Reset,
+startup, install, HEC submission and index-visibility timing are separate.
+HEC code-zero responses establish HTTP acceptance; complete indexed counts and
+row identities provide separate visibility/correctness evidence.
+
+The first attempt stopped on an overly narrow expected-warning oracle after
+its first completed job. It remains retained separately; the correction
+requires both exact known workload warnings and rejects unexpected warnings.
+The corrected three-case report is
+`performance/topology-boundary-corrected-b1b9f08.json` in retained evidence.
+
+The separate existing pipeline smoke workload also completed its builders,
+rollup, summary and graph searches: 19 events became visible, with 8 graph nodes
+and 10 edges. This is a small local functional regression check.
+
+## Integrated acceptance
+
+Pending integration and final package validation. Historical qualification records remain bound to
 their original sources and packages; they are not evidence for this candidate.
