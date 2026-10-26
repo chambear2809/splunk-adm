@@ -295,7 +295,10 @@ valid-from/to, and configuration ID. Application identity and agent location
 are optional labels. Current configuration accepts up to 32 account-group
 mappings, 64 bindings per group, 16 indexes, and 16 exact path source pairs per
 mapping. Keep overlapping bindings visible as ambiguous; do not merge them by
-name or address.
+name or address. Within the selected scope, a path `(index, source)` pair must
+belong to exactly one authority. With the fixed Atlas exporter source, use a
+distinct path index per authority and count it against the 16-index source
+budget; shared pairs are rejected rather than resolved by first match.
 
 For the optional CEA path exporter, the `path` family requires a verified CEA
 binding plus `te_path_sources` matching the export index and

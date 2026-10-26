@@ -240,6 +240,10 @@ After vendor ingestion and searchable readback pass:
    `atlas:thousandeyes:path`; a Cisco-package source must be observed, not
    guessed. This exact pair allowlist is separate from `te_families` and does
    not supply missing native identity.
+   Within a selected scope, each path `(index, source)` pair must belong to one
+   account-group authority. The fixed exporter source therefore needs a distinct
+   path index per authority; shared pairs are rejected as ambiguous. Count these
+   path indexes against the source's 16-index limit.
 7. If source navigation is needed, set `thousandeyes_origin` to a credential-
    free HTTPS origin only. It is a configured navigation root, not a deep-link
    template; never construct a URL from event-supplied values.
