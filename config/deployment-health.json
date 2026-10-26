@@ -6,19 +6,10 @@
       "id": "netflow",
       "readinessImpact": "core",
       "label": "NetFlow",
-      "healthNames": [
-        "NetFlow"
-      ],
-      "indexMacros": [
-        "adm_index_netflow"
-      ],
-      "qualitySources": [
-        "netflow",
-        "stream_ipfix_v2"
-      ],
-      "evidence": [
-        "traffic"
-      ],
+      "healthNames": ["NetFlow"],
+      "indexMacros": ["adm_index_netflow"],
+      "qualitySources": ["netflow", "stream_ipfix_v2"],
+      "evidence": ["traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -26,9 +17,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "exporter"
-      ],
+      "observerKinds": ["exporter"],
       "requiredFields": [
         "src_ip",
         "dest_ip",
@@ -38,13 +27,8 @@
         "exporter_ip"
       ],
       "qualitySourcesByContract": {
-        "1": [
-          "netflow"
-        ],
-        "2": [
-          "stream_ipfix_v2",
-          "stream_ipfix_unclassified_v2"
-        ]
+        "1": ["netflow"],
+        "2": ["stream_ipfix_v2", "stream_ipfix_unclassified_v2"]
       },
       "probeMacro": "adm_health_source_netflow"
     },
@@ -52,21 +36,10 @@
       "id": "dcn",
       "readinessImpact": "core",
       "label": "DC Networking",
-      "healthNames": [
-        "DC Networking"
-      ],
-      "indexMacros": [
-        "adm_index_dcn"
-      ],
-      "qualitySources": [
-        "nd",
-        "aci_acllog"
-      ],
-      "evidence": [
-        "inventory",
-        "discovery",
-        "traffic"
-      ],
+      "healthNames": ["DC Networking"],
+      "indexMacros": ["adm_index_dcn"],
+      "qualitySources": ["nd", "aci_acllog"],
+      "evidence": ["inventory", "discovery", "traffic"],
       "cadenceSeconds": 600,
       "staleAfterSeconds": 1800,
       "quiet": false,
@@ -74,39 +47,18 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "apic",
-        "nd_host",
-        "fabric",
-        "nxos_serial"
-      ],
-      "requiredFields": [
-        "srcIp",
-        "dstIp",
-        "ts",
-        "protocolName",
-        "fabricName"
-      ],
+      "observerKinds": ["apic", "nd_host", "fabric", "nxos_serial"],
+      "requiredFields": ["srcIp", "dstIp", "ts", "protocolName", "fabricName"],
       "probeMacro": "adm_health_source_dcn"
     },
     {
       "id": "aci",
       "readinessImpact": "core",
       "label": "ACI",
-      "healthNames": [
-        "ACI"
-      ],
-      "indexMacros": [
-        "adm_index_dcn"
-      ],
-      "qualitySources": [
-        "aci_acllog"
-      ],
-      "evidence": [
-        "inventory",
-        "association",
-        "traffic"
-      ],
+      "healthNames": ["ACI"],
+      "indexMacros": ["adm_index_dcn"],
+      "qualitySources": ["aci_acllog"],
+      "evidence": ["inventory", "association", "traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -114,9 +66,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "apic"
-      ],
+      "observerKinds": ["apic"],
       "requiredFields": [],
       "probeMacro": "adm_health_source_aci"
     },
@@ -124,19 +74,10 @@
       "id": "nd",
       "readinessImpact": "core",
       "label": "Nexus Dashboard",
-      "healthNames": [
-        "Nexus Dashboard"
-      ],
-      "indexMacros": [
-        "adm_index_dcn"
-      ],
-      "qualitySources": [
-        "nd"
-      ],
-      "evidence": [
-        "discovery",
-        "traffic"
-      ],
+      "healthNames": ["Nexus Dashboard"],
+      "indexMacros": ["adm_index_dcn"],
+      "qualitySources": ["nd"],
+      "evidence": ["discovery", "traffic"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 10800,
       "quiet": true,
@@ -144,24 +85,13 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "fabric",
-        "nd_host"
-      ],
+      "observerKinds": ["fabric", "nd_host"],
       "requiredFields": [],
       "observerKindsByJob": {
-        "identity": [
-          "nd_host"
-        ],
-        "rollup_v1": [
-          "fabric"
-        ],
-        "rollup_v2": [
-          "fabric"
-        ],
-        "traffic_v2": [
-          "fabric"
-        ]
+        "identity": ["nd_host"],
+        "rollup_v1": ["fabric"],
+        "rollup_v2": ["fabric"],
+        "traffic_v2": ["fabric"]
       },
       "probeMacro": "adm_health_source_nd"
     },
@@ -169,17 +99,10 @@
       "id": "nxos",
       "readinessImpact": "core",
       "label": "NX-OS",
-      "healthNames": [
-        "NX-OS"
-      ],
-      "indexMacros": [
-        "adm_index_dcn"
-      ],
+      "healthNames": ["NX-OS"],
+      "indexMacros": ["adm_index_dcn"],
       "qualitySources": [],
-      "evidence": [
-        "inventory",
-        "discovery"
-      ],
+      "evidence": ["inventory", "discovery"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 10800,
       "quiet": false,
@@ -187,9 +110,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "nxos_serial"
-      ],
+      "observerKinds": ["nxos_serial"],
       "requiredFields": [],
       "probeMacro": "adm_health_source_nxos"
     },
@@ -197,18 +118,10 @@
       "id": "ftd",
       "readinessImpact": "core",
       "label": "FTD",
-      "healthNames": [
-        "FTD"
-      ],
-      "indexMacros": [
-        "adm_index_ftd"
-      ],
-      "qualitySources": [
-        "ftd"
-      ],
-      "evidence": [
-        "traffic"
-      ],
+      "healthNames": ["FTD"],
+      "indexMacros": ["adm_index_ftd"],
+      "qualitySources": ["ftd"],
+      "evidence": ["traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -216,9 +129,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "firewall"
-      ],
+      "observerKinds": ["firewall"],
       "requiredFields": [
         "InitiatorIP",
         "ResponderIP",
@@ -232,18 +143,10 @@
       "id": "isovalent",
       "readinessImpact": "core",
       "label": "Isovalent",
-      "healthNames": [
-        "Isovalent"
-      ],
-      "indexMacros": [
-        "adm_index_isovalent"
-      ],
-      "qualitySources": [
-        "isovalent"
-      ],
-      "evidence": [
-        "traffic"
-      ],
+      "healthNames": ["Isovalent"],
+      "indexMacros": ["adm_index_isovalent"],
+      "qualitySources": ["isovalent"],
+      "evidence": ["traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -251,9 +154,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "hec_source"
-      ],
+      "observerKinds": ["hec_source"],
       "requiredFields": [
         "process_connect.source_ip",
         "process_connect.destination_ip",
@@ -266,16 +167,10 @@
       "id": "k8s",
       "readinessImpact": "core",
       "label": "Kubernetes",
-      "healthNames": [
-        "Kubernetes"
-      ],
-      "indexMacros": [
-        "adm_index_k8s"
-      ],
+      "healthNames": ["Kubernetes"],
+      "indexMacros": ["adm_index_k8s"],
       "qualitySources": [],
-      "evidence": [
-        "inventory"
-      ],
+      "evidence": ["inventory"],
       "cadenceSeconds": 600,
       "staleAfterSeconds": 1800,
       "quiet": true,
@@ -283,30 +178,18 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "cluster"
-      ],
-      "requiredFields": [
-        "k8s.cluster.name",
-        "k8s.namespace.name",
-        "object"
-      ],
+      "observerKinds": ["cluster"],
+      "requiredFields": ["k8s.cluster.name", "k8s.namespace.name", "object"],
       "probeMacro": "adm_health_source_k8s"
     },
     {
       "id": "traces",
       "readinessImpact": "core",
       "label": "Traces",
-      "healthNames": [
-        "Traces"
-      ],
-      "indexMacros": [
-        "adm_index_traces"
-      ],
+      "healthNames": ["Traces"],
+      "indexMacros": ["adm_index_traces"],
       "qualitySources": [],
-      "evidence": [
-        "trace"
-      ],
+      "evidence": ["trace"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -315,33 +198,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "trace_id",
-        "k8s.cluster.name",
-        "k8s.namespace.name"
-      ],
+      "requiredFields": ["trace_id", "k8s.cluster.name", "k8s.namespace.name"],
       "probeMacro": "adm_health_source_traces"
     },
     {
       "id": "hubble",
       "readinessImpact": "core",
       "label": "Hubble",
-      "healthNames": [
-        "Hubble"
-      ],
-      "indexMacros": [
-        "adm_index_hubble"
-      ],
-      "qualitySources": [
-        "hubble",
-        "hubble_l7",
-        "hubble_xlate"
-      ],
-      "evidence": [
-        "traffic",
-        "translation",
-        "trace"
-      ],
+      "healthNames": ["Hubble"],
+      "indexMacros": ["adm_index_hubble"],
+      "qualitySources": ["hubble", "hubble_l7", "hubble_xlate"],
+      "evidence": ["traffic", "translation", "trace"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -349,9 +216,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "cluster"
-      ],
+      "observerKinds": ["cluster"],
       "requiredFields": [
         "flow.Type",
         "flow.trace_observation_point",
@@ -364,16 +229,10 @@
       "id": "dns_stream",
       "readinessImpact": "optional_evidence",
       "label": "Splunk Stream DNS",
-      "healthNames": [
-        "Splunk Stream DNS"
-      ],
-      "indexMacros": [
-        "adm_index_dns_stream"
-      ],
+      "healthNames": ["Splunk Stream DNS"],
+      "indexMacros": ["adm_index_dns_stream"],
       "qualitySources": [],
-      "evidence": [
-        "dns"
-      ],
+      "evidence": ["dns"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 3600,
       "quiet": true,
@@ -382,27 +241,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "query",
-        "host_addr",
-        "reply_code"
-      ],
+      "requiredFields": ["query", "host_addr", "reply_code"],
       "probeMacro": ""
     },
     {
       "id": "dns_hubble",
       "readinessImpact": "optional_evidence",
       "label": "Hubble DNS L7",
-      "healthNames": [
-        "Hubble DNS L7"
-      ],
-      "indexMacros": [
-        "adm_index_dns_hubble"
-      ],
+      "healthNames": ["Hubble DNS L7"],
+      "indexMacros": ["adm_index_dns_hubble"],
       "qualitySources": [],
-      "evidence": [
-        "dns"
-      ],
+      "evidence": ["dns"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 3600,
       "quiet": true,
@@ -411,26 +260,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "flow.l7.dns.query",
-        "flow.l7.dns.rcode"
-      ],
+      "requiredFields": ["flow.l7.dns.query", "flow.l7.dns.rcode"],
       "probeMacro": ""
     },
     {
       "id": "proxy_envoy",
       "readinessImpact": "optional_evidence",
       "label": "Envoy request routing",
-      "healthNames": [
-        "Envoy request routing"
-      ],
-      "indexMacros": [
-        "adm_index_proxy_envoy"
-      ],
+      "healthNames": ["Envoy request routing"],
+      "indexMacros": ["adm_index_proxy_envoy"],
       "qualitySources": [],
-      "evidence": [
-        "translation"
-      ],
+      "evidence": ["translation"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": true,
@@ -438,9 +278,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "envoy_proxy"
-      ],
+      "observerKinds": ["envoy_proxy"],
       "requiredFields": [
         "downstream_direct_remote_address",
         "upstream_remote_address",
@@ -452,16 +290,10 @@
       "id": "aws_vpc_flow",
       "readinessImpact": "optional_evidence",
       "label": "AWS VPC Flow Logs",
-      "healthNames": [
-        "AWS VPC Flow Logs"
-      ],
-      "indexMacros": [
-        "adm_index_aws_vpc_flow"
-      ],
+      "healthNames": ["AWS VPC Flow Logs"],
+      "indexMacros": ["adm_index_aws_vpc_flow"],
       "qualitySources": [],
-      "evidence": [
-        "traffic"
-      ],
+      "evidence": ["traffic"],
       "cadenceSeconds": 600,
       "staleAfterSeconds": 1800,
       "quiet": true,
@@ -469,9 +301,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "aws_vpc_flow"
-      ],
+      "observerKinds": ["aws_vpc_flow"],
       "requiredFields": [
         "version",
         "account-id",
@@ -487,16 +317,10 @@
       "id": "asset_history",
       "readinessImpact": "optional_evidence",
       "label": "Asset history import",
-      "healthNames": [
-        "Asset history import"
-      ],
-      "indexMacros": [
-        "adm_index_asset_history"
-      ],
+      "healthNames": ["Asset history import"],
+      "indexMacros": ["adm_index_asset_history"],
       "qualitySources": [],
-      "evidence": [
-        "inventory"
-      ],
+      "evidence": ["inventory"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 86400,
       "quiet": true,
@@ -504,32 +328,18 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "asset_authority"
-      ],
-      "requiredFields": [
-        "scope",
-        "ip",
-        "asset_id",
-        "valid_from"
-      ],
+      "observerKinds": ["asset_authority"],
+      "requiredFields": ["scope", "ip", "asset_id", "valid_from"],
       "probeMacro": ""
     },
     {
       "id": "o11y_health",
       "readinessImpact": "optional_evidence",
       "label": "Splunk Observability Cloud health",
-      "healthNames": [
-        "Splunk Observability Cloud health"
-      ],
-      "indexMacros": [
-        "adm_index_o11y_health"
-      ],
+      "healthNames": ["Splunk Observability Cloud health"],
+      "indexMacros": ["adm_index_o11y_health"],
       "qualitySources": [],
-      "evidence": [
-        "metrics",
-        "health"
-      ],
+      "evidence": ["metrics", "health"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": true,
@@ -537,9 +347,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "o11y_export"
-      ],
+      "observerKinds": ["o11y_export"],
       "requiredFields": [
         "service.name",
         "service.namespace",
@@ -554,19 +362,10 @@
       "id": "catalyst",
       "readinessImpact": "core",
       "label": "Catalyst client observations",
-      "healthNames": [
-        "Catalyst client observations",
-        "Catalyst Center"
-      ],
-      "indexMacros": [
-        "adm_index_catalyst"
-      ],
-      "qualitySources": [
-        "catalyst_client_snapshot"
-      ],
-      "evidence": [
-        "association"
-      ],
+      "healthNames": ["Catalyst client observations", "Catalyst Center"],
+      "indexMacros": ["adm_index_catalyst"],
+      "qualitySources": ["catalyst_client_snapshot"],
+      "evidence": ["association"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 10800,
       "quiet": false,
@@ -575,29 +374,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "macAddress",
-        "lastUpdatedTime"
-      ],
+      "requiredFields": ["macAddress", "lastUpdatedTime"],
       "probeMacro": "adm_health_source_catalyst"
     },
     {
       "id": "meraki",
       "readinessImpact": "core",
       "label": "Meraki wireless associations",
-      "healthNames": [
-        "Meraki wireless associations",
-        "Meraki"
-      ],
-      "indexMacros": [
-        "adm_index_meraki"
-      ],
-      "qualitySources": [
-        "meraki_association"
-      ],
-      "evidence": [
-        "association"
-      ],
+      "healthNames": ["Meraki wireless associations", "Meraki"],
+      "indexMacros": ["adm_index_meraki"],
+      "qualitySources": ["meraki_association"],
+      "evidence": ["association"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 10800,
       "quiet": true,
@@ -606,31 +393,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "occurredAt",
-        "networkId",
-        "organizationId",
-        "type"
-      ],
+      "requiredFields": ["occurredAt", "networkId", "organizationId", "type"],
       "probeMacro": "adm_health_source_meraki"
     },
     {
       "id": "sdwan",
       "readinessImpact": "core",
       "label": "Catalyst SD-WAN IPFIX",
-      "healthNames": [
-        "Catalyst SD-WAN IPFIX"
-      ],
-      "indexMacros": [
-        "adm_index_netflow"
-      ],
-      "qualitySources": [
-        "sdwan_ipfix_v2",
-        "stream_ipfix_unclassified_v2"
-      ],
-      "evidence": [
-        "traffic"
-      ],
+      "healthNames": ["Catalyst SD-WAN IPFIX"],
+      "indexMacros": ["adm_index_netflow"],
+      "qualitySources": ["sdwan_ipfix_v2", "stream_ipfix_unclassified_v2"],
+      "evidence": ["traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -639,28 +412,17 @@
       "derivedFrom": [],
       "contract": null,
       "observerKinds": [],
-      "requiredFields": [
-        "exporter_ip",
-        "observation_domain_id",
-        "vpn_id"
-      ],
+      "requiredFields": ["exporter_ip", "observation_domain_id", "vpn_id"],
       "probeMacro": "adm_health_source_sdwan"
     },
     {
       "id": "summary",
       "readinessImpact": "core",
       "label": "Summary",
-      "healthNames": [
-        "Summary"
-      ],
-      "indexMacros": [
-        "adm_index_summary",
-        "adm_summary_index_name"
-      ],
+      "healthNames": ["Summary"],
+      "indexMacros": ["adm_index_summary", "adm_summary_index_name"],
       "qualitySources": [],
-      "evidence": [
-        "derived_traffic"
-      ],
+      "evidence": ["derived_traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -678,28 +440,17 @@
       ],
       "contract": 1,
       "observerKinds": [],
-      "requiredFields": [
-        "adm_record",
-        "client_ip",
-        "server_ip"
-      ],
+      "requiredFields": ["adm_record", "client_ip", "server_ip"],
       "probeMacro": "adm_health_source_summary"
     },
     {
       "id": "summary_v2",
       "readinessImpact": "core",
       "label": "Conversation summary v2",
-      "healthNames": [
-        "Conversation summary v2"
-      ],
-      "indexMacros": [
-        "adm_index_summary_v2",
-        "adm_summary_index_v2_name"
-      ],
+      "healthNames": ["Conversation summary v2"],
+      "indexMacros": ["adm_index_summary_v2", "adm_summary_index_v2_name"],
       "qualitySources": [],
-      "evidence": [
-        "derived_traffic"
-      ],
+      "evidence": ["derived_traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -724,17 +475,10 @@
       "id": "traffic_v2",
       "readinessImpact": "core",
       "label": "Traffic observation summary v2",
-      "healthNames": [
-        "Traffic observation summary v2"
-      ],
-      "indexMacros": [
-        "adm_index_summary_v2",
-        "adm_summary_index_v2_name"
-      ],
+      "healthNames": ["Traffic observation summary v2"],
+      "indexMacros": ["adm_index_summary_v2", "adm_summary_index_v2_name"],
       "qualitySources": [],
-      "evidence": [
-        "derived_traffic"
-      ],
+      "evidence": ["derived_traffic"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -759,14 +503,10 @@
       "id": "profiles",
       "readinessImpact": "core",
       "label": "Version 2 source scope profiles",
-      "healthNames": [
-        "Version 2 source scope profiles"
-      ],
+      "healthNames": ["Version 2 source scope profiles"],
       "indexMacros": [],
       "qualitySources": [],
-      "evidence": [
-        "configuration"
-      ],
+      "evidence": ["configuration"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
@@ -782,22 +522,16 @@
       "id": "profiles_catalyst",
       "readinessImpact": "core",
       "label": "Catalyst source scope profiles",
-      "healthNames": [
-        "Catalyst source scope profiles"
-      ],
+      "healthNames": ["Catalyst source scope profiles"],
       "indexMacros": [],
       "qualitySources": [],
-      "evidence": [
-        "configuration"
-      ],
+      "evidence": ["configuration"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
       "minimumContract": 2,
       "selectable": false,
-      "derivedFrom": [
-        "catalyst"
-      ],
+      "derivedFrom": ["catalyst"],
       "contract": 2,
       "observerKinds": [],
       "requiredFields": [],
@@ -807,22 +541,16 @@
       "id": "profiles_meraki",
       "readinessImpact": "core",
       "label": "Meraki source scope profiles",
-      "healthNames": [
-        "Meraki source scope profiles"
-      ],
+      "healthNames": ["Meraki source scope profiles"],
       "indexMacros": [],
       "qualitySources": [],
-      "evidence": [
-        "configuration"
-      ],
+      "evidence": ["configuration"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
       "minimumContract": 2,
       "selectable": false,
-      "derivedFrom": [
-        "meraki"
-      ],
+      "derivedFrom": ["meraki"],
       "contract": 2,
       "observerKinds": [],
       "requiredFields": [],
@@ -832,22 +560,16 @@
       "id": "profiles_stream",
       "readinessImpact": "core",
       "label": "Stream source scope profiles",
-      "healthNames": [
-        "Stream source scope profiles"
-      ],
+      "healthNames": ["Stream source scope profiles"],
       "indexMacros": [],
       "qualitySources": [],
-      "evidence": [
-        "configuration"
-      ],
+      "evidence": ["configuration"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
       "minimumContract": 2,
       "selectable": false,
-      "derivedFrom": [
-        "netflow"
-      ],
+      "derivedFrom": ["netflow"],
       "contract": 2,
       "observerKinds": [],
       "requiredFields": [],
@@ -857,22 +579,16 @@
       "id": "profiles_sdwan",
       "readinessImpact": "core",
       "label": "SD-WAN source scope profiles",
-      "healthNames": [
-        "SD-WAN source scope profiles"
-      ],
+      "healthNames": ["SD-WAN source scope profiles"],
       "indexMacros": [],
       "qualitySources": [],
-      "evidence": [
-        "configuration"
-      ],
+      "evidence": ["configuration"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": false,
       "minimumContract": 2,
       "selectable": false,
-      "derivedFrom": [
-        "sdwan"
-      ],
+      "derivedFrom": ["sdwan"],
       "contract": 2,
       "observerKinds": [],
       "requiredFields": [],
@@ -882,16 +598,10 @@
       "id": "o11y_detector_events",
       "readinessImpact": "optional_evidence",
       "label": "Splunk Observability Cloud detector events",
-      "healthNames": [
-        "Splunk Observability Cloud detector events"
-      ],
-      "indexMacros": [
-        "adm_index_o11y_detector_events"
-      ],
+      "healthNames": ["Splunk Observability Cloud detector events"],
+      "indexMacros": ["adm_index_o11y_detector_events"],
       "qualitySources": [],
-      "evidence": [
-        "events"
-      ],
+      "evidence": ["events"],
       "cadenceSeconds": 300,
       "staleAfterSeconds": 1200,
       "quiet": true,
@@ -899,9 +609,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "o11y_detector"
-      ],
+      "observerKinds": ["o11y_detector"],
       "requiredFields": [
         "detector_id",
         "record_id",
@@ -915,16 +623,10 @@
       "id": "appdynamics_inventory",
       "readinessImpact": "optional_evidence",
       "label": "Splunk AppDynamics inventory",
-      "healthNames": [
-        "Splunk AppDynamics inventory"
-      ],
-      "indexMacros": [
-        "adm_index_appdynamics_inventory"
-      ],
+      "healthNames": ["Splunk AppDynamics inventory"],
+      "indexMacros": ["adm_index_appdynamics_inventory"],
       "qualitySources": [],
-      "evidence": [
-        "inventory"
-      ],
+      "evidence": ["inventory"],
       "cadenceSeconds": 3600,
       "staleAfterSeconds": 86400,
       "quiet": true,
@@ -932,9 +634,7 @@
       "selectable": true,
       "derivedFrom": [],
       "contract": null,
-      "observerKinds": [
-        "appd_controller"
-      ],
+      "observerKinds": ["appd_controller"],
       "requiredFields": [
         "controller_authority",
         "application_id",
@@ -943,22 +643,40 @@
         "snapshot_complete"
       ],
       "probeMacro": ""
+    },
+    {
+      "id": "thousandeyes",
+      "readinessImpact": "optional_evidence",
+      "label": "Cisco ThousandEyes synthetic evidence",
+      "healthNames": ["Cisco ThousandEyes synthetic evidence"],
+      "indexMacros": ["adm_index_thousandeyes"],
+      "qualitySources": [],
+      "evidence": [
+        "synthetic_metrics",
+        "measured_probe_paths",
+        "synthetic_traces",
+        "events",
+        "alerts",
+        "activity"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": ["thousandeyes_account_group"],
+      "requiredFields": [],
+      "probeMacro": ""
     }
   ],
   "jobs": [
     {
       "id": "identity",
       "name": "ADM - Identity builder",
-      "sourceIds": [
-        "k8s",
-        "dcn",
-        "aci",
-        "nd"
-      ],
-      "contracts": [
-        1,
-        2
-      ],
+      "sourceIds": ["k8s", "dcn", "aci", "nd"],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -968,13 +686,8 @@
     {
       "id": "binding",
       "name": "ADM - Service binding",
-      "sourceIds": [
-        "traces"
-      ],
-      "contracts": [
-        1,
-        2
-      ],
+      "sourceIds": ["traces"],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -984,31 +697,19 @@
     {
       "id": "backends",
       "name": "ADM - Service backends",
-      "sourceIds": [
-        "k8s"
-      ],
-      "contracts": [
-        1,
-        2
-      ],
+      "sourceIds": ["k8s"],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
       "stage": "active",
-      "prerequisiteIds": [
-        "identity"
-      ]
+      "prerequisiteIds": ["identity"]
     },
     {
       "id": "aci_policy",
       "name": "ADM - ACI policy",
-      "sourceIds": [
-        "aci"
-      ],
-      "contracts": [
-        1,
-        2
-      ],
+      "sourceIds": ["aci"],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -1018,14 +719,8 @@
     {
       "id": "interfaces",
       "name": "ADM - Interface inventory",
-      "sourceIds": [
-        "dcn",
-        "nxos"
-      ],
-      "contracts": [
-        1,
-        2
-      ],
+      "sourceIds": ["dcn", "nxos"],
+      "contracts": [1, 2],
       "cadenceSeconds": 3600,
       "graceSeconds": 1800,
       "required": false,
@@ -1045,9 +740,7 @@
         "hubble",
         "sdwan"
       ],
-      "contracts": [
-        1
-      ],
+      "contracts": [1],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -1057,13 +750,8 @@
     {
       "id": "catalog_v1",
       "name": "ADM - Application catalog",
-      "sourceIds": [
-        "traces",
-        "k8s"
-      ],
-      "contracts": [
-        1
-      ],
+      "sourceIds": ["traces", "k8s"],
+      "contracts": [1],
       "cadenceSeconds": 3600,
       "graceSeconds": 1800,
       "required": true,
@@ -1073,13 +761,8 @@
     {
       "id": "history",
       "name": "ADM - Network client history builder",
-      "sourceIds": [
-        "catalyst",
-        "meraki"
-      ],
-      "contracts": [
-        2
-      ],
+      "sourceIds": ["catalyst", "meraki"],
+      "contracts": [2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -1099,9 +782,7 @@
         "hubble",
         "sdwan"
       ],
-      "contracts": [
-        2
-      ],
+      "contracts": [2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -1121,9 +802,7 @@
         "hubble",
         "sdwan"
       ],
-      "contracts": [
-        2
-      ],
+      "contracts": [2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": true,
@@ -1133,13 +812,8 @@
     {
       "id": "catalog_v2",
       "name": "ADM - Application catalog v2",
-      "sourceIds": [
-        "traces",
-        "k8s"
-      ],
-      "contracts": [
-        2
-      ],
+      "sourceIds": ["traces", "k8s"],
+      "contracts": [2],
       "cadenceSeconds": 3600,
       "graceSeconds": 1800,
       "required": true,
@@ -1150,10 +824,7 @@
       "id": "identity_prune",
       "name": "ADM - Identity prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1164,10 +835,7 @@
       "id": "binding_prune",
       "name": "ADM - Service binding prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1178,10 +846,7 @@
       "id": "backends_prune",
       "name": "ADM - Service backends prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1192,10 +857,7 @@
       "id": "routes_prune",
       "name": "ADM - Service routes prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1206,10 +868,7 @@
       "id": "aci_policy_prune",
       "name": "ADM - ACI policy prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1220,10 +879,7 @@
       "id": "history_prune",
       "name": "ADM - Network client history prune",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 86400,
       "graceSeconds": 0,
       "required": false,
@@ -1234,10 +890,7 @@
       "id": "missed_slots",
       "name": "ADM - Scheduler missed-slot alert",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": false,
@@ -1248,10 +901,7 @@
       "id": "recovery",
       "name": "ADM - Recovery abandoned-lease alert",
       "sourceIds": [],
-      "contracts": [
-        1,
-        2
-      ],
+      "contracts": [1, 2],
       "cadenceSeconds": 300,
       "graceSeconds": 900,
       "required": false,

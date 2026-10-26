@@ -20,7 +20,8 @@ export type SupplementalSource =
   | "asset_history"
   | "o11y_health"
   | "o11y_detector_events"
-  | "appdynamics_inventory";
+  | "appdynamics_inventory"
+  | "thousandeyes";
 export type OptionalSource = DnsSource | SupplementalSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {
@@ -46,6 +47,13 @@ export interface EvidenceSelection {
   contexts: TrafficContext[];
   identityBasis: string;
   configurationFingerprint: string;
+  /** Exact selected catalog boundary, never inferred from a display label. */
+  application?: {
+    service: string;
+    environment: string;
+    cluster: string;
+    namespace: string;
+  };
 }
 /** Exact service identity for optional health; namespace is the Kubernetes namespace. */
 export interface ServiceHealthSelection {
@@ -225,6 +233,17 @@ export function validateSelection(value: EvidenceSelection): EvidenceSelection {
     throw new Error("Invalid evidence selection contract.");
   validateWindow(value.window);
   routingScope(value.scope);
+  if (value.application !== undefined) {
+    if (!isObject(value.application))
+      throw new Error("Invalid application evidence boundary.");
+    for (const key of [
+      "service",
+      "environment",
+      "cluster",
+      "namespace",
+    ] as const)
+      literal(value.application[key]);
+  }
   if (
     value.identityAddresses !== undefined &&
     (!Array.isArray(value.identityAddresses) ||

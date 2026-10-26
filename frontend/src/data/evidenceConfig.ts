@@ -18,6 +18,13 @@ import {
   type SupplementalSource,
 } from "./evidence";
 import type { IdentityRecord } from "./dnsAdapters";
+import {
+  parseThousandEyesBindings,
+  parseThousandEyesFamilies,
+  parseThousandEyesPathSources,
+  thousandEyesAccountGroupId,
+  thousandEyesNativeId,
+} from "./thousandEyesConfiguration";
 
 export interface ObserverMapping {
   observer_kind: string;
@@ -34,6 +41,14 @@ export interface ObserverMapping {
   detector_ids?: string;
   controller_origin?: string;
   observability_origin?: string;
+  te_account_group_id?: string;
+  te_stream_account_id?: string;
+  te_alert_account_id?: string;
+  te_organization_id?: string;
+  te_families?: string;
+  te_bindings?: string;
+  te_path_sources?: string;
+  thousandeyes_origin?: string;
 }
 /** Operator-configured origin only; event-provided URLs never enter this boundary. */
 export function configuredHttpsOrigin(value: string): string {
@@ -225,7 +240,7 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       sort: "_key:1",
       fields:
         name === "adm_observer_scope"
-          ? "_key,observer_kind,observer,scope,cluster,mapping_status,account_id,region,vpc_id,organization_id,realm,apm_mms_id,detector_ids,controller_origin,observability_origin"
+          ? "_key,observer_kind,observer,scope,cluster,mapping_status,account_id,region,vpc_id,organization_id,realm,apm_mms_id,detector_ids,controller_origin,observability_origin,te_account_group_id,te_stream_account_id,te_alert_account_id,te_organization_id,te_families,te_bindings,te_path_sources,thousandeyes_origin"
           : "_key,ip,scope,scope_mapping_verified,entity_kind,entity_id,valid_from,valid_end",
     });
     const value = await this.get(
@@ -307,6 +322,20 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         ...(typeof r.observability_origin === "string"
           ? { observability_origin: r.observability_origin }
           : {}),
+        ...Object.fromEntries(
+          [
+            "te_account_group_id",
+            "te_stream_account_id",
+            "te_alert_account_id",
+            "te_organization_id",
+            "te_families",
+            "te_bindings",
+            "te_path_sources",
+            "thousandeyes_origin",
+          ]
+            .filter((key) => typeof r[key] === "string")
+            .map((key) => [key, r[key] as string]),
+        ),
       };
     });
     const sharedSummary =
@@ -499,6 +528,12 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         "adm_index_appdynamics_inventory",
         "adm_appdynamics_inventory_schema_qualified",
       ],
+      [
+        "thousandeyes",
+        "thousandeyes_account_group",
+        "adm_index_thousandeyes",
+        "adm_thousandeyes_schema_qualified",
+      ],
     ] as const;
     const supplemental: SupplementalSourceConfiguration[] = await Promise.all(
       supplementalSpecs.map(
@@ -568,6 +603,40 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
                   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(row.apm_mms_id ?? ""))
                     throw new Error("Observability Cloud MMS ID is invalid.");
                 }
+                if (source === "thousandeyes") {
+                  const group = thousandEyesAccountGroupId(
+                    row.te_account_group_id,
+                  );
+                  const families = parseThousandEyesFamilies(
+                    row.te_families ?? "[]",
+                  );
+                  if (
+                    families.some((family) =>
+                      ["metric", "trace", "activity"].includes(family),
+                    )
+                  )
+                    thousandEyesAccountGroupId(row.te_stream_account_id);
+                  if (families.includes("alert")) {
+                    thousandEyesAccountGroupId(row.te_alert_account_id);
+                    thousandEyesNativeId(row.te_organization_id);
+                  }
+                  parseThousandEyesBindings(
+                    row.te_bindings ?? "[]",
+                    row.observer,
+                    group,
+                    row.scope,
+                  );
+                  if (
+                    parseThousandEyesPathSources(
+                      row.te_path_sources ?? "[]",
+                    ).some((entry) => !indexes.includes(entry.index))
+                  )
+                    throw new Error(
+                      "Path input source is outside configured indexes.",
+                    );
+                  if (row.thousandeyes_origin !== undefined)
+                    configuredHttpsOrigin(row.thousandeyes_origin);
+                }
               } catch {
                 return false;
               }
@@ -577,7 +646,8 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
                 mappings.filter(
                   (other) =>
                     other.observer_kind === kind &&
-                    other.observer === row.observer,
+                    other.observer === row.observer &&
+                    (source !== "thousandeyes" || other.scope === row.scope),
                 ).length === 1
               );
             });

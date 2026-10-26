@@ -3,12 +3,7 @@ import type { SupplementalResult } from "./supplementalEvidence";
 
 /** Versioned Atlas projection; native producer version remains separate. */
 export type ThousandEyesFamily =
-  | "metric"
-  | "path"
-  | "trace"
-  | "event"
-  | "alert"
-  | "activity";
+  "metric" | "path" | "trace" | "event" | "alert" | "activity";
 
 export interface ThousandEyesApplication {
   service: string;
@@ -98,7 +93,10 @@ export interface ThousandEyesObservation {
   schemaVersion: 1;
   family: ThousandEyesFamily;
   authority: string;
-  authorityBasis: "producer_account" | "configured_input_source";
+  authorityBasis:
+    | "producer_account"
+    | "configured_account_binding"
+    | "configured_input_source";
   accountGroupId: string;
   accountId?: string;
   organizationId?: string;
@@ -122,6 +120,7 @@ export interface ThousandEyesObservation {
   source: string;
   sourcetype: string;
   fingerprint: string;
+  navigationOrigin?: string;
   outcome: "success" | "failure" | "unknown";
   measurements: ThousandEyesMeasurement[];
   hops: ThousandEyesHop[];

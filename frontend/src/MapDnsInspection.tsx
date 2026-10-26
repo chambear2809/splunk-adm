@@ -256,6 +256,12 @@ export function MapDnsInspection({
       next = {
         ...next,
         workflow: "application",
+        application: {
+          service: graph.boundary.service,
+          environment: graph.boundary.environment,
+          cluster: graph.boundary.cluster,
+          namespace: graph.boundary.namespace,
+        },
         selectionId: `${graph.snapshot_id}:${selection.kind}:${selection.id}`,
         identityBasis: verified
           ? "Original workload UID revalidated against current scoped history; independent observation capture."
