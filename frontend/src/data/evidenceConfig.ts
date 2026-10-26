@@ -85,6 +85,20 @@ export function configuredDetectorIds(value: string): string[] {
   return [...ids].sort();
 }
 
+function canonicalJson(value: unknown[]): string {
+  return (
+    JSON.stringify(value, (_key, item) =>
+      isObject(item)
+        ? Object.fromEntries(
+            Object.keys(item)
+              .sort()
+              .map((key) => [key, item[key]]),
+          )
+        : item,
+    ) ?? ""
+  );
+}
+
 export interface SupplementalSourceConfiguration {
   source: SupplementalSource;
   state: "active" | "staged" | "not_selected";
@@ -261,7 +275,7 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
     );
     if (
       !Array.isArray(probe) ||
-      JSON.stringify(value.slice(1)) !== JSON.stringify(probe)
+      canonicalJson(value.slice(1)) !== canonicalJson(probe)
     )
       throw new Error(
         "Shared collection completeness or stability could not be verified.",

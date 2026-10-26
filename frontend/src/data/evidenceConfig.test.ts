@@ -35,6 +35,13 @@ function fixture({
   teBindings = "[]",
   detectorIds = '["detector-1"]',
   controllerOrigin = "https://controller.example.test",
+  collectionTransform = undefined as
+    | ((
+        name: string,
+        rows: Record<string, unknown>[],
+        probe: boolean,
+      ) => Record<string, unknown>[])
+    | undefined,
 } = {}) {
   const settings = defaultExpectations();
   if (active) settings.sources.dns_stream.state = "active";
@@ -243,6 +250,12 @@ function fixture({
             Object.entries(row).filter(([key]) => fields.has(key)),
           ),
         );
+        if (collectionTransform)
+          body = collectionTransform(
+            url.pathname.split("/").pop() ?? "",
+            body as Record<string, unknown>[],
+            url.searchParams.has("skip"),
+          );
       }
       return {
         ok: true,
@@ -479,6 +492,53 @@ describe("caller-context evidence configuration", () => {
       expect(config.summaryIndexes).toEqual(["adm_summary"]);
       expect(config.dns[0].error).toBeDefined();
     }
+  });
+  it("accepts stable collection rows when only nested object property order changes", async () => {
+    const { client } = fixture({
+      duplicates: true,
+      collectionTransform: (name, rows, probe) => {
+        if (name !== "adm_observer_scope") return rows;
+        return rows.map((row) => {
+          const fields = Object.fromEntries(
+            probe ? Object.entries(row) : Object.entries(row).reverse(),
+          );
+          const nested = probe
+            ? { label: "stable", detail: { first: 1, second: 2 } }
+            : { detail: { second: 2, first: 1 }, label: "stable" };
+          return probe ? { nested, ...fields } : { ...fields, nested };
+        });
+      },
+    });
+    const config = await client.read();
+    expect(config.summaryIndexes).toEqual(["adm_summary"]);
+    expect(config.dns[0].error).toBeDefined();
+  });
+  it("rejects collection probe changes to nested values and row keys", async () => {
+    for (const change of ["nested", "key"] as const) {
+      const { client } = fixture({
+        duplicates: true,
+        collectionTransform: (name, rows, probe) => {
+          if (name !== "adm_observer_scope") return rows;
+          return rows.map((row) => {
+            if (!probe || row._key !== "two")
+              return { ...row, nested: { value: 1 } };
+            return change === "nested"
+              ? { ...row, nested: { value: 2 } }
+              : { ...row, nested: { value: 1 }, _key: "changed" };
+          });
+        },
+      });
+      await expect(client.read()).rejects.toThrow(/completeness or stability/);
+    }
+  });
+  it("preserves collection row order when comparing skip probes", async () => {
+    const { client } = fixture({
+      duplicates: true,
+      optional: true,
+      collectionTransform: (name, rows, probe) =>
+        name === "adm_observer_scope" && probe ? rows.reverse() : rows,
+    });
+    await expect(client.read()).rejects.toThrow(/completeness or stability/);
   });
   it("detects lower server caps and quarantines unverified legacy-default identities", async () => {
     await expect(fixture({ lowCap: true }).client.read()).rejects.toThrow(
