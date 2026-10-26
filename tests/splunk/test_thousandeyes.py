@@ -537,7 +537,25 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertEqual(evidence.get("pageErrors"), 0, evidence)
         self.assertEqual(evidence.get("unexpectedConsoleErrors"), 0, evidence)
         self.assertEqual(evidence.get("unexpectedHttpErrors"), 0, evidence)
-        self.assertEqual(evidence.get("failedRequestCount"), 0, evidence)
+        self.assertEqual(evidence.get("unexpectedFailedRequestCount"), 0, evidence)
+        navigation_aborts = evidence.get("navigationAborts")
+        self.assertIsInstance(navigation_aborts, list, evidence)
+        self.assertEqual(
+            evidence.get("navigationAbortCount"), len(navigation_aborts), evidence
+        )
+        self.assertEqual(
+            evidence.get("failedRequestCount"), len(navigation_aborts), evidence
+        )
+        self.assertTrue(
+            all(
+                item.get("method") == "DELETE"
+                and item.get("path")
+                == "/en-US/splunkd/__raw/servicesNS/[viewer]/system/storage/collections/data/RecentlyViewedKO"
+                and item.get("errorText") == "net::ERR_ABORTED"
+                for item in navigation_aborts
+            ),
+            evidence,
+        )
         denials = evidence.get("metadataReadDenials")
         self.assertIsInstance(denials, list, evidence)
         self.assertEqual(
@@ -552,6 +570,8 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
                 "legacy_macro_adm_graph_4",
                 "legacy_macro_adm_catalog_build",
                 "legacy_macro_adm_health_quality",
+                "legacy_macro_adm_flow_evidence_4",
+                "legacy_macro_adm_topology",
             },
             evidence,
         )

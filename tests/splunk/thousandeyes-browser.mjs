@@ -77,6 +77,8 @@ const EXPECTED_METADATA_DENIALS = new Map([
     "adm_graph(4)",
     "adm_catalog_build",
     "adm_health_quality",
+    "adm_flow_evidence(4)",
+    "adm_topology",
   ].map((name) => [
     `/en-US/splunkd/__raw/servicesNS/nobody/splunk_adm/configs/conf-macros/${name}`,
     `legacy_macro_${name.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}`,
@@ -86,6 +88,16 @@ const isExpectedMetadataDenial = (item) =>
   item.method === "GET" &&
   item.status === 403 &&
   EXPECTED_METADATA_DENIALS.has(item.path);
+const EXPECTED_NAVIGATION_ABORTS = new Map([
+  [
+    "/en-US/splunkd/__raw/servicesNS/[viewer]/system/storage/collections/data/RecentlyViewedKO",
+    "recently_viewed_cleanup",
+  ],
+]);
+const isExpectedNavigationAbort = (item) =>
+  item.method === "DELETE" &&
+  item.errorText === "net::ERR_ABORTED" &&
+  EXPECTED_NAVIGATION_ABORTS.has(item.path);
 const metadataDenialCounts = (responses, consoleList) =>
   [...EXPECTED_METADATA_DENIALS].map(([path, name]) => ({
     name,
@@ -163,10 +175,12 @@ try {
   );
   page.on("requestfailed", (request) => {
     failedRequestCount++;
+    const failure = request.failure();
     if (failedRequests.length < 64)
       failedRequests.push({
         method: request.method(),
         path: safePath(request.url()),
+        errorText: safeMessage(failure?.errorText || "request failed"),
       });
   });
   page.on("request", (request) => {
@@ -225,7 +239,8 @@ try {
     return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
       .toISOString()
       .replace(/Z$/, "")
-      .replace(/\.000$/, "");
+      .replace(/\.000$/, "")
+      .replace(/:00$/, "");
   };
   stage = "endpoint-ip";
   await page.getByLabel("IP address", { exact: true }).fill("198.51.100.20");
@@ -365,11 +380,17 @@ try {
   const unexpectedHttpErrors = badResponses.filter(
     (item) => !isExpectedMetadataDenial(item),
   );
+  const expectedNavigationAborts = failedRequests.filter(
+    isExpectedNavigationAbort,
+  );
+  const unexpectedFailedRequests = failedRequests.filter(
+    (item) => !isExpectedNavigationAbort(item),
+  );
   expect(pageErrors).toEqual([]);
   expect(consoleErrorCount).toBe(consoleErrors.length);
   expect(httpErrorCount).toBe(badResponses.length);
   expect(failedRequestCount).toBe(failedRequests.length);
-  expect(failedRequests).toEqual([]);
+  expect(unexpectedFailedRequests).toEqual([]);
   expect(unexpectedConsoleErrors).toEqual([]);
   expect(unexpectedHttpErrors).toEqual([]);
   const metadataReadDenials = metadataDenialCounts(
@@ -399,6 +420,9 @@ try {
       httpErrorCount,
       unexpectedHttpErrors: unexpectedHttpErrors.length,
       failedRequestCount,
+      unexpectedFailedRequestCount: unexpectedFailedRequests.length,
+      navigationAbortCount: expectedNavigationAborts.length,
+      navigationAborts: expectedNavigationAborts,
     }) + "\n",
   );
   await context.close();
