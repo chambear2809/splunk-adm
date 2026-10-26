@@ -137,6 +137,7 @@ export function parseThousandEyesBindings(
             "scope",
             "testId",
             "agentId",
+            "testDomain",
             "target",
             "endpointAddresses",
             "application",
@@ -149,6 +150,7 @@ export function parseThousandEyesBindings(
       value.authority !== authority ||
       value.accountGroupId !== accountGroupId ||
       value.scope !== scope ||
+      (value.testDomain !== "cea" && value.testDomain !== "endpoint") ||
       typeof value.validFrom !== "number" ||
       typeof value.validTo !== "number" ||
       !Number.isFinite(value.validFrom) ||
@@ -201,6 +203,7 @@ export function parseThousandEyesBindings(
       scope: routingScope(scope),
       testId: thousandEyesNativeId(value.testId),
       agentId: thousandEyesNativeId(value.agentId),
+      testDomain: value.testDomain,
       target: thousandEyesTarget(value.target),
       endpointAddresses: addresses,
       ...(application ? { application } : {}),

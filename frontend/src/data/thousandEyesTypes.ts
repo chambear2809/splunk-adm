@@ -28,6 +28,7 @@ export interface ThousandEyesBinding {
   scope: string;
   testId: string;
   agentId: string;
+  testDomain: "cea" | "endpoint";
   target: ThousandEyesTarget;
   endpointAddresses: string[];
   application?: ThousandEyesApplication;
@@ -49,6 +50,7 @@ export interface ThousandEyesMeasurement {
 }
 
 export interface ThousandEyesHop {
+  pathId?: string;
   number: number;
   ip?: string;
   name?: string;
@@ -107,12 +109,18 @@ export interface ThousandEyesObservation {
   agentId?: string;
   relatedTestIds?: string[];
   relatedAgentIds?: string[];
+  testDomain?: "cea" | "endpoint";
+  streamId?: string;
+  monitorId?: string;
+  targetAgentId?: string;
   testName?: string;
   agentName?: string;
   agentLocation?: string;
   testType?: string;
   configurationId?: string;
   target: ThousandEyesTarget;
+  pathDirection?: "to-target" | "from-target";
+  targetIsProxy?: boolean;
   interval: EvidenceWindow;
   intervalBasis: "measurement" | "point" | "reported_event";
   eventTime: number;

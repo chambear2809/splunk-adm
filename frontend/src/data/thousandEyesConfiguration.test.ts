@@ -16,6 +16,7 @@ const binding = {
   scope: "site-a",
   testId: "17",
   agentId: "9",
+  testDomain: "cea",
   target: { ip: "192.0.2.8", protocol: "tcp", port: 443 },
   endpointAddresses: ["192.0.2.8"],
   validFrom: 100,
