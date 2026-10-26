@@ -407,6 +407,118 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         if status not in (200, 204):
             raise AssertionError("temporary ThousandEyes viewer role cleanup failed")
 
+    @classmethod
+    def _restore_role_indexes(
+        cls, role: str, indexes: list[str], password: str
+    ) -> None:
+        path = "/services/authorization/roles/" + urllib.parse.quote(role, safe="")
+        body = urllib.parse.urlencode(
+            {"srchIndexesAllowed": indexes}, doseq=True
+        ).encode()
+        status, _ = cls.permissions._response("POST", path, "admin", password, body)
+        if status not in (200, 201):
+            raise AssertionError("temporary ThousandEyes viewer index cleanup failed")
+
+    @classmethod
+    def _remove_scope_mapping(cls, key: str, password: str) -> None:
+        path = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/"
+            "adm_observer_scope/" + urllib.parse.quote(key, safe="")
+        )
+        status, _ = cls.permissions._response("DELETE", path, "admin", password)
+        if status not in (200, 204):
+            raise AssertionError("temporary ThousandEyes scope cleanup failed")
+
+    @classmethod
+    def _macro_path(cls, name: str) -> str:
+        return "/servicesNS/nobody/splunk_adm/admin/macros/" + urllib.parse.quote(
+            name, safe=""
+        )
+
+    @classmethod
+    def _macro_content(cls, name: str) -> dict:
+        return cls.lab._json("GET", cls._macro_path(name))["entry"][0]["content"]
+
+    @classmethod
+    def _write_and_verify_macro_states(cls, states: dict[str, str]) -> None:
+        for name, definition in states.items():
+            cls.lab._json("POST", cls._macro_path(name), {"definition": definition})
+        cls.lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
+        for name, definition in states.items():
+            if cls._macro_content(name).get("definition") != definition:
+                raise AssertionError("temporary ThousandEyes macro did not verify")
+
+    def _write_deployment_state(
+        self, fixture, state: str, expected_revision: str | None
+    ) -> str:
+        status, snapshot = fixture.request("GET")
+        self.assertEqual(status, 200, "deployment settings read failed")
+        self.assertTrue(
+            snapshot.get("canWrite"), "deployment settings are not writable"
+        )
+        definitions = json.loads(
+            (ROOT / "config" / "deployment-health.json").read_text("utf-8")
+        )["sources"]
+        sources = {
+            source["id"]: {
+                "state": "not_selected",
+                "cadenceSeconds": source["cadenceSeconds"],
+                "staleAfterSeconds": source["staleAfterSeconds"],
+            }
+            for source in definitions
+            if source.get("selectable")
+        }
+        sources["thousandeyes"]["state"] = state
+        payload = {
+            "namespace": snapshot["namespace"],
+            "requestId": uuid.uuid4().hex,
+            "expectedRevision": expected_revision,
+            "settings": {"schemaVersion": 1, "revision": "draft", "sources": sources},
+        }
+        status, response = fixture.request("POST", payload=payload)
+        self.assertEqual(status, 200, "temporary deployment state write failed")
+        revision = response.get("committedRevision")
+        self.assertRegex(revision or "", r"^[a-f0-9]{64}$")
+        return revision
+
+    def _run_native_browser(self, mode: str) -> dict:
+        screenshot = (
+            ROOT / "dist" / "thousandeyes-qualification" / "native-inspection.png"
+        )
+        result = subprocess.run(
+            [
+                "node",
+                str(HERE / "thousandeyes-browser.mjs"),
+                mode,
+                self.scope,
+                str(self.window["start"]),
+                str(self.window["end"]),
+                str(screenshot),
+            ],
+            cwd=ROOT,
+            env=dict(
+                os.environ,
+                ADM_VIEWER_USER=self.username,
+                ADM_VIEWER_PASS=self.password,
+            ),
+            capture_output=True,
+            text=True,
+            timeout=360,
+        )
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        if not lines:
+            self.fail("native ThousandEyes browser returned no sanitized evidence")
+        try:
+            evidence = json.loads(lines[-1])
+        except json.JSONDecodeError:
+            self.fail("native ThousandEyes browser returned invalid evidence JSON")
+        self.assertEqual(result.returncode, 0, evidence)
+        self.assertTrue(evidence.get("ok"), evidence)
+        self.assertEqual(evidence.get("mode"), mode, evidence)
+        self.assertTrue(evidence.get("noEagerSidecar"), evidence)
+        self.assertEqual(evidence.get("jsErrors"), 0, evidence)
+        return evidence
+
     @staticmethod
     def _build(configuration: dict, selection: dict) -> str:
         output = helper(
@@ -653,6 +765,74 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertTrue(
             no_complete_read,
             "a viewer missing one configured index must not receive a complete result envelope",
+        )
+
+    def test_native_packaged_sidecar_is_lazy_and_reads_as_endpoint_viewer(self):
+        from settings_fixture import SettingsFixture
+
+        admin_password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
+        deployment = SettingsFixture(self)
+        deployment.clear()
+        revision = self._write_deployment_state(
+            deployment, "not_selected", expected_revision=None
+        )
+
+        collection = (
+            "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_observer_scope"
+        )
+        mapping_key = self.token + "-native-browser"
+        mapping = {"_key": mapping_key, **self.mapping}
+        status, _ = self.permissions._response(
+            "POST",
+            collection,
+            "admin",
+            admin_password,
+            json.dumps(mapping).encode(),
+            "application/json",
+        )
+        self.assertIn(status, (200, 201))
+        self.addCleanup(self._remove_scope_mapping, mapping_key, admin_password)
+
+        self.addCleanup(self._restore_role_indexes, self.role, [INDEX], admin_password)
+        role_path = "/services/authorization/roles/" + urllib.parse.quote(
+            self.role, safe=""
+        )
+        role_body = urllib.parse.urlencode(
+            {
+                "srchIndexesAllowed": [INDEX, "adm_summary", "adm_summary_v2"],
+            },
+            doseq=True,
+        ).encode()
+        status, _ = self.permissions._response(
+            "POST", role_path, "admin", admin_password, role_body
+        )
+        self.assertIn(status, (200, 201))
+
+        self._run_native_browser("not-selected")
+
+        macro_names = (
+            "adm_index_thousandeyes",
+            "adm_thousandeyes_schema_qualified",
+        )
+        originals = {
+            name: self._macro_content(name)["definition"] for name in macro_names
+        }
+        self.addCleanup(self._write_and_verify_macro_states, originals)
+        self._write_and_verify_macro_states(
+            {
+                "adm_index_thousandeyes": f"index={INDEX}",
+                "adm_thousandeyes_schema_qualified": "1",
+            }
+        )
+        self._write_deployment_state(deployment, "active", revision)
+
+        evidence = self._run_native_browser("active")
+        self.assertEqual(evidence.get("activeRows"), 7, evidence)
+        self.assertTrue(evidence.get("bgpContextOnly"), evidence)
+        self.assertEqual(evidence.get("sourceSearchCount"), 1, evidence)
+        self.assertTrue(
+            all(asset.get("status") == 200 for asset in evidence["sidecarAssets"]),
+            evidence,
         )
 
 
