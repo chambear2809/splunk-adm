@@ -26,6 +26,7 @@ class OptionalIntegrationPackageTests(unittest.TestCase):
                 "capture_o11y_health",
                 "export_o11y_detector_events",
                 "hec_delivery",
+                "export_thousandeyes_paths",
                 "export_appdynamics",
                 "import_appdynamics",
             ):

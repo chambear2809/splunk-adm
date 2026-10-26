@@ -20,6 +20,7 @@ PATHS = (
     "tools/o11y_transport.py",
     "tools/export_o11y_detector_events.py",
     "tools/hec_delivery.py",
+    "tools/export_thousandeyes_paths.py",
     "tools/export_appdynamics.py",
     "tools/import_appdynamics.py",
     "tools/import_asset_history.py",
@@ -38,6 +39,12 @@ PATHS = (
     "docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md",
     "docs/O11Y_HEALTH_DESIGN.md",
     "docs/APPDYNAMICS_EVIDENCE_DESIGN.md",
+    "docs/THOUSANDEYES_DESIGN.md",
+    "docs/THOUSANDEYES_OPERATIONS.md",
+    "docs/operators/thousandeyes.md",
+    "docs/research/thousandeyes.md",
+    "docs/research/thousandeyes-capabilities.md",
+    "docs/research/thousandeyes-operating-constraints.md",
 )
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_BYTES = 32 * 1024 * 1024

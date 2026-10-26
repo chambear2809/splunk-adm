@@ -328,7 +328,7 @@
       "status": "downloaded_and_statically_inspected",
       "archive_path": "research/packages/cisco-thousandeyes-app-for-splunk_090.tar.gz",
       "extracted_path": "research/extracted/cisco-thousandeyes-app-for-splunk_090/ta_cisco_thousandeyes",
-      "source_url": "User-supplied archive: /Users/alecchamberlain/Downloads/cisco-thousandeyes-app-for-splunk_090.tar.gz",
+      "source_url": "https://splunkbase.splunk.com/app/7719",
       "source_metadata_url": "https://splunkbase.splunk.com/app/7719",
       "listing_verified_at": "2026-10-26",
       "listing_default_version": "0.9.0",
@@ -354,7 +354,8 @@
         "docs/research/thousandeyes.md",
         "docs/research/thousandeyes-capabilities.md"
       ],
-      "qualification": "Splunkbase app 7719 listing was checked on 2026-10-26; 0.9.0 is the current default and matches the supplied archive. Static package/docs analysis only. No live ThousandEyes account or Splunk HEC readback. Confirm OTel account ID to API aid mapping, flattened HEC field paths, event/path source and host metadata, and producer timestamps with sanitized readback before typed normalization. Cisco's OTel detailed trace schema and general v2/Splunk input pages disagree on API trace support; require a sample or Cisco confirmation. The packaged CEA path pull omits request-scoped aid/testId from result events, so typed CEA path admission requires an external adapter to attach those exact configured request identities (or a received payload that already contains them)."
+      "qualification": "Splunkbase app 7719 listing was checked on 2026-10-26; 0.9.0 is the current default and matches the supplied archive. Static package/docs analysis only. No live ThousandEyes account or Splunk HEC readback. Confirm OTel account ID to API aid mapping, flattened HEC field paths, event/path source and host metadata, and producer timestamps with sanitized readback before typed normalization. Cisco's OTel detailed trace schema and general v2/Splunk input pages disagree on API trace support; require a sample or Cisco confirmation. The packaged CEA path pull omits request-scoped aid/testId from result events, so typed CEA path admission requires an external adapter to attach those exact configured request identities (or a received payload that already contains them).",
+      "supplied_archive_name": "cisco-thousandeyes-app-for-splunk_090.tar.gz"
     }
   ],
   "pending": []

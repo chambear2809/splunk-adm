@@ -1,5 +1,11 @@
 # Optional integration implementation contract
 
+The subsequent ThousandEyes integration has its own
+[design and acceptance contract](THOUSANDEYES_DESIGN.md),
+[vendor capability matrix](research/thousandeyes-capabilities.md) and
+[qualification record](THOUSANDEYES_QUALIFICATION.md). It uses this optional
+framework and preserves the evidence boundaries below.
+
 Baseline: `b8f05490f3df8352ff88f9b803ca39d7df3a14d5` from fetched remote main.
 This task covers Observability Cloud, AppDynamics, and Edge/Ingest Processor
 artifacts. ITSI, ES, SOAR, a general CIM rewrite and Cloud certification are excluded.

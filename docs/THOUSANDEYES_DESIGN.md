@@ -25,6 +25,7 @@ their own aid/test/agent/time fields and configured source are verified.
 The exporter emits `application_atlas.thousandeyes_path.v1` HEC events with
 `sourcetype=atlas:thousandeyes:path`, `source=atlas:thousandeyes:path`, schema
 version 1, immutable `capture_id`, `authority`, `account_group_id`, `test_id`,
+explicit `test_domain=cea`,
 `collection_started_at`, `collection_completed_at`, and the native `result`.
 It preserves native round/measurement times, fails closed on pagination/limit/
 identity/schema failures, bounds requests/bytes/records/retries/deadlines and
@@ -90,6 +91,29 @@ than editing them. Search loading reuses `SupplementalResult<T>` and
 30-second server/35-second client deadlines, at most 10,001 scanned records to
 detect the 10,000 input cap, 64 displayed records and one completion row.
 Limits remain conservative and are not raised to accommodate the integration.
+
+The retained-index search does not use `_time` as a measurement selector.
+A guarded source-family native-time predicate admits coarse selected-window
+candidates before the 10,001-row cap, preserving missing/invalid/unrecognized
+timestamp rows as uncertain candidates. A conservative margin prevents lossy
+numeric conversion at this coarse stage from silently dropping a boundary
+measurement; the strict normalizer applies the actual selected interval.
+Conflicting/replayed candidates in the same window remain visible. The cap
+describes eligible window and invalid-time candidates, rather than every sample
+ever retained in an account. The server deadline still bounds searches across
+retained data; no indexer scan-cost or enterprise-capacity guarantee follows.
+
+The existing initial `atlas.js` ceiling remains 670 KiB gzip. The integration
+foundation leaves 1,877 bytes of headroom on Node 26.12.1, so ThousandEyes UI,
+adapters and attribution load through a separate fixed same-origin IIFE only
+when the user opens its investigation. The optional asset has its own enforced
+48 KiB gzip ceiling and 16 KiB CSS ceiling. A source-derived version binds both
+bundles and the stylesheet cache key; packaging verifies the version and final
+JavaScript hash. A mismatched/missing/blocked asset reports unavailable, with a
+bounded retry path. The host bridge exposes existing React and reviewed helper
+functions, contains no selected evidence or credentials, and grants no extra
+Splunk permission. Selection changes invalidate pending UI mounts; the normal
+caller-owned job and configuration recheck still control every source search.
 
 ## Capability and acceptance matrix
 

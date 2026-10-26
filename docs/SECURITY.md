@@ -47,6 +47,16 @@ The sections above cover the coding-agent sandbox. The shipped `splunk_adm` app 
 
 ## Shared-data viewer boundary
 
+ThousandEyes inspections use caller-owned literal searches and existing optional
+job admission. Account-group, application, test, agent and scope bindings are
+administrator attestations with explicit historical validity. Stream account IDs,
+alert account IDs and organization IDs retain their separate producer identities.
+Neither names/tags nor Splunk host authorize a join. Probe and synthetic-trace
+records never become passive traffic or production backend calls. The optional
+UI loads only fixed, version-bound same-origin app assets; its host bridge holds
+helper functions, with no captured evidence or credentials. Source permalinks
+are ignored; navigation uses only an administrator-configured HTTPS origin.
+
 Optional DNS searches run with the caller's existing session/index permissions. New query templates compile validated literal index, sourcetype, address, authority and time inputs; they execute no selector/normalization macros or named lookups. Configuration and bounded identity/scope reads explicitly use the shared `nobody/splunk_adm` namespace, including legacy-default identity quarantine. Raw DNS record inspection rebuilds an exact fingerprint request and never follows event-provided URLs or broadens a missing reference. Names remain text, evidence is held only for the current selection, and portable DNS evidence is an explicit JSON/CSV download. It is excluded from graph snapshots, required-flow exports, saved application views and telemetry. These controls preserve the shared-dataset viewer boundary below; scopes are not authorization partitions.
 
 Envoy, AWS flow, asset history and Observability health inspections use the same caller-owned optional job budget and app-merged literal selector boundary. Their indexes may contain sensitive client, asset or service facts, so operators must verify the existing viewer role has appropriate index access before selecting a source. Routing scope labels never grant or restrict access. Envoy `X-Forwarded-For` is not trusted as client identity. Observability API tokens stay in a server-side environment or approved secret store and must not enter app settings, browser requests, fixtures or source links. Source-provided URLs and payload fields are not executed or used as arbitrary navigation targets.

@@ -53,6 +53,7 @@ For example, a client reaches a Kubernetes LoadBalancer address and the applicat
 | [**Splunk Stream + NetFlow/IPFIX exporters**](docs/operators/network-stream.md)    | Connections, ports, traffic counters and observing devices                             | Stream add-ons, a receiver and an enabled NetFlow stream; endpoint, time, exporter, interface and sampling fields.                   |
 | [**Splunk Observability Cloud — optional**](docs/operators/o11y-health.md) | Indexed historical metric captures and separately selected detector events | External server-side collection, private durable HEC spool, exact authority/detector bindings and target qualification. Event history does not establish historical incident state. |
 | [**Splunk AppDynamics — optional**](docs/operators/appdynamics-evidence.md) | Current node/IP inventory and application-scoped backend candidates | Explicit Controller authority, read-only Application Model APIs, completed bounded snapshots and caller-visible indexes. Inventory does not prove calls or historical IP ownership. |
+| [**Cisco ThousandEyes — optional**](docs/operators/thousandeyes.md) | Synthetic measurements, measured probe paths, synthetic traces, detected events, alerts and ThousandEyes activity context | Cisco-supported Splunk integration 0.9.0, explicit account/test/agent bindings, caller-visible indexes and qualification of every selected input family. Probe observations do not add passive traffic or prove another connection's route. |
 | [**Edge / Ingest Processor templates — optional**](docs/operators/ingest-processors.md) | Conservative Stream NetFlow and Atlas health routing profiles | Product-specific deployment/transport settings and runtime preview qualification. Offline golden fixtures do not execute SPL2. |
 | [**Cisco ACI / APIC**](docs/operators/aci-network.md)                              | Endpoint identity, EPG/bridge-domain context, candidate fabric paths and policy intent | DC Networking add-on, read-only APIC access, and endpoint, topology and policy inputs.                                               |
 | [**Nexus Dashboard / NX-OS**](docs/operators/aci-network.md)                       | Flow, endpoint, device and interface context                                           | DC Networking add-on; applicable flow/endpoint inputs and device/interface/neighbor collection.                                      |
@@ -102,6 +103,10 @@ admission, identity/time rules, delivery semantics and rollback. New integration
 ship unselected and unqualified. Follow each operator guide before selecting a
 source; a successful HEC response is separate from indexed evidence validation.
 See [current qualification and external limits](docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md).
+The [ThousandEyes design](docs/THOUSANDEYES_DESIGN.md),
+[capability matrix](docs/research/thousandeyes-capabilities.md) and
+[qualification record](docs/THOUSANDEYES_QUALIFICATION.md) describe its separate
+disabled defaults and producer/deployment gates.
 The separate [external toolkit guide](docs/OPTIONAL_INTEGRATIONS_TOOLKIT.md)
 describes installation, command entry points and safe local state placement.
 

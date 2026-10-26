@@ -251,7 +251,8 @@ export async function loadSupplementalEvidence<T>(
     base.oversized = envelope.oversized;
     base.records = normalized.records;
   } catch (error) {
-    if (signal.aborted) throw new Error("Optional investigation cancelled.");
+    if (signal.aborted)
+      throw new Error("Optional investigation cancelled.", { cause: error });
     base.state = "unavailable";
     base.errorCode =
       error instanceof SearchAccessDeniedError ? "denied" : stage;
