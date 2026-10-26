@@ -9,7 +9,7 @@ import {
   loadSupplementalEvidence,
   parseSupplementalEnvelope,
 } from "./supplementalEvidence";
-import type { SearchClient } from "./searchClient";
+import { SearchAccessDeniedError, type SearchClient } from "./searchClient";
 
 const selection: EvidenceSelection = {
   schemaVersion: 1,
@@ -82,6 +82,26 @@ const normalizer = (rows: readonly Row[]) => ({
 });
 
 describe("supplemental evidence completion and isolation", () => {
+  it("preserves a verified permission-denied state without claiming source absence", async () => {
+    const client: SearchClient = {
+      search: async () => {
+        throw new SearchAccessDeniedError();
+      },
+    };
+    const result = await loadSupplementalEvidence(
+      client,
+      selection,
+      new AbortController().signal,
+      "proxy_envoy",
+      searchBuilder,
+      normalizer,
+      configClient(() => configuration),
+    );
+    expect(result.state).toBe("unavailable");
+    expect(result.errorCode).toBe("denied");
+    expect(result.records).toEqual([]);
+    expect(result.error).toMatch(/denied access/);
+  });
   it("rejects duplicate, missing and inconsistent completion envelopes", () => {
     expect(() => parseSupplementalEnvelope([record])).toThrow(/completion/);
     expect(() =>

@@ -13,7 +13,11 @@ import {
   type SupplementalSource,
 } from "./evidence";
 import { optionalJobs } from "./optionalJobs";
-import { requireNoSearchErrors, type SearchClient } from "./searchClient";
+import {
+  requireNoSearchErrors,
+  SearchAccessDeniedError,
+  type SearchClient,
+} from "./searchClient";
 
 export interface SupplementalResult<T> {
   schemaVersion: 1;
@@ -36,7 +40,8 @@ export interface SupplementalResult<T> {
   oversized: number;
   records: T[];
   coverage: string[];
-  errorCode?: "configuration" | "execution" | "completion" | "normalization";
+  errorCode?:
+    "configuration" | "execution" | "completion" | "normalization" | "denied";
   error?: string;
 }
 
@@ -245,12 +250,15 @@ export async function loadSupplementalEvidence<T>(
     base.rejected = normalized.rejected;
     base.oversized = envelope.oversized;
     base.records = normalized.records;
-  } catch {
+  } catch (error) {
     if (signal.aborted) throw new Error("Optional investigation cancelled.");
     base.state = "unavailable";
-    base.errorCode = stage;
+    base.errorCode =
+      error instanceof SearchAccessDeniedError ? "denied" : stage;
     base.error =
-      "Optional evidence unavailable: configuration, permissions, execution or completion could not be verified.";
+      error instanceof SearchAccessDeniedError
+        ? "Splunk denied access to this evidence search. Ask an administrator to verify caller permissions."
+        : "Optional evidence unavailable: configuration, permissions, execution or completion could not be verified.";
   }
   if (signal.aborted) throw new Error("Optional investigation cancelled.");
   let after;
