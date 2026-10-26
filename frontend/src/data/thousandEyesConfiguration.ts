@@ -185,7 +185,7 @@ export function parseThousandEyesBindings(
       application = Object.fromEntries(
         fields.map((field) => [
           field,
-          literal(String(configuredApplication[field] ?? "")),
+          literal(configuredApplication[field] as string),
         ]),
       ) as unknown as NonNullable<ThousandEyesBinding["application"]>;
     }

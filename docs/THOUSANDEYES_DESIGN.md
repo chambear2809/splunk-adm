@@ -11,8 +11,29 @@ Consume evidence already indexed by the latest Cisco-supported ThousandEyes
 Splunk integration. The supplied `cisco-thousandeyes-app-for-splunk_090.tar.gz`
 is inspected statically; its identity, latest-version status, provenance and hash
 are verified in the research record before its schemas become adapter contracts.
-No new collector or delivery subsystem is planned. A demonstrated essential
-producer gap requires a separate coordinator design decision before coding.
+Vendor ingestion is preferred. The static inspection identified a necessary
+exception: the 0.9.0 CEA path collector serializes individual API results without
+the request's test ID/account-group ID, which the public CEA result model omits.
+Those rows cannot establish a uniquely qualified test/target path. The coordinator
+approves a narrow optional external CEA path exporter, reading only explicitly
+selected existing tests through the official v7 API. It adds request identity to
+native results and reuses the existing private durable `hec_delivery.py` queue.
+It creates no tests, installs no collector runtime/schedule in Splunk and changes
+no live collection. Native endpoint path results remain supported directly when
+their own aid/test/agent/time fields and configured source are verified.
+
+The exporter emits `application_atlas.thousandeyes_path.v1` HEC events with
+`sourcetype=atlas:thousandeyes:path`, `source=atlas:thousandeyes:path`, schema
+version 1, immutable `capture_id`, `authority`, `account_group_id`, `test_id`,
+`collection_started_at`, `collection_completed_at`, and the native `result`.
+It preserves native round/measurement times, fails closed on pagination/limit/
+identity/schema failures, bounds requests/bytes/records/retries/deadlines and
+atomically writes private capture files outside checkouts. The existing queue
+provides at-least-once delivery; HTTP acceptance, optional indexer acknowledgment
+and caller-authorized indexed readback remain distinct. A single indexed path
+observation cannot prove complete test history or upstream/index continuity.
+The exporter API and genuine target readback remain externally unqualified until
+their exact deployment is exercised. No live export is authorized by this task.
 
 ThousandEyes is a new optional evidence source. It starts unselected, with an
 unconfigured literal index selector and a false schema-qualification flag.
@@ -55,7 +76,7 @@ the six workstreams in bounded waves.
 | --- | --- | --- |
 | Coordinator | `frontend/src/data/thousandEyesTypes.ts`; shared evidence/config/search admission/settings/registry/ACL files; shared UI entry points; packaging/CI; this design and final qualification record | Publish stable typed normalized records, bindings and inspection result; preserve existing optional-source and caller-permission boundaries; inspect integrated diff and run final gates |
 | 1 Research | `docs/research/thousandeyes.md`, `docs/research/thousandeyes-capabilities.md`, ThousandEyes-only package manifest entries; ignored vendor artifacts | Verify latest vendor version and exact package fields; cover every relevant input/capability; send schema evidence before parser contracts freeze |
-| 2 Normalization | `frontend/src/data/thousandEyesEvidence.ts`, `frontend/src/data/thousandEyesEvidence.test.ts`, `frontend/src/data/thousandEyesAdapters.ts`, `frontend/src/data/thousandEyesAdapters.test.ts`, `fixtures/thousandeyes/` | Implement literal bounded source search and strict producer-specific normalization against coordinator types; preserve malformed/duplicate/conflicting/partial behavior |
+| 2 Normalization | `frontend/src/data/thousandEyesEvidence.ts`, `frontend/src/data/thousandEyesEvidence.test.ts`, `frontend/src/data/thousandEyesAdapters.ts`, `frontend/src/data/thousandEyesAdapters.test.ts`, `fixtures/thousandeyes/`, `tools/export_thousandeyes_paths.py`, `tests/test_export_thousandeyes_paths.py` | Implement literal bounded source search and strict producer-specific normalization against coordinator types; preserve malformed/duplicate/conflicting/partial behavior; implement only the approved narrow CEA path exporter above using existing delivery |
 | 3 Attribution | `frontend/src/data/thousandEyesAttribution.ts`, `frontend/src/data/thousandEyesAttribution.test.ts` | Pure attribution and comparison over normalized records/bindings; exact authority, scope and historical validity; retain target/NAT/proxy/CDN ambiguity |
 | 4 UX | `frontend/src/ThousandEyesEvidencePanel.tsx`, `frontend/src/ThousandEyesEvidencePanel.test.tsx`, `frontend/src/thousandeyes.css` | Accessible application/endpoint inspection with measurements, agent comparison, measured paths, change/event context and explicit loading/unselected/staged/denied/stale/incomplete/capped/ambiguous/empty/complete states |
 | 5 Qualification | `tests/browser/thousandeyes.spec.ts`, `tests/splunk/test_thousandeyes.py`, `tools/thousandeyes_search.mjs`, `tests/test_thousandeyes_contract.py` | Adversarial, permission, cancellation/config-race and installed exact-query checks; never weaken assertions or edit implementation; harness changes only after explicit assignment |
