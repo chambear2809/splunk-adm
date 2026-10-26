@@ -56,6 +56,11 @@ unqualified. Do not patch vendor files in place; keep the ThousandEyes source
 disabled until the target owner resolves and rechecks these gates. See the
 [detailed operations record](../THOUSANDEYES_OPERATIONS.md#vendor-release-topology-and-authorization).
 
+Atlas's `adapterVersion=0.9.0` names the reviewed parsing contract, not the
+installed Cisco producer version. If a record omits the producer version,
+Atlas preserves `producerVersion=not_reported`; a matching payload shape does
+not prove package version or continuity.
+
 ## Ingestion, HEC, and authorization
 
 For Cisco ThousandEyes App 0.9.0, route its configured inputs to **events
