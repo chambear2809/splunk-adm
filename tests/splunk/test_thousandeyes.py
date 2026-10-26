@@ -224,6 +224,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         cls.addClassCleanup(cls._delete_user, cls.username, admin_password)
 
         cls.events = cls._fixtures_as_hec_events()
+        cls.events.append(cls._bgp_monitor_event())
         cls.events.append(cls._wrong_account_metric())
         cls.events.append(cls._asset_index_metric())
         cls.lab._hec_post(
@@ -279,16 +280,12 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
                 cls._set_otlp_attribute(
                     event, "thousandeyes.account.id", cls.stream_account_id
                 )
-                event["thousandeyes.account.id"] = cls.stream_account_id
             if family in {"metric", "trace"}:
                 cls._set_otlp_attribute(event, "thousandeyes.test.id", cls.test_id)
                 cls._set_otlp_attribute(
                     event, "thousandeyes.source.agent.id", cls.agent_id
                 )
                 cls._set_otlp_attribute(event, "thousandeyes.test.domain", "cea")
-                event["thousandeyes.test.id"] = cls.test_id
-                event["thousandeyes.source.agent.id"] = cls.agent_id
-                event["thousandeyes.test.domain"] = "cea"
             if family == "event":
                 event["aid"] = cls.account_group_id
                 event["id"] = cls.token + "-event"
@@ -345,15 +342,25 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
     @classmethod
     def _wrong_account_metric(cls) -> dict:
         event = json.loads((FIXTURES / FIXTURE_FILES["metric"]).read_text())
-        cls._set_otlp_attribute(event, "thousandeyes.account.id", cls.stream_account_id)
+        cls._set_otlp_attribute(event, "thousandeyes.account.id", "9999")
         cls._set_otlp_attribute(event, "thousandeyes.test.id", cls.test_id)
         cls._set_otlp_attribute(event, "thousandeyes.source.agent.id", cls.agent_id)
-        event["thousandeyes.account.id"] = "9999"
-        event["thousandeyes.test.id"] = cls.test_id
-        event["thousandeyes.source.agent.id"] = cls.agent_id
         return {
             "time": cls.now,
             "host": cls.token + "-wrong-account",
+            "source": SOURCES["metric"],
+            "sourcetype": SOURCETYPES["metric"],
+            "index": INDEX,
+            "event": event,
+        }
+
+    @classmethod
+    def _bgp_monitor_event(cls) -> dict:
+        event = json.loads((FIXTURES / "bgp-monitor-v2.json").read_text())
+        cls._set_otlp_attribute(event, "thousandeyes.account.id", cls.stream_account_id)
+        return {
+            "time": cls.now,
+            "host": cls.token + "-bgp-monitor",
             "source": SOURCES["metric"],
             "sourcetype": SOURCETYPES["metric"],
             "index": INDEX,
@@ -366,9 +373,6 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         cls._set_otlp_attribute(event, "thousandeyes.account.id", cls.stream_account_id)
         cls._set_otlp_attribute(event, "thousandeyes.test.id", cls.test_id)
         cls._set_otlp_attribute(event, "thousandeyes.source.agent.id", cls.agent_id)
-        event["thousandeyes.account.id"] = cls.stream_account_id
-        event["thousandeyes.test.id"] = cls.test_id
-        event["thousandeyes.source.agent.id"] = cls.agent_id
         return {
             "time": cls.now,
             "host": cls.token + "-restricted-index",
@@ -523,7 +527,9 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
     def _completions(rows: list[dict]) -> list[dict]:
         return [row for row in rows if row.get("kind") == "supplemental_completion"]
 
-    def test_exact_installed_query_normalizes_six_families_for_admin(self):
+    def test_exact_installed_query_normalizes_six_families_and_bgp_context_for_admin(
+        self,
+    ):
         search = self._build(self.config, self.selection)
         self.assertIn("index=atlas_te", search)
         for sourcetype in SOURCETYPES.values():
@@ -542,14 +548,14 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertFalse(admin["warnings"])
         records = self._records(admin["rows"])
         completions = self._completions(admin["rows"])
-        self.assertEqual(len(records), 6)
+        self.assertEqual(len(records), 7)
         self.assertEqual(len(completions), 1)
         completion = completions[0]
         self.assertEqual(int(completion["schema_version"]), 1)
-        self.assertEqual(int(completion["input_count"]), 6)
-        self.assertEqual(int(completion["returned_count"]), 6)
+        self.assertEqual(int(completion["input_count"]), 7)
+        self.assertEqual(int(completion["returned_count"]), 7)
         self.assertEqual(int(completion["input_capped"]), 0)
-        self.assertEqual(int(completion["source_scan_count"]), 6)
+        self.assertEqual(int(completion["source_scan_count"]), 7)
         self.assertEqual(int(completion["source_scan_capped"]), 0)
         self.assertTrue(
             all(record.get("index") == INDEX for record in records),
@@ -578,12 +584,36 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
             )
         )
         self.assertTrue(
-            all(record["agentId"] in ("9", None) for record in normalized["records"])
+            all(
+                record.get("agentId") in (self.agent_id, None)
+                for record in normalized["records"]
+            )
         )
         self.assertTrue(
-            all(record.get("receiptTime") for record in normalized["records"]),
-            "Splunk receipt time must be retained separately from native event time",
+            all(record.get("rowTime") is not None for record in normalized["records"]),
+            "Splunk _time must be retained as row time",
         )
+        self.assertTrue(
+            all(
+                record.get("indexedTime") is not None
+                for record in normalized["records"]
+            ),
+            "Splunk _indextime must be retained as indexed receipt time",
+        )
+        self.assertTrue(
+            all(record.get("receiptTime") is None for record in normalized["records"]),
+            "unattested Splunk times must not be promoted to producer receipt time",
+        )
+        bgp = next(
+            record
+            for record in normalized["records"]
+            if record.get("monitorId") == "monitor-4"
+        )
+        self.assertEqual(bgp["family"], "metric")
+        self.assertNotIn("testId", bgp)
+        self.assertNotIn("agentId", bgp)
+        self.assertEqual(bgp["attribution"]["state"], "context_only")
+        self.assertEqual(bgp["attribution"]["bindingIds"], [])
 
     def test_restricted_viewer_owns_search_and_partial_indexes_do_not_look_complete(
         self,
@@ -594,7 +624,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertEqual(viewer["owner"], self.username)
         self.assertFalse(viewer["errors"])
         self.assertFalse(viewer["warnings"])
-        self.assertEqual(len(self._records(viewer["rows"])), 6)
+        self.assertEqual(len(self._records(viewer["rows"])), 7)
         self.assertEqual(len(self._completions(viewer["rows"])), 1)
 
         expanded = {**self.config, "indexes": [INDEX, "atlas_asset"]}
@@ -607,8 +637,8 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertEqual(admin["status"], 200)
         self.assertFalse(admin["errors"])
         self.assertFalse(admin["warnings"])
-        self.assertEqual(len(self._records(admin["rows"])), 7)
-        self.assertEqual(int(self._completions(admin["rows"])[0]["input_count"]), 7)
+        self.assertEqual(len(self._records(admin["rows"])), 8)
+        self.assertEqual(int(self._completions(admin["rows"])[0]["input_count"]), 8)
 
         partial = self._run_as(self.username, self.password, expanded_search)
         no_complete_read = (
@@ -617,8 +647,8 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
             or partial["errors"]
             or partial["warnings"]
             or len(self._completions(partial["rows"])) != 1
-            or len(self._records(partial["rows"])) != 7
-            or int(self._completions(partial["rows"])[0]["input_count"]) != 7
+            or len(self._records(partial["rows"])) != 8
+            or int(self._completions(partial["rows"])[0]["input_count"]) != 8
         )
         self.assertTrue(
             no_complete_read,
