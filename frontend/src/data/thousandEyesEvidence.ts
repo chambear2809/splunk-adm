@@ -214,6 +214,9 @@ function nativeIdentityFilter(
   mappings: ThousandEyesSourceMapping[],
   selection: EvidenceSelection,
 ): string {
+  // SPL's multivalue extraction flattens OTLP attributes; this stage is only a
+  // bounded candidate filter. The strict JSON adapter checks each key/value
+  // pair and account identity before any observation can be used.
   const metricRules: string[] = [];
   const traceRules: string[] = [];
   const activityRules: string[] = [];
@@ -289,7 +292,7 @@ function nativeIdentityFilter(
     "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.double_value output=_te_m_double_values",
     "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.bool_value output=_te_m_bool_values",
     "| spath input=_raw path=resource_metrics{}.scope_metrics{}.metrics{}.name output=_te_m_metric_names",
-    '| eval _te_m_values=mvappend(_te_m_string_values,_te_m_int_values,_te_m_double_values,_te_m_bool_values),_te_m_has_account_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.account.id"))>0,1,0),_te_m_has_test_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.test.id"))>0,1,0),_te_m_has_agent_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.source.agent.id"))>0,1,0),_te_m_has_monitor_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.monitor.id"))+mvcount(mvfilter(_te_m_keys="thousandeyes.bgp.monitor.id"))>0,1,0),_te_m_has_bgp=if(mvcount(mvfilter(like(_te_m_metric_names,"bgp.%")))>0,1,0)',
+    '| eval _te_m_values=mvappend(_te_m_string_values,_te_m_int_values,_te_m_double_values,_te_m_bool_values),_te_m_has_account_key=if(coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.account.id")),0)>0,1,0),_te_m_has_test_key=if(coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.test.id")),0)>0,1,0),_te_m_has_agent_key=if(coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.source.agent.id")),0)>0,1,0),_te_m_has_monitor_key=if(coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.monitor.id")),0)+coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.bgp.monitor.id")),0)>0,1,0),_te_m_has_bgp=if(coalesce(mvcount(mvfilter(like(_te_m_metric_names,"bgp.%"))),0)>0,1,0)',
     "| eval _te_m_identity_unknown=if(isnull(_te_m_keys) OR isnull(_te_m_attribute_values) OR mvcount(_te_m_keys)!=mvcount(_te_m_attribute_values) OR _te_m_has_account_key=0 OR ((_te_m_has_test_key=0 OR _te_m_has_agent_key=0) AND (_te_m_has_bgp=0 OR _te_m_has_monitor_key=0)),1,0)",
     "| eval _te_m_identity_match=if(_te_m_identity_unknown=1 OR " +
       metricKeep +

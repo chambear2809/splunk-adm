@@ -141,6 +141,9 @@ describe("ThousandEyes selected evidence search", () => {
     expect(query).toContain('mvfilter(_te_m_values="9")');
     expect(query).toContain('like(_te_m_metric_names,"bgp.%")');
     expect(query).toContain("thousandeyes.monitor.id");
+    expect(query).toContain(
+      'coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.monitor.id")),0)',
+    );
     expect(query).toContain("'aid'=\"1234\"");
     expect(query).toContain("'accountId'=\"6789\"");
     expect(query).toContain("'orgId'=\"org-1\"");
