@@ -15,6 +15,7 @@ export default defineConfig({
       "tests/browser/o11y-detector-events-harness.tsx",
       "tests/browser/map-service-health-harness.tsx",
       "tests/browser/map-dns-inspection-harness.tsx",
+      "tests/browser/thousandeyes-harness.tsx",
     ],
   },
   plugins: [
