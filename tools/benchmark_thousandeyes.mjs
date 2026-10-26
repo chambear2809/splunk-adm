@@ -19,17 +19,6 @@ const WINDOW = { start: BASE, end: BASE + 3_600 };
 const RUN_DEFAULT = 7;
 const WARMUP_DEFAULT = 2;
 const SOURCE_FILES = [
-  "frontend/src/data/evidence.ts",
-  "frontend/src/data/evidenceConfig.ts",
-  "frontend/src/data/supplementalEvidence.ts",
-  "frontend/src/data/thousandEyesTypes.ts",
-  "frontend/src/data/thousandEyesConfiguration.ts",
-  "frontend/src/data/thousandEyesAdapters.ts",
-  "frontend/src/data/thousandEyesAttribution.ts",
-  "frontend/src/data/thousandEyesEvidence.ts",
-  "tools/benchmark_thousandeyes.mjs",
-  "package.json",
-  "package-lock.json",
   "fixtures/thousandeyes/activity-v2.json",
   "fixtures/thousandeyes/alert.json",
   "fixtures/thousandeyes/event.json",
@@ -37,6 +26,19 @@ const SOURCE_FILES = [
   "fixtures/thousandeyes/path-cea-anonymous.json",
   "fixtures/thousandeyes/path-export-wrapper.json",
   "fixtures/thousandeyes/trace-v2.json",
+  "frontend/src/data/deploymentHealth.ts",
+  "frontend/src/data/evidence.ts",
+  "frontend/src/data/evidenceConfig.ts",
+  "frontend/src/data/supplementalEvidence.ts",
+  "frontend/src/data/thousandEyesAdapters.ts",
+  "frontend/src/data/thousandEyesAttribution.ts",
+  "frontend/src/data/thousandEyesConfiguration.ts",
+  "frontend/src/data/thousandEyesEvidence.ts",
+  "frontend/src/data/thousandEyesTypes.ts",
+  "frontend/src/drilldown.ts",
+  "package-lock.json",
+  "package.json",
+  "tools/benchmark_thousandeyes.mjs",
 ];
 const FAMILY_MIX = [
   ...Array(24).fill("metric"),
@@ -860,6 +862,9 @@ async function hashSources() {
     const bytes = await readFile(join(ROOT, name));
     files.push({ path: name, bytes: bytes.byteLength, sha256: sha256(bytes) });
   }
+  files.sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
   const sourceFingerprint = sha256(
     files.map((entry) => `${entry.path}\0${entry.sha256}\n`).join(""),
   );
@@ -1102,6 +1107,7 @@ async function runBenchmark(options) {
       workloadNotes: [
         "Fixture values use documentation-only address ranges and synthetic IDs.",
         "The six-family mix is an explicit synthetic profile; no live tenant distribution was available or assumed.",
+        "The BGP monitor fixture is not loaded or exercised by these scenarios.",
         "The application query's 10,000-input scan cap is validated by inspecting generated SPL ordering; indexer execution and scan cost are not measured.",
         "The client adapter accepts at most 64 input rows and at most 64 normalized records; cap scenarios measure those local boundaries.",
         "Memory deltas use Node heapUsed. Retained-after-GC values keep the result live and are not peak-memory measurements; run with --expose-gc for both views.",
