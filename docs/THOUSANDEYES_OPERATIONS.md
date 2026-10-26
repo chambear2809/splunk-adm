@@ -369,17 +369,17 @@ normalization plus attribution measured:
 
 | Synthetic scenario                                           |       Median / P95 | Output and rejection behavior                      |
 | ------------------------------------------------------------ | -----------------: | -------------------------------------------------- |
-| Six-family mix: 64 rows, one group, 32 bindings              |   2.287 / 2.506 ms | 64 records; 52 bound, 12 context-only; no rejects  |
-| Maximum config: 32 groups × 64 bindings, 64 rows             | 12.906 / 13.972 ms | 64 records; 52 bound, 12 context-only; no rejects  |
-| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.184 / 7.329 ms | 64 records explicitly ambiguous; 2,048 output hops |
-| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.324 / 3.383 ms | 64 records; 1,536 output hops; no rejects          |
-| Path expansion overflow: 33 rows × 2 traces                  |   3.437 / 3.503 ms | 64 records retained; 1 overflow rejected           |
-| 65-row adapter cap                                           |   0.384 / 0.415 ms | Batch rejected: 0 records, 65 rejects              |
+| Six-family mix: 64 rows, one group, 32 bindings              |   2.299 / 2.354 ms | 64 records; 52 bound, 12 context-only; no rejects  |
+| Maximum config: 32 groups × 64 bindings, 64 rows             | 12.230 / 12.702 ms | 64 records; 52 bound, 12 context-only; no rejects  |
+| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.131 / 7.256 ms | 64 records explicitly ambiguous; 2,048 output hops |
+| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.301 / 3.383 ms | 64 records; 1,536 output hops; no rejects          |
+| Path expansion overflow: 33 rows × 2 traces                  |   3.410 / 3.516 ms | 64 records retained; 1 overflow rejected           |
+| 65-row adapter cap                                           |   0.366 / 0.381 ms | Batch rejected: 0 records, 65 rejects              |
 
 The representative mix used 69,218 raw input bytes and reported median
-`heapUsed` delta 3,662,856 bytes during operation, with 136,904 bytes retained
+`heapUsed` delta 3,663,200 bytes during operation, with 136,904 bytes retained
 after forced GC while keeping results live. At maximum mapping/binding
-cardinality, those figures were 16,215,056 bytes and 146,336 bytes; in the
+cardinality, those figures were 16,213,472 bytes and 136,512 bytes; in the
 overlap-heavy case, 16,861,920 and 448,336 bytes. These are heap observations,
 not peak RSS or a production memory envelope. The complete JSON report
 contains per-operation statistics, input/config sizes, scenario counts, and
