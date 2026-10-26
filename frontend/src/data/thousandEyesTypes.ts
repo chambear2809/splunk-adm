@@ -105,6 +105,8 @@ export interface ThousandEyesObservation {
   dataModelVersion: string;
   testId?: string;
   agentId?: string;
+  relatedTestIds?: string[];
+  relatedAgentIds?: string[];
   testName?: string;
   agentName?: string;
   agentLocation?: string;
@@ -115,6 +117,8 @@ export interface ThousandEyesObservation {
   intervalBasis: "measurement" | "point" | "reported_event";
   eventTime: number;
   indexedTime: number;
+  /** Splunk _time under the inspected CURRENT props; never used as measurement time. */
+  receiptTime?: number;
   collectionTime?: number;
   index: string;
   source: string;
@@ -150,7 +154,14 @@ export type ThousandEyesAttributedObservation = ThousandEyesObservation & {
 };
 
 export type ThousandEyesEvidenceResult =
-  SupplementalResult<ThousandEyesAttributedObservation>;
+  SupplementalResult<ThousandEyesAttributedObservation> & {
+    receiptFreshness?: {
+      state: "historical" | "stale" | "observed_receipt" | "unknown";
+      basis: "selected_evidence_indexed_receipt";
+      latestIndexedTime?: number;
+      assessedAt: number;
+    };
+  };
 
 export interface ThousandEyesComparison {
   key: string;
