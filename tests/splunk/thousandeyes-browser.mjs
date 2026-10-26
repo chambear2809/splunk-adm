@@ -30,6 +30,45 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = await context.newPage();
+  const safePath = (rawUrl) => {
+    try {
+      const url = new URL(rawUrl, BASE);
+      return url.pathname
+        .replaceAll(encodeURIComponent(user), "[viewer]")
+        .replaceAll(user, "[viewer]")
+        .replaceAll(encodeURIComponent(pass), "[redacted]")
+        .replaceAll(pass, "[redacted]")
+        .replace(/\/search\/(?:v2\/)?jobs\/[^/]+/g, "/search/jobs/[job]")
+        .slice(0, 300);
+    } catch {
+      return "[unknown-path]";
+    }
+  };
+  const safeMessage = (rawMessage) =>
+    String(rawMessage)
+      .replaceAll(encodeURIComponent(user), "[viewer]")
+      .replaceAll(user, "[viewer]")
+      .replaceAll(encodeURIComponent(pass), "[redacted]")
+      .replaceAll(pass, "[redacted]")
+      .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+      .replace(
+        /(?:password|token|session|cookie|sid)(\s*[:=]\s*)[^\s,;]+/gi,
+        "$1[redacted]",
+      )
+      .replace(/https?:\/\/[^\s"'<>]+/gi, (url) => safePath(url))
+      .slice(0, 240);
+  const safeSource = (stack) => {
+    const frame = String(stack || "")
+      .split("\n")
+      .find((line) => line.includes(".js"));
+    const match = frame?.match(
+      /(?:https?:\/\/|\/)[^\s()]+?\.m?js(?:\?[^\s()]*)?/,
+    );
+    return match ? safePath(match[0]) : "[unknown-source]";
+  };
+  const rememberJsError = (item) => {
+    if (jsErrors.length < 8) jsErrors.push(item);
+  };
   const rememberAsset = (rawUrl) => {
     try {
       const url = new URL(rawUrl);
@@ -57,9 +96,21 @@ try {
     }
   };
   page.on("console", (message) => {
-    if (message.type() === "error") jsErrors.push("console-error");
+    if (message.type() === "error")
+      rememberJsError({
+        kind: "console",
+        message: safeMessage(message.text()),
+        source: safePath(message.location().url || ""),
+      });
   });
-  page.on("pageerror", () => jsErrors.push("page-error"));
+  page.on("pageerror", (error) =>
+    rememberJsError({
+      kind: "page",
+      name: safeMessage(error.name || "Error"),
+      message: safeMessage(error.message),
+      source: safeSource(error.stack),
+    }),
+  );
   page.on("request", (request) => {
     const url = new URL(request.url());
     rememberAsset(request.url());
@@ -84,8 +135,11 @@ try {
     const asset = rememberAsset(response.url());
     if (asset) asset.status = response.status();
     if (response.status() >= 400) {
-      const url = new URL(response.url());
-      badResponses.push({ status: response.status(), path: url.pathname });
+      if (badResponses.length < 12)
+        badResponses.push({
+          status: response.status(),
+          path: safePath(response.url()),
+        });
     }
   });
 
@@ -100,7 +154,7 @@ try {
     page.locator('input[type="submit"], button[type="submit"]').first().click(),
   ]);
 
-  stage = "endpoint-selection";
+  stage = "endpoint-route";
   const endpointURL = `${BASE}/en-US/app/splunk_adm/endpoints?mode=live`;
   const response = await page.goto(endpointURL, {
     waitUntil: "domcontentloaded",
@@ -112,11 +166,17 @@ try {
       .toISOString()
       .replace(/Z$/, "");
   };
+  stage = "endpoint-ip";
   await page.getByLabel("IP address", { exact: true }).fill("198.51.100.20");
+  stage = "endpoint-scope";
   await page.getByLabel("Verified routing scope", { exact: true }).fill(scope);
+  stage = "endpoint-start-time";
   await page.getByLabel("Start time", { exact: true }).fill(localDate(start));
+  stage = "endpoint-end-time";
   await page.getByLabel("End time", { exact: true }).fill(localDate(end));
+  stage = "endpoint-submit";
   await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  stage = "endpoint-results";
   await page.getByRole("region", { name: "Endpoint results" }).waitFor({
     timeout: 150000,
   });
@@ -253,7 +313,8 @@ try {
       stage,
       assetCount: assetRequests?.length ?? 0,
       searchCount: searchRequests?.length ?? 0,
-      jsErrorCount: jsErrors?.length ?? 0,
+      jsErrors: jsErrors?.slice(0, 8) ?? [],
+      httpErrors: badResponses?.slice(0, 12) ?? [],
     }) + "\n",
   );
   process.exitCode = 1;
