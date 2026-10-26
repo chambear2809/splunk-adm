@@ -121,11 +121,12 @@ let httpErrorCount = 0;
 let failedRequestCount = 0;
 const browser = await chromium.launch({ headless: true });
 let stage = "launch";
+let page;
 try {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
-  const page = await context.newPage();
+  page = await context.newPage();
   const rememberAsset = (rawUrl) => {
     try {
       const url = new URL(rawUrl);
@@ -253,9 +254,17 @@ try {
   stage = "endpoint-submit";
   await page.getByRole("button", { name: "Investigate", exact: true }).click();
   stage = "endpoint-results";
-  await page.getByRole("region", { name: "Endpoint results" }).waitFor({
-    timeout: 150000,
-  });
+  await Promise.race([
+    page
+      .getByRole("region", { name: "Endpoint results" })
+      .waitFor({ timeout: 150000 }),
+    page
+      .locator('main.endpoints-page > p[role="alert"]')
+      .waitFor({ timeout: 150000 })
+      .then(() => {
+        throw new Error("Endpoint reported an error before results.");
+      }),
+  ]);
   const endpointSearches = searchRequests.filter(
     (item) => item.kind === "other",
   );
@@ -428,11 +437,26 @@ try {
   await context.close();
 } catch (error) {
   const caught = error && typeof error === "object" ? error : {};
+  let visibleAlerts = [];
+  if (page && stage !== "login" && stage !== "launch") {
+    try {
+      visibleAlerts = (
+        await page
+          .locator('main.endpoints-page > p[role="alert"]')
+          .allTextContents()
+      )
+        .slice(0, 8)
+        .map(safeMessage);
+    } catch {
+      visibleAlerts = ["Alert diagnostics unavailable"];
+    }
+  }
   process.stdout.write(
     JSON.stringify({
       ok: false,
       mode,
       stage,
+      visibleAlerts,
       caughtError: {
         name: safeMessage(caught.name || "Error"),
         message: safeMessage(caught.message || error),
