@@ -342,6 +342,15 @@ try {
   }));
   expect(runtimeVersions.host).toBe(versions[0]);
   expect(runtimeVersions.optional).toBe(versions[0]);
+  const indexValidation = await page.evaluate(() => {
+    const validate =
+      window.__AtlasThousandEyesHost.deploymentHealth.validateIndexName;
+    return {
+      valid: validate("atlas_te") === undefined,
+      invalid: typeof validate("atlas_te OR index=*") === "string",
+    };
+  });
+  expect(indexValidation).toEqual({ valid: true, invalid: true });
   expect(
     searchRequests.filter((item) => item.kind === "thousandeyes"),
   ).toHaveLength(beforeOpen);

@@ -8,7 +8,7 @@ import {
   type EvidenceConfigClient,
 } from "./data/evidenceConfig";
 import { loadSupplementalEvidence } from "./data/supplementalEvidence";
-import { indexNames } from "./data/deploymentHealth";
+import { indexNames, validateIndexName } from "./data/deploymentHealth";
 import {
   requireNoSearchErrors,
   SearchAccessDeniedError,
@@ -74,7 +74,7 @@ export function loadThousandEyesUi(): Promise<OptionalUi> {
           evidenceConfigClient,
         }),
         supplementalEvidence: Object.freeze({ loadSupplementalEvidence }),
-        deploymentHealth: Object.freeze({ indexNames }),
+        deploymentHealth: Object.freeze({ indexNames, validateIndexName }),
         searchClient: Object.freeze({
           requireNoSearchErrors,
           SearchAccessDeniedError,
