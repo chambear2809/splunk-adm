@@ -64,11 +64,13 @@ The check was run as:
 docker exec -u splunk "$ADM_LAB_NAME" /opt/splunk/bin/splunk cmd btool check
 ```
 
-The package was not patched. This is a TA compatibility/configuration
-defect independent of Atlas AppInspect; it prevents claiming a clean full-TA
-co-install on that release. Keep Atlas's ThousandEyes source unselected until
-the target owner resolves the vendor package gate and records a fresh check.
-The static trace `props.conf` `EVAL` expression at line 45 also remains
+The package was not patched. This is a TA compatibility/configuration defect
+independent of Atlas AppInspect: although Atlas AppInspect passed and Atlas
+qualification remains disabled, neither clears this TA failure. Do not claim a
+clean full-TA co-install on that release. Keep Atlas's ThousandEyes source
+unselected until the target owner resolves the vendor package gate and records
+a fresh check. Static inspection also found the trace `EVAL` expression in
+`default/props.conf` at line 45 missing its closing `)`; trace parsing remains
 unqualified pending syntax validation. Do not repair vendor files in place.
 
 Cisco's distributed placement table requires the app on the heavy forwarder and
@@ -387,35 +389,45 @@ node --expose-gc tools/benchmark_thousandeyes.mjs \
   --output dist/thousandeyes-qualification/thousandeyes-benchmark.json
 ```
 
-The measurements below are a prior baseline, from before query-size fields were
-added to the report and before pending adapter fixes. Regenerate the report
-after those changes before using current performance or search-size values.
-That baseline used Node 26.12.1 / V8 14.6.202.34-node.40 on an Apple M3
-Pro (macOS arm64), with seven timed runs and two warmups per operation. The
-source fingerprint was
-`a45909b5b89a2ae694c78a5e57102a067d9fabf8aec739b67db355e525da0677`. Integrated
-normalization plus attribution measured:
+This interim run used Node 26.12.1 / V8 14.6.202.34-node.40 on an Apple M3 Pro
+(macOS arm64), with seven timed runs and two warmups per operation. It predates
+the installed-Splunk typing, comparison-eligibility, and exporter-pagination
+fixes now in progress; regenerate the report after those changes land before
+using performance or query-size values as final. Its
+source fingerprint is
+`724980b0b53018625d911f2cf06ce9857ac15c165a2205886073061ac14b4814`; the
+measured code revision is `32914752f9eabb831424f931c12695ebe94bfda6`. Integrated
+normalization plus attribution and generated query size measured:
 
-| Synthetic scenario                                           |       Median / P95 | Output and rejection behavior                      |
-| ------------------------------------------------------------ | -----------------: | -------------------------------------------------- |
-| Six-family mix: 64 rows, one group, 32 bindings              |   2.299 / 2.354 ms | 64 records; 52 bound, 12 context-only; no rejects  |
-| Maximum config: 32 groups × 64 bindings, 64 rows             | 12.230 / 12.702 ms | 64 records; 52 bound, 12 context-only; no rejects  |
-| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.131 / 7.256 ms | 64 records explicitly ambiguous; 2,048 output hops |
-| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.301 / 3.383 ms | 64 records; 1,536 output hops; no rejects          |
-| Path expansion overflow: 33 rows × 2 traces                  |   3.410 / 3.516 ms | 64 records retained; 1 overflow rejected           |
-| 65-row adapter cap                                           |   0.366 / 0.381 ms | Batch rejected: 0 records, 65 rejects              |
+| Synthetic scenario                                           |       Median / P95 | Query UTF-8 bytes | Output and rejection behavior                      |
+| ------------------------------------------------------------ | -----------------: | ----------------: | -------------------------------------------------- |
+| Six-family mix: 64 rows, one group, 32 bindings              |   2.398 / 2.536 ms |            37,112 | 64 records; 52 bound, 12 context-only; no rejects  |
+| Maximum config: 32 groups × 64 bindings, 64 rows             | 12.222 / 12.928 ms |           449,736 | 64 records; 52 bound, 12 context-only; no rejects  |
+| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.170 / 7.615 ms |            59,672 | 64 records explicitly ambiguous; 2,048 output hops |
+| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.404 / 3.496 ms |            59,672 | 64 records; 1,536 output hops; no rejects          |
+| Path expansion overflow: 33 rows × 2 traces                  |   3.480 / 3.541 ms |            59,672 | 64 records retained; 1 overflow rejected           |
+| 65-row adapter cap                                           |   0.357 / 0.417 ms |            59,672 | Batch rejected: 0 records, 65 rejects              |
+
+The 32-mapping × 64-binding configuration generated the largest query at
+449,736 UTF-8 bytes (about 439.2 KiB; the query is ASCII, so its character
+count is also 449,736). A single mapping with 64 bindings generated 59,672
+bytes. These local sizes help assess the query string sent toward Splunk but
+do not establish the target's parser or request-size limit; qualify that
+boundary against the deployed Splunk endpoint before enabling maximum
+configuration cardinality.
 
 The representative mix used 69,218 raw input bytes and reported median
-`heapUsed` delta 3,663,200 bytes during operation, with 136,904 bytes retained
+`heapUsed` delta 3,659,792 bytes during operation, with 137,280 bytes retained
 after forced GC while keeping results live. At maximum mapping/binding
-cardinality, those figures were 16,213,472 bytes and 136,512 bytes; in the
-overlap-heavy case, 16,861,920 and 448,336 bytes. These are heap observations,
-not peak RSS or a production memory envelope. The complete JSON report
-contains per-operation statistics, input/config sizes, scenario counts, and
-component hashes. Its replay/malformed scenario returned 49 normalized records
-and rejected 10 rows. Re-run it after code, fixture, or runtime changes; record
-its aggregate fingerprint and Git revision with any internal qualification
-artifact.
+cardinality, those figures were 16,212,232 bytes and 136,512 bytes; in the
+overlap-heavy case, 16,861,720 and 448,336 bytes. These are heap observations,
+not peak RSS or a production memory envelope. The replay/malformed scenario
+returned 49 normalized records and rejected 10 rows. The checked-in BGP monitor
+fixture was not loaded or exercised; this report makes no BGP benchmark claim.
+The complete JSON report contains per-operation timings/memory, query strings'
+UTF-8 byte length, input/config sizes, scenario counts, and sorted component
+hashes. Re-run it after code, fixture, or runtime changes; record its aggregate
+fingerprint and Git revision with any internal qualification artifact.
 
 This benchmark does not execute SPL. It inspects generated search ordering and
 times local application code only; it does not measure Splunk index scans,

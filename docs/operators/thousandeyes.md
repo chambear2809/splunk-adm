@@ -48,11 +48,13 @@ inspection alone does not establish that the runtime is available on a target.
 **Co-install gate:** On a locked Splunk Enterprise 10.6.0.5 diagnostic, the
 unmodified Cisco TA 0.9.0 failed `btool check` at
 `ta_cisco_thousandeyes/default/app.conf:27` (`[triggers]` key
-`notable_event_actions = reload`). Atlas AppInspect is a separate check and
-does not clear this vendor TA failure. A static trace `props.conf` `EVAL`
-expression at line 45 is also unqualified. Do not patch vendor files in place;
-keep the ThousandEyes source disabled until the target owner resolves and
-rechecks these gates. See the [detailed operations record](../THOUSANDEYES_OPERATIONS.md#vendor-release-topology-and-authorization).
+`notable_event_actions = reload`). Atlas AppInspect passed separately, but it
+does not clear this vendor TA failure; Atlas qualification remains disabled.
+Static inspection also found the trace `EVAL` expression in
+`default/props.conf:45` missing its closing `)`, so trace parsing is
+unqualified. Do not patch vendor files in place; keep the ThousandEyes source
+disabled until the target owner resolves and rechecks these gates. See the
+[detailed operations record](../THOUSANDEYES_OPERATIONS.md#vendor-release-topology-and-authorization).
 
 ## Ingestion, HEC, and authorization
 
