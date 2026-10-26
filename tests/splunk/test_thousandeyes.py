@@ -534,7 +534,38 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         self.assertTrue(evidence.get("ok"), evidence)
         self.assertEqual(evidence.get("mode"), mode, evidence)
         self.assertTrue(evidence.get("noEagerSidecar"), evidence)
-        self.assertEqual(evidence.get("jsErrors"), 0, evidence)
+        self.assertEqual(evidence.get("pageErrors"), 0, evidence)
+        self.assertEqual(evidence.get("unexpectedConsoleErrors"), 0, evidence)
+        self.assertEqual(evidence.get("unexpectedHttpErrors"), 0, evidence)
+        self.assertEqual(evidence.get("failedRequestCount"), 0, evidence)
+        denials = evidence.get("metadataReadDenials")
+        self.assertIsInstance(denials, list, evidence)
+        self.assertEqual(
+            {item.get("name") for item in denials},
+            {
+                "app_icon",
+                "global_web_settings",
+                "structured_data_service_limits",
+                "legacy_macro_adm_data_contract_version",
+                "legacy_macro_adm_health_sources",
+                "legacy_macro_adm_find_1",
+                "legacy_macro_adm_graph_4",
+                "legacy_macro_adm_catalog_build",
+                "legacy_macro_adm_health_quality",
+            },
+            evidence,
+        )
+        self.assertTrue(
+            all(
+                item.get("method") == "GET"
+                and item.get("status") == 403
+                and isinstance(item.get("path"), str)
+                and isinstance(item.get("count"), int)
+                and isinstance(item.get("consoleErrors"), int)
+                for item in denials
+            ),
+            evidence,
+        )
         return evidence
 
     @staticmethod

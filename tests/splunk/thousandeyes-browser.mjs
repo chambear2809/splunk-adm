@@ -57,10 +57,56 @@ const safeSource = (stack) => {
   return match ? safePath(match[0]) : "[unknown-source]";
 };
 
+const EXPECTED_METADATA_DENIALS = new Map([
+  [
+    "/en-US/splunkd/__raw/servicesNS/nobody/splunk_adm/static/appIcon.png",
+    "app_icon",
+  ],
+  [
+    "/en-US/splunkd/__raw/services/configs/conf-web/settings",
+    "global_web_settings",
+  ],
+  [
+    "/en-US/splunkd/__raw/services/configs/conf-limits/structured_data_service",
+    "structured_data_service_limits",
+  ],
+  ...[
+    "adm_data_contract_version",
+    "adm_health_sources",
+    "adm_find(1)",
+    "adm_graph(4)",
+    "adm_catalog_build",
+    "adm_health_quality",
+  ].map((name) => [
+    `/en-US/splunkd/__raw/servicesNS/nobody/splunk_adm/configs/conf-macros/${name}`,
+    `legacy_macro_${name.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}`,
+  ]),
+]);
+const isExpectedMetadataDenial = (item) =>
+  item.method === "GET" &&
+  item.status === 403 &&
+  EXPECTED_METADATA_DENIALS.has(item.path);
+const metadataDenialCounts = (responses, consoleList) =>
+  [...EXPECTED_METADATA_DENIALS].map(([path, name]) => ({
+    name,
+    path,
+    method: "GET",
+    status: 403,
+    count: responses.filter(
+      (item) => isExpectedMetadataDenial(item) && item.path === path,
+    ).length,
+    consoleErrors: consoleList.filter((item) => item.source === path).length,
+  }));
+
 const searchRequests = [];
 const assetRequests = [];
-const jsErrors = [];
+const consoleErrors = [];
+const pageErrors = [];
 const badResponses = [];
+const failedRequests = [];
+let consoleErrorCount = 0;
+let httpErrorCount = 0;
+let failedRequestCount = 0;
 const browser = await chromium.launch({ headless: true });
 let stage = "launch";
 try {
@@ -68,9 +114,6 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = await context.newPage();
-  const rememberJsError = (item) => {
-    if (jsErrors.length < 8) jsErrors.push(item);
-  };
   const rememberAsset = (rawUrl) => {
     try {
       const url = new URL(rawUrl);
@@ -98,21 +141,34 @@ try {
     }
   };
   page.on("console", (message) => {
-    if (message.type() === "error")
-      rememberJsError({
-        kind: "console",
-        message: safeMessage(message.text()),
-        source: safePath(message.location().url || ""),
+    if (message.type() === "error") {
+      consoleErrorCount++;
+      if (consoleErrors.length < 64)
+        consoleErrors.push({
+          kind: "console",
+          message: safeMessage(message.text()),
+          source: safePath(message.location().url || ""),
+        });
+    }
+  });
+  page.on(
+    "pageerror",
+    (error) =>
+      pageErrors.length < 8 &&
+      pageErrors.push({
+        name: safeMessage(error.name || "Error"),
+        message: safeMessage(error.message),
+        source: safeSource(error.stack),
+      }),
+  );
+  page.on("requestfailed", (request) => {
+    failedRequestCount++;
+    if (failedRequests.length < 64)
+      failedRequests.push({
+        method: request.method(),
+        path: safePath(request.url()),
       });
   });
-  page.on("pageerror", (error) =>
-    rememberJsError({
-      kind: "page",
-      name: safeMessage(error.name || "Error"),
-      message: safeMessage(error.message),
-      source: safeSource(error.stack),
-    }),
-  );
   page.on("request", (request) => {
     const url = new URL(request.url());
     rememberAsset(request.url());
@@ -137,9 +193,11 @@ try {
     const asset = rememberAsset(response.url());
     if (asset) asset.status = response.status();
     if (response.status() >= 400) {
-      if (badResponses.length < 12)
+      httpErrorCount++;
+      if (badResponses.length < 64)
         badResponses.push({
           status: response.status(),
+          method: response.request().method(),
           path: safePath(response.url()),
         });
     }
@@ -166,7 +224,8 @@ try {
     const value = new Date(seconds * 1000);
     return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
       .toISOString()
-      .replace(/Z$/, "");
+      .replace(/Z$/, "")
+      .replace(/\.000$/, "");
   };
   stage = "endpoint-ip";
   await page.getByLabel("IP address", { exact: true }).fill("198.51.100.20");
@@ -248,7 +307,12 @@ try {
     ])
       expect(teSearches[0].search).toContain(sourcetype);
     await expect(page.getByText("Checkout availability")).toBeVisible();
-    const monitorRow = page
+    await page.getByLabel("Group by", { exact: true }).selectOption("family");
+    const metricGroup = page.getByRole("region", {
+      name: "Family: Metric",
+      exact: true,
+    });
+    const monitorRow = metricGroup
       .getByRole("row")
       .filter({ hasText: "Test name not supplied" });
     await expect(monitorRow).toHaveCount(1);
@@ -279,14 +343,39 @@ try {
   }
 
   stage = "browser-health";
-  expect(jsErrors).toEqual([]);
-  expect(
-    badResponses.filter((item) =>
-      /\/app\/splunk_adm\/(?:pages\/thousandeyes\.js|thousandeyes\.css)$/.test(
-        item.path,
-      ),
-    ),
-  ).toEqual([]);
+  const expectedConsoleErrors = [];
+  const availableDenials = new Map();
+  for (const item of badResponses.filter(isExpectedMetadataDenial))
+    availableDenials.set(item.path, (availableDenials.get(item.path) || 0) + 1);
+  const unexpectedConsoleErrors = [];
+  for (const item of consoleErrors) {
+    const remaining = availableDenials.get(item.source) || 0;
+    const isExpected =
+      item.message ===
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)" &&
+      EXPECTED_METADATA_DENIALS.has(item.source) &&
+      remaining > 0;
+    if (isExpected) {
+      expectedConsoleErrors.push(item);
+      availableDenials.set(item.source, remaining - 1);
+    } else {
+      unexpectedConsoleErrors.push(item);
+    }
+  }
+  const unexpectedHttpErrors = badResponses.filter(
+    (item) => !isExpectedMetadataDenial(item),
+  );
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrorCount).toBe(consoleErrors.length);
+  expect(httpErrorCount).toBe(badResponses.length);
+  expect(failedRequestCount).toBe(failedRequests.length);
+  expect(failedRequests).toEqual([]);
+  expect(unexpectedConsoleErrors).toEqual([]);
+  expect(unexpectedHttpErrors).toEqual([]);
+  const metadataReadDenials = metadataDenialCounts(
+    badResponses,
+    expectedConsoleErrors,
+  );
   process.stdout.write(
     JSON.stringify({
       ok: true,
@@ -303,7 +392,13 @@ try {
       ).length,
       activeRows: mode === "active" ? 7 : 0,
       bgpContextOnly: mode === "active",
-      jsErrors: jsErrors.length,
+      pageErrors: pageErrors.length,
+      metadataReadDenials,
+      consoleErrorCount,
+      unexpectedConsoleErrors: unexpectedConsoleErrors.length,
+      httpErrorCount,
+      unexpectedHttpErrors: unexpectedHttpErrors.length,
+      failedRequestCount,
     }) + "\n",
   );
   await context.close();
@@ -321,8 +416,14 @@ try {
       },
       assetCount: assetRequests?.length ?? 0,
       searchCount: searchRequests?.length ?? 0,
-      jsErrors: jsErrors?.slice(0, 8) ?? [],
-      httpErrors: badResponses?.slice(0, 12) ?? [],
+      pageErrors: pageErrors?.slice(0, 8) ?? [],
+      consoleErrorCount,
+      consoleErrors: consoleErrors?.slice(0, 24) ?? [],
+      httpErrorCount,
+      httpErrors: badResponses?.slice(0, 32) ?? [],
+      failedRequestCount,
+      failedRequests: failedRequests?.slice(0, 32) ?? [],
+      metadataReadDenials: metadataDenialCounts(badResponses, consoleErrors),
     }) + "\n",
   );
   process.exitCode = 1;
