@@ -122,6 +122,13 @@ export interface ThousandEyesObservation {
   fingerprint: string;
   navigationOrigin?: string;
   outcome: "success" | "failure" | "unknown";
+  /** Structural record quality; it does not assert upstream history continuity. */
+  quality: {
+    stale: boolean;
+    complete: boolean;
+    conflicting: boolean;
+    truncated: boolean;
+  };
   measurements: ThousandEyesMeasurement[];
   hops: ThousandEyesHop[];
   spans: ThousandEyesSpan[];
