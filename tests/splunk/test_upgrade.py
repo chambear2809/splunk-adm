@@ -1066,6 +1066,14 @@ class UpgradeIntegrationTest(unittest.TestCase):
             "detector_ids": '["upgrade-detector"]',
             "controller_origin": "https://controller.example.test",
             "observability_origin": "https://app.us0.signalfx.com",
+            "te_account_group_id": "12345",
+            "te_stream_account_id": "67890",
+            "te_alert_account_id": "12345",
+            "te_organization_id": "org-upgrade",
+            "te_families": '["metric","path"]',
+            "te_bindings": "[]",
+            "te_path_sources": '[{"index":"atlas_te","source":"atlas:thousandeyes:path"}]',
+            "thousandeyes_origin": "https://app.thousandeyes.com",
         }
         assignments = ", ".join(
             f"{key}={json.dumps(value)}" for key, value in optional_mapping.items()
@@ -1080,7 +1088,7 @@ class UpgradeIntegrationTest(unittest.TestCase):
         self.assertEqual(
             self.lab.search(
                 f'| inputlookup adm_observer_scope | search _key="{attested_key}" '
-                "| table _key mapping_status detector_ids controller_origin observability_origin"
+                f"| table _key {' '.join(optional_mapping)}"
             ),
             [{"_key": attested_key, **optional_mapping}],
             "migration rerun must preserve attestation and optional integration configuration",
