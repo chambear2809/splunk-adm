@@ -127,8 +127,10 @@ export interface ThousandEyesObservation {
   intervalBasis: "measurement" | "point" | "reported_event";
   eventTime: number;
   indexedTime: number;
-  /** Splunk _time under the inspected CURRENT props; never used as measurement time. */
+  /** Populated only when receipt-time semantics are independently attested. */
   receiptTime?: number;
+  /** Original Splunk _time; HEC event metadata may supply this independently of raw time extraction. */
+  rowTime?: number;
   sourceTimes?: {
     field: string;
     value: string;
