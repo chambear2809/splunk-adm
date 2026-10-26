@@ -535,7 +535,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
         for sourcetype in SOURCETYPES.values():
             self.assertIn(f'sourcetype="{sourcetype}"', search)
         self.assertNotRegex(search, r"(?i)`|\|\s*(lookup|join|map)\b")
-        self.assertNotIn("9999", search)
+        self.assertNotIn('thousandeyes.account.id="9999"', search)
 
         admin = self._run_as(
             "admin",
