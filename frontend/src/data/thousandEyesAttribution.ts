@@ -602,14 +602,33 @@ function metricEligibleRounds(
   );
 }
 
-function roundMissingMetric(round: ComparisonRound, metric: string): boolean {
-  const measurements = round.records.flatMap((record) =>
-    (Array.isArray(record.measurements) ? record.measurements : []).filter(
-      (measurement) => measurement?.name === metric,
-    ),
-  );
-  if (!measurements.length) return true;
-  return measurements.some((measurement) => !finiteNumber(measurement.value));
+function roundMissingMetric(
+  round: ComparisonRound,
+  metric: string,
+  admittedSamples: readonly ComparisonSample[],
+): boolean {
+  let hasMetricReading = false;
+  for (const record of round.records) {
+    const measurements = Array.isArray(record.measurements)
+      ? record.measurements
+      : [];
+    if (measurements.length === 0) return true;
+    for (const measurement of measurements) {
+      if (measurement?.name !== metric) continue;
+      hasMetricReading = true;
+      if (
+        !finiteNumber(measurement.value) ||
+        !admittedSamples.some(
+          (sample) =>
+            sample.record === record &&
+            sample.measurement === measurement &&
+            finiteNumber(sample.measurement.value),
+        )
+      )
+        return true;
+    }
+  }
+  return !hasMetricReading;
 }
 
 function roundFailed(round: ComparisonRound): boolean {
@@ -731,10 +750,10 @@ export function compareThousandEyesMeasurements(
         bucket.metric,
       );
       const beforeMissingMetric = beforeRounds.filter((round) =>
-        roundMissingMetric(round, bucket.metric),
+        roundMissingMetric(round, bucket.metric, bucket.before),
       ).length;
       const afterMissingMetric = afterRounds.filter((round) =>
-        roundMissingMetric(round, bucket.metric),
+        roundMissingMetric(round, bucket.metric, bucket.after),
       ).length;
       const beforeFailures = beforeRounds.filter(roundFailed).length;
       const afterFailures = afterRounds.filter(roundFailed).length;

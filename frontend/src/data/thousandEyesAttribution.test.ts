@@ -1071,6 +1071,69 @@ describe("compareThousandEyesMeasurements", () => {
     );
   });
 
+  it("does not count finite but unbound or quality-limited readings as complete rounds", () => {
+    const changedTarget = attributed({
+      interval: { start: 130, end: 140 },
+      target: { ip: "198.51.100.21", protocol: "https", port: 443 },
+      measurements: [{ ...record().measurements[0], value: 999 }],
+    });
+    const relocated = attributed({
+      interval: { start: 140, end: 150 },
+      agentLocation: "West office",
+      measurements: [{ ...record().measurements[0], value: 998 }],
+    });
+    const changedConfiguration = attributed({
+      interval: { start: 150, end: 160 },
+      configurationId: "config-b",
+      measurements: [{ ...record().measurements[0], value: 997 }],
+    });
+    const qualityLimited = attributed({
+      interval: { start: 160, end: 170 },
+      quality: {
+        stale: true,
+        complete: true,
+        conflicting: false,
+        truncated: false,
+      },
+      measurements: [{ ...record().measurements[0], value: 996 }],
+    });
+    expect(
+      [changedTarget, relocated, changedConfiguration, qualityLimited].map(
+        (item) => item.attribution.state,
+      ),
+    ).not.toContain("bound");
+
+    const [comparison] = compareThousandEyesMeasurements(
+      [
+        attributed({
+          interval: { start: 110, end: 120 },
+          measurements: [{ ...record().measurements[0], value: 10 }],
+        }),
+        changedTarget,
+        relocated,
+        changedConfiguration,
+        qualityLimited,
+        attributed({
+          interval: { start: 210, end: 220 },
+          measurements: [{ ...record().measurements[0], value: 20 }],
+        }),
+      ],
+      before,
+      after,
+    );
+    expect(comparison.beforeCount).toBe(1);
+    expect(comparison.afterCount).toBe(1);
+    expect(comparison.comparable).toBe(false);
+    expect(comparison.beforeMean).toBeUndefined();
+    expect(comparison.afterMean).toBeUndefined();
+    expect(comparison.reasons.join(" ")).toContain(
+      "across 5 latency-eligible native interval round(s)",
+    );
+    expect(comparison.reasons.join(" ")).toContain(
+      "4 round(s) without a finite bound latency reading",
+    );
+  });
+
   it("rejects partial window intervals, unbound rows and out-of-order windows", () => {
     const partial = attributed({ interval: { start: 190, end: 210 } });
     const comparison = compareThousandEyesMeasurements(
