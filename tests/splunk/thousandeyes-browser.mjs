@@ -19,6 +19,44 @@ const end = Number(endText);
 if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || end <= start)
   throw new Error("invalid endpoint window");
 
+const safePath = (rawUrl) => {
+  try {
+    const url = new URL(rawUrl, BASE);
+    return url.pathname
+      .replaceAll(encodeURIComponent(user), "[viewer]")
+      .replaceAll(user, "[viewer]")
+      .replaceAll(encodeURIComponent(pass), "[redacted]")
+      .replaceAll(pass, "[redacted]")
+      .replace(/\/search\/(?:v2\/)?jobs\/[^/]+/g, "/search/jobs/[job]")
+      .slice(0, 300);
+  } catch {
+    return "[unknown-path]";
+  }
+};
+const safeMessage = (rawMessage) =>
+  String(rawMessage ?? "")
+    .replaceAll(encodeURIComponent(user), "[viewer]")
+    .replaceAll(user, "[viewer]")
+    .replaceAll(encodeURIComponent(pass), "[redacted]")
+    .replaceAll(pass, "[redacted]")
+    .replace(/\bBasic\s+[A-Za-z0-9+/=]+/gi, "Basic [redacted]")
+    .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
+    .replace(
+      /(?:password|token|session|cookie|sid)(\s*[:=]\s*)[^\s,;]+/gi,
+      "$1[redacted]",
+    )
+    .replace(/https?:\/\/[^\s"'<>]+/gi, (url) => safePath(url))
+    .slice(0, 300);
+const safeSource = (stack) => {
+  const frame = String(stack || "")
+    .split("\n")
+    .find((line) => line.includes(".js"));
+  const match = frame?.match(
+    /(?:https?:\/\/|\/)[^\s()]+?\.m?js(?:\?[^\s()]*)?/,
+  );
+  return match ? safePath(match[0]) : "[unknown-source]";
+};
+
 const searchRequests = [];
 const assetRequests = [];
 const jsErrors = [];
@@ -30,42 +68,6 @@ try {
     viewport: { width: 1440, height: 1000 },
   });
   const page = await context.newPage();
-  const safePath = (rawUrl) => {
-    try {
-      const url = new URL(rawUrl, BASE);
-      return url.pathname
-        .replaceAll(encodeURIComponent(user), "[viewer]")
-        .replaceAll(user, "[viewer]")
-        .replaceAll(encodeURIComponent(pass), "[redacted]")
-        .replaceAll(pass, "[redacted]")
-        .replace(/\/search\/(?:v2\/)?jobs\/[^/]+/g, "/search/jobs/[job]")
-        .slice(0, 300);
-    } catch {
-      return "[unknown-path]";
-    }
-  };
-  const safeMessage = (rawMessage) =>
-    String(rawMessage)
-      .replaceAll(encodeURIComponent(user), "[viewer]")
-      .replaceAll(user, "[viewer]")
-      .replaceAll(encodeURIComponent(pass), "[redacted]")
-      .replaceAll(pass, "[redacted]")
-      .replace(/\bBearer\s+\S+/gi, "Bearer [redacted]")
-      .replace(
-        /(?:password|token|session|cookie|sid)(\s*[:=]\s*)[^\s,;]+/gi,
-        "$1[redacted]",
-      )
-      .replace(/https?:\/\/[^\s"'<>]+/gi, (url) => safePath(url))
-      .slice(0, 240);
-  const safeSource = (stack) => {
-    const frame = String(stack || "")
-      .split("\n")
-      .find((line) => line.includes(".js"));
-    const match = frame?.match(
-      /(?:https?:\/\/|\/)[^\s()]+?\.m?js(?:\?[^\s()]*)?/,
-    );
-    return match ? safePath(match[0]) : "[unknown-source]";
-  };
   const rememberJsError = (item) => {
     if (jsErrors.length < 8) jsErrors.push(item);
   };
@@ -305,12 +307,18 @@ try {
     }) + "\n",
   );
   await context.close();
-} catch {
+} catch (error) {
+  const caught = error && typeof error === "object" ? error : {};
   process.stdout.write(
     JSON.stringify({
       ok: false,
       mode,
       stage,
+      caughtError: {
+        name: safeMessage(caught.name || "Error"),
+        message: safeMessage(caught.message || error),
+        source: safeSource(caught.stack),
+      },
       assetCount: assetRequests?.length ?? 0,
       searchCount: searchRequests?.length ?? 0,
       jsErrors: jsErrors?.slice(0, 8) ?? [],
