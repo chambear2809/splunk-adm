@@ -165,6 +165,14 @@ describe("strict ThousandEyes producer adapters", () => {
     expect(metric.rowTime).toBe(1_700_000_200);
     expect(metric.receiptTime).toBeUndefined();
     expect(metric.indexedTime).toBe(1_700_000_201);
+    expect(metric).toMatchObject({
+      adapterVersion: "0.9.0",
+      producerVersion: "not_reported",
+      dataModelVersion: "v2",
+    });
+    expect(metric.limitations.join(" ")).toContain(
+      "raw OpenTelemetry resource declares data-model v2",
+    );
     expect(metric.sourceTimes).toContainEqual({
       field: "time_unix_nano",
       value: "1700000010000000000",
@@ -196,9 +204,11 @@ describe("strict ThousandEyes producer adapters", () => {
       streamId: "activity-stream-1",
       activity: { action: "test.updated", actor: "operator@example.test" },
     });
-    expect(
-      normalized.records.find((record) => record.family === "path"),
-    ).toMatchObject({
+    const path = normalized.records.find((record) => record.family === "path")!;
+    expect(path).toMatchObject({
+      adapterVersion: "0.9.0",
+      producerVersion: "not_reported",
+      dataModelVersion: "api-v7",
       testDomain: "cea",
       collectionTime: 1_700_000_015,
       hops: [
@@ -208,6 +218,12 @@ describe("strict ThousandEyes producer adapters", () => {
       ],
       quality: { complete: false },
     });
+    expect(path.limitations.join(" ")).toContain(
+      "schema_version is a separate envelope contract",
+    );
+    expect(path.limitations.join(" ")).toContain(
+      "deployed Cisco app/package version",
+    );
   });
 
   it("preserves summary RTT and count without inventing intermediate hops", () => {

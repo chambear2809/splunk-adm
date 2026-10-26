@@ -725,6 +725,17 @@ function quality(
   };
 }
 
+function producerProvenanceLimitation(family: ThousandEyesFamily): string {
+  const parserVersion = THOUSANDEYES_ADAPTER_VERSION;
+  if (family === "metric" || family === "trace" || family === "activity")
+    return `The raw OpenTelemetry resource declares data-model v2, but does not report the deployed Cisco app/package version. adapterVersion ${parserVersion} is the reviewed Atlas parser contract, not Cisco package provenance.`;
+  if (family === "path")
+    return `Path fields are validated against the Cisco API v7 shape; an Atlas capture wrapper's schema_version is a separate envelope contract. Neither reports the deployed Cisco app/package version. adapterVersion ${parserVersion} identifies only the reviewed Atlas parser contract.`;
+  if (family === "event")
+    return `Detected-event fields are validated against the Cisco Events API v7 shape, but the deployed Cisco app/package version is not reported. adapterVersion ${parserVersion} is the reviewed Atlas parser contract, not Cisco package provenance.`;
+  return `Alert fields are validated against the configured Cisco webhook shape, but the deployed Cisco app/package version is not reported. adapterVersion ${parserVersion} is the reviewed Atlas parser contract, not Cisco package provenance.`;
+}
+
 function baseRecord(
   context: ParseContext,
   family: ThousandEyesFamily,
@@ -775,7 +786,7 @@ function baseRecord(
       ? { organizationId: mapping.organizationId }
       : {}),
     adapterVersion: THOUSANDEYES_ADAPTER_VERSION,
-    producerVersion: `Cisco ThousandEyes App for Splunk ${THOUSANDEYES_ADAPTER_VERSION}`,
+    producerVersion: "not_reported",
     dataModelVersion:
       family === "metric" || family === "trace" || family === "activity"
         ? "v2"
@@ -820,7 +831,10 @@ function baseRecord(
     spans: values.spans ?? [],
     ...(values.lifecycle ? { lifecycle: values.lifecycle } : {}),
     ...(values.activity ? { activity: values.activity } : {}),
-    limitations: values.limitations ?? [],
+    limitations: [
+      producerProvenanceLimitation(family),
+      ...(values.limitations ?? []),
+    ],
     ...(values.relatedTestIds?.length
       ? { relatedTestIds: values.relatedTestIds }
       : {}),
