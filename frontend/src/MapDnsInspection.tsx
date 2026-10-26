@@ -17,6 +17,15 @@ import {
 import type { SearchClient } from "./data/searchClient";
 import { endpointUrl } from "./data/endpointInvestigation";
 
+/** Guard state writes from both stale generations and externally aborted work. */
+export function isCurrentRequest(
+  current: number,
+  generation: number,
+  signal: AbortSignal,
+): boolean {
+  return current === generation && !signal.aborted;
+}
+
 /** Re-resolve actual scoped observations; never form products of graph address arrays. */
 export function MapDnsInspection({
   graph,
@@ -65,23 +74,24 @@ export function MapDnsInspection({
   const invalidate = useCallback(() => {
     generation.current++;
     active.current?.abort();
+    // Keep aborted or stale work from leaving a spinner, error, or old
+    // evidence visible across a selection/request boundary.
+    setBusy(false);
+    setError(undefined);
+    setEvidence(undefined);
   }, []);
   useEffect(() => {
-    generation.current++;
-    active.current?.abort();
-    setEvidence(undefined);
+    invalidate();
     setScopes([]);
     setScope("");
     setAddress("");
-    setError(undefined);
-    setBusy(false);
     setStart("");
     setEnd("");
     return invalidate;
   }, [key, invalidate]);
   if (!live || !client || !supported) return null;
   const prepare = async () => {
-    active.current?.abort();
+    invalidate();
     const controller = new AbortController();
     active.current = controller;
     const current = ++generation.current;
@@ -110,7 +120,7 @@ export function MapDnsInspection({
       if (!options.length)
         throw Error("No verified routing scope is configured.");
     } catch {
-      if (current === generation.current)
+      if (isCurrentRequest(current, generation.current, controller.signal))
         setError(
           "Evidence scope configuration is unavailable. Ask an administrator to verify mappings.",
         );
@@ -119,7 +129,7 @@ export function MapDnsInspection({
     }
   };
   const load = async () => {
-    active.current?.abort();
+    invalidate();
     const controller = new AbortController();
     active.current = controller;
     const current = ++generation.current;
@@ -254,10 +264,10 @@ export function MapDnsInspection({
           ? next.contexts.map((c) => ({ ...c, clientOwner: uid }))
           : [],
       };
-      if (current === generation.current && !controller.signal.aborted)
+      if (isCurrentRequest(current, generation.current, controller.signal))
         setEvidence(next);
     } catch (reason) {
-      if (current === generation.current)
+      if (isCurrentRequest(current, generation.current, controller.signal))
         setError(
           reason instanceof Error
             ? reason.message
@@ -275,9 +285,16 @@ export function MapDnsInspection({
         map; flow observation time does not establish a connection opening.
       </p>
       {!scopes.length ? (
-        <button type="button" disabled={busy} onClick={() => void prepare()}>
-          Choose evidence context
-        </button>
+        <>
+          <button type="button" disabled={busy} onClick={() => void prepare()}>
+            Choose evidence context
+          </button>
+          {busy && (
+            <button type="button" onClick={invalidate}>
+              Cancel
+            </button>
+          )}
+        </>
       ) : (
         <>
           <label>
@@ -285,8 +302,7 @@ export function MapDnsInspection({
             <select
               value={address}
               onChange={(e) => {
-                active.current?.abort();
-                setEvidence(undefined);
+                invalidate();
                 setAddress(e.target.value);
               }}
             >
@@ -301,8 +317,7 @@ export function MapDnsInspection({
             <select
               value={scope}
               onChange={(e) => {
-                active.current?.abort();
-                setEvidence(undefined);
+                invalidate();
                 setScope(e.target.value);
               }}
             >
@@ -322,8 +337,7 @@ export function MapDnsInspection({
               type="datetime-local"
               value={start}
               onChange={(e) => {
-                active.current?.abort();
-                setEvidence(undefined);
+                invalidate();
                 setStart(e.target.value);
               }}
             />
@@ -334,8 +348,7 @@ export function MapDnsInspection({
               type="datetime-local"
               value={end}
               onChange={(e) => {
-                active.current?.abort();
-                setEvidence(undefined);
+                invalidate();
                 setEnd(e.target.value);
               }}
             />
@@ -348,7 +361,7 @@ export function MapDnsInspection({
             Resolve observed evidence context
           </button>
           {busy && (
-            <button type="button" onClick={() => active.current?.abort()}>
+            <button type="button" onClick={invalidate}>
               Cancel
             </button>
           )}

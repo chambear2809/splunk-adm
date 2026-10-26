@@ -77,6 +77,12 @@ export interface DeploymentSnapshot {
   canWrite: boolean;
   namespace?: string;
   observedRevisions?: string[];
+  recordCount?: number;
+  maxRecords?: number;
+  remainingRecords?: number;
+  capacityWarning?: string;
+  /** Server-authorized path for resolving an already uncertain final-slot save. */
+  canRetry?: boolean;
   writeUnavailableReason?: string;
   error?: string;
 }

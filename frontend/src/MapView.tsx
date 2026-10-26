@@ -40,6 +40,10 @@ const MIN_K = 0.25,
   MAX_K = 2;
 /** Below this scale card text drops under ~11px; collapse pods and pan instead. */
 export const FIT_MIN = 0.85;
+/** Smallest fit scale used to keep a whole layout in view (card text about 9px); narrower layouts are shown at FIT_MIN and may extend past the view. */
+export const FIT_FLOOR = 0.72;
+/** Smallest scale used to show both ends of a selected conversation; the text is small and the user can zoom in. */
+const EDGE_FIT_FLOOR = 0.6;
 const FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 const FONT = `13px ${FAMILY}`;
 const HEADER_FONT = `650 14px ${FAMILY}`;
@@ -402,10 +406,12 @@ export function MapView({
   const fitTo = useCallback(
     (w: number, h: number): Transform => {
       const raw = rawFit(layout, w, h);
-      const k = Math.min(1.15, Math.max(FIT_MIN, raw));
+      // A layout only slightly too wide for FIT_MIN is shrunk to fit whole, so
+      // a focused or filtered view never starts with cards cut off.
+      const k = Math.min(1.15, raw >= FIT_FLOOR ? raw : Math.max(FIT_MIN, raw));
       return {
         k,
-        x: raw < FIT_MIN ? 12 : (w - layout.width * k) / 2,
+        x: raw < FIT_FLOOR ? 12 : Math.max(0, (w - layout.width * k) / 2),
         y: Math.max(8, (h - layout.height * k) / 2),
       };
     },
@@ -432,6 +438,15 @@ export function MapView({
     },
     [layout, index],
   );
+  // Index routed edges once so keyboard/search focus jumps do not scan the
+  // complete dense edge list for every request.
+  const routedEdgeByMember = useMemo(() => {
+    const result = new Map<string, RoutedEdge>();
+    for (const routed of layout.edges)
+      for (const member of routed.members)
+        if (!result.has(member)) result.set(member, routed);
+    return result;
+  }, [layout.edges]);
 
   // Fit once per layout. Later resizes (inspector, path strip) keep the
   // view centred and keep the selection on screen.
@@ -462,6 +477,16 @@ export function MapView({
     setT((cur) => {
       // An edge too long to show whole: bring its server end into view.
       const tooBig = b.w * cur.k > view.w - 48 || b.h * cur.k > view.h - 48;
+      // Zoom out to show both ends when that stays legible.
+      if (tooBig && selection?.kind === "edge") {
+        const k = Math.min(cur.k, (view.w - 48) / b.w, (view.h - 48) / b.h);
+        if (k >= EDGE_FIT_FLOOR)
+          return {
+            k,
+            x: view.w / 2 - (b.x + b.w / 2) * k,
+            y: view.h / 2 - (b.y + b.h / 2) * k,
+          };
+      }
       const target =
         tooBig && selection?.kind === "edge"
           ? layout.items.get(index.edge.get(selection.id)?.target ?? "")
@@ -489,10 +514,10 @@ export function MapView({
       const it = layout.items.get(focusTarget.id);
       if (it) centerOn(it);
     } else {
-      const r = layout.edges.find((e) => e.members.includes(focusTarget.id));
+      const r = routedEdgeByMember.get(focusTarget.id);
       if (r) centerOn({ x: r.mid.x - 20, y: r.mid.y - 20, w: 40, h: 40 });
     }
-  }, [focusTarget, layout, centerOn]);
+  }, [focusTarget, layout, centerOn, routedEdgeByMember]);
   useEffect(() => {
     if (!focusRequest) return;
     const it = layout.items.get(focusRequest.id);
@@ -548,27 +573,55 @@ export function MapView({
     [index, matchNodes, matchEdges, neighborhood],
   );
   const { itemDim, edgeDim } = emphasisPredicates;
+  const selectedEdge = selection?.kind === "edge" ? selection.id : undefined;
   const ids = (item: Item) => item.members ?? [item.nodeId];
   const emphasis = useMemo(
     () =>
       emphasisCounts(layout, index, { matchNodes, matchEdges, neighborhood }),
     [layout, index, matchNodes, matchEdges, neighborhood],
   );
-  const node = (id: string) => index.node.get(id);
-  const edgeClass = (e: GraphEdge) => {
-    if (e.relationship === "traffic_observation") return "traffic-observation";
-    if (e.relationship === "calls") return "call";
-    if (e.relationship === "forwards_to")
-      return e.confidence === "inferred" ? "forward inferred" : "forward";
-    if (e.acl_action === "drop") return "conv blocked";
-    if (tunnelOf(e)) return "tunnel";
-    const s = edgeIdentity(e, node);
-    return s === "identified"
-      ? "conv"
-      : s === "external"
-        ? "conv external"
-        : "conv unknown";
-  };
+  const node = useCallback((id: string) => index.node.get(id), [index]);
+  const edgeClass = useCallback(
+    (e: GraphEdge) => {
+      if (e.relationship === "traffic_observation")
+        return "traffic-observation";
+      if (e.relationship === "calls") return "call";
+      if (e.relationship === "forwards_to")
+        return e.confidence === "inferred" ? "forward inferred" : "forward";
+      if (e.acl_action === "drop") return "conv blocked";
+      if (tunnelOf(e)) return "tunnel";
+      const s = edgeIdentity(e, node);
+      return s === "identified"
+        ? "conv"
+        : s === "external"
+          ? "conv external"
+          : "conv unknown";
+    },
+    [node],
+  );
+
+  // Pills repeat edge lookup/classification work on every dense SVG render.
+  // Cache only derived presentation metadata; all edge IDs remain present.
+  const pillMetadata = useMemo(
+    () =>
+      layout.pills.map((p) => {
+        const edges = p.edgeIds.map((id) => index.edge.get(id)!);
+        const cls = edgeClass(
+          edges.find((e) => e.acl_action !== "drop") ?? edges[0],
+        ).replace(" ", "-");
+        return { p, edges, cls };
+      }),
+    [layout.pills, index, edgeClass],
+  );
+  const pillRenderData = useMemo(
+    () =>
+      pillMetadata.map((item) => ({
+        ...item,
+        dim: item.edges.every((edge) => edgeDim(edge)),
+        selected: item.edges.some((edge) => edge.id === selectedEdge),
+      })),
+    [pillMetadata, edgeDim, selectedEdge],
+  );
 
   const columnItems = useMemo(() => {
     const cols = new Map<number, string[]>();
@@ -624,7 +677,6 @@ export function MapView({
 
   const selectedItem =
     selection?.kind === "node" ? layout.items.get(selection.id) : undefined;
-  const selectedEdge = selection?.kind === "edge" ? selection.id : undefined;
   const hovered = hover && index.edge.get(hover.id);
   const tip = hovered && describeEdge(hovered);
 
@@ -832,14 +884,8 @@ export function MapView({
           ))}
           <g className="edges">{layout.edges.map(renderEdge)}</g>
           <g className="pills">
-            {layout.pills.map((p) => {
-              const edges = p.edgeIds.map((id) => index.edge.get(id)!);
-              const dim = edges.every((e) => edgeDim(e));
-              const selected = edges.some((e) => e.id === selectedEdge);
+            {pillRenderData.map(({ p, edges, dim, selected, cls }) => {
               // A pill shared with permitted conversations keeps their colour.
-              const cls = edgeClass(
-                edges.find((e) => e.acl_action !== "drop") ?? edges[0],
-              ).replace(" ", "-");
               return (
                 <g
                   key={p.id}

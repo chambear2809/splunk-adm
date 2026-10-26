@@ -41,6 +41,8 @@ function fixture({
   unreadableIndex = false,
   enabled = true,
   lostResponse = false,
+  finalSlot = false,
+  malformedCapacity = false,
 } = {}) {
   let record: ReturnType<typeof defaultExpectations> | undefined;
   const revisions: string[] = [];
@@ -124,7 +126,17 @@ function fixture({
         state: record ? "configured" : "absent",
         settings: record,
         observedRevisions: readbackMismatch && record ? [] : [...revisions],
-        canWrite: admin && writable && enabled,
+        recordCount: malformedCapacity ? 2 : record ? 1 : 0,
+        maxRecords: 1,
+        remainingRecords: malformedCapacity ? 0 : record ? 0 : 1,
+        ...(finalSlot && record
+          ? {
+              capacityWarning:
+                "Deployment settings history is nearly full. Review and schedule the separately approved migration before the remaining slots are consumed; records are never deleted or rotated automatically.",
+            }
+          : {}),
+        canWrite: admin && writable && enabled && (!finalSlot || !record),
+        canRetry: admin && writable && enabled && finalSlot && !!record,
         namespace: "namespace_a",
         ...(!enabled
           ? {
@@ -426,6 +438,34 @@ describe("administrator deployment settings persistence", () => {
       await outcome;
     } finally {
       vi.useRealTimers();
+    }
+  });
+  it("retries an uncertain final-slot save even after reads stop advertising new writes", async () => {
+    const { client } = fixture({ lostResponse: true, finalSlot: true });
+    const settings = defaultExpectations();
+    await expect(client.write(settings)).rejects.toMatchObject({
+      code: "uncertain",
+    });
+    await expect(client.write(settings)).resolves.toMatchObject({
+      state: "configured",
+      canWrite: false,
+      remainingRecords: 0,
+    });
+  });
+  it("rejects malformed capacity metadata instead of enabling writes or retries", async () => {
+    const state = await fixture({ malformedCapacity: true }).client.read();
+    expect(state.state).toBe("unavailable");
+    expect(state.canWrite).toBe(false);
+    await expect(
+      fixture({ malformedCapacity: true }).client.write(defaultExpectations()),
+    ).rejects.toMatchObject({ code: "unavailable" });
+  });
+  it("does not bypass authorization or disabled-namespace failures for a pending save", async () => {
+    for (const options of [{ admin: false }, { enabled: false }]) {
+      const { client } = fixture({ ...options, finalSlot: true });
+      await expect(client.write(defaultExpectations())).rejects.toMatchObject({
+        code: "forbidden",
+      });
     }
   });
   it("reports a failed pre-save read as unavailable, not as missing permissions", async () => {

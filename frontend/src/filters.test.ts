@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterGraph, focusHops } from "./filters";
+import { filterGraph, focusHops, focusTrace } from "./filters";
 import { indexGraph, type Graph } from "./graph";
 
 const graph = {
@@ -290,5 +290,143 @@ describe("focusHops", () => {
     expect(focusHops(index, "unknown", Number.POSITIVE_INFINITY)).toEqual(
       new Set(),
     );
+  });
+});
+
+describe("focusHops direction", () => {
+  const edge = (
+    id: string,
+    source: string,
+    target: string,
+    relationship: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    source,
+    target,
+    relationship,
+    evidence: [],
+    confidence: "observed",
+    count: 1,
+    ...extra,
+  });
+  const node = (id: string, kind: string) => ({ id, label: id, kind });
+  // client -> vip -(forwards_to)-> web-pod -> api-pod -> db; svc-api owns api-pod.
+  const directed = indexGraph({
+    nodes: [
+      node("client", "endpoint"),
+      node("vip", "endpoint"),
+      node("web-pod", "workload"),
+      node("svc-api", "service"),
+      node("api-pod", "workload"),
+      node("db", "endpoint"),
+      node("batch", "workload"),
+      node("mystery", "endpoint"),
+    ],
+    edges: [
+      edge("e1", "client", "vip", "communicates_with"),
+      edge("e2", "vip", "web-pod", "forwards_to"),
+      edge("e3", "web-pod", "api-pod", "communicates_with"),
+      edge("e4", "api-pod", "db", "communicates_with"),
+      edge("e5", "batch", "api-pod", "communicates_with"),
+      edge("e6", "svc-api", "api-pod", "runs_on"),
+      edge("e7", "mystery", "api-pod", "communicates_with", {
+        direction_basis: "unknown",
+      }),
+      edge("e8", "web-pod", "db", "traffic_observation"),
+    ],
+  } as unknown as Graph);
+
+  it("follows callers from server to client and treats forwards_to as free", () => {
+    expect(focusHops(directed, "api-pod", 1, "callers")).toEqual(
+      new Set(["api-pod", "svc-api", "web-pod", "vip", "batch", "mystery"]),
+    );
+    const two = focusHops(directed, "api-pod", 2, "callers");
+    expect(two.has("client")).toBe(true);
+    expect(two.has("db")).toBe(false);
+  });
+  it("follows dependencies from client to server and follows unknown direction both ways", () => {
+    expect(focusHops(directed, "web-pod", 1, "dependencies")).toEqual(
+      new Set(["web-pod", "api-pod", "svc-api"]),
+    );
+    const result = focusHops(directed, "web-pod", 2, "dependencies");
+    expect(result.has("db")).toBe(true);
+    expect(result.has("batch")).toBe(false);
+    expect(result.has("client")).toBe(false);
+    expect(result.has("mystery")).toBe(true);
+  });
+  it("treats a service as its pods and ignores traffic observations", () => {
+    expect(focusHops(directed, "svc-api", 1, "dependencies")).toEqual(
+      new Set(["svc-api", "api-pod", "db", "mystery"]),
+    );
+    expect(focusHops(directed, "svc-api", 0, "callers")).toEqual(
+      new Set(["svc-api", "api-pod"]),
+    );
+    expect(focusHops(directed, "svc-api", 1)).toEqual(
+      new Set(["svc-api", "api-pod", "web-pod", "db", "batch", "mystery"]),
+    );
+  });
+  it("does not follow blocked conversations as dependencies", () => {
+    const blocked = indexGraph({
+      nodes: [node("a", "workload"), node("b", "workload")],
+      edges: [
+        edge("x", "a", "b", "communicates_with", {
+          acl_action: "drop",
+          acl_drops: 3,
+        }),
+      ],
+    } as unknown as Graph);
+    expect(focusHops(blocked, "b", 1, "callers")).toEqual(new Set(["b"]));
+    expect(focusHops(blocked, "a", 1, "dependencies")).toEqual(new Set(["a"]));
+    expect(focusHops(blocked, "a", 1)).toEqual(new Set(["a", "b"]));
+  });
+  it("stays bounded on cycles", () => {
+    const cycle = indexGraph({
+      nodes: [node("a", "workload"), node("b", "workload")],
+      edges: [
+        edge("x", "a", "b", "communicates_with"),
+        edge("y", "b", "a", "communicates_with"),
+      ],
+    } as unknown as Graph);
+    expect(focusHops(cycle, "a", 3, "callers")).toEqual(new Set(["a", "b"]));
+  });
+});
+
+describe("focusTrace", () => {
+  const edge = (
+    id: string,
+    source: string,
+    target: string,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    id,
+    source,
+    target,
+    relationship: "communicates_with",
+    evidence: [],
+    confidence: "observed",
+    count: 1,
+    ...extra,
+  });
+  const node = (id: string) => ({ id, label: id, kind: "workload" });
+  const traced = indexGraph({
+    nodes: ["a", "b", "c", "d", "e"].map(node),
+    edges: [
+      edge("ab", "a", "b", { direction_basis: "port_rule" }),
+      edge("cb", "c", "b", { direction_basis: "unknown" }),
+      edge("db", "d", "b", { acl_action: "drop" }),
+      edge("ae", "a", "e"),
+    ],
+  } as unknown as Graph);
+  it("reports only the conversations the walk followed", () => {
+    const result = focusTrace(traced, "b", 1, "callers");
+    expect(result.nodes).toEqual(new Set(["b", "a", "c"]));
+    expect(result.followed).toEqual(new Set(["ab", "cb"]));
+  });
+  it("reports nothing followed when no dependency was observed", () => {
+    const result = focusTrace(traced, "b", 2, "dependencies");
+    expect(result.nodes).toEqual(new Set(["b", "c"]));
+    expect(result.followed).toEqual(new Set(["cb"]));
+    expect(focusTrace(traced, "e", 2, "dependencies").followed.size).toBe(0);
   });
 });

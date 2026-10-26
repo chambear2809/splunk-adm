@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import type { Graph, GraphEdge } from "../graph";
-import { plural, portLabel, warningTitle } from "../glossary";
+import { isBlocked, plural, portLabel, warningTitle } from "../glossary";
 import type { View } from "../layout";
 import { MapView } from "../MapView";
 import { Inspector } from "../Inspector";
@@ -63,6 +63,13 @@ const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
 ];
 type Tab = View | "devices" | "table";
 type Panel = "settings" | "help" | "warnings" | "export" | "changes" | "saved";
+const FOCUS_PREFIX = {
+  any: "Within",
+  callers: "Observed callers within",
+  dependencies: "Observed dependencies within",
+} as const;
+// Extra shell height while a candidate path is open, so the map keeps its size.
+const PATH_STRIP_ROOM = 260;
 const TABS: [Tab, string][] = [
   ["network", "Network"],
   ["services", "Services"],
@@ -137,6 +144,7 @@ export function MapPage({
   const {
     facets,
     focus,
+    followedEdges,
     setFocus,
     clearFilters,
     changeFacets,
@@ -186,6 +194,41 @@ export function MapPage({
     initialQuery: initialState.query,
   });
   const empty = visible && graph.nodes.length === 0;
+  const focusNotes: string[] = [];
+  if (focus && focus.direction !== "any" && followedEdges) {
+    const followed = displayGraph.edges.filter((edge) =>
+      followedEdges.has(edge.id),
+    );
+    const kind = focus.direction === "callers" ? "callers" : "dependencies";
+    focusNotes.push(
+      "Limited to conversations and traced calls observed in this window and these sources.",
+    );
+    if (!followed.length)
+      focusNotes.push(
+        `No ${kind} were observed here; that does not show that none exist.`,
+      );
+    const unknown = followed.filter(
+      (edge) => edge.direction_basis === "unknown",
+    ).length;
+    const inferred = followed.filter(
+      (edge) => edge.direction_basis === "port_rule",
+    ).length;
+    const blocked = displayGraph.edges.filter(
+      (edge) => edge.relationship === "communicates_with" && isBlocked(edge),
+    ).length;
+    if (unknown)
+      focusNotes.push(
+        `${plural(unknown, "followed connection")} with unknown direction, followed both ways.`,
+      );
+    if (inferred)
+      focusNotes.push(
+        `${plural(inferred, "followed connection")} with direction inferred from ports.`,
+      );
+    if (blocked)
+      focusNotes.push(
+        `${plural(blocked, "blocked conversation")} between shown cards, not followed.`,
+      );
+  }
   const savePreferences = (nextPersona: Persona, merge: boolean) => {
     preferences?.write({
       ...preferences.read(),
@@ -202,6 +245,15 @@ export function MapPage({
     const el = root.current;
     if (el) setTop(el.getBoundingClientRect().top + window.scrollY);
   }, []);
+
+  const pathOpen =
+    visible && !!pathTab && !!path && !!selectedEdge && !pathHidden;
+  useEffect(() => {
+    if (pathOpen)
+      root.current
+        ?.querySelector(".path-strip")
+        ?.scrollIntoView?.({ block: "nearest" });
+  }, [pathOpen, selectedEdge?.id]);
 
   const snapshotChanged = () => {
     resetView();
@@ -293,7 +345,7 @@ export function MapPage({
       data-edge-count={visible ? graph.edges.length : 0}
       ref={root}
       style={{
-        height: `max(600px, calc(100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px))`,
+        height: `calc(max(600px, 100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px) + ${pathOpen ? PATH_STRIP_ROOM : 0}px)`,
       }}
       onKeyDown={(e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -861,14 +913,17 @@ export function MapPage({
                 graph={graph}
                 facets={facets}
                 onChange={changeFacets}
-                focus={focus?.hops ?? 0}
+                focus={{
+                  hops: focus?.hops ?? 0,
+                  direction: focus?.direction ?? "any",
+                }}
                 canFocus={selection?.kind === "node"}
-                onFocus={(hops) => {
+                onFocus={(hops, direction) => {
                   if (!hops) setFocus(null);
                   else {
                     const id =
                       selection?.kind === "node" ? selection.id : focus?.id;
-                    if (id) setFocus({ id, hops });
+                    if (id) setFocus({ id, hops, direction });
                   }
                 }}
               />
@@ -889,9 +944,10 @@ export function MapPage({
                     }{" "}
                     connections
                     {focus
-                      ? ` · Within ${plural(focus.hops, "hop")} of ${label(focus.id)}`
+                      ? ` · ${FOCUS_PREFIX[focus.direction]} ${plural(focus.hops, "hop")} of ${label(focus.id)}`
                       : ""}
                     . Findings and exports use the full map.
+                    {focusNotes.length ? ` ${focusNotes.join(" ")}` : ""}
                   </span>
                   <button className="link" onClick={clearFilters}>
                     Clear filters and focus
@@ -1024,7 +1080,7 @@ export function MapPage({
               collapsed={layout.collapsed}
             />
           )}
-          {visible && pathTab && path && selectedEdge && !pathHidden && (
+          {pathOpen && path && selectedEdge && (
             <PathStrip
               path={path}
               title={`${label(selectedEdge.source)} → ${label(selectedEdge.target)} · ${portLabel(selectedEdge)}`}

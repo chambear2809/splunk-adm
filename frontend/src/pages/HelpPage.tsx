@@ -17,6 +17,17 @@ export function HelpPage() {
         blocking. Candidate paths come from inventory and do not establish the
         exact path packets took.
       </p>
+      <h2>Follow observed callers and dependencies</h2>
+      <p>
+        Select a card, then choose Focus. Callers lists the clients observed
+        reaching the selection; Dependencies lists what the selection was
+        observed reaching. Each hop is one observed conversation or traced call
+        in the loaded window and sources, so an empty Dependencies result means
+        none were observed, not that none exist. A connection of unknown
+        direction is followed both ways, a direction inferred from ports is
+        followed as drawn, and the filter summary counts both. A blocked
+        conversation between shown cards is drawn but not followed.
+      </p>
       <h2>Navigate</h2>
       <p>
         Use Applications to choose a scope, Map to inspect dependencies, and

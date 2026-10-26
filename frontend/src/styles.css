@@ -367,6 +367,8 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  /* An open candidate path scrolls the panel instead of squeezing the map. */
+  overflow-y: auto;
   background: var(--adm-surface);
 }
 .adm .toolbar {
@@ -410,8 +412,7 @@
 }
 .adm .map-area {
   position: relative;
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 360px;
 }
 .adm .map-canvas {
   position: absolute;
@@ -1523,6 +1524,22 @@
     box-shadow: var(--adm-shadow);
     z-index: 4;
   }
+  /* The fixed viewport-height shell leaves no room for the map once the
+     scope bar and filters wrap; let the page grow and scroll instead of
+     letting the findings panel overlap the controls. */
+  .adm {
+    height: auto !important;
+  }
+  .adm .map-area {
+    min-height: 420px;
+  }
+  .adm .toolbar {
+    flex-wrap: wrap;
+  }
+  .adm .search {
+    max-width: none;
+    min-width: 200px;
+  }
 }
 
 .adm .popover.health {
@@ -1582,6 +1599,26 @@
 }
 .atlas-page p {
   margin: 12px 0;
+}
+/* Wide evidence tables get the full page width; prose keeps a readable measure. */
+.atlas-page.atlas-page-wide {
+  max-width: none;
+}
+.atlas-page.atlas-page-wide > p {
+  max-width: 1200px;
+}
+/* Overlay scrollbars hide that a table scrolls sideways; keep the bar visible. */
+.atlas-page div:has(> table)::-webkit-scrollbar {
+  height: 12px;
+}
+.atlas-page div:has(> table)::-webkit-scrollbar-track {
+  background: var(--adm-line, #e1e1e1);
+}
+.atlas-page div:has(> table)::-webkit-scrollbar-thumb {
+  background: var(--adm-muted, #6b6b6b);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
 }
 .atlas-field {
   display: block;
@@ -1742,6 +1779,12 @@
 .atlas-application-cell small {
   display: block;
   margin-top: 4px;
+}
+.atlas-page small.atlas-attention {
+  display: block;
+  margin-top: 6px;
+  color: var(--adm-warn-ink);
+  font-weight: 600;
 }
 .atlas-page a {
   color: var(--adm-link);

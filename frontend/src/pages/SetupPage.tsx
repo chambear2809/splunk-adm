@@ -277,6 +277,8 @@ export function SetupPage({
           ? reason.message
           : "Invalid deployment expectations.";
     }
+  const retryingUncertainFinalSlot =
+    uncertainSave.current && deployment?.canRetry === true;
   return (
     <main className="atlas-page" aria-labelledby="setup-title">
       <h1 id="setup-title">Setup</h1>
@@ -347,6 +349,18 @@ export function SetupPage({
               {deployment?.writeUnavailableReason && (
                 <p role="status">{deployment.writeUnavailableReason}</p>
               )}
+              {deployment?.capacityWarning && (
+                <p role="status">{deployment.capacityWarning}</p>
+              )}
+              {deployment?.recordCount !== undefined &&
+                deployment.maxRecords !== undefined &&
+                deployment.remainingRecords !== undefined && (
+                  <p role="status">
+                    Settings history capacity: {deployment.recordCount}/
+                    {deployment.maxRecords} records used;{" "}
+                    {deployment.remainingRecords} remaining.
+                  </p>
+                )}
               {settings && (
                 <>
                   <Table
@@ -490,7 +504,7 @@ export function SetupPage({
                       !!settingsError ||
                       !!draftConflict ||
                       !snapshot.authorized ||
-                      !deployment?.canWrite ||
+                      (!deployment?.canWrite && !retryingUncertainFinalSlot) ||
                       !deploymentClient
                     }
                     onClick={() => {

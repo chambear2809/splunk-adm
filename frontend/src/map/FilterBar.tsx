@@ -1,5 +1,5 @@
 import type { Graph } from "../graph";
-import type { Facets } from "../filters";
+import type { Facets, FocusDirection } from "../filters";
 
 export function FilterBar({
   graph,
@@ -13,8 +13,8 @@ export function FilterBar({
   graph: Graph;
   facets: Facets;
   onChange: (facets: Facets) => void;
-  focus: number;
-  onFocus: (hops: number) => void;
+  focus: { hops: number; direction: FocusDirection };
+  onFocus: (hops: number, direction: FocusDirection) => void;
   canFocus: boolean;
   network?: boolean;
 }) {
@@ -111,14 +111,46 @@ export function FilterBar({
         Focus
         <select
           aria-label="Focus around selected card"
-          value={focus}
-          disabled={!canFocus && !focus}
-          onChange={(e) => onFocus(Number(e.target.value))}
+          title={
+            canFocus || focus.hops
+              ? undefined
+              : "Select a card on the map to focus on its connections"
+          }
+          value={
+            focus.direction === "any"
+              ? String(focus.hops)
+              : `${focus.direction}:${focus.hops}`
+          }
+          disabled={!canFocus && !focus.hops}
+          onChange={(e) => {
+            const [direction, hops] = e.target.value.includes(":")
+              ? e.target.value.split(":")
+              : ["any", e.target.value];
+            onFocus(Number(hops), direction as FocusDirection);
+          }}
         >
           <option value="0">All connections</option>
-          <option value="1">1 hop</option>
-          <option value="2">2 hops</option>
-          <option value="3">3 hops</option>
+          <optgroup label="Any direction">
+            {[1, 2, 3].map((hops) => (
+              <option key={hops} value={String(hops)}>
+                {hops === 1 ? "1 hop" : `${hops} hops`}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Callers: observed reaching the selection">
+            {[1, 2, 3].map((hops) => (
+              <option key={hops} value={`callers:${hops}`}>
+                Callers · {hops === 1 ? "1 hop" : `${hops} hops`}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Dependencies: observed from the selection">
+            {[1, 2, 3].map((hops) => (
+              <option key={hops} value={`dependencies:${hops}`}>
+                Dependencies · {hops === 1 ? "1 hop" : `${hops} hops`}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </label>
     </div>
