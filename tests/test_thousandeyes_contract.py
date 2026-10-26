@@ -86,6 +86,27 @@ class ThousandEyesContractTest(unittest.TestCase):
         lab = (ROOT / "tests/splunk/lab.sh").read_text(encoding="utf-8")
         self.assertIn("atlas_te", shell_array(lab, "LAB_INDEXES"))
 
+    def test_atlas_path_rows_use_json_props_without_installing_vendor_writers(self):
+        props = configparser.RawConfigParser()
+        props.read(ROOT / "splunk_app/splunk_adm/default/props.conf")
+        self.assertEqual(
+            dict(props.items("atlas:thousandeyes:path")),
+            {
+                "should_linemerge": "false",
+                "kv_mode": "json",
+                "truncate": "65536",
+            },
+        )
+
+        lab = (ROOT / "tests/splunk/lab.sh").read_text(encoding="utf-8")
+        search_time_confs = shell_array(lab, "SEARCH_TIME_CONFS")
+        self.assertNotIn("inputs", search_time_confs)
+        self.assertNotIn("savedsearches", search_time_confs)
+        copy_ta = lab.split("copy_ta() {", 1)[1].split("\n}\n", 1)[0]
+        self.assertNotIn('"$src/default/inputs.conf"', copy_ta)
+        self.assertNotIn('"$src/default/savedsearches.conf"', copy_ta)
+        self.assertNotIn('"$src/bin"', copy_ta)
+
 
 if __name__ == "__main__":
     unittest.main()
