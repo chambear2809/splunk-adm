@@ -68,6 +68,8 @@ export interface ThousandEyesSpan {
   name: string;
   start: number;
   end: number;
+  startTimeUnixNano?: string;
+  endTimeUnixNano?: string;
   status?: string;
 }
 
@@ -127,6 +129,11 @@ export interface ThousandEyesObservation {
   indexedTime: number;
   /** Splunk _time under the inspected CURRENT props; never used as measurement time. */
   receiptTime?: number;
+  sourceTimes?: {
+    field: string;
+    value: string;
+    unit: "ns" | "ms" | "s" | "iso8601";
+  }[];
   collectionTime?: number;
   index: string;
   source: string;
@@ -177,6 +184,7 @@ export interface ThousandEyesComparison {
   accountGroupId: string;
   testId: string;
   agentId: string;
+  testDomain?: "cea" | "endpoint";
   agentLocation?: string;
   metric: string;
   unit: string;
