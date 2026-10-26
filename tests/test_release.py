@@ -365,10 +365,27 @@ class ReleaseArchiveTests(unittest.TestCase):
                 install[name] = (
                     install[name].replace(before, after)
                     if before
-                    else install[name] + after
+                    else install[name].replace(
+                        b"methods = GET,POST", b"methods = GET,POST\n" + after
+                    )
                 )
                 self._write_pair(install)
                 with self.assertRaisesRegex(ValueError, "settings browser exposure"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_broadened_or_csrf_bypassed_metadata_browser_exposure(self):
+        name = "splunk_adm/default/web.conf"
+        for before, after in (
+            (b"macros/stanzas:get", b"macros/**"),
+            (b"methods = POST\n", b"methods = GET,POST,DELETE\n"),
+            (b"methods = POST\n", b"methods = POST\nskipCSRFProtection = 1\n"),
+            (b"methods = POST\n", b"methods = POST\nallowRemoteProxy = true\n"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "metadata browser exposure"):
                     check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_settings_enabled_or_qualified_installation_defaults(self):

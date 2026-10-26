@@ -351,6 +351,10 @@ class AtomicSettingsTests(unittest.TestCase):
         self.assertEqual(
             set(config["expose:adm_deployment_settings"]), {"pattern", "methods"}
         )
+        self.assertEqual(
+            dict(config["expose:adm_macro_stanza_read"]),
+            {"pattern": "configs/v1/conftypes/macros/stanzas:get", "methods": "POST"},
+        )
         config.read(app / "app.conf")
         self.assertEqual(config["triggers"]["reload.adm_settings"], "simple")
         config.read(app / "adm_settings.conf")

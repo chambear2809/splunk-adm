@@ -72,3 +72,11 @@ it grants no capability or index access and never invokes a settings write.
 Denied, duplicate or inconsistent definitions leave the contract unknown. A
 readable inconsistent legacy definition is not replaced by another view.
 Administrator-only write checks and uncertain-write recovery remain unchanged.
+
+Splunk Web exposes only the exact `configs/v1/conftypes/macros/stanzas:get`
+getter with POST, alongside the existing authenticated settings endpoint.
+No wildcard configuration route, update/create/delete action, CSRF override or
+remote-proxy override is packaged. The release gate rejects those changes.
+[Splunk's web.conf specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/9.4/configuration-file-reference/9.4.16-configuration-file-reference/web.conf)
+describes the proxy allowlist and native CSRF defaults; Splunkd still enforces
+caller authorization independently of Web reachability.

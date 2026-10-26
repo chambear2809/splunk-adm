@@ -361,6 +361,18 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         raise ValueError(
             "settings browser exposure must use only pattern/methods and inherit CSRF protection"
         )
+    macro_read = "expose:adm_macro_stanza_read"
+    if (
+        not web.has_section(macro_read)
+        or set(web[macro_read]) != {"pattern", "methods"}
+        or web.get(macro_read, "pattern", fallback="")
+        != "configs/v1/conftypes/macros/stanzas:get"
+        or web.get(macro_read, "methods", fallback="") != "POST"
+        or set(web.sections()) != {exposure, macro_read}
+    ):
+        raise ValueError(
+            "metadata browser exposure must use the exact read-only macro getter, POST only, and native CSRF protection"
+        )
     if [
         name
         for name in web.sections()
