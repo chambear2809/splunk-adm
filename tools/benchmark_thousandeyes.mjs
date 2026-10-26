@@ -639,6 +639,8 @@ function contractSummary(search, limits) {
   const inputCap = search.indexOf(`| head ${limits.input + 1}`);
   const outputCap = search.indexOf(`| head ${limits.records}`);
   return {
+    searchCharacters: search.length,
+    searchUtf8Bytes: Buffer.byteLength(search, "utf8"),
     inputCapRows: limits.input,
     scanSentinelRows: limits.input + 1,
     displayedRows: limits.records,
@@ -1137,6 +1139,7 @@ try {
       rejectedRows: scenario.integratedNormalizeAndAttribute.rejectedRows,
       attributionStates:
         scenario.integratedNormalizeAndAttribute.attributionStates,
+      searchUtf8Bytes: scenario.searchContract.searchUtf8Bytes,
     })),
   };
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);

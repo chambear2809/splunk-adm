@@ -49,6 +49,28 @@ guide and embedded README publish narrower ranges. Keep the mismatch in the
 target qualification record and confirm the exact release with the platform
 owner. The user-supplied archive hash is recorded but not publisher-verified.
 
+A locked local co-install diagnostic on Splunk Enterprise 10.6.0.5 with the
+unmodified Cisco TA 0.9.0 failed `btool check` with exit code 1. Its only
+diagnostic was:
+
+```text
+Invalid key in stanza [triggers] in ta_cisco_thousandeyes/default/app.conf,
+line 27: notable_event_actions = reload
+```
+
+The check was run as:
+
+```sh
+docker exec -u splunk "$ADM_LAB_NAME" /opt/splunk/bin/splunk cmd btool check
+```
+
+The package was not patched. This is a TA compatibility/configuration
+defect independent of Atlas AppInspect; it prevents claiming a clean full-TA
+co-install on that release. Keep Atlas's ThousandEyes source unselected until
+the target owner resolves the vendor package gate and records a fresh check.
+The static trace `props.conf` `EVAL` expression at line 45 also remains
+unqualified pending syntax validation. Do not repair vendor files in place.
+
 Cisco's distributed placement table requires the app on the heavy forwarder and
 search head/search head cluster, and excludes indexers/indexer clusters. Its
 guide lists standalone and SHC; the public guide lacks deployer-specific SHC
@@ -353,6 +375,10 @@ fixtures. It varies test/agent/path cardinality, exact/overlapping bindings,
 input/output caps, malformed rows, exact replay, and conflicting replay. It
 writes a JSON report with Node/V8 environment, run statistics, memory
 observations, fixture/module SHA-256 values, and an aggregate source fingerprint.
+Each scenario also records the generated search's character count and UTF-8
+byte length, including the maximum mapping/binding configuration. These sizes
+describe the local generated query string; they do not establish a Splunk
+parser limit or prove that the query executes on a target.
 
 Run it without a lab or producer credentials:
 
@@ -361,7 +387,10 @@ node --expose-gc tools/benchmark_thousandeyes.mjs \
   --output dist/thousandeyes-qualification/thousandeyes-benchmark.json
 ```
 
-One measured run used Node 26.12.1 / V8 14.6.202.34-node.40 on an Apple M3
+The measurements below are a prior baseline, from before query-size fields were
+added to the report and before pending adapter fixes. Regenerate the report
+after those changes before using current performance or search-size values.
+That baseline used Node 26.12.1 / V8 14.6.202.34-node.40 on an Apple M3
 Pro (macOS arm64), with seven timed runs and two warmups per operation. The
 source fingerprint was
 `a45909b5b89a2ae694c78a5e57102a067d9fabf8aec739b67db355e525da0677`. Integrated

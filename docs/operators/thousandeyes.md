@@ -45,6 +45,15 @@ The Cisco package declares Python 3.9 and 3.13 for its modular inputs. Confirm
 the runtime supported on the exact input tier and Splunk release. Package
 inspection alone does not establish that the runtime is available on a target.
 
+**Co-install gate:** On a locked Splunk Enterprise 10.6.0.5 diagnostic, the
+unmodified Cisco TA 0.9.0 failed `btool check` at
+`ta_cisco_thousandeyes/default/app.conf:27` (`[triggers]` key
+`notable_event_actions = reload`). Atlas AppInspect is a separate check and
+does not clear this vendor TA failure. A static trace `props.conf` `EVAL`
+expression at line 45 is also unqualified. Do not patch vendor files in place;
+keep the ThousandEyes source disabled until the target owner resolves and
+rechecks these gates. See the [detailed operations record](../THOUSANDEYES_OPERATIONS.md#vendor-release-topology-and-authorization).
+
 ## Ingestion, HEC, and authorization
 
 For Cisco ThousandEyes App 0.9.0, route its configured inputs to **events
