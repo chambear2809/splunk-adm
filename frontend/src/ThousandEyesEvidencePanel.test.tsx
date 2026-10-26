@@ -543,6 +543,23 @@ describe("ThousandEyes evidence panel", () => {
     );
     expect(treeText(completedTree)).toContain("0.03");
     expect(treeText(completedTree)).toContain("seconds");
+
+    // A filter change supplies a different effective cohort. Cached results
+    // must disappear immediately, before another comparison is requested.
+    const filteredTree = renderDirectComponent(comparisonComponent, {
+      ...comparisonProps,
+      records: [],
+    });
+    expect(treeText(filteredTree)).not.toContain("0.03");
+    const replacementComparatorTree = renderDirectComponent(
+      comparisonComponent,
+      {
+        ...comparisonProps,
+        compareMeasurements: vi.fn(() => []),
+      },
+    );
+    expect(treeText(replacementComparatorTree)).not.toContain("0.03");
+    expect(compareMeasurements).toHaveBeenCalledOnce();
   });
 
   it("rejects edited comparison windows outside the native measurement window", () => {

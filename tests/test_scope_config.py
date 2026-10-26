@@ -31,6 +31,14 @@ class ScopeConfigTest(unittest.TestCase):
                 "detector_ids",
                 "controller_origin",
                 "observability_origin",
+                "te_account_group_id",
+                "te_stream_account_id",
+                "te_alert_account_id",
+                "te_organization_id",
+                "te_families",
+                "te_bindings",
+                "te_path_sources",
+                "thousandeyes_origin",
             },
         )
         self.assertTrue(scope.getboolean("replicate"))
@@ -57,6 +65,14 @@ class ScopeConfigTest(unittest.TestCase):
                 "detector_ids",
                 "controller_origin",
                 "observability_origin",
+                "te_account_group_id",
+                "te_stream_account_id",
+                "te_alert_account_id",
+                "te_organization_id",
+                "te_families",
+                "te_bindings",
+                "te_path_sources",
+                "thousandeyes_origin",
             },
         )
         self.assertNotIn("mapping_status", definition["fields_list"].split(","))

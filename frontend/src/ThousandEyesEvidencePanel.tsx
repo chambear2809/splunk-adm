@@ -55,15 +55,29 @@ export function ThousandEyesEvidencePanel({
   const [groupBy, setGroupBy] = useState<
     "test" | "agent" | "location" | "family"
   >("test");
-  const visibleRecords = result.records.slice(0, MAX_VISIBLE_RECORDS);
-  const filteredRecords = visibleRecords
-    .map((record, index) => ({ record, key: observationKey(record, index) }))
-    .filter(
-      ({ record }) =>
-        (!testFilter || testKey(record) === testFilter) &&
-        (!agentFilter || agentKey(record) === agentFilter) &&
-        (!locationFilter || locationKey(record) === locationFilter),
-    );
+  const visibleRecords = useMemo(
+    () => result.records.slice(0, MAX_VISIBLE_RECORDS),
+    [result.records],
+  );
+  const filteredRecords = useMemo(
+    () =>
+      visibleRecords
+        .map((record, index) => ({
+          record,
+          key: observationKey(record, index),
+        }))
+        .filter(
+          ({ record }) =>
+            (!testFilter || testKey(record) === testFilter) &&
+            (!agentFilter || agentKey(record) === agentFilter) &&
+            (!locationFilter || locationKey(record) === locationFilter),
+        ),
+    [visibleRecords, testFilter, agentFilter, locationFilter],
+  );
+  const comparisonRecords = useMemo(
+    () => filteredRecords.map((entry) => entry.record),
+    [filteredRecords],
+  );
   const groups = new Map<string, typeof filteredRecords>();
   for (const entry of filteredRecords) {
     const record = entry.record;
@@ -348,7 +362,7 @@ export function ThousandEyesEvidencePanel({
             filteredRecords.length > 0 && (
               <ComparisonSection
                 key={`${result.selection.selectionId}:${result.capturedAt}:${result.selection.window.start}:${result.selection.window.end}`}
-                records={filteredRecords.map((entry) => entry.record)}
+                records={comparisonRecords}
                 nativeMeasurementWindow={result.selection.window}
                 compareMeasurements={compareMeasurements}
                 blockedReason={comparisonBlockedReason(
@@ -1216,7 +1230,16 @@ function ComparisonSection({
     start: midpoint,
     end: nativeMeasurementWindow.end,
   });
-  const [comparisons, setComparisons] = useState<ThousandEyesComparison[]>();
+  const [comparisonSnapshot, setComparisonSnapshot] = useState<{
+    records: readonly ThousandEyesAttributedObservation[];
+    comparator: ThousandEyesMeasurementComparator;
+    values: ThousandEyesComparison[];
+  }>();
+  const comparisons =
+    comparisonSnapshot?.records === records &&
+    comparisonSnapshot.comparator === compareMeasurements
+      ? comparisonSnapshot.values
+      : undefined;
   const [error, setError] = useState("");
   const valid =
     validWindow(before) &&
@@ -1234,16 +1257,20 @@ function ComparisonSection({
     const seconds = Date.parse(value) / 1000;
     if (!Number.isFinite(seconds)) return;
     setter((previous) => ({ ...previous, [edge]: seconds }));
-    setComparisons(undefined);
+    setComparisonSnapshot(undefined);
     setError("");
   };
   const run = () => {
     if (!valid) return;
     try {
-      setComparisons(compareMeasurements(records, before, after));
+      setComparisonSnapshot({
+        records,
+        comparator: compareMeasurements,
+        values: compareMeasurements(records, before, after),
+      });
       setError("");
     } catch {
-      setComparisons(undefined);
+      setComparisonSnapshot(undefined);
       setError(
         "The supplied comparator could not produce a defensible comparison for these windows.",
       );
