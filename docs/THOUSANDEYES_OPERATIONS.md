@@ -413,24 +413,26 @@ node --expose-gc tools/benchmark_thousandeyes.mjs \
   --output dist/thousandeyes-qualification/thousandeyes-benchmark.json
 ```
 
-The refreshed run was captured at `2026-10-26T20:16:21.721Z` on Node 26.12.1 /
+The refreshed run was captured at `2026-10-26T20:50:02.582Z` on Node 26.12.1 /
 V8 14.6.202.34-node.40, Apple M3 Pro (macOS arm64), with seven timed runs and
-two warmups per operation. Its 21 listed source-file hashes were checked
-against the integration worktree and all matched. The source fingerprint is
-`cbd81d5a859dc435f3fecbbe4e19bcd3501d286b2a3c96ca533879f16e21acb5`; the
-measured code revision is `783e3200e6e9c56b5487cacff9c0496fcfe62b16`. Integrated
-normalization plus attribution and generated query size measured:
+two warmups per operation. All 21 listed source-file hashes match the measured
+source revision, including the collection comparison correction. Its fingerprint is
+`c1d620a1e5cb8be0148d981048dffe28fcaef03b2ca972c760159a961b04d528`;
+the measured code revision is `52da4cca25bdad2a4878446ff116d12019853cee`.
+The disposable Splunk lab and browser regression checks were running during this
+measurement; contention is part of these observations, not an isolated capacity
+measurement. Integrated normalization plus attribution measured:
 
-| Synthetic scenario                                           |       Median / P95 | Query UTF-8 bytes | Output and rejection behavior                      |
-| ------------------------------------------------------------ | -----------------: | ----------------: | -------------------------------------------------- |
-| Six-family mix: 64 rows, one group, 32 bindings              |   6.606 / 9.691 ms |            37,238 | 64 records; 52 bound, 12 context-only; no rejects  |
-| Maximum bindings: one group × 64 bindings, 64 rows           |  3.621 / 15.816 ms |            59,926 | 64 records; 52 bound, 12 context-only; no rejects  |
-| Maximum config: 32 groups × 64 bindings, 64 rows             | 13.794 / 18.427 ms |           449,804 | 64 records; 52 bound, 12 context-only; no rejects  |
-| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.536 / 7.793 ms |            59,926 | 64 records explicitly ambiguous; 2,048 output hops |
-| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.691 / 4.257 ms |            59,926 | 64 records; 1,536 output hops; no rejects          |
-| Path expansion overflow: 33 rows × 2 traces                  |  8.129 / 12.556 ms |            59,926 | 64 records retained; 1 overflow rejected           |
-| Replay, conflict, malformed: 64 rows                         |  2.358 / 11.267 ms |            59,926 | 49 records; 10 rows rejected                       |
-| 65-row adapter cap                                           |   0.717 / 1.111 ms |            59,926 | Batch rejected: 0 records, 65 rejects              |
+| Synthetic scenario | Median / P95 | Query UTF-8 bytes | Output and rejection behavior |
+| --- | ---: | ---: | --- |
+| Six-family mix: 64 rows, one group, 32 bindings | 9.731 / 56.307 ms | 37,238 | 64 records; 52 bound, 12 context-only; no rejects |
+| Maximum bindings: one group × 64 bindings, 64 rows | 12.378 / 31.904 ms | 59,926 | 64 records; 52 bound, 12 context-only; no rejects |
+| Maximum config: 32 groups × 64 bindings, 64 rows | 54.379 / 113.813 ms | 449,804 | 64 records; 52 bound, 12 context-only; no rejects |
+| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each | 39.027 / 162.713 ms | 59,926 | 64 records explicitly ambiguous; 2,048 output hops |
+| Path expansion at display cap: 32 rows × 2 traces × 24 hops | 15.727 / 52.155 ms | 59,926 | 64 records; 1,536 output hops; no rejects |
+| Path expansion overflow: 33 rows × 2 traces | 10.936 / 70.202 ms | 59,926 | 64 records retained; 1 overflow rejected |
+| Replay, conflict, malformed: 64 rows | 10.606 / 16.759 ms | 59,926 | 49 records; 10 rows rejected |
+| 65-row adapter cap | 0.950 / 17.707 ms | 59,926 | Batch rejected: 0 records, 65 rejects |
 
 The 32-mapping × 64-binding configuration generated the largest query at
 449,804 UTF-8 bytes (about 439.3 KiB; the query is ASCII, so its character
@@ -441,23 +443,25 @@ establish the target's parser or request-size limit; qualify that boundary
 against the deployed Splunk endpoint before enabling maximum configuration
 cardinality.
 
-The representative mix used 69,218 raw input bytes and reported median
-`heapUsed` delta 3,684,696 bytes during operation, with 147,456 bytes retained
-after forced GC while keeping results live. At maximum mapping/binding
-cardinality, those figures were 15,841,624 bytes and 154,952 bytes; in the
-overlap-heavy case, 16,870,704 and 459,600 bytes. These are heap observations,
-not peak RSS or a production memory envelope. The BGP monitor fixture was not
-loaded or exercised; this report makes no BGP benchmark claim. Comparison
-returned 48 groups for the representative (0.451 ms median / 4.482 ms P95),
-one-group maximum bindings (0.453 / 4.624 ms), and maximum config (0.350 / 0.391
-ms); path expansion at the display cap returned 32 groups (0.469 / 0.486 ms).
-The all-ambiguous overlap case returned zero comparison groups. Groups are
-comparison outputs, not a claim that all groups were comparable.
+The representative mix used 69,218 raw input bytes. Median `heapUsed` delta
+during operation and retained after forced GC were 3,685,888 bytes and 147,400 bytes,
+respectively. At maximum mapping/binding cardinality these were
+16,330,048 bytes and 146,928 bytes; for the overlap-heavy case,
+16,886,920 bytes and 459,600 bytes. These are heap observations, not peak
+RSS or a production memory envelope. The BGP monitor fixture was not loaded
+or exercised; this report makes no BGP benchmark claim.
+
+Comparison returned 48 groups for the representative
+(0.899 / 4.780 ms median / P95), one-group maximum bindings
+(1.869 / 23.101 ms), and maximum configuration
+(1.348 / 3.143 ms); path expansion at the display cap
+returned 32 groups (1.174 / 3.163 ms). The all-ambiguous
+overlap case returned zero comparison groups. Groups are comparison outputs,
+not a claim that all groups were comparable.
 
 The benchmark's P95 uses only seven timed samples; with this percentile method
-it equals the highest sample. The wide gaps in the representative, one-group
-maximum, and overflow scenarios are retained here rather than presented as a
-stable tail-latency estimate. They are local runtime observations only.
+it equals the highest sample. Wide gaps are retained as observed and do not
+establish stable tail latency. These are local runtime observations only.
 The complete JSON report contains per-operation timings/memory, query strings'
 UTF-8 byte length, input/config sizes, scenario counts, and sorted component
 hashes. Re-run it after code, fixture, or runtime changes; record its aggregate
