@@ -100,7 +100,7 @@ function checkedMappings(
 }
 
 function nativeField(name: string, value: string): string {
-  return `'${name}'="${literal(value, 255)}"`;
+  return `${name}="${literal(value, 255)}"`;
 }
 
 function isoSecondsExpression(field: string): string {

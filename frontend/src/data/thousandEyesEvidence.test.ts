@@ -146,9 +146,12 @@ describe("ThousandEyes selected evidence search", () => {
     expect(query).toContain(
       'coalesce(mvcount(mvfilter(_te_m_keys="thousandeyes.monitor.id")),0)',
     );
-    expect(query).toContain("'aid'=\"1234\"");
-    expect(query).toContain("'accountId'=\"6789\"");
-    expect(query).toContain("'orgId'=\"org-1\"");
+    expect(query).toContain('aid="1234"');
+    expect(query).toContain('accountId="6789"');
+    expect(query).toContain('orgId="org-1"');
+    expect(query).not.toContain("'aid'=");
+    expect(query).not.toContain("'accountId'=");
+    expect(query).not.toContain("'orgId'=");
     expect(query).toContain('schema="application_atlas.thousandeyes_path.v1"');
     expect(query).toContain(
       "path=result.agent.agentId output=_te_p_wrapper_agent",
