@@ -391,7 +391,9 @@ try {
       exact: true,
     });
     await expect(
-      metricGroup.getByText("Checkout availability", { exact: true }),
+      metricGroup.getByRole("cell", {
+        name: /^Checkout availability \(CEA ID /,
+      }),
     ).toBeVisible();
     const monitorRow = metricGroup
       .getByRole("row")
