@@ -383,7 +383,9 @@ try {
       "atlas:thousandeyes:path",
     ])
       expect(teSearches[0].search).toContain(sourcetype);
-    await page.getByLabel("Group by", { exact: true }).selectOption("family");
+    await page
+      .getByRole("combobox", { name: /^Group by/ })
+      .selectOption("family");
     const metricGroup = page.getByRole("region", {
       name: "Family: Metric",
       exact: true,
@@ -396,8 +398,14 @@ try {
       .filter({ hasText: "Test name not supplied" });
     await expect(monitorRow).toHaveCount(1);
     await monitorRow
-      .getByRole("button", { name: "Inspect observation" })
+      .getByRole("button", {
+        name: /^(Inspect observation|Selected observation)$/,
+      })
       .click();
+    await expect(monitorRow.getByRole("button")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     const detail = page.getByRole("region", {
       name: "Selected ThousandEyes observation detail",
     });
