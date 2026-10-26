@@ -51,7 +51,7 @@ test.describe("optional ThousandEyes evidence inspection", () => {
       page.getByRole("region", { name: "Optional ThousandEyes evidence" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Search complete: 1 visible observation."),
+      page.getByText("Search complete: 1 returned observation."),
     ).toBeVisible();
     await expect(
       page.getByRole("table", {
@@ -76,7 +76,7 @@ test.describe("optional ThousandEyes evidence inspection", () => {
       .click();
     await expect(
       page.getByRole("table", {
-        name: "Scrollable before and after comparison table",
+        name: "Comparator results by authority, account group, test domain, native identity, metric and unit",
       }),
     ).toContainText("0.025");
     expect((await state(page))?.comparisons).toHaveLength(1);
