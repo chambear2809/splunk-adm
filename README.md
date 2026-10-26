@@ -4,6 +4,26 @@
 
 Atlas runs inside Splunk and uses data your teams already collect. Network observations show the connections; workload history identifies the systems behind the IP addresses; traces add service-level context. Together, they help application, network and security teams investigate the same dependency with a shared set of evidence.
 
+## See it work
+
+These screenshots come from the running app with the repository's synthetic demo dataset (hosts, addresses and the `example.invalid` controller are fictional; the app labels demo data "Synthetic demo", though some framings below crop that label).
+
+**Find an application from network evidence.** Searching an address returns the application it was observed reaching, plus source-qualified client attachment evidence. The catalog below sorts scopes with problems first and names the window its counts cover.
+
+![Applications page: searching 10.61.0.20 returns the checkout application with an Open map action and the observed Catalyst wired client attachment, above a catalog whose first rows carry Review first notes about unknown peers.](docs/screenshots/01-find-application.png)
+
+**Open its map.** The map shows entry points, services, pods and dependencies, with findings for blocked conversations, unknown sources and warnings.
+
+![Network map for the checkout application with a findings panel listing a blocked conversation, a missing permitting contract and an inferred backend.](docs/screenshots/02-application-map.png)
+
+**Troubleshoot a blocked connection.** Show path on a finding highlights the conversation and lists the candidate fabric path; the strip marks which hops were seen in the logs and which are inferred only.
+
+![Full-page view of the frontend application map, labeled Synthetic demo, with the blocked win-client-01 to orders-db-01 conversation highlighted, and a five-step candidate path below where the leaf-103 hop is marked Seen and the spine and leaf-102 hops Not seen.](docs/screenshots/03-blocked-path.png)
+
+**Check blast radius.** Select a card and choose Focus, then Callers (observed reaching the selection) or Dependencies (what it was observed reaching), within 1 to 3 hops. Here, Callers within 2 hops of the orders-db-01 database retains 10 of 25 nodes and 13 of 27 connections, as displayed. The summary notes that the focus is limited to conversations and traced calls observed in the window and sources, so it is not a full impact analysis. The one blocked conversation between shown cards is displayed but not followed.
+
+![Map focused on callers within 2 hops of the orders-db-01 VM, with unrelated cards dimmed; the filter summary reads 10 of 25 nodes retained, 13 of 27 connections, and notes that 1 blocked conversation between shown cards is not followed.](docs/screenshots/04-callers-blast-radius.png)
+
 ## Why it matters
 
 IP addresses change, workloads move, and dependency evidence is spread across network, platform and application tools. Atlas brings that context together to help teams:
@@ -18,7 +38,7 @@ The map distinguishes observed traffic from inferred candidate paths. Device inv
 
 1. **Collect into Splunk.** Existing add-ons and collectors ingest flows, controller inventory, Kubernetes objects and spans into source indexes.
 2. **Build dependency history.** Scheduled searches normalize traffic into conversations and maintain endpoint, workload and Service history in summary indexes and KV Store. Correlation uses the relevant time and routing scope, so reused IPs in unrelated networks do not become one identity.
-3. **Explore an application.** Select an application or use Find, choose a scope and time window, and build the map. Inspect dependencies, ports, observers, candidate paths and supporting evidence, or export required flows. Data health explains source freshness and scheduled-search outcomes against the configured expectations.
+3. **Explore an application.** Select an application or use Find, choose a scope and time window, and build the map. Inspect dependencies, ports, observers, candidate paths and supporting evidence, focus on a selected card's callers or dependencies within 1 to 3 hops, or export required flows. Data health explains source freshness and scheduled-search outcomes against the configured expectations.
 
 For example, a client reaches a Kubernetes LoadBalancer address and the application calls a database VM. Flow records establish the observed connections; Kubernetes history identifies the frontend and workloads; compatible Hubble evidence can connect that client's frontend connection to a backend pod. ACI inventory adds the VM's network context, and traces add service calls where instrumented. If the backend evidence is missing or ambiguous, that part stays unresolved.
 
