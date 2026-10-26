@@ -159,6 +159,17 @@ capture can duplicate rounds already queued or indexed. Keep output and spool
 files under restricted permissions and preserve pending captures until
 indexed readback completes.
 
+**Parsing-tier gate:** exporter event lines can be up to 65,535 bytes. For the
+exact sourcetype `[atlas:thousandeyes:path]`, qualify `TRUNCATE=65536` and
+`SHOULD_LINEMERGE=false` on the authorized HEC/parsing tier, and search-time
+`KV_MODE=json` on every serving search head. Search-head props alone do not
+establish ingest-tier truncation behavior in distributed or Cloud deployments.
+Deploy this stanza only through the target-approved props/configuration path;
+do not install Cisco's app on indexers or install the full Atlas app solely to
+deliver this stanza. Before selecting `path`, read back a sanitized path event
+larger than 10 KiB and verify the full `_raw` payload and hop arrays survived.
+The standalone synthetic lab did not qualify truncation or indexed readback.
+
 ```sh
 python3 tools/export_thousandeyes_paths.py \
   --authority <configured-lowercase-id> \

@@ -201,6 +201,18 @@ the path reached an application backend. Hops are the probe's reported path,
 not a proof of every forwarding device. Missing hop numbers do not independently
 prove packet loss.
 
+The exporter permits HEC event lines up to 65,535 bytes. For the exact custom
+stanza `[atlas:thousandeyes:path]`, qualify `TRUNCATE=65536` and
+`SHOULD_LINEMERGE=false` on the authorized HEC/parsing tier, and search-time
+`KV_MODE=json` on all serving search heads. In distributed and Cloud targets,
+search-head props do not establish ingest-tier truncation behavior. Deploy the
+stanza through the target-approved props/configuration path; Cisco disallows
+installing its app on indexers, and this stanza does not require installing
+the full Atlas app solely to deliver it. Before enabling `path`, use a
+sanitized path event larger than 10 KiB and verify its complete indexed `_raw`
+payload and hop arrays. The standalone synthetic lab did not qualify truncation
+or indexed readback.
+
 ## API limits, schedule, and retention
 
 The [ThousandEyes v7 rate-limit documentation](https://developer.cisco.com/docs/thousandeyes/v7/rate-limits/)
