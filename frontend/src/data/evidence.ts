@@ -20,7 +20,8 @@ export type SupplementalSource =
   | "asset_history"
   | "o11y_health"
   | "o11y_detector_events"
-  | "appdynamics_inventory";
+  | "appdynamics_inventory"
+  | "thousandeyes";
 export type OptionalSource = DnsSource | SupplementalSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {
@@ -32,6 +33,8 @@ export interface TrafficContext {
   timeBasis: "flow_observation" | "connection_open";
   clientOwner?: string;
   capped: boolean;
+  serverPort?: number;
+  transport?: string;
 }
 export interface EvidenceSelection {
   schemaVersion: 1;
@@ -46,6 +49,13 @@ export interface EvidenceSelection {
   contexts: TrafficContext[];
   identityBasis: string;
   configurationFingerprint: string;
+  /** Exact selected catalog boundary, never inferred from a display label. */
+  application?: {
+    service: string;
+    environment: string;
+    cluster: string;
+    namespace: string;
+  };
 }
 /** Exact service identity for optional health; namespace is the Kubernetes namespace. */
 export interface ServiceHealthSelection {
@@ -225,6 +235,17 @@ export function validateSelection(value: EvidenceSelection): EvidenceSelection {
     throw new Error("Invalid evidence selection contract.");
   validateWindow(value.window);
   routingScope(value.scope);
+  if (value.application !== undefined) {
+    if (!isObject(value.application))
+      throw new Error("Invalid application evidence boundary.");
+    for (const key of [
+      "service",
+      "environment",
+      "cluster",
+      "namespace",
+    ] as const)
+      literal(value.application[key]);
+  }
   if (
     value.identityAddresses !== undefined &&
     (!Array.isArray(value.identityAddresses) ||
@@ -255,7 +276,14 @@ export function validateSelection(value: EvidenceSelection): EvidenceSelection {
       c.first < 0 ||
       c.last < c.first ||
       !["flow_observation", "connection_open"].includes(c.timeBasis) ||
-      typeof c.capped !== "boolean"
+      typeof c.capped !== "boolean" ||
+      (c.serverPort !== undefined &&
+        (!Number.isInteger(c.serverPort) ||
+          c.serverPort < 1 ||
+          c.serverPort > 65535)) ||
+      (c.transport !== undefined &&
+        (typeof c.transport !== "string" ||
+          !/^[a-z][a-z0-9_-]{0,31}$/.test(c.transport)))
     )
       throw new Error("Invalid scoped traffic observation context.");
   }

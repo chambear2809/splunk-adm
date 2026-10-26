@@ -6,6 +6,15 @@ Everything in the data layer is SPL in `macros.conf`, `savedsearches.conf`, `col
 
 ## Sources
 
+Optional [ThousandEyes investigations](THOUSANDEYES_DESIGN.md) consume the Cisco
+integration's indexed metrics, paths, synthetic spans, detected events, alerts
+and activity. Native observation times remain separate from the inspected TA's
+`CURRENT` parsing configuration and potentially explicit HEC row timestamps. Explicit authority/test/agent/time bindings control
+attribution; these records never feed traffic rollups, production trace calls,
+graph edges, ownership or passive counters. The source ships unselected and
+unqualified. See its [capability matrix](research/thousandeyes-capabilities.md)
+and [operator guide](operators/thousandeyes.md).
+
 Optional on-demand DNS resolution evidence and standalone scoped-address investigations use separate versioned result contracts. They do not change application graphs, summary counters or ownership, and introduce no scheduled DNS writer. See [DNS operations](operators/dns-evidence.md) and the [candidate qualification record](DNS_EVIDENCE_QUALIFICATION.md). Existing traffic readers and settings persistence gates remain applicable.
 
 | Source | Sourcetype | Role |

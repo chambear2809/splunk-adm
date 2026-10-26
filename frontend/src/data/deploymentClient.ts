@@ -72,6 +72,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
     signal?: AbortSignal,
     body?: unknown,
     global = false,
+    readOnlyPost = false,
   ): Promise<unknown> {
     if (signal?.aborted)
       throw new Error("Deployment settings request cancelled.");
@@ -83,7 +84,8 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const defaults = getDefaultFetchInit();
       const headers = new Headers(defaults.headers);
       if (body !== undefined) headers.set("Content-Type", "application/json");
-      const endpoint = `${path}?output_mode=json`;
+      const endpoint = `${path}${path.includes("?") ? "&" : "?"}output_mode=json`;
+      const mayWrite = body !== undefined && !readOnlyPost;
       let response: Response;
       try {
         response = await this.fetcher(
@@ -100,15 +102,14 @@ export class ToolkitDeploymentClient implements DeploymentClient {
           },
         );
       } catch (reason) {
-        // A timed-out, cancelled or dropped POST may still have committed.
-        if (body !== undefined)
-          throw new DeploymentWriteError("uncertain", UNCERTAIN);
+        // A timed-out, cancelled or dropped write may still have committed.
+        if (mayWrite) throw new DeploymentWriteError("uncertain", UNCERTAIN);
         throw reason;
       }
       const payload: unknown = await response.json().catch(() => undefined);
       const coded = object(payload) && typeof payload.code === "string";
-      // A proxy/gateway failure on POST says nothing about whether the insert landed.
-      if (body !== undefined && (response.ok ? payload === undefined : !coded))
+      // A proxy/gateway failure on a write says nothing about whether the insert landed.
+      if (mayWrite && (response.ok ? payload === undefined : !coded))
         throw new DeploymentWriteError("uncertain", UNCERTAIN);
       if (!response.ok) throw new HTTPError(response.status, payload);
       if (payload === undefined)
@@ -120,15 +121,52 @@ export class ToolkitDeploymentClient implements DeploymentClient {
     }
   }
 
+  /** A denied legacy read may use the caller-authorized app-merged view. */
+  private async macro(name: string, signal?: AbortSignal): Promise<unknown> {
+    if (!/^adm_[a-z0-9_]+(?:\([1-9][0-9]*\))?$/.test(name))
+      throw new Error("Invalid shared selector name.");
+    try {
+      return await this.request(
+        `configs/conf-macros/${encodeURIComponent(name)}`,
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof HTTPError) || error.status !== 403) throw error;
+    }
+    // This POST reads a fixed app/nobody stanza; it neither writes nor elevates.
+    const payload = await this.request(
+      "configs/v1/conftypes/macros/stanzas:get?view=app-merged",
+      signal,
+      { stanza: name },
+      false,
+      true,
+    );
+    if (
+      !object(payload) ||
+      !Array.isArray(payload.settings) ||
+      !payload.settings.every(
+        (item) => object(item) && typeof item.setting === "string",
+      )
+    )
+      throw new Error("Shared selector unavailable.");
+    const definitions = payload.settings.filter(
+      (item) => item.setting === "definition",
+    );
+    if (
+      definitions.length !== 1 ||
+      typeof definitions[0].value !== "string" ||
+      definitions[0].value.length > 1048576
+    )
+      throw new Error("Shared selector unavailable.");
+    return { entry: [{ content: { definition: definitions[0].value } }] };
+  }
+
   async read(signal?: AbortSignal): Promise<DeploymentSnapshot> {
     const results = await Promise.allSettled([
       this.request(ENDPOINT, signal),
       Promise.all(
         DATA_CONTRACT_SELECTORS.map((selector) =>
-          this.request(
-            `configs/conf-macros/${encodeURIComponent(selector.name)}`,
-            signal,
-          ),
+          this.macro(selector.name, signal),
         ),
       ),
     ]);
@@ -257,12 +295,7 @@ export class ToolkitDeploymentClient implements DeploymentClient {
         ...new Set(selected.flatMap((source) => source.indexMacros)),
       ];
       const definitions = await Promise.allSettled(
-        names.map((name) =>
-          this.request(
-            `configs/conf-macros/${encodeURIComponent(name)}`,
-            signal,
-          ),
-        ),
+        names.map((name) => this.macro(name, signal)),
       );
       if (signal?.aborted)
         throw new Error("Deployment settings request cancelled.");

@@ -407,6 +407,8 @@ export function endpointEvidenceSelection(
       last: c.last,
       timeBasis: "flow_observation",
       capped: c.contextCapped || contextsCapped,
+      ...(c.port !== undefined ? { serverPort: c.port } : {}),
+      transport: c.transport.toLowerCase(),
     }));
   return {
     schemaVersion: 1,

@@ -1,11 +1,11 @@
 {
   "name": "splunk-adm",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc --noEmit && vite build && vite build --config vite.splunk.config.ts",
+    "build": "tsc --noEmit && vite build && vite build --config vite.splunk.config.ts && vite build --config vite.thousandeyes.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint frontend/src tests/browser playwright.config.ts vite*.ts tools/package-app.mjs && tsc --noEmit && tsc -p tsconfig.browser.json --noEmit && prettier --check frontend tests/browser tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",
     "format": "prettier --write frontend tests/browser tools/package-app.mjs eslint.config.mjs \"*.ts\" \"*.json\"",

@@ -1,6 +1,7 @@
 import hashlib
 import gzip
 import io
+import json
 import tarfile
 import unittest
 from hashlib import sha256
@@ -11,6 +12,10 @@ from unittest.mock import patch
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
     MAX_ATLAS_GZIP_BYTES,
+    MAX_THOUSANDEYES_GZIP_BYTES,
+    THOUSANDEYES_BUNDLE_PATH,
+    THOUSANDEYES_MANIFEST_PATH,
+    THOUSANDEYES_CSS_PATH,
     SETTINGS_CONFIG_FILES,
     SETTINGS_REGISTRY_PATH,
     SETTINGS_RUNTIME_FILES,
@@ -29,6 +34,29 @@ def _incompressible(size: int) -> bytes:
 
 
 class ReleaseArchiveTests(unittest.TestCase):
+    def test_thousandeyes_optional_asset_has_an_independent_enforced_budget(self):
+        files = self._files()
+        files[THOUSANDEYES_BUNDLE_PATH] = _incompressible(
+            MAX_THOUSANDEYES_GZIP_BYTES + 1
+        )
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_mixed_thousandeyes_asset_versions_are_rejected(self):
+        files = self._files()
+        files[THOUSANDEYES_BUNDLE_PATH] += b"different candidate"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "version/hash"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_missing_thousandeyes_stylesheet_is_rejected(self):
+        files = self._files()
+        del files[THOUSANDEYES_CSS_PATH]
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
     def test_bundle_budget_is_independent_of_host_default_gzip_level(self):
         self._write_pair(self._files())
         compress = gzip.compress
@@ -103,7 +131,18 @@ class ReleaseArchiveTests(unittest.TestCase):
             SETTINGS_REGISTRY_PATH: (
                 self.root / "config/deployment-health.json"
             ).read_bytes(),
-            "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle",
+            "splunk_adm/appserver/static/pages/atlas.js": b"toolkit bundle aaaaaaaaaaaaaaaaaaaaaaaa",
+            THOUSANDEYES_BUNDLE_PATH: b"optional bundle aaaaaaaaaaaaaaaaaaaaaaaa",
+            THOUSANDEYES_CSS_PATH: b"optional styles",
+            THOUSANDEYES_MANIFEST_PATH: json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "assetVersion": "a" * 24,
+                    "javascriptSha256": hashlib.sha256(
+                        b"optional bundle aaaaaaaaaaaaaaaaaaaaaaaa"
+                    ).hexdigest(),
+                }
+            ).encode(),
             **{
                 f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
                 for name in (
@@ -196,8 +235,8 @@ class ReleaseArchiveTests(unittest.TestCase):
 
     def test_accepts_atlas_bundle_just_under_gzip_limit(self):
         install = self._files()
-        install["splunk_adm/appserver/static/pages/atlas.js"] = _incompressible(
-            MAX_ATLAS_GZIP_BYTES - 4096
+        install["splunk_adm/appserver/static/pages/atlas.js"] = (
+            _incompressible(MAX_ATLAS_GZIP_BYTES - 4096) + b"aaaaaaaaaaaaaaaaaaaaaaaa"
         )
         self._write_pair(install)
         check_release(self.root / "dist", self.root / "package.json")
@@ -326,10 +365,27 @@ class ReleaseArchiveTests(unittest.TestCase):
                 install[name] = (
                     install[name].replace(before, after)
                     if before
-                    else install[name] + after
+                    else install[name].replace(
+                        b"methods = GET,POST", b"methods = GET,POST\n" + after
+                    )
                 )
                 self._write_pair(install)
                 with self.assertRaisesRegex(ValueError, "settings browser exposure"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_broadened_or_csrf_bypassed_metadata_browser_exposure(self):
+        name = "splunk_adm/default/web.conf"
+        for before, after in (
+            (b"macros/stanzas:get", b"macros/**"),
+            (b"methods = POST\n", b"methods = GET,POST,DELETE\n"),
+            (b"methods = POST\n", b"methods = POST\nskipCSRFProtection = 1\n"),
+            (b"methods = POST\n", b"methods = POST\nallowRemoteProxy = true\n"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "metadata browser exposure"):
                     check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_settings_enabled_or_qualified_installation_defaults(self):

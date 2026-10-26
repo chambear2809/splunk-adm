@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { OptionalJobBudget, optionalJobs } from "./optionalJobs";
 import {
   SearchResultLimitError,
+  SearchAccessDeniedError,
   ToolkitSearchClient,
   timeError,
 } from "./searchClient";
@@ -69,6 +70,12 @@ describe("timeError", () => {
 });
 
 describe("bounded investigation job lifecycle", () => {
+  it("reports native HTTP permission denial without echoing response data", async () => {
+    const pending = new ToolkitSearchClient().search(request());
+    runtime.progress.error({ status: 403, message: "private source detail" });
+    await expect(pending).rejects.toBeInstanceOf(SearchAccessDeniedError);
+    await expect(pending).rejects.not.toThrow(/private source detail/);
+  });
   it("retains optional admission after untrackable SDK creation failure and queues retry", async () => {
     const budget = new OptionalJobBudget();
     runtime.create.mockImplementation(() => {

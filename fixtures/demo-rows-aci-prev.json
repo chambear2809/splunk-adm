@@ -90,14 +90,24 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "65d1e62c5c0f954ac4ab2a38c91a880a258443a95034572847e1d32caa20ad2f",
+      "reviewed_macro_file_sha256": "a26ce2ecaa1ba571f928c608d2d4b1684421d6583a21a2fe802cf7e151b1a5fe",
       "method": "static review only; no recapture",
-      "reason": "Only adm_health_missed_slots and the adm_missed_slot_lookback description changed to monitor the existing V1 hourly application catalog alongside V2. A stanza-by-stanza comparison with the accepted source confirms all graph, normalization, identity and topology definitions are byte-identical. Historical captured rows, capture time and original provenance hashes remain unchanged. This records static compatibility only, not a new capture or runtime qualification.",
+      "reason": "Byte-prefix comparison with baseline 1e4f2043 confirms every existing macro byte is unchanged. Only literal disabled ThousandEyes selector and qualification stanzas are appended; they execute no searches and do not participate in the captured graph. Historical rows, original capture time and hashes are unchanged. This records static compatibility only, without recapture or production qualification.",
       "modified_macro_stanzas": [
-        "adm_health_missed_slots",
-        "adm_missed_slot_lookback"
+        "adm_index_thousandeyes",
+        "adm_thousandeyes_schema_qualified"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "65d1e62c5c0f954ac4ab2a38c91a880a258443a95034572847e1d32caa20ad2f",
+          "method": "static review only; no recapture",
+          "reason": "Only adm_health_missed_slots and the adm_missed_slot_lookback description changed to monitor the existing V1 hourly application catalog alongside V2. A stanza-by-stanza comparison with the accepted source confirms all graph, normalization, identity and topology definitions are byte-identical. Historical captured rows, capture time and original provenance hashes remain unchanged. This records static compatibility only, not a new capture or runtime qualification.",
+          "modified_macro_stanzas": [
+            "adm_health_missed_slots",
+            "adm_missed_slot_lookback"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "29197a19727a0ce497b6adb8aadc3fca0706bb820037c9a5d0834c7dc6bba04b",

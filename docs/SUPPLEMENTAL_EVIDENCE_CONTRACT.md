@@ -1,6 +1,6 @@
 # Supplemental evidence contract
 
-Application Atlas adds four optional sources alongside the existing DNS inspection. Each source is selected explicitly in deployment settings. An unselected source dispatches no search, changes no core graph behavior, and does not make a paid service mandatory.
+Application Atlas supports optional sources alongside the existing DNS inspection. Each source is selected explicitly in deployment settings. An unselected source dispatches no search, changes no core graph behavior, and does not make a paid service mandatory.
 
 ## Shared boundaries
 
@@ -21,6 +21,7 @@ Application Atlas adds four optional sources alongside the existing DNS inspecti
 | AWS | `aws_vpc_flow` | fixed 29-field custom VPC Flow Logs v5 | aggregated interface flow observation; action is capture-point decision |
 | Asset history | `asset_authority` | versioned CSV/JSON import | time-qualified inventory/ownership candidate only |
 | Observability Cloud | `o11y_export` | completed SignalFlow historical export | time-aligned measured health; detector state remains unqueried |
+| ThousandEyes | `thousandeyes_account_group` | explicitly qualified Cisco app 0.9.0 input families; strict synthetic OTLP v2 and native API contracts | synthetic measurements, probe paths, synthetic traces and vendor lifecycle/activity context; no passive counters or dependency edges |
 
 AWS mappings additionally pin account ID, Region and VPC ID. Service health authority pins an exact custom APM Monitoring MetricSet ID, organization and realm; association also requires environment, service namespace/name and workload identity when available. Default and custom MetricSets must not be combined. Asset history uses half-open effective intervals and retains conflicts, retirement and current-only limits.
 
@@ -33,6 +34,7 @@ AWS mappings additionally pin account ID, Region and VPC ID. Service health auth
 | AWS | malformed/reordered 29 fields, overlap, status/action, duplicate subscriptions, ENI history | strict parser/query tests, props/static checks | ingestion time, interval and authority SPL, no cross-sensor sum | real VPC v5 feed and historical bindings |
 | Asset history | changes, retirement, conflicts, current-only, duplicate/invalid import | importer and query tests, lint | indexed history before/after validity and ambiguity | actual export history completeness |
 | Observability | identity collisions, units, gaps, timeout/partial export, stale data | export and metric tests, frontend build | indexed metric and completion readback, source absence | real realm/API/metric dimensions |
+| ThousandEyes | native units/time, failed rounds, replay/conflict, scope/configuration history, proxy/address ambiguity, caps, cancellation | strict parser, query, attribution, comparator, panel and exporter tests | exact raw JSON query, caller permissions, installed optional assets, upgrade/rollback | genuine sanitized HEC/API readback, exact producer versions, clocks, deployment and capacity |
 
 Final validation uses one task-owned disposable lab against the final package. Synthetic fixtures and lab ingestion establish implementation behavior, not production source qualification.
 
@@ -48,3 +50,19 @@ increase covering these two bounded inspection paths with modest headroom.
 The final package measurement and exact archive hashes belong in
 `OPTIONAL_INTEGRATIONS_QUALIFICATION.md`. No runtime dependency was upgraded,
 and external collectors remain outside the Splunk app archive.
+
+For ThousandEyes in 0.6.0, the existing main-page ceiling stays at 670 KiB.
+An explicit investigation action loads a separately versioned same-origin IIFE
+and stylesheet, bounded to 48 KiB gzip and 16 KiB raw respectively. Main and
+optional assets share a source-derived version; the package gate rejects stale
+or missing assets. The optional bundle reuses the host React and search helpers.
+It creates no second SDK runtime or automatic source query.
+
+Native measurement time and source/index time remain separate. Since the
+vendor CURRENT setting does not attest an explicit outer HEC timestamp's basis,
+ThousandEyes retains `_time` as unqualified row time and `_indextime` as indexed
+time. Its retained-index scan uses a conservative native-time prefilter before
+the 10,001-row cap; unknown time shapes remain candidates for strict parsing.
+A historical selection does not establish collection continuity or present
+upstream health. See [the design](THOUSANDEYES_DESIGN.md) and
+[qualification record](THOUSANDEYES_QUALIFICATION.md) for evidence and limits.

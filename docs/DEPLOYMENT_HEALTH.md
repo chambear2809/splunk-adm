@@ -216,6 +216,14 @@ V2 builders and manual maintenance searches remain outside required V1 job healt
 
 ## Evidence and freshness
 
+ThousandEyes uses the `optional_evidence` readiness tier and the same shared
+administrator-owned source expectations. `te_families` explicitly selects the
+qualified inputs; its literal index selector, schema gate and verified
+account-group/test/agent/time bindings remain separate from collection setup.
+Selected-evidence receipt age is a scoped diagnostic and cannot establish API
+permission, collection continuity or health. Historical measurements are not
+invalidated merely because their correctly selected interval is old.
+
 | Evidence | Interpretation |
 | --- | --- |
 | Not selected | No operational failure or builder requirement for that source. |

@@ -1,0 +1,384 @@
+.atlas .thousandeyes-evidence,
+.adm .thousandeyes-evidence {
+  margin-block: 18px;
+  padding: 16px;
+  color: var(--adm-ink, #202a35);
+  background: var(--adm-surface, #fff);
+  border: 1px solid var(--adm-card-border, #8b98a5);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.atlas .thousandeyes-evidence :is(h3, h4, h5, h6),
+.adm .thousandeyes-evidence :is(h3, h4, h5, h6) {
+  margin: 0 0 8px;
+}
+
+.atlas .thousandeyes-evidence h3,
+.adm .thousandeyes-evidence h3 {
+  font-size: 1.15rem;
+}
+
+.atlas .thousandeyes-evidence h4,
+.adm .thousandeyes-evidence h4 {
+  font-size: 1rem;
+}
+
+.atlas .thousandeyes-evidence h5,
+.adm .thousandeyes-evidence h5 {
+  font-size: 0.95rem;
+}
+
+.atlas .thousandeyes-evidence h6,
+.adm .thousandeyes-evidence h6 {
+  font-size: 0.9rem;
+}
+
+.atlas .thousandeyes-evidence :is(p, ul, dl),
+.adm .thousandeyes-evidence :is(p, ul, dl) {
+  margin-block: 8px;
+}
+
+.atlas .thousandeyes-evidence :is(button, select, input),
+.adm .thousandeyes-evidence :is(button, select, input) {
+  max-width: 100%;
+  min-height: 36px;
+  padding: 6px 9px;
+  color: var(--adm-ink, #202a35);
+  background: var(--adm-surface, #fff);
+  border: 1px solid var(--adm-card-border, #8b98a5);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.atlas
+  .thousandeyes-evidence
+  :is(button, a, select, input, .te-table-scroll):focus-visible,
+.adm
+  .thousandeyes-evidence
+  :is(button, a, select, input, .te-table-scroll):focus-visible {
+  outline: 3px solid var(--adm-focus, #007abd);
+  outline-offset: 2px;
+}
+
+.atlas .thousandeyes-evidence button,
+.adm .thousandeyes-evidence button {
+  cursor: pointer;
+}
+
+.atlas .thousandeyes-evidence button:disabled,
+.adm .thousandeyes-evidence button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.atlas .thousandeyes-evidence a,
+.adm .thousandeyes-evidence a {
+  color: var(--adm-link, #0069b4);
+}
+
+.atlas .te-intro,
+.adm .te-intro,
+.atlas .te-quality-list,
+.adm .te-quality-list,
+.atlas .te-notice,
+.adm .te-notice {
+  color: var(--adm-muted, #576576);
+}
+
+.atlas .te-status,
+.adm .te-status {
+  padding: 9px 11px;
+  border-left: 4px solid var(--adm-link, #0069b4);
+  background: var(--adm-page, #f4f6f8);
+  background: color-mix(in srgb, var(--adm-link, #0069b4) 9%, transparent);
+}
+
+.atlas .te-quality-list,
+.adm .te-quality-list {
+  padding: 8px 12px 8px 30px;
+  border-left: 4px solid var(--adm-warn-icon, #b26b00);
+  background: var(--adm-warn-bg, #fff2d6);
+  color: var(--adm-warn-ink, #7a4a00);
+}
+
+.atlas .te-result-meta,
+.adm .te-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-block: 12px;
+  padding: 8px 10px;
+  background: var(--adm-page, #f4f6f8);
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+
+.atlas .te-filters,
+.adm .te-filters,
+.atlas .te-window-editor,
+.adm .te-window-editor {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-block: 14px;
+  padding: 10px;
+  border: 1px solid var(--adm-line, #ccd2d8);
+  border-radius: 4px;
+}
+
+.atlas .te-filters legend,
+.adm .te-filters legend,
+.atlas .te-window-editor legend,
+.adm .te-window-editor legend {
+  padding-inline: 5px;
+  font-weight: 650;
+}
+
+.atlas .te-filters label,
+.adm .te-filters label,
+.atlas .te-window-editor label,
+.adm .te-window-editor label {
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  max-width: 100%;
+}
+
+.atlas .te-record-count,
+.adm .te-record-count {
+  color: var(--adm-muted, #576576);
+  font-size: 0.92em;
+}
+
+.atlas .te-group,
+.adm .te-group {
+  margin-block: 14px;
+}
+
+.atlas .te-group > h4,
+.adm .te-group > h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 8px;
+  border-bottom: 1px solid var(--adm-line, #ccd2d8);
+}
+
+.atlas .te-count,
+.adm .te-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding-inline: 6px;
+  border: 1px solid var(--adm-card-border, #8b98a5);
+  border-radius: 99px;
+  font-size: 0.8em;
+}
+
+.atlas .te-observation,
+.adm .te-observation {
+  margin-block: 10px;
+  padding: 12px;
+  border: 1px solid var(--adm-line, #ccd2d8);
+  border-radius: 4px;
+}
+
+.atlas .te-observation > header,
+.adm .te-observation > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-bottom: 8px;
+}
+
+.atlas .te-outcome,
+.adm .te-outcome {
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.atlas .te-outcome-failure,
+.adm .te-outcome-failure {
+  color: var(--adm-error-ink, #8a1f1f);
+}
+
+.atlas .te-identity,
+.adm .te-identity,
+.atlas .te-lifecycle dl,
+.adm .te-lifecycle dl,
+.atlas .te-activity dl,
+.adm .te-activity dl {
+  display: grid;
+  grid-template-columns: minmax(145px, 0.32fr) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin-block: 8px;
+}
+
+.atlas .te-identity dt,
+.adm .te-identity dt,
+.atlas .te-lifecycle dt,
+.adm .te-lifecycle dt,
+.atlas .te-activity dt,
+.adm .te-activity dt {
+  color: var(--adm-muted, #576576);
+  font-weight: 600;
+}
+
+.atlas .te-identity dd,
+.adm .te-identity dd,
+.atlas .te-lifecycle dd,
+.adm .te-lifecycle dd,
+.atlas .te-activity dd,
+.adm .te-activity dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.atlas .te-copy-row,
+.adm .te-copy-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 10px;
+}
+
+.atlas .te-record-quality,
+.adm .te-record-quality {
+  padding: 7px 9px;
+  background: var(--adm-page, #f4f6f8);
+  border-radius: 3px;
+  font-size: 0.91em;
+}
+
+.atlas .te-attribution,
+.adm .te-attribution,
+.atlas .te-source-times,
+.adm .te-source-times,
+.atlas .te-measured-path,
+.adm .te-measured-path,
+.atlas .te-trace,
+.adm .te-trace,
+.atlas .te-lifecycle,
+.adm .te-lifecycle,
+.atlas .te-activity,
+.adm .te-activity {
+  margin-block: 12px;
+  padding: 10px;
+  border-left: 3px solid var(--adm-card-border, #8b98a5);
+  background: var(--adm-page, #f4f6f8);
+}
+
+.atlas .te-table-scroll,
+.adm .te-table-scroll {
+  max-width: 100%;
+  margin-block: 8px;
+  overflow: auto;
+}
+
+.atlas .thousandeyes-evidence table,
+.adm .thousandeyes-evidence table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-block: 4px;
+}
+
+.atlas .thousandeyes-evidence caption,
+.adm .thousandeyes-evidence caption {
+  padding: 6px;
+  color: var(--adm-muted, #576576);
+  text-align: left;
+  font-weight: 600;
+}
+
+.atlas .thousandeyes-evidence :is(th, td),
+.adm .thousandeyes-evidence :is(th, td) {
+  min-width: 95px;
+  padding: 8px;
+  border-bottom: 1px solid var(--adm-line, #ccd2d8);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.atlas .thousandeyes-evidence th,
+.adm .thousandeyes-evidence th {
+  font-weight: 650;
+}
+
+.atlas .te-path-iteration th,
+.adm .te-path-iteration th {
+  padding-top: 10px;
+  background: var(--adm-select-bg, #e8f0fb);
+  background: color-mix(
+    in srgb,
+    var(--adm-card-border, #8b98a5) 16%,
+    transparent
+  );
+}
+
+.atlas .te-coverage,
+.adm .te-coverage,
+.atlas .te-limitations,
+.adm .te-limitations {
+  margin-block: 10px;
+}
+
+.atlas .te-coverage summary,
+.adm .te-coverage summary,
+.atlas .te-limitations summary,
+.adm .te-limitations summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.atlas .te-comparison,
+.adm .te-comparison {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 2px solid var(--adm-card-border, #8b98a5);
+}
+
+.atlas .te-window-editor,
+.adm .te-window-editor {
+  display: inline-flex;
+  vertical-align: top;
+}
+
+.atlas .te-empty,
+.adm .te-empty {
+  padding: 10px;
+  border: 1px dashed var(--adm-card-border, #8b98a5);
+}
+
+@media (max-width: 700px) {
+  .atlas .thousandeyes-evidence,
+  .adm .thousandeyes-evidence {
+    padding: 10px;
+  }
+
+  .atlas .te-identity,
+  .adm .te-identity,
+  .atlas .te-lifecycle dl,
+  .adm .te-lifecycle dl,
+  .atlas .te-activity dl,
+  .adm .te-activity dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1px;
+  }
+
+  .atlas .te-identity dd,
+  .adm .te-identity dd,
+  .atlas .te-lifecycle dd,
+  .adm .te-lifecycle dd,
+  .atlas .te-activity dd,
+  .adm .te-activity dd {
+    margin-bottom: 6px;
+  }
+}

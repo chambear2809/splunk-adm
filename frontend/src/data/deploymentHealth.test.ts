@@ -32,7 +32,11 @@ describe("shared deployment expectations", () => {
   });
   it("keeps new integrations optional for fresh and pre-integration settings", () => {
     const snapshot = deployment([]);
-    for (const source of ["o11y_detector_events", "appdynamics_inventory"]) {
+    for (const source of [
+      "o11y_detector_events",
+      "appdynamics_inventory",
+      "thousandeyes",
+    ]) {
       expect(expectationFor(snapshot, source)).toBe("not_selected");
       delete snapshot.settings!.sources[source];
       expect(expectationFor(snapshot, source)).toBe("not_selected");
@@ -40,6 +44,7 @@ describe("shared deployment expectations", () => {
     const selected = deployment([
       "o11y_detector_events",
       "appdynamics_inventory",
+      "thousandeyes",
     ]);
     expect(applicableJobs(selected)).toEqual([]);
     expect(validateExpectations(snapshot.settings)).toEqual(snapshot.settings);

@@ -1,0 +1,16 @@
+{
+  "aid": "1234",
+  "id": "event-1",
+  "type": "NETWORK_OUTAGE",
+  "typeName": "Network outage",
+  "severity": "major",
+  "state": "active",
+  "startDate": "2023-11-14T22:13:30Z",
+  "endDate": null,
+  "title": "Probe reported an outage",
+  "affectedTargets": {
+    "total": 2,
+    "affectedTestIds": ["17", "18"],
+    "affectedAgentIds": ["9"]
+  }
+}

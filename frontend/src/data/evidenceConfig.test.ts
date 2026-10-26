@@ -31,8 +31,17 @@ function fixture({
   invalidMms = false,
   detector = false,
   appd = false,
+  thousandeyes = false,
+  teBindings = "[]",
   detectorIds = '["detector-1"]',
   controllerOrigin = "https://controller.example.test",
+  collectionTransform = undefined as
+    | ((
+        name: string,
+        rows: Record<string, unknown>[],
+        probe: boolean,
+      ) => Record<string, unknown>[])
+    | undefined,
 } = {}) {
   const settings = defaultExpectations();
   if (active) settings.sources.dns_stream.state = "active";
@@ -43,6 +52,7 @@ function fixture({
   if (o11y) settings.sources.o11y_health.state = "active";
   if (detector) settings.sources.o11y_detector_events.state = "active";
   if (appd) settings.sources.appdynamics_inventory.state = "staged";
+  if (thousandeyes) settings.sources.thousandeyes.state = "active";
   const deployment: DeploymentClient = {
     read: async () => ({
       state: "configured",
@@ -130,6 +140,26 @@ function fixture({
           },
         ]
       : []),
+    ...(thousandeyes
+      ? [
+          {
+            _key: "te",
+            observer_kind: "thousandeyes_account_group",
+            observer: "te-primary",
+            scope: "prod",
+            cluster: "",
+            mapping_status: "verified",
+            te_account_group_id: "1234",
+            te_stream_account_id: "2345",
+            te_alert_account_id: "3456",
+            te_organization_id: "org-123",
+            te_families: '["metric","alert"]',
+            te_bindings: teBindings,
+            te_path_sources: "[]",
+            thousandeyes_origin: "https://app.thousandeyes.com",
+          },
+        ]
+      : []),
   ];
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -167,6 +197,8 @@ function fixture({
           adm_o11y_detector_events_schema_qualified: "0",
           adm_index_appdynamics_inventory: "index=atlas_asset",
           adm_appdynamics_inventory_schema_qualified: "0",
+          adm_index_thousandeyes: "index=atlas_te",
+          adm_thousandeyes_schema_qualified: "0",
         };
         body = {
           settings: [
@@ -218,6 +250,12 @@ function fixture({
             Object.entries(row).filter(([key]) => fields.has(key)),
           ),
         );
+        if (collectionTransform)
+          body = collectionTransform(
+            url.pathname.split("/").pop() ?? "",
+            body as Record<string, unknown>[],
+            url.searchParams.has("skip"),
+          );
       }
       return {
         ok: true,
@@ -232,6 +270,47 @@ function fixture({
   };
 }
 describe("caller-context evidence configuration", () => {
+  it("projects ThousandEyes identity and historical binding fields through shared app reads", async () => {
+    const { client, fetcher } = fixture({ active: false, thousandeyes: true });
+    const config = await client.read(undefined, [], "prod");
+    expect(
+      config.supplemental?.find((source) => source.source === "thousandeyes"),
+    ).toMatchObject({
+      state: "active",
+      indexes: ["atlas_te"],
+      authorities: ["te-primary"],
+      schemaQualified: false,
+      mappings: [
+        expect.objectContaining({
+          te_account_group_id: "1234",
+          te_stream_account_id: "2345",
+          te_alert_account_id: "3456",
+          te_organization_id: "org-123",
+          te_bindings: "[]",
+          te_families: '["metric","alert"]',
+          thousandeyes_origin: "https://app.thousandeyes.com",
+        }),
+      ],
+    });
+    expect(
+      fetcher.mock.calls.every(([url]) =>
+        String(url).includes('"owner":"nobody"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("refuses malformed historical ThousandEyes bindings before source admission", async () => {
+    const config = await fixture({
+      active: false,
+      thousandeyes: true,
+      teBindings: '[{"authority":"other"}]',
+    }).client.read(undefined, [], "prod");
+    const source = config.supplemental?.find(
+      (entry) => entry.source === "thousandeyes",
+    );
+    expect(source?.error).toBeDefined();
+    expect(source?.authorities).toEqual([]);
+  });
   it("uses explicit app/shared reads and treats unselected old settings as inert", async () => {
     const { client, fetcher } = fixture({ active: false });
     const config = await client.read(undefined, ["10.0.0.1"], "prod");
@@ -413,6 +492,53 @@ describe("caller-context evidence configuration", () => {
       expect(config.summaryIndexes).toEqual(["adm_summary"]);
       expect(config.dns[0].error).toBeDefined();
     }
+  });
+  it("accepts stable collection rows when only nested object property order changes", async () => {
+    const { client } = fixture({
+      duplicates: true,
+      collectionTransform: (name, rows, probe) => {
+        if (name !== "adm_observer_scope") return rows;
+        return rows.map((row) => {
+          const fields = Object.fromEntries(
+            probe ? Object.entries(row) : Object.entries(row).reverse(),
+          );
+          const nested = probe
+            ? { label: "stable", detail: { first: 1, second: 2 } }
+            : { detail: { second: 2, first: 1 }, label: "stable" };
+          return probe ? { nested, ...fields } : { ...fields, nested };
+        });
+      },
+    });
+    const config = await client.read();
+    expect(config.summaryIndexes).toEqual(["adm_summary"]);
+    expect(config.dns[0].error).toBeDefined();
+  });
+  it("rejects collection probe changes to nested values and row keys", async () => {
+    for (const change of ["nested", "key"] as const) {
+      const { client } = fixture({
+        duplicates: true,
+        collectionTransform: (name, rows, probe) => {
+          if (name !== "adm_observer_scope") return rows;
+          return rows.map((row) => {
+            if (!probe || row._key !== "two")
+              return { ...row, nested: { value: 1 } };
+            return change === "nested"
+              ? { ...row, nested: { value: 2 } }
+              : { ...row, nested: { value: 1 }, _key: "changed" };
+          });
+        },
+      });
+      await expect(client.read()).rejects.toThrow(/completeness or stability/);
+    }
+  });
+  it("preserves collection row order when comparing skip probes", async () => {
+    const { client } = fixture({
+      duplicates: true,
+      optional: true,
+      collectionTransform: (name, rows, probe) =>
+        name === "adm_observer_scope" && probe ? rows.reverse() : rows,
+    });
+    await expect(client.read()).rejects.toThrow(/completeness or stability/);
   });
   it("detects lower server caps and quarantines unverified legacy-default identities", async () => {
     await expect(fixture({ lowCap: true }).client.read()).rejects.toThrow(

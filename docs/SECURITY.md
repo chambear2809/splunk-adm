@@ -47,8 +47,36 @@ The sections above cover the coding-agent sandbox. The shipped `splunk_adm` app 
 
 ## Shared-data viewer boundary
 
+ThousandEyes inspections use caller-owned literal searches and existing optional
+job admission. Account-group, application, test, agent and scope bindings are
+administrator attestations with explicit historical validity. Stream account IDs,
+alert account IDs and organization IDs retain their separate producer identities.
+Neither names/tags nor Splunk host authorize a join. Probe and synthetic-trace
+records never become passive traffic or production backend calls. The optional
+UI loads only fixed, version-bound same-origin app assets; its host bridge holds
+helper functions, with no captured evidence or credentials. Source permalinks
+are ignored; navigation uses only an administrator-configured HTTPS origin.
+
 Optional DNS searches run with the caller's existing session/index permissions. New query templates compile validated literal index, sourcetype, address, authority and time inputs; they execute no selector/normalization macros or named lookups. Configuration and bounded identity/scope reads explicitly use the shared `nobody/splunk_adm` namespace, including legacy-default identity quarantine. Raw DNS record inspection rebuilds an exact fingerprint request and never follows event-provided URLs or broadens a missing reference. Names remain text, evidence is held only for the current selection, and portable DNS evidence is an explicit JSON/CSV download. It is excluded from graph snapshots, required-flow exports, saved application views and telemetry. These controls preserve the shared-dataset viewer boundary below; scopes are not authorization partitions.
 
 Envoy, AWS flow, asset history and Observability health inspections use the same caller-owned optional job budget and app-merged literal selector boundary. Their indexes may contain sensitive client, asset or service facts, so operators must verify the existing viewer role has appropriate index access before selecting a source. Routing scope labels never grant or restrict access. Envoy `X-Forwarded-For` is not trusted as client identity. Observability API tokens stay in a server-side environment or approved secret store and must not enter app settings, browser requests, fixtures or source links. Source-provided URLs and payload fields are not executed or used as arbitrary navigation targets.
 
 The shipped derived KV lookups and catalogs grant shared read access. Routing scopes prevent attribution joins across domains; they do not filter data by the viewer's tenant or source-index entitlements. Deployment owners must ensure every app viewer is entitled to the complete configured dataset. Tenant-separated viewer access needs an additional reviewed authorization design and target-specific tests before adoption.
+
+ThousandEyes endpoint inspection also needs read-only traffic-contract metadata.
+When the legacy macro REST read is denied, the deployment client can use the
+caller-authorized `configs/v1/conftypes/macros/stanzas:get` app-merged view for
+fixed reviewed stanza names in the explicit `nobody/splunk_adm` namespace.
+This read-only POST requires the caller's existing `list_conf_objects` access;
+it grants no capability or index access and never invokes a settings write.
+Denied, duplicate or inconsistent definitions leave the contract unknown. A
+readable inconsistent legacy definition is not replaced by another view.
+Administrator-only write checks and uncertain-write recovery remain unchanged.
+
+Splunk Web exposes only the exact `configs/v1/conftypes/macros/stanzas:get`
+getter with POST, alongside the existing authenticated settings endpoint.
+No wildcard configuration route, update/create/delete action, CSRF override or
+remote-proxy override is packaged. The release gate rejects those changes.
+[Splunk's web.conf specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/9.4/configuration-file-reference/9.4.16-configuration-file-reference/web.conf)
+describes the proxy allowlist and native CSRF defaults; Splunkd still enforces
+caller authorization independently of Web reachability.

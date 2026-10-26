@@ -23,6 +23,13 @@ MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 # Same-runtime baseline and measured growth are recorded in the evidence contract.
 MAX_ATLAS_GZIP_BYTES = 670 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
+THOUSANDEYES_BUNDLE_PATH = "splunk_adm/appserver/static/pages/thousandeyes.js"
+THOUSANDEYES_MANIFEST_PATH = "splunk_adm/appserver/static/thousandeyes-manifest.json"
+THOUSANDEYES_CSS_PATH = "splunk_adm/appserver/static/thousandeyes.css"
+# This optional asset loads only when the user opens a ThousandEyes investigation.
+# The existing initial Atlas bundle ceiling remains unchanged.
+MAX_THOUSANDEYES_GZIP_BYTES = 48 * 1024
+MAX_THOUSANDEYES_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -354,6 +361,18 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         raise ValueError(
             "settings browser exposure must use only pattern/methods and inherit CSRF protection"
         )
+    macro_read = "expose:adm_macro_stanza_read"
+    if (
+        not web.has_section(macro_read)
+        or set(web[macro_read]) != {"pattern", "methods"}
+        or web.get(macro_read, "pattern", fallback="")
+        != "configs/v1/conftypes/macros/stanzas:get"
+        or web.get(macro_read, "methods", fallback="") != "POST"
+        or set(web.sections()) != {exposure, macro_read}
+    ):
+        raise ValueError(
+            "metadata browser exposure must use the exact read-only macro getter, POST only, and native CSRF protection"
+        )
     if [
         name
         for name in web.sections()
@@ -414,6 +433,9 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
     required = {
         "splunk_adm/appserver/static/adm.css",
         "splunk_adm/appserver/static/pages/atlas.js",
+        THOUSANDEYES_BUNDLE_PATH,
+        THOUSANDEYES_MANIFEST_PATH,
+        THOUSANDEYES_CSS_PATH,
         *{
             f"splunk_adm/appserver/static/demo/{name}.json"
             for name in (
@@ -495,6 +517,30 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             f"atlas.js gzip bundle is {atlas_gzip_bytes} bytes; "
             f"maximum is {MAX_ATLAS_GZIP_BYTES} bytes"
         )
+    optional_gzip = len(
+        gzip.compress(files[THOUSANDEYES_BUNDLE_PATH], compresslevel=9, mtime=0)
+    )
+    if optional_gzip > MAX_THOUSANDEYES_GZIP_BYTES:
+        raise ValueError("ThousandEyes optional bundle exceeds its 48 KiB gzip budget")
+    if len(files[THOUSANDEYES_CSS_PATH]) > MAX_THOUSANDEYES_CSS_BYTES:
+        raise ValueError("ThousandEyes optional CSS exceeds its 16 KiB budget")
+    try:
+        optional_manifest = json.loads(files[THOUSANDEYES_MANIFEST_PATH])
+        asset_version = optional_manifest["assetVersion"]
+        if (
+            optional_manifest.get("schemaVersion") != 1
+            or not isinstance(asset_version, str)
+            or not re.fullmatch(r"[0-9a-f]{24}", asset_version)
+            or optional_manifest.get("javascriptSha256")
+            != hashlib.sha256(files[THOUSANDEYES_BUNDLE_PATH]).hexdigest()
+            or asset_version.encode() not in files[ATLAS_BUNDLE_PATH]
+            or asset_version.encode() not in files[THOUSANDEYES_BUNDLE_PATH]
+        ):
+            raise ValueError("mismatch")
+    except (ValueError, TypeError, KeyError) as exc:
+        raise ValueError(
+            "ThousandEyes asset version/hash does not match the main bundle"
+        ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:
         config.read_string(files["splunk_adm/default/app.conf"].decode("utf-8"))

@@ -1,5 +1,5 @@
 {
-  "research_date": "2026-10-16",
+  "research_date": "2026-10-26",
   "scope": "Static package inspection for datacenter and enterprise networking application dependency mapping",
   "packages": [
     {
@@ -320,6 +320,42 @@
         "verification": "tests/splunk/test_cisco_vendor_app.py; 4 runtime checks passed on 2026-10-16",
         "collector_scripts_executed": false
       }
+    },
+    {
+      "title": "Cisco ThousandEyes App for Splunk",
+      "splunkbase_id": "7719",
+      "version": "0.9.0",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-thousandeyes-app-for-splunk_090.tar.gz",
+      "extracted_path": "research/extracted/cisco-thousandeyes-app-for-splunk_090/ta_cisco_thousandeyes",
+      "source_url": "https://splunkbase.splunk.com/app/7719",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/7719",
+      "listing_verified_at": "2026-10-26",
+      "listing_default_version": "0.9.0",
+      "listing_support_status": "Cisco Supported",
+      "listing_release_date": "2026-08-24",
+      "sha256": "2206fe9a288060a0a8d4e780cbba8c56ecd1c18cf53c965b60b505c3524cf6af",
+      "bytes": 9429427,
+      "publisher_digest_verified": false,
+      "publisher_digest_source": "No publisher checksum shown on the public listing; SHA-256 computed locally from the user-provided archive",
+      "app_conf_versions": {
+        "launcher": "0.9.0",
+        "id": "0.9.0"
+      },
+      "inspected_at": "2026-10-26",
+      "extraction_scope": "1,068 regular UTF-8 text files up to 5 MiB; traversal paths rejected; symlinks, hardlinks, special files, binary files, and oversized entries excluded",
+      "archive_members": 1288,
+      "extracted_text_files": 1068,
+      "license_acceptance": "Not recorded; archive was supplied by the user for static analysis",
+      "download_method": "User-supplied local archive; copied into ignored research/packages for inspection",
+      "installed": false,
+      "executed": false,
+      "inspection_evidence": [
+        "docs/research/thousandeyes.md",
+        "docs/research/thousandeyes-capabilities.md"
+      ],
+      "qualification": "Splunkbase app 7719 listing was checked on 2026-10-26; 0.9.0 is the current default and matches the supplied archive. Static package/docs analysis only. No live ThousandEyes account or Splunk HEC readback. Confirm OTel account ID to API aid mapping, flattened HEC field paths, event/path source and host metadata, and producer timestamps with sanitized readback before typed normalization. Cisco's OTel detailed trace schema and general v2/Splunk input pages disagree on API trace support; require a sample or Cisco confirmation. The packaged CEA path pull omits request-scoped aid/testId from result events, so typed CEA path admission requires an external adapter to attach those exact configured request identities (or a received payload that already contains them).",
+      "supplied_archive_name": "cisco-thousandeyes-app-for-splunk_090.tar.gz"
     }
   ],
   "pending": []

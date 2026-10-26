@@ -943,6 +943,38 @@
         "snapshot_complete"
       ],
       "probeMacro": ""
+    },
+    {
+      "id": "thousandeyes",
+      "readinessImpact": "optional_evidence",
+      "label": "Cisco ThousandEyes synthetic evidence",
+      "healthNames": [
+        "Cisco ThousandEyes synthetic evidence"
+      ],
+      "indexMacros": [
+        "adm_index_thousandeyes"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "synthetic_metrics",
+        "measured_probe_paths",
+        "synthetic_traces",
+        "events",
+        "alerts",
+        "activity"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1200,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "thousandeyes_account_group"
+      ],
+      "requiredFields": [],
+      "probeMacro": ""
     }
   ],
   "jobs": [

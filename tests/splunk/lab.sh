@@ -29,9 +29,10 @@ TAS=(
   "cisco-enterprise-networking-netflow-add-on-for-splunk_400/splunk_app_stream_ipfix_cisco_hsl"
   "cisco-meraki-add-on-for-splunk_350/Splunk_TA_cisco_meraki"
 )
+OPTIONAL_TAS=("cisco-thousandeyes-app-for-splunk_090/ta_cisco_thousandeyes")
 VENDOR_APP="cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app"
 SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros collections ipfixmap)
-LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y atlas_proxy atlas_cloud atlas_asset atlas_o11y)
+LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y atlas_proxy atlas_cloud atlas_asset atlas_o11y atlas_te)
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
@@ -125,6 +126,11 @@ cmd_install() {
   for ta in "${TAS[@]}"; do
     [[ -d "$EXTRACTED/$ta" ]] || { echo "missing $EXTRACTED/$ta" >&2; return 1; }
     copy_ta "$EXTRACTED/$ta" "$stage/$(basename "$ta")"
+  done
+  for ta in "${OPTIONAL_TAS[@]}"; do
+    if [[ -d "$EXTRACTED/$ta" ]]; then
+      copy_ta "$EXTRACTED/$ta" "$stage/$(basename "$ta")"
+    fi
   done
   # Co-install the dashboard app separately from Atlas. Its scheduled lookup
   # writers stay disabled until explicitly dispatched by a qualification test.

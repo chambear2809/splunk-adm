@@ -42,6 +42,13 @@ export interface SearchClient {
   search(request: SearchRequest): Promise<RunResult>;
 }
 
+export class SearchAccessDeniedError extends Error {
+  constructor() {
+    super("Splunk denied access to this search.");
+    this.name = "SearchAccessDeniedError";
+  }
+}
+
 /** Fail closed when Splunk reported ERROR or FATAL job messages. */
 export function requireNoSearchErrors(
   result: RunResult,
@@ -65,6 +72,15 @@ export class SearchResultLimitError extends Error {
 }
 
 const errorDetail = (base: string, payload: unknown) => {
+  if (payload && typeof payload === "object") {
+    const error = payload as {
+      status?: unknown;
+      statusCode?: unknown;
+      response?: { status?: unknown };
+    };
+    const status = error.status ?? error.statusCode ?? error.response?.status;
+    if (status === 401 || status === 403) return new SearchAccessDeniedError();
+  }
   const message = splunkWarnings(payload)[0];
   return new Error(message ? `${base} Splunk reported: ${message}` : base);
 };

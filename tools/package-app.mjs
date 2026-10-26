@@ -114,6 +114,19 @@ await copyFile(
   `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
 );
 await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
+for (const file of ["THOUSANDEYES_DESIGN.md", "THOUSANDEYES_OPERATIONS.md"])
+  await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
+await copyFile(
+  "docs/operators/thousandeyes.md",
+  `${stage}/docs/operators/thousandeyes.md`,
+);
+await mkdir(`${stage}/docs/research`, { recursive: true });
+for (const file of [
+  "thousandeyes.md",
+  "thousandeyes-capabilities.md",
+  "thousandeyes-operating-constraints.md",
+])
+  await copyFile(`docs/research/${file}`, `${stage}/docs/research/${file}`);
 await copyFile(
   "docs/CISCO_CONTRACT_MIGRATION.md",
   `${stage}/docs/CISCO_CONTRACT_MIGRATION.md`,
