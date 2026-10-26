@@ -610,8 +610,8 @@ def _sanitize_property(name: str, value: str | None) -> str | None:
         candidate = value.strip()
         if (
             len(candidate) > 255
-            or any(char.isspace() for char in candidate)
-            or any(char in candidate for char in "@/?#")
+            or not re.fullmatch(r"[A-Za-z0-9._:%\[\]-]+", candidate)
+            or CONNECTION_SECRET_RE.search(candidate)
         ):
             return None
         return candidate

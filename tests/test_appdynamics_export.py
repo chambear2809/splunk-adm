@@ -782,6 +782,20 @@ class AppDynamicsCollectorTests(unittest.TestCase):
             "https://[2001:db8::1]:443",
         )
 
+    def test_host_properties_drop_embedded_connection_credentials(self) -> None:
+        for value in (
+            "db;password=synthetic",
+            "db,user=synthetic",
+            "db:1433;pwd=synthetic",
+            "host=x;token=synthetic",
+            "password:synthetic",
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(_sanitize_property("HOST", value))
+        for value in ("10.0.0.1", "fe80::1%eth0", "db-1.example.test", "[2001:db8::1]"):
+            with self.subTest(value=value):
+                self.assertEqual(_sanitize_property("HOST", value), value)
+
     def test_bearer_token_rejects_header_injection_and_non_ascii(self) -> None:
         for token in ("good\r\nInjected: yes", "tökén", "bad token"):
 

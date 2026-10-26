@@ -277,26 +277,26 @@ class HealthSearchTest(unittest.TestCase):
     def test_hourly_catalog_slots_follow_the_checkpoint_not_the_clock_minute(self):
         import time
 
-        target = "ADM - Application catalog v2"
         now = int(time.time())
         # A cron minute of :15 in a UTC+05:30 zone lands at epoch minute :45.
         first = (now - 4 * 3600) // 3600 * 3600 + 45 * 60
-        evidence = (
-            f'| makeresults | eval scheduled_time=split("{first};{first + 3600}",";") '
-            "| mvexpand scheduled_time | eval scheduled_time=tonumber(scheduled_time), "
-            f'savedsearch_name="{target}", sid="scheduler__catalog_test"'
-        )
-        rows = self.lab.search(
-            self.missed_slots_fixture_query(evidence, target), "-25h", "now"
-        )
-        missing = {
-            int(row["scheduled_time"])
-            for row in rows
-            if row["name"] == target and row["reason"] == "missed_slot"
-        }
         expected = set(range(first + 7200, now - 600 + 1, 3600))
         self.assertTrue(expected)
-        self.assertEqual(missing, expected)
+        for target in ("ADM - Application catalog", "ADM - Application catalog v2"):
+            evidence = (
+                f'| makeresults | eval scheduled_time=split("{first};{first + 3600}",";") '
+                "| mvexpand scheduled_time | eval scheduled_time=tonumber(scheduled_time), "
+                f'savedsearch_name="{target}", sid="scheduler__catalog_test"'
+            )
+            rows = self.lab.search(
+                self.missed_slots_fixture_query(evidence, target), "-25h", "now"
+            )
+            missing = {
+                int(row["scheduled_time"])
+                for row in rows
+                if row["name"] == target and row["reason"] == "missed_slot"
+            }
+            self.assertEqual(missing, expected, target)
 
     def test_missed_slots_manual_only_success_has_no_checkpoint(self):
         query = self.missed_slots_fixture_query(

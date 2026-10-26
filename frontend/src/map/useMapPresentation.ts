@@ -16,7 +16,12 @@ import {
 } from "../glossary";
 import { computeLayout, type View } from "../layout";
 import { FIT_MIN, type Selection } from "../MapView";
-import { filterGraph, focusHops, type Facets } from "../filters";
+import {
+  filterGraph,
+  focusTrace,
+  type Facets,
+  type FocusDirection,
+} from "../filters";
 import {
   buildPath,
   deviceName,
@@ -48,7 +53,11 @@ export function useMapPresentation({
   const [collapse, setCollapse] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [facets, setFacets] = useState<Facets>({});
-  const [focus, setFocus] = useState<{ id: string; hops: number } | null>(null);
+  const [focus, setFocus] = useState<{
+    id: string;
+    hops: number;
+    direction: FocusDirection;
+  } | null>(null);
   const clearFilters = () => {
     setFacets({});
     setFocus(null);
@@ -93,9 +102,21 @@ export function useMapPresentation({
   const node = useCallback((id: string) => index.node.get(id), [index]);
   const view: View = tab === "services" ? "services" : "network";
   const filtered = useMemo(() => filterGraph(graph, facets), [graph, facets]);
+  const focusResult = useMemo(
+    () =>
+      focus
+        ? focusTrace(
+            indexGraph(filtered),
+            focus.id,
+            focus.hops,
+            focus.direction,
+          )
+        : undefined,
+    [filtered, focus],
+  );
   const displayGraph = useMemo(() => {
-    if (!focus) return filtered;
-    const ids = focusHops(indexGraph(filtered), focus.id, focus.hops);
+    if (!focusResult) return filtered;
+    const ids = focusResult.nodes;
     return {
       ...filtered,
       nodes: filtered.nodes.filter((n) => ids.has(n.id)),
@@ -103,7 +124,7 @@ export function useMapPresentation({
         (e) => ids.has(e.source) && ids.has(e.target),
       ),
     };
-  }, [filtered, focus]);
+  }, [filtered, focusResult]);
   const displayIndex = useMemo(() => indexGraph(displayGraph), [displayGraph]);
   useEffect(() => {
     if (
@@ -255,6 +276,7 @@ export function useMapPresentation({
   return {
     facets,
     focus,
+    followedEdges: focusResult?.followed,
     setFocus,
     clearFilters,
     changeFacets,

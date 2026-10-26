@@ -19,6 +19,8 @@ const UNCERTAIN =
   "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.";
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
+const validCapacity = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 0;
 export class DeploymentWriteError extends Error {
   constructor(
     readonly code: string,
@@ -176,6 +178,20 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       )
         throw new Error("Malformed deployment settings response.");
       const backend = record.value;
+      const recordCount = backend.recordCount;
+      const maxRecords = backend.maxRecords;
+      const remainingRecords = backend.remainingRecords;
+      const capacityValues = [recordCount, maxRecords, remainingRecords];
+      if (
+        capacityValues.some((value) => value !== undefined) &&
+        (!capacityValues.every(validCapacity) ||
+          !validCapacity(recordCount) ||
+          !validCapacity(maxRecords) ||
+          !validCapacity(remainingRecords) ||
+          recordCount > maxRecords ||
+          remainingRecords !== maxRecords - recordCount)
+      )
+        throw new Error("Malformed deployment settings capacity metadata.");
       const observedRevisions = backend.observedRevisions as string[];
       const namespace =
         typeof backend.namespace === "string" ? backend.namespace : undefined;
@@ -196,6 +212,16 @@ export class ToolkitDeploymentClient implements DeploymentClient {
       const persistence = {
         namespace,
         observedRevisions,
+        recordCount: validCapacity(recordCount) ? recordCount : undefined,
+        maxRecords: validCapacity(maxRecords) ? maxRecords : undefined,
+        remainingRecords: validCapacity(remainingRecords)
+          ? remainingRecords
+          : undefined,
+        capacityWarning:
+          typeof backend.capacityWarning === "string"
+            ? backend.capacityWarning
+            : undefined,
+        canRetry: backend.canRetry === true,
         writeUnavailableReason:
           typeof backend.writeUnavailableReason === "string"
             ? backend.writeUnavailableReason
@@ -317,6 +343,10 @@ export class ToolkitDeploymentClient implements DeploymentClient {
     signal?: AbortSignal,
   ): Promise<DeploymentSnapshot> {
     const validated = validateExpectations(settings);
+    const signature = JSON.stringify([
+      expectedRevision ?? null,
+      validated.sources,
+    ]);
     const before = await this.read(signal);
     if (before.state === "unavailable")
       throw new DeploymentWriteError(
@@ -324,16 +354,14 @@ export class ToolkitDeploymentClient implements DeploymentClient {
         before.error ??
           "Read deployment expectations successfully before changing them.",
       );
-    if (!before.canWrite || !before.namespace)
+    const canRetryFinalSlot =
+      this.pending.has(signature) && before.canRetry === true;
+    if ((!before.canWrite && !canRetryFinalSlot) || !before.namespace)
       throw new DeploymentWriteError(
         "forbidden",
         before.writeUnavailableReason ??
           "Administrator capability and collection write permission are required.",
       );
-    const signature = JSON.stringify([
-      expectedRevision ?? null,
-      validated.sources,
-    ]);
     // Keep the operation identity on response loss/cancellation. A retry must
     // resolve that immutable operation even if another administrator advanced.
     const requestId = this.pending.get(signature) ?? crypto.randomUUID();

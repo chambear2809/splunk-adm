@@ -36,6 +36,7 @@ import { loadCatalogDemo, type FindQueryCapture } from "../data/catalogDemo";
 import { toolkitDefault } from "../app/interop";
 import { pageURL, stateParams, type UrlState } from "../app/urlState";
 import { argError } from "../provider";
+import { plural } from "../glossary";
 import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 import {
@@ -135,8 +136,8 @@ export function ApplicationsPage({
   >([]);
   const [demoRetry, setDemoRetry] = useState(0);
   const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({
-    key: "service",
-    descending: false,
+    key: "blocked_1h",
+    descending: true,
   });
   const revision = useRef(0);
   const findRevision = useRef(0);
@@ -340,14 +341,24 @@ export function ApplicationsPage({
 
   const sorted = useMemo(() => {
     const rows = [...catalog];
+    const compare = (key: SortKey, left: CatalogRow, right: CatalogRow) => {
+      const a = left[key];
+      const b = right[key];
+      return typeof a === "number" || typeof b === "number"
+        ? (typeof a === "number" ? a : -1) - (typeof b === "number" ? b : -1)
+        : String(a ?? "").localeCompare(String(b ?? ""));
+    };
     rows.sort((left, right) => {
-      const a = left[sort.key];
-      const b = right[sort.key];
-      const result =
-        typeof a === "number" && typeof b === "number"
-          ? a - b
-          : String(a ?? "").localeCompare(String(b ?? ""));
-      return sort.descending ? -result : result;
+      const result = compare(sort.key, left, right);
+      const ordered = sort.descending ? -result : result;
+      if (ordered) return ordered;
+      // Problems first, then a stable name order, whichever column is sorted.
+      return (
+        compare("blocked_1h", right, left) ||
+        compare("unknown_peers_1h", right, left) ||
+        compare("service", left, right) ||
+        compare("cluster", left, right)
+      );
     });
     return rows;
   }, [catalog, sort]);
@@ -571,7 +582,7 @@ export function ApplicationsPage({
       });
   };
   return (
-    <main className="atlas-page">
+    <main className="atlas-page atlas-page-wide">
       <h1>Applications</h1>
       {state.mode === "demo" && (
         <label className="scenario">
@@ -618,21 +629,6 @@ export function ApplicationsPage({
             {utc(demoWindow.latest)}.
           </p>
         )}
-      <p>
-        Find returns applications bound to a matching pod or observed
-        communicating with the matching endpoint. Exact IPv4 or MAC searches
-        also return source-qualified client attachment evidence when available.
-        Bound pods reflect retained bindings; counts describe distinct direct
-        conversations in the displayed window.
-      </p>
-      <p>
-        Choose an application scope to explore its services and network
-        dependencies.
-      </p>
-      <p>
-        Catalog metrics use each row’s last completed hour; the selected
-        Find/map time window does not change this catalog window.
-      </p>
       {(state.mode === "live" || state.mode === "demo") && (
         <>
           <div className="atlas-find">
@@ -669,6 +665,13 @@ export function ApplicationsPage({
               />
             </div>
           </div>
+          <p className="muted">
+            Find returns applications bound to a matching pod or observed
+            communicating with the matching endpoint. Exact IPv4 or MAC searches
+            also return source-qualified client attachment evidence when
+            available. Bound pods reflect retained bindings; counts describe
+            distinct direct conversations in the displayed window.
+          </p>
           {uncaptured && (
             <p>
               Choose a captured query:{" "}
@@ -825,6 +828,14 @@ export function ApplicationsPage({
               </Table.Body>
             </Table>
           )}
+          <p>
+            Choose an application scope to explore its services and network
+            dependencies.
+          </p>
+          <p>
+            Catalog metrics use each row’s last completed hour; the selected
+            Find/map time window does not change this catalog window.
+          </p>
           {loading && <p>Loading application catalog…</p>}
           {error && (
             <p role="alert">
@@ -851,13 +862,15 @@ export function ApplicationsPage({
                     key={column.key}
                     width={
                       column.key === "service"
-                        ? 280
+                        ? 240
                         : column.key.startsWith("window_")
-                          ? 190
+                          ? 150
                           : column.key === "conversations_1h" ||
                               column.key === "unknown_peers_1h"
-                            ? 155
-                            : 110
+                            ? 140
+                            : column.key === "environment"
+                              ? 100
+                              : 90
                     }
                     tooltip={column.label}
                     sortKey={column.key}
@@ -884,17 +897,44 @@ export function ApplicationsPage({
                   <Table.Row key={row._key}>
                     {columns.map((column) => (
                       <Table.Cell key={column.key} title={row.scopeError}>
-                        {column.key === "service"
-                          ? mapAction(row)
-                          : ["window_start", "window_end"].includes(
-                                column.key,
-                              ) && typeof row[column.key] === "number"
-                            ? new Date(
-                                (row[column.key] as number) * 1000,
-                              ).toISOString()
-                            : typeof row[column.key] === "string"
-                              ? scopeLabel(row[column.key] as string)
-                              : (row[column.key] ?? "—")}
+                        {column.key === "service" ? (
+                          <div>
+                            {mapAction(row)}
+                            {(row.blocked_1h ?? 0) > 0 ||
+                            (row.unknown_peers_1h ?? 0) > 0 ? (
+                              <small className="atlas-attention">
+                                Review first:{" "}
+                                {[
+                                  row.blocked_1h
+                                    ? `${row.blocked_1h} blocked`
+                                    : "",
+                                  row.unknown_peers_1h
+                                    ? plural(
+                                        row.unknown_peers_1h,
+                                        "unknown peer",
+                                      )
+                                    : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}{" "}
+                                in the window ending{" "}
+                                {typeof row.window_end === "number"
+                                  ? utc(row.window_end)
+                                  : "(time unavailable)"}
+                              </small>
+                            ) : null}
+                          </div>
+                        ) : ["window_start", "window_end"].includes(
+                            column.key,
+                          ) && typeof row[column.key] === "number" ? (
+                          new Date(
+                            (row[column.key] as number) * 1000,
+                          ).toISOString()
+                        ) : typeof row[column.key] === "string" ? (
+                          scopeLabel(row[column.key] as string)
+                        ) : (
+                          (row[column.key] ?? "—")
+                        )}
                       </Table.Cell>
                     ))}
                   </Table.Row>

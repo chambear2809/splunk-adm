@@ -604,7 +604,7 @@ def collect_detector_events(
             total += len(page)
             if total > MAX_EVENTS_PER_CAPTURE:
                 raise DetectorExportError("Detector export exceeded the event cap.")
-            if len(page) < limit:
+            if not page:
                 break
             offset += len(page)
         event_batches[detector_id] = events

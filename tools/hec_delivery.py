@@ -1269,7 +1269,9 @@ def _send_capture(
         raise DeliveryError(
             "Capture is already bound to another HEC endpoint; pending data was preserved."
         )
-    if ack_mode == "enterprise" and origin.lower().endswith(".splunkcloud.com"):
+    if ack_mode == "enterprise" and (urlsplit(origin).hostname or "").endswith(
+        ".splunkcloud.com"
+    ):
         raise DeliveryError(
             "HEC indexer acknowledgment is unavailable for direct Splunk Cloud delivery."
         )

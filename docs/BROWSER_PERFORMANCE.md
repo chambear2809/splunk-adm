@@ -1,5 +1,22 @@
 # Browser performance measurements
 
+The Splunk production build writes `dist/atlas-bundle-report.json` outside the
+app archive. It reports final gzip bytes at level 9, remaining headroom against
+the existing 670 KiB release gate, and per-module rendered-byte attribution.
+The release checker explicitly uses level 9, preserving its established CI
+calculation across Python versions whose default compression levels differ.
+Module contributions are uncompressed attribution estimates, not additive gzip
+costs. Module identifiers omit absolute workspace paths. CI retains the report
+separately for 90 days; the release checker remains authoritative for the exact
+packaged bundle and its gzip ceiling.
+
+The current map changes cache routed-edge membership and pill presentation
+metadata across unrelated renders. Routed-edge focus preserves the first matching
+route, and pill classification retains every evidence member. These changes do
+not remove graph rows, inspector evidence or export content. No new browser timing
+or benchmark was executed for this change; the historical measurements below
+remain historical evidence rather than a measured speedup for this revision.
+
 The standalone `tests/performance` harness builds the real `MapPage`, parsers,
 indexes, layout, filters, inspector and export code into a production Vite bundle.
 It uses the ReactDOM production profiling build so React commit/render durations

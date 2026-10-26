@@ -40,6 +40,12 @@ generated credentials. A workflow that cannot acquire ownership does not purge
 the lab. The workflow does not run this job for pull requests or untrusted
 branches.
 
+The trusted lab job depends on the successful frontend job. It downloads and
+verifies that job's qualification packet, then installs the same captured app
+archive. It does not rebuild a second archive for runtime qualification. The
+installed packet records its parent offline manifest hash and requires the same
+application hash, so a rebuilt or changed archive cannot inherit earlier checks.
+
 The manual `run_pipeline_rehearsals` option also starts the trusted lab job and
 runs the mixed-source baseline followed by the real scheduler/downtime
 rehearsal with explicit assisted replay (`--recovery replay --timeout 2400`).
@@ -77,3 +83,41 @@ implementation evidence, not qualification of a real organization or realm.
 
 For local Python checks, use a dedicated virtual environment and install
 `tools/requirements-o11y.txt` there before running the transport tests.
+
+## Retained qualification packets
+
+`tools/qualification_evidence.py` records check execution and snapshots the
+packages and their checksum sidecars. The offline packet includes source commit,
+tree and input fingerprints, runtime versions, release/bundle/AppInspect outcomes,
+and an AppInspect summary containing only check-result counts and the original
+report hash. The installed packet adds the actual Splunk version, build and
+product type, the suite outcome and owned-lifecycle outcome. Raw server metadata,
+credentials, command arguments, customer events and raw AppInspect messages are
+not copied into these packets.
+
+CI finalizes and uploads available packets on success and failure, with unique
+run/attempt names and 90-day retention. Missing or interrupted checks stay
+incomplete; failed checks, source drift and package drift cannot become complete
+qualification. A packet created before a later failure still retains the exact
+input archives. Cancellation can leave a running check without a terminal result;
+that remains incomplete evidence.
+
+Offline packets establish only their named offline checks. Installed packets
+describe the exact synthetic lab run, not Cloud, customer-source, production
+capacity or SHC qualification. Frontend lint/unit and separate browser/Python jobs
+retain their ordinary CI status; they are not relabelled as installed evidence.
+The runtime helper runs inside the owned lab lifecycle before cleanup.
+
+Inspect a downloaded packet without rewriting its recorded environment:
+
+```sh
+python3 tools/qualification_evidence.py verify \
+  --directory dist/qualification/offline --stage offline
+```
+
+Verification checks manifest and snapshot integrity and the current source
+fingerprint. It does not require the original output archive path or raw
+AppInspect JSON. Integrity hashes do not authenticate a packet's producer; retain
+the trusted Actions run identity with it. Copy release packets to the approved
+long-term evidence store before CI retention expires. Keep private maintenance
+backups and migration journals outside the sanitized qualification packet.

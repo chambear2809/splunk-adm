@@ -25,6 +25,7 @@ MAX_ATLAS_GZIP_BYTES = 670 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
+RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
 SETTINGS_ENTRYPOINT = "splunk_adm/bin/adm_settings.py"
 SETTINGS_REGISTRY_PATH = "splunk_adm/bin/adm_settings_registry.json"
 SETTINGS_RUNTIME_FILES = frozenset(
@@ -460,6 +461,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/DNS_INGESTION_RESEARCH.md",
         "splunk_adm/docs/operators/dns-evidence.md",
         RECOVERY_DOC_PATH,
+        RETENTION_DOC_PATH,
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",
         ALERT_ACTIONS_PATH,
@@ -482,7 +484,12 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "packaged default/transforms.conf",
         require_kv=True,
     )
-    atlas_gzip_bytes = len(gzip.compress(files[ATLAS_BUNDLE_PATH], mtime=0))
+    # Python's default compression level varies across supported host runtimes.
+    # Keep the established CI level explicit so headroom means the same thing
+    # in the build report and on operator machines.
+    atlas_gzip_bytes = len(
+        gzip.compress(files[ATLAS_BUNDLE_PATH], compresslevel=9, mtime=0)
+    )
     if atlas_gzip_bytes > MAX_ATLAS_GZIP_BYTES:
         raise ValueError(
             f"atlas.js gzip bundle is {atlas_gzip_bytes} bytes; "

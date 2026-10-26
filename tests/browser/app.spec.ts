@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 test.describe("Application Atlas browser regressions", () => {
   test("selects the captured Catalyst and Meraki demo flows on the map", async ({
@@ -1402,7 +1402,10 @@ test("shrinking focus clears a selected connection outside the new neighborhood"
   await page
     .locator(".table-view table")
     .first()
-    .locator("tbody button")
+    .locator("tbody tr")
+    .filter({ hasText: "orders-db-01" })
+    .first()
+    .locator("button")
     .first()
     .click();
   await expect(
@@ -1894,4 +1897,198 @@ test("invalid deep links recover safely with a dismissible notice", async ({
   ).toBe(0);
   await page.getByRole("button", { name: "Dismiss link notice" }).click();
   await expect(notice).toHaveCount(0);
+});
+
+test("focus follows caller and dependency direction for blast radius", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const focus = page.getByLabel("Focus around selected card", { exact: true });
+  await expect(focus).toBeDisabled();
+  const checkout = page.getByRole("button", { name: /^Service checkout/ });
+  await checkout.focus();
+  await checkout.press("Enter");
+  const status = page.locator(".atlas-filter-status");
+
+  await focus.selectOption("callers:1");
+  await expect(status).toContainText(
+    "Observed callers within 1 hop of checkout",
+  );
+  await expect(
+    page.getByRole("button", { name: /^Service frontend/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^Service payment/ }),
+  ).toHaveCount(0);
+
+  await focus.selectOption("dependencies:1");
+  await expect(status).toContainText(
+    "Observed dependencies within 1 hop of checkout",
+  );
+  await expect(
+    page.getByRole("button", { name: /^Service frontend/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /^VM orders-db-01/ }),
+  ).toBeVisible();
+
+  await expect(status).toContainText(
+    "Limited to conversations and traced calls observed in this window",
+  );
+
+  await focus.selectOption("0");
+  await expect(status).toHaveCount(0);
+});
+
+test("applications catalog lists blocked and unknown-peer scopes first", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&scenario=meraki-nxos",
+  );
+  const catalog = page.locator("table").last();
+  const first = catalog.locator("tbody > tr").first();
+  await expect(first).toContainText("Review first: 3 unknown peers");
+  await expect(first).toContainText(
+    "in the window ending 2026-10-18 03:55 UTC",
+  );
+  await expect(first).toContainText("checkout");
+  const find = page.getByLabel("Find an address, EPG, or device");
+  const findBox = await find.boundingBox();
+  const catalogBox = await catalog.boundingBox();
+  expect(findBox!.y).toBeLessThan(300);
+  expect(findBox!.y).toBeLessThan(catalogBox!.y);
+});
+
+test("narrow maps keep findings below the controls instead of overlapping them", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/tests/browser/browser.html");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const filters = await page.locator(".atlas-map-filters").boundingBox();
+  const findings = await page
+    .getByRole("region", { name: "Map findings" })
+    .boundingBox();
+  const mapArea = await page.locator(".map-area").boundingBox();
+  expect(mapArea!.height).toBeGreaterThanOrEqual(400);
+  expect(findings!.y).toBeGreaterThanOrEqual(filters!.y + filters!.height);
+  expect(findings!.y).toBeGreaterThanOrEqual(mapArea!.y + mapArea!.height);
+});
+
+const cardsInsideMap = async (page: Page, names?: RegExp[]) => {
+  const area = (await page.locator(".map-area").boundingBox())!;
+  let cards = page.locator(".map-canvas .item[role=button]");
+  if (names)
+    cards = cards.filter({
+      hasText: new RegExp(names.map((name) => name.source).join("|")),
+    });
+  const boxes = await cards.evaluateAll((items) =>
+    items.map((item) => {
+      const r = item.getBoundingClientRect();
+      return { left: r.left, right: r.right };
+    }),
+  );
+  expect(boxes.length).toBeGreaterThan(0);
+  for (const box of boxes) {
+    expect(box.left).toBeGreaterThanOrEqual(area.x - 1);
+    expect(box.right).toBeLessThanOrEqual(area.x + area.width + 1);
+  }
+};
+
+test("a wider focus refits so no retained card is clipped", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/tests/browser/browser.html");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const db = page.getByRole("button", { name: /^VM orders-db-01/ });
+  await db.focus();
+  await db.press("Enter");
+  const focus = page.getByLabel("Focus around selected card", { exact: true });
+  await focus.selectOption("callers:2");
+  await expect(page.locator(".atlas-filter-status")).toContainText(
+    "within 2 hops of orders-db-01",
+  );
+  await cardsInsideMap(page);
+});
+
+test("showing a candidate path keeps the map usable and fits both ends", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/tests/browser/browser.html");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const before = (await page.locator(".map-area").boundingBox())!.height;
+  await page
+    .getByRole("article", { name: "Blocked conversation", exact: true })
+    .getByRole("button", { name: "Show path", exact: true })
+    .click();
+  await expect(page.locator(".path-strip")).toBeVisible();
+  await expect(page.locator(".path-strip")).toBeInViewport();
+  const after = (await page.locator(".map-area").boundingBox())!.height;
+  expect(after).toBeGreaterThanOrEqual(Math.min(before, 360));
+  await cardsInsideMap(page, [/win-client-01/, /orders-db-01/]);
+});
+
+test("applications tables use the page width and every column stays reachable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&scenario=meraki-nxos",
+  );
+  await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  const tables = page.locator("table");
+  await expect(tables).toHaveCount(3);
+  for (const index of [0, 1, 2]) {
+    const state = await tables.nth(index).evaluate((table) => {
+      const wrapper = table.parentElement!;
+      const heads = [...table.querySelectorAll("th")];
+      const visible = wrapper.getBoundingClientRect();
+      wrapper.scrollLeft = wrapper.scrollWidth;
+      const last = heads[heads.length - 1].getBoundingClientRect();
+      return {
+        overflow: getComputedStyle(wrapper).overflowX,
+        lastReachable: last.right <= visible.right + 1,
+        wrapperWithinViewport: visible.right <= innerWidth,
+        scrollbarHeight: getComputedStyle(wrapper, "::-webkit-scrollbar")
+          .height,
+      };
+    });
+    expect(state.overflow).toMatch(/auto|scroll/);
+    expect(state.lastReachable).toBe(true);
+    expect(state.wrapperWithinViewport).toBe(true);
+    expect(state.scrollbarHeight).toBe("12px");
+  }
+  const catalog = tables.last();
+  await catalog.evaluate((table) => {
+    table.parentElement!.scrollLeft = 0;
+  });
+  const unknown = catalog.getByRole("columnheader", { name: /Unknown peers/ });
+  const box = (await unknown.boundingBox())!;
+  const wrapper = (await catalog.locator("xpath=..").boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(wrapper.x + wrapper.width + 1);
+});
+
+test("directed focus discloses empty, inferred and blocked evidence", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const db = page.getByRole("button", { name: /^VM orders-db-01/ });
+  await db.focus();
+  await db.press("Enter");
+  const focus = page.getByLabel("Focus around selected card", { exact: true });
+  const status = page.locator(".atlas-filter-status");
+  await focus.selectOption("dependencies:1");
+  await expect(status).toContainText(
+    "No dependencies were observed here; that does not show that none exist.",
+  );
+  await focus.selectOption("callers:2");
+  await expect(status).toContainText(
+    "1 blocked conversation between shown cards, not followed.",
+  );
 });

@@ -155,6 +155,16 @@ slots to reclaim space. A client refuses to move behind a revision it has alread
 observed or silently switch namespaces. A stale first read can produce a conflict
 on save, but cannot overwrite a successor.
 
+The endpoint and Setup expose `recordCount`, `maxRecords` and `remainingRecords`.
+A warning appears at 90% utilization, and a full history remains readable while
+new writes are advertised as unavailable. Plan the separately reviewed migration
+before exhaustion; there is no automatic deletion, rotation or limit increase.
+The capacity check does not prevent an exact retry of an already committed
+operation in the final slot. A separate retry capability still requires current
+administrator authorization and a qualified namespace; the browser only uses it
+for its retained operation identity. Malformed or inconsistent capacity metadata
+leaves the browser read-only.
+
 After insertion the server must observe the exact operation in a valid chain,
 and the browser performs another refresh that must contain its committed revision.
 Unverifiable outcomes return explicit **uncertain** status, preserve the draft,

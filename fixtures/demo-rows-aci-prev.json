@@ -90,10 +90,20 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "29197a19727a0ce497b6adb8aadc3fca0706bb820037c9a5d0834c7dc6bba04b",
+      "reviewed_macro_file_sha256": "65d1e62c5c0f954ac4ab2a38c91a880a258443a95034572847e1d32caa20ad2f",
       "method": "static review only; no recapture",
-      "reason": "The corrected NAT path uses numeric predicate flags and validates IP literals before constructing comparison CIDRs. It retains the existing conversation keys, traffic expressions and backend attribution. Numeric evidence bounds report Splunk addinfo precision; the tested image truncates sub-millisecond bounds. The historical ACI inputs contain no explicit NAT tuple, so the added evidence fields remain absent. Historical captured rows, capture time, original macro/generator hashes and scenario provenance remain unchanged. Prior static reviews are retained; failed native validation of the earlier NAT revision is recorded separately and is not qualification for this corrected source. This is a compatibility review, not a new capture or production qualification.",
+      "reason": "Only adm_health_missed_slots and the adm_missed_slot_lookback description changed to monitor the existing V1 hourly application catalog alongside V2. A stanza-by-stanza comparison with the accepted source confirms all graph, normalization, identity and topology definitions are byte-identical. Historical captured rows, capture time and original provenance hashes remain unchanged. This records static compatibility only, not a new capture or runtime qualification.",
+      "modified_macro_stanzas": [
+        "adm_health_missed_slots",
+        "adm_missed_slot_lookback"
+      ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "29197a19727a0ce497b6adb8aadc3fca0706bb820037c9a5d0834c7dc6bba04b",
+          "method": "static review only; no recapture",
+          "reason": "The corrected NAT path uses numeric predicate flags and validates IP literals before constructing comparison CIDRs. It retains the existing conversation keys, traffic expressions and backend attribution. Numeric evidence bounds report Splunk addinfo precision; the tested image truncates sub-millisecond bounds. The historical ACI inputs contain no explicit NAT tuple, so the added evidence fields remain absent. Historical captured rows, capture time, original macro/generator hashes and scenario provenance remain unchanged. Prior static reviews are retained; failed native validation of the earlier NAT revision is recorded separately and is not qualification for this corrected source. This is a compatibility review, not a new capture or production qualification."
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "a2b314b735f5e22cf34db399f536d0faac6b6643dfd85a2131fff22f05ff50c0",

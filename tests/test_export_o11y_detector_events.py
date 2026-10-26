@@ -33,6 +33,19 @@ def request(**changes) -> export.DetectorExportRequest:
     return export.DetectorExportRequest(**values)
 
 
+def offset_pages(events):
+    """Serve events by the request's offset and limit, as the paged API does."""
+
+    def get_json(url, *_):
+        params = dict(part.split("=", 1) for part in url.split("?", 1)[1].split("&"))
+        offset, limit = int(params["offset"]), int(params["limit"])
+        return export._HTTPResponse(
+            200, json.dumps(events[offset : offset + limit]).encode()
+        )
+
+    return get_json
+
+
 def source_event(
     event_id: str, *, detector_id="detector_A", timestamp=1_800_000_100_000, **changes
 ):
@@ -221,9 +234,7 @@ class DetectorEventExportTest(unittest.TestCase):
         records = export.collect_detector_events(
             request(detector_ids=("detector_A",)),
             "token",
-            get_json=lambda *args: export._HTTPResponse(
-                200, json.dumps(events).encode()
-            ),
+            get_json=offset_pages(events),
             captured_at=1_800_000_901,
         )
         by_id = {record["event_id"]: record for record in records}
@@ -244,9 +255,7 @@ class DetectorEventExportTest(unittest.TestCase):
         records = export.collect_detector_events(
             request(detector_ids=("detector_A",)),
             "token",
-            get_json=lambda *args: export._HTTPResponse(
-                200, json.dumps(events).encode()
-            ),
+            get_json=offset_pages(events),
             captured_at=1_800_000_901,
         )
         self.assertEqual(
@@ -310,9 +319,7 @@ class DetectorEventExportTest(unittest.TestCase):
             export.collect_detector_events(
                 request(detector_ids=("detector_A",)),
                 "token",
-                get_json=lambda *args: export._HTTPResponse(
-                    200, json.dumps([large]).encode()
-                ),
+                get_json=offset_pages([large]),
                 captured_at=1_800_000_901,
             )
 
@@ -406,6 +413,36 @@ class DetectorEventExportTest(unittest.TestCase):
                         ).encode(),
                     ),
                 )
+
+    def test_short_page_is_not_treated_as_end_of_history(self):
+        events = [
+            source_event(str(index), timestamp=1_800_000_100_000 + index)
+            for index in range(5)
+        ]
+        served = offset_pages(events)
+
+        def capped(url, token, timeout, context):
+            # The server caps pages below the requested limit.
+            response = served(url.replace("limit=1000", "limit=2"))
+            return response
+
+        calls = []
+
+        def recording(url, *args):
+            calls.append(url)
+            return capped(url, *args)
+
+        records = export.collect_detector_events(
+            request(detector_ids=("detector_A",)),
+            "token",
+            get_json=recording,
+            captured_at=1_800_000_901,
+        )
+        self.assertEqual(
+            {record["event_id"] for record in records}, {"0", "1", "2", "3", "4"}
+        )
+        self.assertIn("offset=4", calls[-2])
+        self.assertIn("offset=5", calls[-1])
 
     def test_api_detector_ceiling_is_not_mistaken_for_complete_history(self):
         req = request(detector_ids=("detector_A",))

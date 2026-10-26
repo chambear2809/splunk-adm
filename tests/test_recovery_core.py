@@ -22,7 +22,7 @@ if str(LIB) not in sys.path:
 
 from adm_recovery_lib.core import Refused, Recovery, Settings, Uncertain  # noqa: E402
 from adm_recovery_lib.planner import TARGET_WINDOWS  # noqa: E402
-from adm_recovery_lib.rest import Rest  # noqa: E402
+from adm_recovery_lib.rest import ApiError, ResponseTooLarge, Rest  # noqa: E402
 
 
 TARGET = "ADM - Identity builder"
@@ -383,7 +383,239 @@ class RecoveryPlanTest(unittest.TestCase):
             recovery.verify_summary(manifest)
 
 
+class RecoverySearchCompletionTest(unittest.TestCase):
+    def recovery(self, content, rows=None):
+        rows = rows or []
+
+        class Api:
+            def __init__(self):
+                self.calls = []
+
+            def request(self, method, path, data=None, **_kwargs):
+                self.calls.append((method, path, data))
+                if method == "POST" and path.endswith("/search/v2/jobs"):
+                    return {"sid": "readonly-1"}
+                if method == "POST" and path.endswith("/readonly-1/control"):
+                    return {}
+                if method == "GET" and path.endswith("/readonly-1"):
+                    return {"entry": [{"content": content}]}
+                if method == "GET" and path.endswith(
+                    "/readonly-1/results?count=1000&offset=0"
+                ):
+                    return {"results": rows}
+                raise AssertionError((method, path))
+
+        api = Api()
+        recovery = Recovery(api, settings=Settings(enabled=True), sleep=lambda _: None)
+        return recovery, api
+
+    def complete(self):
+        return {
+            "dispatchState": "DONE",
+            "isDone": True,
+            "isFinalized": False,
+            "eventIsTruncated": False,
+            "resultIsTruncated": False,
+            "dropCount": "0",
+            "resultCount": "0",
+            "scanCount": "0",
+            "eventCount": "0",
+            "messages": [],
+        }
+
+    def test_complete_metadata_matches_capture_contract(self):
+        recovery, api = self.recovery(self.complete())
+        self.assertEqual(recovery.search("| makeresults"), [])
+        self.assertNotIn("readonly-1", recovery.readonly_sids)
+        self.assertTrue(
+            any(path.endswith("/readonly-1/control") for _, path, _ in api.calls)
+        )
+
+    def test_missing_or_truncated_completion_metadata_is_uncertain(self):
+        for field, value in (
+            ("dispatchState", "RUNNING"),
+            ("isDone", False),
+            ("isFinalized", True),
+            ("eventIsTruncated", True),
+            ("resultIsTruncated", True),
+            ("dropCount", "1"),
+            ("isFinalized", "invalid"),
+            ("eventIsTruncated", None),
+            ("resultIsTruncated", "invalid"),
+        ):
+            with self.subTest(field=field):
+                content = self.complete()
+                content[field] = value
+                recovery, _api = self.recovery(content)
+                with self.assertRaisesRegex(Uncertain, "completion metadata"):
+                    recovery.search("| makeresults")
+
+    def test_missing_required_metadata_is_uncertain_but_optional_flag_can_be_absent(
+        self,
+    ):
+        for field in (
+            "dispatchState",
+            "isDone",
+            "isFinalized",
+            "eventIsTruncated",
+            "dropCount",
+        ):
+            with self.subTest(field=field):
+                content = self.complete()
+                content.pop(field)
+                recovery, _ = self.recovery(content)
+                with self.assertRaisesRegex(Uncertain, "completion metadata"):
+                    recovery.search("| makeresults")
+        content = self.complete()
+        content.pop("resultIsTruncated")
+        recovery, _ = self.recovery(content)
+        self.assertEqual(recovery.search("| makeresults"), [])
+
+    def test_expired_search_deadline_does_not_prevent_bounded_readonly_cleanup(self):
+        recovery, api = self.recovery(self.complete())
+        recovery.readonly_sids.add("readonly-1")
+        recovery.active_sid = "writer-1"
+        recovery.deadline = recovery.clock() - 1
+        recovery.cleanup_readonly_searches()
+        self.assertEqual(recovery.readonly_sids, set())
+        self.assertFalse(any("writer-1" in path for _, path, _ in api.calls))
+
+    def test_unacknowledged_cleanup_retains_sid_without_masking_search_result(self):
+        recovery, api = self.recovery(self.complete())
+        original = api.request
+
+        def request(method, path, **kwargs):
+            if path.endswith("/control"):
+                raise ApiError(503)
+            return original(method, path, **kwargs)
+
+        api.request = request
+        self.assertEqual(recovery.search("| makeresults"), [])
+        self.assertEqual(recovery.readonly_sids, {"readonly-1"})
+
+    def test_paused_writer_search_defers_cleanup_until_after_handback(self):
+        recovery, api = self.recovery(self.complete())
+        recovery.lock = {"state": "paused"}
+        self.assertEqual(recovery.search("| makeresults"), [])
+        self.assertEqual(recovery.readonly_sids, {"readonly-1"})
+        self.assertFalse(any(path.endswith("/control") for _, path, _ in api.calls))
+
+    def test_known_failure_restores_schedule_before_auxiliary_cleanup(self):
+        events = []
+
+        class CleanupRecovery(Recovery):
+            def preflight(self, name):
+                self.lock = {"state": "paused"}
+                return {"is_scheduled": "1"}, "configuration"
+
+            def state(self, key):
+                raise Uncertain("read failed after pause")
+
+            def target(self, name):
+                return {"content": {"is_scheduled": "0"}}
+
+            def drain(self, name, before):
+                events.append("drain")
+
+            def restore(self, name, before):
+                events.append("restore")
+
+            def save(self, record, **changes):
+                events.append("save")
+
+            def cleanup_readonly_searches(self):
+                events.append("cleanup")
+
+        recovery = CleanupRecovery(NullApi(), settings=Settings(enabled=True))
+        self.assertEqual(recovery.run(TARGET)["status"], "uncertain")
+        self.assertLess(events.index("restore"), events.index("cleanup"))
+
+    def test_claim_acquisition_transport_uncertainty_carries_key(self):
+        class Api:
+            def request(self, method, path, **_kwargs):
+                if method == "POST" and path.endswith("adm_recovery_state"):
+                    raise Uncertain("management request timed out")
+                raise AssertionError((method, path))
+
+        recovery = Recovery(Api(), settings=Settings(enabled=True))
+        record = {"_key": "target-test", "owner": recovery.owner}
+        with self.assertRaises(Uncertain) as raised:
+            recovery.insert(record)
+        self.assertEqual(raised.exception.claim_key, "target-test")
+
+    def test_lost_target_claim_response_is_uncertain_without_pausing_or_dispatching(
+        self,
+    ):
+        class ClaimApi:
+            def __init__(self):
+                self.claim = None
+                self.mutations = []
+
+            def request(self, method, path, data=None, **kwargs):
+                if method == "POST" and path.endswith("adm_recovery_state"):
+                    self.claim = dict(data)
+                    raise OSError("response lost")
+                if method == "POST" and path.endswith("adm_recovery_audit"):
+                    return {}
+                self.mutations.append((method, path))
+                raise AssertionError((method, path))
+
+        class ClaimRecovery(Recovery):
+            def preflight(self, name):
+                return {"is_scheduled": "1"}, "configuration"
+
+            def state(self, key):
+                return None
+
+            def history(self, name):
+                return []
+
+            def plan(self, name, history):
+                return [{"scheduled_time": 1}]
+
+        api = ClaimApi()
+        recovery = ClaimRecovery(api, settings=Settings(enabled=True))
+        with patch("adm_recovery_lib.core.validate_recovery_plan"):
+            result = recovery.run(TARGET)
+        self.assertEqual(result["status"], "uncertain")
+        self.assertEqual(result["claim_key"], api.claim["_key"])
+        self.assertEqual(api.claim["state"], "pause_pending")
+        self.assertEqual(api.mutations, [])
+
+
 class RestValidationTest(unittest.TestCase):
+    def test_response_bound_applies_before_sdk_reads_http_error_body(self):
+        body = BytesIO(b"sensitive-error-body")
+        response = {"status": 503, "reason": "Unavailable", "headers": [], "body": body}
+        with patch(
+            "adm_recovery_lib.rest.binding.handler",
+            return_value=lambda *_args, **_kwargs: response,
+        ):
+            with self.assertRaisesRegex(
+                ResponseTooLarge, "response exceeds byte bound"
+            ):
+                Rest("token").request(
+                    "GET", "/services/server/info", max_response_bytes=4
+                )
+        self.assertTrue(body.closed)
+
+    def test_bounded_http_errors_still_expose_only_status(self):
+        response = {
+            "status": 503,
+            "reason": "Unavailable",
+            "headers": [],
+            "body": BytesIO(b"secret"),
+        }
+        with patch(
+            "adm_recovery_lib.rest.binding.handler",
+            return_value=lambda *_args, **_kwargs: response,
+        ):
+            with self.assertRaises(ApiError) as caught:
+                Rest("token").request(
+                    "GET", "/services/server/info", max_response_bytes=100
+                )
+        self.assertEqual(str(caught.exception), "Splunk REST HTTP 503")
+
     def test_requires_local_https_origin_and_token(self):
         for uri in (
             "http://localhost:8089",

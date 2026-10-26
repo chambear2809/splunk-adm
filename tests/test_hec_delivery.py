@@ -523,6 +523,30 @@ class HecDeliveryTest(unittest.TestCase):
             sender.spool_status(self.spool).indexer_acknowledged_not_searchable, 1
         )
 
+    def test_cloud_endpoint_refuses_indexer_ack_with_or_without_explicit_port(self):
+        for index, host in enumerate(
+            ("inputs.stack.splunkcloud.com", "inputs.stack.splunkcloud.com:8088")
+        ):
+            with self.subTest(host=host):
+                spool = self.spool.parent / f"cloud-spool-{index}"
+                capture(self.input, envelope({"capture_id": f"cloud-{index}"}))
+                sender.enqueue_capture(self.input, spool, source_id="o11y_health")
+                requests = []
+
+                def post(url, body, token, timeout, context, channel=None):
+                    requests.append(url)
+                    return response(b'{"text":"Success","code":0,"ackId":9}')
+
+                result = sender.deliver_pending(
+                    spool,
+                    endpoint=f"https://{host}/services/collector/event",
+                    token="test-token",
+                    ack_mode="enterprise",
+                    post_json=post,
+                )
+                self.assertEqual(requests, [])
+                self.assertEqual(result.failed_captures, 1)
+
     def test_missing_ack_id_replays_only_unacknowledged_batch_after_restart(self):
         rows = [
             envelope(

@@ -386,7 +386,20 @@ def handle_request(request, store, source_ids):
         result = service.write(payload)
     else:
         result = service.read()
-    result.update(canWrite=authorized and namespace is not None, namespace=namespace)
+    # A full immutable history remains readable, but does not advertise a new
+    # write. POST is intentionally evaluated by SettingsService first so an
+    # exact retry can still resolve an operation occupying the final slot.
+    capacity_available = result.get("remainingRecords", 1) > 0
+    result.update(
+        canWrite=authorized and namespace is not None and capacity_available,
+        canRetry=authorized and namespace is not None and not capacity_available,
+        namespace=namespace,
+    )
+    if not capacity_available and not reason:
+        result["writeUnavailableReason"] = (
+            "Deployment settings history is full; new settings writes are disabled. "
+            "Review the separately approved migration before changing settings."
+        )
     if reason:
         result["writeUnavailableReason"] = reason
     return result

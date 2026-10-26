@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import errno
+from io import BytesIO
 import socket
 import ssl
 from urllib.error import URLError
@@ -20,6 +21,10 @@ class ApiError(RuntimeError):
 
 class TransportTimeout(RuntimeError):
     """The local management request exceeded its transport timeout."""
+
+
+class ResponseTooLarge(ValueError):
+    """The management response exceeded the caller-provided byte bound."""
 
 
 def is_transport_timeout(exc):
@@ -55,7 +60,33 @@ class Rest:
         self.port = endpoint.port or 8089
         self.context = ssl.create_default_context(cafile=ca_file or None)
 
-    def request(self, method, path, data=None, json_body=False, timeout=30):
+    def request(
+        self,
+        method,
+        path,
+        data=None,
+        json_body=False,
+        timeout=30,
+        max_response_bytes=None,
+    ):
+        if max_response_bytes is not None and (
+            type(max_response_bytes) is not int or max_response_bytes <= 0
+        ):
+            raise ValueError("response byte bound must be a positive integer")
+        transport = binding.handler(timeout=timeout, verify=True, context=self.context)
+
+        def bounded_transport(url, message, **kwargs):
+            response = transport(url, message, **kwargs)
+            if max_response_bytes is not None:
+                # The SDK reads HTTP error bodies before raising HTTPError.
+                # Enforce the bound before either successful or error decoding.
+                with response["body"] as stream:
+                    raw = stream.read(max_response_bytes + 1)
+                if len(raw) > max_response_bytes:
+                    raise ResponseTooLarge("management response exceeds byte bound")
+                response["body"] = BytesIO(raw)
+            return response
+
         client = binding.Context(
             host=self.host,
             port=self.port,
@@ -63,7 +94,7 @@ class Rest:
             token=self.token,
             autologin=False,
             retries=0,
-            handler=binding.handler(timeout=timeout, verify=True, context=self.context),
+            handler=bounded_transport,
         )
         parts = urlsplit(path)
         if parts.scheme or parts.netloc or not parts.path.startswith("/services"):
@@ -87,7 +118,13 @@ class Rest:
             else:
                 raise ValueError("unsupported REST method")
             with response.body as stream:
-                raw = stream.read()
+                raw = (
+                    stream.read(max_response_bytes + 1)
+                    if max_response_bytes
+                    else stream.read()
+                )
+            if max_response_bytes is not None and len(raw) > max_response_bytes:
+                raise ResponseTooLarge("management response exceeds byte bound")
             if response.status >= 300:
                 raise ApiError(response.status)
             return json.loads(raw) if raw else {}
