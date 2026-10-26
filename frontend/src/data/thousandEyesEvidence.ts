@@ -346,7 +346,7 @@ function nativeIdentityFilter(
       PATH_SOURCETYPE +
       '",_te_p_identity_match=1,sourcetype="' +
       ATLAS_PATH_SOURCETYPE +
-      '",_te_p_identity_match=1,1=1,1)',
+      '",_te_p_identity_match=1,1=1,1=1)',
   ].join("\n");
 }
 
@@ -434,7 +434,7 @@ function nativeWindowFilter(selection: EvidenceSelection): string {
       end +
       " AND _te_p_last>=" +
       start +
-      "),1=1,1)",
+      "),1=1,1=1)",
   ].join("\n");
 }
 

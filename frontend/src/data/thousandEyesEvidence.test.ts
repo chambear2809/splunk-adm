@@ -97,6 +97,8 @@ describe("ThousandEyes selected evidence search", () => {
     expect(query).toContain("min(_te_m_start_s)");
     expect(query).not.toContain("mvmin(");
     expect(query).not.toContain("mvmax(");
+    expect([...query.matchAll(/,1=1,1=1\)/g)]).toHaveLength(2);
+    expect(query).not.toContain(",1=1,1)");
   });
 
   it("uses retained-index capture bounds, never Splunk _time as native time or receipt filter", () => {
