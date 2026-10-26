@@ -408,6 +408,24 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
             raise AssertionError("temporary ThousandEyes viewer role cleanup failed")
 
     @classmethod
+    def _wait_for_kvstore(cls, timeout: float = 300) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                status = cls.lab._json("GET", "/services/kvstore/status")["entry"][0][
+                    "content"
+                ]
+            except Exception:
+                time.sleep(3)
+                continue
+            if status.get("current", {}).get("status") == "ready":
+                return
+            time.sleep(3)
+        raise AssertionError(
+            "KV store did not become ready for ThousandEyes fixture setup"
+        )
+
+    @classmethod
     def _restore_role_indexes(
         cls, role: str, indexes: list[str], password: str
     ) -> None:
@@ -770,6 +788,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
     def test_native_packaged_sidecar_is_lazy_and_reads_as_endpoint_viewer(self):
         from settings_fixture import SettingsFixture
 
+        self._wait_for_kvstore()
         admin_password = self.lab.read_secrets()["SPLUNK_PASSWORD"]
         deployment = SettingsFixture(self)
         deployment.clear()
