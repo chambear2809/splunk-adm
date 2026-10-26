@@ -298,6 +298,8 @@ describe("endpoint investigation contracts", () => {
     };
     const evidence = endpointEvidenceSelection(result);
     expect(evidence.contexts[0].capped).toBe(true);
+    expect(evidence.contexts[0].serverPort).toBe(443);
+    expect(evidence.contexts[0].transport).toBe("tcp");
   });
   it("rejects result timestamps beyond the supported date range", () => {
     const result = {

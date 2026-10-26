@@ -33,6 +33,8 @@ export interface TrafficContext {
   timeBasis: "flow_observation" | "connection_open";
   clientOwner?: string;
   capped: boolean;
+  serverPort?: number;
+  transport?: string;
 }
 export interface EvidenceSelection {
   schemaVersion: 1;
@@ -274,7 +276,14 @@ export function validateSelection(value: EvidenceSelection): EvidenceSelection {
       c.first < 0 ||
       c.last < c.first ||
       !["flow_observation", "connection_open"].includes(c.timeBasis) ||
-      typeof c.capped !== "boolean"
+      typeof c.capped !== "boolean" ||
+      (c.serverPort !== undefined &&
+        (!Number.isInteger(c.serverPort) ||
+          c.serverPort < 1 ||
+          c.serverPort > 65535)) ||
+      (c.transport !== undefined &&
+        (typeof c.transport !== "string" ||
+          !/^[a-z][a-z0-9_-]{0,31}$/.test(c.transport)))
     )
       throw new Error("Invalid scoped traffic observation context.");
   }
