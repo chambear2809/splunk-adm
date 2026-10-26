@@ -85,6 +85,13 @@ class ThousandEyesContractTest(unittest.TestCase):
         )
         lab = (ROOT / "tests/splunk/lab.sh").read_text(encoding="utf-8")
         self.assertIn("atlas_te", shell_array(lab, "LAB_INDEXES"))
+        hec = configparser.RawConfigParser()
+        hec.read(ROOT / "tests/splunk/lab_app/default/inputs.conf.template")
+        allowed = {
+            index.strip() for index in hec["http://adm-lab"]["indexes"].split(",")
+        }
+        self.assertIn("atlas_te", allowed)
+        self.assertNotIn("*", allowed)
 
     def test_atlas_path_rows_use_json_props_without_installing_vendor_writers(self):
         props = configparser.RawConfigParser()
