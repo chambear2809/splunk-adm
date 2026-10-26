@@ -103,6 +103,12 @@ function nativeField(name: string, value: string): string {
   return `'${name}'="${literal(value, 255)}"`;
 }
 
+function isoSecondsExpression(field: string): string {
+  const utc = `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$`;
+  const offset = `^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}$`;
+  return `if(match(${field},"${utc}"),strptime(replace(${field},"Z$","+0000"),"%Y-%m-%dT%H:%M:%S%z"),if(match(${field},"${offset}"),strptime(${field},"%Y-%m-%dT%H:%M:%S%:z"),null()))`;
+}
+
 function sourceField(value: string): string {
   return `source="${literal(value, 255)}"`;
 }
@@ -261,17 +267,17 @@ function nativeWindowFilter(selection: EvidenceSelection): string {
     "| spath input=_raw path=result.roundId output=_te_p_result_round",
     "| spath input=_raw path=roundId output=_te_p_round",
     "| eval _te_m_end=mvappend(_te_m_gauge_end,_te_m_sum_end),_te_m_start=mvappend(_te_m_gauge_start,_te_m_sum_start),_te_m_end_s=mvmap(_te_m_end,tonumber(_te_m_end)/1000000000),_te_m_start_s=mvmap(_te_m_start,tonumber(_te_m_start)/1000000000)",
-    "| eval _te_m_unknown=if(isnull(_te_m_end) OR mvcount(_te_m_end_s)<mvcount(_te_m_end) OR (mvcount(_te_m_start)>0 AND mvcount(_te_m_start)!=mvcount(_te_m_end)),1,0),_te_m_first=coalesce(mvmin(_te_m_start_s),mvmin(_te_m_end_s)),_te_m_last=mvmax(_te_m_end_s)",
+    "| eval _te_m_unknown=if(isnull(_te_m_end) OR mvcount(_te_m_end_s)<mvcount(_te_m_end) OR (mvcount(_te_m_start)>0 AND mvcount(_te_m_start)!=mvcount(_te_m_end)),1,0),_te_m_first=coalesce(min(_te_m_start_s),min(_te_m_end_s)),_te_m_last=max(_te_m_end_s)",
     "| eval _te_t_start_s=mvmap(_te_t_start,tonumber(_te_t_start)/1000000000),_te_t_end_s=mvmap(_te_t_end,tonumber(_te_t_end)/1000000000)",
-    "| eval _te_t_unknown=if(isnull(_te_t_start) OR isnull(_te_t_end) OR mvcount(_te_t_start_s)<mvcount(_te_t_start) OR mvcount(_te_t_end_s)<mvcount(_te_t_end) OR mvcount(_te_t_start)!=mvcount(_te_t_end),1,0),_te_t_first=mvmin(_te_t_start_s),_te_t_last=mvmax(_te_t_end_s)",
-    '| eval _te_a_raw=mvappend(_te_a_ns,_te_a_iso),_te_a_s=mvmap(_te_a_raw,if(match(_te_a_raw,"^[0-9]{4}-[0-9]{2}-[0-9]{2}T"),coalesce(strptime(_te_a_raw,"%Y-%m-%dT%H:%M:%S%z"),if(match(_te_a_raw,"Z$"),strptime(substr(_te_a_raw,1,19),"%Y-%m-%dT%H:%M:%S"),null())),tonumber(_te_a_raw)/1000000000))',
-    "| eval _te_a_unknown=if(isnull(_te_a_raw) OR mvcount(_te_a_s)<mvcount(_te_a_raw),1,0),_te_a_first=mvmin(_te_a_s),_te_a_last=mvmax(_te_a_s)",
-    '| eval _te_e_start_s=if(match(_te_e_start,"Z$"),strptime(substr(_te_e_start,1,19),"%Y-%m-%dT%H:%M:%S"),strptime(_te_e_start,"%Y-%m-%dT%H:%M:%S%z")),_te_e_end_s=if(match(_te_e_end,"Z$"),strptime(substr(_te_e_end,1,19),"%Y-%m-%dT%H:%M:%S"),strptime(_te_e_end,"%Y-%m-%dT%H:%M:%S%z"))',
+    "| eval _te_t_unknown=if(isnull(_te_t_start) OR isnull(_te_t_end) OR mvcount(_te_t_start_s)<mvcount(_te_t_start) OR mvcount(_te_t_end_s)<mvcount(_te_t_end) OR mvcount(_te_t_start)!=mvcount(_te_t_end),1,0),_te_t_first=min(_te_t_start_s),_te_t_last=max(_te_t_end_s)",
+    `| eval _te_a_raw=mvappend(_te_a_ns,_te_a_iso),_te_a_s=mvmap(_te_a_raw,if(match(_te_a_raw,"^[0-9]{4}-[0-9]{2}-[0-9]{2}T"),${isoSecondsExpression("_te_a_raw")},tonumber(_te_a_raw)/1000000000))`,
+    "| eval _te_a_unknown=if(isnull(_te_a_raw) OR mvcount(_te_a_s)<mvcount(_te_a_raw),1,0),_te_a_first=min(_te_a_s),_te_a_last=max(_te_a_s)",
+    `| eval _te_e_start_s=${isoSecondsExpression("_te_e_start")},_te_e_end_s=${isoSecondsExpression("_te_e_end")}`,
     "| eval _te_e_unknown=if(isnull(_te_e_start_s) OR (isnotnull(_te_e_end) AND isnull(_te_e_end_s)),1,0)",
     "| eval _te_l_start=mvappend(_te_l_trigger,_te_l_first),_te_l_end_all=mvappend(_te_l_clear,_te_l_end),_te_l_start_s=mvmap(_te_l_start,tonumber(_te_l_start)/1000),_te_l_end_s=mvmap(_te_l_end_all,tonumber(_te_l_end_all)/1000)",
-    "| eval _te_l_unknown=if(isnull(_te_l_start) OR mvcount(_te_l_start_s)<mvcount(_te_l_start) OR (mvcount(_te_l_end_all)>0 AND mvcount(_te_l_end_s)<mvcount(_te_l_end_all)),1,0),_te_l_first=mvmin(_te_l_start_s),_te_l_last=coalesce(mvmax(_te_l_end_s),mvmax(_te_l_start_s))",
-    '| eval _te_p_iso=mvappend(_te_p_result_date,_te_p_date),_te_p_iso_s=mvmap(_te_p_iso,if(match(_te_p_iso,"Z$"),strptime(substr(_te_p_iso,1,19),"%Y-%m-%dT%H:%M:%S"),strptime(_te_p_iso,"%Y-%m-%dT%H:%M:%S%z"))),_te_p_start_raw=mvappend(_te_p_result_start,_te_p_start),_te_p_end_raw=mvappend(_te_p_result_end,_te_p_end),_te_p_round_raw=mvappend(_te_p_result_round,_te_p_round),_te_p_start_s=mvmap(_te_p_start_raw,tonumber(_te_p_start_raw)),_te_p_end_s=mvmap(_te_p_end_raw,tonumber(_te_p_end_raw)),_te_p_round_s=mvmap(_te_p_round_raw,tonumber(_te_p_round_raw))',
-    "| eval _te_p_first=coalesce(mvmin(_te_p_start_s),mvmin(_te_p_iso_s),mvmin(_te_p_round_s)),_te_p_last=coalesce(mvmax(_te_p_end_s),mvmax(_te_p_iso_s),mvmax(_te_p_round_s)),_te_p_unknown=if((isnull(_te_p_first) AND isnull(_te_p_last)) OR (mvcount(_te_p_start_raw)>0 AND mvcount(_te_p_start_s)<mvcount(_te_p_start_raw)) OR (mvcount(_te_p_end_raw)>0 AND mvcount(_te_p_end_s)<mvcount(_te_p_end_raw)),1,0)",
+    "| eval _te_l_unknown=if(isnull(_te_l_start) OR mvcount(_te_l_start_s)<mvcount(_te_l_start) OR (mvcount(_te_l_end_all)>0 AND mvcount(_te_l_end_s)<mvcount(_te_l_end_all)),1,0),_te_l_first=min(_te_l_start_s),_te_l_last=coalesce(max(_te_l_end_s),max(_te_l_start_s))",
+    `| eval _te_p_iso=mvappend(_te_p_result_date,_te_p_date),_te_p_iso_s=mvmap(_te_p_iso,${isoSecondsExpression("_te_p_iso")}),_te_p_start_raw=mvappend(_te_p_result_start,_te_p_start),_te_p_end_raw=mvappend(_te_p_result_end,_te_p_end),_te_p_round_raw=mvappend(_te_p_result_round,_te_p_round),_te_p_start_s=mvmap(_te_p_start_raw,tonumber(_te_p_start_raw)),_te_p_end_s=mvmap(_te_p_end_raw,tonumber(_te_p_end_raw)),_te_p_round_s=mvmap(_te_p_round_raw,tonumber(_te_p_round_raw))`,
+    "| eval _te_p_first=coalesce(min(_te_p_start_s),min(_te_p_iso_s),min(_te_p_round_s)),_te_p_last=coalesce(max(_te_p_end_s),max(_te_p_iso_s),max(_te_p_round_s)),_te_p_unknown=if((isnull(_te_p_first) AND isnull(_te_p_last)) OR (mvcount(_te_p_start_raw)>0 AND mvcount(_te_p_start_s)<mvcount(_te_p_start_raw)) OR (mvcount(_te_p_end_raw)>0 AND mvcount(_te_p_end_s)<mvcount(_te_p_end_raw)),1,0)",
     '| where case(sourcetype="' +
       METRIC_SOURCETYPE +
       '",_te_m_unknown=1 OR (_te_m_first<=' +

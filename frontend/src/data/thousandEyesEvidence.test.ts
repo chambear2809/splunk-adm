@@ -92,6 +92,11 @@ describe("ThousandEyes selected evidence search", () => {
     expect(query).toContain("_te_e_unknown=1 OR");
     expect(query).toContain("_te_l_unknown=1 OR");
     expect(query).toContain("_te_p_unknown=1 OR");
+    expect(query).toContain("%:z");
+    expect(query).toContain('replace(_te_e_start,"Z$","+0000")');
+    expect(query).toContain("min(_te_m_start_s)");
+    expect(query).not.toContain("mvmin(");
+    expect(query).not.toContain("mvmax(");
   });
 
   it("uses retained-index capture bounds, never Splunk _time as native time or receipt filter", () => {
