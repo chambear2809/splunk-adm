@@ -1,7 +1,8 @@
 // Exercise the installed app's explicit, same-origin ThousandEyes sidecar.
 // Credentials arrive only through the environment and never enter evidence.
 import { createRequire } from "node:module";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { dirname, resolve } from "node:path";
 
 const require = createRequire(new URL("../../package.json", import.meta.url));
@@ -111,6 +112,17 @@ const metadataDenialCounts = (responses, consoleList) =>
     consoleErrors: consoleList.filter((item) => item.source === path).length,
   }));
 
+const expectedAssetVersion = JSON.parse(
+  await readFile(
+    new URL(
+      "../../splunk_app/splunk_adm/appserver/static/thousandeyes-manifest.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+).assetVersion;
+const mainScripts = [];
+const mergedReads = [];
 const searchRequests = [];
 const assetRequests = [];
 const consoleErrors = [];
@@ -206,6 +218,37 @@ try {
     });
   });
   page.on("response", (response) => {
+    const observedPath = new URL(response.url()).pathname;
+    if (observedPath.endsWith("/app/splunk_adm/pages/atlas.js")) {
+      void response
+        .body()
+        .then((body) =>
+          mainScripts.push({
+            status: response.status(),
+            hasExpectedAssetVersion: body.includes(
+              Buffer.from(expectedAssetVersion),
+            ),
+            sha256: createHash("sha256").update(body).digest("hex"),
+          }),
+        )
+        .catch(() =>
+          mainScripts.push({ status: response.status(), unavailable: true }),
+        );
+    }
+    if (observedPath.endsWith("/configs/v1/conftypes/macros/stanzas:get")) {
+      let stanza = "invalid";
+      try {
+        const value = JSON.parse(response.request().postData() || "{}").stanza;
+        if (/^adm_[a-z0-9_]+(?:\([1-9][0-9]*\))?$/.test(value)) stanza = value;
+      } catch {
+        /* No source payload is logged. */
+      }
+      mergedReads.push({
+        stanza,
+        method: response.request().method(),
+        status: response.status(),
+      });
+    }
     const asset = rememberAsset(response.url());
     if (asset) asset.status = response.status();
     if (response.status() >= 400) {
@@ -458,6 +501,8 @@ try {
       mode,
       stage,
       visibleAlerts,
+      mainScripts,
+      mergedReads,
       caughtError: {
         name: safeMessage(caught.name || "Error"),
         message: safeMessage(caught.message || error),
