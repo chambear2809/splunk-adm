@@ -135,6 +135,7 @@ function observation(
     intervalBasis: "measurement",
     eventTime: 1100,
     indexedTime: 1110,
+    rowTime: 1099,
     sourceTimes: [
       { field: "time_unix_nano", value: "10000000000", unit: "ns" },
     ],
@@ -229,8 +230,15 @@ describe("ThousandEyes evidence panel", () => {
     expect(html).toContain("ENDPOINT");
     expect(html).toContain("stream-3");
     expect(html).toContain("test-related-18");
+    expect(html).toContain("Original Splunk row time (_time)");
+    expect(html).toContain("basis not qualified; not measurement time");
+    expect(html).not.toContain("Attested Splunk receipt time");
     expect(html).toContain("ambiguous configured-binding attribution");
     expect(html).toContain("Copy exact IDs and times");
+    expect(html).toContain("Native measurement window");
+    expect(html).toContain("Retained-index scan diagnostics");
+    expect(html).toContain("not the ThousandEyes measurement window");
+    expect(html).not.toContain("Inspected window:");
   });
 
   it("separates measured ordered hops from inventory route candidates", () => {
@@ -465,7 +473,7 @@ describe("ThousandEyes evidence panel", () => {
     expect(comparisonButton).not.toContain("disabled");
   });
 
-  it("calls only the injected comparator for valid windows, even with historical receipt age", () => {
+  it("defaults to native-window halves while allowing historical measurement evidence", () => {
     const compareMeasurements = vi.fn(() => [
       {
         key: "test-17:agent-4:network.latency",
@@ -527,14 +535,62 @@ describe("ThousandEyes evidence panel", () => {
     expect(compareMeasurements).toHaveBeenCalledOnce();
     expect(compareMeasurements).toHaveBeenCalledWith(
       [expect.objectContaining({ testId: "test-17" })],
-      { start: 0, end: 600 },
-      { start: 600, end: 1200 },
+      { start: 600, end: 900 },
+      { start: 900, end: 1200 },
     );
     expect(treeText(completedTree)).toContain(
       "Comparator results by authority, account group, test domain",
     );
     expect(treeText(completedTree)).toContain("0.03");
     expect(treeText(completedTree)).toContain("seconds");
+  });
+
+  it("rejects edited comparison windows outside the native measurement window", () => {
+    const compareMeasurements = vi.fn(() => []);
+    hookHarness.cursor = 0;
+    hookHarness.pendingEffects = [];
+    hookHarness.active = true;
+    let panelTree: ReactElement;
+    try {
+      panelTree = ThousandEyesEvidencePanel({
+        result: result(),
+        compareMeasurements,
+      });
+    } finally {
+      hookHarness.active = false;
+    }
+    const comparison = findComponent(panelTree, "ComparisonSection");
+    const comparisonComponent = comparison?.type as (
+      props: Record<string, unknown>,
+    ) => ReactElement;
+    const comparisonProps = comparison?.props as Record<string, unknown>;
+    hookHarness.stateSlots = [];
+    hookHarness.refSlots = [];
+    hookHarness.memoSlots = [];
+    const initialTree = renderDirectComponent(
+      comparisonComponent,
+      comparisonProps,
+    );
+    const dateInputs = findDateInputs(initialTree);
+    expect(dateInputs).toHaveLength(4);
+    expect(dateInputs[0].props.value).toBe(localDateTimeInput(600));
+    expect(dateInputs[1].props.value).toBe(localDateTimeInput(900));
+    expect(dateInputs[2].props.value).toBe(localDateTimeInput(900));
+    expect(dateInputs[3].props.value).toBe(localDateTimeInput(1200));
+
+    dateInputs[0].props.onChange?.({
+      target: { value: localDateTimeInput(599) },
+    } as never);
+    const editedTree = renderDirectComponent(
+      comparisonComponent,
+      comparisonProps,
+    );
+    const compareButton = findButton(editedTree, "Compare loaded measurements");
+    expect(compareButton?.props.disabled).toBe(true);
+    expect(treeText(editedTree)).toContain(
+      "inside the native measurement window",
+    );
+    expect(compareMeasurements).not.toHaveBeenCalled();
   });
 
   it("blocks the comparison control when the search input was capped", () => {
@@ -777,7 +833,12 @@ function treeText(node: unknown): string {
 function findButton(
   node: unknown,
   label: string,
-): ReactElement<{ onClick?: (event: never) => void }> | undefined {
+):
+  | ReactElement<{
+      onClick?: (event: never) => void;
+      disabled?: boolean;
+    }>
+  | undefined {
   if (Array.isArray(node)) {
     for (const item of node) {
       const found = findButton(item, label);
@@ -792,6 +853,7 @@ function findButton(
     const element = node as ReactElement<{
       children?: unknown;
       onClick?: (event: never) => void;
+      disabled?: boolean;
     }>;
     if (
       element.type === "button" &&
@@ -801,6 +863,58 @@ function findButton(
     return findButton(element.props.children, label);
   }
   return undefined;
+}
+
+function findDateInputs(node: unknown): ReactElement<{
+  type?: string;
+  value?: string;
+  onChange?: (event: never) => void;
+}>[] {
+  if (Array.isArray(node)) return node.flatMap(findDateInputs);
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    !("props" in node) ||
+    !("type" in node)
+  )
+    return [];
+
+  const element = node as ReactElement<{
+    children?: unknown;
+    type?: string;
+    value?: string;
+    onChange?: (event: never) => void;
+  }>;
+  if (
+    typeof element.type === "function" &&
+    element.type.name === "WindowEditor"
+  ) {
+    const renderWindowEditor = element.type as (
+      props: Record<string, unknown>,
+    ) => ReactElement;
+    return findDateInputs(renderWindowEditor(element.props));
+  }
+  const inputs =
+    element.type === "input" && element.props.type === "datetime-local"
+      ? [
+          element as ReactElement<{
+            type?: string;
+            value?: string;
+            onChange?: (event: never) => void;
+          }>,
+        ]
+      : [];
+  return [...inputs, ...findDateInputs(element.props.children)];
+}
+
+function localDateTimeInput(value: number): string {
+  const date = new Date(value * 1000);
+  const pad = (number: number) => String(number).padStart(2, "0");
+  const milliseconds = date.getMilliseconds();
+  const fraction = milliseconds
+    ? `.${String(milliseconds).padStart(3, "0")}`
+    : "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${fraction}`;
 }
 
 function findComponent(node: unknown, name: string): ReactElement | undefined {

@@ -145,8 +145,9 @@ export function ThousandEyesEvidencePanel({
               </time>
             </span>
             <span>
-              Inspected window: {epochTime(result.inspectedWindow.start)} to{" "}
-              {epochTime(result.inspectedWindow.end)}
+              Native measurement window:{" "}
+              {epochTime(result.selection.window.start)} to{" "}
+              {epochTime(result.selection.window.end)}
             </span>
             <span>
               Configuration fingerprint: {result.configurationFingerprint}
@@ -170,6 +171,15 @@ export function ThousandEyesEvidencePanel({
               </span>
             )}
           </div>
+          <details className="te-coverage">
+            <summary>Retained-index scan diagnostics</summary>
+            <p>
+              Splunk _time scan bounds: {result.inspectedWindow.start} to{" "}
+              {result.inspectedWindow.end} epoch seconds. These broad search
+              bounds locate retained index rows; they are not the ThousandEyes
+              measurement window or coverage period.
+            </p>
+          </details>
 
           <fieldset className="te-filters">
             <legend>Filter and group observations</legend>
@@ -337,9 +347,9 @@ export function ThousandEyesEvidencePanel({
             result.state === "complete" &&
             filteredRecords.length > 0 && (
               <ComparisonSection
+                key={`${result.selection.selectionId}:${result.capturedAt}:${result.selection.window.start}:${result.selection.window.end}`}
                 records={filteredRecords.map((entry) => entry.record)}
-                inspectedWindow={result.inspectedWindow}
-                selectionWindow={result.selection.window}
+                nativeMeasurementWindow={result.selection.window}
                 compareMeasurements={compareMeasurements}
                 blockedReason={comparisonBlockedReason(
                   result,
@@ -650,9 +660,18 @@ function ObservationCard({
         <dd>
           {isoTime(record.indexedTime)} ({record.indexedTime} epoch seconds)
         </dd>
+        {record.rowTime !== undefined && (
+          <>
+            <dt>Original Splunk row time (_time)</dt>
+            <dd>
+              {isoTime(record.rowTime)} ({record.rowTime} epoch seconds) · basis
+              not qualified; not measurement time
+            </dd>
+          </>
+        )}
         {record.receiptTime !== undefined && (
           <>
-            <dt>Splunk receipt time (_time)</dt>
+            <dt>Attested Splunk receipt time</dt>
             <dd>
               {isoTime(record.receiptTime)} ({record.receiptTime} epoch seconds;
               not measurement time)
@@ -1177,33 +1196,36 @@ function Activity({
 
 function ComparisonSection({
   records,
-  inspectedWindow,
-  selectionWindow,
+  nativeMeasurementWindow,
   compareMeasurements,
   blockedReason,
 }: {
   records: readonly ThousandEyesAttributedObservation[];
-  inspectedWindow: EvidenceWindow;
-  selectionWindow: EvidenceWindow;
+  nativeMeasurementWindow: EvidenceWindow;
   compareMeasurements: ThousandEyesMeasurementComparator;
   blockedReason?: string;
 }) {
-  const width = selectionWindow.end - selectionWindow.start;
+  const midpoint =
+    nativeMeasurementWindow.start +
+    (nativeMeasurementWindow.end - nativeMeasurementWindow.start) / 2;
   const [before, setBefore] = useState<EvidenceWindow>({
-    start: Math.max(0, selectionWindow.start - width),
-    end: selectionWindow.start,
+    start: nativeMeasurementWindow.start,
+    end: midpoint,
   });
-  const [after, setAfter] = useState<EvidenceWindow>(selectionWindow);
+  const [after, setAfter] = useState<EvidenceWindow>({
+    start: midpoint,
+    end: nativeMeasurementWindow.end,
+  });
   const [comparisons, setComparisons] = useState<ThousandEyesComparison[]>();
   const [error, setError] = useState("");
   const valid =
     validWindow(before) &&
     validWindow(after) &&
     before.end <= after.start &&
-    before.start >= inspectedWindow.start &&
-    before.end <= inspectedWindow.end &&
-    after.start >= inspectedWindow.start &&
-    after.end <= inspectedWindow.end;
+    before.start >= nativeMeasurementWindow.start &&
+    before.end <= nativeMeasurementWindow.end &&
+    after.start >= nativeMeasurementWindow.start &&
+    after.end <= nativeMeasurementWindow.end;
   const update = (
     setter: Dispatch<SetStateAction<EvidenceWindow>>,
     edge: "start" | "end",
@@ -1236,9 +1258,9 @@ function ComparisonSection({
       <p>
         Comparison uses only the injected ThousandEyes comparator and
         observations matching the current filters in this result. Both windows
-        must fall inside the inspected interval; no values or missing test
-        coverage are filled in. Window inputs use the browser's local time and
-        are passed to the comparator as epoch seconds.
+        must stay inside the native measurement window; no values or missing
+        test coverage are filled in. Window inputs use the browser's local time
+        and are passed to the comparator as epoch seconds.
       </p>
       {blockedReason ? (
         <p className="te-notice" role="status">
@@ -1258,9 +1280,9 @@ function ComparisonSection({
           />
           {!valid && (
             <p className="te-notice" role="status">
-              Choose ordered, non-overlapping windows fully contained in the
-              inspected interval ({epochTime(inspectedWindow.start)} to{" "}
-              {epochTime(inspectedWindow.end)}).
+              Choose ordered, non-overlapping windows inside the native
+              measurement window ({epochTime(nativeMeasurementWindow.start)} to{" "}
+              {epochTime(nativeMeasurementWindow.end)}).
             </p>
           )}
           <button type="button" onClick={run} disabled={!valid}>
@@ -1376,7 +1398,7 @@ function WindowEditor({
         Start
         <input
           type="datetime-local"
-          step="1"
+          step="0.001"
           value={localDateTime(value.start)}
           onChange={(event) => onChange("start", event.target.value)}
         />
@@ -1385,7 +1407,7 @@ function WindowEditor({
         End
         <input
           type="datetime-local"
-          step="1"
+          step="0.001"
           value={localDateTime(value.end)}
           onChange={(event) => onChange("end", event.target.value)}
         />
@@ -1649,7 +1671,11 @@ function localDateTime(value: number): string {
   const date = new Date(value * 1000);
   if (!Number.isFinite(date.getTime())) return "";
   const pad = (number: number) => String(number).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const milliseconds = date.getMilliseconds();
+  const fraction = milliseconds
+    ? `.${String(milliseconds).padStart(3, "0")}`
+    : "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}${fraction}`;
 }
 function safeConfiguredOrigin(value?: string): string | undefined {
   if (!value) return undefined;
@@ -1704,10 +1730,16 @@ function exactContextText(record: ThousandEyesAttributedObservation): string {
     `Event time UTC: ${isoTime(record.eventTime)}`,
     `Indexed time epoch seconds: ${record.indexedTime}`,
     `Indexed time UTC: ${isoTime(record.indexedTime)}`,
-    `Splunk receipt _time epoch seconds: ${record.receiptTime ?? "not supplied"}`,
+    `Original Splunk row time _time epoch seconds: ${record.rowTime ?? "not supplied"}`,
+    ...(record.rowTime === undefined
+      ? []
+      : [
+          `Original Splunk row time basis: unqualified; ${isoTime(record.rowTime)}`,
+        ]),
+    `Attested Splunk receipt time epoch seconds: ${record.receiptTime ?? "not supplied"}`,
     ...(record.receiptTime === undefined
       ? []
-      : [`Splunk receipt _time UTC: ${isoTime(record.receiptTime)}`]),
+      : [`Attested Splunk receipt time UTC: ${isoTime(record.receiptTime)}`]),
     `Interval start epoch seconds: ${record.interval.start}`,
     `Interval end epoch seconds: ${record.interval.end}`,
     `Interval basis: ${record.intervalBasis}`,
