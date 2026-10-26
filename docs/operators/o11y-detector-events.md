@@ -14,7 +14,10 @@ with `X-SF-TOKEN`. The detector ID is configured literally; the exporter does
 not enumerate all detectors. The API reference documents inclusive `from` and
 `to` Unix timestamps in milliseconds, nonnegative `offset`, and `limit` (50 by
 default). This exporter requests pages of at most 1,000 events and pages by
-offset until the selected detector returns a short page. Splunk documents a
+offset until the selected detector returns an empty page; a short page is not
+treated as the end, because the repository cannot verify that the service never
+caps a page below the requested `limit`. Each detector therefore costs one extra
+request. Splunk documents a
 maximum of 10,000 events from this operation even if more are present. Atlas
 cannot prove one detector's complete history after reaching this API ceiling,
 even if the next offset returns an empty page, so it fails that capture

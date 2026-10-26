@@ -24,7 +24,8 @@ SPEC = importlib.util.spec_from_file_location(
 entry = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(entry)
 
-V2_ROWS = (
+UNRECOVERABLE_ROWS = (
+    "ADM - Application catalog",
     "ADM - Network client history builder",
     "ADM - Conversation rollup v2",
     "ADM - Traffic observation rollup v2",
@@ -50,14 +51,14 @@ class FakeRecovery:
 
 
 class EarliestReplayableTest(unittest.TestCase):
-    def test_v2_rows_before_a_v1_gap_do_not_block_recovery(self):
-        rows = [{"name": name, "scheduled_time": "100"} for name in V2_ROWS]
+    def test_monitored_unrecoverable_rows_do_not_block_a_replayable_gap(self):
+        rows = [{"name": name, "scheduled_time": "100"} for name in UNRECOVERABLE_ROWS]
         rows.append({"name": "ADM - Service binding", "scheduled_time": "400"})
         rows.append({"name": "ADM - Identity builder", "scheduled_time": "200"})
         self.assertEqual(entry.earliest_replayable(rows), "ADM - Identity builder")
 
     def test_only_unrecoverable_or_malformed_rows_yield_no_target(self):
-        rows = [{"name": name, "scheduled_time": "100"} for name in V2_ROWS]
+        rows = [{"name": name, "scheduled_time": "100"} for name in UNRECOVERABLE_ROWS]
         rows.append({"name": "ADM - Identity builder", "scheduled_time": "bad"})
         rows.append({"name": "ADM - Identity builder"})
         self.assertIsNone(entry.earliest_replayable(rows))
@@ -66,7 +67,7 @@ class EarliestReplayableTest(unittest.TestCase):
     def test_detector_query_restricts_to_every_recoverable_target(self):
         for name in entry.TARGET_WINDOWS:
             self.assertIn(json.dumps(name), entry.DETECTOR_QUERY)
-        for name in V2_ROWS:
+        for name in UNRECOVERABLE_ROWS:
             self.assertNotIn(json.dumps(name), entry.DETECTOR_QUERY)
         self.assertEqual(entry._spl_string('a"b\\c'), '"a\\"b\\\\c"')
 
@@ -115,7 +116,9 @@ class EntrypointTargetTest(unittest.TestCase):
         self.assertEqual(FakeRecovery.queries, [entry.DETECTOR_QUERY])
 
     def test_only_v2_gaps_are_a_noop_without_running(self):
-        FakeRecovery.rows = [{"name": name, "scheduled_time": "1"} for name in V2_ROWS]
+        FakeRecovery.rows = [
+            {"name": name, "scheduled_time": "1"} for name in UNRECOVERABLE_ROWS
+        ]
         code, output = self.invoke("ADM - Application catalog v2")
         self.assertEqual((code, output["status"]), (0, "noop"))
         self.assertEqual(FakeRecovery.ran, [])

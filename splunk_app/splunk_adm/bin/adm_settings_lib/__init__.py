@@ -13,6 +13,28 @@ ROOT_KEY = "atomic_root"
 TOKEN = re.compile(r"[A-Za-z0-9_-]{1,80}\Z")
 
 
+def capacity_metadata(record_count):
+    remaining = MAX_RECORDS - record_count
+    result = {
+        "recordCount": record_count,
+        "maxRecords": MAX_RECORDS,
+        "remainingRecords": remaining,
+    }
+    threshold = (MAX_RECORDS * 90 + 99) // 100
+    if record_count >= MAX_RECORDS:
+        result["capacityWarning"] = (
+            "Deployment settings history is full. New settings writes are disabled; "
+            "review the separately approved migration before changing settings."
+        )
+    elif record_count >= threshold:
+        result["capacityWarning"] = (
+            "Deployment settings history is nearly full. Review and schedule the "
+            "separately approved migration before the remaining slots are consumed; "
+            "records are never deleted or rotated automatically."
+        )
+    return result
+
+
 class SettingsError(Exception):
     def __init__(self, status, code, message):
         super().__init__(message)
@@ -152,17 +174,19 @@ class SettingsService:
         return {**settings, "sources": sources}
 
     def read(self):
-        settings, chain, _, _ = self.inspect()
+        settings, chain, _, record_count = self.inspect()
         revisions = [row["revision"] for row in chain]
         if chain and chain[0]["previous_revision"] is not None:
             revisions.insert(0, chain[0]["previous_revision"])
         if not chain and settings:
             revisions.append(settings["revision"])
-        return {
+        result = {
             "state": "configured" if settings else "absent",
             "settings": self.visible(settings),
             "observedRevisions": revisions,
         }
+        result.update(capacity_metadata(record_count))
+        return result
 
     def write(self, payload):
         if (
@@ -190,7 +214,7 @@ class SettingsService:
                     raise SettingsError(
                         409, "conflict", "Request ID was used with different settings."
                     )
-                return self.verified(row, current)
+                return self.verified(row, current, count)
         if (current["revision"] if current else None) != expected:
             raise SettingsError(
                 409,
@@ -220,7 +244,7 @@ class SettingsService:
             # operation identity, never by retrying an overwrite.
             pass
         try:
-            current, chain, _, _ = self.inspect()
+            current, chain, _, record_count = self.inspect()
         except Exception as exc:
             raise SettingsError(
                 503,
@@ -230,7 +254,7 @@ class SettingsService:
         for row in chain:
             if row["_key"] == document["_key"]:
                 if row["operation_fingerprint"] == fingerprint:
-                    return self.verified(row, current)
+                    return self.verified(row, current, record_count)
                 raise SettingsError(
                     409,
                     "conflict",
@@ -242,11 +266,13 @@ class SettingsService:
             "Save outcome is uncertain. Your draft is preserved; retry the same save to verify it.",
         )
 
-    def verified(self, row, current):
-        return {
+    def verified(self, row, current, record_count):
+        result = {
             "state": "configured",
             "settings": self.visible(current),
             "committedRevision": row["revision"],
             "requestId": row["request_id"],
             "superseded": current["revision"] != row["revision"],
         }
+        result.update(capacity_metadata(record_count))
+        return result

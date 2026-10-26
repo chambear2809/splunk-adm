@@ -85,6 +85,10 @@ await copyFile(
 );
 await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
 await copyFile(
+  "docs/RETENTION_MAINTENANCE.md",
+  `${stage}/docs/RETENTION_MAINTENANCE.md`,
+);
+await copyFile(
   "docs/DNS_EVIDENCE_QUALIFICATION.md",
   `${stage}/docs/DNS_EVIDENCE_QUALIFICATION.md`,
 );

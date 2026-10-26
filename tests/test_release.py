@@ -1,10 +1,12 @@
 import hashlib
+import gzip
 import io
 import tarfile
 import unittest
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
@@ -27,6 +29,31 @@ def _incompressible(size: int) -> bytes:
 
 
 class ReleaseArchiveTests(unittest.TestCase):
+    def test_bundle_budget_is_independent_of_host_default_gzip_level(self):
+        self._write_pair(self._files())
+        compress = gzip.compress
+
+        def changed_host_default(data, compresslevel=6, *, mtime=0):
+            # Model a host with a different default without altering the cap.
+            if compresslevel != 9:
+                return b"x" * (MAX_ATLAS_GZIP_BYTES + 1)
+            return compress(data, compresslevel=compresslevel, mtime=mtime)
+
+        with patch(
+            "tools.check_release.gzip.compress", side_effect=changed_host_default
+        ):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_retention_tool_is_documented_as_repository_only(self):
+        repo = Path(__file__).resolve().parents[1]
+        doc = (repo / "docs/RETENTION_MAINTENANCE.md").read_text(encoding="utf-8")
+        packager = (repo / "tools/package-app.mjs").read_text(encoding="utf-8")
+        self.assertIn("not shipped in the\nSplunk app package", doc)
+        self.assertNotIn("retention_maintenance", packager)
+        self.assertNotIn(
+            "tools/retention_maintenance.py", "".join(BUNDLED_RUNTIME_FILES)
+        )
+
     def setUp(self):
         self.temp = TemporaryDirectory()
         self.root = Path(self.temp.name)
@@ -117,6 +144,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/DEPLOYMENT_HEALTH.md": b"settings operator docs",
             "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md": b"late receipt operator docs",
             "splunk_adm/docs/RECOVERY.md": b"# Recovery and replay\n",
+            "splunk_adm/docs/RETENTION_MAINTENANCE.md": b"# Retention\n",
             "splunk_adm/docs/UPGRADES.md": b"migration docs",
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
@@ -238,6 +266,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                 SETTINGS_REGISTRY_PATH,
                 "splunk_adm/docs/DEPLOYMENT_HEALTH.md",
                 "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md",
+                "splunk_adm/docs/RETENTION_MAINTENANCE.md",
             }
         ):
             with self.subTest(name=name):

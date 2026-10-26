@@ -45,7 +45,9 @@ class Refused(RuntimeError):
 
 
 class Uncertain(RuntimeError):
-    pass
+    def __init__(self, message, *, claim_key=None):
+        super().__init__(message)
+        self.claim_key = claim_key
 
 
 def truth(value):
@@ -116,6 +118,10 @@ class Recovery:
         self.current = None
         self.unknown_dispatch = False
         self.active_sid = None
+        # These are only SIDs created by read-only manifest/history/verification
+        # searches.  Replay dispatch SIDs are tracked separately above and must
+        # never be cancelled automatically after an uncertain write.
+        self.readonly_sids = set()
         self.completed = []
         self.slot_seconds = 0.0
 
@@ -166,9 +172,25 @@ class Recovery:
         except ApiError as exc:
             if exc.status == 409:
                 raise Refused("existing claim; no takeover") from None
-            raise
-        if self.state(record["_key"]).get("owner") != self.owner:
-            raise Uncertain("claim readback does not match owner")
+            if 400 <= exc.status < 500:
+                raise
+            raise Uncertain(
+                "claim acquisition response is uncertain", claim_key=record["_key"]
+            ) from None
+        except Exception:
+            raise Uncertain(
+                "claim acquisition response is uncertain", claim_key=record["_key"]
+            ) from None
+        try:
+            persisted = self.state(record["_key"])
+        except Exception:
+            raise Uncertain(
+                "claim readback is uncertain", claim_key=record["_key"]
+            ) from None
+        if not persisted or persisted.get("owner") != self.owner:
+            raise Uncertain(
+                "claim readback does not match owner", claim_key=record["_key"]
+            )
 
     def save(self, record, **changes):
         persisted = self.state(record["_key"])
@@ -343,7 +365,16 @@ class Recovery:
                 index_earliest=str(index_window[0]), index_latest=str(index_window[1])
             )
         sid = self.request("POST", APP + "/search/v2/jobs", data)["sid"]
-        return self.job(sid, target=target)
+        if not isinstance(sid, str) or not sid:
+            raise Uncertain("read-only search creation did not return a valid SID")
+        self.readonly_sids.add(sid)
+        try:
+            return self.job(sid, target=target)
+        finally:
+            # While a writer is paused, its restoration has priority over
+            # auxiliary cancellation and must retain the remaining deadline.
+            if self.lock is None:
+                self.cleanup_readonly_searches()
 
     def job(self, sid, target=None):
         path = "/services/search/v2/jobs/" + quote(sid, safe="")
@@ -354,11 +385,32 @@ class Recovery:
                 or content.get("dispatchState") == "FAILED"
             ):
                 raise Uncertain("search failed")
+            # A DONE job with missing/false completion flags is malformed, not
+            # an in-progress job; do not poll it forever or consume the slot
+            # budget while accepting incomplete native metadata.
+            if content.get("dispatchState") == "DONE" and (
+                not truth(content.get("isDone"))
+                or "isFinalized" not in content
+                or "eventIsTruncated" not in content
+                or "dropCount" not in content
+            ):
+                raise Uncertain("search completion metadata is incomplete or truncated")
             if truth(content.get("isDone")):
                 break
             self.sleep(0.25)
-        if truth(content.get("isFinalized")):
-            raise Uncertain("search finalized before completion")
+        result_truncated = content.get("resultIsTruncated")
+        if (
+            content.get("dispatchState") != "DONE"
+            or not truth(content.get("isDone"))
+            or content.get("isFinalized") not in (False, 0, "0")
+            or content.get("eventIsTruncated") not in (False, 0, "0")
+            or (
+                "resultIsTruncated" in content
+                and result_truncated not in (False, 0, "0")
+            )
+            or str(content.get("dropCount")) != "0"
+        ):
+            raise Uncertain("search completion metadata is incomplete or truncated")
         total = int(content.get("resultCount", -1))
         if total < 0 or total > self.settings.manifest_count_limit:
             raise Uncertain("search result count exceeds qualified limit")
@@ -400,6 +452,34 @@ class Recovery:
             if not (zero and (empty_rollup or empty_binding)):
                 raise Uncertain("search reported warnings or errors")
         return rows
+
+    def cleanup_readonly_searches(self):
+        """Best-effort, bounded cleanup that ignores the per-search deadline.
+
+        The budget is at most 5 seconds and never extends past the overall
+        action deadline; after that no cancel is attempted. A failed or skipped
+        cleanup must never prevent restoring a known-safe writer schedule.
+        Unacknowledged SIDs remain tracked and are reported.
+        """
+        deadline = min(
+            self.started + self.settings.action_deadline_seconds,
+            self.clock() + min(5, self.settings.cleanup_seconds),
+        )
+        for sid in sorted(self.readonly_sids):
+            remaining = deadline - self.clock()
+            if remaining <= 0:
+                break
+            path = "/services/search/v2/jobs/" + quote(sid, safe="") + "/control"
+            try:
+                self.api.request(
+                    "POST", path, data={"action": "cancel"}, timeout=min(2, remaining)
+                )
+            except ApiError as exc:
+                if exc.status != 404:
+                    continue
+            except Exception:
+                continue
+            self.readonly_sids.discard(sid)
 
     def history(self, name):
         return self.search(
@@ -665,6 +745,13 @@ class Recovery:
         )
 
     def run(self, name):
+        result = self._run(name)
+        self.cleanup_readonly_searches()
+        if self.readonly_sids:
+            result["readonly_cleanup_unverified"] = sorted(self.readonly_sids)
+        return result
+
+    def _run(self, name):
         before = None
         try:
             before, configuration = self.preflight(name)
@@ -692,8 +779,15 @@ class Recovery:
             self.insert(record)
             self.lock = record
             # The durable intent and original state exist before any REST pause.
-            if self.state(record["_key"]).get("before") != before:
-                raise Uncertain("pause state was not persisted")
+            try:
+                persisted = self.state(record["_key"])
+            except (ApiError, Uncertain) as exc:
+                exc.claim_key = record["_key"]
+                raise
+            if not persisted or persisted.get("before") != before:
+                uncertain = Uncertain("pause state was not persisted")
+                uncertain.claim_key = record["_key"]
+                raise uncertain
             self.audit("pause_pending", name=name)
             self.unchanged(name, before, paused=False)
             self.request(
@@ -753,7 +847,8 @@ class Recovery:
                         self.slot_seconds += self.clock() - start
         except Exception as exc:
             if not self.lock:
-                # Pre-pause refusals do not create claims or change schedules.
+                # A lost claim response can leave durable intent even though no
+                # schedule was paused. Preserve that uncertainty for reconciliation.
                 reason = (
                     str(exc)
                     if isinstance(exc, (Refused, Uncertain, ApiError))
@@ -761,13 +856,27 @@ class Recovery:
                 )
                 if before is not None:
                     try:
-                        self.audit("refused", name=name, reason=reason)
+                        self.audit(
+                            "uncertain_claim"
+                            if getattr(exc, "claim_key", None)
+                            else "refused",
+                            name=name,
+                            reason=reason,
+                            claim_key=getattr(exc, "claim_key", None),
+                        )
                     except Exception:
                         pass  # Refusal remains a nonzero action result if audit is unavailable.
                 return {
-                    "status": "refused",
+                    "status": "uncertain"
+                    if getattr(exc, "claim_key", None)
+                    else "refused",
                     "name": name,
                     "reason": reason,
+                    **(
+                        {"claim_key": exc.claim_key}
+                        if getattr(exc, "claim_key", None)
+                        else {}
+                    ),
                 }
             self.deadline = min(
                 self.started + self.settings.action_deadline_seconds,
@@ -798,4 +907,9 @@ class Recovery:
                 "name": name,
                 "reason": reason,
                 "slots": [item["scheduled_time"] for item in self.completed],
+                **(
+                    {"claim_key": exc.claim_key}
+                    if getattr(exc, "claim_key", None)
+                    else {}
+                ),
             }

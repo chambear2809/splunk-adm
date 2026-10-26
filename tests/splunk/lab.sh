@@ -88,7 +88,7 @@ cmd_up() {
       labels=(--label "org.splunk-adm.task=$TASK" --label "org.splunk-adm.lab=$NAME"
         --network "$NAME-net" -v "$NAME-etc:/opt/splunk/etc" -v "$NAME-var:/opt/splunk/var")
     fi
-    docker run -d --name "$NAME" --platform linux/amd64 "${labels[@]}" \
+    docker run -d --name "$NAME" --platform linux/amd64 ${labels[@]+"${labels[@]}"} \
       -p "127.0.0.1:$WEB_PORT:8000" -p "127.0.0.1:$MGMT_PORT:8089" -p "127.0.0.1:$HEC_PORT:8088" \
       -e SPLUNK_START_ARGS=--accept-license \
       -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \

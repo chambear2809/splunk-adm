@@ -32,6 +32,8 @@ concurrency:
 jobs:
   frontend:
     name: Frontend checks
+    outputs:
+      qualification_artifact_id: ${{ steps.offline_upload.outputs.artifact-id }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -40,16 +42,33 @@ jobs:
         with:
           node-version: 22.13.0
           cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
       - run: npm ci --registry=https://registry.npmjs.org --ignore-scripts
       - run: npm run lint
       - run: npm test -- --run
       - run: npm run package
-      - run: python3 tools/check_release.py --dist dist
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.11"
+      - name: Snapshot qualification inputs
+        id: offline_evidence
+        run: |
+          archives=(dist/splunk_adm-*.tar.gz)
+          integrations=(dist/application-atlas-integrations-*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          test "${#integrations[@]}" -eq 1
+          python3 tools/qualification_evidence.py start \
+            --directory dist/qualification/offline --stage offline \
+            --package "${archives[0]}" --package "${integrations[0]}"
+      - name: Verify captured release
+        run: |
+          python3 tools/qualification_evidence.py run \
+            --directory dist/qualification/offline --check release -- \
+            python3 tools/check_release.py --dist dist
       - name: Verify Atlas bundle
-        run: python3 -m unittest tests.test_atlas_build
+        run: |
+          python3 tools/qualification_evidence.py run \
+            --directory dist/qualification/offline --check atlas_bundle -- \
+            python3 -m unittest tests.test_atlas_build
       - name: AppInspect Cloud precert gate
         run: |
           python3 -m pip install --disable-pip-version-check 'splunk-appinspect==4.3.1'
@@ -57,12 +76,39 @@ jobs:
           test "${#archives[@]}" -eq 1
           report=dist/appinspect-cloud.json
           set +e
-          splunk-appinspect inspect "${archives[0]}" \
+          python3 tools/qualification_evidence.py run \
+            --directory dist/qualification/offline --check appinspect -- \
+            splunk-appinspect inspect "${archives[0]}" \
             --mode precert --included-tags cloud --output-file "$report"
           appinspect_status=$?
           set -e
           python3 tools/check_appinspect.py "$report"
           test "$appinspect_status" -eq 0
+      - name: Finalize offline qualification evidence
+        if: ${{ always() && steps.offline_evidence.outcome == 'success' }}
+        run: |
+          python3 tools/qualification_evidence.py finish \
+            --directory dist/qualification/offline \
+            --require release --require atlas_bundle --require appinspect \
+            --appinspect-report dist/appinspect-cloud.json
+      - name: Retain exact packages and sanitized qualification evidence
+        id: offline_upload
+        if: ${{ always() && steps.offline_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: offline-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/qualification/offline/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Retain bundle contribution and headroom report
+        if: ${{ always() && steps.offline_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundle-contributions-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/atlas-bundle-report.json
+          if-no-files-found: error
+          retention-days: 90
 
   browser:
     name: Browser regression checks
@@ -109,6 +155,7 @@ jobs:
 
   splunk-lab:
     name: Splunk integration suite
+    needs: frontend
     # This job is default-branch-only because it executes trusted repository code
     # next to licensed TA files on a persistent, dedicated runner.
     if: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && ((github.event_name == 'workflow_dispatch' && (inputs.run_splunk_lab || inputs.run_pipeline_rehearsals)) || (github.event_name == 'push' && vars.ADM_SPLUNK_LAB_ENABLED == 'true') || (github.event_name == 'schedule' && vars.ADM_PIPELINE_REHEARSALS_SCHEDULE_ENABLED == 'true')) }}
@@ -124,8 +171,31 @@ jobs:
           cache: npm
       - run: npm ci --registry=https://registry.npmjs.org --ignore-scripts
       - run: npx playwright install --with-deps chromium
-      - run: npm run package
-      - run: python3 tools/check_release.py --dist dist
+      - name: Download the exact offline-qualified packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.frontend.outputs.qualification_artifact_id }}
+          merge-multiple: true
+          path: dist/qualification/offline
+      - name: Snapshot installed qualification inputs
+        id: installed_evidence
+        run: |
+          python3 tools/qualification_evidence.py verify \
+            --directory dist/qualification/offline --stage offline
+          cp dist/qualification/offline/artifacts/* dist/
+          archives=(dist/splunk_adm-*.tar.gz)
+          integrations=(dist/application-atlas-integrations-*.tar.gz)
+          test "${#archives[@]}" -eq 1
+          test "${#integrations[@]}" -eq 1
+          python3 tools/qualification_evidence.py start \
+            --directory dist/qualification/installed --stage installed \
+            --parent-packet dist/qualification/offline \
+            --package "${archives[0]}" --package "${integrations[0]}"
+      - name: Verify the exact candidate before installation
+        run: |
+          python3 tools/qualification_evidence.py run \
+            --directory dist/qualification/installed --check release -- \
+            python3 tools/check_release.py --dist dist
       - name: Check TA research artifacts
         run: |
           set -euo pipefail
@@ -149,7 +219,9 @@ jobs:
         env:
           ADM_RUN_PIPELINE_REHEARSALS: ${{ (github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule' }}
         run: |
-          python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
+          python3 tools/qualification_evidence.py run \
+            --directory dist/qualification/installed --check lab_lifecycle -- \
+            python3 tools/lab_lock.py --root . -- bash -euo pipefail -c '
             if docker inspect adm-splunk-lab >/dev/null 2>&1; then
               echo "Refusing to adopt an existing adm-splunk-lab container; remove it before CI." >&2
               exit 1
@@ -162,13 +234,31 @@ jobs:
             tests/splunk/lab.sh up
             tests/splunk/lab.sh install
             tests/splunk/lab.sh btool
-            ADM_LAB=1 python3 -m unittest discover -s tests/splunk -v
+            python3 tools/qualification_evidence.py lab-runtime \
+              --directory dist/qualification/installed
+            ADM_LAB=1 python3 tools/qualification_evidence.py run \
+              --directory dist/qualification/installed --check splunk_integration -- \
+              python3 -m unittest discover -s tests/splunk -v
             if [[ "$ADM_RUN_PIPELINE_REHEARSALS" == "true" ]]; then
               tests/splunk/lab.sh install
               python3 tools/mixed_pipeline.py --reset-lab --case baseline
               python3 tools/scheduler_pipeline.py --reset-lab --recovery replay --timeout 2400
             fi
           '
+      - name: Finalize installed qualification evidence
+        if: ${{ always() && steps.installed_evidence.outcome == 'success' }}
+        run: |
+          python3 tools/qualification_evidence.py finish \
+            --directory dist/qualification/installed \
+            --require release --require lab_lifecycle --require splunk_integration
+      - name: Retain exact installed packages and sanitized evidence
+        if: ${{ always() && steps.installed_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: installed-qualification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/qualification/installed/
+          if-no-files-found: error
+          retention-days: 90
       - name: Preserve rehearsal evidence
         if: ${{ always() && ((github.event_name == 'workflow_dispatch' && inputs.run_pipeline_rehearsals) || github.event_name == 'schedule') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

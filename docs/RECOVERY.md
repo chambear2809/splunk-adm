@@ -108,6 +108,10 @@ administrator's bounded replay and readback evidence; it is not automatically
 recovered by enabling the action. V2 outage recovery on distributed Enterprise,
 SHC and Cloud remains an open [qualification gate](CISCO_NETWORKING_QUALIFICATION.md).
 
+Both V1 and V2 application catalogs are monitored at hourly intervals relative
+to their earliest visible scheduled success. Neither catalog is in the recovery
+action's replay allowlist. Catalog detection does not enable automatic replay.
+
 The core action handles one target at a time. Before pausing, it reads and
 durably records the target's saved-search state, configuration fingerprint and
 owner claim. The record is written before the REST pause, so a process failure
@@ -141,6 +145,24 @@ before dispatch; an unknown dispatch response is uncertain and is not retried.
 The core action records audit events and performs ordinary known-failure
 cleanup, and the separate supervisor reports expired claims for manual reconciliation.
 Neither component reclaims a paused target.
+
+A lost claim-insert response or failed readback returns `uncertain` with the
+`claim_key`, even when the schedule has not yet been paused. Durable
+`pause_pending` intent can already exist at that point. Inspect that exact claim
+before considering another operation; a refusal is reserved for a known outcome.
+
+Search completion requires the qualified native `DONE` state, completion and
+non-finalization flags, no event truncation, and zero dropped events. When
+`resultIsTruncated` is present it must be false; the qualified runtime may omit
+that field. Missing or malformed required metadata cannot verify a recovered
+slot, even when every reported result row was fetched.
+
+Known read-only history, manifest, and verification jobs are tracked separately
+from replay writers. Their cancellation has a bounded transport budget and is
+deferred while a writer is paused, so restoration keeps priority. Unacknowledged
+read-only cleanup is returned as `readonly_cleanup_unverified` SIDs for operator
+inspection. It does not authorize cancelling an uncertain replay writer or
+repeating a dispatch.
 
 For rollups, the pre-replay manifest compares the raw accepted count with the
 expected rollup identities and counts for the exact slice. This is a
@@ -218,6 +240,13 @@ Two independently indexed NetFlow records can have identical payloads and timest
 Builders upsert deterministic KV keys. Replay their original closed slices in chronological order while their schedules are paused, then verify interval boundaries and the latest attributes before resuming. Do not run two manual instances of the same builder concurrently. A saved search's single-instance limit does not serialize different saved searches or manual macro calls. The existing interval regressions cover same-batch gaps and out-of-order replays; arbitrary overlapping concurrent updates are not transactional. The automated assisted recovery action enforces this one-at-a-time rule and permits the builders' intentional overlapping ten-minute windows. It refuses rollup slices that overlap or are not closed.
 
 ## Pruning and maintenance
+
+The bounded row-wise operator path in
+[retention maintenance](RETENTION_MAINTENANCE.md) can inspect collections beyond
+the SPL reader's 200,000-row ceiling. It retains the maintenance assertion,
+quiescence checks and private backup requirement. It does not raise the shipped
+SPL reader limit or provide a distributed lock. Its new REST path requires
+target-specific runtime qualification before operational adoption.
 
 All prune searches, including the additional Cisco client-history prune, ship with scheduling disabled, and `adm_prune_maintenance=0` makes them read-only reports. Enabling a prune saved search alone cannot authorize its collection rewrite. The gate is an explicit operator assertion of a maintenance window, **not a lock**. Scheduling prunes between normal builder start times cannot prevent a long or delayed builder from overlapping.
 

@@ -12,15 +12,22 @@ class CIChecks(unittest.TestCase):
         cls.text = CI.read_text(encoding="utf-8")
         cls.lab = cls.text.split("  splunk-lab:", 1)[1]
 
-    def test_lab_builds_verified_single_archive_before_lifecycle(self):
+    def test_lab_uses_the_offline_qualified_archive_before_lifecycle(self):
         for marker in (
             "node-version: 22.13.0",
             "npm ci --registry=https://registry.npmjs.org --ignore-scripts",
             "npx playwright install --with-deps chromium",
-            "npm run package",
             "python3 tools/check_release.py --dist dist",
+            "needs: frontend",
+            "actions/download-artifact@",
+            "--parent-packet dist/qualification/offline",
         ):
             self.assertIn(marker, self.lab)
+        self.assertNotIn("npm run package", self.lab)
+        self.assertLess(
+            self.lab.index("--stage offline"),
+            self.lab.index('export ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-'),
+        )
         self.assertIn('export ADM_UPGRADE_PACKAGE="$PWD/dist/splunk_adm-', self.lab)
         self.assertIn('test -f "$ADM_UPGRADE_PACKAGE"', self.lab)
 
@@ -57,6 +64,23 @@ class CIChecks(unittest.TestCase):
         export = self.lab.index('export ADM_LAB_PACKAGE="$ADM_UPGRADE_PACKAGE"')
         self.assertLess(self.lab.index('test -f "$ADM_UPGRADE_PACKAGE"'), export)
         self.assertLess(export, self.lab.index("tests/splunk/lab.sh install"))
+
+    def test_qualification_packets_are_retained_after_failure_without_raw_reports(self):
+        for stage in ("offline", "installed"):
+            self.assertIn(f"dist/qualification/{stage}/", self.text)
+            self.assertIn(
+                f"always() && steps.{stage}_evidence.outcome == 'success'", self.text
+            )
+        self.assertIn("retention-days: 90", self.text)
+        self.assertNotIn("path: dist/\n", self.text)
+        self.assertNotIn("path: dist/appinspect-cloud.json", self.text)
+
+    def test_lab_records_native_runtime_and_suite_inside_owned_lifecycle(self):
+        trap = self.lab.index('trap "tests/splunk/lab.sh purge" EXIT')
+        runtime = self.lab.index("qualification_evidence.py lab-runtime")
+        suite = self.lab.index("--check splunk_integration")
+        self.assertLess(trap, runtime)
+        self.assertLess(runtime, suite)
 
 
 if __name__ == "__main__":

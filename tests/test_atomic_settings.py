@@ -270,6 +270,21 @@ class AtomicSettingsTests(unittest.TestCase):
             with self.assertRaises(SettingsError):
                 self.service.read()
 
+    def test_history_capacity_is_exposed_and_exact_final_slot_retry_remains_valid(self):
+        with patch("adm_settings_lib.MAX_RECORDS", 1):
+            committed = self.request()
+            snapshot = self.request("GET")
+            self.assertEqual(snapshot["recordCount"], 1)
+            self.assertEqual(snapshot["maxRecords"], 1)
+            self.assertEqual(snapshot["remainingRecords"], 0)
+            self.assertFalse(snapshot["canWrite"])
+            self.assertIn("history is full", snapshot["writeUnavailableReason"])
+            # handle_request must not reject this POST before SettingsService
+            # resolves the already committed operation occupying the final slot.
+            retry = self.request()
+            self.assertEqual(retry["requestId"], committed["requestId"])
+            self.assertFalse(retry["canWrite"])
+
     def request(self, method="POST", **changes):
         payload = {**operation(), "namespace": "namespace_a", **changes}
         return handle_request(
