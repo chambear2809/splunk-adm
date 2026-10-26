@@ -413,21 +413,24 @@ node --expose-gc tools/benchmark_thousandeyes.mjs \
   --output dist/thousandeyes-qualification/thousandeyes-benchmark.json
 ```
 
-The final recorded run used Node 26.12.1 / V8 14.6.202.34-node.40 on an Apple
-M3 Pro (macOS arm64), with seven timed runs and two warmups per operation. Its
-source fingerprint is
-`adaca10dabad98c38f7b5189b0b8a331d8fb3ce2eec46e490a8bc06668708656`; the
-measured code revision is `c7a536f7238792746fbb1822c6a55c2407417a43`. Integrated
+The refreshed run was captured at `2026-10-26T20:16:21.721Z` on Node 26.12.1 /
+V8 14.6.202.34-node.40, Apple M3 Pro (macOS arm64), with seven timed runs and
+two warmups per operation. Its 21 listed source-file hashes were checked
+against the integration worktree and all matched. The source fingerprint is
+`cbd81d5a859dc435f3fecbbe4e19bcd3501d286b2a3c96ca533879f16e21acb5`; the
+measured code revision is `783e3200e6e9c56b5487cacff9c0496fcfe62b16`. Integrated
 normalization plus attribution and generated query size measured:
 
 | Synthetic scenario                                           |       Median / P95 | Query UTF-8 bytes | Output and rejection behavior                      |
 | ------------------------------------------------------------ | -----------------: | ----------------: | -------------------------------------------------- |
-| Six-family mix: 64 rows, one group, 32 bindings              |   2.381 / 2.459 ms |            37,238 | 64 records; 52 bound, 12 context-only; no rejects  |
-| Maximum config: 32 groups × 64 bindings, 64 rows             | 13.529 / 13.917 ms |           449,804 | 64 records; 52 bound, 12 context-only; no rejects  |
-| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.468 / 7.815 ms |            59,926 | 64 records explicitly ambiguous; 2,048 output hops |
-| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.690 / 3.694 ms |            59,926 | 64 records; 1,536 output hops; no rejects          |
-| Path expansion overflow: 33 rows × 2 traces                  |   3.452 / 3.848 ms |            59,926 | 64 records retained; 1 overflow rejected           |
-| 65-row adapter cap                                           |   0.381 / 0.417 ms |            59,926 | Batch rejected: 0 records, 65 rejects              |
+| Six-family mix: 64 rows, one group, 32 bindings              |   6.606 / 9.691 ms |            37,238 | 64 records; 52 bound, 12 context-only; no rejects  |
+| Maximum bindings: one group × 64 bindings, 64 rows           |  3.621 / 15.816 ms |            59,926 | 64 records; 52 bound, 12 context-only; no rejects  |
+| Maximum config: 32 groups × 64 bindings, 64 rows             | 13.794 / 18.427 ms |           449,804 | 64 records; 52 bound, 12 context-only; no rejects  |
+| Overlap: 64 overlapping path bindings, 64 rows, 32 hops each |   7.536 / 7.793 ms |            59,926 | 64 records explicitly ambiguous; 2,048 output hops |
+| Path expansion at display cap: 32 rows × 2 traces × 24 hops  |   3.691 / 4.257 ms |            59,926 | 64 records; 1,536 output hops; no rejects          |
+| Path expansion overflow: 33 rows × 2 traces                  |  8.129 / 12.556 ms |            59,926 | 64 records retained; 1 overflow rejected           |
+| Replay, conflict, malformed: 64 rows                         |  2.358 / 11.267 ms |            59,926 | 49 records; 10 rows rejected                       |
+| 65-row adapter cap                                           |   0.717 / 1.111 ms |            59,926 | Batch rejected: 0 records, 65 rejects              |
 
 The 32-mapping × 64-binding configuration generated the largest query at
 449,804 UTF-8 bytes (about 439.3 KiB; the query is ASCII, so its character
@@ -439,17 +442,22 @@ against the deployed Splunk endpoint before enabling maximum configuration
 cardinality.
 
 The representative mix used 69,218 raw input bytes and reported median
-`heapUsed` delta 3,688,712 bytes during operation, with 149,144 bytes retained
+`heapUsed` delta 3,684,696 bytes during operation, with 147,456 bytes retained
 after forced GC while keeping results live. At maximum mapping/binding
-cardinality, those figures were 16,271,872 bytes and 155,384 bytes; in the
-overlap-heavy case, 16,885,776 and 459,600 bytes. These are heap observations,
-not peak RSS or a production memory envelope. The replay/malformed scenario
-returned 49 normalized records and rejected 10 rows. The checked-in BGP monitor
-fixture was not loaded or exercised; this report makes no BGP benchmark claim.
-The comparison stage produced 48 groups in the representative and maximum
-configuration scenarios (0.421 ms and 0.366 ms median), 32 groups for path
-expansion at the display cap (0.493 ms), and zero groups when every overlapping
-path record was ambiguous. It does not compare unmatched or ambiguous records.
+cardinality, those figures were 15,841,624 bytes and 154,952 bytes; in the
+overlap-heavy case, 16,870,704 and 459,600 bytes. These are heap observations,
+not peak RSS or a production memory envelope. The BGP monitor fixture was not
+loaded or exercised; this report makes no BGP benchmark claim. Comparison
+returned 48 groups for the representative (0.451 ms median / 4.482 ms P95),
+one-group maximum bindings (0.453 / 4.624 ms), and maximum config (0.350 / 0.391
+ms); path expansion at the display cap returned 32 groups (0.469 / 0.486 ms).
+The all-ambiguous overlap case returned zero comparison groups. Groups are
+comparison outputs, not a claim that all groups were comparable.
+
+The benchmark's P95 uses only seven timed samples; with this percentile method
+it equals the highest sample. The wide gaps in the representative, one-group
+maximum, and overflow scenarios are retained here rather than presented as a
+stable tail-latency estimate. They are local runtime observations only.
 The complete JSON report contains per-operation timings/memory, query strings'
 UTF-8 byte length, input/config sizes, scenario counts, and sorted component
 hashes. Re-run it after code, fixture, or runtime changes; record its aggregate
