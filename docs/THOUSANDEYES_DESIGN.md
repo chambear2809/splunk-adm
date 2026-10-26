@@ -156,3 +156,15 @@ production gates. Missing external evidence keeps the affected capability
 disabled and unqualified. Neither AppInspect nor merging grants production
 qualification. A disabled implementation can merge only after every applicable
 merge gate and independent final review passes.
+
+## Version provenance
+
+`adapterVersion=0.9.0` identifies Atlas's reviewed parsing contract against the
+supplied Cisco package. It is not an observed installed producer version.
+Records without an explicit producer software version retain `not_reported`.
+OTLP v2 is verified from the native resource version; API v7 and the Atlas path
+wrapper are declared parsing contracts. Matching shape does not establish a
+running vendor package version. Comparisons with unreported producer versions
+in both windows disclose unverified version continuity and retain all identity,
+configuration, location, model, unit, aggregation, interval and quality guards.
+Mixed, changed or one-sided producer versions remain blockers.

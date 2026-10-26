@@ -104,8 +104,11 @@ export interface ThousandEyesObservation {
   accountGroupId: string;
   accountId?: string;
   organizationId?: string;
+  /** Reviewed parsing contract, not an observed vendor installation version. */
   adapterVersion: string;
+  /** Reported producer software version, or not_reported when absent. */
   producerVersion: string;
+  /** Explicit OTLP schema version or the declared native API contract. */
   dataModelVersion: string;
   testId?: string;
   agentId?: string;

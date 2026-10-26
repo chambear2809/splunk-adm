@@ -705,10 +705,12 @@ function ObservationCard({
         <dd>
           {record.index} · {record.source} · {record.sourcetype}
         </dd>
-        <dt>Producer / adapter / model</dt>
+        <dt>Producer version / adapter contract / data model</dt>
         <dd>
-          {record.producerVersion} / {record.adapterVersion} /{" "}
-          {record.dataModelVersion}
+          {record.producerVersion === "not_reported"
+            ? "Not reported"
+            : record.producerVersion}{" "}
+          / {record.adapterVersion} / {record.dataModelVersion}
         </dd>
       </dl>
       <div className="te-copy-row">
