@@ -374,12 +374,14 @@ try {
       "atlas:thousandeyes:path",
     ])
       expect(teSearches[0].search).toContain(sourcetype);
-    await expect(page.getByText("Checkout availability")).toBeVisible();
     await page.getByLabel("Group by", { exact: true }).selectOption("family");
     const metricGroup = page.getByRole("region", {
       name: "Family: Metric",
       exact: true,
     });
+    await expect(
+      metricGroup.getByText("Checkout availability", { exact: true }),
+    ).toBeVisible();
     const monitorRow = metricGroup
       .getByRole("row")
       .filter({ hasText: "Test name not supplied" });
@@ -450,9 +452,18 @@ try {
     badResponses,
     expectedConsoleErrors,
   );
+  expect(mainScripts).toHaveLength(1);
+  expect(mainScripts[0].status).toBe(200);
+  expect(mainScripts[0].hasExpectedAssetVersion).toBe(true);
+  expect(mergedReads.length).toBeGreaterThanOrEqual(8);
+  expect(
+    mergedReads.every((read) => read.method === "POST" && read.status === 200),
+  ).toBe(true);
   process.stdout.write(
     JSON.stringify({
       ok: true,
+      mainScripts,
+      mergedReads,
       mode,
       endpointSelected: true,
       noEagerSidecar: true,
