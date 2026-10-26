@@ -399,47 +399,10 @@ describe("strict ThousandEyes producer adapters", () => {
   });
 
   it("retains BGP monitor evidence without fabricating a source agent", () => {
-    const bgp = {
-      resource_metrics: [
-        {
-          resource: {
-            attributes: [
-              {
-                key: "thousandeyes.data.version",
-                value: { string_value: "v2" },
-              },
-              {
-                key: "thousandeyes.account.id",
-                value: { string_value: "5678" },
-              },
-              {
-                key: "thousandeyes.monitor.id",
-                value: { string_value: "monitor-4" },
-              },
-            ],
-          },
-          scope_metrics: [
-            {
-              metrics: [
-                {
-                  name: "bgp.reachability",
-                  unit: "%",
-                  gauge: {
-                    data_points: [
-                      { time_unix_nano: "1700000010000000000", as_double: 100 },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    };
     const normalized = normalizeThousandEyesRows(
       [
         row(
-          JSON.stringify(bgp),
+          fixture("bgp-monitor-v2.json"),
           "te_metrics",
           "cisco:thousandeyes:stream",
           "cisco:thousandeyes:metric",

@@ -152,17 +152,6 @@ function selectedBindings(
   );
 }
 
-function nativeIdentityClauses(
-  mapping: ThousandEyesSourceMapping,
-  selection: EvidenceSelection,
-  fields: { test: string; agent: string },
-): string[] {
-  return selectedBindings(mapping, selection).map(
-    (binding) =>
-      `(${nativeField(fields.test, binding.testId)} AND ${nativeField(fields.agent, binding.agentId)})`,
-  );
-}
-
 function familyClause(
   mapping: ThousandEyesSourceMapping,
   selection: EvidenceSelection,
@@ -171,34 +160,21 @@ function familyClause(
   if (!mapping.families.includes(family)) return [];
   const accountGroup = mapping.accountGroupId;
   const streamAccount = mapping.streamAccountId;
-  const boundIdentity = (testField: string, agentField: string) =>
-    nativeIdentityClauses(mapping, selection, {
-      test: testField,
-      agent: agentField,
-    });
   switch (family) {
     case "metric":
       if (!streamAccount) return [];
-      return boundIdentity(
-        "thousandeyes.test.id",
-        "thousandeyes.source.agent.id",
-      ).map(
-        (identity) =>
-          `(${sourcetypeField(METRIC_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)} AND ${nativeField("thousandeyes.account.id", streamAccount)} AND ${identity})`,
-      );
+      return [
+        `(${sourcetypeField(METRIC_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)})`,
+      ];
     case "trace":
       if (!streamAccount) return [];
-      return boundIdentity(
-        "thousandeyes.test.id",
-        "thousandeyes.source.agent.id",
-      ).map(
-        (identity) =>
-          `(${sourcetypeField(TRACE_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)} AND ${nativeField("thousandeyes.account.id", streamAccount)} AND ${identity})`,
-      );
+      return [
+        `(${sourcetypeField(TRACE_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)})`,
+      ];
     case "activity":
       if (!streamAccount) return [];
       return [
-        `(${sourcetypeField(ACTIVITY_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)} AND ${nativeField("thousandeyes.account.id", streamAccount)})`,
+        `(${sourcetypeField(ACTIVITY_SOURCETYPE)} AND ${sourceField(METRIC_SOURCE)})`,
       ];
     case "event":
       return [
@@ -210,30 +186,165 @@ function familyClause(
         `(${sourcetypeField(ALERT_SOURCETYPE)} AND ${sourceField(WEBHOOK_SOURCE)} AND ${nativeField("accountId", mapping.alertAccountId)} AND ${nativeField("orgId", mapping.organizationId)})`,
       ];
     case "path": {
-      const identities = boundIdentity("testId", "agentId");
-      const wrappedIdentities = boundIdentity("test_id", "agent_id");
       // thousandEyesMappings already verifies that each exact (index, source)
       // pair is unique and that its index belongs to this source configuration.
       const sources = mapping.pathSources;
       const clauses: string[] = [];
       for (const pathSource of sources) {
         if (pathSource.source === ATLAS_PATH_SOURCE) {
-          for (const identity of wrappedIdentities) {
-            clauses.push(
-              `(index=${pathSource.index} AND ${sourcetypeField(ATLAS_PATH_SOURCETYPE)} AND ${sourceField(ATLAS_PATH_SOURCE)} AND schema="${PATH_SCHEMA}" AND ${nativeField("account_group_id", accountGroup)} AND ${identity})`,
-            );
-          }
+          clauses.push(
+            `(index=${pathSource.index} AND ${sourcetypeField(ATLAS_PATH_SOURCETYPE)} AND ${sourceField(ATLAS_PATH_SOURCE)})`,
+          );
         } else {
-          for (const identity of identities) {
-            clauses.push(
-              `(index=${pathSource.index} AND ${sourcetypeField(PATH_SOURCETYPE)} AND ${sourceField(pathSource.source)} AND ${nativeField("aid", accountGroup)} AND ${identity})`,
-            );
-          }
+          clauses.push(
+            `(index=${pathSource.index} AND ${sourcetypeField(PATH_SOURCETYPE)} AND ${sourceField(pathSource.source)})`,
+          );
         }
       }
       return clauses;
     }
   }
+}
+
+function multiValueEquals(field: string, value: string): string {
+  return `mvcount(mvfilter(${field}="${literal(value, 255)}"))>0`;
+}
+
+function nativeIdentityFilter(
+  mappings: ThousandEyesSourceMapping[],
+  selection: EvidenceSelection,
+): string {
+  const metricRules: string[] = [];
+  const traceRules: string[] = [];
+  const activityRules: string[] = [];
+  const pathRules: string[] = [];
+
+  for (const mapping of mappings) {
+    if (mapping.families.includes("metric") && mapping.streamAccountId) {
+      const accountMatch = multiValueEquals(
+        "_te_m_values",
+        mapping.streamAccountId,
+      );
+      const bindingMatches = selectedBindings(mapping, selection).map(
+        (binding) =>
+          `(${multiValueEquals("_te_m_values", binding.testId)} AND ${multiValueEquals("_te_m_values", binding.agentId)})`,
+      );
+      const bound = bindingMatches.length
+        ? `(${bindingMatches.join(" OR ")})`
+        : "1=0";
+      const bgpContext =
+        "(_te_m_has_bgp=1 AND _te_m_has_monitor_key=1 AND mvcount(_te_m_values)>0)";
+      metricRules.push(`(${accountMatch} AND (${bound} OR ${bgpContext}))`);
+    }
+    if (mapping.families.includes("trace") && mapping.streamAccountId) {
+      const accountMatch = multiValueEquals(
+        "_te_t_values",
+        mapping.streamAccountId,
+      );
+      const bindingMatches = selectedBindings(mapping, selection).map(
+        (binding) =>
+          `(${multiValueEquals("_te_t_values", binding.testId)} AND ${multiValueEquals("_te_t_values", binding.agentId)})`,
+      );
+      if (bindingMatches.length)
+        traceRules.push(
+          `(${accountMatch} AND (${bindingMatches.join(" OR ")}))`,
+        );
+    }
+    if (mapping.families.includes("activity") && mapping.streamAccountId)
+      activityRules.push(
+        multiValueEquals("_te_a_values", mapping.streamAccountId),
+      );
+
+    if (!mapping.families.includes("path")) continue;
+    const bindings = selectedBindings(mapping, selection);
+    for (const source of mapping.pathSources) {
+      for (const binding of bindings) {
+        if (source.source === ATLAS_PATH_SOURCE) {
+          pathRules.push(
+            `(index=${source.index} AND ${sourceField(source.source)} AND ${sourcetypeField(ATLAS_PATH_SOURCETYPE)} AND _te_p_schema="${PATH_SCHEMA}" AND _te_p_schema_version="1" AND _te_p_wrapper_account="${mapping.accountGroupId}" AND _te_p_wrapper_test="${binding.testId}" AND _te_p_wrapper_domain="cea" AND _te_p_wrapper_agent="${binding.agentId}")`,
+          );
+        } else {
+          pathRules.push(
+            `(index=${source.index} AND ${sourceField(source.source)} AND ${sourcetypeField(PATH_SOURCETYPE)} AND _te_p_vendor_account="${mapping.accountGroupId}" AND _te_p_vendor_test="${binding.testId}" AND _te_p_vendor_agent="${binding.agentId}")`,
+          );
+        }
+      }
+    }
+  }
+
+  const metricKeep = metricRules.length
+    ? `(${metricRules.join(" OR ")})`
+    : "1=0";
+  const traceKeep = traceRules.length ? `(${traceRules.join(" OR ")})` : "1=0";
+  const activityKeep = activityRules.length
+    ? `(${activityRules.join(" OR ")})`
+    : "1=0";
+  const pathKeep = pathRules.length ? `(${pathRules.join(" OR ")})` : "1=0";
+
+  return [
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.key output=_te_m_keys",
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value output=_te_m_attribute_values",
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.string_value output=_te_m_string_values",
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.int_value output=_te_m_int_values",
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.double_value output=_te_m_double_values",
+    "| spath input=_raw path=resource_metrics{}.resource.attributes{}.value.bool_value output=_te_m_bool_values",
+    "| spath input=_raw path=resource_metrics{}.scope_metrics{}.metrics{}.name output=_te_m_metric_names",
+    '| eval _te_m_values=mvappend(_te_m_string_values,_te_m_int_values,_te_m_double_values,_te_m_bool_values),_te_m_has_account_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.account.id"))>0,1,0),_te_m_has_test_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.test.id"))>0,1,0),_te_m_has_agent_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.source.agent.id"))>0,1,0),_te_m_has_monitor_key=if(mvcount(mvfilter(_te_m_keys="thousandeyes.monitor.id"))+mvcount(mvfilter(_te_m_keys="thousandeyes.bgp.monitor.id"))>0,1,0),_te_m_has_bgp=if(mvcount(mvfilter(like(_te_m_metric_names,"bgp.%")))>0,1,0)',
+    "| eval _te_m_identity_unknown=if(isnull(_te_m_keys) OR isnull(_te_m_attribute_values) OR mvcount(_te_m_keys)!=mvcount(_te_m_attribute_values) OR _te_m_has_account_key=0 OR ((_te_m_has_test_key=0 OR _te_m_has_agent_key=0) AND (_te_m_has_bgp=0 OR _te_m_has_monitor_key=0)),1,0)",
+    "| eval _te_m_identity_match=if(_te_m_identity_unknown=1 OR " +
+      metricKeep +
+      ",1,0)",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.key output=_te_t_keys",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.value output=_te_t_attribute_values",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.value.string_value output=_te_t_string_values",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.value.int_value output=_te_t_int_values",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.value.double_value output=_te_t_double_values",
+    "| spath input=_raw path=resource_spans{}.resource.attributes{}.value.bool_value output=_te_t_bool_values",
+    '| eval _te_t_values=mvappend(_te_t_string_values,_te_t_int_values,_te_t_double_values,_te_t_bool_values),_te_t_has_account_key=if(mvcount(mvfilter(_te_t_keys="thousandeyes.account.id"))>0,1,0),_te_t_has_test_key=if(mvcount(mvfilter(_te_t_keys="thousandeyes.test.id"))>0,1,0),_te_t_has_agent_key=if(mvcount(mvfilter(_te_t_keys="thousandeyes.source.agent.id"))>0,1,0)',
+    "| eval _te_t_identity_unknown=if(isnull(_te_t_keys) OR isnull(_te_t_attribute_values) OR mvcount(_te_t_keys)!=mvcount(_te_t_attribute_values) OR _te_t_has_account_key=0 OR _te_t_has_test_key=0 OR _te_t_has_agent_key=0,1,0)",
+    "| eval _te_t_identity_match=if(_te_t_identity_unknown=1 OR " +
+      traceKeep +
+      ",1,0)",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.key output=_te_a_keys",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.value output=_te_a_attribute_values",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.value.string_value output=_te_a_string_values",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.value.int_value output=_te_a_int_values",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.value.double_value output=_te_a_double_values",
+    "| spath input=_raw path=resource_logs{}.resource.attributes{}.value.bool_value output=_te_a_bool_values",
+    '| eval _te_a_values=mvappend(_te_a_string_values,_te_a_int_values,_te_a_double_values,_te_a_bool_values),_te_a_has_account_key=if(mvcount(mvfilter(_te_a_keys="thousandeyes.account.id"))>0,1,0)',
+    "| eval _te_a_identity_unknown=if(isnull(_te_a_keys) OR isnull(_te_a_attribute_values) OR mvcount(_te_a_keys)!=mvcount(_te_a_attribute_values) OR _te_a_has_account_key=0,1,0)",
+    "| eval _te_a_identity_match=if(_te_a_identity_unknown=1 OR " +
+      activityKeep +
+      ",1,0)",
+    "| spath input=_raw path=schema output=_te_p_schema",
+    "| spath input=_raw path=schema_version output=_te_p_schema_version",
+    "| spath input=_raw path=account_group_id output=_te_p_wrapper_account",
+    "| spath input=_raw path=test_id output=_te_p_wrapper_test",
+    "| spath input=_raw path=test_domain output=_te_p_wrapper_domain",
+    "| spath input=_raw path=result.agent.agentId output=_te_p_wrapper_agent",
+    "| spath input=_raw path=aid output=_te_p_vendor_account",
+    "| spath input=_raw path=testId output=_te_p_vendor_test",
+    "| spath input=_raw path=agentId output=_te_p_vendor_agent_top",
+    "| spath input=_raw path=agent.agentId output=_te_p_vendor_agent_nested",
+    '| eval _te_p_vendor_agent=coalesce(_te_p_vendor_agent_top,_te_p_vendor_agent_nested),_te_p_is_wrapper=if(_te_p_schema="' +
+      PATH_SCHEMA +
+      '" AND _te_p_schema_version="1",1,0)',
+    '| eval _te_p_identity_unknown=if((_te_p_is_wrapper=1 AND (isnull(_te_p_wrapper_account) OR isnull(_te_p_wrapper_test) OR isnull(_te_p_wrapper_domain) OR _te_p_wrapper_domain!="cea" OR isnull(_te_p_wrapper_agent))) OR (_te_p_is_wrapper=0 AND (isnull(_te_p_vendor_account) OR isnull(_te_p_vendor_test) OR isnull(_te_p_vendor_agent))),1,0)',
+    "| eval _te_p_identity_match=if(_te_p_identity_unknown=1 OR " +
+      pathKeep +
+      ",1,0)",
+    '| where case(sourcetype="' +
+      METRIC_SOURCETYPE +
+      '",_te_m_identity_match=1,sourcetype="' +
+      TRACE_SOURCETYPE +
+      '",_te_t_identity_match=1,sourcetype="' +
+      ACTIVITY_SOURCETYPE +
+      '",_te_a_identity_match=1,sourcetype="' +
+      PATH_SOURCETYPE +
+      '",_te_p_identity_match=1,sourcetype="' +
+      ATLAS_PATH_SOURCETYPE +
+      '",_te_p_identity_match=1,1=1,1)',
+  ].join("\n");
 }
 
 /**
@@ -344,6 +455,7 @@ export function buildThousandEyesSearch(
   const indexSelector = indexes.map((index) => `index=${index}`).join(" OR ");
   return `search (${indexSelector}) (${clauses.join(" OR ")})
 ${nativeWindowFilter(selection)}
+${nativeIdentityFilter(mappings, selection)}
 | head ${EVIDENCE_LIMITS.input + 1}
 | eval source_scan_row_invalid=if(isnull(index) OR isnull(source) OR isnull(sourcetype) OR len(coalesce(_raw,""))=0,1,0)
 | eventstats count AS source_scan_count sum(source_scan_row_invalid) AS source_scan_invalid_count

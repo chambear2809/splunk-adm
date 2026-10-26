@@ -113,7 +113,7 @@ describe("ThousandEyes selected evidence search", () => {
     );
   });
 
-  it("uses fixed producer/source scopes and literal account and bound identities", () => {
+  it("extracts OTel attribute arrays and nested path identity before literal admission", () => {
     const query = buildThousandEyesSearch(configuration(), selection);
     expect(query).toContain('sourcetype="cisco:thousandeyes:metric"');
     expect(query).toContain('sourcetype="cisco:thousandeyes:trace"');
@@ -123,13 +123,35 @@ describe("ThousandEyes selected evidence search", () => {
     expect(query).toContain('sourcetype="atlas:thousandeyes:path"');
     expect(query).toContain('source="cisco:thousandeyes:stream"');
     expect(query).toContain('source="cisco:thousandeyes:webhook"');
-    expect(query).toContain("'thousandeyes.account.id'=\"5678\"");
+    expect(query).toContain(
+      "path=resource_metrics{}.resource.attributes{}.key output=_te_m_keys",
+    );
+    expect(query).toContain(
+      "path=resource_metrics{}.resource.attributes{}.value.string_value output=_te_m_string_values",
+    );
+    expect(query).toContain(
+      "path=resource_spans{}.resource.attributes{}.key output=_te_t_keys",
+    );
+    expect(query).toContain(
+      "path=resource_logs{}.resource.attributes{}.key output=_te_a_keys",
+    );
+    expect(query).toContain('mvfilter(_te_m_keys="thousandeyes.account.id")');
+    expect(query).toContain('mvfilter(_te_m_values="5678")');
+    expect(query).toContain('mvfilter(_te_m_values="17")');
+    expect(query).toContain('mvfilter(_te_m_values="9")');
+    expect(query).toContain('like(_te_m_metric_names,"bgp.%")');
+    expect(query).toContain("thousandeyes.monitor.id");
     expect(query).toContain("'aid'=\"1234\"");
     expect(query).toContain("'accountId'=\"6789\"");
     expect(query).toContain("'orgId'=\"org-1\"");
-    expect(query).toContain("'thousandeyes.test.id'=\"17\"");
-    expect(query).toContain("'thousandeyes.source.agent.id'=\"9\"");
     expect(query).toContain('schema="application_atlas.thousandeyes_path.v1"');
+    expect(query).toContain(
+      "path=result.agent.agentId output=_te_p_wrapper_agent",
+    );
+    expect(query).toContain('_te_p_wrapper_agent="9"');
+    expect(query).not.toContain("'agent_id'=\"9\"");
+    expect(query).not.toContain("'thousandeyes.account.id'=\"5678\"");
+    expect(query).toContain("_te_m_identity_unknown=1 OR");
   });
 
   it("rejects inactive, unqualified, invalid-index, and injection-shaped config", () => {

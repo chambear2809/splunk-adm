@@ -1,0 +1,28 @@
+{
+  "resource_metrics": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "thousandeyes.data.version", "value": { "string_value": "v2" } },
+          { "key": "thousandeyes.account.id", "value": { "string_value": "5678" } },
+          { "key": "thousandeyes.monitor.id", "value": { "string_value": "monitor-4" } }
+        ]
+      },
+      "scope_metrics": [
+        {
+          "metrics": [
+            {
+              "name": "bgp.reachability",
+              "unit": "%",
+              "gauge": {
+                "data_points": [
+                  { "time_unix_nano": "1700000010000000000", "as_double": 100 }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
