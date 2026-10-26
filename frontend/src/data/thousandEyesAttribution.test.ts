@@ -1,5 +1,11 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import type { Row } from "../rows";
 import type { EvidenceSelection } from "./evidence";
+import type { SupplementalSourceConfiguration } from "./evidenceConfig";
+import { normalizeThousandEyesRows } from "./thousandEyesAdapters";
 import {
   attributeThousandEyesRecords,
   compareThousandEyesMeasurements,
@@ -119,6 +125,102 @@ const attribute = (
   selected: EvidenceSelection = selection(),
   bindings: ThousandEyesBinding[] = [binding()],
 ) => attributeThousandEyesRecords([value], selected, bindings)[0];
+
+const adapterSelection = (): EvidenceSelection =>
+  selection({ window: { start: 1_700_000_000, end: 1_700_000_050 } });
+
+const adapterBinding = (): ThousandEyesBinding =>
+  binding({
+    testId: "17",
+    agentId: "9",
+    target: { ip: "198.51.100.20", protocol: "tcp", port: 443 },
+    validFrom: 1_700_000_000,
+    validTo: 1_700_000_050,
+  });
+
+const adapterConfiguration = (): SupplementalSourceConfiguration => ({
+  source: "thousandeyes",
+  state: "active",
+  indexes: ["te_metrics"],
+  authorities: ["te-east"],
+  schemaQualified: true,
+  staleAfterSeconds: 1_200,
+  mappings: [
+    {
+      observer_kind: "thousandeyes_account_group",
+      observer: "te-east",
+      scope: "vpc-east",
+      cluster: "",
+      mapping_status: "verified",
+      te_account_group_id: "12345",
+      te_stream_account_id: "5678",
+      te_families: JSON.stringify(["metric"]),
+      te_bindings: JSON.stringify([adapterBinding()]),
+    },
+  ],
+});
+
+function metricFixture(timestamp: number, latency: number, loss: number): Row {
+  const fixturePath = fileURLToPath(
+    new URL("../../../fixtures/thousandeyes/metric-v2.json", import.meta.url),
+  );
+  const document = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+    resource_metrics: {
+      scope_metrics: {
+        metrics: {
+          name: string;
+          unit: string;
+          gauge: { data_points: Record<string, unknown>[] };
+        }[];
+      }[];
+    }[];
+  };
+  const metrics = document.resource_metrics[0].scope_metrics[0].metrics;
+  const latencyMetric = metrics[0];
+  const sourcePoint = latencyMetric.gauge.data_points[0];
+  const point = {
+    ...sourcePoint,
+    attributes: [
+      ...((sourcePoint.attributes as Record<string, unknown>[]) ?? []),
+      { key: "network.io.direction", value: { string_value: "round_trip" } },
+    ],
+    time_unix_nano: `${timestamp}000000000`,
+    as_double: latency,
+  };
+  latencyMetric.gauge.data_points = [point];
+  metrics.push({
+    name: "network.loss",
+    unit: "%",
+    gauge: {
+      data_points: [{ ...point, as_double: loss }],
+    },
+  });
+
+  const raw = JSON.stringify(document);
+  return {
+    kind: "supplemental_record",
+    _raw: raw,
+    index: "te_metrics",
+    source: "cisco:thousandeyes:stream",
+    sourcetype: "cisco:thousandeyes:metric",
+    event_fingerprint: createHash("sha256").update(raw).digest("hex"),
+    row_time_epoch: "1700000300",
+    indexed_time_epoch: "1700000301",
+    record_truncated: "0",
+  };
+}
+
+function normalizeMetricFixture(
+  timestamp: number,
+  latency: number,
+  loss: number,
+) {
+  return normalizeThousandEyesRows(
+    [metricFixture(timestamp, latency, loss)],
+    adapterSelection(),
+    adapterConfiguration(),
+  );
+}
 
 describe("attributeThousandEyesRecords", () => {
   it("binds only the exact native identity, selected scope/application/address, target and interval", () => {
@@ -558,6 +660,66 @@ describe("compareThousandEyesMeasurements", () => {
   const before = { start: 100, end: 200 };
   const after = { start: 200, end: 300 };
 
+  it("groups adapter-emitted OTLP metric datapoints into metric-specific rounds", () => {
+    const beforeNormalized = normalizeMetricFixture(1_700_000_010, 0.025, 1);
+    const afterNormalized = normalizeMetricFixture(1_700_000_020, 0.05, 2);
+    expect(beforeNormalized.rejected).toBe(0);
+    expect(afterNormalized.rejected).toBe(0);
+    expect(beforeNormalized.records).toHaveLength(2);
+    expect(afterNormalized.records).toHaveLength(2);
+    expect(
+      new Set(beforeNormalized.records.map((item) => item.fingerprint)).size,
+    ).toBe(1);
+
+    const selected = adapterSelection();
+    const attributedRecords = [
+      ...beforeNormalized.records,
+      ...afterNormalized.records,
+    ].map(
+      (item) =>
+        attributeThousandEyesRecords([item], selected, [adapterBinding()])[0],
+    );
+    expect(attributedRecords.map((item) => item.attribution.state)).toEqual([
+      "bound",
+      "bound",
+      "bound",
+      "bound",
+    ]);
+
+    const comparisons = compareThousandEyesMeasurements(
+      attributedRecords,
+      { start: 1_700_000_000, end: 1_700_000_015 },
+      { start: 1_700_000_015, end: 1_700_000_030 },
+    );
+    expect(comparisons).toHaveLength(2);
+    expect(
+      comparisons.map(({ metric, beforeCount, afterCount, comparable }) => ({
+        metric,
+        beforeCount,
+        afterCount,
+        comparable,
+      })),
+    ).toEqual([
+      {
+        metric: "network.latency",
+        beforeCount: 1,
+        afterCount: 1,
+        comparable: true,
+      },
+      {
+        metric: "network.loss",
+        beforeCount: 1,
+        afterCount: 1,
+        comparable: true,
+      },
+    ]);
+    for (const comparison of comparisons) {
+      expect(comparison.reasons.join(" ")).not.toContain(
+        "successful-sample coverage may be biased",
+      );
+    }
+  });
+
   it("returns means and deltas only for compatible bound scalar samples", () => {
     const samples = [
       attributed({
@@ -902,7 +1064,7 @@ describe("compareThousandEyesMeasurements", () => {
     expect(comparison.beforeMean).toBeUndefined();
     expect(comparison.afterMean).toBeUndefined();
     expect(comparison.reasons.join(" ")).toContain(
-      "across 2 same-identity observation(s); 1 failed round(s), 1 round(s) without a finite bound latency reading",
+      "across 2 latency-eligible native interval round(s); 1 failed round(s), 1 round(s) without a finite bound latency reading",
     );
     expect(comparison.reasons.join(" ")).toContain(
       "successful-sample coverage may be biased",

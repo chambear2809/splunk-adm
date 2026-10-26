@@ -462,9 +462,13 @@ interface ComparisonBucket {
   after: ComparisonSample[];
 }
 
+interface ComparisonRound {
+  records: ThousandEyesAttributedObservation[];
+}
+
 interface ComparisonRounds {
-  before: ThousandEyesAttributedObservation[];
-  after: ThousandEyesAttributedObservation[];
+  before: Map<string, ComparisonRound>;
+  after: Map<string, ComparisonRound>;
 }
 
 function producerVersionForComparison(
@@ -512,8 +516,9 @@ function uniqueNonempty(set: Set<string | undefined>): string | undefined {
     : undefined;
 }
 
-function targetIdentity(sample: ComparisonSample): string | undefined {
-  const target = sample.record.target;
+function targetIdentityForRecord(
+  target: ThousandEyesObservation["target"],
+): string | undefined {
   if (!target) return undefined;
   const ip = target.ip === undefined ? undefined : canonicalIp(target.ip);
   const hostname =
@@ -527,6 +532,10 @@ function targetIdentity(sample: ComparisonSample): string | undefined {
     return undefined;
   if (!ip && !hostname) return undefined;
   return JSON.stringify([ip, hostname, target.protocol, target.port]);
+}
+
+function targetIdentity(sample: ComparisonSample): string | undefined {
+  return targetIdentityForRecord(sample.record.target);
 }
 
 function comparisonKey(bucket: ComparisonBucket): string {
@@ -554,17 +563,57 @@ function comparisonIdentityKey(
   ]);
 }
 
-function finiteBoundReading(
+function nativeIntervalRoundKey(
   record: ThousandEyesAttributedObservation,
-  samples: readonly ComparisonSample[],
+  ordinal: number,
+): string {
+  return JSON.stringify([
+    comparisonIdentityKey(record),
+    record.streamId ?? null,
+    record.monitorId ?? null,
+    record.targetAgentId ?? null,
+    record.configurationId ?? null,
+    targetIdentityForRecord(record.target),
+    record.intervalBasis,
+    record.interval?.start,
+    record.interval?.end,
+    record.eventTime,
+    // The adapter emits one normalized row per OTLP datapoint. Datapoints from
+    // one indexed native metric envelope share its fingerprint and interval.
+    // Keep fingerprint-less observations separate because no round join is safe.
+    record.fingerprint || `record-${ordinal}`,
+  ]);
+}
+
+function metricEligibleRounds(
+  rounds: Iterable<ComparisonRound>,
   metric: string,
-): boolean {
-  return samples.some(
-    (sample) =>
-      sample.record === record &&
-      sample.measurement.name === metric &&
-      finiteNumber(sample.measurement.value),
+): ComparisonRound[] {
+  return [...rounds].filter((round) =>
+    round.records.some((record) => {
+      const measurements = Array.isArray(record.measurements)
+        ? record.measurements
+        : [];
+      return (
+        measurements.length === 0 ||
+        measurements.some((measurement) => measurement?.name === metric)
+      );
+    }),
   );
+}
+
+function roundMissingMetric(round: ComparisonRound, metric: string): boolean {
+  const measurements = round.records.flatMap((record) =>
+    (Array.isArray(record.measurements) ? record.measurements : []).filter(
+      (measurement) => measurement?.name === metric,
+    ),
+  );
+  if (!measurements.length) return true;
+  return measurements.some((measurement) => !finiteNumber(measurement.value));
+}
+
+function roundFailed(round: ComparisonRound): boolean {
+  return round.records.some((record) => record.outcome === "failure");
 }
 
 /** Compare only bound scalar samples wholly covered by ordered before/after windows. */
@@ -577,7 +626,7 @@ export function compareThousandEyesMeasurements(
 
   const buckets = new Map<string, ComparisonBucket>();
   const roundsByIdentity = new Map<string, ComparisonRounds>();
-  for (const record of records) {
+  for (const [ordinal, record] of records.entries()) {
     const inBefore = containedInWindow(record.interval, before);
     const inAfter = containedInWindow(record.interval, after);
     const hasNativeIdentity =
@@ -594,11 +643,26 @@ export function compareThousandEyesMeasurements(
       const identityKey = comparisonIdentityKey(record);
       let rounds = roundsByIdentity.get(identityKey);
       if (!rounds) {
-        rounds = { before: [], after: [] };
+        rounds = { before: new Map(), after: new Map() };
         roundsByIdentity.set(identityKey, rounds);
       }
-      if (inBefore) rounds.before.push(record);
-      if (inAfter) rounds.after.push(record);
+      const roundKey = nativeIntervalRoundKey(record, ordinal);
+      if (inBefore) {
+        let round = rounds.before.get(roundKey);
+        if (!round) {
+          round = { records: [] };
+          rounds.before.set(roundKey, round);
+        }
+        if (!round.records.includes(record)) round.records.push(record);
+      }
+      if (inAfter) {
+        let round = rounds.after.get(roundKey);
+        if (!round) {
+          round = { records: [] };
+          rounds.after.set(roundKey, round);
+        }
+        if (!round.records.includes(record)) round.records.push(record);
+      }
     }
 
     if (!inBefore && !inAfter) continue;
@@ -658,20 +722,22 @@ export function compareThousandEyesMeasurements(
       const afterValues = valuesFor(bucket.after);
       const sampleRecord = bucket.before[0]?.record ?? bucket.after[0].record;
       const rounds = roundsByIdentity.get(comparisonIdentityKey(sampleRecord));
-      const beforeRounds = rounds?.before ?? [];
-      const afterRounds = rounds?.after ?? [];
-      const beforeMissingMetric = beforeRounds.filter(
-        (round) => !finiteBoundReading(round, bucket.before, bucket.metric),
+      const beforeRounds = metricEligibleRounds(
+        rounds?.before.values() ?? [],
+        bucket.metric,
+      );
+      const afterRounds = metricEligibleRounds(
+        rounds?.after.values() ?? [],
+        bucket.metric,
+      );
+      const beforeMissingMetric = beforeRounds.filter((round) =>
+        roundMissingMetric(round, bucket.metric),
       ).length;
-      const afterMissingMetric = afterRounds.filter(
-        (round) => !finiteBoundReading(round, bucket.after, bucket.metric),
+      const afterMissingMetric = afterRounds.filter((round) =>
+        roundMissingMetric(round, bucket.metric),
       ).length;
-      const beforeFailures = beforeRounds.filter(
-        (round) => round.outcome === "failure",
-      ).length;
-      const afterFailures = afterRounds.filter(
-        (round) => round.outcome === "failure",
-      ).length;
+      const beforeFailures = beforeRounds.filter(roundFailed).length;
+      const afterFailures = afterRounds.filter(roundFailed).length;
       const beforeUnits = fieldSet(
         bucket.before,
         (sample) => sample.measurement.unit,
@@ -775,8 +841,9 @@ export function compareThousandEyesMeasurements(
       );
 
       const reasons = [
-        `Before window: ${beforeValues.length} finite scalar sample(s) across ${beforeRounds.length} same-identity observation(s); ${beforeFailures} failed round(s), ${beforeMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
-        `After window: ${afterValues.length} finite scalar sample(s) across ${afterRounds.length} same-identity observation(s); ${afterFailures} failed round(s), ${afterMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
+        `Before window: ${beforeValues.length} finite scalar sample(s) across ${beforeRounds.length} ${bucket.metric}-eligible native interval round(s); ${beforeFailures} failed round(s), ${beforeMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
+        `After window: ${afterValues.length} finite scalar sample(s) across ${afterRounds.length} ${bucket.metric}-eligible native interval round(s); ${afterFailures} failed round(s), ${afterMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
+        `Only reported rounds with this metric or an explicit measurementless result are counted; other named metrics and absent producer history are not treated as missing ${bucket.metric} readings.`,
       ];
       const blockers: string[] = [];
       if (!orderedWindows)
@@ -791,7 +858,7 @@ export function compareThousandEyesMeasurements(
         );
       if (beforeMissingMetric > 0 || afterMissingMetric > 0)
         blockers.push(
-          "One or more same-identity rounds lack a finite bound reading for this metric; successful-sample coverage may be biased.",
+          "One or more metric-eligible native interval rounds lack a finite bound reading for this metric; successful-sample coverage may be biased.",
         );
 
       const compareField = (
