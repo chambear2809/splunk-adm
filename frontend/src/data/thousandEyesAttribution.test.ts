@@ -46,6 +46,7 @@ const record = (
   dataModelVersion: "1",
   testId: "test-7",
   agentId: "agent-2",
+  testDomain: "cea",
   testName: "checkout availability",
   agentName: "east probe",
   agentLocation: "East office",
@@ -97,6 +98,7 @@ const binding = (
   scope: "vpc-east",
   testId: "test-7",
   agentId: "agent-2",
+  testDomain: "cea",
   target: { ip: "198.51.100.20", protocol: "https", port: 443 },
   endpointAddresses: ["192.0.2.10"],
   application: {
@@ -315,6 +317,48 @@ describe("attributeThousandEyesRecords", () => {
     });
   });
 
+  it("requires an explicit matching CEA or Endpoint test domain", () => {
+    const missing = attribute(record({ testDomain: undefined }));
+    expect(missing.attribution.state).toBe("context_only");
+    expect(missing.attribution.reason).toContain("test domain is missing");
+
+    const mismatched = attribute(record(), selection(), [
+      binding({ testDomain: "endpoint" }),
+    ]);
+    expect(mismatched.attribution.state).toBe("unmatched");
+    expect(mismatched.attribution.reason).toContain(
+      "different ThousandEyes test domain",
+    );
+  });
+
+  it("keeps producer-marked proxy targets context only without target-role proof", () => {
+    const target = { ip: "198.51.100.20", protocol: "tcp", port: 443 };
+    const proxy = attribute(
+      record({ target, targetIsProxy: true }),
+      selection({
+        contexts: [
+          {
+            client: "192.0.2.10",
+            server: "198.51.100.20",
+            serverPort: 443,
+            transport: "tcp",
+            scope: "vpc-east",
+            first: 123,
+            last: 128,
+            timeBasis: "flow_observation",
+            capped: false,
+          },
+        ],
+      }),
+      [binding({ target })],
+    );
+    expect(proxy.attribution.state).toBe("context_only");
+    expect(proxy.attribution.bindingIds).toEqual([]);
+    expect(proxy.attribution.observedDependency).toBe(false);
+    expect(proxy.attribution.reason).toContain("proxy coverage");
+    expect(proxy.attribution.reason).toContain("does not prove target role");
+  });
+
   it("does not use names or tags when native test or agent IDs are absent", () => {
     const attributed = attribute(
       record({ testId: undefined, agentId: undefined }),
@@ -323,6 +367,20 @@ describe("attributeThousandEyesRecords", () => {
     expect(attributed.attribution.reason).toContain(
       "test names and tags are not used",
     );
+  });
+
+  it("requires an explicitly configured agent location and keeps relocation context only", () => {
+    const relocated = attribute(record({ agentLocation: "West office" }));
+    expect(relocated.attribution.state).toBe("context_only");
+    expect(relocated.attribution.bindingIds).toEqual([]);
+    expect(relocated.attribution.reason).toContain("possible agent relocation");
+
+    const notLocationScoped = attribute(
+      record({ agentLocation: "West office" }),
+      selection(),
+      [binding({ agentLocation: undefined })],
+    );
+    expect(notLocationScoped.attribution.state).toBe("bound");
   });
 
   it("keeps stale, incomplete, conflicting or truncated records context only", () => {
@@ -338,6 +396,25 @@ describe("attributeThousandEyesRecords", () => {
       expect(attributed.attribution.bindingIds).toEqual([]);
       expect(attributed.attribution.observedDependency).toBe(false);
     }
+    const staleButTupleMatched = attribute(
+      record({ quality: defects[0] }),
+      selection({
+        contexts: [
+          {
+            client: "192.0.2.10",
+            server: "198.51.100.20",
+            serverPort: 443,
+            transport: "https",
+            scope: "vpc-east",
+            first: 123,
+            last: 128,
+            timeBasis: "flow_observation",
+            capped: false,
+          },
+        ],
+      }),
+    );
+    expect(staleButTupleMatched.attribution.observedDependency).toBe(false);
   });
 
   it("marks only uncapped actual selected contexts and says they do not prove the same route", () => {
@@ -351,21 +428,26 @@ describe("attributeThousandEyesRecords", () => {
           last: 128,
           timeBasis: "flow_observation",
           capped: false,
+          serverPort: 443,
+          transport: "tcp",
         },
       ],
     });
-    const observed = attribute(record(), contextSelection);
+    const target = { ip: "198.51.100.20", protocol: "tcp", port: 443 };
+    const tupleRecord = record({ target });
+    const tupleBinding = binding({ target });
+    const observed = attribute(tupleRecord, contextSelection, [tupleBinding]);
     expect(observed.attribution.observedDependency).toBe(true);
     expect(observed.attribution.reason).toContain(
       "does not prove the same route",
     );
 
     expect(
-      attribute(record(), selection()).attribution.observedDependency,
+      attribute(tupleRecord, selection()).attribution.observedDependency,
     ).toBe(false);
     expect(
       attribute(
-        record(),
+        tupleRecord,
         selection({
           contexts: [
             {
@@ -374,24 +456,93 @@ describe("attributeThousandEyesRecords", () => {
             },
           ],
         }),
+        [tupleBinding],
       ).attribution.observedDependency,
     ).toBe(false);
     expect(
-      attribute(record({ family: "trace" }), contextSelection).attribution
-        .observedDependency,
+      attribute(record({ ...tupleRecord, family: "trace" }), contextSelection, [
+        tupleBinding,
+      ]).attribution.observedDependency,
     ).toBe(false);
     expect(
       attribute(
         record({ target: { hostname: "service.example" } }),
         contextSelection,
+        [tupleBinding],
       ).attribution.observedDependency,
     ).toBe(false);
     expect(
       attribute(
-        record({ interval: { start: 150, end: 160 } }),
+        record({ ...tupleRecord, interval: { start: 150, end: 160 } }),
         contextSelection,
+        [tupleBinding],
       ).attribution.observedDependency,
     ).toBe(false);
+
+    expect(
+      attribute(
+        record({ target: { ...target, port: 444 } }),
+        contextSelection,
+        [binding({ target: { ...target, port: 444 } })],
+      ).attribution.observedDependency,
+    ).toBe(false);
+    expect(
+      attribute(
+        record({ target: { ...target, protocol: "udp" } }),
+        contextSelection,
+        [binding({ target: { ...target, protocol: "udp" } })],
+      ).attribution.observedDependency,
+    ).toBe(false);
+    expect(
+      attribute(
+        tupleRecord,
+        selection({
+          contexts: [
+            {
+              ...contextSelection.contexts[0],
+              client: "198.51.100.20",
+              server: "192.0.2.10",
+            },
+          ],
+        }),
+        [tupleBinding],
+      ).attribution.observedDependency,
+    ).toBe(false);
+    expect(
+      attribute(
+        record({ target: { ...target, protocol: "unknown" } }),
+        selection({
+          contexts: [
+            {
+              ...contextSelection.contexts[0],
+              transport: "unknown",
+            },
+          ],
+        }),
+        [binding({ target: { ...target, protocol: "unknown" } })],
+      ).attribution.observedDependency,
+    ).toBe(false);
+    const boundWithoutTuple = attribute(
+      record({ target: { ip: "198.51.100.20" } }),
+      contextSelection,
+      [binding({ target: { ip: "198.51.100.20" } })],
+    );
+    expect(boundWithoutTuple.attribution.state).toBe("bound");
+    expect(boundWithoutTuple.attribution.observedDependency).toBe(false);
+    const missingContextTuple = attribute(
+      tupleRecord,
+      selection({
+        contexts: [
+          {
+            ...contextSelection.contexts[0],
+            serverPort: undefined,
+            transport: undefined,
+          },
+        ],
+      }),
+      [tupleBinding],
+    );
+    expect(missingContextTuple.attribution.observedDependency).toBe(false);
   });
 });
 
@@ -471,6 +622,37 @@ describe("compareThousandEyesMeasurements", () => {
     expect(missing.reasons.join(" ")).toContain("No finite scalar measurement");
   });
 
+  it("keeps identical native test IDs in separate test-domain comparisons", () => {
+    const ceaSample = attributed({ interval: { start: 110, end: 120 } });
+    const endpointSample = attributed(
+      { interval: { start: 210, end: 220 }, testDomain: "endpoint" },
+      [
+        binding({
+          testDomain: "endpoint",
+          validFrom: 50,
+          validTo: 350,
+        }),
+      ],
+    );
+    const comparisons = compareThousandEyesMeasurements(
+      [ceaSample, endpointSample],
+      before,
+      after,
+    );
+    expect(comparisons).toHaveLength(2);
+    expect(new Set(comparisons.map((item) => item.key)).size).toBe(2);
+    expect(comparisons.every((item) => !item.comparable)).toBe(true);
+    expect(comparisons.map((item) => item.testDomain).sort()).toEqual([
+      "cea",
+      "endpoint",
+    ]);
+    expect(
+      comparisons
+        .map((item) => [item.beforeCount, item.afterCount].join(":"))
+        .sort(),
+    ).toEqual(["0:1", "1:0"]);
+  });
+
   it("exposes configuration, location, target and unit changes as incomparable", () => {
     const beforeBinding = binding({
       id: "old-config",
@@ -482,6 +664,7 @@ describe("compareThousandEyesMeasurements", () => {
       id: "new-config",
       configurationId: "config-b",
       target: { ip: "198.51.100.21", protocol: "https", port: 443 },
+      agentLocation: "West office",
       validFrom: 200,
       validTo: 350,
     });
@@ -521,6 +704,211 @@ describe("compareThousandEyesMeasurements", () => {
     expect(comparison.reasons.join(" ")).toContain("Measurement unit changed");
   });
 
+  it("rejects unknown measurement semantics and changed adapter or model versions", () => {
+    const fields = [
+      ["aggregation", "Measurement aggregation"],
+      ["direction", "Measurement direction"],
+      ["denominator", "Measurement denominator"],
+      ["timeBasis", "Measurement time basis"],
+    ] as const;
+    for (const [field, label] of fields) {
+      const measurement = { ...record().measurements[0], [field]: "unknown" };
+      const [comparison] = compareThousandEyesMeasurements(
+        [
+          attributed({
+            interval: { start: 110, end: 120 },
+            measurements: [measurement],
+          }),
+          attributed({
+            interval: { start: 210, end: 220 },
+            measurements: [measurement],
+          }),
+        ],
+        before,
+        after,
+      );
+      expect(comparison.comparable).toBe(false);
+      expect(comparison.reasons.join(" ")).toContain(
+        `${label} is unknown or unreported`,
+      );
+    }
+
+    for (const [field, label] of [
+      ["adapterVersion", "Atlas adapter version"],
+      ["dataModelVersion", "ThousandEyes data-model version"],
+    ] as const) {
+      const [comparison] = compareThousandEyesMeasurements(
+        [
+          attributed({ interval: { start: 110, end: 120 } }),
+          attributed({
+            interval: { start: 210, end: 220 },
+            [field]: "changed-version",
+          }),
+        ],
+        before,
+        after,
+      );
+      expect(comparison.comparable).toBe(false);
+      expect(comparison.reasons.join(" ")).toContain(
+        `${label} changed between windows`,
+      );
+      const [unknown] = compareThousandEyesMeasurements(
+        [
+          attributed({
+            interval: { start: 110, end: 120 },
+            [field]: "unknown",
+          }),
+          attributed({
+            interval: { start: 210, end: 220 },
+            [field]: "unknown",
+          }),
+        ],
+        before,
+        after,
+      );
+      expect(unknown.comparable).toBe(false);
+      expect(unknown.reasons.join(" ")).toContain(
+        `${label} is unknown or unreported`,
+      );
+    }
+  });
+
+  it("requires a stable known probe path direction for path comparisons", () => {
+    const [changed] = compareThousandEyesMeasurements(
+      [
+        attributed({
+          family: "path",
+          interval: { start: 110, end: 120 },
+          pathDirection: "to-target",
+        }),
+        attributed({
+          family: "path",
+          interval: { start: 210, end: 220 },
+          pathDirection: "from-target",
+        }),
+      ],
+      before,
+      after,
+    );
+    expect(changed.comparable).toBe(false);
+    expect(changed.reasons.join(" ")).toContain(
+      "Probe path direction changed between windows",
+    );
+
+    const [missing] = compareThousandEyesMeasurements(
+      [
+        attributed({ family: "path", interval: { start: 110, end: 120 } }),
+        attributed({ family: "path", interval: { start: 210, end: 220 } }),
+      ],
+      before,
+      after,
+    );
+    expect(missing.comparable).toBe(false);
+    expect(missing.reasons.join(" ")).toContain(
+      "Probe path direction is missing or varies",
+    );
+  });
+
+  it("discloses unreported producer versions and rejects version changes", () => {
+    const noProducerVersion = [
+      attributed({
+        interval: { start: 110, end: 120 },
+        producerVersion: undefined,
+      }),
+      attributed({
+        interval: { start: 210, end: 220 },
+        producerVersion: "not_reported",
+      }),
+    ];
+    const [unreported] = compareThousandEyesMeasurements(
+      noProducerVersion,
+      before,
+      after,
+    );
+    expect(unreported.comparable).toBe(true);
+    expect(unreported.reasons.join(" ")).toContain(
+      "Producer version was not reported in either window",
+    );
+
+    const [changed] = compareThousandEyesMeasurements(
+      [
+        attributed({
+          interval: { start: 110, end: 120 },
+          producerVersion: "10.0",
+        }),
+        attributed({
+          interval: { start: 210, end: 220 },
+          producerVersion: "11.0",
+        }),
+      ],
+      before,
+      after,
+    );
+    expect(changed.comparable).toBe(false);
+    expect(changed.reasons.join(" ")).toContain(
+      "Producer version changed between windows",
+    );
+
+    const [unknown] = compareThousandEyesMeasurements(
+      [
+        attributed({
+          interval: { start: 110, end: 120 },
+          producerVersion: "unknown",
+        }),
+        attributed({
+          interval: { start: 210, end: 220 },
+          producerVersion: "unknown",
+        }),
+      ],
+      before,
+      after,
+    );
+    expect(unknown.comparable).toBe(false);
+    expect(unknown.reasons.join(" ")).toContain(
+      "Producer version is unknown or invalid",
+    );
+  });
+
+  it("counts failed rounds missing a finite metric and blocks a survivor-only comparison", () => {
+    const [comparison] = compareThousandEyesMeasurements(
+      [
+        attributed({
+          interval: { start: 110, end: 120 },
+          outcome: "success",
+          measurements: [{ ...record().measurements[0], value: 100 }],
+        }),
+        attributed({
+          interval: { start: 130, end: 140 },
+          outcome: "failure",
+          measurements: [],
+        }),
+        attributed({
+          interval: { start: 210, end: 220 },
+          outcome: "success",
+          measurements: [{ ...record().measurements[0], value: 10 }],
+        }),
+        attributed({
+          interval: { start: 230, end: 240 },
+          outcome: "failure",
+          measurements: [],
+        }),
+      ],
+      before,
+      after,
+    );
+    expect(comparison.beforeCount).toBe(1);
+    expect(comparison.afterCount).toBe(1);
+    expect(comparison.comparable).toBe(false);
+    expect(comparison.beforeMean).toBeUndefined();
+    expect(comparison.afterMean).toBeUndefined();
+    expect(comparison.reasons.join(" ")).toContain(
+      "across 2 same-identity observation(s); 1 failed round(s), 1 round(s) without a finite bound latency reading",
+    );
+    expect(comparison.reasons.join(" ")).toContain(
+      "successful-sample coverage may be biased",
+    );
+  });
+
   it("rejects partial window intervals, unbound rows and out-of-order windows", () => {
     const partial = attributed({ interval: { start: 190, end: 210 } });
     const comparison = compareThousandEyesMeasurements(
@@ -539,8 +927,7 @@ describe("compareThousandEyesMeasurements", () => {
       before,
       after,
     );
-    expect(comparison[0].beforeCount).toBe(0);
-    expect(comparison[0].afterCount).toBe(0);
+    expect(comparison).toEqual([]);
 
     const contextOnly = {
       ...attributed({ interval: { start: 110, end: 120 } }),

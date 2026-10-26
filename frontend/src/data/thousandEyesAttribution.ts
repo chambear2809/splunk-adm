@@ -9,6 +9,30 @@ import type {
 } from "./thousandEyesTypes";
 
 const MAX_EPOCH = 253_402_300_799;
+const UNKNOWN_SEMANTIC_VALUES = new Set([
+  "",
+  "unknown",
+  "not_reported",
+  "not reported",
+  "unreported",
+  "unspecified",
+  "not_available",
+  "not available",
+  "n/a",
+  "na",
+  "null",
+]);
+
+function isKnownMetadata(value: string | undefined): value is string {
+  return (
+    typeof value === "string" &&
+    !UNKNOWN_SEMANTIC_VALUES.has(value.trim().toLowerCase())
+  );
+}
+
+function isTestDomain(value: unknown): value is "cea" | "endpoint" {
+  return value === "cea" || value === "endpoint";
+}
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
@@ -198,19 +222,34 @@ function hasCompatibleSelectedContext(
 ): boolean {
   if (record.family !== "metric" && record.family !== "path") return false;
   const targetIp = canonicalIp(record.target?.ip);
-  if (!targetIp || !Array.isArray(selection.contexts)) return false;
+  const targetProtocol =
+    typeof record.target?.protocol === "string"
+      ? record.target.protocol.toLowerCase()
+      : undefined;
+  const targetPort = record.target?.port;
+  if (
+    !targetIp ||
+    !isKnownMetadata(targetProtocol) ||
+    !finiteNumber(targetPort) ||
+    !Number.isInteger(targetPort) ||
+    targetPort < 1 ||
+    targetPort > 65535 ||
+    !Array.isArray(selection.contexts)
+  )
+    return false;
   return selection.contexts.some((context) => {
     if (
       !context ||
       context.capped ||
       context.scope !== selection.scope ||
+      context.serverPort !== targetPort ||
+      typeof context.transport !== "string" ||
+      !isKnownMetadata(context.transport) ||
+      context.transport.toLowerCase() !== targetProtocol ||
       !intervalsOverlapContext(record.interval, context.first, context.last)
     )
       return false;
-    return (
-      canonicalIp(context.client) === targetIp ||
-      canonicalIp(context.server) === targetIp
-    );
+    return canonicalIp(context.server) === targetIp;
   });
 }
 
@@ -234,20 +273,40 @@ export function attributeThousandEyesRecords(
   bindings: readonly ThousandEyesBinding[],
 ): ThousandEyesAttributedObservation[] {
   return records.map((record) => {
-    const observedDependency = hasCompatibleSelectedContext(record, selection);
+    const qualityIssues = qualityLimitations(record);
+    const observedDependency =
+      qualityIssues.length === 0 &&
+      isTestDomain(record.testDomain) &&
+      record.targetIsProxy !== true &&
+      hasCompatibleSelectedContext(record, selection);
     const contextReason = observedDependency
       ? "A compatible uncapped selected traffic context overlaps this target and interval; this does not prove the same route or protocol/port tuple."
       : undefined;
-    const qualityIssues = qualityLimitations(record);
+    const contextOnlyReasons: string[] = [];
     if (qualityIssues.length) {
+      contextOnlyReasons.push(
+        `Record quality prevents attribution: ${qualityIssues.join(", ")}.`,
+        "The record remains context only and is not eligible for comparison.",
+      );
+    }
+    if (!isTestDomain(record.testDomain)) {
+      contextOnlyReasons.push(
+        "The ThousandEyes test domain is missing or invalid; CEA and Endpoint native IDs are not interchangeable.",
+      );
+    }
+    if (record.targetIsProxy === true) {
+      contextOnlyReasons.push(
+        "The producer marks this target as a proxy; the binding does not prove target role or proxy coverage, so attribution remains context only.",
+      );
+    }
+    if (contextOnlyReasons.length) {
       return {
         ...record,
         attribution: {
           state: "context_only",
           bindingIds: [],
           reason: [
-            `Record quality prevents attribution: ${qualityIssues.join(", ")}.`,
-            "The record remains context only and is not eligible for comparison.",
+            ...contextOnlyReasons,
             ...(contextReason ? [contextReason] : []),
           ].join(" "),
           observedDependency,
@@ -260,7 +319,7 @@ export function attributeThousandEyesRecords(
       typeof record.agentId === "string" &&
       record.agentId.length > 0;
 
-    const identityCandidates = exactIdentityPresent
+    const sameNativeCandidates = exactIdentityPresent
       ? bindings.filter(
           (binding) =>
             binding.authority === record.authority &&
@@ -271,7 +330,20 @@ export function attributeThousandEyesRecords(
             containedInBinding(record.interval, binding),
         )
       : [];
-    const targetCandidates = identityCandidates.filter((binding) =>
+    const identityCandidates = sameNativeCandidates.filter(
+      (binding) => binding.testDomain === record.testDomain,
+    );
+    const relocationCandidates = identityCandidates.filter(
+      (binding) =>
+        binding.agentLocation !== undefined &&
+        record.agentLocation !== binding.agentLocation,
+    );
+    const locationCandidates = identityCandidates.filter(
+      (binding) =>
+        binding.agentLocation === undefined ||
+        record.agentLocation === binding.agentLocation,
+    );
+    const targetCandidates = locationCandidates.filter((binding) =>
       targetMatches(record.target, binding.target),
     );
     const configurationCandidates =
@@ -288,7 +360,7 @@ export function attributeThousandEyesRecords(
         state: "bound",
         bindingIds: [binding.id],
         reason: [
-          "Exactly one historical binding matches the authority, account group, native test/agent, routing scope, selected endpoint address, target, and whole observation interval.",
+          "Exactly one historical binding matches authority, account group, native test/agent/domain, routing scope, selected endpoint address, configured target, any explicitly configured agent location, and the whole observation interval.",
           ...(contextReason ? [contextReason] : []),
         ].join(" "),
         observedDependency,
@@ -308,11 +380,24 @@ export function attributeThousandEyesRecords(
         state: "ambiguous",
         bindingIds: candidates.map((binding) => binding.id).sort(),
         reason: [
-          "Multiple overlapping historical bindings match the selected identity and target; their configuration cannot establish one attribution.",
+          "Multiple overlapping historical bindings match the selected native test domain, identity, and target; their configuration cannot establish one attribution.",
           ...(record.configurationId !== undefined &&
           configurationCandidates.length === 0
             ? ["The observed configuration ID matches none of those bindings."]
             : []),
+          ...(contextReason ? [contextReason] : []),
+        ].join(" "),
+        observedDependency,
+      };
+    } else if (
+      relocationCandidates.length > 0 &&
+      targetCandidates.length === 0
+    ) {
+      attribution = {
+        state: "context_only",
+        bindingIds: [],
+        reason: [
+          "The observed agent location is missing or differs from the explicitly configured historical location; possible agent relocation keeps this record context only.",
           ...(contextReason ? [contextReason] : []),
         ].join(" "),
         observedDependency,
@@ -328,12 +413,18 @@ export function attributeThousandEyesRecords(
       ) {
         reason =
           "The observed configuration ID does not match the historical target binding.";
+      } else if (
+        sameNativeCandidates.length > 0 &&
+        identityCandidates.length === 0
+      ) {
+        reason =
+          "The historical binding uses a different ThousandEyes test domain; CEA and Endpoint IDs are not interchangeable.";
       } else if (identityCandidates.length > 0) {
         reason =
           "The observed target does not exactly match the configured target; hostnames are never resolved.";
       } else {
         reason =
-          "No historical binding matches the exact authority, account group, native test/agent, routing scope, selected application, endpoint address, target, and whole observation interval.";
+          "No historical binding matches the exact authority, account group, native test/agent/domain, routing scope, selected application, endpoint address, target, and whole observation interval.";
       }
       attribution = {
         state: observedDependency ? "context_only" : "unmatched",
@@ -342,7 +433,9 @@ export function attributeThousandEyesRecords(
           reason,
           ...(observedDependency
             ? [contextReason!]
-            : ["No compatible uncapped selected traffic context is present."]),
+            : [
+                "No uncapped selected server tuple matches the target address, interval, protocol, and port.",
+              ]),
         ].join(" "),
         observedDependency,
       };
@@ -362,10 +455,26 @@ interface ComparisonBucket {
   accountGroupId: string;
   testId: string;
   agentId: string;
+  testDomain: "cea" | "endpoint";
   family: "metric" | "path";
   metric: string;
   before: ComparisonSample[];
   after: ComparisonSample[];
+}
+
+interface ComparisonRounds {
+  before: ThousandEyesAttributedObservation[];
+  after: ThousandEyesAttributedObservation[];
+}
+
+function producerVersionForComparison(
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.trim().toLowerCase();
+  return ["not_reported", "not reported", "unreported"].includes(normalized)
+    ? undefined
+    : value;
 }
 
 function scalarMean(values: readonly number[]): number | undefined {
@@ -426,9 +535,36 @@ function comparisonKey(bucket: ComparisonBucket): string {
     bucket.accountGroupId,
     bucket.testId,
     bucket.agentId,
+    bucket.testDomain,
     bucket.family,
     bucket.metric,
   ]);
+}
+
+function comparisonIdentityKey(
+  record: ThousandEyesAttributedObservation,
+): string {
+  return JSON.stringify([
+    record.authority,
+    record.accountGroupId,
+    record.testId,
+    record.agentId,
+    record.testDomain,
+    record.family,
+  ]);
+}
+
+function finiteBoundReading(
+  record: ThousandEyesAttributedObservation,
+  samples: readonly ComparisonSample[],
+  metric: string,
+): boolean {
+  return samples.some(
+    (sample) =>
+      sample.record === record &&
+      sample.measurement.name === metric &&
+      finiteNumber(sample.measurement.value),
+  );
 }
 
 /** Compare only bound scalar samples wholly covered by ordered before/after windows. */
@@ -440,12 +576,40 @@ export function compareThousandEyesMeasurements(
   if (!validWindow(before) || !validWindow(after)) return [];
 
   const buckets = new Map<string, ComparisonBucket>();
+  const roundsByIdentity = new Map<string, ComparisonRounds>();
   for (const record of records) {
+    const inBefore = containedInWindow(record.interval, before);
+    const inAfter = containedInWindow(record.interval, after);
+    const hasNativeIdentity =
+      typeof record.testId === "string" &&
+      !!record.testId &&
+      typeof record.agentId === "string" &&
+      !!record.agentId;
+    if (
+      hasNativeIdentity &&
+      isTestDomain(record.testDomain) &&
+      (record.family === "metric" || record.family === "path") &&
+      (inBefore || inAfter)
+    ) {
+      const identityKey = comparisonIdentityKey(record);
+      let rounds = roundsByIdentity.get(identityKey);
+      if (!rounds) {
+        rounds = { before: [], after: [] };
+        roundsByIdentity.set(identityKey, rounds);
+      }
+      if (inBefore) rounds.before.push(record);
+      if (inAfter) rounds.after.push(record);
+    }
+
+    if (!inBefore && !inAfter) continue;
+
     if (
       record.attribution?.state !== "bound" ||
       record.attribution.bindingIds.length !== 1 ||
       !record.attribution.configurationId ||
       qualityLimitations(record).length > 0 ||
+      !isTestDomain(record.testDomain) ||
+      record.targetIsProxy === true ||
       (record.family !== "metric" && record.family !== "path")
     )
       continue;
@@ -461,6 +625,7 @@ export function compareThousandEyesMeasurements(
         record.accountGroupId,
         record.testId,
         record.agentId,
+        record.testDomain,
         record.family,
         measurement.name,
       ]);
@@ -471,6 +636,7 @@ export function compareThousandEyesMeasurements(
           accountGroupId: record.accountGroupId,
           testId: record.testId ?? "",
           agentId: record.agentId ?? "",
+          testDomain: record.testDomain,
           family: record.family,
           metric: measurement.name,
           before: [],
@@ -479,9 +645,8 @@ export function compareThousandEyesMeasurements(
         buckets.set(key, bucket);
       }
       const sample = { record, measurement };
-      if (containedInWindow(record.interval, before))
-        bucket.before.push(sample);
-      if (containedInWindow(record.interval, after)) bucket.after.push(sample);
+      if (inBefore) bucket.before.push(sample);
+      if (inAfter) bucket.after.push(sample);
     }
   }
 
@@ -491,6 +656,22 @@ export function compareThousandEyesMeasurements(
     .map((bucket) => {
       const beforeValues = valuesFor(bucket.before);
       const afterValues = valuesFor(bucket.after);
+      const sampleRecord = bucket.before[0]?.record ?? bucket.after[0].record;
+      const rounds = roundsByIdentity.get(comparisonIdentityKey(sampleRecord));
+      const beforeRounds = rounds?.before ?? [];
+      const afterRounds = rounds?.after ?? [];
+      const beforeMissingMetric = beforeRounds.filter(
+        (round) => !finiteBoundReading(round, bucket.before, bucket.metric),
+      ).length;
+      const afterMissingMetric = afterRounds.filter(
+        (round) => !finiteBoundReading(round, bucket.after, bucket.metric),
+      ).length;
+      const beforeFailures = beforeRounds.filter(
+        (round) => round.outcome === "failure",
+      ).length;
+      const afterFailures = afterRounds.filter(
+        (round) => round.outcome === "failure",
+      ).length;
       const beforeUnits = fieldSet(
         bucket.before,
         (sample) => sample.measurement.unit,
@@ -538,6 +719,14 @@ export function compareThousandEyesMeasurements(
         bucket.after,
         (sample) => sample.measurement.direction,
       );
+      const beforePathDirections = fieldSet(
+        bucket.before,
+        (sample) => sample.record.pathDirection,
+      );
+      const afterPathDirections = fieldSet(
+        bucket.after,
+        (sample) => sample.record.pathDirection,
+      );
       const beforeDenominators = fieldSet(
         bucket.before,
         (sample) => sample.measurement.denominator,
@@ -562,10 +751,32 @@ export function compareThousandEyesMeasurements(
         bucket.after,
         (sample) => sample.record.intervalBasis,
       );
+      const beforeAdapterVersions = fieldSet(
+        bucket.before,
+        (sample) => sample.record.adapterVersion,
+      );
+      const afterAdapterVersions = fieldSet(
+        bucket.after,
+        (sample) => sample.record.adapterVersion,
+      );
+      const beforeDataModelVersions = fieldSet(
+        bucket.before,
+        (sample) => sample.record.dataModelVersion,
+      );
+      const afterDataModelVersions = fieldSet(
+        bucket.after,
+        (sample) => sample.record.dataModelVersion,
+      );
+      const beforeProducerVersions = fieldSet(bucket.before, (sample) =>
+        producerVersionForComparison(sample.record.producerVersion),
+      );
+      const afterProducerVersions = fieldSet(bucket.after, (sample) =>
+        producerVersionForComparison(sample.record.producerVersion),
+      );
 
       const reasons = [
-        `Before window: ${beforeValues.length} scalar sample(s).`,
-        `After window: ${afterValues.length} scalar sample(s).`,
+        `Before window: ${beforeValues.length} finite scalar sample(s) across ${beforeRounds.length} same-identity observation(s); ${beforeFailures} failed round(s), ${beforeMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
+        `After window: ${afterValues.length} finite scalar sample(s) across ${afterRounds.length} same-identity observation(s); ${afterFailures} failed round(s), ${afterMissingMetric} round(s) without a finite bound ${bucket.metric} reading.`,
       ];
       const blockers: string[] = [];
       if (!orderedWindows)
@@ -578,11 +789,16 @@ export function compareThousandEyesMeasurements(
         blockers.push(
           "No finite scalar measurement is wholly covered by the after window.",
         );
+      if (beforeMissingMetric > 0 || afterMissingMetric > 0)
+        blockers.push(
+          "One or more same-identity rounds lack a finite bound reading for this metric; successful-sample coverage may be biased.",
+        );
 
       const compareField = (
         beforeSet: Set<string | undefined>,
         afterSet: Set<string | undefined>,
         label: string,
+        requireKnown = false,
       ) => {
         if (!beforeValues.length || !afterValues.length) return;
         if (
@@ -594,36 +810,111 @@ export function compareThousandEyesMeasurements(
           blockers.push(
             `${label} is missing or varies within a comparison window.`,
           );
-        } else if ([...beforeSet][0] !== [...afterSet][0]) {
-          blockers.push(`${label} changed between windows.`);
+        } else {
+          const beforeValue = [...beforeSet][0];
+          const afterValue = [...afterSet][0];
+          if (
+            requireKnown &&
+            (!isKnownMetadata(beforeValue) || !isKnownMetadata(afterValue))
+          ) {
+            blockers.push(`${label} is unknown or unreported.`);
+          } else if (beforeValue !== afterValue) {
+            blockers.push(`${label} changed between windows.`);
+          }
         }
       };
 
-      compareField(beforeUnits, afterUnits, "Measurement unit");
+      compareField(beforeUnits, afterUnits, "Measurement unit", true);
       compareField(
         beforeConfigurations,
         afterConfigurations,
         "Test configuration",
+        true,
       );
-      compareField(beforeLocations, afterLocations, "Agent location");
+      compareField(beforeLocations, afterLocations, "Agent location", true);
       compareField(beforeTargets, afterTargets, "Target identity");
       compareField(
         beforeAggregations,
         afterAggregations,
         "Measurement aggregation",
+        true,
       );
-      compareField(beforeDirections, afterDirections, "Measurement direction");
+      compareField(
+        beforeDirections,
+        afterDirections,
+        "Measurement direction",
+        true,
+      );
+      if (bucket.family === "path")
+        compareField(
+          beforePathDirections,
+          afterPathDirections,
+          "Probe path direction",
+          true,
+        );
       compareField(
         beforeDenominators,
         afterDenominators,
         "Measurement denominator",
+        true,
       );
-      compareField(beforeTimeBases, afterTimeBases, "Measurement time basis");
+      compareField(
+        beforeTimeBases,
+        afterTimeBases,
+        "Measurement time basis",
+        true,
+      );
       compareField(
         beforeIntervalBases,
         afterIntervalBases,
         "Observation interval basis",
+        true,
       );
+      compareField(
+        beforeAdapterVersions,
+        afterAdapterVersions,
+        "Atlas adapter version",
+        true,
+      );
+      compareField(
+        beforeDataModelVersions,
+        afterDataModelVersions,
+        "ThousandEyes data-model version",
+        true,
+      );
+
+      if (beforeValues.length && afterValues.length) {
+        if (
+          beforeProducerVersions.size !== 1 ||
+          afterProducerVersions.size !== 1
+        ) {
+          blockers.push(
+            "Producer version is missing or varies within a comparison window.",
+          );
+        } else {
+          const beforeVersion = [...beforeProducerVersions][0];
+          const afterVersion = [...afterProducerVersions][0];
+          if (beforeVersion === undefined && afterVersion === undefined) {
+            reasons.push(
+              "Producer version was not reported in either window; no version is inferred, and comparison relies on matching known adapter and data-model versions.",
+            );
+          } else if (
+            (beforeVersion !== undefined && !isKnownMetadata(beforeVersion)) ||
+            (afterVersion !== undefined && !isKnownMetadata(afterVersion))
+          ) {
+            blockers.push("Producer version is unknown or invalid.");
+          } else if (
+            beforeVersion === undefined ||
+            afterVersion === undefined
+          ) {
+            blockers.push(
+              "Producer version is not reported in one window and known in the other.",
+            );
+          } else if (beforeVersion !== afterVersion) {
+            blockers.push("Producer version changed between windows.");
+          }
+        }
+      }
 
       let comparable = blockers.length === 0;
       const beforeMean = comparable ? scalarMean(beforeValues) : undefined;
@@ -648,6 +939,7 @@ export function compareThousandEyesMeasurements(
         accountGroupId: bucket.accountGroupId,
         testId: bucket.testId,
         agentId: bucket.agentId,
+        testDomain: bucket.testDomain,
         ...(agentLocation ? { agentLocation } : {}),
         metric:
           bucket.family === "path" ? `path: ${bucket.metric}` : bucket.metric,
