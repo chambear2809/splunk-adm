@@ -264,11 +264,11 @@ function nativeIdentityFilter(
       for (const binding of bindings) {
         if (source.source === ATLAS_PATH_SOURCE) {
           pathRules.push(
-            `(index=${source.index} AND ${sourceField(source.source)} AND ${sourcetypeField(ATLAS_PATH_SOURCETYPE)} AND _te_p_schema="${PATH_SCHEMA}" AND _te_p_schema_version="1" AND _te_p_wrapper_account="${mapping.accountGroupId}" AND _te_p_wrapper_test="${binding.testId}" AND _te_p_wrapper_domain="cea" AND _te_p_wrapper_agent="${binding.agentId}")`,
+            `(index="${source.index}" AND ${sourceField(source.source)} AND ${sourcetypeField(ATLAS_PATH_SOURCETYPE)} AND _te_p_schema="${PATH_SCHEMA}" AND _te_p_schema_version="1" AND _te_p_wrapper_account="${mapping.accountGroupId}" AND _te_p_wrapper_test="${binding.testId}" AND _te_p_wrapper_domain="cea" AND _te_p_wrapper_agent="${binding.agentId}")`,
           );
         } else {
           pathRules.push(
-            `(index=${source.index} AND ${sourceField(source.source)} AND ${sourcetypeField(PATH_SOURCETYPE)} AND _te_p_vendor_account="${mapping.accountGroupId}" AND _te_p_vendor_test="${binding.testId}" AND _te_p_vendor_agent="${binding.agentId}")`,
+            `(index="${source.index}" AND ${sourceField(source.source)} AND ${sourcetypeField(PATH_SOURCETYPE)} AND _te_p_vendor_account="${mapping.accountGroupId}" AND _te_p_vendor_test="${binding.testId}" AND _te_p_vendor_agent="${binding.agentId}")`,
           );
         }
       }

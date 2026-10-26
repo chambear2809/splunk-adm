@@ -152,6 +152,9 @@ describe("ThousandEyes selected evidence search", () => {
       "path=result.agent.agentId output=_te_p_wrapper_agent",
     );
     expect(query).toContain('_te_p_wrapper_agent="9"');
+    expect(query).toContain(
+      '(index="te_paths" AND source="atlas:thousandeyes:path"',
+    );
     expect(query).not.toContain("'agent_id'=\"9\"");
     expect(query).not.toContain("'thousandeyes.account.id'=\"5678\"");
     expect(query).toContain("_te_m_identity_unknown=1 OR");
