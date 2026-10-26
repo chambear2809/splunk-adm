@@ -1,0 +1,29 @@
+{
+  "resource_logs": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "thousandeyes.data.version", "value": { "string_value": "v2" } },
+          { "key": "thousandeyes.account.id", "value": { "string_value": "5678" } },
+          { "key": "thousandeyes.stream.id", "value": { "string_value": "activity-stream-1" } },
+          { "key": "thousandeyes.user.name", "value": { "string_value": "operator@example.test" } },
+          { "key": "thousandeyes.activitylog.action", "value": { "string_value": "test.updated" } },
+          { "key": "thousandeyes.activitylog.resources", "value": { "string_value": "test/17" } }
+        ]
+      },
+      "scope_logs": [
+        {
+          "log_records": [
+            {
+              "time_unix_nano": "1700000010000000000",
+              "observed_time_unix_nano": "1700000011000000000",
+              "body": { "string_value": "Updated test settings" },
+              "severity_text": "INFO",
+              "severity_number": 9
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

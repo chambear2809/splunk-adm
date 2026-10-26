@@ -1,0 +1,24 @@
+{
+  "eventId": "webhook-1",
+  "eventType": "alert.triggered",
+  "accountId": "6789",
+  "orgId": "org-1",
+  "alert": {
+    "id": "alert-2",
+    "type": "HTTP_SERVER",
+    "severity": { "name": "Major" },
+    "triggered": { "epochMilli": 1700000010000 },
+    "cleared": false,
+    "rule": {
+      "id": "rule-1",
+      "name": "Checkout latency",
+      "alertType": "HTTP_SERVER",
+      "account": {
+        "id": "6789",
+        "organization": { "id": "org-1" }
+      }
+    },
+    "test": { "id": "17", "name": "Checkout availability" },
+    "targets": [{ "description": "198.51.100.20" }]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "resource_spans": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "thousandeyes.data.version", "value": { "string_value": "v2" } },
+          { "key": "thousandeyes.account.id", "value": { "string_value": "5678" } },
+          { "key": "thousandeyes.test.id", "value": { "string_value": "17" } },
+          { "key": "thousandeyes.test.domain", "value": { "string_value": "cea" } },
+          { "key": "thousandeyes.stream.id", "value": { "string_value": "stream-1" } },
+          { "key": "thousandeyes.test.type", "value": { "string_value": "agent-to-server" } },
+          { "key": "thousandeyes.source.agent.id", "value": { "string_value": "9" } }
+        ]
+      },
+      "scope_spans": [
+        {
+          "spans": [
+            {
+              "trace_id": "0123456789abcdef0123456789abcdef",
+              "span_id": "0123456789abcdef",
+              "parent_span_id": "0000000000000000",
+              "name": "HTTP GET",
+              "start_time_unix_nano": "1700000010000000000",
+              "end_time_unix_nano": "1700000010100000000",
+              "status": { "code": 1 },
+              "attributes": [
+                { "key": "server.address", "value": { "string_value": "198.51.100.20" } },
+                { "key": "server.port", "value": { "int_value": 443 } },
+                { "key": "network.transport", "value": { "string_value": "tcp" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

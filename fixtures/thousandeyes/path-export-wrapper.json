@@ -1,0 +1,35 @@
+{
+  "schema": "application_atlas.thousandeyes_path.v1",
+  "schema_version": 1,
+  "capture_id": "capture-1",
+  "authority": "te-example",
+  "account_group_id": "1234",
+  "test_id": "17",
+  "test_domain": "cea",
+  "collection_started_at": 1700000012,
+  "collection_completed_at": 1700000015,
+  "result": {
+    "date": "2023-11-14T22:13:32Z",
+    "roundId": 1700000012,
+    "startTime": 1700000010,
+    "endTime": 1700000014,
+    "agent": {
+      "agentId": "9",
+      "agentName": "East probe",
+      "location": "East office"
+    },
+    "serverIp": "198.51.100.20",
+    "originalTargetProfile": { "protocol": "tcp", "remotePort": 443 },
+    "pathTraces": [
+      {
+        "pathId": "path-1",
+        "numberOfHops": 3,
+        "responseTime": 25.5,
+        "hops": [
+          { "hop": 1, "ipAddress": "192.0.2.1", "responseTime": 1.2 },
+          { "hop": 3, "ipAddress": "198.51.100.20", "responseTime": 25.5 }
+        ]
+      }
+    ]
+  }
+}
