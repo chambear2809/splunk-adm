@@ -343,6 +343,57 @@ class PathExportTest(unittest.TestCase):
         with self.assertRaisesRegex(export.ThousandEyesPathExportError, "identity"):
             export.collect_path_results(active, "token", get_json=changed_page)
 
+    def test_empty_intermediate_page_follows_validated_next_cursor(self):
+        active = request()
+        pages = []
+
+        def get_json(url, *_):
+            if "/agent/" in url:
+                round_id = int(url.split("/round/", 1)[1].split("?", 1)[0])
+                return response(detail(round_id=round_id))
+            pages.append(url)
+            if len(pages) == 1:
+                return response(
+                    {
+                        "results": [summary(round_id=active.start + 15)],
+                        "_links": {
+                            "next": {
+                                "href": export.build_results_url(
+                                    "17",
+                                    active.account_group_id,
+                                    active.start,
+                                    active.end,
+                                    cursor="empty",
+                                )
+                            }
+                        },
+                    }
+                )
+            if len(pages) == 2:
+                return response(
+                    {
+                        "results": [],
+                        "_links": {
+                            "next": {
+                                "href": export.build_results_url(
+                                    "17",
+                                    active.account_group_id,
+                                    active.start,
+                                    active.end,
+                                    cursor="populated",
+                                )
+                            }
+                        },
+                    }
+                )
+            if len(pages) == 3:
+                return response({"results": [summary(round_id=active.start + 30)]})
+            raise AssertionError("unexpected path API request")
+
+        wrappers, _, _ = export.collect_path_results(active, "token", get_json=get_json)
+        self.assertEqual(len(pages), 3)
+        self.assertEqual(len(wrappers), 2)
+
     def test_retries_only_transient_status_and_never_follows_redirects(self):
         active = request()
         calls = []

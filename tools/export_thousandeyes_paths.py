@@ -961,8 +961,6 @@ def collect_path_results(
                     raise ThousandEyesPathExportError(
                         "ThousandEyes path export exceeded its round cap."
                     )
-            if not summaries:
-                break
             links = page.get("_links", {})
             if not isinstance(links, dict):
                 raise ThousandEyesPathExportError(
