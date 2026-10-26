@@ -19,6 +19,7 @@ export function thousandEyesAssetVersion(): string {
     "frontend/src/data/thousandEyesAttribution.ts",
     "frontend/src/data/evidence.ts",
     "frontend/src/data/evidenceConfig.ts",
+    "frontend/src/data/deploymentClient.ts",
     "frontend/src/data/supplementalEvidence.ts",
     "frontend/src/data/searchClient.ts",
     "frontend/src/data/deploymentHealth.ts",

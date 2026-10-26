@@ -535,3 +535,101 @@ describe("administrator deployment settings persistence", () => {
     },
   );
 });
+
+describe("caller-authorized app-merged metadata fallback", () => {
+  function mergedFetcher(
+    base: ReturnType<typeof fixture>,
+    mode: "valid" | "denied" | "duplicate" | "mixed" = "valid",
+  ) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("configs/conf-macros/")) return response({}, 403);
+      if (path.includes("configs/v1/conftypes/macros/stanzas:get")) {
+        expect(init?.method).toBe("POST");
+        expect(path).toContain("?view=app-merged&output_mode=json");
+        expect(new Headers(init?.headers).get("X-Splunk-Form-Key")).toBe(
+          "csrf-test",
+        );
+        const { stanza } = JSON.parse(String(init?.body));
+        expect(stanza).toMatch(/^adm_[a-z0-9_]+(?:\([1-9][0-9]*\))?$/);
+        if (mode === "denied") return response({}, 403);
+        const selector = DATA_CONTRACT_SELECTORS.find(
+          (item) => item.name === stanza,
+        );
+        const value = selector
+          ? selector[
+              mode === "mixed" && stanza === "adm_topology" ? "after" : "before"
+            ]
+          : "index=netflow";
+        const definition = { setting: "definition", value };
+        return response({
+          settings:
+            mode === "duplicate" ? [definition, definition] : [definition],
+        });
+      }
+      const result = await base.fetcher(input, init);
+      if (path.includes("adm/deployment-settings") && init?.method !== "POST")
+        return response({
+          ...(await result.json()),
+          canWrite: false,
+          canRetry: false,
+        });
+      return result;
+    });
+  }
+
+  it("verifies contract and active index metadata without configuration writes", async () => {
+    const base = fixture();
+    const settings = defaultExpectations();
+    settings.sources.netflow.state = "active";
+    await base.client.write(settings);
+    const fetcher = mergedFetcher(base);
+    const snapshot = await new ToolkitDeploymentClient(fetcher).read();
+    expect(snapshot.activeContract).toBe(1);
+    expect(snapshot.sourceConfiguration?.netflow).toBe("configured");
+    expect(snapshot.canWrite).toBe(false);
+    const posts = fetcher.mock.calls.filter(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(posts.length).toBeGreaterThan(DATA_CONTRACT_SELECTORS.length);
+    const stanzas = posts.map(
+      ([, init]) => JSON.parse(String(init?.body)).stanza,
+    );
+    for (const selector of DATA_CONTRACT_SELECTORS)
+      expect(stanzas).toContain(selector.name);
+    expect(stanzas).toContain("adm_index_netflow");
+    expect(
+      posts.every(([path]) =>
+        String(path).includes("configs/v1/conftypes/macros/stanzas:get"),
+      ),
+    ).toBe(true);
+  });
+
+  it.each(["denied", "duplicate", "mixed"] as const)(
+    "keeps %s app-merged metadata unqualified",
+    async (mode) => {
+      const fetcher = mergedFetcher(fixture({ admin: false }), mode);
+      const snapshot = await new ToolkitDeploymentClient(fetcher).read();
+      expect(snapshot.activeContract).toBeUndefined();
+      expect(snapshot.canWrite).toBe(false);
+      expect(
+        fetcher.mock.calls.some(
+          ([path, init]) =>
+            String(path).includes("adm/deployment-settings") &&
+            init?.method === "POST",
+        ),
+      ).toBe(false);
+    },
+  );
+
+  it("does not replace inconsistent readable legacy definitions with another view", async () => {
+    const base = fixture({ admin: false, contract: 2, mixedSelector: true });
+    const snapshot = await base.client.read();
+    expect(snapshot.activeContract).toBeUndefined();
+    expect(
+      base.fetcher.mock.calls.some(([path]) =>
+        String(path).includes("stanzas:get"),
+      ),
+    ).toBe(false);
+  });
+});

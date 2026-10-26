@@ -79,6 +79,7 @@ const EXPECTED_METADATA_DENIALS = new Map([
     "adm_health_quality",
     "adm_flow_evidence(4)",
     "adm_topology",
+    "adm_index_thousandeyes",
   ].map((name) => [
     `/en-US/splunkd/__raw/servicesNS/nobody/splunk_adm/configs/conf-macros/${name}`,
     `legacy_macro_${name.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "")}`,

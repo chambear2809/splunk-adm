@@ -62,3 +62,13 @@ Optional DNS searches run with the caller's existing session/index permissions. 
 Envoy, AWS flow, asset history and Observability health inspections use the same caller-owned optional job budget and app-merged literal selector boundary. Their indexes may contain sensitive client, asset or service facts, so operators must verify the existing viewer role has appropriate index access before selecting a source. Routing scope labels never grant or restrict access. Envoy `X-Forwarded-For` is not trusted as client identity. Observability API tokens stay in a server-side environment or approved secret store and must not enter app settings, browser requests, fixtures or source links. Source-provided URLs and payload fields are not executed or used as arbitrary navigation targets.
 
 The shipped derived KV lookups and catalogs grant shared read access. Routing scopes prevent attribution joins across domains; they do not filter data by the viewer's tenant or source-index entitlements. Deployment owners must ensure every app viewer is entitled to the complete configured dataset. Tenant-separated viewer access needs an additional reviewed authorization design and target-specific tests before adoption.
+
+ThousandEyes endpoint inspection also needs read-only traffic-contract metadata.
+When the legacy macro REST read is denied, the deployment client can use the
+caller-authorized `configs/v1/conftypes/macros/stanzas:get` app-merged view for
+fixed reviewed stanza names in the explicit `nobody/splunk_adm` namespace.
+This read-only POST requires the caller's existing `list_conf_objects` access;
+it grants no capability or index access and never invokes a settings write.
+Denied, duplicate or inconsistent definitions leave the contract unknown. A
+readable inconsistent legacy definition is not replaced by another view.
+Administrator-only write checks and uncertain-write recovery remain unchanged.

@@ -572,6 +572,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
                 "legacy_macro_adm_health_quality",
                 "legacy_macro_adm_flow_evidence_4",
                 "legacy_macro_adm_topology",
+                "legacy_macro_adm_index_thousandeyes",
             },
             evidence,
         )

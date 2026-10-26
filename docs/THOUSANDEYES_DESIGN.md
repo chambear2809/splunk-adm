@@ -168,3 +168,15 @@ running vendor package version. Comparisons with unreported producer versions
 in both windows disclose unverified version continuity and retain all identity,
 configuration, location, model, unit, aggregation, interval and quality guards.
 Mixed, changed or one-sided producer versions remain blockers.
+
+## Read-only contract metadata
+
+Installed viewer qualification exposed a legacy metadata limitation: a caller
+can read the supported app-merged configuration view while the older macro GET
+route returns 403. Endpoint investigation correctly refuses an unknown traffic
+contract. The shared deployment reader now falls back only after that explicit
+denial, using the existing caller-authorized app-merged read API and fixed
+reviewed stanza names. It still requires every selector to match one known
+contract; denied, malformed, duplicate or mixed definitions stay unknown.
+The read-only POST is distinct from a settings write and cannot acquire a write
+permission or trigger uncertain-save recovery. No viewer capability is added.

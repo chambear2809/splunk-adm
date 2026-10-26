@@ -29,6 +29,7 @@ const SOURCE_FILES = [
   "frontend/src/data/deploymentHealth.ts",
   "frontend/src/data/evidence.ts",
   "frontend/src/data/evidenceConfig.ts",
+  "frontend/src/data/deploymentClient.ts",
   "frontend/src/data/supplementalEvidence.ts",
   "frontend/src/data/thousandEyesAdapters.ts",
   "frontend/src/data/thousandEyesAttribution.ts",
