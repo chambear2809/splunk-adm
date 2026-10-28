@@ -1,0 +1,43 @@
+{
+  "fixture_kind": "documentation_shaped_synthetic",
+  "documentation_source": "ThousandEyes API v7 UserEvent and AuditUserEvents models",
+  "collection_metadata": {
+    "schema_version": 1,
+    "capture_id": "te-api-synthetic-capture-01",
+    "product": "thousandeyes",
+    "authority": "te-org-synthetic-01",
+    "source_version": "thousandeyes-api-v7",
+    "family": "activity_log",
+    "partition": "aid-synthetic-01",
+    "scope": "change-a",
+    "started_at": 1793102399,
+    "completed_at": 1793102402,
+    "received_at": 1793102403,
+    "status": "complete",
+    "permissions_fingerprint": "permissions-synthetic-01",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "query_start": "2026-10-27T11:59:59Z",
+    "query_end": "2026-10-27T12:01:00Z",
+    "source_reference": "thousandeyes:api:v7:audit-user-events",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "aid": "aid-synthetic-01",
+      "accountGroupName": "Synthetic Account Group",
+      "date": "2026-10-27T12:00:00.125Z",
+      "event": "Test updated.",
+      "uid": "user-synthetic-01",
+      "user": "Synthetic User (synthetic@example.invalid)",
+      "ipAddress": "192.0.2.20",
+      "resources": [
+        {
+          "type": "testName",
+          "name": "Synthetic Checkout Probe"
+        }
+      ]
+    }
+  ]
+}
