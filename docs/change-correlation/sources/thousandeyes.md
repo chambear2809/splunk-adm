@@ -173,17 +173,19 @@ coverage-register stage or establish live qualification.
 | `package_verified` | v0.9.0 helper statically calls the endpoint; no input calls it | v0.9.0 input/sourcetype statically selects the push stream; callback does no polling |
 | `sample_verified` | No; fixture is documentation-shaped synthetic | No; fixture is documentation-shaped synthetic, not received HEC |
 | `adapter_tested` | Yes, offline unit tests | Yes, for published OTel JSON envelope only |
-| `local_pipeline_tested` | Prepared HEC replay; not run pending the orchestrator's lab gate | Not tested against installed HEC flattening |
+| `local_pipeline_tested` | Passed in the authorized isolated local lab with the documentation-shaped synthetic API fixture; confirms local HEC/history projection only, not native collection | Not tested against installed HEC flattening |
 | `live_qualified` | No | No |
 
 Unit tests cover field allowlisting, actor and account identity, page
 completeness metadata, timestamp precision, duplicate handling, resource
 cardinality, OTel partial completeness, mixed stream/account rejection,
 history observations, and explicit blocked configuration disposition. The
-installed replay test uses only the synthetic API fixture, writes to the task
-lab's `atlas_changes` index, and never contacts ThousandEyes. It must remain
-unrun until the root verifies the allocation and explicitly authorizes lab
-startup.
+installed replay test used only the synthetic API fixture, wrote to the task
+lab's `atlas_changes` index, and never contacted ThousandEyes. Both installed
+assertions passed; the task container, network, volumes, and credentials were
+purged afterward. This reports a local HEC replay result only: the shared
+coverage-register feature stages remain unchanged and no live qualification is
+claimed.
 
 ## Primary references
 
