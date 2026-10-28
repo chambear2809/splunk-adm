@@ -26,20 +26,18 @@ from ..contracts import (
 PRODUCT = "thousandeyes"
 ACTIVITY_FAMILY = "activity_log"
 
-# These are source-path dispositions against the W10 feature inventory. They
-# are not live-qualification claims; the source note records evidence stages.
+# These are dispositions keyed exactly to the shared W10 feature inventory.
+# They are not live-qualification claims; the source note records evidence
+# stages. Generic activity-log context is described separately in that note.
 FEATURE_DISPOSITIONS = {
-    "thousandeyes.activity_log_context": "adapter_tested_context_only",
-    "thousandeyes.test_creation_edit_delete": "adapter_tested_context_only_resource_names_not_ids",
-    "thousandeyes.target_protocol_port_interval_changes": "blocked_no_frozen_test_configuration_projection",
-    "thousandeyes.agent_assignment_location": "blocked_no_versioned_test_agent_binding_projection",
-    "thousandeyes.alert_rule_changes": "blocked_no_alert_rule_configuration_projection",
+    "thousandeyes.test_crud": "adapter_tested_context_only_resource_names_not_ids",
+    "thousandeyes.target_interval": "blocked_no_frozen_test_configuration_projection",
+    "thousandeyes.agent_assignment": "blocked_no_versioned_test_agent_binding_projection",
+    "thousandeyes.alert_rule": "blocked_no_alert_rule_configuration_projection",
     "thousandeyes.stream_configuration": "blocked_no_stream_configuration_revision_projection",
-    "thousandeyes.account_resource_resolution": "blocked_account_crosswalk_and_native_resource_ids_unqualified",
-    "thousandeyes.measurement_comparability": "blocked_no_compatible_configuration_revision_projection",
-    "thousandeyes.probe_location_controls": "blocked_no_qualified_agent_location_binding",
-    "thousandeyes.path_changes": "unsupported_as_configuration_history_measurement_path_only",
-    "thousandeyes.detected_event_lifecycle": "unsupported_as_configuration_history_operational_event_only",
+    "thousandeyes.account_resource_mapping": "blocked_account_crosswalk_and_native_resource_ids_unqualified",
+    "thousandeyes.metric_units_config": "blocked_no_compatible_configuration_revision_projection",
+    "thousandeyes.path_events": "unsupported_as_configuration_history_measurement_and_event_context_only",
     "thousandeyes.cea_endpoint_identity": "blocked_no_qualified_domain_binding",
     "thousandeyes.api_trace_support": "blocked_no_received_trace_readback_for_disputed_support",
 }

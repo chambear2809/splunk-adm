@@ -147,21 +147,23 @@ with an application, endpoint, network dependency, or probe.
 
 ## Feature dispositions
 
-| W10 feature | Disposition | Evidence boundary and next evidence needed |
-| --- | --- | --- |
-| Activity log context | Adapter tested, context only | The API and OTel sources have separate documented shapes. Obtain sanitized API and indexed OTel samples, verify effective permissions, and qualify pagination, timestamps, retries, the conflicting 13-month/two-year retention statements, and completeness. |
-| Test create, edit, delete activity | Adapter tested, context only | The API event label and optional resource name may describe activity but do not identify a test by native ID or establish an effective test revision. Require versioned test snapshots and an explicit ID/time binding. |
-| Target, protocol, port, interval changes | Blocked | No ThousandEyes test-configuration snapshot projection is frozen. Add a reviewed, allowlisted test snapshot/revision family and complete enumeration semantics before comparing settings. |
-| Agent assignment and location | Blocked | Activity records do not provide a versioned test-agent assignment or probe-location relationship. Require stable test/agent/domain IDs and validity intervals from a qualified native config source. |
-| Alert-rule changes | Blocked | No alert-rule snapshot, stable rule revision, or versioned association projection is available here. Separate rule configuration from triggered/cleared alerts. |
-| OTel stream configuration | Blocked | The package input's `thousandeyes_stream_id` is setup context, not an immutable stream-configuration history. Require a reviewed stream snapshot/revision and change semantics. |
-| Account and resource resolution | Blocked | API `aid` is an account-group ID; OTel `account.id` is not proven equivalent. API resource names and OTel's comma-separated resource string are not test/application IDs. Require a reviewed crosswalk and native stable identifiers. |
-| Comparable before/after measurements | Blocked | No measurement or config revision projection is added. Require matching test/domain, target, agent cohort, units, aggregation, measurement window, and exact configuration revision. |
-| Probe-location controls | Blocked | No qualified location assignment/change evidence exists. Require native agent identity and time-valid location history. |
-| Path changes | Unsupported as configuration history | Path visualizations are probe measurements; they are not the customer's passive traffic path and do not establish a test configuration transition. Preserve only in a separately qualified measurement family. |
-| Detected event lifecycle | Unsupported as configuration history | Detected events and alert notifications are operational/measurement context, not a source configuration revision or proof of a configuration change. |
-| CEA versus Endpoint identity | Blocked | Activity projection carries no test domain. Require exact `cea`/`endpoint` native identities and explicit compatible bindings before joining evidence. |
-| API/trace support limits | Blocked | The reviewed package selects trace streams, but official pages disagree on API test trace support and no received stream sample was inspected. Obtain sanitized readback or vendor clarification before admitting API trace measurements. |
+Generic activity-log context is covered by the adapter and described above; it
+is not a separate W10 feature ID. The table below uses the exact ten ThousandEyes
+IDs in the shared coverage register. These dispositions do not promote any
+coverage-register stage or establish live qualification.
+
+| Coverage-register ID | Feature | Disposition | Evidence boundary and next evidence needed |
+| --- | --- | --- | --- |
+| `thousandeyes.test_crud` | Test create, update and delete | Adapter-tested context only | API event labels and optional resource names may describe actions but do not identify a test by native ID or establish an effective revision. Require versioned test snapshots and an explicit ID/time binding. |
+| `thousandeyes.target_interval` | Target, protocol, port and interval changes | Blocked | No ThousandEyes test-configuration snapshot projection is frozen. Add a reviewed, allowlisted test snapshot/revision family and complete enumeration semantics before comparing settings. |
+| `thousandeyes.agent_assignment` | Agent assignment and location | Blocked | Activity records do not provide a versioned test-agent assignment or probe-location relationship. Require stable test/agent/domain IDs and validity intervals from a qualified native config source. |
+| `thousandeyes.alert_rule` | Alert-rule changes | Blocked | No alert-rule snapshot, stable rule revision, or versioned association projection is available here. Separate rule configuration from triggered/cleared alerts. |
+| `thousandeyes.stream_configuration` | Stream configuration | Blocked | The package input's `thousandeyes_stream_id` is setup context, not an immutable stream-configuration history. Require a reviewed stream snapshot/revision and change semantics. |
+| `thousandeyes.account_resource_mapping` | Account and resource mapping | Blocked | API `aid` is an account-group ID; OTel `account.id` is not proven equivalent. API resource names and OTel's comma-separated resource string are not test/application IDs. Require a reviewed crosswalk and native stable identifiers. |
+| `thousandeyes.metric_units_config` | Metric units and configuration version | Blocked | No measurement or config revision projection is added. Require matching test/domain, target, agent cohort, units, aggregation, measurement window, and exact configuration revision. |
+| `thousandeyes.path_events` | Path changes and event lifecycle | Unsupported as configuration history | Path visualizations are probe measurements; they are not the customer's passive traffic path and do not establish a test configuration transition. Detected events and alert notifications are operational/measurement context, not a source configuration revision. |
+| `thousandeyes.cea_endpoint_identity` | CEA versus Endpoint identity | Blocked | Activity projection carries no test domain. Require exact `cea`/`endpoint` native identities and explicit compatible bindings before joining evidence. |
+| `thousandeyes.api_trace_support` | API and trace support limits | Blocked | The reviewed package selects trace streams, but official pages disagree on API test trace support and no received stream sample was inspected. Obtain sanitized readback or vendor clarification before admitting API trace measurements. |
 
 ## Evidence stages and tests
 
