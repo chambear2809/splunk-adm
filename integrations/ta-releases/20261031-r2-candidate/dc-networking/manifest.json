@@ -1,0 +1,70 @@
+{
+  "build_id": "atlas-20261031-r2-candidate",
+  "status": "candidate_not_deployed",
+  "vendor_version": "1.2.2",
+  "vendor_archive": "research/packages/cisco-dc-networking_122.tar.gz",
+  "vendor_sha256": "9e2b8534b4c0ddfd5750d3d5924e07ba6d4cf689300164bed041f5cfadb08497",
+  "candidate_archive": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r2-candidate.tgz",
+  "candidate_sha256": "6848bc5d6f3f511cb7ec3ca747e6670d652f15afc078b4b027f9fc59782173f4",
+  "package_root": "cisco_dc_networking_app_for_splunk",
+  "files": [
+    {
+      "path": "README/inputs.conf.spec",
+      "sha256": "50d5129748ff3feb89a4bf4c0d04827854ee3bfee03dd29a7dd067d189a313af",
+      "bytes": 1540,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "default/props.conf",
+      "sha256": "12fe4389d2cb6e3a5df4047e45abea2c99388bafbd019cd1c6cabd92b848cdb3",
+      "bytes": 27964,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "default/inputs.conf",
+      "sha256": "ddc75e08ebf36d974d67964c4f86deb7d74195b60cffb56457d9dd4d3159eaf8",
+      "bytes": 5121,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "LICENSE.atlas",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "NOTICE.atlas",
+      "sha256": "0f9c4b5c7decdc441f47d94d091d3b9c589a91f52b3e722a6302de240fb6f8ef",
+      "bytes": 586,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci/aci_snapshot.py",
+      "sha256": "e0fee5a0fc6ef356a2bd948aad2c23429a9a3813e5e3e4130b2eaf83f029ddb5",
+      "bytes": 13510,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci_snapshot.py",
+      "sha256": "3dd04b9e961da114ee32de86e838bc9843f25acb507b4c3630e0a151439d2be9",
+      "bytes": 22139,
+      "archive_mode": "0o755",
+      "operation": "add"
+    }
+  ],
+  "deleted_files": [],
+  "compatibility": "Default22-classv1 retained; explicit poll_version=2 produces23-classv2 including fvRsCtx. Consumer upgrade required before opting in. Quarantine remains."
+}

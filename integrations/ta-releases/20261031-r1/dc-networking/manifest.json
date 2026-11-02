@@ -1,0 +1,69 @@
+{
+  "build_id": "atlas-20261031-r1",
+  "vendor_version": "1.2.2",
+  "vendor_archive": "research/packages/cisco-dc-networking_122.tar.gz",
+  "vendor_sha256": "9e2b8534b4c0ddfd5750d3d5924e07ba6d4cf689300164bed041f5cfadb08497",
+  "deployed_archive": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r1.tgz",
+  "deployed_sha256": "c9ec9fe788b71b41675b9bad9544d2db6ebd486fcb712bc0d24249a6c1a51184",
+  "package_root": "cisco_dc_networking_app_for_splunk",
+  "files": [
+    {
+      "path": "README/inputs.conf.spec",
+      "sha256": "e9e7ebe14b97b34e09d3b46c6be549147107e7b8eb1fbb03a8d3c14482d0fc2c",
+      "bytes": 1416,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "default/props.conf",
+      "sha256": "a731c3411fa9d8ce8f9dd921ff1bf043fba6a90699bc378f03ed87e02873ef3a",
+      "bytes": 27750,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "default/inputs.conf",
+      "sha256": "ddc75e08ebf36d974d67964c4f86deb7d74195b60cffb56457d9dd4d3159eaf8",
+      "bytes": 5121,
+      "archive_mode": "0o664",
+      "operation": "replace"
+    },
+    {
+      "path": "LICENSE.atlas",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "NOTICE.atlas",
+      "sha256": "0f9c4b5c7decdc441f47d94d091d3b9c589a91f52b3e722a6302de240fb6f8ef",
+      "bytes": 586,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci/aci_snapshot.py",
+      "sha256": "f45e79133e373a336a1e504f840b0f1e9e19b57929b5b1ceed1cae124248714e",
+      "bytes": 13314,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_aci_snapshot.py",
+      "sha256": "905102b52c858938a5f7a9dfa32c0623e347781def8e55464554bacb61982ce9",
+      "bytes": 21786,
+      "archive_mode": "0o755",
+      "operation": "add"
+    }
+  ],
+  "deleted_files": [],
+  "verification": "Saved delta plus pinned vendor archive reproduces every regular file in the exact deployed archive. Gzip/tar container bytes are preserved separately in deployed_archive."
+}

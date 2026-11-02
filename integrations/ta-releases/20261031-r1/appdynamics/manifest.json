@@ -1,0 +1,76 @@
+{
+  "build_id": "atlas-20261031-r1",
+  "vendor_version": "3.3.0",
+  "vendor_archive": "research/packages/cisco-splunk-add-on-for-appdynamics_330.tar.gz",
+  "vendor_sha256": "ee7f6de3160a1a4cdf5c1193484dd23e8d4f2fb6e91c9990456259e82068a7e6",
+  "deployed_archive": "research/packages/atlas/splunk-ta-appdynamics-3.3.0-atlas-20261031-r1.tgz",
+  "deployed_sha256": "41843e59692ed2ca66e03cd6ee06b8fed2c6c3a1bad527630e3d65324ccd54d7",
+  "package_root": "Splunk_TA_AppDynamics",
+  "files": [
+    {
+      "path": "README/inputs.conf.spec",
+      "sha256": "f22f31fb4fc8c9a638ef0309b283a0bf63af183923295ab04f39d7fc472d37b2",
+      "bytes": 9383,
+      "archive_mode": "0o644",
+      "operation": "replace"
+    },
+    {
+      "path": "default/inputs.conf",
+      "sha256": "86df90e7ebeeb6dd647d83a9cdd380af75e41ae8b97ff4528fe7be47d6480d24",
+      "bytes": 1411,
+      "archive_mode": "0o644",
+      "operation": "replace"
+    },
+    {
+      "path": "LICENSE.atlas",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "bytes": 11358,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "NOTICE.atlas",
+      "sha256": "0f9c4b5c7decdc441f47d94d091d3b9c589a91f52b3e722a6302de240fb6f8ef",
+      "bytes": 586,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/atlas_appdynamics_inventory.py",
+      "sha256": "b3acf09a61b6eb0c363618e320702588f45429f399e83fdc429effa33c51d912",
+      "bytes": 16103,
+      "archive_mode": "0o755",
+      "operation": "add"
+    },
+    {
+      "path": "bin/tools/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/tools/export_appdynamics.py",
+      "sha256": "4d4054276edbeeeebba3abb8002083236d426607ff849eac18825332fea0608f",
+      "bytes": 48851,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/tools/import_appdynamics.py",
+      "sha256": "54e4525fd0e60781f4db758a8a474d19f42bfcc6af3fcd3761fbad0042f0972d",
+      "bytes": 31115,
+      "archive_mode": "0o644",
+      "operation": "add"
+    },
+    {
+      "path": "bin/tools/import_asset_history.py",
+      "sha256": "06e7d9eafe18d42bb7a5c036661c3ef86b55a6b0356f8337ba64bf6c3d6d6b40",
+      "bytes": 33908,
+      "archive_mode": "0o644",
+      "operation": "add"
+    }
+  ],
+  "deleted_files": [],
+  "verification": "Saved delta plus pinned vendor archive reproduces every regular file in the exact deployed archive. Gzip/tar container bytes are preserved separately in deployed_archive."
+}

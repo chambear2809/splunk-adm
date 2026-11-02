@@ -99,7 +99,7 @@
       "title": "Cisco DC Networking",
       "splunkbase_id": "7777",
       "version": "1.2.2",
-      "status": "downloaded_and_statically_inspected",
+      "status": "installed_with_reviewed_atlas_ta_extension",
       "archive_path": "research/packages/cisco-dc-networking_122.tar.gz",
       "extracted_path": "research/extracted/cisco-dc-networking_122/cisco_dc_networking_app_for_splunk",
       "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7777/releases/1.2.2/download/?origin=sb&lead=true",
@@ -113,8 +113,85 @@
       },
       "extraction_scope": "Regular static source/configuration files no larger than 5 MB; symlinks and executables excluded",
       "license_acceptance": "Displayed Cisco End User License and Splunk terms/privacy accepted with user confirmation on 2026-10-07",
-      "installed": false,
-      "executed": false
+      "installed": true,
+      "executed": true,
+      "installed_at": "2026-10-31",
+      "execution_scope": "existing_lab_heavy_forwarder",
+      "target_splunk_version": "10.6.0.5",
+      "local_overlay": {
+        "build_id": "atlas-20261031-r2-candidate",
+        "status": "deployed_hf_v2_first_indexed_capture_verified",
+        "artifact": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r2-candidate.tgz",
+        "sha256": "6848bc5d6f3f511cb7ec3ca747e6670d652f15afc078b4b027f9fc59782173f4",
+        "bytes": 12122000,
+        "source_snapshot": "integrations/ta-releases/20261031-r2-candidate/dc-networking",
+        "validation": "Independent source review, 39 focused snapshot/poll/overlay tests and targeted Ruff passed. Exact archive matches reviewed builder inputs and pinned vendor file contents; source delta reconstructed successfully. The candidate was subsequently deployed on the lab heavy forwarder with v2 explicitly enabled; the first scheduled 515-event capture passed 23-class integrity validation. Consumer/path qualification remains quarantined.",
+        "live_dry_capture": {
+          "capture_id": "4822798f-752c-4399-bbc9-fe4cc6ff6cf8",
+          "schema": "application_atlas.aci_poll.v2",
+          "class_count": 23,
+          "event_count": 515,
+          "fvRsCtx_count": 6,
+          "integrity": "passed",
+          "all_bd_parents_and_vrf_targets_present": true,
+          "all_fvRsCtx_formed": true,
+          "published": false,
+          "enabled_for_recurring_collection": false,
+          "consumer_quarantine": true,
+          "evidence_location": "Protected external deployment directory/v2-dry-capture-report.private.json"
+        },
+        "installed_at": "2026-10-31",
+        "first_verified_capture_id": "078bb315-b87f-42fd-a82d-a5db9c6711bf",
+        "first_verified_indexed_events": 515,
+        "consumer_quarantine": true,
+        "input": "atlas_aci_snapshot",
+        "poll_version": 2,
+        "version_note": "Atlas build based on vendor 1.2.2; original app.conf vendor version retained."
+      },
+      "candidate_overlay": {
+        "build_id": "atlas-20261031-r2-candidate",
+        "status": "deployed_hf_v2_first_indexed_capture_verified",
+        "artifact": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r2-candidate.tgz",
+        "sha256": "6848bc5d6f3f511cb7ec3ca747e6670d652f15afc078b4b027f9fc59782173f4",
+        "bytes": 12122000,
+        "source_snapshot": "integrations/ta-releases/20261031-r2-candidate/dc-networking",
+        "validation": "Independent source review, 39 focused snapshot/poll/overlay tests and targeted Ruff passed. Exact archive matches reviewed builder inputs and pinned vendor file contents; source delta reconstructed successfully. The candidate was subsequently deployed on the lab heavy forwarder with v2 explicitly enabled; the first scheduled 515-event capture passed 23-class integrity validation. Consumer/path qualification remains quarantined.",
+        "live_dry_capture": {
+          "capture_id": "4822798f-752c-4399-bbc9-fe4cc6ff6cf8",
+          "schema": "application_atlas.aci_poll.v2",
+          "class_count": 23,
+          "event_count": 515,
+          "fvRsCtx_count": 6,
+          "integrity": "passed",
+          "all_bd_parents_and_vrf_targets_present": true,
+          "all_fvRsCtx_formed": true,
+          "published": false,
+          "enabled_for_recurring_collection": false,
+          "consumer_quarantine": true,
+          "evidence_location": "Protected external deployment directory/v2-dry-capture-report.private.json"
+        },
+        "installed_at": "2026-10-31",
+        "first_verified_capture_id": "078bb315-b87f-42fd-a82d-a5db9c6711bf",
+        "first_verified_indexed_events": 515,
+        "consumer_quarantine": true
+      },
+      "previous_overlays": [
+        {
+          "artifact": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r1.tgz",
+          "sha256": "c9ec9fe788b71b41675b9bad9544d2db6ebd486fcb712bc0d24249a6c1a51184",
+          "bytes": 12121760,
+          "input": "atlas_aci_snapshot",
+          "build_id": "atlas-20261031-r1",
+          "vendor_version": "1.2.2",
+          "version_note": "Atlas-modified build; upstream app.conf version retained. Not an official vendor release.",
+          "contents": "Vendor package plus reviewed Atlas input source and default configuration; no host-local runtime configuration or credentials.",
+          "builder": "tools/package_dc_networking_ta_overlay.py",
+          "source": "integrations/dc_networking_ta_overlay",
+          "source_available_in_this_checkout": false,
+          "validation": "Exact deployed archive SHA-256 and safe archive paths verified on 2026-10-31; no links, special files, duplicate paths, local/ configuration, .env or passwords.conf. Reviewed runtime evidence retained in protected deployment records.",
+          "deployed_source_snapshot": "integrations/ta-releases/20261031-r1/dc-networking"
+        }
+      ]
     },
     {
       "title": "Cisco Security Cloud",
@@ -356,7 +433,95 @@
       ],
       "qualification": "Splunkbase app 7719 listing was checked on 2026-10-26; 0.9.0 is the current default and matches the supplied archive. Static package/docs analysis only. No live ThousandEyes account or Splunk HEC readback. Confirm OTel account ID to API aid mapping, flattened HEC field paths, event/path source and host metadata, and producer timestamps with sanitized readback before typed normalization. Cisco's OTel detailed trace schema and general v2/Splunk input pages disagree on API trace support; require a sample or Cisco confirmation. The packaged CEA path pull omits request-scoped aid/testId from result events, so typed CEA path admission requires an external adapter to attach those exact configured request identities (or a received payload that already contains them).",
       "supplied_archive_name": "cisco-thousandeyes-app-for-splunk_090.tar.gz"
+    },
+    {
+      "title": "Cisco Splunk Add-on for AppDynamics",
+      "splunkbase_id": "3471",
+      "version": "3.3.0",
+      "status": "installed_with_reviewed_atlas_ta_extension",
+      "archive_path": "research/packages/cisco-splunk-add-on-for-appdynamics_330.tar.gz",
+      "extracted_path": "research/extracted/cisco-splunk-add-on-for-appdynamics_330/Splunk_TA_AppDynamics",
+      "source_url": "https://splunkbase.splunk.com/app/3471",
+      "source_metadata_url": "https://splunkbase.splunk.com/app/3471",
+      "downloaded_at": "2026-10-31",
+      "sha256": "ee7f6de3160a1a4cdf5c1193484dd23e8d4f2fb6e91c9990456259e82068a7e6",
+      "bytes": 6752159,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "launcher": "3.3.0",
+        "id": "3.3.0"
+      },
+      "release_notes": [
+        "Added an input for Topology to expose AppDynamics component relationships.",
+        "Made changes required for continued Splunk Cloud certification."
+      ],
+      "installed": true,
+      "executed": true,
+      "installed_at": "2026-10-31",
+      "execution_scope": "existing_lab_heavy_forwarder",
+      "target_splunk_version": "10.6.0.5",
+      "local_overlay": {
+        "artifact": "research/packages/atlas/splunk-ta-appdynamics-3.3.0-atlas-20261031-r1.tgz",
+        "sha256": "41843e59692ed2ca66e03cd6ee06b8fed2c6c3a1bad527630e3d65324ccd54d7",
+        "bytes": 6820677,
+        "input": "atlas_appdynamics_inventory",
+        "build_id": "atlas-20261031-r1",
+        "vendor_version": "3.3.0",
+        "version_note": "Atlas-modified build; upstream app.conf version retained. Not an official vendor release.",
+        "contents": "Vendor package plus reviewed Atlas input source and default configuration; no host-local runtime configuration or credentials.",
+        "builder": "tools/package_appdynamics_ta_overlay.py",
+        "source": "integrations/appdynamics_ta_overlay",
+        "source_available_in_this_checkout": false,
+        "validation": "Exact deployed archive SHA-256 and safe archive paths verified on 2026-10-31; no links, special files, duplicate paths, local/ configuration, .env or passwords.conf. Reviewed runtime evidence retained in protected deployment records.",
+        "deployed_source_snapshot": "integrations/ta-releases/20261031-r1/appdynamics"
+      }
     }
   ],
-  "pending": []
+  "pending": [],
+  "atlas_collector_builds": [
+    {
+      "version": "0.164.0-atlas-device-evidence-r1",
+      "vendor_version": "0.164.0",
+      "vendor_source": "https://github.com/signalfx/splunk-otel-collector/tree/v0.164.0",
+      "vendor_commit": "370a0a68ebf661de554e9b9f28077959dc6033d8",
+      "base_image_digest": "sha256:9b20e492df328e01efbd6e0efbb12aeedbceaf5074b8caf35a01544b6fe97acc",
+      "platform": "linux/amd64",
+      "platform_manifest_digest": "sha256:16d6c2d8fab0754eadf93e0df139a9fbde5c95dc552fa2db19c537694baa34e4",
+      "binary_path": "research/packages/atlas/otelcol-0.164.0-atlas-device-evidence-r1-linux-amd64",
+      "binary_sha256": "ba321287bca3465c00d4f9415ee94a1c6d7dbb5425ada7b35b6a7ec7f0106519",
+      "archive_path": "research/packages/atlas/otelcol-0.164.0-atlas-device-evidence-r1-image.tar.gz",
+      "archive_sha256": "52285f3e8fab9164e57268e0b3d004c2c03c2dc9b552b5fc40814bbe964c83ce",
+      "source": "integrations/otel_atlas_receiver",
+      "builder": "tools/build_atlas_otel_collector.py",
+      "status": "deployed_cluster_receiver_production_point_snapshots_qualified",
+      "validation": "Native custom collector ready1/1 with exact platform digest. Two production Node and two production Pod generations passed independent source/job/count/hash/time validation via existing k8s route. Existing five pipeline configs and credential refs preserved. Original ConfigMap retained; guarded rollback staged.",
+      "qualification_scope": "Complete point inventories only; no continuous ownership or traversal claim.",
+      "vendor_release_note": "Custom Atlas collector distribution; not an official signed vendor TA.",
+      "digest_alias_archive_path": "research/packages/atlas/otelcol-0.164.0-atlas-device-evidence-r1-digest-alias.tar",
+      "digest_alias_archive_sha256": "ee95eb08a0741db4b56f0a2484d1a319b9f420140d60787e7c3531adf4533fd6",
+      "deployment": {
+        "namespace": "default",
+        "workload": "splunk-otel-collector-k8s-cluster-receiver",
+        "configmap": "atlas-k8s-cluster-receiver-20261031-r1",
+        "generation": 5,
+        "index": "k8s",
+        "source": "atlas_k8s_snapshot",
+        "producer_id": "atlas-native-k8s-20261031",
+        "interval_seconds": 60
+      }
+    }
+  ],
+  "atlas_app_deployments": [
+    {
+      "version": "0.6.0",
+      "build": 1793479639,
+      "build_label": "device-evidence-r5",
+      "archive_path": "research/packages/atlas/application-atlas-0.6.0-device-evidence-r5.tgz",
+      "sha256": "b4ec5f9aac3f345fe90e6fd434d1acdf844a65bc5ea3d7ec2efbf6daec5825ce",
+      "installed_at": "2026-10-31",
+      "target": "Splunk Cloud stack (hostname withheld)",
+      "validation": "1044 Python tests; release checks; independent exact archive review; local AppInspect zero errors/failures, five reviewed warnings; Cloud validation approved; exact installed build and preserved settings/profiles verified.",
+      "scope": "Versioned ACI reader and admin-only routing-realm bindings; path output remains quarantined/not_observed."
+    }
+  ]
 }
