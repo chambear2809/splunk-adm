@@ -20,6 +20,13 @@ export type UrlState = {
   scenario: DemoScenario;
   tab: "network" | "services" | "devices" | "table";
   query: string;
+  appd?: {
+    applicationId: string;
+    snapshotId: string;
+    snapshotAt: string;
+    authority: string;
+    scope: string;
+  };
 };
 const defaults: GraphArgs = {
   service: "frontend",
@@ -85,7 +92,36 @@ export function parseUrlState(
     )
   )
     throw new Error("Invalid highlight query.");
+  const appdValues = [
+    params.get("appd_app"),
+    params.get("appd_snapshot"),
+    params.get("appd_at"),
+    params.get("appd_authority"),
+    params.get("appd_scope"),
+  ];
+  if (
+    appdValues.some((value) => value !== null) &&
+    (appdValues.some((value) => value === null) ||
+      !/^[0-9]{1,20}$/.test(appdValues[0] ?? "") ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(appdValues[1] ?? "") ||
+      !/^\d+(?:\.\d+)?$/.test(appdValues[2] ?? "") ||
+      Number(appdValues[2]) > 253402300799 ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/.test(appdValues[3] ?? "") ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,252}$/.test(appdValues[4] ?? "") ||
+      /^(unmapped|unknown|reserved)(:|$)/i.test(appdValues[4] ?? ""))
+  )
+    throw new Error("Invalid Controller snapshot link.");
+  const appd = appdValues[0]
+    ? {
+        applicationId: appdValues[0],
+        snapshotId: appdValues[1]!,
+        snapshotAt: appdValues[2]!,
+        authority: appdValues[3]!,
+        scope: appdValues[4]!,
+      }
+    : undefined;
   return {
+    ...(appd ? { appd } : {}),
     args,
     earliest,
     latest,
@@ -124,6 +160,41 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
       dropped.push(key);
     }
   }
+  if (
+    [
+      "appd_app",
+      "appd_snapshot",
+      "appd_at",
+      "appd_authority",
+      "appd_scope",
+    ].some((key) => clean.has(key))
+  ) {
+    try {
+      const probe = new URLSearchParams();
+      for (const key of [
+        "appd_app",
+        "appd_snapshot",
+        "appd_at",
+        "appd_authority",
+        "appd_scope",
+      ]) {
+        const value = clean.get(key);
+        if (value !== null) probe.set(key, value);
+      }
+      parseUrlState(probe, inSplunk);
+    } catch {
+      for (const key of [
+        "appd_app",
+        "appd_snapshot",
+        "appd_at",
+        "appd_authority",
+        "appd_scope",
+      ]) {
+        clean.delete(key);
+        dropped.push(key);
+      }
+    }
+  }
   try {
     parseUrlState(clean, inSplunk);
   } catch {
@@ -151,6 +222,13 @@ export function stateParams(state: UrlState): URLSearchParams {
     tab: state.tab,
   });
   if (state.query) params.set("q", state.query);
+  if (state.appd) {
+    params.set("appd_app", state.appd.applicationId);
+    params.set("appd_snapshot", state.appd.snapshotId);
+    params.set("appd_at", state.appd.snapshotAt);
+    params.set("appd_authority", state.appd.authority);
+    params.set("appd_scope", state.appd.scope);
+  }
   parseUrlState(params);
   return params;
 }
@@ -173,6 +251,11 @@ export function writeUrlState(state: UrlState) {
       "scenario",
       "tab",
       "q",
+      "appd_app",
+      "appd_snapshot",
+      "appd_at",
+      "appd_authority",
+      "appd_scope",
     ])
       params.delete(key);
     stateParams(state).forEach((value, key) => params.set(key, value));

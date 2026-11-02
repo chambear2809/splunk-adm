@@ -128,3 +128,24 @@ it("retains query strings in browsers without URLSearchParams.size", () => {
       Object.defineProperty(URLSearchParams.prototype, "size", descriptor);
   }
 });
+
+it("round trips a pinned Controller application and traffic window", () => {
+  const state = parseUrlState(
+    new URLSearchParams(
+      "mode=live&earliest=100&latest=200&appd_app=23&appd_snapshot=snapshot-1&appd_at=150&appd_authority=controller-a&appd_scope=cv-lab",
+    ),
+  );
+  expect(parseUrlState(stateParams(state))).toEqual(state);
+  expect(state.args).toEqual({
+    service: "",
+    environment: "",
+    cluster: "",
+    namespace: "",
+  });
+  expect(() =>
+    parseUrlState(new URLSearchParams("mode=live&appd_app=23")),
+  ).toThrow();
+  expect(
+    recoverUrlState(new URLSearchParams("mode=live&appd_app=23")).state.appd,
+  ).toBeUndefined();
+});

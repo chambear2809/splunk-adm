@@ -1,3 +1,4 @@
+import { ControllerMap } from "../AppDynamicsCatalog";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
@@ -85,7 +86,22 @@ const themeOverride = (): Theme | undefined => {
   return t === "dark" || t === "light" ? t : undefined;
 };
 
-export function MapPage({
+export function MapPage(props: Parameters<typeof StandardMapPage>[0]) {
+  const state =
+    props.initialState ??
+    parseUrlState(
+      new URLSearchParams(
+        typeof location === "undefined" ? "" : location.search,
+      ),
+    );
+  return state.appd ? (
+    <ControllerMap state={state} client={props.client} />
+  ) : (
+    <StandardMapPage {...props} />
+  );
+}
+
+function StandardMapPage({
   client,
   initialState = parseUrlState(
     new URLSearchParams(typeof location === "undefined" ? "" : location.search),

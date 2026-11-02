@@ -1,3 +1,4 @@
+import { ControllerCatalogSection } from "../AppDynamicsCatalog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
 import TableExport from "@splunk/react-ui/Table";
@@ -584,6 +585,7 @@ export function ApplicationsPage({
   return (
     <main className="atlas-page atlas-page-wide">
       <h1>Applications</h1>
+      <ControllerCatalogSection state={state} client={client} />
       {state.mode === "demo" && (
         <label className="scenario">
           <span>Demo scenario</span>

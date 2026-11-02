@@ -1,0 +1,18 @@
+# Integration instructions; not a complete OpenTelemetry Collector Builder manifest.
+upstream:
+  module: github.com/signalfx/splunk-otel-collector
+  version: v0.164.0
+  go_module_sum: h1:F27h/RAjTJdfKtY5GrvYPdbfqg8a2aBu7o0XUrioWuA=
+  go_version: 1.26.10
+receiver:
+  module: github.com/atlascisco/splunk-adm/integrations/otel_atlas_receiver
+  type: atlas_k8s_snapshot
+  factory: NewFactory
+  collector_component_api: v1.70.0
+registration:
+  file: internal/components/components.go
+  function: Get
+  method: add the receiver factory to the existing b.AddReceivers call
+  build_target: ./cmd/otelcol
+  constraint: preserve all upstream factories, config providers and feature gates
+license: Apache-2.0
