@@ -1,6 +1,6 @@
 # Configuration change product and feature coverage
 
-Research baseline: October 27, 2026, checkout `ca91cb8b1a8c6c4da72c215e2820eb514a0785ad`. This register supports the [execution prompt](CHANGE_CORRELATION_EXECUTION_PROMPT.md). It separates concrete collection evidence from features the implementation must research, build and qualify. None of the proposed cross-product change stories is asserted to be implemented or live-qualified here.
+Research baseline: October 27, 2026, checkout `ca91cb8b1a8c6c4da72c215e2820eb514a0785ad`. This register supports the change-correlation implementation work. It separates concrete collection evidence from features the implementation must research, build and qualify. None of the proposed cross-product change stories is asserted to be implemented or live-qualified here.
 
 ## Coverage standard
 
