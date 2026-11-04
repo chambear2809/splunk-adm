@@ -108,6 +108,27 @@ describe("device path evidence", () => {
     expect(r.reason).toBe("competing_owners");
     expect(r.endpoints[0].owners).toHaveLength(2);
   });
+  it("does not merge AppDynamics and TeaStore identities by address, authority, or id", () => {
+    const cases: Partial<EvidenceRecord>[] = [
+      { identitySource: "teastore_otel" },
+      { identityAuthority: "other-controller" },
+      { identityId: "other-id" },
+    ];
+    for (const change of cases) {
+      const v = ready();
+      Object.assign(v.snapshots[0].records[0], change);
+      expect(reason(v)).toBe("owner_unresolved");
+    }
+
+    const competing = ready();
+    competing.snapshots[0].records.push({
+      ...competing.snapshots[0].records[0],
+      id: "teastore-owner",
+      identitySource: "teastore_otel",
+    });
+    competing.snapshots[0].expectedCount++;
+    expect(reason(competing)).toBe("competing_owners");
+  });
   it("requires explicit in-scope authority and complete captures", () => {
     const v = ready();
     v.snapshots[0].fabric = "other";
@@ -134,6 +155,39 @@ describe("device path evidence", () => {
       Object.assign(v.snapshots[0].records[0], changes);
       expect(reason(v)).toBe("time_window");
     }
+  });
+  it("accepts exact as-of, age, receipt-delay, and cutoff boundaries", () => {
+    const v = ready();
+    Object.assign(v.snapshots[0].records[0], {
+      observedAt: 90,
+      receivedAt: 95,
+    });
+    expect(resolveDevicePath(v).status).toBe("candidate");
+
+    const w = ready();
+    Object.assign(w.snapshots[0].records[0], {
+      observedAt: 100,
+      receivedAt: 105,
+    });
+    expect(resolveDevicePath(w).status).toBe("candidate");
+  });
+  it("rejects each just-outside time boundary", () => {
+    for (const changes of [
+      { observedAt: 89 },
+      { observedAt: 101 },
+      { observedAt: 95, receivedAt: 101 },
+    ]) {
+      const v = ready();
+      Object.assign(v.snapshots[0].records[0], changes);
+      expect(reason(v)).toBe("time_window");
+    }
+    const cutoff = ready();
+    cutoff.maxReceiptDelay = 6;
+    Object.assign(cutoff.snapshots[0].records[0], {
+      observedAt: 100,
+      receivedAt: 106,
+    });
+    expect(reason(cutoff)).toBe("time_window");
   });
   it("rejects conflicting replays and unordered captures", () => {
     const v = ready();
@@ -188,6 +242,20 @@ describe("device path evidence", () => {
     v.snapshots[2].records = [];
     v.snapshots[2].expectedCount = 0;
     expect(reason(v)).toBe("disconnected_or_unknown");
+  });
+  it("retains a synthetic Stream-labeled source and requires in-scope authority", () => {
+    const v = ready();
+    v.authorities[2].source = "stream_netflow";
+    v.snapshots[2].source = "stream_netflow";
+    const r = resolveDevicePath(v);
+    expect(r.status).toBe("candidate");
+    expect(r.alternatives[0][0].provenance.source).toBe("stream_netflow");
+
+    const w = ready();
+    w.authorities[2].source = "stream_netflow";
+    w.snapshots[2].source = "stream_netflow";
+    w.snapshots[2].routingDomain = "other-vrf";
+    expect(reason(w)).toBe("missing_snapshot");
   });
   it("suppresses all paths when the path or input cap is exceeded", () => {
     const v = ready();

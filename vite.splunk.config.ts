@@ -95,6 +95,14 @@ function atlasBundleContributionReport(): Plugin {
 
 export default defineConfig({
   plugins: [atlasBundleContributionReport()],
+  resolve: {
+    alias: [
+      {
+        find: /^moment$/,
+        replacement: resolve("frontend/build/moment.cjs"),
+      },
+    ],
+  },
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     __ADM_SPLUNK_BUILD__: "true",

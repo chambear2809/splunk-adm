@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
+    QUALIFIED_CONFIG_FILES,
+    QUALIFIED_RUNTIME_FILES,
     MAX_ATLAS_GZIP_BYTES,
     MAX_THOUSANDEYES_GZIP_BYTES,
     THOUSANDEYES_BUNDLE_PATH,
@@ -116,12 +118,17 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"[install]\nbuild = 123\n[id]\nversion = 1.2.3\n"
             b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
             b"[triggers]\nreload.adm_recovery = simple\nreload.adm_settings = simple\n"
+            b"reload.adm_identity = simple\nreload.adm_aci_poll = simple\nreload.adm_aci_bindings = simple\n"
         )
         return {
             **{
-                name: b"#!/usr/bin/env python3\n"
-                if name.endswith("adm_recovery.py")
-                else b"runtime\n"
+                name: (
+                    (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
+                    if name in QUALIFIED_RUNTIME_FILES
+                    else b"#!/usr/bin/env python3\n"
+                    if name.endswith("adm_recovery.py")
+                    else b"runtime\n"
+                )
                 for name in BUNDLED_RUNTIME_FILES
             },
             **{
@@ -188,6 +195,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/CISCO_CONTRACT_MIGRATION.md": b"contract migration docs",
             "splunk_adm/docs/CISCO_NETWORKING_QUALIFICATION.md": b"qualification docs",
             "splunk_adm/docs/operators/cisco-enterprise-networking.md": b"operator docs",
+            "splunk_adm/docs/operators/qualified-native-network.md": b"operator docs",
             "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md": b"dns qualification docs",
             "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md": b"dns scenario docs",
             "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md": b"dns design docs",
@@ -195,7 +203,13 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/operators/dns-evidence.md": b"dns operator docs",
             "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
-            "splunk_adm/default/macros.conf": b"[x]\n",
+            "splunk_adm/default/macros.conf": (
+                Path(__file__).parents[1] / "splunk_app/splunk_adm/default/macros.conf"
+            ).read_bytes(),
+            **{
+                name: (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
+                for name in QUALIFIED_CONFIG_FILES
+            },
             "splunk_adm/default/savedsearches.conf": b"[x]\n",
             "splunk_adm/default/transforms.conf": (
                 b"[adm_observer_scope]\nexternal_type = kvstore\ncollection = adm_observer_scope\n"
@@ -285,6 +299,112 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "missing required files.*core.py"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_qualified_runtime_configuration_or_spec(self):
+        for name in QUALIFIED_RUNTIME_FILES | QUALIFIED_CONFIG_FILES:
+            with self.subTest(name=name):
+                install = self._files()
+                del install[name]
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "missing required files"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_enabled_or_nonportable_qualified_defaults(self):
+        for name, before, after in (
+            (
+                "splunk_adm/default/adm_identity.conf",
+                b"enabled = false",
+                b"enabled = true",
+            ),
+            (
+                "splunk_adm/default/adm_identity.conf",
+                b"cluster = placeholder",
+                b"cluster = lab",
+            ),
+            (
+                "splunk_adm/default/adm_identity.conf",
+                b"[network]\nenabled = false",
+                b"[network]\nenabled = true",
+            ),
+            (
+                "splunk_adm/default/adm_aci_poll.conf",
+                b"enabled = false",
+                b"enabled = true",
+            ),
+            (
+                "splunk_adm/default/adm_aci_bindings.conf",
+                b"enabled = false",
+                b"enabled = true",
+            ),
+        ):
+            with self.subTest(name=name, after=after):
+                install = self._files()
+                self.assertIn(before, install[name])
+                install[name] = install[name].replace(before, after, 1)
+                self._write_pair(install)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_unreviewed_qualified_command_registration(self):
+        name = "splunk_adm/default/commands.conf"
+        for before, after in (
+            (b"filename = admqualified.py", b"filename = missing.py"),
+            (b"python.version = python3", b"python.version = python2"),
+            (b"python.required = 3.13", b"python.required = 3.12"),
+            (b"local = true", b"local = false"),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                self.assertIn(before, install[name])
+                install[name] = install[name].replace(before, after, 1)
+                self._write_pair(install)
+                with self.assertRaisesRegex(
+                    ValueError, "qualified command registration"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_qualified_config_acl_mutation(self):
+        install = self._files()
+        name = "splunk_adm/metadata/default.meta"
+        install[name] = install[name].replace(
+            b"write : [ admin, sc_admin ]", b"write : [ * ]", 1
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "ACL"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_noninert_aci_profile_keys_independently(self):
+        for name, suffix in (
+            ("splunk_adm/default/adm_aci_poll.conf", b"\napic_host = lab\n"),
+            ("splunk_adm/default/adm_aci_bindings.conf", b"\njson = []\n"),
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                install[name] += suffix
+                self._write_pair(install)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_missing_or_repointed_qualified_macro_wrapper(self):
+        for before, after in (
+            (
+                b"definition = inputlookup adm_app_catalog",
+                b"definition = admqualified mode=catalog",
+            ),
+            (
+                b'definition = search `adm_graph("$service$", "$environment$", "$cluster$", "$namespace$")`',
+                b"definition = search other",
+            ),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                self.assertIn(before, install["splunk_adm/default/macros.conf"])
+                install["splunk_adm/default/macros.conf"] = install[
+                    "splunk_adm/default/macros.conf"
+                ].replace(before, after, 1)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "wrapper"):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_recovery_registration_to_unshipped_entrypoint(self):
         install = self._files()
@@ -496,6 +616,21 @@ class ReleaseArchiveTests(unittest.TestCase):
                     ValueError, "reload.adm_settings must be simple"
                 ):
                     check_release(self.root / "dist", self.root / "package.json")
+
+    def test_qualified_configuration_reload_does_not_require_restart(self):
+        for config in ("adm_identity", "adm_aci_poll", "adm_aci_bindings"):
+            for replacement in (b"", f"reload.{config} = never\n".encode()):
+                with self.subTest(config=config, replacement=replacement):
+                    install = self._files()
+                    path = "splunk_adm/default/app.conf"
+                    install[path] = install[path].replace(
+                        f"reload.{config} = simple\n".encode(), replacement
+                    )
+                    self._write_pair(install)
+                    with self.assertRaisesRegex(
+                        ValueError, rf"reload\.{config} must be simple"
+                    ):
+                        check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_installed_local_csv_scope_override(self):
         self._write_pair()

@@ -18,6 +18,23 @@ describe("applicationMapTarget", () => {
     expect(resolveDemoTarget).not.toHaveBeenCalled();
   });
 
+  it("uses a qualified catalog observation window for live navigation", () => {
+    expect(
+      applicationMapTarget(
+        "live",
+        "aci",
+        "-60m@m",
+        "now",
+        () => ({ scenario: "aci", earliest: "1", latest: "2" }),
+        { earliest: 1781542800, latest: 1781546400 },
+      ),
+    ).toEqual({
+      scenario: "aci",
+      earliest: "1781542800",
+      latest: "1781546400",
+    });
+  });
+
   it("uses the matching captured scope and time range in demo mode", () => {
     const resolveDemoTarget = vi.fn(() => ({
       scenario: "catalyst-aci" as const,

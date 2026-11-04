@@ -230,9 +230,11 @@ describe("catalog parsing", () => {
   });
 
   it("pushes an exact service filter into the catalog lookup", () => {
-    expect(validatedBuildCatalogSearch()).toBe("| inputlookup adm_app_catalog");
+    expect(validatedBuildCatalogSearch()).toBe(
+      "| `adm_application_catalog_read`",
+    );
     expect(validatedBuildCatalogSearch("frontend")).toBe(
-      '| inputlookup adm_app_catalog WHERE service="frontend"',
+      '| `adm_application_catalog_read` | search service="frontend"',
     );
     for (const value of ['frontend"', "frontend\n", "frontend|search", " "])
       expect(() => validatedBuildCatalogSearch(value)).toThrow();

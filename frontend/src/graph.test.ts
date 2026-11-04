@@ -710,6 +710,32 @@ describe("parseGraph", () => {
     expect(() => parseGraph(g)).toThrow(/incompatible node kinds/);
   });
 
+  it("accepts qualified traffic observations from workloads", () => {
+    const g = clone();
+    const source = g.nodes.find((n: { kind: string }) => n.kind === "workload");
+    const target = g.nodes.find(
+      (n: { kind: string; endpoint_kind?: string }) =>
+        n.kind === "endpoint" && n.endpoint_kind !== "k8s_service",
+    );
+    g.edges.push({
+      id: `traffic-observation:${"a".repeat(64)}`,
+      source: source.id,
+      target: target.id,
+      relationship: "traffic_observation",
+      evidence: ["qualified"],
+      confidence: "correlated",
+      count: 1,
+      records: 1,
+      sources: ["hubble"],
+      traffic_observation_id: "a".repeat(64),
+    });
+    expect(parseGraph(g).edges.at(-1)).toMatchObject({
+      relationship: "traffic_observation",
+      source: source.id,
+      target: target.id,
+    });
+  });
+
   it.each([
     ["numeric-looking generated_at", (g: any) => (g.generated_at = "1")],
     [

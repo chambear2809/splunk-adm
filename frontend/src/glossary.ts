@@ -301,9 +301,14 @@ export function prettyBytes(bytes: number): string {
   return `${(bytes / 1e9).toFixed(1)} GB`;
 }
 
+export const observedPort = (edge: GraphEdge) =>
+  edge.relationship === "traffic_observation"
+    ? (edge.destination_port ?? edge.server_port)
+    : edge.server_port;
+
 export const portLabel = (edge: GraphEdge) =>
-  edge.server_port !== undefined
-    ? `${edge.server_port}/${edge.transport ?? "?"}`
+  observedPort(edge) !== undefined
+    ? `${edge.relationship === "traffic_observation" ? "Observed " : ""}${observedPort(edge)}/${edge.transport ?? "?"}`
     : edge.transport?.toLowerCase() === "ipip"
       ? "IPIP"
       : (edge.transport ?? "—");

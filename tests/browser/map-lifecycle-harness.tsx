@@ -39,9 +39,11 @@ const requestList = () =>
     timezone: request.timezone,
     aborted: request.signal.aborted,
   }));
+const isGraphSearch = (search: string) =>
+  search.includes("adm_application_graph_read") || search.includes("adm_graph");
 const complete = (index: number, version = 1) => {
   const item = pending[index];
-  const graph = item.request.search.includes("adm_graph");
+  const graph = isGraphSearch(item.request.search);
   const previous =
     graph && item.request.latest === lifecycleWindow.earliest
       ? { earliest: item.request.earliest, latest: item.request.latest }
@@ -60,7 +62,7 @@ const clientFor = (client: string): SearchClient => ({
   search: (request) => {
     if (
       surface === "map" &&
-      !request.search.includes("adm_graph") &&
+      !isGraphSearch(request.search) &&
       !request.search.includes("adm_topology")
     )
       return Promise.resolve({
@@ -133,7 +135,7 @@ function Harness() {
       })),
     resolve: (index, version = 1) => {
       const item = pending[index];
-      const graph = item.request.search.includes("adm_graph");
+      const graph = isGraphSearch(item.request.search);
       item.resolve({
         rows: graph
           ? rows.rows.map((row) =>

@@ -273,6 +273,63 @@ class HubbleEnterpriseExportTest(unittest.TestCase):
         )
         self.assertLess(max(abs(a - b) for a, b in zip(got, want)), 0.001)
 
+    def test_raw_flow_values_override_conflicting_extractions(self):
+        raw_valid = json.dumps(
+            {
+                "flow": {
+                    "Type": "L3_L4",
+                    "trace_observation_point": "TO_ENDPOINT",
+                    "verdict": "FORWARDED",
+                    "is_reply": False,
+                    "time": "2024-01-02T03:04:05.123456789Z",
+                    "IP": {"source": "10.10.0.1", "destination": "10.10.0.2"},
+                    "l4": {"TCP": {"source_port": 1234, "destination_port": 443}},
+                }
+            }
+        )
+        raw_invalid_time = json.dumps(
+            {
+                "flow": {
+                    "Type": "L3_L4",
+                    "trace_observation_point": "TO_ENDPOINT",
+                    "verdict": "FORWARDED",
+                    "is_reply": False,
+                    "time": "not-a-time",
+                    "IP": {"source": "10.20.0.1", "destination": "10.20.0.2"},
+                    "l4": {"UDP": {"source_port": 5353, "destination_port": 53}},
+                }
+            }
+        )
+        query = (
+            "| makeresults count=2 | streamstats count as n "
+            f"| eval _raw=if(n=1,{json.dumps(raw_valid)},{json.dumps(raw_invalid_time)}), "
+            'index="cilium_hubble", sourcetype="cilium:hubble:flow", '
+            '"flow.time"=mvappend("2030-01-01T00:00:00Z","2040-01-01T00:00:00Z"), '
+            '"flow.IP.source"="192.0.2.1", "flow.IP.destination"="192.0.2.2", '
+            '"flow.l4.TCP.source_port"=9999, "flow.l4.TCP.destination_port"=9998 '
+            "| search `adm_flows_hubble` | table n adm_kind adm_start adm_src_ip "
+            "adm_dest_ip adm_src_port adm_dest_port adm_transport"
+        )
+        rows = self.lab.search(query)
+        self.assertEqual(len(rows), 2)
+        by_n = {int(row["n"]): row for row in rows}
+        self.assertEqual(by_n[1]["adm_kind"], "conv")
+        self.assertEqual(by_n[1]["adm_src_ip"], "10.10.0.1")
+        self.assertEqual(by_n[1]["adm_dest_ip"], "10.10.0.2")
+        self.assertEqual(
+            (by_n[1]["adm_src_port"], by_n[1]["adm_dest_port"]), ("1234", "443")
+        )
+        self.assertEqual(by_n[1]["adm_transport"], "tcp")
+        self.assertAlmostEqual(
+            float(by_n[1]["adm_start"]), 1704164645.1234567, places=5
+        )
+        self.assertIsNone(by_n[2].get("adm_start"))
+        self.assertEqual(by_n[2]["adm_src_ip"], "10.20.0.1")
+        self.assertEqual(
+            (by_n[2]["adm_src_port"], by_n[2]["adm_dest_port"]), ("5353", "53")
+        )
+        self.assertEqual(by_n[2]["adm_transport"], "udp")
+
 
 if __name__ == "__main__":
     unittest.main()

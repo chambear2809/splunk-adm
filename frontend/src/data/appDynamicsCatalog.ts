@@ -3,8 +3,8 @@ import {
   APPDYNAMICS_SOURCETYPE,
 } from "./appdynamicsEvidence";
 import {
-  evidenceConfigClient,
-  type EvidenceConfigClient,
+  appDynamicsInventoryConfigClient,
+  type AppDynamicsInventoryConfigClient,
   type SupplementalSourceConfiguration,
 } from "./evidenceConfig";
 import { literal, normalizeIp, routingScope } from "./evidence";
@@ -267,17 +267,13 @@ export function normalizeControllerCatalog(
 export async function loadControllerCatalog(
   client: SearchClient,
   signal: AbortSignal,
-  configurationClient: EvidenceConfigClient = evidenceConfigClient,
+  configurationClient: AppDynamicsInventoryConfigClient = appDynamicsInventoryConfigClient,
 ): Promise<ControllerCatalog> {
-  const before = await configurationClient.read(signal);
-  const source = before.supplemental?.find(
-    (s) => s.source === "appdynamics_inventory",
-  );
-  if (!source)
-    throw new Error("AppDynamics Controller source is not configured.");
+  const before = await configurationClient.readAppDynamicsInventory(signal);
+  const source = before.source;
   const mapping = configuration(source);
   const cutoff = Math.floor(Date.now() / 1000);
-  const search = `search index=${mapping.index} sourcetype="${APPDYNAMICS_SOURCETYPE}" source="appdynamics_inventory" schema="${APPDYNAMICS_SCHEMA}" controller_authority="${mapping.authority}" scope="${literal(mapping.scope)}" | head 10001 | fields _raw index _indextime`;
+  const search = `search index=${mapping.index} sourcetype="${APPDYNAMICS_SOURCETYPE}" source="appdynamics_inventory" schema="${APPDYNAMICS_SCHEMA}" controller_authority="${mapping.authority}" scope="${literal(mapping.scope)}" | eval adm_snapshot_at=tonumber(snapshot_at) | eventstats max(adm_snapshot_at) AS adm_latest_snapshot_at BY controller_authority scope | eval adm_latest_ids=if(adm_snapshot_at=adm_latest_snapshot_at,snapshot_id,null()) | eventstats values(adm_latest_ids) AS adm_latest_ids BY controller_authority scope | eval adm_selected_snapshot=if(isnotnull(mvmap(adm_latest_ids,if(adm_latest_ids==snapshot_id,1,null()))),1,0) | where adm_selected_snapshot=1 OR adm_snapshot_at=adm_latest_snapshot_at OR isnull(adm_snapshot_at) | head 10001 | fields _raw index _indextime`;
   const result = requireNoSearchErrors(
     await client.search({
       search,
@@ -294,7 +290,7 @@ export async function loadControllerCatalog(
       "Controller inventory search returned warnings; completeness is unknown.",
     );
   const catalog = normalizeControllerCatalog(result.rows, source, cutoff);
-  const after = await configurationClient.read(signal);
+  const after = await configurationClient.readAppDynamicsInventory(signal);
   if (before.fingerprint !== after.fingerprint)
     throw new Error("Controller configuration changed during the search.");
   return catalog;

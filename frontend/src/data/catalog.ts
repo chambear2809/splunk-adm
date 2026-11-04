@@ -14,11 +14,12 @@ export interface CatalogRow extends GraphArgs {
   updated?: number;
   window_start?: number;
   window_end?: number;
+  identity_contract?: "qualified_v2";
 }
 export type FindRow = Pick<
   CatalogRow,
   "_key" | "service" | "environment" | "cluster" | "namespace"
-> & { scopeError?: string };
+> & { scopeError?: string; window_start?: number; window_end?: number };
 export interface NetworkClientFindRow {
   _key: string;
   native_id?: string;
@@ -153,6 +154,33 @@ export function parseCatalogRows(
       if (!validKey(row._key))
         throw new Error("Catalog field _key is invalid.");
       const dimensions = scope(row);
+      if (row.identity_contract !== undefined) {
+        if (row.identity_contract !== "qualified_v2")
+          throw new Error("Catalog identity contract is invalid.");
+        const allowed = new Set([
+          "_key",
+          ...fields,
+          "identity_contract",
+          "pods",
+          "first_seen",
+          "last_seen",
+          "updated",
+          "window_start",
+          "window_end",
+        ]);
+        if (Object.keys(row).some((key) => !allowed.has(key)))
+          throw new Error("Qualified catalog row contains an unknown field.");
+        if (
+          typeof row.window_start !== "number" &&
+          typeof row.window_start !== "string"
+        )
+          throw new Error("Qualified catalog row is missing window_start.");
+        if (
+          typeof row.window_end !== "number" &&
+          typeof row.window_end !== "string"
+        )
+          throw new Error("Qualified catalog row is missing window_end.");
+      }
       const invalidScope = scopeError(dimensions);
       const result = {
         _key: row._key,
@@ -161,6 +189,8 @@ export function parseCatalogRows(
       } as CatalogRow;
       for (const field of metricFields)
         result[field] = integer(row[field], field);
+      if (row.identity_contract !== undefined)
+        result.identity_contract = row.identity_contract;
       return validateRelations(result);
     });
 }
@@ -193,6 +223,14 @@ export function parseFindRows(
     const parsed = {
       _key: row._key,
       ...dimensions,
+      ...(row.identity_contract === "qualified_v2" &&
+      row.window_start !== undefined
+        ? { window_start: integer(row.window_start, "window_start") }
+        : {}),
+      ...(row.identity_contract === "qualified_v2" &&
+      row.window_end !== undefined
+        ? { window_end: integer(row.window_end, "window_end") }
+        : {}),
       ...(invalidScope ? { scopeError: invalidScope } : {}),
     };
     const existing = byKey.get(parsed._key);
@@ -325,10 +363,10 @@ export const catalogLimitMessage = (maxRows = 5000) =>
 
 /** Build a lookup search with an optional exact service prefilter. */
 export function validatedBuildCatalogSearch(service?: string): string {
-  if (service === undefined) return "| inputlookup adm_app_catalog";
+  if (service === undefined) return "| `adm_application_catalog_read`";
   const invalid = argError("service", service);
   const exact = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/;
   if (invalid || exact.exec(service)?.[0] !== service)
     throw new Error(invalid ?? "Service contains unsupported characters.");
-  return `| inputlookup adm_app_catalog WHERE service="${service}"`;
+  return `| \`adm_application_catalog_read\` | search service="${service}"`;
 }

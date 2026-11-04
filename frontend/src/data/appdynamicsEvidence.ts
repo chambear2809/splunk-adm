@@ -206,9 +206,14 @@ export function buildAppDynamicsSearch(
 | spath input=_raw path=record_counts.total_records output=declared_record_count
 | spath input=_raw path=ip_addresses{}.ip output=appd_node_ip_values
 | eval snapshot_at_number=tonumber(snapshot_at),started_at_number=tonumber(collection_started_at),completed_at_number=tonumber(collection_completed_at),skew_number=tonumber(collection_skew_seconds),record_fingerprint_valid=if(match(record_fingerprint,"^[0-9a-f]{64}$"),1,0),complete_flag=if(snapshot_complete="true" OR snapshot_complete="1" OR snapshot_complete=1,1,0),source_row_oversized=if(len(_raw)>${EVIDENCE_LIMITS.recordBytes},1,0),source_row_invalid=if(isnull(snapshot_id) OR len(snapshot_id)>128 OR record_fingerprint_valid=0 OR isnull(snapshot_at_number) OR snapshot_at_number<0 OR isnull(tonumber(observed_at)) OR complete_flag=0 OR identity_basis!="controller_application_model_ids" OR NOT (record_type="snapshot" OR record_type="application" OR record_type="tier" OR record_type="node" OR record_type="backend") OR isnull(record_id) OR source_row_oversized=1,1,0)
-| where scope="${scope}" AND snapshot_at_number>=${Math.max(0, Math.floor(Date.now() / 1000) - config.staleAfterSeconds)} AND snapshot_at_number<${Math.floor(Date.now() / 1000) + 60}
+| where scope="${scope}" AND ((snapshot_at_number>=${Math.max(0, Math.floor(Date.now() / 1000) - config.staleAfterSeconds)} AND snapshot_at_number<${Math.floor(Date.now() / 1000) + 60}) OR isnull(snapshot_at_number))
+| eventstats max(snapshot_at_number) AS source_latest_snapshot_at BY controller_authority
+| eval source_latest_snapshot_id=if(snapshot_at_number=source_latest_snapshot_at,snapshot_id,null())
+| eventstats values(source_latest_snapshot_id) AS source_latest_snapshot_ids sum(source_row_invalid) AS all_source_row_invalid_count BY controller_authority
+| eval source_latest_id_match=if(isnotnull(mvmap(source_latest_snapshot_ids,if(source_latest_snapshot_ids==snapshot_id,1,null()))),1,0)
+| where source_latest_id_match=1 OR snapshot_at_number=source_latest_snapshot_at OR isnull(snapshot_at_number) OR source_row_invalid=1
 | head ${sourceScanLimit}
-| eventstats count AS source_scan_count sum(source_row_invalid) AS source_row_invalid_count
+| eventstats count AS source_scan_count max(all_source_row_invalid_count) AS source_row_invalid_count
 | eval endpoint_node_match=if(record_type="node" AND mvfind(appd_node_ip_values,"${selectedNodePattern}")>=0,1,0),selected_app_id=if(endpoint_node_match=1,tostring(application_id),null()),selected_app_tier=if(endpoint_node_match=1,tostring(application_id).":".tostring(tier_id),null())
 | eventstats values(selected_app_id) AS selected_app_ids values(selected_app_tier) AS selected_app_tiers BY controller_authority snapshot_id
 | eventstats dc(_raw) AS fingerprint_variant_count BY controller_authority snapshot_id record_fingerprint

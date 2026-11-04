@@ -328,6 +328,66 @@ describe("network evidence inspectors", () => {
     expect(html).toContain("do not establish a tunnel peer or packet route");
   });
 
+  it("warns that workload observations are not traced calls or routes", () => {
+    const graph = structuredClone(demoGraph("nxos"));
+    const source = graph.nodes.find(
+      (candidate) => candidate.kind === "workload",
+    )!;
+    const target = graph.nodes.find(
+      (candidate) =>
+        candidate.kind === "endpoint" &&
+        candidate.endpoint_kind !== "k8s_service",
+    )!;
+    const observationId = "b".repeat(64);
+    graph.edges.push({
+      id: `traffic-observation:${observationId}`,
+      source: source.id,
+      target: target.id,
+      relationship: "traffic_observation",
+      evidence: [],
+      confidence: "correlated",
+      count: 1,
+      records: 1,
+      sources: ["hubble"],
+      traffic_observation_id: observationId,
+      traffic_observations: [
+        {
+          source: "hubble",
+          bytes_in: 99,
+          records: 1,
+          source_port: 443,
+          destination_port: 1234,
+          transport: "tcp",
+          is_reply: false,
+        },
+        {
+          source: "netflow",
+          records: 1,
+          source_port: 1234,
+          destination_port: 443,
+          transport: "tcp",
+          is_reply: true,
+        },
+      ],
+    });
+    const html = inspector(graph, { kind: "node", id: source.id });
+    expect(html).toContain(
+      "Workload observations are separate from traced service calls",
+    );
+    expect(html).not.toContain("No calls or conversations in this time range.");
+    const edgeHtml = inspector(graph, {
+      kind: "edge",
+      id: graph.edges.at(-1)!.id,
+    });
+    expect(edgeHtml).toContain("Source observations");
+    expect(edgeHtml).not.toContain("Bytes in 99");
+    expect(edgeHtml).toContain("Source port 443");
+    expect(edgeHtml).toContain("Destination port 1234");
+    expect(edgeHtml).toContain("Transport tcp");
+    expect(edgeHtml).toContain("Reply false");
+    expect(edgeHtml).toContain("Reply true");
+  });
+
   it("does not infer an unmapped scope from an empty routing domain", () => {
     const graph = structuredClone(demoGraph("nxos"));
     const edge = graph.edges.find(

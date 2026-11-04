@@ -129,9 +129,11 @@ test.describe("Application Atlas browser regressions", () => {
     await page.getByLabel("Find an address, EPG, or device").fill("10.42.0.15");
     await page.getByRole("button", { name: "Find", exact: true }).click();
 
-    await expect(page.locator('p[role="status"]')).toContainText(
-      "Network-client evidence may be incomplete.",
-    );
+    await expect(
+      page
+        .locator('p[role="status"]')
+        .filter({ hasText: "Network-client evidence may be incomplete." }),
+    ).toContainText("Network-client evidence may be incomplete.");
     await expect(page.locator('[aria-label="Find results"]')).toContainText(
       "checkout",
     );
@@ -195,7 +197,9 @@ test.describe("Application Atlas browser regressions", () => {
       .toBe("-24h@h");
     await expect
       .poll(() => page.evaluate(() => window.__ADM_LAST_GRAPH_SEARCH__))
-      .toBe('`adm_graph("frontend","demo","demo-cluster","shop")`');
+      .toBe(
+        '| `adm_application_graph_read("frontend","demo","demo-cluster","shop")`',
+      );
     await expect(page.locator(".scope-service")).toHaveText("frontend");
     await expect(page.locator(".scope-dims")).toHaveText(
       "demo · demo-cluster · shop",
@@ -257,7 +261,9 @@ test("reload reproduces a validated live deep link", async ({ page }) => {
   await expect
     .poll(() =>
       page.evaluate(() =>
-        window.__ADM_REQUESTS__?.find((r) => r.spl.includes("adm_graph")),
+        window.__ADM_REQUESTS__?.find((r) =>
+          r.spl.includes("adm_application_graph_read"),
+        ),
       ),
     )
     .toMatchObject({ earliest: "1770000000", latest: "1770003600" });
@@ -790,7 +796,9 @@ test("catalog over-limit is actionable and does not fall back to scopes", async 
   ).toBe(1);
   expect(
     requests.some((request) =>
-      request.spl.includes('inputlookup adm_app_catalog WHERE service="'),
+      request.spl.includes(
+        '| `adm_application_catalog_read` | search service="',
+      ),
     ),
   ).toBe(true);
 });
@@ -817,7 +825,7 @@ test("editing the scope keeps Find results and does not restart the catalog", as
     page.evaluate(
       () =>
         (window.__ADM_REQUESTS__ ?? []).filter((request) =>
-          request.spl.startsWith("| inputlookup adm_app_catalog"),
+          request.spl.startsWith("| `adm_application_catalog_read`"),
         ).length,
     );
   await expect(page.locator("tbody").first()).toContainText("checkout");
@@ -855,7 +863,7 @@ test("an over-limit catalog narrows again when the service changes", async ({
         (window.__ADM_REQUESTS__ ?? []).some(
           (request) =>
             request.spl ===
-            '| inputlookup adm_app_catalog WHERE service="checkout"',
+            '| `adm_application_catalog_read` | search service="checkout"',
         ),
       ),
     )
@@ -883,7 +891,7 @@ test("catalog uses its captured metric window when the Find/map picker changes",
   const catalogRequests = () =>
     page.evaluate(() =>
       (window.__ADM_REQUESTS__ ?? []).filter((request) =>
-        request.spl.startsWith("| inputlookup adm_app_catalog"),
+        request.spl.startsWith("| `adm_application_catalog_read`"),
       ),
     );
   const before = await catalogRequests();
@@ -1752,7 +1760,7 @@ for (const fault of [
       await page.evaluate(
         () =>
           window.__ADM_REQUESTS__?.filter((r) =>
-            r.spl.startsWith("| inputlookup adm_app_catalog"),
+            r.spl.startsWith("| `adm_application_catalog_read`"),
           ).length,
       ),
     ).toBe(1);

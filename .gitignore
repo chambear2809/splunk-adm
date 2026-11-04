@@ -18,3 +18,9 @@ __pycache__/
 test-results/
 playwright-report/
 tests/splunk/.lab-secrets*
+
+# Operator access files are local runtime configuration, never fixtures.
+/fixtures/kubeconfig
+/credentials
+/credentials.*
+!/credentials.example

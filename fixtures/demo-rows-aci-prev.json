@@ -90,14 +90,26 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "a26ce2ecaa1ba571f928c608d2d4b1684421d6583a21a2fe802cf7e151b1a5fe",
+      "reviewed_macro_file_sha256": "76a485201e013c0521b71de2acbc621a4b743ac0cd78de24630288678c9df8c1",
       "method": "static review only; no recapture",
-      "reason": "Byte-prefix comparison with baseline 1e4f2043 confirms every existing macro byte is unchanged. Only literal disabled ThousandEyes selector and qualification stanzas are appended; they execute no searches and do not participate in the captured graph. Historical rows, original capture time and hashes are unchanged. This records static compatibility only, without recapture or production qualification.",
+      "reason": "Reviewed Hubble normalization now explicitly extracts raw JSON fields; the two new application reader wrappers retain legacy defaults. The adm_graph stanza is unchanged. A separate fresh Splunk 10.6.0.5 local-lab execution over all preceding-window inputs reproduced all 58 historical rows exactly after excluding only meta.generated_at. Original capture time, rows and capture hashes remain immutable; this compatibility record does not replace the historical capture.",
       "modified_macro_stanzas": [
-        "adm_index_thousandeyes",
+        "adm_application_catalog_read",
+        "adm_application_graph_read(4)",
+        "adm_flows_hubble",
         "adm_thousandeyes_schema_qualified"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "a26ce2ecaa1ba571f928c608d2d4b1684421d6583a21a2fe802cf7e151b1a5fe",
+          "method": "static review only; no recapture",
+          "reason": "Byte-prefix comparison with baseline 1e4f2043 confirms every existing macro byte is unchanged. Only literal disabled ThousandEyes selector and qualification stanzas are appended; they execute no searches and do not participate in the captured graph. Historical rows, original capture time and hashes are unchanged. This records static compatibility only, without recapture or production qualification.",
+          "modified_macro_stanzas": [
+            "adm_index_thousandeyes",
+            "adm_thousandeyes_schema_qualified"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "65d1e62c5c0f954ac4ab2a38c91a880a258443a95034572847e1d32caa20ad2f",
@@ -126,7 +138,16 @@
           "method": "static review only; no recapture",
           "reason": "The NAT revision adds strictly validated same-event FTD observations and optional exact evidence time bounds to the active V1 path. It does not change conversation keys, byte/packet expressions, backend attribution or ordinary no-NAT output. The historical ACI fixture has no explicit NAT tuple; new evidence fields/bounds remain absent. Existing adm_ip normalization is unchanged. Historical captured rows, capture time, macro hash and scenario provenance remain unchanged. This is a compatibility review, not a new capture or production qualification."
         }
-      ]
+      ],
+      "runtime_regression": {
+        "splunk_version": "10.6.0.5",
+        "row_count": 58,
+        "excluded_volatile_fields": [
+          "meta.generated_at"
+        ],
+        "stable_rows_sha256": "42c703ed811403cb03dc6340d1a88a25d986bf80cd851d332245e64d846859d3",
+        "checked_at": 1793754453
+      }
     },
     "reviewed_generator_compatibility": {
       "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",

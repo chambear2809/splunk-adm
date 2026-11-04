@@ -1,0 +1,241 @@
+# LAB EXAMPLE ONLY — NOT A PORTABLE BASE MANIFEST.
+# RENDER REQUIRED: replace every __REQUIRED_*__ placeholder, create the referenced
+# Secret/CA ConfigMap, and validate the rendered YAML before applying. Start disabled
+# until the cluster-to-Enterprise HEC path is verified. Never embed token values here.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+  labels: { app.kubernetes.io/managed-by: application-atlas }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+subjects:
+  - kind: ServiceAccount
+    name: atlas-telemetry
+    namespace: __REQUIRED_NAMESPACE__
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: atlas-telemetry
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+data:
+  collector.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 192
+        spike_limit_mib: 32
+      k8sattributes:
+        auth_type: serviceAccount
+        filter:
+          namespace: __REQUIRED_NAMESPACE__
+        extract:
+          metadata: [k8s.namespace.name, k8s.pod.name, k8s.pod.uid, k8s.node.name]
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
+      filter/namespace:
+        error_mode: propagate
+        traces:
+          span:
+            - 'resource.attributes["k8s.namespace.name"] != "__REQUIRED_NAMESPACE__"'
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: __REQUIRED_CLUSTER_NAME__
+            action: upsert
+          - key: deployment.environment.name
+            value: lab
+            action: insert
+      transform/raw_identity:
+        error_mode: propagate
+        trace_statements:
+          - context: span
+            statements:
+              - set(attributes["atlas.resource.service.name"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil
+              - set(attributes["atlas.resource.deployment.environment.name"], resource.attributes["deployment.environment.name"]) where resource.attributes["deployment.environment.name"] != nil
+              - set(attributes["atlas.resource.k8s.cluster.name"], resource.attributes["k8s.cluster.name"])
+              - set(attributes["atlas.resource.k8s.namespace.name"], resource.attributes["k8s.namespace.name"])
+              - set(attributes["atlas.resource.k8s.pod.uid"], resource.attributes["k8s.pod.uid"]) where resource.attributes["k8s.pod.uid"] != nil
+      batch:
+        timeout: 5s
+        send_batch_size: 128
+        send_batch_max_size: 512
+    exporters:
+      splunk_hec:
+        endpoint: ${env:SPLUNK_HEC_ENDPOINT}
+        token: ${env:SPLUNK_HEC_TOKEN}
+        index: otel_traces
+        source: __REQUIRED_SOURCE__
+        sourcetype: otel:traces
+        tls:
+          insecure_skip_verify: false
+          ca_file: /certs/enterprise-ca.pem
+          server_name_override: __REQUIRED_TLS_SERVER_NAME__
+        sending_queue:
+          enabled: true
+          num_consumers: 2
+          queue_size: 128
+        retry_on_failure:
+          enabled: true
+          max_elapsed_time: 300s
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, k8sattributes, filter/namespace, resource, transform/raw_identity, batch]
+          exporters: [splunk_hec]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+  labels: { app.kubernetes.io/managed-by: application-atlas }
+spec:
+  replicas: 0
+  selector:
+    matchLabels: { app: atlas-telemetry }
+  template:
+    metadata:
+      labels: { app: atlas-telemetry }
+    spec:
+      serviceAccountName: atlas-telemetry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: collector
+          # Exact image already running in the cluster (Splunk OTel 0.140.0).
+          image: quay.io/signalfx/splunk-otel-collector@sha256:deec3e0e6e9a67663a84f405046c9719408b9d03fe64b6afa0d7b05a92ade6ee
+          args: [--config=/conf/collector.yaml]
+          env:
+            - name: SPLUNK_HEC_ENDPOINT
+              value: https://__REQUIRED_HEC_HOST__:__REQUIRED_HEC_PORT__/services/collector/event
+            - name: SPLUNK_HEC_TOKEN
+              valueFrom:
+                secretKeyRef: { name: atlas-telemetry-hec, key: token }
+          ports:
+            - { name: otlp-grpc, containerPort: 4317 }
+            - { name: otlp-http, containerPort: 4318 }
+            - { name: health, containerPort: 13133 }
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          readinessProbe:
+            httpGet: { path: /, port: health }
+          livenessProbe:
+            httpGet: { path: /, port: health }
+            initialDelaySeconds: 20
+          volumeMounts:
+            - { name: config, mountPath: /conf, readOnly: true }
+            - { name: enterprise-ca, mountPath: /certs, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: atlas-telemetry }
+        - name: enterprise-ca
+          configMap: { name: atlas-enterprise-ca }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+spec:
+  selector: { app: atlas-telemetry }
+  ports:
+    - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-telemetry
+  namespace: __REQUIRED_NAMESPACE__
+spec:
+  podSelector:
+    matchLabels: { app: atlas-telemetry }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - { protocol: TCP, port: 4317 }
+        - { protocol: TCP, port: 4318 }
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: atlas-telemetry-app-egress
+  namespace: __REQUIRED_NAMESPACE__
+spec:
+  endpointSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [coreapi, crawler, jobposting, loader, recruiter, resumes]
+  egress:
+    - toEndpoints:
+        - matchLabels: { app: atlas-telemetry }
+      toPorts:
+        - ports:
+            - { port: "4317", protocol: TCP }
+            - { port: "4318", protocol: TCP }
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: atlas-telemetry-collector-egress
+  namespace: __REQUIRED_NAMESPACE__
+spec:
+  endpointSelector:
+    matchLabels: { app: atlas-telemetry }
+  egress:
+    - toEntities: [kube-apiserver]
+      toPorts:
+        - ports:
+            - { port: "443", protocol: TCP }
+            - { port: "6443", protocol: TCP }
+    - toCIDR: [__REQUIRED_HEC_HOST__/32]
+      toPorts:
+        - ports:
+            - { port: "8088", protocol: TCP }

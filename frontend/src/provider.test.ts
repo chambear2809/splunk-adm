@@ -29,7 +29,7 @@ const fake = (
 describe("buildGraphSearch", () => {
   it("calls the graph macro with quoted arguments", () =>
     expect(buildGraphSearch(ok)).toBe(
-      '`adm_graph("frontend","demo","demo-cluster","shop")`',
+      '| `adm_application_graph_read("frontend","demo","demo-cluster","shop")`',
     ));
   it("rejects unsafe arguments", () =>
     expect(() =>

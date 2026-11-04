@@ -348,6 +348,17 @@ function StandardMapPage({
       plural(totals.unknownSources, "unknown source"),
     totals.unknownOther > 0 && plural(totals.unknownOther, "unknown endpoint"),
   ].filter(Boolean) as string[];
+  const edgeCountLabel = (edges: GraphEdge[]) =>
+    [
+      edges.filter((e) => e.relationship === "calls").length &&
+        `${edges.filter((e) => e.relationship === "calls").length} calls`,
+      edges.filter((e) => e.relationship === "communicates_with").length &&
+        `${edges.filter((e) => e.relationship === "communicates_with").length} conversations`,
+      edges.filter((e) => e.relationship === "traffic_observation").length &&
+        `${edges.filter((e) => e.relationship === "traffic_observation").length} observation links`,
+    ]
+      .filter(Boolean)
+      .join(", ");
 
   return (
     <div
@@ -948,17 +959,15 @@ function StandardMapPage({
                   <span>
                     {displayGraph.nodes.length} of {graph.nodes.length} nodes
                     retained ·{" "}
-                    {
+                    {edgeCountLabel(
                       displayGraph.edges.filter(
                         (e) => e.relationship !== "runs_on",
-                      ).length
-                    }{" "}
+                      ),
+                    ) || "relationships"}{" "}
                     of{" "}
-                    {
-                      graph.edges.filter((e) => e.relationship !== "runs_on")
-                        .length
-                    }{" "}
-                    connections
+                    {edgeCountLabel(
+                      graph.edges.filter((e) => e.relationship !== "runs_on"),
+                    ) || "relationships"}
                     {focus
                       ? ` · ${FOCUS_PREFIX[focus.direction]} ${plural(focus.hops, "hop")} of ${label(focus.id)}`
                       : ""}
@@ -1057,6 +1066,10 @@ function StandardMapPage({
                 topo={topo}
                 selected={selection?.kind === "edge" ? selection.id : undefined}
                 onSelect={(id) => select({ kind: "edge", id })}
+                client={snapshot.client ?? client}
+                live={mode === "live"}
+                earliest={earliest}
+                latest={latest}
               />
             ) : (
               <MapView

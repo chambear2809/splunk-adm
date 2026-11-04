@@ -75,8 +75,8 @@ const columns: { key: SortKey; label: string }[] = [
   { key: "conversations_1h", label: "Conversations (1h)" },
   { key: "blocked_1h", label: "Blocked (1h)" },
   { key: "unknown_peers_1h", label: "Unknown peers (1h)" },
-  { key: "window_start", label: "Last completed hour start (UTC)" },
-  { key: "window_end", label: "Last completed hour end (UTC)" },
+  { key: "window_start", label: "Observation window start (UTC)" },
+  { key: "window_end", label: "Observation window end (UTC)" },
 ];
 
 export function ApplicationsPage({
@@ -390,6 +390,7 @@ export function ApplicationsPage({
           latest: rowWindow.latest,
         };
       },
+      { earliest: row.window_start, latest: row.window_end },
     );
     location.assign(
       pageURL(
@@ -585,7 +586,6 @@ export function ApplicationsPage({
   return (
     <main className="atlas-page atlas-page-wide">
       <h1>Applications</h1>
-      <ControllerCatalogSection state={state} client={client} />
       {state.mode === "demo" && (
         <label className="scenario">
           <span>Demo scenario</span>
@@ -835,8 +835,9 @@ export function ApplicationsPage({
             dependencies.
           </p>
           <p>
-            Catalog metrics use each row’s last completed hour; the selected
-            Find/map time window does not change this catalog window.
+            Qualified rows report a finite ownership/span observation window;
+            map views use that row window when available. Legacy rows may have
+            fewer metrics and remain quarantined.
           </p>
           {loading && <p>Loading application catalog…</p>}
           {error && (
@@ -854,7 +855,17 @@ export function ApplicationsPage({
           )}
           {warning && <p role="status">{warning}</p>}
           {!loading && !error && !sorted.length && (
-            <p>No applications are available for this time window.</p>
+            <>
+              <p>No applications are available for this time window.</p>
+              {state.mode === "live" && (
+                <p>
+                  Qualified application identity is unavailable. Legacy catalog
+                  bindings are quarantined until temporal authority is
+                  established. Inspect Source evidence in Data health. An empty
+                  catalog does not establish that there are no dependencies.
+                </p>
+              )}
+            </>
           )}
           {!!sorted.length && (
             <Table aria-label="Application catalog" horizontalOverflow="scroll">
@@ -946,6 +957,7 @@ export function ApplicationsPage({
           )}
         </>
       )}
+      <ControllerCatalogSection state={state} client={client} />
       <p>
         <a href={pageURL("setup", stateParams(state))}>Check catalog setup</a>
       </p>

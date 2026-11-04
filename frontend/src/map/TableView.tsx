@@ -34,6 +34,9 @@ export function TableView({
     (e) => e.relationship === "communicates_with",
   );
   const calls = graph.edges.filter((e) => e.relationship === "calls");
+  const observations = graph.edges.filter(
+    (e) => e.relationship === "traffic_observation",
+  );
   return (
     <div className="table-view">
       <table>
@@ -109,6 +112,47 @@ export function TableView({
                 </button>
               </td>
               <td className="num">{e.count.toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <table>
+        <caption>Source observations</caption>
+        <thead>
+          <tr>
+            <th scope="col">Observed tuple</th>
+            <th scope="col">Source</th>
+            <th scope="col" className="num">
+              Records
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {observations.map((e) => (
+            <tr key={e.id} className={selected === e.id ? "selected" : ""}>
+              <td>
+                <button className="link" onClick={() => onSelect(e.id)}>
+                  {label(e.source)} <ArrowRight size={13} aria-label="to" />{" "}
+                  {label(e.target)}
+                </button>
+                {(e.source_ip || e.destination_ip) && (
+                  <div className="muted small">
+                    {e.source_ip ?? "?"} → {e.destination_ip ?? "?"}
+                    {e.source_port !== undefined &&
+                      ` · source port ${e.source_port}`}
+                    {e.destination_port !== undefined &&
+                      ` · destination port ${e.destination_port}`}
+                    {e.transport && ` · transport ${e.transport}`}
+                    {e.source_port === undefined &&
+                    e.destination_port === undefined &&
+                    e.server_port !== undefined
+                      ? `:${e.server_port}`
+                      : ""}
+                  </div>
+                )}
+              </td>
+              <td>{e.sources?.join(", ") || "—"}</td>
+              <td className="num">{(e.records ?? e.count).toLocaleString()}</td>
             </tr>
           ))}
         </tbody>

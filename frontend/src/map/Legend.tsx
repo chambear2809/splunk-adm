@@ -15,6 +15,8 @@ export function Legend({
   const types = new Map<string, string>();
   for (const edge of edges) {
     if (edge.relationship === "calls") types.set("call", "Traced call");
+    else if (edge.relationship === "traffic_observation")
+      types.set("traffic observation", "Traffic observation");
     else if (edge.relationship === "forwards_to") {
       if (edge.confidence === "inferred")
         types.set("forward inferred", "Backend inferred");

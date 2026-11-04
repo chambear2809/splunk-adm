@@ -53,7 +53,7 @@ export function buildGraphSearch(request: LiveRequest): string {
     if (error) throw new Error(error);
   }
   const { service, environment, cluster, namespace } = request;
-  return `\`adm_graph("${service}","${environment}","${cluster}","${namespace}")\``;
+  return `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}")\``;
 }
 export function splunkMessage(payload: unknown): string | undefined {
   let text: unknown;

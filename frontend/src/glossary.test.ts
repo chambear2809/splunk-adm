@@ -65,6 +65,15 @@ describe("glossary", () => {
     expect(prettyBytes(20100)).toBe("20.1 KB");
     expect(prettyBytes(3.2e9)).toBe("3.2 GB");
   });
+  it("labels observation destination ports without calling them server ports", () => {
+    const e = {
+      relationship: "traffic_observation",
+      destination_port: 8443,
+      server_port: 443,
+      transport: "TCP",
+    } as GraphEdge;
+    expect(portLabel(e)).toBe("Observed 8443/TCP");
+  });
 
   it("keeps late Catalyst source age and retained-history uncertainty visible", () => {
     const snapshot = {

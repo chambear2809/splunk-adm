@@ -1,5 +1,17 @@
-import { edgeIdentity, isBlocked, type IdentityState } from "./glossary";
-import { indexGraph, tunnelOf, type Graph, type GraphIndex } from "./graph";
+import {
+  edgeIdentity,
+  isBlocked,
+  observedPort,
+  type IdentityState,
+} from "./glossary";
+import {
+  indexGraph,
+  tunnelOf,
+  type Graph,
+  type GraphEdge,
+  type GraphIndex,
+  type TrafficObservation,
+} from "./graph";
 
 export interface Facets {
   identity?: "identified" | "external" | "unknown";
@@ -17,11 +29,91 @@ const edgeFacetsActive = (facets: Facets) =>
 const active = (facets: Facets) =>
   edgeFacetsActive(facets) || facets.hideInfrastructure === true;
 
+const flowFacetActive = (facets: Facets) =>
+  facets.identity !== undefined ||
+  facets.port !== undefined ||
+  facets.blocked === true;
+
 const identityMatches = (state: IdentityState, wanted: Facets["identity"]) =>
   wanted === undefined ||
   (wanted === "unknown"
     ? state === "unknown" || state === "multiple"
     : state === wanted);
+
+const observationPortMatches = (
+  observation: TrafficObservation,
+  wanted: number,
+) =>
+  observation.source_port === wanted ||
+  observation.destination_port === wanted ||
+  (observation.source_port === undefined &&
+    observation.destination_port === undefined &&
+    observation.server_port === wanted);
+
+const oneObservationValue = <K extends keyof TrafficObservation>(
+  observations: TrafficObservation[],
+  key: K,
+): TrafficObservation[K] | undefined => {
+  const values = observations.map((observation) => observation[key]);
+  if (values.length === 0 || values.some((value) => value === undefined))
+    return undefined;
+  const defined = values as TrafficObservation[K][];
+  return defined.every((value) => value === defined[0])
+    ? defined[0]
+    : undefined;
+};
+
+/**
+ * Keep a native observation edge's ownership/context, but remove tuples that
+ * failed the port facet. Aggregate counters are intentionally dropped because
+ * their original values may describe observations that are no longer shown.
+ */
+const portFilteredObservation = (
+  edge: GraphEdge,
+  wanted: number,
+): GraphEdge | undefined => {
+  const observations = edge.traffic_observations;
+  if (!observations?.length) return edge;
+  const retained = observations.filter((observation) =>
+    observationPortMatches(observation, wanted),
+  );
+  if (!retained.length) return undefined;
+  const retainedCount = retained.reduce(
+    (total, observation) => total + (observation.records ?? 1),
+    0,
+  );
+  const context = { ...edge };
+  delete context.bytes;
+  delete context.raw_bytes;
+  delete context.raw_packets;
+  delete context.records;
+  delete context.counter_semantics;
+  delete context.metrics_authoritative;
+  delete context.source_port;
+  delete context.destination_port;
+  delete context.server_port;
+  delete context.transport;
+  return {
+    ...context,
+    count: retainedCount,
+    metrics_authoritative: false,
+    traffic_observations: retained,
+    ...(oneObservationValue(retained, "source_port") !== undefined
+      ? { source_port: oneObservationValue(retained, "source_port") }
+      : {}),
+    ...(oneObservationValue(retained, "destination_port") !== undefined
+      ? {
+          destination_port: oneObservationValue(retained, "destination_port"),
+        }
+      : {}),
+    ...(oneObservationValue(retained, "server_port") !== undefined
+      ? { server_port: oneObservationValue(retained, "server_port") }
+      : {}),
+    ...(oneObservationValue(retained, "transport") !== undefined
+      ? { transport: oneObservationValue(retained, "transport") }
+      : {}),
+  };
+};
 
 /** Filter edge facets while retaining enough ownership context for layout. */
 export function filterGraph(graph: Graph, facets: Facets): Graph {
@@ -29,22 +121,53 @@ export function filterGraph(graph: Graph, facets: Facets): Graph {
   const index = indexGraph(graph);
   const matched = graph.edges.filter((edge) => {
     if (!edgeFacetsActive(facets)) return true;
+    if (edge.relationship === "calls") {
+      // Calls carry declared source provenance, but not flow-level facts such
+      // as identity, port, or blocked state to which those facets can apply.
+      return (
+        facets.source !== undefined &&
+        facets.source.length > 0 &&
+        !flowFacetActive(facets) &&
+        edge.sources?.includes(facets.source) === true
+      );
+    }
     const conversation = edge.relationship === "communicates_with";
     const observation = edge.relationship === "traffic_observation";
+    const nativeObservations = edge.traffic_observations;
+    const portMatches =
+      facets.port === undefined ||
+      (observation && nativeObservations?.length
+        ? nativeObservations.some((item) =>
+            observationPortMatches(item, facets.port!),
+          )
+        : observation
+          ? edge.source_port === facets.port ||
+            edge.destination_port === facets.port ||
+            (edge.source_port === undefined &&
+              edge.destination_port === undefined &&
+              observedPort(edge) === facets.port)
+          : observedPort(edge) === facets.port);
     return (
       (conversation || observation) &&
       identityMatches(
         edgeIdentity(edge, (id) => index.node.get(id)),
         facets.identity,
       ) &&
-      (facets.port === undefined || edge.server_port === facets.port) &&
+      portMatches &&
       (facets.source === undefined ||
         facets.source.length === 0 ||
         edge.sources?.includes(facets.source) === true) &&
       (facets.blocked !== true || (conversation && isBlocked(edge)))
     );
   });
-  const keptEdges = new Map(matched.map((edge) => [edge.id, edge]));
+  const keptEdges = new Map<string, GraphEdge>();
+  for (const edge of matched) {
+    const filtered =
+      facets.port !== undefined && edge.relationship === "traffic_observation"
+        ? portFilteredObservation(edge, facets.port)
+        : edge;
+    if (filtered) keptEdges.set(edge.id, filtered);
+  }
   const keptNodes = edgeFacetsActive(facets)
     ? new Set(matched.flatMap((edge) => [edge.source, edge.target]))
     : new Set(graph.nodes.map((node) => node.id));

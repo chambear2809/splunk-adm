@@ -1,6 +1,6 @@
 {
   "name": "splunk-adm",
-  "version": "0.6.0",
+  "version": "0.6.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,7 @@
     "typecheck:browser": "tsc -p tsconfig.browser.json --noEmit"
   },
   "dependencies": {
+    "@splunk/moment": "0.7.0",
     "@splunk/react-time-range": "12.1.1",
     "@splunk/react-ui": "5.17.0",
     "@splunk/search-job": "3.1.0",

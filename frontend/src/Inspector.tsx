@@ -166,9 +166,10 @@ function TrafficEvidence({
         <span className="count">{observations.length}</span>
       </h3>
       <p className="muted small">
-        Exporter observations are evidence at collection points. They do not
+        Source observations are evidence at collection points. They do not
         establish physical adjacency or packet route. Record counts and
-        directional counters are shown separately.
+        directional counters are shown separately; byte counters are not
+        authoritative for these observations.
       </p>
       <ul className="seen-list">
         {observations.map((o, i) => (
@@ -185,6 +186,8 @@ function TrafficEvidence({
                       ? o.quality_status.replaceAll("_", " ")
                       : "unavailable"
                   }`,
+                o.is_reply !== undefined && `Reply ${o.is_reply}`,
+                o.verdict && `Verdict ${o.verdict}`,
                 o.exporter_ip && `Exporter ${o.exporter_ip}`,
                 o.source_authority && `Authority ${o.source_authority}`,
                 o.observation_domain_id && `Domain ${o.observation_domain_id}`,
@@ -193,6 +196,10 @@ function TrafficEvidence({
                 o.observation_point && `Point ${o.observation_point}`,
                 o.source_ip && `Source IP ${o.source_ip}`,
                 o.destination_ip && `Destination IP ${o.destination_ip}`,
+                o.source_port !== undefined && `Source port ${o.source_port}`,
+                o.destination_port !== undefined &&
+                  `Destination port ${o.destination_port}`,
+                o.transport && `Transport ${o.transport}`,
                 o.source_mac && `Source MAC ${o.source_mac}`,
                 o.destination_mac && `Destination MAC ${o.destination_mac}`,
                 o.scope && `Scope ${o.scope}`,
@@ -248,23 +255,25 @@ function TrafficEvidence({
                       : ""}
                 </>
               )}
-              {(o.bytes_in !== undefined ||
-                o.bytes_out !== undefined ||
-                o.packets_in !== undefined ||
-                o.packets_out !== undefined) && (
-                <>
-                  <br />
-                  {[
-                    o.bytes_in !== undefined && `Bytes in ${o.bytes_in}`,
-                    o.bytes_out !== undefined && `Bytes out ${o.bytes_out}`,
-                    o.packets_in !== undefined && `Packets in ${o.packets_in}`,
-                    o.packets_out !== undefined &&
-                      `Packets out ${o.packets_out}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </>
-              )}
+              {!o.source?.toLowerCase().includes("hubble") &&
+                (o.bytes_in !== undefined ||
+                  o.bytes_out !== undefined ||
+                  o.packets_in !== undefined ||
+                  o.packets_out !== undefined) && (
+                  <>
+                    <br />
+                    {[
+                      o.bytes_in !== undefined && `Bytes in ${o.bytes_in}`,
+                      o.bytes_out !== undefined && `Bytes out ${o.bytes_out}`,
+                      o.packets_in !== undefined &&
+                        `Packets in ${o.packets_in}`,
+                      o.packets_out !== undefined &&
+                        `Packets out ${o.packets_out}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </>
+                )}
               {o.records !== undefined && (
                 <>
                   <br />
@@ -277,34 +286,35 @@ function TrafficEvidence({
                   {o.counter_semantics ? ` · ${o.counter_semantics}` : ""}
                 </>
               )}
-              {(o.raw_bytes !== undefined ||
-                o.raw_bytes_in !== undefined ||
-                o.raw_bytes_out !== undefined ||
-                o.raw_packets !== undefined ||
-                o.raw_packets_in !== undefined ||
-                o.raw_packets_out !== undefined ||
-                o.raw_sampling !== undefined) && (
-                <>
-                  <br />
-                  Raw exporter values (non-authoritative):{" "}
-                  {[
-                    o.raw_bytes !== undefined && `bytes ${o.raw_bytes}`,
-                    o.raw_bytes_in !== undefined &&
-                      `bytes in ${o.raw_bytes_in}`,
-                    o.raw_bytes_out !== undefined &&
-                      `bytes out ${o.raw_bytes_out}`,
-                    o.raw_packets !== undefined && `packets ${o.raw_packets}`,
-                    o.raw_packets_in !== undefined &&
-                      `packets in ${o.raw_packets_in}`,
-                    o.raw_packets_out !== undefined &&
-                      `packets out ${o.raw_packets_out}`,
-                    o.raw_sampling !== undefined &&
-                      `sampling ${o.raw_sampling}`,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </>
-              )}
+              {!o.source?.toLowerCase().includes("hubble") &&
+                (o.raw_bytes !== undefined ||
+                  o.raw_bytes_in !== undefined ||
+                  o.raw_bytes_out !== undefined ||
+                  o.raw_packets !== undefined ||
+                  o.raw_packets_in !== undefined ||
+                  o.raw_packets_out !== undefined ||
+                  o.raw_sampling !== undefined) && (
+                  <>
+                    <br />
+                    Raw exporter values (non-authoritative):{" "}
+                    {[
+                      o.raw_bytes !== undefined && `bytes ${o.raw_bytes}`,
+                      o.raw_bytes_in !== undefined &&
+                        `bytes in ${o.raw_bytes_in}`,
+                      o.raw_bytes_out !== undefined &&
+                        `bytes out ${o.raw_bytes_out}`,
+                      o.raw_packets !== undefined && `packets ${o.raw_packets}`,
+                      o.raw_packets_in !== undefined &&
+                        `packets in ${o.raw_packets_in}`,
+                      o.raw_packets_out !== undefined &&
+                        `packets out ${o.raw_packets_out}`,
+                      o.raw_sampling !== undefined &&
+                        `sampling ${o.raw_sampling}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </>
+                )}
               {(o.flow_id || o.sequence || o.record_fingerprint) && (
                 <>
                   <br />
@@ -981,6 +991,9 @@ function NodeDetails({
     ? handoffCoverageMessage(node)
     : undefined;
   const networkClient = node.endpoint_kind === "network_client";
+  const observationCount = incident.filter(
+    (e) => e.relationship === "traffic_observation",
+  ).length;
   const attachmentStatus = attrs.attachment_status;
   const wirelessCorrelated =
     attrs.attachment_basis === "meraki_association_flow" &&
@@ -1089,6 +1102,13 @@ function NodeDetails({
           that pod was identified.
         </p>
       )}
+      {node.kind === "service" && (
+        <p className="callout neutral">
+          Service membership is based only on qualified OTel span association in
+          the selected window; it is not a continuous service-lifetime or
+          packet-route claim.
+        </p>
+      )}
       {aggregateHandoffCoverage && (
         <p className="callout warn">
           {aggregateHandoffCoverage} Any backend links shown here summarize only
@@ -1170,6 +1190,30 @@ function NodeDetails({
           ],
         ]}
       />
+      {node.kind === "service" && runsOn.length > 0 && (
+        <section aria-label="Service membership evidence">
+          <h3>
+            Membership evidence <span className="count">{runsOn.length}</span>
+          </h3>
+          <ul className="seen-list">
+            {runsOn.map((e) => (
+              <li key={e.id}>
+                <b>
+                  {index.node.get(e.target === node.id ? e.source : e.target)
+                    ?.label ?? "Workload"}
+                </b>
+                <small>
+                  {e.evidence.length
+                    ? e.evidence.join(" · ")
+                    : e.span_ids?.length
+                      ? `${e.span_ids.length} qualified span${e.span_ids.length === 1 ? "" : "s"}`
+                      : "Qualified OTel span association"}
+                </small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <VlanEvidence edges={vlan} topo={topo} index={index} />
       {networkClient &&
         incident.flatMap((e) => e.traffic_observations ?? []).length > 0 && (
@@ -1198,7 +1242,13 @@ function NodeDetails({
         index={index}
         onSelect={onSelect}
       />
-      {!links.length && (
+      {observationCount > 0 && (
+        <p className="callout neutral">
+          Workload observations are separate from traced service calls; grouping
+          does not prove a route or translation.
+        </p>
+      )}
+      {!links.length && !observationCount && (
         <p className="muted">No calls or conversations in this time range.</p>
       )}
       <details className="ids">

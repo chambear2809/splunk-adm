@@ -334,6 +334,28 @@ describe("rowsToGraph validation", () => {
     );
   });
 
+  it("preserves false reply flags and verdicts in traffic observations", () => {
+    const r = rows();
+    const edgeRow = r.find((x) => x.row_type === "edge")!;
+    edgeRow.traffic_observations = JSON.stringify([
+      { is_reply: false, verdict: "FORWARDED", records: 1 },
+    ]);
+    const parsed = rowsToGraph(r, args, { demo: true });
+    expect(parsed.edges[0].traffic_observations?.[0]).toMatchObject({
+      is_reply: false,
+      verdict: "FORWARDED",
+    });
+  });
+
+  it("rejects non-boolean traffic observation reply flags", () => {
+    const r = rows();
+    const edgeRow = r.find((x) => x.row_type === "edge")!;
+    edgeRow.traffic_observations = JSON.stringify([{ is_reply: "false" }]);
+    expect(() => rowsToGraph(r, args, { demo: true })).toThrow(
+      /traffic_observations has an invalid observation/,
+    );
+  });
+
   it.each([
     ["malformed JSON", "{"],
     ["non-array JSON", JSON.stringify({ vlan: 120 })],

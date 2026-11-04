@@ -140,6 +140,10 @@ await copyFile(
   "docs/operators/cisco-enterprise-networking.md",
   `${stage}/docs/operators/cisco-enterprise-networking.md`,
 );
+await copyFile(
+  "docs/operators/qualified-native-network.md",
+  `${stage}/docs/operators/qualified-native-network.md`,
+);
 await copyFile("LICENSE", `${stage}/LICENSE`);
 await copyFile("NOTICE", `${stage}/NOTICE`);
 

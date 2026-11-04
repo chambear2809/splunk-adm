@@ -4,6 +4,7 @@ import { deploymentClient } from "./deploymentClient";
 import {
   expectationFor,
   indexNames,
+  validateExpectations,
   SOURCE_DEFINITIONS,
   UNCONFIGURED_DNS_INDEX,
   type DeploymentClient,
@@ -136,6 +137,15 @@ export interface EvidenceConfigClient {
     addresses?: string[],
     scope?: string,
   ): Promise<EvidenceConfiguration>;
+}
+export interface AppDynamicsInventoryConfiguration {
+  fingerprint: string;
+  source: SupplementalSourceConfiguration;
+}
+export interface AppDynamicsInventoryConfigClient {
+  readAppDynamicsInventory(
+    signal?: AbortSignal,
+  ): Promise<AppDynamicsInventoryConfiguration>;
 }
 /** Reads explicit app/shared objects with the caller's session, never private lookups. */
 export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
@@ -281,6 +291,77 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         "Shared collection completeness or stability could not be verified.",
       );
     return value as Record<string, unknown>[];
+  }
+  async readAppDynamicsInventory(
+    signal?: AbortSignal,
+  ): Promise<AppDynamicsInventoryConfiguration> {
+    const deployment = await this.deployment.read(signal);
+    if (deployment.state !== "configured" || !deployment.settings)
+      throw new Error("Deployment expectations are unavailable.");
+    const settings = validateExpectations(deployment.settings);
+    const expectation = settings.sources.appdynamics_inventory;
+    if (!expectation)
+      throw new Error("Controller inventory expectation is unavailable.");
+    const rows = await this.collection("adm_observer_scope", {}, 2000, signal);
+    const relevant = rows.filter(
+      (row) => row.observer_kind === "appd_controller",
+    );
+    const mappings: ObserverMapping[] = relevant.map((row) => {
+      if (
+        typeof row.observer !== "string" ||
+        typeof row.scope !== "string" ||
+        row.mapping_status !== "verified" ||
+        row.observer !== row.observer.toLowerCase() ||
+        (row.controller_origin !== undefined &&
+          typeof row.controller_origin !== "string")
+      )
+        throw new Error("Controller authority mapping is invalid.");
+      literal(row.observer);
+      routingScope(row.scope);
+      if (typeof row.controller_origin === "string")
+        configuredHttpsOrigin(row.controller_origin);
+      return {
+        observer_kind: "appd_controller",
+        observer: row.observer,
+        scope: row.scope,
+        cluster: typeof row.cluster === "string" ? row.cluster : "",
+        mapping_status: "verified",
+        ...(typeof row.controller_origin === "string"
+          ? { controller_origin: row.controller_origin }
+          : {}),
+      };
+    });
+    if (mappings.length !== 1)
+      throw new Error("Controller authority mapping is missing or ambiguous.");
+    const indexes = indexNames({
+      name: "adm_index_appdynamics_inventory",
+      definition: await this.definition(
+        "adm_index_appdynamics_inventory",
+        signal,
+      ),
+    });
+    if (indexes.length !== 1 || indexes[0] === "unconfigured_optional")
+      throw new Error(
+        "Controller inventory index is unavailable or ambiguous.",
+      );
+    const schemaQualified =
+      (await this.definition(
+        "adm_appdynamics_inventory_schema_qualified",
+        signal,
+      )) === "1";
+    const source: SupplementalSourceConfiguration = {
+      source: "appdynamics_inventory",
+      state: expectation.state,
+      indexes,
+      authorities: [mappings[0].observer],
+      mappings,
+      schemaQualified,
+      staleAfterSeconds: expectation.staleAfterSeconds,
+    };
+    return {
+      source,
+      fingerprint: await fingerprint([source, settings.revision]),
+    };
   }
   async read(
     signal?: AbortSignal,
@@ -783,4 +864,6 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
   }
 }
 export const evidenceConfigClient: EvidenceConfigClient =
+  new ToolkitEvidenceConfigClient();
+export const appDynamicsInventoryConfigClient =
   new ToolkitEvidenceConfigClient();

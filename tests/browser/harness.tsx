@@ -386,10 +386,10 @@ class FakeSearchClient implements SearchClient {
         errors: [],
       };
     }
-    if (request.search.startsWith("| inputlookup adm_app_catalog")) {
+    if (request.search.startsWith("| `adm_application_catalog_read`")) {
       if (
         faultScenario === "catalog-overlimit-narrowed" &&
-        request.search.includes(' WHERE service="')
+        request.search.includes('| search service="')
       )
         return {
           rows: catalogCapture.rows,
@@ -420,7 +420,7 @@ class FakeSearchClient implements SearchClient {
         await new Promise((resolve) => setTimeout(resolve, 250));
         return { rows: catalogCapture.rows, warnings: [], errors: [] };
       }
-      const service = request.search.match(/WHERE service="([^"]+)"/)?.[1];
+      const service = request.search.match(/\| search service="([^"]+)"/)?.[1];
       return {
         rows: service
           ? catalogCapture.rows.filter((row) => row.service === service)

@@ -220,6 +220,196 @@ describe("graph facets", () => {
     });
     expect(result.edges.map((edge) => edge.id)).toContain("observation");
   });
+  it("filters observations by destination port without relabeling conversations", () => {
+    const withObservation = {
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: "reply-observation",
+          source: "pod-a",
+          target: "external",
+          relationship: "traffic_observation",
+          evidence: [],
+          confidence: "correlated",
+          count: 1,
+          destination_port: 8443,
+          server_port: 443,
+          transport: "TCP",
+          sources: ["hubble"],
+        },
+      ],
+    } as unknown as Graph;
+    expect(
+      filterGraph(withObservation, { port: 8443 }).edges.map((e) => e.id),
+    ).toContain("reply-observation");
+    expect(
+      filterGraph(withObservation, { port: 443 }).edges.map((e) => e.id),
+    ).not.toContain("reply-observation");
+  });
+  it("does not let a conflicting legacy server port match when a raw port exists", () => {
+    const withObservation = {
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: "source-only-observation",
+          source: "pod-a",
+          target: "external",
+          relationship: "traffic_observation",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+          source_port: 49152,
+          server_port: 443,
+        },
+      ],
+    } as unknown as Graph;
+    expect(
+      filterGraph(withObservation, { port: 49152 }).edges.map((e) => e.id),
+    ).toContain("source-only-observation");
+    expect(
+      filterGraph(withObservation, { port: 443 }).edges.map((e) => e.id),
+    ).not.toContain("source-only-observation");
+  });
+  it("retains forward and reply observations when either raw port matches", () => {
+    const observations = {
+      ...graph,
+      edges: [
+        ...graph.edges,
+        {
+          id: "forward-observation",
+          source: "pod-a",
+          target: "external",
+          relationship: "traffic_observation",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+          source_port: 1234,
+          destination_port: 443,
+          transport: "tcp",
+        },
+        {
+          id: "reply-observation",
+          source: "external",
+          target: "pod-a",
+          relationship: "traffic_observation",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+          source_port: 443,
+          destination_port: 1234,
+          transport: "tcp",
+        },
+      ],
+    } as unknown as Graph;
+    const result = filterGraph(observations, { port: 1234 });
+    expect(result.edges.map((edge) => edge.id)).toEqual(
+      expect.arrayContaining(["forward-observation", "reply-observation"]),
+    );
+  });
+  it("filters mixed native tuples without leaking unmatched tuples or mutating the source", () => {
+    const nativeObservations = [
+      {
+        source: "hubble",
+        source_port: 49152,
+        destination_port: 443,
+        transport: "tcp",
+        records: 2,
+      },
+      {
+        source: "hubble",
+        source_port: 443,
+        destination_port: 49152,
+        transport: "tcp",
+        is_reply: true,
+        records: 3,
+      },
+      {
+        source: "hubble",
+        source_port: 53000,
+        destination_port: 8443,
+        transport: "tcp",
+        records: 4,
+      },
+    ];
+    const nativeEdge = {
+      id: "mixed-native",
+      source: "pod-a",
+      target: "external",
+      relationship: "traffic_observation",
+      evidence: [],
+      confidence: "observed",
+      count: 3,
+      records: 9,
+      source_authority: "hubble",
+      traffic_observations: nativeObservations,
+    };
+    const withNative = {
+      ...graph,
+      edges: [...graph.edges, nativeEdge],
+    } as unknown as Graph;
+    const result = filterGraph(withNative, { port: 443 });
+    const filtered = result.edges.find((edge) => edge.id === nativeEdge.id)!;
+    expect(filtered.traffic_observations).toEqual(
+      nativeObservations.slice(0, 2),
+    );
+    expect(filtered.count).toBe(5);
+    expect(filtered.source_port).toBeUndefined();
+    expect(filtered.destination_port).toBeUndefined();
+    expect(filtered.server_port).toBeUndefined();
+    expect(filtered.records).toBeUndefined();
+    expect(filtered.metrics_authoritative).toBe(false);
+    expect(filtered.source_authority).toBe("hubble");
+    expect(result.edges.map((edge) => edge.id)).toContain("runs");
+    expect(nativeEdge.traffic_observations).toHaveLength(3);
+    expect(nativeEdge.records).toBe(9);
+  });
+  it("retains a single native top-port value only when all retained tuples agree", () => {
+    const edge = {
+      id: "single-native",
+      source: "pod-a",
+      target: "external",
+      relationship: "traffic_observation",
+      evidence: [],
+      confidence: "observed",
+      count: 2,
+      traffic_observations: [
+        { source_port: 40000, destination_port: 8443, transport: "tcp" },
+        { source_port: 40001, destination_port: 8443, transport: "tcp" },
+      ],
+    };
+    const result = filterGraph(
+      { ...graph, edges: [...graph.edges, edge] } as unknown as Graph,
+      { port: 8443 },
+    );
+    const filtered = result.edges.find((item) => item.id === edge.id)!;
+    expect(filtered.destination_port).toBe(8443);
+    expect(filtered.transport).toBe("tcp");
+    expect(filtered.source_port).toBeUndefined();
+  });
+  it("does not infer a top port when a retained tuple omits that field", () => {
+    const edge = {
+      id: "missing-native-port",
+      source: "pod-a",
+      target: "external",
+      relationship: "traffic_observation",
+      evidence: [],
+      confidence: "observed",
+      count: 2,
+      traffic_observations: [
+        { source_port: 40000, destination_port: 8443, transport: "tcp" },
+        { destination_port: 8443, transport: "tcp" },
+      ],
+    };
+    const result = filterGraph(
+      { ...graph, edges: [...graph.edges, edge] } as unknown as Graph,
+      { port: 8443 },
+    );
+    const filtered = result.edges.find((item) => item.id === edge.id)!;
+    expect(filtered.source_port).toBeUndefined();
+    expect(filtered.destination_port).toBe(8443);
+  });
   it("handles dense service and port sets without dangling endpoints", () => {
     const dense = {
       ...graph,

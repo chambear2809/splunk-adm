@@ -1154,6 +1154,32 @@
 .adm .device-card tr.selected td {
   background: var(--adm-select-bg);
 }
+.adm .path-candidate {
+  display: block;
+  width: 100%;
+  margin: 4px 0;
+  padding: 7px 9px;
+  text-align: left;
+  color: inherit;
+  background: var(--adm-card);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+}
+.adm section[aria-label="ACI topology candidates"] select {
+  color: var(--adm-ink);
+  background: var(--adm-card);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+.adm .path-candidate.selected {
+  background: var(--adm-select-bg);
+  border-color: var(--adm-ink-2);
+}
+.adm .path-candidate small,
+.adm .path-candidate-detail small {
+  display: block;
+}
 
 /* Export menu */
 .adm .menu-item {

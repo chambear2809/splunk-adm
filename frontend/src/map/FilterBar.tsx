@@ -1,5 +1,6 @@
 import type { Graph } from "../graph";
 import type { Facets, FocusDirection } from "../filters";
+import { observedPort } from "../glossary";
 
 export function FilterBar({
   graph,
@@ -18,13 +19,7 @@ export function FilterBar({
   canFocus: boolean;
   network?: boolean;
 }) {
-  const ports = [
-    ...new Set(
-      graph.edges.flatMap((e) =>
-        e.server_port === undefined ? [] : [e.server_port],
-      ),
-    ),
-  ].sort((a, b) => a - b);
+  const ports = availablePorts(graph);
   const sources = [
     ...new Set(graph.edges.flatMap((e) => e.sources ?? [])),
   ].sort();
@@ -155,4 +150,31 @@ export function FilterBar({
       </label>
     </div>
   );
+}
+
+/** Ports exposed by the facet, preserving both orientations of observations. */
+export function availablePorts(graph: Graph): number[] {
+  return [
+    ...new Set(
+      graph.edges.flatMap((edge) => {
+        if (edge.relationship !== "traffic_observation") {
+          const port = observedPort(edge);
+          return port === undefined ? [] : [port];
+        }
+        const nativePorts = (edge.traffic_observations ?? []).flatMap(
+          (observation) =>
+            [observation.source_port, observation.destination_port].filter(
+              (port): port is number => port !== undefined,
+            ),
+        );
+        if (nativePorts.length) return nativePorts;
+        const rawPorts = [edge.source_port, edge.destination_port].filter(
+          (port): port is number => port !== undefined,
+        );
+        if (rawPorts.length) return rawPorts;
+        const fallback = observedPort(edge);
+        return fallback === undefined ? [] : [fallback];
+      }),
+    ),
+  ].sort((a, b) => a - b);
 }

@@ -22,6 +22,7 @@ export type TrafficObservation = {
   routing_domain?: string;
   observation_domain_id?: string;
   exporter_ip?: string;
+  netflow_version?: number;
   flow_id?: string;
   record_fingerprint?: string;
   sequence?: string;
@@ -72,6 +73,8 @@ export type TrafficObservation = {
   server_port?: number;
   transport?: string;
   event_identity_status?: string;
+  is_reply?: boolean;
+  verdict?: string;
 };
 export interface AttachmentEvidence {
   basis?: string;
@@ -303,7 +306,7 @@ const allowedEdges: Record<Relationship, [NodeKind[], NodeKind[]]> = {
   ],
   forwards_to: [["endpoint"], ["workload"]],
   traffic_observation: [
-    ["client", "endpoint"],
+    ["workload", "client", "endpoint"],
     ["endpoint", "workload"],
   ],
 };
@@ -499,6 +502,7 @@ const TRAFFIC_TEXT_FIELDS = [
   "destination_ip",
   "transport",
   "event_identity_status",
+  "verdict",
 ] as const;
 const TRAFFIC_QUALITY_TEXT_FIELDS = [
   "quality_errors",
@@ -513,6 +517,7 @@ const TRAFFIC_NUMBER_FIELDS = [
   "packets_in",
   "packets_out",
   "exporter_sampling_interval",
+  "netflow_version",
   "records",
   "source_port",
   "destination_port",
@@ -542,6 +547,7 @@ export const validTrafficObservation = (
           ...TRAFFIC_NUMBER_FIELDS,
           ...TRAFFIC_SCALAR_FIELDS,
           "metrics_authoritative",
+          "is_reply",
           "quality_status",
         ].includes(k as never),
     )
@@ -553,6 +559,7 @@ export const validTrafficObservation = (
     )
   )
     return false;
+  if (v.is_reply !== undefined && typeof v.is_reply !== "boolean") return false;
   if (
     TRAFFIC_QUALITY_TEXT_FIELDS.some(
       (k) => v[k] !== undefined && typeof v[k] !== "string",

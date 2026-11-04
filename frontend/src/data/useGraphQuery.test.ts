@@ -8,7 +8,7 @@ describe("graph query coordination", () => {
     const controller = new AbortController();
     const client: SearchClient = {
       search: (request) =>
-        request.search.includes("adm_graph")
+        request.search.includes("adm_application_graph_read")
           ? Promise.reject(new Error("permission denied"))
           : new Promise(() => {}),
     };
@@ -115,7 +115,9 @@ it("anchors topology to the graph's returned absolute bounds for relative reques
     search: async (request) => {
       requests.push(request);
       return {
-        rows: request.search.includes("adm_graph") ? rows.rows : [],
+        rows: request.search.includes("adm_application_graph_read")
+          ? rows.rows
+          : [],
         warnings: [],
         errors: [],
       };
@@ -157,7 +159,7 @@ it("cannot publish a valid graph after inventory completes following cancellatio
   const controller = new AbortController();
   const client: SearchClient = {
     search: async (request) => {
-      const graph = request.search.includes("adm_graph");
+      const graph = request.search.includes("adm_application_graph_read");
       if (!graph) controller.abort();
       return { rows: graph ? rows.rows : [], warnings: [], errors: [] };
     },

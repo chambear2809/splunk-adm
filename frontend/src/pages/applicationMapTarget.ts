@@ -11,8 +11,18 @@ export function applicationMapTarget(
     earliest: string;
     latest: string;
   },
+  liveWindow?: { earliest?: number; latest?: number },
 ): { scenario: DemoScenario; earliest: string; latest: string } {
-  return mode === "demo" ? resolveDemoTarget() : { scenario, earliest, latest };
+  if (mode === "demo") return resolveDemoTarget();
+  return {
+    scenario,
+    earliest:
+      liveWindow?.earliest !== undefined
+        ? String(liveWindow.earliest)
+        : earliest,
+    latest:
+      liveWindow?.latest !== undefined ? String(liveWindow.latest) : latest,
+  };
 }
 
 export function applicationDemoEntryTarget(

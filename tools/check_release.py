@@ -50,9 +50,39 @@ SETTINGS_CONFIG_FILES = frozenset(
         "splunk_adm/README/adm_settings.conf.spec",
     }
 )
+QUALIFIED_RUNTIME_FILES = frozenset(
+    {
+        "splunk_adm/bin/admqualified.py",
+        "splunk_adm/bin/admacipoll.py",
+        *{
+            f"splunk_adm/bin/adm_identity_lib/{name}.py"
+            for name in (
+                "__init__",
+                "native_network",
+                "network_graph",
+                "protocol",
+                "qualified",
+                "search",
+            )
+        },
+        *{
+            f"splunk_adm/bin/adm_aci_lib/{name}.py"
+            for name in (
+                "__init__",
+                "config",
+                "context",
+                "fabric",
+                "reader",
+                "schema",
+                "validation",
+            )
+        },
+    }
+)
 BUNDLED_RUNTIME_FILES = frozenset(
     {
         *SETTINGS_RUNTIME_FILES,
+        *QUALIFIED_RUNTIME_FILES,
         "splunk_adm/bin/adm_recovery.py",
         "splunk_adm/bin/adm_recovery_lib/__init__.py",
         "splunk_adm/bin/adm_recovery_lib/core.py",
@@ -97,6 +127,17 @@ BUNDLED_RUNTIME_FILES = frozenset(
             }.items()
             for name in names
         },
+    }
+)
+QUALIFIED_CONFIG_FILES = frozenset(
+    {
+        "splunk_adm/default/commands.conf",
+        "splunk_adm/default/adm_identity.conf",
+        "splunk_adm/default/adm_aci_poll.conf",
+        "splunk_adm/default/adm_aci_bindings.conf",
+        "splunk_adm/README/adm_identity.conf.spec",
+        "splunk_adm/README/adm_aci_poll.conf.spec",
+        "splunk_adm/README/adm_aci_bindings.conf.spec",
     }
 )
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
@@ -484,6 +525,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/operators/dns-evidence.md",
         RECOVERY_DOC_PATH,
         RETENTION_DOC_PATH,
+        "splunk_adm/docs/operators/qualified-native-network.md",
         "splunk_adm/default/collections.conf",
         "splunk_adm/default/adm_recovery.conf",
         ALERT_ACTIONS_PATH,
@@ -495,12 +537,14 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/metadata/default.meta",
         *BUNDLED_RUNTIME_FILES,
         *SETTINGS_CONFIG_FILES,
+        *QUALIFIED_CONFIG_FILES,
         SETTINGS_REGISTRY_PATH,
     }
     missing = sorted(required - files.keys())
     if missing:
         raise ValueError(f"archive missing required files: {', '.join(missing)}")
     _check_settings_contract(files, registry)
+    _check_qualified_contract(files)
     _check_scope_transform(
         files["splunk_adm/default/transforms.conf"],
         "packaged default/transforms.conf",
@@ -557,6 +601,9 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         raise ValueError("app.conf [triggers] reload.adm_recovery must be simple")
     if config.get("triggers", "reload.adm_settings", fallback=None) != "simple":
         raise ValueError("app.conf [triggers] reload.adm_settings must be simple")
+    for name in ("adm_identity", "adm_aci_poll", "adm_aci_bindings"):
+        if config.get("triggers", f"reload.{name}", fallback=None) != "simple":
+            raise ValueError(f"app.conf [triggers] reload.{name} must be simple")
     actions = configparser.RawConfigParser(strict=True)
     try:
         actions.read_string(files[ALERT_ACTIONS_PATH].decode("utf-8"))
@@ -577,6 +624,146 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
     build = config.get("install", "build", fallback=None)
     if build is None or not re.fullmatch(r"[1-9]\d*", build):
         raise ValueError("app.conf [install] build must be a positive integer")
+
+
+def _check_qualified_contract(files: dict[str, bytes]) -> None:
+    """Keep the qualified commands portable, disabled, and fully bundled."""
+    for name in QUALIFIED_RUNTIME_FILES:
+        try:
+            tree = ast.parse(files[name], filename=name)
+        except (SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(f"invalid packaged qualified runtime: {name}") from exc
+        if name.endswith("admqualified.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "AdmQualified"
+            for node in tree.body
+        ):
+            raise ValueError("qualified identity entrypoint must define AdmQualified")
+        if name.endswith("admacipoll.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "AdmAciPoll"
+            for node in tree.body
+        ):
+            raise ValueError("ACI poll entrypoint must define AdmAciPoll")
+
+    commands = _packaged_config(files, "default/commands.conf")
+    expected = {
+        "chunked": "true",
+        "local": "true",
+        "generating": "true",
+        "python.version": "python3",
+        "python.required": "3.13",
+    }
+    for stanza, filename in (
+        ("admqualified", "admqualified.py"),
+        ("admacipoll", "admacipoll.py"),
+    ):
+        if (
+            not commands.has_section(stanza)
+            or commands.get(stanza, "filename", fallback="") != filename
+        ):
+            raise ValueError("qualified command registration has an invalid filename")
+        if any(
+            commands.get(stanza, key, fallback=None) != value
+            for key, value in expected.items()
+        ):
+            raise ValueError(
+                "qualified command registration must use the exact local Python 3.13 settings"
+            )
+
+    identity = _packaged_config(files, "default/adm_identity.conf")
+    if set(identity.sections()) != {"profile", "network"}:
+        raise ValueError("identity defaults contain unreviewed sections")
+    if set(identity["profile"]) != {
+        "enabled",
+        "cluster",
+        "environment",
+        "scope",
+        "producer_id",
+        "interval_source",
+        "span_source",
+        "interval_index",
+        "span_index",
+        "interval_sourcetype",
+        "span_sourcetype",
+        "namespaces",
+    } or set(identity["network"]) != {"enabled", "profiles_json", "frontends_json"}:
+        raise ValueError("identity defaults contain unreviewed keys")
+    if identity.get("profile", "enabled", fallback=None) != "false":
+        raise ValueError("identity profile must be disabled in the package")
+    for key in (
+        "cluster",
+        "environment",
+        "scope",
+        "producer_id",
+        "interval_source",
+        "span_source",
+        "namespaces",
+    ):
+        if identity.get("profile", key, fallback=None) != "placeholder":
+            raise ValueError("identity defaults must retain portable placeholders")
+    if any(
+        identity.get("profile", key, fallback=None) != value
+        for key, value in {
+            "interval_index": "adm_identity_intervals",
+            "span_index": "adm_identity_spans",
+            "interval_sourcetype": "adm:pod_ip_interval:v2",
+            "span_sourcetype": "otel:traces",
+        }.items()
+    ):
+        raise ValueError("identity defaults contain unreviewed source selectors")
+    if identity.get("network", "enabled", fallback=None) != "false" or any(
+        identity.get("network", key, fallback=None) != "[]"
+        for key in ("profiles_json", "frontends_json")
+    ):
+        raise ValueError("native network defaults must be disabled and empty")
+    aci = _packaged_config(files, "default/adm_aci_poll.conf")
+    bindings = _packaged_config(files, "default/adm_aci_bindings.conf")
+    if set(aci.sections()) != {"profile"} or set(aci["profile"]) != {"enabled"}:
+        raise ValueError("ACI poll defaults must contain only disabled profile state")
+    if set(bindings.sections()) != {"bindings"} or set(bindings["bindings"]) != {
+        "enabled"
+    }:
+        raise ValueError("ACI bindings defaults must contain only disabled state")
+    if (
+        aci.get("profile", "enabled", fallback=None) != "false"
+        or bindings.get("bindings", "enabled", fallback=None) != "false"
+    ):
+        raise ValueError("ACI poll and bindings defaults must be disabled")
+    for name in QUALIFIED_CONFIG_FILES:
+        if name.endswith(".spec") and not files[name].strip():
+            raise ValueError(f"empty qualified configuration specification: {name}")
+    macro_text = files["splunk_adm/default/macros.conf"].decode("utf-8")
+
+    def macro_section(name: str) -> str:
+        match = re.search(
+            rf"(?ms)^\[{re.escape(name)}\]\s*\n(.*?)(?=^\[|\Z)", macro_text
+        )
+        return match.group(1) if match else ""
+
+    catalog = macro_section("adm_application_catalog_read")
+    graph = macro_section("adm_application_graph_read(4)")
+    if not re.search(r"(?m)^definition\s*=\s*inputlookup adm_app_catalog\s*$", catalog):
+        raise ValueError("catalog wrapper must retain the legacy catalog reader")
+    if not re.search(r"(?m)^iseval\s*=\s*0\s*$", catalog):
+        raise ValueError("catalog wrapper must be a command macro")
+    if not re.search(
+        r'(?m)^definition\s*=\s*search `adm_graph\("\$service\$", "\$environment\$", "\$cluster\$", "\$namespace\$"\)`\s*$',
+        graph,
+    ) or not re.search(r"(?m)^iseval\s*=\s*0\s*$", graph):
+        raise ValueError("graph wrapper must retain the legacy graph reader")
+    if not re.search(
+        r"(?m)^args\s*=\s*service, environment, cluster, namespace\s*$", graph
+    ) or not re.search(r"(?m)^validation\s*=\s*.+$", graph):
+        raise ValueError("graph wrapper must retain argument validation")
+    metadata = _packaged_config(files, "metadata/default.meta")
+    global_acl = re.sub(r"\s+", "", metadata.get("app", "access", fallback=""))
+    if global_acl != "read:[*],write:[admin,sc_admin]":
+        raise ValueError("qualified configuration ACL must remain admin-owned")
+    for section in metadata.sections():
+        lowered = section.casefold()
+        if any(token in lowered for token in ("adm_identity", "adm_aci", "commands")):
+            acl = re.sub(r"\s+", "", metadata.get(section, "access", fallback=""))
+            if acl and acl != "read:[*],write:[admin,sc_admin]":
+                raise ValueError("qualified configuration ACL must remain admin-owned")
 
 
 def check_release(
