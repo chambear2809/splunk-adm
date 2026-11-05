@@ -35,6 +35,37 @@ import scopes from "../../fixtures/demo-scopes.json";
 import aciRows from "../../fixtures/demo-rows-aci.json";
 import catalogCapture from "../../fixtures/demo-catalog.json";
 import findCapture from "../../fixtures/demo-find.json";
+import aciTopologyRows from "../../fixtures/demo-topology-aci.json";
+import vsphereRows from "../../fixtures/demo-topology-aci-vsphere.json";
+import pathTraceCapture from "../../fixtures/demo-path-trace-aci.json";
+
+/** adm_ip_identity rows adm_path_trace appends for the demo pair. */
+const PATH_TRACE_ENDPOINTS = [
+  {
+    row_type: "endpoint",
+    ip: "10.30.40.25",
+    scope: "prod",
+    entity_kind: "vm",
+    entity_name: "win-client-01",
+    attach_device: "pod-1/node-103",
+    attach_interface: "eth1/5",
+    epg: "win-clients",
+  },
+  {
+    row_type: "endpoint",
+    ip: "10.20.30.40",
+    scope: "prod",
+    entity_kind: "vm",
+    entity_name: "orders-db-01",
+    attach_device: "pod-1/node-102",
+    attach_interface: "eth1/6",
+    epg: "db",
+  },
+];
+const PATH_TRACE_NAMES: Record<string, string> = {
+  "win-client-01": "10.30.40.25",
+  "orders-db-01": "10.20.30.40",
+};
 import "../../frontend/src/styles.css";
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
 const queryParams = new URLSearchParams(location.search);
@@ -343,6 +374,42 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    const resolve = /adm_path_trace_resolve\(([^)]*)\)/.exec(request.search);
+    if (resolve) {
+      const ip = PATH_TRACE_NAMES[resolve[1]];
+      return {
+        rows: ip ? [{ entity_name: resolve[1], ip, query: resolve[1] }] : [],
+        warnings: [],
+        errors: [],
+      };
+    }
+    if (request.search.includes("adm_path_trace(")) {
+      if (faultScenario === "trace-error")
+        throw new Error("The Splunk search failed. Splunk reported: timeout");
+      return {
+        rows: [
+          ...pathTraceCapture.rows,
+          ...PATH_TRACE_ENDPOINTS,
+          ...vsphereRows,
+        ] as Record<string, unknown>[],
+        warnings: [],
+        errors: [],
+      };
+    }
+    // The map reads `adm_topology` and `adm_map_vsphere_inventory` side by
+    // side (the halves of `adm_topology_with_vsphere`); other pages read
+    // `adm_topology`. The VMM half adds nothing to the ACI topology capture.
+    if (request.search === "| `adm_map_vsphere_inventory`")
+      return { rows: [], warnings: [], errors: [] };
+    const topologyRead = /^`adm_topology(?:_with_vsphere)?`$/.test(
+      request.search,
+    );
+    if (topologyRead && faultScenario === "path-trace")
+      return {
+        rows: aciTopologyRows as Record<string, unknown>[],
+        warnings: [],
+        errors: [],
+      };
     if (
       faultScenario === "health-hold" &&
       request.search.includes("adm_health")
@@ -500,8 +567,7 @@ class FakeSearchClient implements SearchClient {
         errors: [],
       };
     }
-    if (request.search === "`adm_topology`")
-      return { rows: [], warnings: [], errors: [] };
+    if (topologyRead) return { rows: [], warnings: [], errors: [] };
     window.__ADM_LAST_EARLIEST__ = request.earliest;
     window.__ADM_LAST_GRAPH_SEARCH__ = request.search;
     const scenario = faultScenario;

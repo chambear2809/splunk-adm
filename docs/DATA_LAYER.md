@@ -19,7 +19,7 @@ Optional on-demand DNS resolution evidence and standalone scoped-address investi
 
 | Source | Sourcetype | Role |
 | --- | --- | --- |
-| Splunk Stream NetFlow/IPFIX from NX-OS leaves | `stream:netflow` (`source=stream:netflow`) | Unidirectional flow records, exporter and ifIndex |
+| Splunk Stream NetFlow/IPFIX (NX-OS and ACI leaves, ESXi VDS, campus exporters) | `stream:netflow` (`source=stream:netflow`) | Unidirectional flow records, exporter and ifIndex |
 | Nexus Dashboard Insights | `cisco:dc:nd:flows`, `cisco:dc:nd:endpoints` | Fabric flow records; endpoint change records (creation/deletion) |
 | ACI (APIC) | `cisco:dc:aci:stats` (`fvCEp` with `fvIp`, `fvRsCEpToPathEp`), `cisco:dc:aci:class` (`fvRsVm`, `compVm`) | Endpoint IP/MAC, tenant, application profile, EPG, leaf path, VM name |
 | NX-OS (NX-API) | `cisco:dc:nexus9k` (`nxhostname`, `nxneighbor`) | Device names; ifIndex to interface name for CDP-connected ports |
@@ -235,6 +235,8 @@ Observer strings in graph edges (`<source>:<observer>[:<in_if>><out_if>]`) are r
 
 **Candidate path (UI).** For a selected `communicates_with` edge the UI builds an ordered candidate path: client entity → its attachment (pod → node → node's leaf and port; VM/endpoint → ACI or ND attachment) → shortest CDP path between the two attachment switches → server attachment → server entity. Each hop is marked *observed* when an observer string names that device (and interface when given), otherwise *not observed*. Where no collected link connects two segments (for example between the NX-OS fabric and ACI, or to the internet edge), the path shows an explicit gap. Candidate paths come from inventory and are never presented as proof that packets took that route; ECMP, asymmetric routing and sampling are noted.
 
+**Virtual switching, path trace, device flows.** `adm_vsphere_topology(1|2)` adds `hypervisor` and `virtual_switch` devices and `virtual_port` links derived from APIC VMM classes (`compHv`, `fvRsHyper`, `fvCEp`, `compVm`, `fvRsVm`, `fvRsCEpToPathEp`). Readers concatenate these rows with the topology rows; they are not part of `adm_topology`/`adm_topology_v2`. The map reads `adm_topology_with_vsphere` (virtual ports, their switches and hosts) as its two halves side by side, `adm_topology` and `adm_map_vsphere_inventory`, concatenated in the macro's order. `adm_map_vsphere_inventory` is `adm_vsphere_vmm_rows("1", "1") | adm_vsphere_rows_finish` plus the map filter; it omits the `adm_vsphere_uplinks` append, whose rows the filter drops. The map names an unresolved address only when exactly one vNIC carries that IP and MAC. Inventory is current state: `adm_topology` reads each ACI object (APIC, class, dn) and NX-OS record (device, command, content apart from the poll timestamp) once, newest first, before its window-wide eventstats, so a 7-day window costs about one poll cycle of assembly and keeps every device and link seen in the window. The map's VMM read is `adm_vsphere_topology("1", "1")`: at most `adm_topology_inventory_recent_seconds` (3600 s, twelve default 300 s polls) before the window end, plus the newest `compHv` per hypervisor from the rest of the window, so hypervisors and VMM switches seen only earlier stay. `adm_vsphere_topology(1)` (Device page, Impact, path trace) keeps the full window. `adm_path_trace(src_ip,dst_ip)` returns bounded evidence for one address pair (every matching flow record aggregated per observer and direction, so `records` is a total; at most `adm_path_trace_observer_limit` rows), and `adm_device_flows(device)` returns top-N aggregated conversations observed at one device. See [VSPHERE_SWITCH_DESIGN.md](VSPHERE_SWITCH_DESIGN.md).
+
 ## Access paths, ACI fabric and contracts (v2, pilot: single ACI fabric)
 
 External clients (for example a Windows VM in an ACI EPG) reach a Kubernetes app through a Cilium LoadBalancer VIP (LB IPAM, BGP), a NodePort, Cilium Ingress/Gateway API (Envoy; the only supported ingress), or a pod IP directly, with `externalTrafficPolicy` `Cluster` or `Local` and Cilium load balancing in SNAT, DSR or hybrid mode. The NX-OS design above stays supported; the pilot path is ACI. Validated by `tests/splunk/test_aci.py` against `fixtures/raw-aci/`.
@@ -248,6 +250,9 @@ External clients (for example a Windows VM in an ACI EPG) reach a Kubernetes app
 | Kubernetes objects (Helm `clusterReceiver.k8sObjects`) | `kube:object:services`, `kube:object:endpointslices`, `kube:object:ingresses`, `kube:object:httproutes`, `kube:object:nodes` (`kube:object:gateways` is not needed: Cilium's Gateway Service names its Gateway as owner) | Service frontends, backends, routes, Cilium per-node ingress IP. |
 | ACI fabric (DC Networking `classInfo`) | `cisco:dc:aci:class` | `topSystem` (names, roles, OOB addresses), `fabricLink` and fabric `lldpAdjEp` (leaf↔spine), host `lldpAdjEp` (attachment by LLDP system name), contracts and external EPG subnets, ACL-log records. `fabricNode` and `vzFilter` are not used (the subject-filter relation carries the filter DN). |
 | ACI NetFlow v9 via Stream, Nexus Dashboard flows for the ACI site | `stream:netflow`, `cisco:dc:nd:flows` | Fabric observations; either or both. ACI exports from each leaf's OOB address, so `exporter_ip` maps to `topSystem.oobMgmtAddr`; records carry the ingress interface only. |
+| ACI VMM and host adjacency (DC Networking `classInfo_faultInst` + `classInfo_adm`) | `cisco:dc:aci:class` | `compHv`, `fvRsHyper`, `compVm`, `fvRsVm`, `fvCEp`, `fvRsCEpToPathEp` (vSphere host, VDS, VM port) and `hvsAdj`, `compHpNic` (host uplinks) for `adm_vsphere_topology`/`adm_vsphere_uplinks`. `compVNic` is collected but unused. See [VSPHERE_SWITCH_DESIGN.md](VSPHERE_SWITCH_DESIGN.md). |
+| ACI spine evidence (`classInfo_adm`) | `cisco:dc:aci:class` | `isisAdjEp` (up adjacencies) and `coopEpRec` (spine COOP records) for `adm_fabric_path_evidence`. Spines export no NetFlow; spine hops stay inferred. |
+| VMware VDS IPFIX via Stream | `stream:netflow` | ESXi host exporter (`exporter_ip` = `compHv.mgmtIp`); marks the VDS hop observed. V2 profile `vmware_vds_ipfix`. |
 
 ### Identity
 
@@ -313,6 +318,8 @@ All ship `disabled = 1` and `dispatchAs = owner`. Builders and the rollup have `
 | ADM - Service backends prune | `14 3 * * *` | — | — | — |
 | ADM - Service routes prune | `19 3 * * *` | — | — | — |
 | ADM - ACI policy prune | `24 3 * * *` | — | — | — |
+| ADM - Qualified graph rollup | `2-57/5 * * * *` | `_index_latest` = slice end + lateness | `-7m@m` → `-2m@m` | continuous, priority higher; see [Qualified graph summaries](#qualified-graph-summaries) |
+| ADM - Qualified graph backfill | manual | as above | chosen range | unscheduled |
 
 The Cisco contract adds the following separately staged searches. Their shipped
 defaults are disabled; the public readers remain on V1. Follow the
@@ -388,6 +395,91 @@ stability check. The post-replay summary-index comparison of every expected
 `rollup_id` and its `records` count is the actual verification. See [Recovery
 and replay](RECOVERY.md#automated-assisted-recovery-core-action) for the
 manual fallback, claim behavior, and native catch-up qualification result.
+
+## Qualified graph summaries
+
+Opt-in (`adm_identity.conf [summary] enabled = true`) for the qualified reader
+(`admqualified`). **ADM - Qualified graph rollup** (`2-57/5`, event time
+`-7m@m` → `-2m@m`, continuous, `max_concurrent = 1`) qualifies one closed
+absolute five-minute slice with exactly the interactive rules (complete
+ownership manifests, span containment, ownership and service at each native
+observation time, frontend intents, namespace-claim checks; no name merges) and
+`collect`s the result to `adm_summary_v2` as `source=adm:qualified`
+(`stash`, not licensed). Evidence is accepted up to `lateness` (default and
+maximum 90 s) after the slice ends (`_index_latest`), and the run starts 30 s
+after that.
+
+Rows per slice (`q_kind`): `m` manifest (row count, status, spans, exclusion
+counters, raw native rows read), `s` service, `c` call pair, `w` span-to-pod
+membership, `f` flow group (endpoint IDs with pod UID or scoped address,
+addresses, profile, observer, transport, ownership/service status) with
+records, raw bytes/packets, dropped verdicts, first/last seen, port uniformity,
+sensor names and the newest 8 observations. Each row lists the root services
+it is relevant to (`q_roots`: the selected service's call component, pods bound
+to it, its frontend intents), so one `TERM()` filter plus `stats` reads any
+service. Run identity = slice, horizon and a fingerprint of the identity and
+network configuration. Replays are skipped when a complete identical run exists;
+readers use only complete runs (row count = manifest), prefer the largest
+horizon per slice and `dedup q_doc` if a run was collected twice. Changing
+`adm_identity.conf` changes the fingerprint: re-backfill.
+
+Graph windows over 300 s are snapped down to a five-minute boundary and read
+from summaries (exact totals; no slice sampling), plus at most the two newest
+unsummarized slices and the current partial slice read raw, merged by
+qualified ID. Up to four other unsummarized slices are read raw; more are
+sampled (6) and the map shows **Summary coverage X%**. Without summaries the
+previous sampled reader remains (**Sampled X%**). Meta: `read_coverage`,
+`summary_slices`, `summary_seconds`, `summary_through`, `raw_tail_seconds`.
+Summaries keep counts exact; inspector tuples are the newest 8 per group from
+the newest slice. Long windows trim the lightest relationships to the
+500-node/2,000-edge budget and say so. The map loads progressively through
+`adm_application_graph_read(5)` (`tail=deferred`: summaries only, chip
+"Summarized · newest N min loading…"), then reads the full window with
+`adm_application_graph_read(4)`; override both wrappers (see
+[qualified native network](operators/qualified-native-network.md)). Viewers
+need search access to `adm_summary_v2`. Raw slices over the interactive
+50,000-row evidence budget are reported as unread, not guessed.
+
+**Retention.** Size `adm_summary_v2` for the longest map window plus backfill
+slack: Cloud `acs indexes create --name adm_summary_v2 --data-type event
+--searchable-days 35`; Enterprise `indexes.conf` `frozenTimePeriodInSecs =
+3024000`. Live volume ≈ 150 rows (≈ 0.25 MB) per slice, ≈ 43k rows/day.
+
+**Backfill** (new install; runs as the caller, existing complete slices are
+skipped; at most 24 h per search, oldest first, aligned to 5 minutes):
+
+```spl
+| admqualified mode=rollup start=<epoch> as_of=<epoch+86400> | collect index=adm_summary_v2 source="adm:qualified"
+```
+
+Repeat per day for 7 days, or run **ADM - Qualified graph backfill** with a
+chosen range. `[summary] lateness` (0–90 s, default 90) is the horizon of the
+scheduled rollup, which summarizes the slice that ended two minutes before it
+runs; larger values are rejected. To admit events indexed later, re-run a
+closed range with an explicit lateness (0–86400 s); the larger horizon
+supersedes:
+
+```spl
+| `adm_qualified_rollup(3600)` | collect index=adm_summary_v2 source="adm:qualified"
+```
+
+(run over a range that ended more than lateness + 30 s ago; in the backfill
+saved search, replace `adm_qualified_rollup` with `adm_qualified_rollup(<s>)`).
+
+**Health.** `| admqualified mode=summary_health` (`adm_qualified_summary_health`,
+Admin → Data health → Graph summaries): status `ok|lagging|gaps|no_summaries|disabled`,
+newest summarized slice, lag, due vs. summarized slices and missing slices in
+24 h, empty slices, superseded/incomplete and duplicated runs.
+
+**Scheduler load.** One search per 5 minutes plus two nested evidence jobs.
+Live (≈ 20–28k native and ≈ 10k span/interval events per slice): 19 s typical,
+25 s average and 69 s maximum while a backfill shared the search head; backfill
+≈ 6 s/slice with `slice_workers = 2` (24 h ≈ 30 min, 7 d ≈ 75 min). A read over
+50,000 rows splits in halves (down to 2 s; ≤ 200,000 rows per family per
+slice), as seen live for a 71k-record NetFlow burst. At 10× expect ≈ 2–3 min
+per slice: still inside the period, but measure before relying on it; above
+that, shorten `slice_workers` contention or move the rollup to a dedicated
+search head. Map reads: one manifest and one aggregate `stats` (2.7–3.9 s).
 
 ## Application catalog and exact Find
 

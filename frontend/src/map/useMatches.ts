@@ -41,7 +41,7 @@ export function useMatches(
       );
     });
     const edges = layout.edges
-      .filter((r) => matchEdges.has(r.id))
+      .filter((r) => r.members.some((id) => matchEdges.has(id)))
       .sort((a, b) => a.mid.x - b.mid.x || a.mid.y - b.mid.y)
       .map((r) => r.id);
     return [

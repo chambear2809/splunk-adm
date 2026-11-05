@@ -1,9 +1,9 @@
 import { pageURL } from "./app/urlState";
 import { useEffect, useState } from "react";
-import TableExport from "@splunk/react-ui/Table";
-import { toolkitDefault } from "./app/interop";
+import ToolkitTable from "./SimpleTable";
 import { RefreshCw, X } from "lucide-react";
 import {
+  evaluatedAt,
   loadHealth,
   jobStatus,
   sourceStatus,
@@ -16,7 +16,6 @@ const time = (value?: number) =>
   value
     ? `${formatUtc(new Date(value * 1000).toISOString())} UTC`
     : "Not observed";
-const ToolkitTable = toolkitDefault(TableExport);
 
 type HealthTableProps = {
   headers: string[];
@@ -59,8 +58,18 @@ export function HealthResults({ report }: { report: HealthReport }) {
   return (
     <>
       <p className="muted small">
-        Checked {time(report.checkedAt)}. App-wide evidence from the last 24
-        hours for quality and seven days for source receipt and scheduled runs;
+        {report.asOf !== undefined ? (
+          <>
+            As of {time(report.asOf)}: the 24 hours of quality and seven days of
+            receipt and scheduled runs before it; job configuration is current.
+          </>
+        ) : (
+          <>
+            Checked {time(report.checkedAt)}. App-wide evidence from the last 24
+            hours for quality and seven days for source receipt and scheduled
+            runs;
+          </>
+        )}{" "}
         independent of map filters.
       </p>
       {report.warnings.length > 0 && (
@@ -108,7 +117,7 @@ export function HealthResults({ report }: { report: HealthReport }) {
           key: s.name,
           cells: [
             s.name,
-            `${sourceStatus(s, report.checkedAt)}${s.staleAfterSeconds ? ` (freshness ${s.staleAfterSeconds}s)` : ""}`,
+            `${sourceStatus(s, evaluatedAt(report))}${s.staleAfterSeconds ? ` (freshness ${s.staleAfterSeconds}s)` : ""}`,
             `${time(s.latestEvent)}\n${time(s.latestIndexed)}`,
             `${s.records ?? "Unknown"} / ${s.maxIngestLag === undefined ? "Unknown" : `${Math.round(s.maxIngestLag)}s`}`,
             [
@@ -217,7 +226,7 @@ export function HealthResults({ report }: { report: HealthReport }) {
           key: j.name,
           cells: [
             j.name.replace(/^ADM - /, ""),
-            jobStatus(j, report.checkedAt),
+            jobStatus(j, evaluatedAt(report)),
             `${time(j.lastRun)}\n${time(j.lastSuccess)}`,
             `${j.failures ?? "Unknown"} / ${j.skips ?? "Unknown"}`,
           ],
@@ -226,15 +235,23 @@ export function HealthResults({ report }: { report: HealthReport }) {
     </>
   );
 }
-export function useHealthData(client?: SearchClient, live = false) {
-  const shared = useHealthStatus();
+/** `asOf`: evaluate a past window's end instead of the shared current report. */
+export function useHealthData(
+  client?: SearchClient,
+  live = false,
+  asOf?: number,
+) {
+  const sharedState = useHealthStatus();
+  const shared = asOf === undefined ? sharedState : undefined;
+  const deployment = sharedState?.deployment;
+  const waiting = asOf !== undefined && !!sharedState && !deployment;
   const [report, setReport] = useState<HealthReport>();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     if (shared) return;
-    if (!live || !client) {
+    if (!live || !client || waiting) {
       setReport(undefined);
       setBusy(false);
       return;
@@ -243,7 +260,7 @@ export function useHealthData(client?: SearchClient, live = false) {
     setBusy(true);
     setError("");
     setReport(undefined);
-    loadHealth(client, controller.signal)
+    loadHealth(client, controller.signal, deployment, "full", asOf)
       .then((result) => {
         if (!controller.signal.aborted) setReport(result);
       })
@@ -255,7 +272,7 @@ export function useHealthData(client?: SearchClient, live = false) {
         if (!controller.signal.aborted) setBusy(false);
       });
     return () => controller.abort();
-  }, [client, live, revision, shared]);
+  }, [client, live, revision, shared, asOf, deployment, waiting]);
   return {
     report: shared?.report ?? report,
     error: shared?.error ?? error,

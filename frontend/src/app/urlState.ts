@@ -10,8 +10,30 @@ export const PAGES = [
   "data_health",
   "setup",
   "help",
+  "device",
+  "impact",
 ] as const;
 export type Page = (typeof PAGES)[number];
+/** Top-level navigation sections; each owns one or more Splunk views. */
+export type Section = "explore" | "map" | "admin" | "help";
+export const SECTION_OF: Record<Page, Section> = {
+  applications: "explore",
+  endpoints: "explore",
+  device: "explore",
+  impact: "explore",
+  map: "map",
+  setup: "admin",
+  data_health: "admin",
+  help: "help",
+};
+/** Friendly aliases resolve to the Splunk view that renders the section. */
+const PAGE_ALIASES: Record<string, Page> = {
+  explore: "applications",
+  admin: "setup",
+};
+/** Endpoint, device and trace identifiers: a name, IPv4/IPv6 or DN-like path. */
+const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,254}$/;
+export const isSafeIdentifier = (value: string) => IDENTIFIER.test(value);
 export type UrlState = {
   args: GraphArgs;
   earliest: string;
@@ -20,6 +42,10 @@ export type UrlState = {
   scenario: DemoScenario;
   tab: "network" | "services" | "devices" | "table";
   query: string;
+  /** Requested source → destination trace (Map `trace_src` / `trace_dst`). */
+  trace?: { src: string; dst: string };
+  /** Device lookup target (Device page `id`). */
+  device?: string;
   appd?: {
     applicationId: string;
     snapshotId: string;
@@ -38,8 +64,9 @@ const defaults: GraphArgs = {
 /** Reject unknown views before starting any search or rendering a page. */
 export function pageFromPath(pathname: string): Page | "dependency_map" {
   const match = /^\/(?:[^/]+\/)*app\/splunk_adm\/([^/]+)\/?$/.exec(pathname);
-  const name = match?.[1];
-  if (name === "dependency_map") return name;
+  const raw = match?.[1];
+  if (raw === "dependency_map") return raw;
+  const name = (raw && PAGE_ALIASES[raw]) ?? raw;
   if (!PAGES.includes(name as Page))
     throw new Error("Unsupported Application Atlas page.");
   return name as Page;
@@ -49,7 +76,14 @@ export function parseUrlState(
   params: URLSearchParams,
   inSplunk = false,
 ): UrlState {
-  const mode = params.get("mode") ?? (inSplunk ? "live" : "demo");
+  // Demo data ships only with the development server; the packaged app
+  // ignores ?mode=demo and always reads live searches.
+  // Impact's mode=fails|depends is a view choice, not a data mode.
+  const rawMode = params.get("mode");
+  const mode = __ADM_SPLUNK_BUILD__
+    ? "live"
+    : ((rawMode === "fails" || rawMode === "depends" ? null : rawMode) ??
+      (inSplunk ? "live" : "demo"));
   const args =
     mode === "live"
       ? { service: "", environment: "", cluster: "", namespace: "" }
@@ -61,7 +95,7 @@ export function parseUrlState(
     if (error) throw new Error(error);
     args[key] = value;
   }
-  const earliest = params.get("earliest") ?? "-1h";
+  const earliest = params.get("earliest") ?? "-15m";
   const latest = params.get("latest") ?? "now";
   if (!isSafeTime(earliest) || !isSafeTime(latest))
     throw new Error("Unsupported time window.");
@@ -111,6 +145,17 @@ export function parseUrlState(
       /^(unmapped|unknown|reserved)(:|$)/i.test(appdValues[4] ?? ""))
   )
     throw new Error("Invalid Controller snapshot link.");
+  const traceSrc = params.get("trace_src");
+  const traceDst = params.get("trace_dst");
+  if (
+    (traceSrc !== null || traceDst !== null) &&
+    (!isSafeIdentifier(traceSrc ?? "") || !isSafeIdentifier(traceDst ?? ""))
+  )
+    throw new Error("Invalid trace endpoints.");
+  // `id` is shared with other views' deep links; only a safe value is a device.
+  const rawDevice = params.get("id");
+  const device =
+    rawDevice !== null && isSafeIdentifier(rawDevice) ? rawDevice : undefined;
   const appd = appdValues[0]
     ? {
         applicationId: appdValues[0],
@@ -122,6 +167,10 @@ export function parseUrlState(
     : undefined;
   return {
     ...(appd ? { appd } : {}),
+    ...(traceSrc && traceDst
+      ? { trace: { src: traceSrc, dst: traceDst } }
+      : {}),
+    ...(device ? { device } : {}),
     args,
     earliest,
     latest,
@@ -195,6 +244,21 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
       }
     }
   }
+  if (clean.has("trace_src") || clean.has("trace_dst")) {
+    const probe = new URLSearchParams();
+    for (const key of ["trace_src", "trace_dst"]) {
+      const value = clean.get(key);
+      if (value !== null) probe.set(key, value);
+    }
+    try {
+      parseUrlState(probe, inSplunk);
+    } catch {
+      for (const key of ["trace_src", "trace_dst"]) {
+        clean.delete(key);
+        dropped.push(key);
+      }
+    }
+  }
   try {
     parseUrlState(clean, inSplunk);
   } catch {
@@ -222,6 +286,11 @@ export function stateParams(state: UrlState): URLSearchParams {
     tab: state.tab,
   });
   if (state.query) params.set("q", state.query);
+  if (state.trace) {
+    params.set("trace_src", state.trace.src);
+    params.set("trace_dst", state.trace.dst);
+  }
+  if (state.device) params.set("id", state.device);
   if (state.appd) {
     params.set("appd_app", state.appd.applicationId);
     params.set("appd_snapshot", state.appd.snapshotId);
@@ -256,6 +325,8 @@ export function writeUrlState(state: UrlState) {
       "appd_at",
       "appd_authority",
       "appd_scope",
+      "trace_src",
+      "trace_dst",
     ])
       params.delete(key);
     stateParams(state).forEach((value, key) => params.set(key, value));

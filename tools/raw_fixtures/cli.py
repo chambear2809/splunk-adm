@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from . import aci, common, networking, nxos
+from . import aci, common, networking, nxos, vmware
 
 
 def main(description: str, argv: list[str] | None = None) -> int:
@@ -13,9 +13,9 @@ def main(description: str, argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--scenario",
-        choices=("nxos", "aci", "aci-prev", "networking"),
+        choices=("nxos", "aci", "aci-prev", "networking", "vmware"),
         default="nxos",
-        help="nxos: fixtures/raw/ (default); aci: the ACI pilot; aci-prev: derived prior window in dist/; networking: combined campus/Meraki scenario",
+        help="nxos: fixtures/raw/ (default); aci: the ACI pilot; aci-prev: derived prior window in dist/; networking: combined campus/Meraki scenario; vmware: vSphere overlay for the ACI pilot",
     )
     parser.add_argument(
         "--base-time",
@@ -31,6 +31,8 @@ def main(description: str, argv: list[str] | None = None) -> int:
     out_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
     if scenario == "networking":
         return networking.main_networking(base_time, args.output_dir)
+    if scenario == "vmware":
+        return vmware.main_vmware(out_dir)
     if scenario == "aci":
         return aci.main_aci(out_dir or common.RAW_ACI)
     if scenario == "aci-prev":

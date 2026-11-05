@@ -1,0 +1,146 @@
+/* Scale features: windowed tables, canvas edges, truncation and LOD chips. */
+.adm .atlas-vtable {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.adm .atlas-vtable-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.adm .atlas-vtable-bar h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+.adm .atlas-vtable-bar input {
+  margin-left: auto;
+  min-width: 180px;
+  padding: 4px 8px;
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+  background: var(--adm-surface);
+  color: var(--adm-ink);
+  font: inherit;
+}
+.adm .atlas-vtable-scroll {
+  overflow: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: 6px;
+  contain: strict;
+}
+/* Header and rows share one grid template, so cells always line up. */
+.adm .atlas-vtable-scroll table {
+  display: block;
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+}
+.adm .atlas-vtable-scroll thead,
+.adm .atlas-vtable-scroll tbody {
+  display: block;
+}
+.adm .atlas-vtable-scroll thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--adm-surface);
+}
+.adm .atlas-vtable-scroll tr {
+  display: grid;
+  grid-template-columns: var(--atlas-vtable-cols);
+  align-items: center;
+  min-width: 0;
+}
+.adm .atlas-vtable-scroll tr.atlas-vtable-spacer {
+  display: block;
+}
+.adm .atlas-vtable-scroll th,
+.adm .atlas-vtable-scroll td {
+  display: block;
+  min-width: 0;
+  padding: 0 8px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm .atlas-vtable-scroll th {
+  font-weight: 650;
+}
+.adm .atlas-vtable-scroll th.num,
+.adm .atlas-vtable-scroll td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.adm .atlas-vtable-scroll th.num .atlas-vtable-sort {
+  flex-direction: row-reverse;
+}
+.adm .atlas-vtable-scroll tbody tr + tr {
+  border-top: 1px solid var(--adm-line);
+}
+.adm .atlas-vtable-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.adm .atlas-edge-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.adm .map-canvas .map-svg {
+  position: relative;
+}
+.adm .atlas-scale-chips {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.adm .atlas-scale-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--adm-card-border);
+  background: var(--adm-surface);
+  color: var(--adm-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+.adm .edge.bundle .edge-line {
+  stroke: var(--adm-edge);
+  stroke-dasharray: none;
+}
+.adm .edge.bundle.blocked .edge-line {
+  stroke: var(--adm-blocked);
+}
+.adm .edge.bundle.selected .edge-line {
+  stroke: var(--adm-select-ring);
+}
+.adm .arrow.bundle-blocked {
+  fill: var(--adm-blocked);
+}
+/*
+ * With a composited edge canvas below, a will-change layer inside the SVG
+ * forces Chrome to overlap-test every SVG paint chunk on each pan (measured
+ * ~350 ms/frame at 500 cards); repainting the SVG plainly is ~16 ms.
+ */
+.adm .map-canvas.atlas-canvas-mode .map-svg [data-export-root] {
+  will-change: auto;
+}
+.adm .edge.bundle.inferred .edge-line {
+  stroke: var(--adm-forward);
+  stroke-dasharray: 6 4;
+}
+.adm .arrow.bundle-inferred {
+  fill: var(--adm-forward);
+}

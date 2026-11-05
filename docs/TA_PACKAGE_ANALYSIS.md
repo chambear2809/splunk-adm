@@ -2,7 +2,7 @@
 
 ## Inspection status
 
-Nine archives have been downloaded and inspected as files. Archives live under `research/packages/`; extracted configuration/source files are under `research/extracted/`. These local artifacts are ignored by Git. Versions, provenance, computed SHA-256 hashes, and pending packages are recorded in [the manifest](../research/package-manifest.json).
+The archives below have been downloaded and inspected as files. Archives live under `research/packages/`; extracted configuration/source files are under `research/extracted/`. These local artifacts are ignored by Git. Versions, provenance, computed SHA-256 hashes, and pending packages are recorded in [the manifest](../research/package-manifest.json).
 
 | Package | Inspected version | Artifact source |
 | --- | --- | --- |
@@ -14,6 +14,14 @@ Nine archives have been downloaded and inspected as files. Archives live under `
 | Cisco Security Cloud | 3.6.5 and 3.7.2 | Mirror baseline plus authenticated Splunkbase 3.7.2 download; 3.7.2 publisher digest verified |
 | Cisco DC Networking | 1.2.2 | Authenticated Splunkbase download; local SHA-256 matches the displayed publisher digest |
 | Splunk OpenTelemetry Collector for Kubernetes (Helm chart) | 0.161.0 | Publisher's GitHub release; local SHA-256 matches its release digest; rendered statically with `helm template` only |
+| Cisco Enterprise Networking Add-on / App / NetFlow Add-on | 4.0.60 / 4.0.20 / 4.0.0 | See manifest |
+| Cisco Meraki Add-on | 3.5.0 | See manifest |
+| Cisco ThousandEyes App | 0.9.0 | See manifest |
+| Cisco Splunk Add-on for AppDynamics | 3.3.0 | See manifest |
+| Splunk Add-on for VMware (+ SA-Hydra 4.3.0) | 4.2.1 | Authenticated Splunkbase download; no publisher digest |
+| Splunk Add-on for VMware Extractions | 4.0.4 | Authenticated Splunkbase download; no publisher digest |
+| Splunk Add-on for VMware ESXi Logs | 4.2.2 | Mirror; byte count matches Splunkbase API; no publisher digest. Syslog only, no topology value |
+| Cisco Intersight Add-on | 3.2.2 | Authenticated Splunkbase download; no publisher digest |
 
 The mirror references come from [Splunk's package configuration](https://github.com/splunk/security_content/blob/b3eabf7af2e7f556838b18b3c08b07e33f058c50/contentctl.yml). OTel comes from [the publisher release](https://github.com/signalfx/splunk-otel-collector/releases/tag/v0.162.0); DC Networking comes from [its Splunkbase listing](https://splunkbase.splunk.com/app/7777). DC Networking extraction retains regular static source/configuration files up to 5 MB and excludes symlinks and executables. No add-on was installed and no downloaded scripts or collector binaries were executed. Package inspection identifies extraction and collection behavior; representative events are still required to verify which fields the deployed sources actually emit.
 
@@ -126,6 +134,12 @@ Base: `research/extracted/cisco-dc-networking_122/cisco_dc_networking_app_for_sp
 ACI events are flattened key/value records, while ND events retain JSON. Keep repeated child addresses and interface statistics as separate associations when normalizing. `default/props.conf:203` coalesces ACI `ip`/`addr`, but its generic `dest` is the APIC host. ND flow `dvc` is the Dashboard host. These aliases must not be mistaken for the communicating endpoint or traversed switch. ND endpoint `_time` is collection time (`DATETIME_CONFIG=CURRENT`), so distinguish observed change timestamps from collection time.
 
 The package supplies network context; no automatic AppDynamics/OTel/Kubernetes identity join was found. It also does not prove the entire routed path of an observed flow. ACI queries paginate, and ND flow collection uses time windows and checkpoints; validate API completeness, retention, duplicates and polling lag with the enabled inputs.
+
+## VMware and Intersight: staged, not yet consumed
+
+- Splunk Add-on for VMware 4.2.1: `vmware:inv:*` (index `vmware-inv`), `vmware:perf:*`, `vmware:events`/`vmware:tasks`. Host `config.network` only with `hostsystem_inv_config = config.network`; no `DistributedVirtualPortgroup` inventory, so no VDS portgroup VLANs. Field provenance: `fixtures/raw-vmware/FIELDS.md`. Atlas has no SPL for it yet; vSphere topology comes from APIC VMM classes.
+- Cisco Intersight 3.2.2: `cisco:intersight:*` (index `intersight`), including network elements, ports and adapter host Ethernet interfaces. Candidate for the UCS FI hop; not consumed yet.
+- VMware ESXi Logs 4.2.2: syslog sourcetypes only; not used.
 
 ## Switch coverage
 

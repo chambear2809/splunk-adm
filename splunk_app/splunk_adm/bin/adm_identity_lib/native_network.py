@@ -408,7 +408,10 @@ def _counter(value, label):
     return value
 
 
-def normalize_records(rows, profiles, start, as_of):
+def normalize_records(
+    rows, profiles, start, as_of, horizon=None, max_rows=_MAX_ROWS, max_bytes=None
+):
+    """``horizon`` (default ``as_of``) is the exclusive receipt bound."""
     if (
         type(start) not in (int, float)
         or type(as_of) not in (int, float)
@@ -417,16 +420,16 @@ def normalize_records(rows, profiles, start, as_of):
         or not (start < as_of <= start + _MAX_WINDOW)
     ):
         _fail("invalid native window")
-    if not isinstance(rows, list) or len(rows) > _MAX_ROWS:
+    known = as_of if horizon is None else horizon
+    if type(known) not in (int, float) or not math.isfinite(known) or known < as_of:
+        _fail("invalid native horizon")
+    if not isinstance(rows, list) or len(rows) > max_rows:
         _fail("native input exceeds budget")
-    if (
-        sum(
-            len(row.get("_raw", ""))
-            for row in rows
-            if isinstance(row, dict) and isinstance(row.get("_raw", ""), str)
-        )
-        > 50 * 1024 * 1024
-    ):
+    if sum(
+        len(row.get("_raw", ""))
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("_raw", ""), str)
+    ) > (max_bytes or 50 * 1024 * 1024):
         _fail("native raw input exceeds budget")
     by_provenance = {}
     for profile in profiles:
@@ -487,7 +490,7 @@ def normalize_records(rows, profiles, start, as_of):
             if not candidates:
                 _fail("unknown native provenance")
             event, receipt = _metadata(row, candidates[0])
-            if receipt >= as_of:
+            if receipt >= known:
                 raise NativeEvidenceError("future receipt")
             if not (start <= event < as_of):
                 raise NativeEvidenceError("event outside window")

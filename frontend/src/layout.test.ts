@@ -1,3 +1,4 @@
+import { syntheticGraph } from "./scale/generate";
 import { describe, expect, it } from "vitest";
 import { indexGraph, parseGraph, type Graph } from "./graph";
 import { computeLayout, type Layout } from "./layout";
@@ -543,14 +544,68 @@ describe("layout performance", () => {
   it("lays out 500 nodes and 2,000 edges in under 200 ms", () => {
     const big = largeGraph();
     const idx = indexGraph(big);
-    computeLayout(big, idx, "network"); // warm up the JIT
+    const full = { aggregate: false };
+    computeLayout(big, idx, "network", full); // warm up the JIT
     const start = performance.now();
-    const layout = computeLayout(big, idx, "network");
+    const layout = computeLayout(big, idx, "network", full);
     const ms = performance.now() - start;
     expect(big.nodes).toHaveLength(500);
     expect(big.edges).toHaveLength(2000);
     expect(layout.items.size).toBe(500);
     assertSound(layout);
     expect(ms).toBeLessThan(200);
+  });
+  it("summarizes the largest groups past the card budget and bundles lines", () => {
+    const big = largeGraph();
+    const layout = computeLayout(big, indexGraph(big), "network");
+    const cards = layout.groups.reduce((n, g) => n + g.items.length, 0);
+    expect(layout.aggregated).toBeGreaterThan(0);
+    expect(cards).toBeLessThanOrEqual(300);
+    // Every node still resolves to a card.
+    for (const n of big.nodes) expect(layout.items.has(n.id)).toBe(true);
+    const summaries = layout.groups.flatMap((g) =>
+      g.items.filter((it) => it.role === "summary"),
+    );
+    expect(
+      summaries.every((it) =>
+        /^\d[\d,]* (pods|endpoints|nodes)$/.test(it.label!),
+      ),
+    ).toBe(true);
+    // Bundled lines keep every member and carry a volume width.
+    const members = layout.edges.reduce((n, e) => n + e.members.length, 0);
+    expect(layout.edges.length).toBeLessThan(members);
+    expect(layout.edges.some((e) => (e.bundle ?? 0) > 1)).toBe(true);
+    expect(layout.edges.every((e) => e.width! >= 1.25 && e.width! <= 7)).toBe(
+      true,
+    );
+    assertSound(layout);
+  });
+  it("expands a summarized group on request", () => {
+    const big = largeGraph();
+    const idx = indexGraph(big);
+    const first = computeLayout(big, idx, "network");
+    const group = first.groups.find((g) => g.collapsed)!;
+    const next = computeLayout(big, idx, "network", {
+      expanded: new Set([group.id]),
+    });
+    expect(next.groups.find((g) => g.id === group.id)!.collapsed).toBe(false);
+  });
+  it("lays out 4,000 nodes and 10,000 edges with straight lines in under 1 s", () => {
+    const big = syntheticGraph({ nodes: 4000, edges: 10000 });
+    const idx = indexGraph(big);
+    const full = computeLayout(big, idx, "network", { aggregate: false });
+    expect(full.straight).toBe(true);
+    assertSound(full);
+    const start = performance.now();
+    const lod = computeLayout(big, idx, "network");
+    expect(performance.now() - start).toBeLessThan(1000);
+    expect(
+      // The budget is a target: one card per group is the floor, and every
+      // group that can be summarized is.
+      lod.groups.reduce((n, g) => n + g.items.length, 0),
+    ).toBeLessThan(big.nodes.length / 8);
+    expect(lod.groups.every((g) => g.collapsed || g.items.length <= 2)).toBe(
+      true,
+    );
   });
 });

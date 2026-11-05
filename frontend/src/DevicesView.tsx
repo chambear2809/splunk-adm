@@ -1,33 +1,46 @@
-import { useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
-  ArrowRight,
+  Boxes,
   BrickWall,
+  Cable,
+  ChevronDown,
+  ChevronRight,
+  CircleDot,
   Network,
   Server,
   Waypoints,
 } from "lucide-react";
 import type { Graph, GraphEdge, GraphIndex, TrafficObservation } from "./graph";
-import {
-  contractCell,
-  edgeIdentity,
-  plural,
-  portLabel,
-  prettyBytes,
-} from "./glossary";
-import { IdentityBadge } from "./Inspector";
+import { plural, prettyBytes } from "./glossary";
 import { AciFabricPanel } from "./AciFabricPanel";
+import "./devicesTab.css";
 import type { SearchClient } from "./data/searchClient";
+import { pageURL, type Page } from "./app/urlState";
+import { VirtualTable, type VirtualColumn } from "./scale/VirtualTable";
 import {
   deviceSummaries,
   deviceKindLabel,
   fabricLabel,
-  type DeviceSummary,
+  type Device,
   type TopologyIndex,
 } from "./topology";
+import {
+  TOP_CONVERSATIONS,
+  VIRTUALIZE_DEVICES_ABOVE,
+  conversationDetail,
+  formatLastSeen,
+  groupDeviceRows,
+  ipNames,
+  observerRow,
+  summaryRow,
+  unseenRow,
+  windowByHeights,
+  type Conversation,
+  type DeviceGroup,
+  type DeviceRowModel,
+} from "./devicesTab";
 
 export const MAX_ATTACHMENT_REFERENCES = 32;
-export const MAX_OBSERVER_GROUPS = 256;
-export const MAX_OBSERVER_ENTRIES = 50;
 
 export interface TrafficObserverGroup {
   key: string;
@@ -113,24 +126,7 @@ export function trafficObserverGroups(graph: Graph): TrafficObserverGroup[] {
   return [...groups.values()].sort((a, b) => a.key.localeCompare(b.key));
 }
 
-const ROLE_LABEL: Record<DeviceSummary["role"], string> = {
-  firewall: "Firewall",
-  switch: "Switch",
-  fabric: "Fabric (Nexus Dashboard)",
-  host: "Kubernetes node (Isovalent)",
-};
-
-function RoleIcon({ role }: { role: DeviceSummary["role"] }) {
-  const p = { size: 16, "aria-hidden": true } as const;
-  if (role === "firewall") return <BrickWall {...p} />;
-  if (role === "host") return <Server {...p} />;
-  if (role === "fabric") return <Waypoints {...p} />;
-  return <Network {...p} />;
-}
-
-function inventoryDetails(
-  device: NonNullable<DeviceSummary["device"]>,
-): string {
+function inventoryDetails(device: Device): string {
   const fields = [
     device.sources.length ? `Source ${device.sources.join(", ")}` : undefined,
     device.mapping_status ? `Mapping ${device.mapping_status}` : undefined,
@@ -188,187 +184,264 @@ function inventoryDetails(
   return fields.join(" · ");
 }
 
-function Conversations({
-  edges,
-  index,
-  selected,
-  onSelect,
-}: {
-  edges: GraphEdge[];
-  index: GraphIndex;
-  selected?: string;
-  onSelect: (id: string) => void;
-}) {
-  const node = (id: string) => index.node.get(id);
-  const sorted = [...edges].sort(
-    (a, b) =>
-      (a.traffic_observations?.length || b.traffic_observations?.length
-        ? 0
-        : (b.bytes ?? -1) - (a.bytes ?? -1)) || a.id.localeCompare(b.id),
-  );
-  return (
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">Client → Server</th>
-          <th scope="col">Port</th>
-          <th scope="col">Contract</th>
-          <th scope="col" className="num">
-            Bytes
-          </th>
-          <th scope="col">Identity</th>
-        </tr>
-      </thead>
-      <tbody>
-        {sorted.map((e) => (
-          <tr key={e.id} className={selected === e.id ? "selected" : ""}>
-            <td>
-              <button className="link" onClick={() => onSelect(e.id)}>
-                {node(e.source)?.label}
-                {e.direction_basis === "unknown" ? (
-                  " ↔ "
-                ) : (
-                  <ArrowRight size={13} aria-label="to" />
-                )}
-                {node(e.target)?.label}
-              </button>
-            </td>
-            <td>{portLabel(e)}</td>
-            <td>{contractCell(e)}</td>
-            <td className="num">
-              {e.traffic_observations?.length
-                ? "See observations"
-                : e.bytes !== undefined
-                  ? prettyBytes(e.bytes)
-                  : "—"}
-            </td>
-            <td>
-              {e.acl_action === "drop" ? (
-                <span className="status blocked">Blocked</span>
-              ) : (
-                <IdentityBadge state={edgeIdentity(e, node)} />
-              )}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+const currentParams = () =>
+  typeof location === "undefined"
+    ? new URLSearchParams()
+    : new URLSearchParams(location.search);
+
+/** Same-mode link to an Atlas page, e.g. /device?id=… */
+function atlasHref(page: string, key: string, value: string): string {
+  const next = new URLSearchParams();
+  const mode = currentParams().get("mode");
+  if (mode) next.set("mode", mode);
+  next.set(key, value);
+  // The impact page is registered separately; pageURL only joins the path.
+  return pageURL(page as Page, next);
+}
+export const deviceHref = (id: string) => atlasHref("device", "id", id);
+export const impactHref = (element: string) =>
+  atlasHref("impact", "element", element);
+
+function GroupIcon({ group }: { group: DeviceGroup }) {
+  const p = { size: 16, "aria-hidden": true } as const;
+  if (group === "Leaf") return <Network {...p} />;
+  if (group === "Spine") return <Waypoints {...p} />;
+  if (group === "FI") return <Cable {...p} />;
+  if (group === "Host/VDS") return <Server {...p} />;
+  if (group === "K8s node/Cilium") return <Boxes {...p} />;
+  if (group === "Firewall") return <BrickWall {...p} />;
+  return <CircleDot {...p} />;
+}
+
+const endpointCell = (
+  endpoint: Conversation["source"],
+  edgeId: string,
+  onSelect: (id: string) => void,
+) => (
+  <button
+    type="button"
+    className="link device-conv-endpoint"
+    title={endpoint.ip}
+    onClick={() => onSelect(edgeId)}
+  >
+    {endpoint.label}
+  </button>
+);
+
+function useConversationColumns(
+  onSelect: (id: string) => void,
+): VirtualColumn<Conversation>[] {
+  return useMemo(
+    () => [
+      {
+        key: "source",
+        header: "Source",
+        width: 1.4,
+        render: (c) => endpointCell(c.source, c.edgeId, onSelect),
+        sortValue: (c) => c.source.label,
+        filterText: (c) => `${c.source.label} ${c.source.ip ?? ""}`,
+      },
+      {
+        key: "destination",
+        header: "Destination",
+        width: 1.4,
+        render: (c) => endpointCell(c.destination, c.edgeId, onSelect),
+        sortValue: (c) => c.destination.label,
+        filterText: (c) => `${c.destination.label} ${c.destination.ip ?? ""}`,
+      },
+      {
+        key: "service",
+        header: "Service",
+        headerTitle: "Listener port/protocol",
+        render: (c) => (
+          <span
+            className="device-conv-service"
+            title={conversationDetail(c)}
+            tabIndex={0}
+          >
+            {c.service}
+            {c.blocked && <span className="status blocked">Blocked</span>}
+          </span>
+        ),
+        sortValue: (c) => c.port ?? Number.MAX_SAFE_INTEGER,
+        filterText: (c) => `${c.service}${c.blocked ? " blocked" : ""}`,
+      },
+      {
+        key: "flows",
+        header: "Flows",
+        num: true,
+        render: (c) => c.flows.toLocaleString(),
+        sortValue: (c) => c.flows,
+      },
+      {
+        key: "replies",
+        header: "Replies",
+        num: true,
+        render: (c) => (c.replies ? c.replies.toLocaleString() : "—"),
+        sortValue: (c) => c.replies,
+      },
+      {
+        key: "bytes",
+        header: "Bytes",
+        num: true,
+        render: (c) => (c.bytes !== undefined ? prettyBytes(c.bytes) : "—"),
+        sortValue: (c) => c.bytes ?? -1,
+      },
+      {
+        key: "last",
+        header: "Last seen",
+        width: 1.1,
+        render: (c) => formatLastSeen(c.lastSeen),
+        sortValue: (c) => c.lastSeen ?? 0,
+      },
+    ],
+    [onSelect],
   );
 }
 
-const observationTuple = (observation: TrafficObservation) => (
-  <span className="observation-tuple">
-    <span>Source {observation.source_ip ?? "unknown"}</span>
-    {observation.source_port !== undefined && (
-      <span>:{observation.source_port}</span>
-    )}
-    <span> → Destination {observation.destination_ip ?? "unknown"}</span>
-    {observation.destination_port !== undefined && (
-      <span>:{observation.destination_port}</span>
-    )}
-    {observation.transport && <span> · {observation.transport}</span>}
-    {observation.is_reply !== undefined && (
-      <span> · Reply {String(observation.is_reply)}</span>
-    )}
-  </span>
-);
+const ROW_HEIGHT = 56;
+const GROUP_HEIGHT = 38;
+const PANEL_HEIGHT = 420;
+const PANEL_TABLE_HEIGHT = 300;
+const LIST_VIEWPORT = 640;
 
-function TrafficObservers({
-  groups,
+function ConversationPanel({
+  row,
   selected,
-  onSelect,
+  columns,
+  fixedHeight,
 }: {
-  groups: TrafficObserverGroup[];
+  row: DeviceRowModel;
   selected?: string;
-  onSelect: (id: string) => void;
+  columns: VirtualColumn<Conversation>[];
+  fixedHeight: boolean;
 }) {
-  if (!groups.length) return null;
+  const [showAll, setShowAll] = useState(false);
+  const all = row.conversations;
+  const shown = useMemo(
+    () => (showAll ? all : all.slice(0, TOP_CONVERSATIONS)),
+    [all, showAll],
+  );
+  const selectedKey = selected
+    ? all.find((c) => c.edgeId === selected)?.key
+    : undefined;
   return (
-    <section className="device-card" aria-label="Flow exporters and observers">
-      <header>
-        <Waypoints size={16} aria-hidden />
-        <div>
-          <h3>Flow exporters and observers</h3>
-          <p className="muted small">
-            Source observations are grouped by their reported authority and
-            observer context. They are not devices, routes, or packet hops.
-          </p>
-        </div>
-      </header>
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Reported observer</th>
-            <th scope="col">Context</th>
-            <th scope="col">Observed tuple</th>
-            <th scope="col" className="num">
-              Flow records
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.slice(0, MAX_OBSERVER_GROUPS).map((group) => (
-            <tr key={group.key}>
-              <td>
-                <b>{group.observer}</b>
-                <div className="muted small">
-                  {group.source} · Authority {group.authority}
-                </div>
-              </td>
-              <td>
-                {[group.profile, group.scope, group.cluster]
-                  .concat(
-                    [
-                      group.observation_domain_id &&
-                        `Domain ${group.observation_domain_id}`,
-                      group.observation_domain_present &&
-                        `Domain present ${group.observation_domain_present}`,
-                      group.version && `Version ${group.version}`,
-                    ].filter((value): value is string => Boolean(value)),
-                  )
-                  .filter(Boolean)
-                  .join(" · ") || "—"}
-              </td>
-              <td>
-                {group.entries
-                  .slice(0, MAX_OBSERVER_ENTRIES)
-                  .map(({ edge, observation }, index) => (
-                    <div key={`${edge.id}-${index}`}>
-                      <button
-                        className="link"
-                        aria-pressed={selected === edge.id}
-                        onClick={() => onSelect(edge.id)}
-                      >
-                        {observationTuple(observation)}
-                      </button>
-                    </div>
-                  ))}
-                {group.entries.length > MAX_OBSERVER_ENTRIES && (
-                  <div className="muted small">
-                    {group.entries.length - MAX_OBSERVER_ENTRIES} additional
-                    source records omitted from display; total flow records
-                    remains {group.records.toLocaleString()}.
-                  </div>
-                )}
-              </td>
-              <td className="num">{group.records.toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="muted small">
-        Flow record counts are source-reported records, not connection or byte
-        totals.
-      </p>
-      {groups.length > MAX_OBSERVER_GROUPS && (
-        <p className="muted small">
-          {groups.length - MAX_OBSERVER_GROUPS} additional observer contexts
-          omitted from display; source records remain in the snapshot.
+    <div className="device-conv-panel">
+      <VirtualTable
+        caption="Conversations"
+        rows={shown}
+        columns={columns}
+        rowKey={(c) => c.key}
+        selected={selectedKey}
+        viewportHeight={fixedHeight ? PANEL_TABLE_HEIGHT : 360}
+        empty="No conversations."
+      />
+      {all.length > shown.length && (
+        <p className="device-conv-more muted small">
+          Top {shown.length.toLocaleString()} of {all.length.toLocaleString()}
+          {" · "}
+          {row.deviceId ? (
+            <a href={deviceHref(row.deviceId)}>Show all</a>
+          ) : (
+            <button
+              type="button"
+              className="link"
+              onClick={() => setShowAll(true)}
+            >
+              Show all
+            </button>
+          )}
         </p>
       )}
+    </div>
+  );
+}
+
+function DeviceRow({
+  row,
+  open,
+  onToggle,
+  onOpenDevice,
+  children,
+}: {
+  row: DeviceRowModel;
+  open: boolean;
+  onToggle: () => void;
+  onOpenDevice?: (deviceId: string) => void;
+  children?: ReactNode;
+}) {
+  const openDevice = row.deviceId
+    ? () =>
+        onOpenDevice
+          ? onOpenDevice(row.deviceId!)
+          : location.assign(deviceHref(row.deviceId!))
+    : undefined;
+  return (
+    <section
+      className="device-card device-row"
+      aria-label={row.name}
+      data-device-row={row.key}
+    >
+      <header onDoubleClick={openDevice}>
+        <button
+          type="button"
+          className="devices-row-toggle"
+          aria-expanded={open}
+          title={row.details}
+          onClick={onToggle}
+        >
+          {open ? (
+            <ChevronDown size={14} aria-hidden />
+          ) : (
+            <ChevronRight size={14} aria-hidden />
+          )}
+          <GroupIcon group={row.group} />
+          <span className="device-row-name">
+            <b>{row.name}</b>
+            {row.subtitle && (
+              <span className="muted small">{row.subtitle}</span>
+            )}
+          </span>
+        </button>
+        <span className="device-row-chips">
+          <span className="chip" title="Conversations">
+            {plural(row.conversations.length, "conversation")}
+          </span>
+          <span className="chip" title="Distinct endpoints">
+            {plural(row.peers, "peer")}
+          </span>
+          {row.bytes !== undefined && (
+            <span className="chip" title="Bytes">
+              {prettyBytes(row.bytes)}
+            </span>
+          )}
+          {row.blocked > 0 && (
+            <span className="chip blocked" title="Blocked conversations">
+              {row.blocked} blocked
+            </span>
+          )}
+        </span>
+        <span className="device-row-actions">
+          {row.deviceId && (
+            <a href={deviceHref(row.deviceId)} className="device-row-action">
+              Open device
+            </a>
+          )}
+          {row.element && (
+            <a href={impactHref(row.element)} className="device-row-action">
+              Impact
+            </a>
+          )}
+        </span>
+      </header>
+      {open && children}
     </section>
   );
 }
+
+type ListItem =
+  | { type: "group"; group: DeviceGroup; count: number; open: boolean }
+  | { type: "row"; row: DeviceRowModel; open: boolean };
 
 export function DevicesView({
   graph,
@@ -380,10 +453,13 @@ export function DevicesView({
   live = false,
   earliest,
   latest,
+  onOpenDevice,
 }: {
   graph: Graph;
   index: GraphIndex;
   topo: TopologyIndex;
+  /** Double-click a device row to open its page. */
+  onOpenDevice?: (deviceId: string) => void;
   selected?: string;
   onSelect: (id: string) => void;
   client?: SearchClient;
@@ -395,77 +471,138 @@ export function DevicesView({
     () => deviceSummaries(graph.edges, topo, index),
     [graph, index, topo],
   );
-  const observerGroups = useMemo(() => trafficObserverGroups(graph), [graph]);
+  const rows = useMemo(() => {
+    const names = ipNames(graph);
+    return [
+      ...devices.map((d) => summaryRow(d, index)),
+      ...trafficObserverGroups(graph).map((g) => observerRow(g, topo, names)),
+      ...(unseenByFabric.length ? [unseenRow(unseenByFabric, index)] : []),
+    ];
+  }, [devices, unseenByFabric, graph, index, topo]);
+  const [query, setQuery] = useState("");
+  const [groupOpen, setGroupOpen] = useState<
+    Partial<Record<DeviceGroup, boolean>>
+  >({});
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [scrollTop, setScrollTop] = useState(0);
+  const groups = useMemo(() => groupDeviceRows(rows, query), [rows, query]);
+  const shownDevices = groups.reduce((sum, g) => sum + g.rows.length, 0);
+  const virtual = shownDevices > VIRTUALIZE_DEVICES_ABOVE;
+  const items: ListItem[] = [];
+  for (const g of groups) {
+    const open = groupOpen[g.group] ?? g.defaultOpen;
+    items.push({ type: "group", group: g.group, count: g.rows.length, open });
+    if (open)
+      for (const row of g.rows)
+        items.push({ type: "row", row, open: expanded.has(row.key) });
+  }
+  const columns = useConversationColumns(onSelect);
+  const heights = items.map((item) =>
+    item.type === "group"
+      ? GROUP_HEIGHT
+      : ROW_HEIGHT + (item.open ? PANEL_HEIGHT : 0),
+  );
+  const range = virtual
+    ? windowByHeights(heights, scrollTop, LIST_VIEWPORT)
+    : { first: 0, last: items.length, before: 0, after: 0 };
+  const toggleRow = (key: string) =>
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const renderItem = (item: ListItem, i: number) => {
+    const style = virtual ? { height: heights[i] } : undefined;
+    if (item.type === "group")
+      return (
+        <h3 key={`g:${item.group}`} className="devices-group" style={style}>
+          <button
+            type="button"
+            aria-expanded={item.open}
+            onClick={() =>
+              setGroupOpen((cur) => ({ ...cur, [item.group]: !item.open }))
+            }
+          >
+            {item.open ? (
+              <ChevronDown size={14} aria-hidden />
+            ) : (
+              <ChevronRight size={14} aria-hidden />
+            )}
+            <GroupIcon group={item.group} />
+            {item.group}
+            <span className="chip">{item.count}</span>
+          </button>
+        </h3>
+      );
+    return (
+      <div
+        key={item.row.key}
+        className="devices-item"
+        style={style}
+        data-virtual={virtual || undefined}
+      >
+        <DeviceRow
+          row={item.row}
+          open={item.open}
+          onToggle={() => toggleRow(item.row.key)}
+          onOpenDevice={onOpenDevice}
+        >
+          <ConversationPanel
+            row={item.row}
+            selected={selected}
+            columns={columns}
+            fixedHeight={virtual}
+          />
+        </DeviceRow>
+      </div>
+    );
+  };
   return (
     <div className="devices-view">
-      <p className="muted">
-        Source observations and separate device context for this map. Legacy
-        device cards below list only devices associated with reported
-        conversations.
-      </p>
-      {devices.map((d) => (
-        <section key={d.key} className="device-card" aria-label={d.label}>
-          <header>
-            <RoleIcon role={d.role} />
-            <div>
-              <h3>{d.label}</h3>
-              <p className="muted small">
-                {[
-                  d.device?.role ? `ACI ${d.device.role}` : ROLE_LABEL[d.role],
-                  d.device?.platform,
-                  d.device?.mgmt_ip,
-                  fabricLabel(d.device?.fabric),
-                  d.device?.aci_node?.split("/").at(-1),
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
-            <span className="chip">
-              {plural(d.edges.length, "conversation")}
-            </span>
-          </header>
-          <p className="device-meta">
-            <span className="muted">Reported by</span> {d.sources.join(", ")}
-            {d.edges.some(
-              (e) =>
-                e.acl_action === "drop" &&
-                d.device &&
-                [d.device.id, d.device.aci_node, d.device.name]
-                  .filter(Boolean)
-                  .map((x) => x!.toLowerCase())
-                  .includes((e.acl_leaf ?? "").toLowerCase()),
-            ) && (
-              <>
-                {" "}
-                <span className="status blocked">Drops logged here</span>
-              </>
-            )}
-            {d.interfaces.length > 0 && (
-              <>
-                {" "}
-                <span className="muted">· Interfaces</span>{" "}
-                {d.interfaces.map((i) => (
-                  <code key={i} className="if-chip">
-                    {i}
-                  </code>
-                ))}
-              </>
-            )}
+      <div className="devices-toolbar">
+        <label className="sr-only" htmlFor="devices-filter">
+          Filter devices
+        </label>
+        <input
+          id="devices-filter"
+          type="search"
+          placeholder="Filter devices"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setScrollTop(0);
+          }}
+        />
+        <span className="muted small" aria-live="polite">
+          {shownDevices === rows.length
+            ? plural(rows.length, "device")
+            : `${shownDevices} of ${plural(rows.length, "device")}`}
+        </span>
+      </div>
+      <div
+        className={virtual ? "devices-list virtual" : "devices-list"}
+        style={virtual ? { height: LIST_VIEWPORT } : undefined}
+        data-scroll-region={virtual || undefined}
+        onScroll={
+          virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined
+        }
+      >
+        {range.before > 0 && (
+          <div aria-hidden="true" style={{ height: range.before }} />
+        )}
+        {items
+          .slice(range.first, range.last)
+          .map((item, i) => renderItem(item, range.first + i))}
+        {range.after > 0 && (
+          <div aria-hidden="true" style={{ height: range.after }} />
+        )}
+        {!items.length && (
+          <p className="muted small">
+            {rows.length ? "No devices match." : "No devices."}
           </p>
-          <Conversations
-            edges={d.edges}
-            index={index}
-            selected={selected}
-            onSelect={onSelect}
-          />
-        </section>
-      ))}
-      <TrafficObservers
-        groups={observerGroups}
-        selected={selected}
-        onSelect={onSelect}
-      />
+        )}
+      </div>
       {earliest && (
         <AciFabricPanel
           client={client}
@@ -483,17 +620,42 @@ export function DevicesView({
             <Waypoints size={16} aria-hidden />
             <div>
               <h3>Client attachment devices</h3>
-              <p className="muted small">
-                Source-qualified client evidence is shown alongside compatible
-                flow observations. It does not prove a packet route.
-              </p>
             </div>
           </header>
           <ul className="seen-list">
             {attachmentReferences
               .slice(0, MAX_ATTACHMENT_REFERENCES)
               .map((reference) => (
-                <li key={reference.key}>
+                <li
+                  key={reference.key}
+                  data-device-id={
+                    reference.device?.id ?? reference.evidence.device_id
+                  }
+                  title={[
+                    ...(reference.device
+                      ? [
+                          reference.device.id,
+                          reference.device.device_authority,
+                          reference.device.scope,
+                          reference.device.cluster,
+                        ]
+                      : [
+                          reference.unresolvedReason,
+                          reference.evidence.device_id,
+                          reference.evidence.device_name,
+                        ]),
+                    reference.client ? `Client ${reference.client}` : undefined,
+                    reference.evidence.status,
+                    reference.evidence.basis,
+                    reference.evidence.device_serial,
+                    reference.evidence.ssid_number
+                      ? `SSID ${reference.evidence.ssid_number}`
+                      : undefined,
+                    ...reference.exporterContext,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
                   <b>
                     {reference.device
                       ? `${reference.device.name} (${deviceKindLabel(
@@ -503,39 +665,9 @@ export function DevicesView({
                       : "Unresolved attachment device"}
                   </b>
                   <small>
-                    {reference.device
-                      ? [
-                          reference.device.id,
-                          reference.device.device_authority,
-                          reference.device.scope,
-                          reference.device.cluster,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")
-                      : [
-                          reference.unresolvedReason,
-                          reference.evidence.device_id,
-                          reference.evidence.device_name,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                    <br />
                     {[
-                      reference.client
-                        ? `Client ${reference.client}`
-                        : undefined,
-                      reference.evidence.status,
-                      reference.evidence.basis,
-                      reference.evidence.device_serial,
-                      reference.evidence.ssid_number
-                        ? `SSID ${reference.evidence.ssid_number}`
-                        : undefined,
-                      ...reference.exporterContext,
-                      `${reference.flowEdges.length} correlated flow ${
-                        reference.flowEdges.length === 1
-                          ? "observation"
-                          : "observations"
-                      }`,
+                      reference.client,
+                      plural(reference.flowEdges.length, "flow"),
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -545,52 +677,30 @@ export function DevicesView({
           </ul>
           {attachmentReferences.length > MAX_ATTACHMENT_REFERENCES && (
             <p className="muted small">
-              {plural(
-                attachmentReferences.length - MAX_ATTACHMENT_REFERENCES,
-                "additional attachment reference",
-              )}{" "}
-              {attachmentReferences.length - MAX_ATTACHMENT_REFERENCES === 1
-                ? "was"
-                : "were"}{" "}
-              omitted because the list is capped at {MAX_ATTACHMENT_REFERENCES}.
+              Showing {MAX_ATTACHMENT_REFERENCES} of{" "}
+              {attachmentReferences.length}
             </p>
           )}
         </section>
       )}
-      <section className="device-card quiet">
-        <header>
-          <Waypoints size={16} aria-hidden />
-          <div>
-            <h3>
-              {plural(unseenByFabric.length, "conversation")} not seen by any
-              fabric device
-            </h3>
-            <p className="muted small">
-              Only a Kubernetes node (Isovalent) reported these, so no switch,
-              firewall or Nexus Dashboard record covers them.
-            </p>
-          </div>
-        </header>
-        {unseenByFabric.length > 0 && (
-          <Conversations
-            edges={unseenByFabric}
-            index={index}
-            selected={selected}
-            onSelect={onSelect}
-          />
-        )}
-      </section>
       {idle.length > 0 && (
-        <p className="muted small">
-          In inventory but not reporting these conversations:{" "}
-          {idle
-            .map((d) => {
-              const details = inventoryDetails(d);
-              return `${d.name} (${deviceKindLabel(d.kind, d.cluster)})${details ? ` — ${details}` : ""}`;
-            })
-            .join(", ")}
-          .
-        </p>
+        <details className="devices-idle">
+          <summary className="muted small">
+            Idle inventory · {idle.length}
+          </summary>
+          <ul className="devices-idle-list">
+            {idle.map((d) => (
+              <li key={d.id} title={inventoryDetails(d) || undefined}>
+                {d.name}{" "}
+                <span className="muted small">
+                  {[deviceKindLabel(d.kind, d.cluster), fabricLabel(d.fabric)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

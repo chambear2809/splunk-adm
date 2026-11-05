@@ -90,16 +90,102 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "76a485201e013c0521b71de2acbc621a4b743ac0cd78de24630288678c9df8c1",
+      "reviewed_macro_file_sha256": "1455bb684c7f4ddc8d35667cbc9f99a5cd6af1117d7c10bb33eb4ffeb652f8c8",
       "method": "static review only; no recapture",
-      "reason": "Reviewed Hubble normalization now explicitly extracts raw JSON fields; the two new application reader wrappers retain legacy defaults. The adm_graph stanza is unchanged. A separate fresh Splunk 10.6.0.5 local-lab execution over all preceding-window inputs reproduced all 58 historical rows exactly after excluding only meta.generated_at. Original capture time, rows and capture hashes remain immutable; this compatibility record does not replace the historical capture.",
+      "reason": "Combined static review of five integrated changes, all outside the captured graph: the closure of adm_graph(4) (38 stanzas) is the same set with byte-identical bodies as main and as the previously reviewed file. New stanzas: adm_l3out_path_limit, adm_l3out_path_evidence(2) (L3Out border-leaf paths and external EPG subnets for routed-egress inference); adm_path_hubble_fields, adm_path_acl_first_poll, adm_path_service_port, adm_path_pod_nodes(2), adm_identity_k8s_raw, adm_identity_pod_absence (live-scenario path-trace and identity gaps); adm_impact_* (bounded blast-radius reads); adm_vsphere_topology(2), adm_topology_inventory_recent_seconds, adm_topology_inventory_time_bounds(1) and adm_topology_inventory_older_bounds(1) (current-state VMM read for the map). Modified: adm_path_trace(2), adm_path_flow_normalize, adm_device_flows(1) and adm_identity_observations (path trace and identity fixes); adm_topology reads each inventory object once, newest first, before its eventstats (the public selector and V1 surface in research/cisco-pipeline-interface.json were updated with it); adm_vsphere_topology(1) delegates to adm_vsphere_topology(2) with recent=0 (same window, plus an empty-range compHv append); adm_topology_with_vsphere appends the recent=1 VMM read. Map performance pass: adm_vsphere_topology(2) is split, without changing its expansion (reassembling the helpers reproduces the previously reviewed body byte for byte), into adm_vsphere_vmm_rows(2) | append adm_vsphere_uplinks | adm_vsphere_rows_finish; new stanza adm_map_vsphere_inventory is adm_vsphere_vmm_rows(\"1\", \"1\") | adm_vsphere_rows_finish | the map's existing where filter, omitting the uplink append whose rows (uplink links, network_device devices only) that filter always dropped and which, appended after the VMM rows, cannot win their dedup; adm_topology_with_vsphere appends adm_map_vsphere_inventory, so the map can read adm_topology and the VMM half side by side and concatenate them in the macro's order. None of these is expanded by adm_graph(4), so the captured rows are not re-derived; no recapture is claimed. Impact vPC membership: adm_impact_port_channels uses, per APIC, the latest pcAggrIf/pcRsMbrIfs snapshot at or before the window end and otherwise the earliest within the new adm_impact_port_channel_lookahead_seconds after it, adding snapshot_time and after_window; neither stanza is in the adm_graph(4) closure (38 stanzas, byte-identical). Review fixes (0.8.6): adm_path_trace_resolve(1) gains argument validation and its body no longer starts with a pipe (callers prefix one, so a doubled leading pipe failed to parse); adm_device_flows(1) applies its record cap after the device filter and derives records_capped from the device records read; adm_l3out_path_evidence(2) bounds L3Out paths and external subnets separately (paths of matching L3Outs first) and marks truncated rows, with adm_l3out_path_limit and adm_path_trace_limit descriptions updated; adm_impact_port_channels keeps only each APIC's newest pcAggrIf/pcRsMbrIfs poll; validation regexes of the impact, path, fabric, interface-name and device macros anchor with \\z and impact endpoints are '-' or IP literals; new stanza adm_qualified_rollup(1) passes an explicit lateness to the summary writer. None of these is in the adm_graph(4) closure (38 stanzas, the same set with byte-identical bodies), so the captured rows are not re-derived; no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_application_catalog_read",
-        "adm_application_graph_read(4)",
-        "adm_flows_hubble",
-        "adm_thousandeyes_schema_qualified"
+        "adm_device_flows(1)",
+        "adm_fabric_path_evidence(2)",
+        "adm_identity_observations",
+        "adm_impact_element(2)",
+        "adm_impact_element(3)",
+        "adm_impact_flows(2)",
+        "adm_impact_flows_raw(2)",
+        "adm_impact_flows_summary(2)",
+        "adm_impact_members(1)",
+        "adm_impact_port_channels",
+        "adm_interface_names(1)",
+        "adm_interface_names_pair(2)",
+        "adm_l3out_path_evidence(2)",
+        "adm_l3out_path_limit",
+        "adm_path_flow_normalize",
+        "adm_path_pod_nodes(2)",
+        "adm_path_trace(2)",
+        "adm_path_trace_limit",
+        "adm_path_trace_resolve(1)",
+        "adm_topology",
+        "adm_topology_with_vsphere",
+        "adm_vsphere_topology(1)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "61917ad6d642fa994b3eae54b3c064995f47dd1362d21df882c51ee24b88887c",
+          "method": "static review only; no recapture",
+          "reason": "Release 0.8.5 macro file: the combined review above before its 0.8.6 review fixes."
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "3ec1c3f8b97a154115d39b1d10d757b7ac373253fa8e2ce2ca2386edcce8504b",
+          "method": "static review only; no recapture",
+          "reason": "Outside the captured graph only: adm_device_flows(1) also returns the configured limit (flows_limit) so the Device page shows exactly the configured top N; new stanzas adm_qualified_rollup and adm_qualified_summary_health wrap the admqualified summary writer and health probe, and adm_application_graph_read(5) is a progressive-read wrapper that delegates to adm_application_graph_read(4) by default. None is expanded by adm_graph(4); the adm_graph(4) stanza and all 38 stanzas in its expansion closure are byte-identical, so no recapture or lab re-run is required. This record does not replace the historical capture.",
+          "modified_macro_stanzas": [
+            "adm_device_flows(1)"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "66cdb10f4e3fe2ed3e382703fa21842c608a8142bcc97f285bc4902459395a32",
+          "method": "static review only; no recapture",
+          "reason": "Outside the captured graph only: adm_path_trace(2) aggregates every matching flow record per observer and direction (no raw head; adds dest_port_count) and returns at most adm_path_trace_observer_limit aggregate rows, a new stanza; adm_path_trace_limit keeps its value and now documents adm_device_flows only; new stanza adm_topology_with_vsphere appends vSphere virtual-port rows for the map's inventory read; adm_device_inventory also appends adm_vsphere_topology(1) virtual_port links. Neither stanza is expanded by adm_graph(4); the adm_graph(4) stanza and every helper it expands are unchanged, so no recapture or lab re-run is required. This record does not replace the historical capture.",
+          "modified_macro_stanzas": [
+            "adm_device_inventory",
+            "adm_path_trace(2)",
+            "adm_path_trace_limit"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "e70b786933432904516ff9864309f90a284a754fb9304184921189ea1a11d252",
+          "method": "static review only; no recapture",
+          "reason": "Additive only for the captured graph: new stanzas adm_index_snmp, adm_index_vmware_inv, adm_aci_node_inventory, adm_device_inventory and adm_interface_names* (identity and interface-name rows for path trace and Device pages); fixes inside stanzas that adm_graph(4) never expands: adm_vsphere_topology(1) maps uni/epp fv:RsHyper to its fv:CEp and ignores comp:Hv mgmtIp 0.0.0.0, adm_vsphere_uplinks no longer re-reads rows its earlier appendpipes emitted, adm_path_flow_normalize reads Stream bytes_in/packets_in, and adm_path_trace(2) appends node identity and interface names. The adm_graph(4) stanza and every helper it expands are unchanged; this record does not replace the historical capture.",
+          "modified_macro_stanzas": [
+            "adm_path_flow_normalize",
+            "adm_path_trace(2)",
+            "adm_vsphere_topology(1)",
+            "adm_vsphere_uplinks(1)"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "7b9be295c8a0b380f41588f1425513d15349efa6fb39f01d8bf3e5559104a73c",
+          "method": "static review only; no recapture",
+          "reason": "Additive only: new stanzas adm_vsphere_topology, adm_vsphere_uplinks, adm_fabric_path_evidence, adm_path_trace*, adm_path_flow_normalize and adm_device_flows*, plus two new supported source-scope profiles (aci_leaf_netflow, vmware_vds_ipfix) in adm_flow_enrich_v2. The adm_graph(4) stanza and every helper it expands are unchanged; this record does not replace the historical capture.",
+          "modified_macro_stanzas": [
+            "adm_flow_enrich_v2"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "76a485201e013c0521b71de2acbc621a4b743ac0cd78de24630288678c9df8c1",
+          "method": "static review only; no recapture",
+          "reason": "Reviewed Hubble normalization now explicitly extracts raw JSON fields; the two new application reader wrappers retain legacy defaults. The adm_graph stanza is unchanged. A separate fresh Splunk 10.6.0.5 local-lab execution over all preceding-window inputs reproduced all 58 historical rows exactly after excluding only meta.generated_at. Original capture time, rows and capture hashes remain immutable; this compatibility record does not replace the historical capture.",
+          "modified_macro_stanzas": [
+            "adm_application_catalog_read",
+            "adm_application_graph_read(4)",
+            "adm_flows_hubble",
+            "adm_thousandeyes_schema_qualified"
+          ],
+          "runtime_regression": {
+            "splunk_version": "10.6.0.5",
+            "row_count": 58,
+            "excluded_volatile_fields": [
+              "meta.generated_at"
+            ],
+            "stable_rows_sha256": "42c703ed811403cb03dc6340d1a88a25d986bf80cd851d332245e64d846859d3",
+            "checked_at": 1793754453
+          }
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "a26ce2ecaa1ba571f928c608d2d4b1684421d6583a21a2fe802cf7e151b1a5fe",
@@ -138,31 +224,23 @@
           "method": "static review only; no recapture",
           "reason": "The NAT revision adds strictly validated same-event FTD observations and optional exact evidence time bounds to the active V1 path. It does not change conversation keys, byte/packet expressions, backend attribution or ordinary no-NAT output. The historical ACI fixture has no explicit NAT tuple; new evidence fields/bounds remain absent. Existing adm_ip normalization is unchanged. Historical captured rows, capture time, macro hash and scenario provenance remain unchanged. This is a compatibility review, not a new capture or production qualification."
         }
-      ],
-      "runtime_regression": {
-        "splunk_version": "10.6.0.5",
-        "row_count": 58,
-        "excluded_volatile_fields": [
-          "meta.generated_at"
-        ],
-        "stable_rows_sha256": "42c703ed811403cb03dc6340d1a88a25d986bf80cd851d332245e64d846859d3",
-        "checked_at": 1793754453
-      }
+      ]
     },
     "reviewed_generator_compatibility": {
       "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
-      "reviewed_generator_sha256": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
+      "reviewed_generator_sha256": "b9afd1106a5cc5e5beac07feef37ab71e477af7c83dcc373149dc1353dfdea54",
       "reviewed_generator_source_sha256": {
-        "tools/gen_raw_fixtures.py": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
+        "tools/gen_raw_fixtures.py": "b9afd1106a5cc5e5beac07feef37ab71e477af7c83dcc373149dc1353dfdea54",
         "tools/raw_fixtures/__init__.py": "2f32d2aea4cfdd25ebb6be23b1c6cee5a2135828f14ebd02ab2569aabe85e980",
         "tools/raw_fixtures/common.py": "0f7824aeba0c33ff2a9c5351e37f321f41e98645e6584d8c94020832593b0a68",
         "tools/raw_fixtures/nxos.py": "fae1e35f0e397226f599afef7e063fec3124d348f0be143086c81b6d2e6052a6",
         "tools/raw_fixtures/aci.py": "7ebccc7a6f716c761b796bc6e955e73514764d551e66c7a05208e59122ec3c5e",
         "tools/raw_fixtures/networking.py": "2598900d01130dcfeaf80a37d45c013b742a766c5975df19960ace5066db6d42",
-        "tools/raw_fixtures/cli.py": "5f41c0c14d4d02b655165a7d2f01e8ec84f6fd243129f6f2d4363f69b1468a8f"
+        "tools/raw_fixtures/vmware.py": "ac48c75e24da58bb43b22062d386028d9b347346e7fe7c2ec5a346ce13710b98",
+        "tools/raw_fixtures/cli.py": "b214853bbb2e44431f17944a61c1942b77b0d6f3d4f23e5e68ab2a2bb616a286"
       },
       "method": "static review only; no recapture",
-      "reason": "The generator was split into shared, NX-OS, ACI, networking, and CLI modules behind its original entrypoint. With unchanged inputs and the networking clock anchored at 2026-10-25T12:00:00Z, every file from NX-OS, ACI, ACI prior-window, and networking generation is byte-identical to the pre-refactor output manifest. This preserves the historical capture without claiming a new live capture. Independent review corrected a facade export collision: private CLI implementation modules are excluded so the original aci(s) builder remains callable. CLI generation and captured fixture outputs remain unchanged; no recapture is claimed.",
+      "reason": "Adds the vSphere overlay scenario (tools/raw_fixtures/vmware.py, --scenario vmware) and its CLI wiring. With the base time anchored at 2026-10-25T12:00:00Z, nxos, aci and networking outputs are byte-identical to main's generator (diff -r, 2026-11-04). No new live capture is claimed. Impact revision: vmware.py adds aci_port_channels (pcAggrIf/pcRsMbrIfs) for the vmware scenario only; the four existing raw-vmware outputs are byte-identical and no aci output is touched (vmware.py was 09dba30e19db70203a9ea596b7e2b60b5318a044031f6b977529493929939772).",
       "prior_reviews": [
         {
           "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
@@ -227,47 +305,85 @@
             },
             "all_scenarios": true
           }
+        },
+        {
+          "captured_generator_sha256": "4aed74dfc4d75cf0e01a6c805ac675aabeb53fe2adae1eea760d0c997a462e1b",
+          "reviewed_generator_sha256": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
+          "reviewed_generator_source_sha256": {
+            "tools/gen_raw_fixtures.py": "1c2645d235a867c86eba60e31cefb25db9c1959997bdd244ea25950742b0d1af",
+            "tools/raw_fixtures/__init__.py": "2f32d2aea4cfdd25ebb6be23b1c6cee5a2135828f14ebd02ab2569aabe85e980",
+            "tools/raw_fixtures/common.py": "0f7824aeba0c33ff2a9c5351e37f321f41e98645e6584d8c94020832593b0a68",
+            "tools/raw_fixtures/nxos.py": "fae1e35f0e397226f599afef7e063fec3124d348f0be143086c81b6d2e6052a6",
+            "tools/raw_fixtures/aci.py": "7ebccc7a6f716c761b796bc6e955e73514764d551e66c7a05208e59122ec3c5e",
+            "tools/raw_fixtures/networking.py": "2598900d01130dcfeaf80a37d45c013b742a766c5975df19960ace5066db6d42",
+            "tools/raw_fixtures/cli.py": "5f41c0c14d4d02b655165a7d2f01e8ec84f6fd243129f6f2d4363f69b1468a8f"
+          },
+          "method": "static review only; no recapture",
+          "reason": "The generator was split into shared, NX-OS, ACI, networking, and CLI modules behind its original entrypoint. With unchanged inputs and the networking clock anchored at 2026-10-25T12:00:00Z, every file from NX-OS, ACI, ACI prior-window, and networking generation is byte-identical to the pre-refactor output manifest. This preserves the historical capture without claiming a new live capture. Independent review corrected a facade export collision: private CLI implementation modules are excluded so the original aci(s) builder remains callable. CLI generation and captured fixture outputs remain unchanged; no recapture is claimed.",
+          "byte_equivalence": {
+            "baseline_commit": "96db6c6baedc706fc272b34f89b676e79411fadf",
+            "input_sha256": {
+              "tools/gen_raw_fixtures.py": "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
+              "fixtures/raw/scenario.json": "ac68d0e466c06ed51f44cbed447a1857a19178630710fe9b402b69207d08d728",
+              "fixtures/raw-aci/scenario.json": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
+              "fixtures/raw-aci/edge-cases.json": "09226ab92a7c063f63bade18ea0faf53e3bfd6675e55dbcfc39c7869a9ab261d",
+              "fixtures/raw-networking/scenario.json": "8f0ab2a8012b7ed36c353354fd22c2886c84a0a1435cb5f7c56264f4e8afdafc",
+              "fixtures/raw-networking/source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467",
+              "fixtures/raw-networking/FIELDS.md": "83a848c09b522351d6a5aebc809fdd9031b31f83f7f16f4054b137335051c5f0"
+            },
+            "scenarios": {
+              "nxos": {
+                "byte_identical": true,
+                "file_count": 11,
+                "output_manifest_sha256": "1670d14e57e417f91a16d5cd9f0e28e85dee7cea0b148778a6a7f1dd6704ac3b",
+                "base_time": null,
+                "mismatches": []
+              },
+              "aci": {
+                "byte_identical": true,
+                "file_count": 20,
+                "output_manifest_sha256": "ce4c0a9c4098f87a824d66786db45c6f85b63fbff0eae86a335d246565ddb1fc",
+                "base_time": null,
+                "mismatches": []
+              },
+              "aci-prev": {
+                "byte_identical": true,
+                "file_count": 9,
+                "output_manifest_sha256": "c397ceae1298b426c725338a4ea3439e5a510522677f3410ed726b47564f540f",
+                "base_time": null,
+                "mismatches": []
+              },
+              "networking": {
+                "byte_identical": true,
+                "file_count": 23,
+                "output_manifest_sha256": "ae9cbd13be50eb8eed179e813af18750e36fe9b7383a4e2e39fec2f57fa3276a",
+                "base_time": "2026-10-25T12:00:00Z",
+                "mismatches": []
+              }
+            },
+            "all_scenarios": true
+          }
         }
       ],
       "byte_equivalence": {
-        "baseline_commit": "96db6c6baedc706fc272b34f89b676e79411fadf",
+        "baseline_commit": "7aabd70",
+        "base_time": "2026-10-25T12:00:00Z",
         "input_sha256": {
-          "tools/gen_raw_fixtures.py": "521c079c77c9f4840c44142d693f44d0c981a8a251c84bf15d6b3807f39926ae",
           "fixtures/raw/scenario.json": "ac68d0e466c06ed51f44cbed447a1857a19178630710fe9b402b69207d08d728",
           "fixtures/raw-aci/scenario.json": "afdbed39b7073c4e8e320771daf6d51802675e88df4110d058a9cc0bc71aef02",
           "fixtures/raw-aci/edge-cases.json": "09226ab92a7c063f63bade18ea0faf53e3bfd6675e55dbcfc39c7869a9ab261d",
           "fixtures/raw-networking/scenario.json": "8f0ab2a8012b7ed36c353354fd22c2886c84a0a1435cb5f7c56264f4e8afdafc",
-          "fixtures/raw-networking/source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467",
-          "fixtures/raw-networking/FIELDS.md": "83a848c09b522351d6a5aebc809fdd9031b31f83f7f16f4054b137335051c5f0"
+          "fixtures/raw-networking/source-profiles.json": "df8eaa4933ec98978484ea9f6a2feb9257d513f40b9ae9277c319067db500467"
         },
         "scenarios": {
           "nxos": {
-            "byte_identical": true,
-            "file_count": 11,
-            "output_manifest_sha256": "1670d14e57e417f91a16d5cd9f0e28e85dee7cea0b148778a6a7f1dd6704ac3b",
-            "base_time": null,
-            "mismatches": []
+            "byte_identical": true
           },
           "aci": {
-            "byte_identical": true,
-            "file_count": 20,
-            "output_manifest_sha256": "ce4c0a9c4098f87a824d66786db45c6f85b63fbff0eae86a335d246565ddb1fc",
-            "base_time": null,
-            "mismatches": []
-          },
-          "aci-prev": {
-            "byte_identical": true,
-            "file_count": 9,
-            "output_manifest_sha256": "c397ceae1298b426c725338a4ea3439e5a510522677f3410ed726b47564f540f",
-            "base_time": null,
-            "mismatches": []
+            "byte_identical": true
           },
           "networking": {
-            "byte_identical": true,
-            "file_count": 23,
-            "output_manifest_sha256": "ae9cbd13be50eb8eed179e813af18750e36fe9b7383a4e2e39fec2f57fa3276a",
-            "base_time": "2026-10-25T12:00:00Z",
-            "mismatches": []
+            "byte_identical": true
           }
         },
         "all_scenarios": true

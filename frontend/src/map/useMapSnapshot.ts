@@ -23,6 +23,14 @@ export interface MapSnapshot {
   client?: SearchClient;
 }
 
+const measure = (name: string, start: number) => {
+  try {
+    performance.measure(name, { start });
+  } catch {
+    /* timing is diagnostic only */
+  }
+};
+
 function pendingGraph(args: GraphArgs): Graph {
   const instant = new Date(0).toISOString();
   return {
@@ -57,10 +65,16 @@ export function useMapSnapshot({
   timezone?: string;
   demoData?: { graph: () => Graph; topology: () => Topology };
 }) {
-  const loadDemo = (scenario: DemoScenario): MapSnapshot => ({
-    graph: demoData ? demoData.graph() : demoGraph(scenario),
-    topology: demoData ? demoData.topology() : demoTopology(scenario),
-  });
+  // Demo captures exist only in the development build; the packaged app
+  // never enters demo mode (parseUrlState forces live).
+  const loadDemo = (scenario: DemoScenario): MapSnapshot => {
+    if (__ADM_SPLUNK_BUILD__)
+      throw new Error("Demo data is not available in the Splunk app.");
+    return {
+      graph: demoData ? demoData.graph() : demoGraph(scenario),
+      topology: demoData ? demoData.topology() : demoTopology(scenario),
+    };
+  };
   const [snapshot, setSnapshot] = useState<MapSnapshot>(() =>
     initialState.mode === "demo"
       ? loadDemo(initialState.scenario)
@@ -104,7 +118,7 @@ export function useMapSnapshot({
   }, [client, cancelQuery, abort]);
 
   const refresh = async (): Promise<boolean | undefined> => {
-    if (mode === "demo") {
+    if (!__ADM_SPLUNK_BUILD__ && mode === "demo") {
       const captured = loadDemo(scenario);
       setSnapshot(captured);
       setEarliest(pickerBound(captured.graph.window.start));
@@ -122,10 +136,56 @@ export function useMapSnapshot({
     setBusy(true);
     setError("");
     try {
-      const result = await queryGraph(request);
+      const started = performance.now();
+      // Progressive load: summaries first; when minutes remain unread the
+      // full window (summaries plus the newest raw minutes) follows. It starts
+      // as soon as the summary graph returns, beside the inventory read, and
+      // reuses that exact-window inventory instead of reading it again.
+      let full: Promise<{ graph: Graph; topology: Topology }> | undefined;
+      const result = await queryGraph(request, "deferred", {
+        onGraph: (graph, inventory, pinned) => {
+          if (graph.read?.pendingSeconds && revision.current === current) {
+            full = queryGraph(pinned, undefined, {
+              concurrent: true,
+              inventory,
+            });
+            // A superseded build aborts this read; that is not an error.
+            full.catch(() => undefined);
+          }
+        },
+      });
       if (revision.current !== current) return undefined;
       setSnapshot({ ...result, request, client });
       setHasLiveGraph(true);
+      measure("atlas:map:first", started);
+      if (full) {
+        setBusy(false);
+        full
+          .then((value) => {
+            if (revision.current === current) {
+              setSnapshot({ ...value, request, client });
+              measure("atlas:map:full", started);
+            }
+          })
+          .catch((error: unknown) => {
+            if (revision.current !== current) return;
+            // Keep the summarized map; the chip now shows partial coverage.
+            setSnapshot((prior) => ({
+              ...prior,
+              graph: {
+                ...prior.graph,
+                read: { ...prior.graph.read!, pendingSeconds: 0 },
+                coverage: {
+                  ...prior.graph.coverage,
+                  warnings: [
+                    ...prior.graph.coverage.warnings,
+                    `Newest minutes could not be read: ${error instanceof Error ? error.message.slice(0, 200) : "search failed"}`,
+                  ],
+                },
+              },
+            }));
+          });
+      }
       return true;
     } catch (error) {
       if (revision.current !== current) return undefined;
@@ -143,6 +203,8 @@ export function useMapSnapshot({
     setBusy(true);
     setError("");
     try {
+      if (__ADM_SPLUNK_BUILD__)
+        throw new Error("Demo data is not available in the Splunk app.");
       await prepareDemo();
       if (revision.current !== current) return false;
       const captured = loadDemo(next);

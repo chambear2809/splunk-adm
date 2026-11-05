@@ -65,7 +65,11 @@ async function mount(node: HTMLElement) {
     }
     const { state, notice } = recoverUrlState(params, __ADM_SPLUNK_BUILD__);
     if (notice) writeUrlState(state);
-    if ((page === "map" || page === "applications") && state.mode === "demo")
+    if (
+      !__ADM_SPLUNK_BUILD__ &&
+      (page === "map" || page === "applications") &&
+      state.mode === "demo"
+    )
       await prepareDemo();
     const [preference, timezone] = await Promise.all([
       __ADM_SPLUNK_BUILD__

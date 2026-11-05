@@ -21,25 +21,9 @@ await access(`${app}/appserver/static/adm.css`);
 await access(`${app}/appserver/static/pages/atlas.js`);
 await access(`${app}/default/data/ui/views/map.xml`);
 
-// Keep captured rows outside the executable bundle. They remain grounded lab data.
-await mkdir(`${app}/appserver/static/demo`, { recursive: true });
-for (const file of [
-  "demo-scopes.json",
-  "demo-catalog.json",
-  "demo-find.json",
-  "demo-rows.json",
-  "demo-rows-aci.json",
-  "demo-rows-aci-prev.json",
-  "demo-topology.json",
-  "demo-topology-aci.json",
-  "demo-networking-aci.json",
-  "demo-networking-nxos.json",
-  "demo-networking-topology.json",
-  "demo-networking-scopes.json",
-  "demo-networking-catalog.json",
-  "demo-networking-find.json",
-])
-  await copyFile(`fixtures/${file}`, `${app}/appserver/static/demo/${file}`);
+// Demo captures are a development-server feature only; the packaged app is
+// live-only and must not carry fixture files.
+await rm(`${app}/appserver/static/demo`, { recursive: true, force: true });
 
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 const appConf = await readFile(`${app}/default/app.conf`, "utf8");
@@ -99,6 +83,10 @@ await copyFile(
 await copyFile(
   "docs/DNS_EVIDENCE_DESIGN.md",
   `${stage}/docs/DNS_EVIDENCE_DESIGN.md`,
+);
+await copyFile(
+  "docs/VSPHERE_SWITCH_DESIGN.md",
+  `${stage}/docs/VSPHERE_SWITCH_DESIGN.md`,
 );
 await copyFile(
   "docs/DNS_INGESTION_RESEARCH.md",

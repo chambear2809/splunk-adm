@@ -19,6 +19,8 @@ export interface Facets {
   source?: string;
   blocked?: boolean;
   hideInfrastructure?: boolean;
+  /** Omit inferred relationships (drawn dashed by default). */
+  hideInferred?: boolean;
 }
 
 const edgeFacetsActive = (facets: Facets) =>

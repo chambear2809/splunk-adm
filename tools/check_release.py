@@ -62,7 +62,9 @@ QUALIFIED_RUNTIME_FILES = frozenset(
                 "network_graph",
                 "protocol",
                 "qualified",
+                "rollup",
                 "search",
+                "slices",
             )
         },
         *{
@@ -470,6 +472,61 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         )
 
 
+# Demo captures and the demo client run only on the development server. These
+# markers come from frontend/src/data/demoClient.ts, catalogDemo.ts and the
+# fixtures/demo-*.json captures; none of them may reach the packaged app.
+DEMO_BUNDLE_MARKERS = (
+    b"app/splunk_adm/demo/",
+    b"Demo data is not prepared",
+    b"Catalog fixture",
+    b"ACI pilot fabric",
+    b"adm_device_flows-shaped rows for the ACI demo",
+)
+
+
+# The only web assets a release may ship. Anything else under static/ (demo
+# rows, captured fixtures, source maps, stray files) fails the check.
+STATIC_ALLOWLIST = frozenset(
+    {
+        "splunk_adm/appserver/static/adm.css",
+        "splunk_adm/appserver/static/pages/atlas.js",
+        THOUSANDEYES_BUNDLE_PATH,
+        THOUSANDEYES_MANIFEST_PATH,
+        THOUSANDEYES_CSS_PATH,
+    }
+)
+
+
+def _is_fixture(name: str) -> bool:
+    """Synthetic or captured fixture data (fixtures/** shapes), anywhere."""
+    parts = name.split("/")
+    base = parts[-1]
+    return (
+        "fixtures" in parts[:-1]
+        or "demo" in parts[:-1]
+        or any(part.startswith("raw-") for part in parts[:-1])
+        or (base.startswith(("demo-", "path-trace-")) and base.endswith(".json"))
+        or base == "scenario.json"
+        or base.endswith(".ndjson")
+    )
+
+
+def _check_no_demo(files: dict[str, bytes]) -> None:
+    static = "splunk_adm/appserver/static/"
+    for name in sorted(files):
+        if name.startswith(static) and name.endswith(".js"):
+            for marker in DEMO_BUNDLE_MARKERS:
+                if marker in files[name]:
+                    raise ValueError(
+                        f"archive ships demo code in {name}: {marker.decode()}"
+                    )
+    for name in sorted(files):
+        if _is_fixture(name):
+            raise ValueError(f"archive ships demo fixture: {name}")
+        if name.startswith(static) and name not in STATIC_ALLOWLIST:
+            raise ValueError(f"archive ships unlisted static file: {name}")
+
+
 def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> None:
     required = {
         "splunk_adm/appserver/static/adm.css",
@@ -477,25 +534,6 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         THOUSANDEYES_BUNDLE_PATH,
         THOUSANDEYES_MANIFEST_PATH,
         THOUSANDEYES_CSS_PATH,
-        *{
-            f"splunk_adm/appserver/static/demo/{name}.json"
-            for name in (
-                "demo-scopes",
-                "demo-catalog",
-                "demo-find",
-                "demo-rows",
-                "demo-rows-aci",
-                "demo-rows-aci-prev",
-                "demo-topology",
-                "demo-topology-aci",
-                "demo-networking-aci",
-                "demo-networking-nxos",
-                "demo-networking-topology",
-                "demo-networking-scopes",
-                "demo-networking-catalog",
-                "demo-networking-find",
-            )
-        },
         *{
             f"splunk_adm/default/data/ui/views/{page}.xml"
             for page in (
@@ -505,6 +543,8 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "data_health",
                 "setup",
                 "help",
+                "device",
+                "impact",
             )
         },
         "splunk_adm/default/app.conf",
@@ -521,6 +561,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md",
         "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md",
         "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md",
+        "splunk_adm/docs/VSPHERE_SWITCH_DESIGN.md",
         "splunk_adm/docs/DNS_INGESTION_RESEARCH.md",
         "splunk_adm/docs/operators/dns-evidence.md",
         RECOVERY_DOC_PATH,
@@ -543,6 +584,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
     missing = sorted(required - files.keys())
     if missing:
         raise ValueError(f"archive missing required files: {', '.join(missing)}")
+    _check_no_demo(files)
     _check_settings_contract(files, registry)
     _check_qualified_contract(files)
     _check_scope_transform(
@@ -670,8 +712,12 @@ def _check_qualified_contract(files: dict[str, bytes]) -> None:
             )
 
     identity = _packaged_config(files, "default/adm_identity.conf")
-    if set(identity.sections()) != {"profile", "network"}:
+    if set(identity.sections()) != {"profile", "network", "summary"}:
         raise ValueError("identity defaults contain unreviewed sections")
+    if set(identity["summary"]) != {"enabled", "index", "lateness"} or (
+        identity.get("summary", "enabled", fallback=None) != "false"
+    ):
+        raise ValueError("qualified summaries must ship disabled with reviewed keys")
     if set(identity["profile"]) != {
         "enabled",
         "cluster",

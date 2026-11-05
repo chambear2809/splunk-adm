@@ -1,6 +1,51 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 
+/** Map overflow menu: Changes, Saved views, Legend, Export, settings, help. */
+async function more(page: Page, item: string) {
+  const menu = page.getByRole("region", { name: "More actions", exact: true });
+  if (!(await menu.count()))
+    await page
+      .getByRole("button", { name: "More actions", exact: true })
+      .click();
+  await menu.getByRole("button", { name: item, exact: true }).click();
+}
+async function filters(page: Page) {
+  const panel = page.getByRole("region", { name: "Filters", exact: true });
+  if (!(await panel.count()))
+    await page.getByRole("button", { name: /^Filters/ }).click();
+  return panel;
+}
+async function openFindings(page: Page) {
+  const toggle = page.getByRole("button", { name: /^Findings/ });
+  if ((await toggle.getAttribute("aria-expanded")) !== "true")
+    await toggle.click();
+  return page.getByRole("region", { name: "Map findings" });
+}
+/** Map scope popover, or the Explore "Open by scope" disclosure. */
+async function scope(page: Page) {
+  const button = page.getByRole("button", { name: "Scope", exact: true });
+  const disclosure = page
+    .locator("details.atlas-disclosure")
+    .filter({ hasText: "Open by scope" });
+  await expect(button.or(disclosure).first()).toBeVisible();
+  if (await button.count()) {
+    if ((await button.getAttribute("aria-expanded")) !== "true")
+      await button.click();
+  } else if (
+    !(await disclosure.evaluate((d) => (d as HTMLDetailsElement).open))
+  )
+    await disclosure.locator("summary").click();
+  return page;
+}
+async function detailsTab(page: Page, name: "Overview" | "Flows" | "Evidence") {
+  await page
+    .getByRole("complementary", { name: "Details" })
+    .getByRole("tab", { name, exact: true })
+    .first()
+    .click();
+}
+
 test.describe("Application Atlas browser regressions", () => {
   test("selects the captured Catalyst and Meraki demo flows on the map", async ({
     page,
@@ -13,7 +58,7 @@ test.describe("Application Atlas browser regressions", () => {
       await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
       await expect(page.locator(".scope-service")).toHaveText("checkout");
       await expect(page.locator(".scope-dims")).toContainText(cluster);
-      await page.getByRole("button", { name: "Map settings" }).click();
+      await more(page, "Map settings");
       await expect(page.getByLabel("Demo scenario")).toHaveValue(scenario);
       await page.getByRole("button", { name: "Close settings" }).click();
       await expect(page.locator(".adm")).toHaveAttribute(
@@ -29,7 +74,7 @@ test.describe("Application Atlas browser regressions", () => {
           .getByRole("region", { name: "Client attachment devices" })
           .getByText(attachmentDevice, { exact: false }),
       ).toBeVisible();
-      await page.getByRole("button", { name: "Export", exact: true }).click();
+      await more(page, "Export");
       const download = page.waitForEvent("download");
       await page
         .getByRole("button", { name: /Context evidence \(CSV\)/ })
@@ -50,9 +95,6 @@ test.describe("Application Atlas browser regressions", () => {
       "/tests/browser/browser.html?page=applications&scenario=meraki-nxos",
     );
     await expect(page.getByLabel("Demo scenario")).toHaveValue("meraki-nxos");
-    await expect(
-      page.getByText(/correlated from Meraki association/),
-    ).toBeVisible();
     await page.getByLabel("Find an address, EPG, or device").fill("10.71.0.20");
     await page.getByRole("button", { name: "Find", exact: true }).click();
     await expect(
@@ -141,9 +183,7 @@ test.describe("Application Atlas browser regressions", () => {
 
   test("filters the map and opens endpoint inspection", async ({ page }) => {
     await page.goto("/tests/browser/browser.html");
-    await expect(
-      page.getByText("Synthetic demo", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("Demo data", { exact: true })).toBeVisible();
 
     const search = page.getByLabel(
       "Highlight by name, IP, EPG, port or device",
@@ -168,7 +208,7 @@ test.describe("Application Atlas browser regressions", () => {
     page,
   }) => {
     await page.goto("/tests/browser/browser.html");
-    await page.getByRole("button", { name: "Map settings" }).click();
+    await more(page, "Map settings");
     await page.getByRole("button", { name: "Splunk" }).click();
     for (const [label, value] of [
       ["Environment", "demo"],
@@ -189,17 +229,29 @@ test.describe("Application Atlas browser regressions", () => {
     await page.getByRole("button", { name: "Presets", exact: true }).click();
     await page.getByText("Last 24 hours", { exact: true }).click();
     await page.getByRole("button", { name: "Build map" }).click();
-    await expect(
-      page.getByText("Synthetic demo", { exact: true }),
-    ).toBeHidden();
+    await expect(page.getByText("Demo data", { exact: true })).toBeHidden();
+    // The map pins relative bounds once (here -24h@h) so every read of the
+    // build shares one exact window.
     await expect
-      .poll(() => page.evaluate(() => window.__ADM_LAST_EARLIEST__))
-      .toBe("-24h@h");
+      .poll(() =>
+        page.evaluate(() => {
+          const sent = Number(window.__ADM_LAST_EARLIEST__);
+          const hour = Math.floor(Date.now() / 3600000) * 3600 - 86400;
+          return Math.abs(sent - hour) <= 3600;
+        }),
+      )
+      .toBe(true);
+    // The client may append the bounded top-N suffix after the read macro.
     await expect
-      .poll(() => page.evaluate(() => window.__ADM_LAST_GRAPH_SEARCH__))
-      .toBe(
-        '| `adm_application_graph_read("frontend","demo","demo-cluster","shop")`',
-      );
+      .poll(() =>
+        page.evaluate(() =>
+          String(window.__ADM_LAST_GRAPH_SEARCH__ ?? "").startsWith(
+            // Progressive read: summaries first ("deferred" newest minutes).
+            '| `adm_application_graph_read("frontend","demo","demo-cluster","shop","deferred")`',
+          ),
+        ),
+      )
+      .toBe(true);
     await expect(page.locator(".scope-service")).toHaveText("frontend");
     await expect(page.locator(".scope-dims")).toHaveText(
       "demo · demo-cluster · shop",
@@ -208,7 +260,7 @@ test.describe("Application Atlas browser regressions", () => {
 
   test("shows permission errors from the live search", async ({ page }) => {
     await page.goto("/tests/browser/browser.html?scenario=permission");
-    await page.getByRole("button", { name: "Map settings" }).click();
+    await more(page, "Map settings");
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByRole("alert")).toContainText("search failed");
@@ -219,7 +271,7 @@ test.describe("Application Atlas browser regressions", () => {
     page,
   }) => {
     await page.goto("/tests/browser/browser.html?scenario=graph-warning");
-    await page.getByRole("button", { name: "Map settings" }).click();
+    await more(page, "Map settings");
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
@@ -233,7 +285,7 @@ test.describe("Application Atlas browser regressions", () => {
     page,
   }) => {
     await page.goto("/tests/browser/browser.html?scenario=incomplete");
-    await page.getByRole("button", { name: "Map settings" }).click();
+    await more(page, "Map settings");
     await page.getByRole("button", { name: "Splunk" }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByRole("alert")).toContainText(
@@ -275,8 +327,10 @@ test("reload reproduces a validated live deep link", async ({ page }) => {
 
 test("loads each foundation page", async ({ page }) => {
   for (const [route, title] of [
-    ["applications", "Applications"],
+    ["applications", "Explore"],
+    ["endpoints", "Explore"],
     ["data_health", "Data health"],
+    ["device", "Device"],
     ["help", "Help"],
     ["setup", "Setup"],
   ]) {
@@ -492,9 +546,7 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
       "data-atlas-theme",
       theme,
     );
-    await expect(
-      page.getByText("Synthetic demo", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("Demo data", { exact: true })).toBeVisible();
     expect(
       await page
         .locator(".atlas")
@@ -503,7 +555,7 @@ test("the real demo bootstrap renders with Toolkit fonts and both themes", async
   }
   await page.goto("/applications");
   await expect(
-    page.getByRole("heading", { name: "Applications", exact: true }),
+    page.getByRole("heading", { name: "Explore", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Open map for frontend", exact: true })
@@ -573,20 +625,23 @@ test("clears dependent scope fields and rejects invalid manual input", async ({
     "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
   );
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
-  const environment = page.getByRole("combobox", {
+  const environment = (await scope(page)).getByRole("combobox", {
     name: "Environment",
     exact: true,
   });
   await expect(environment).toBeEnabled();
   await environment.fill("prod");
   await expect(
-    page.getByRole("combobox", { name: "Cluster", exact: true }),
+    (await scope(page)).getByRole("combobox", { name: "Cluster", exact: true }),
   ).toHaveValue("");
   await expect(
-    page.getByRole("combobox", { name: "Namespace", exact: true }),
+    (await scope(page)).getByRole("combobox", {
+      name: "Namespace",
+      exact: true,
+    }),
   ).toBeDisabled();
   await expect(
-    page.getByRole("combobox", { name: "Service", exact: true }),
+    (await scope(page)).getByRole("combobox", { name: "Service", exact: true }),
   ).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Build map", exact: true }),
@@ -611,7 +666,10 @@ test("clears dependent scope fields and rejects invalid manual input", async ({
 
 test("demo controls retain the captured scope and time", async ({ page }) => {
   await page.goto("/tests/browser/browser.html");
-  const service = page.getByRole("combobox", { name: "Service", exact: true });
+  const service = (await scope(page)).getByRole("combobox", {
+    name: "Service",
+    exact: true,
+  });
   await expect(service).toBeEnabled();
   await service.fill("uncaptured");
   await expect(service).toHaveValue("frontend");
@@ -630,7 +688,7 @@ test("applications catalog sorts numeric metrics and opens a captured scope", as
     "/tests/browser/browser.html?page=applications&mode=live&earliest=1791370800&latest=1791374400",
   );
   await expect(
-    page.getByRole("heading", { name: "Applications", exact: true }),
+    page.getByRole("heading", { name: "Explore", exact: true }),
   ).toBeVisible();
   const catalog = page.locator("table").last();
   const rows = catalog.locator("tbody > tr");
@@ -640,14 +698,14 @@ test("applications catalog sorts numeric metrics and opens a captured scope", as
   const metric = page.getByRole("button", { name: /Conversations \(1h\)/ });
   await metric.click();
   const ascending = await rows.evaluateAll((items) =>
-    items.map((item) => Number(item.children[6]?.textContent?.trim())),
+    items.map((item) => Number(item.children[4]?.textContent?.trim())),
   );
   expect(ascending.filter(Number.isFinite)).toEqual(
     expect.arrayContaining([1, 2, 4, 6]),
   );
   await metric.click();
   const descending = await rows.evaluateAll((items) =>
-    items.map((item) => Number(item.children[6]?.textContent?.trim())),
+    items.map((item) => Number(item.children[4]?.textContent?.trim())),
   );
   expect(descending.filter(Number.isFinite)).toEqual(
     expect.arrayContaining([1, 2, 4, 6]),
@@ -835,10 +893,15 @@ test("editing the scope keeps Find results and does not restart the catalog", as
   const results = page.locator('[aria-label="Find results"]');
   await expect(results).toBeVisible();
   const before = await catalogRequests();
-  const service = page.getByRole("combobox", { name: "Service", exact: true });
+  const service = (await scope(page)).getByRole("combobox", {
+    name: "Service",
+    exact: true,
+  });
   await service.fill("front");
   await service.fill("frontend-x");
-  await page
+  await (
+    await scope(page)
+  )
     .getByRole("combobox", { name: "Environment", exact: true })
     .fill("prod");
   await expect(results).toBeVisible();
@@ -854,7 +917,9 @@ test("an over-limit catalog narrows again when the service changes", async ({
   await expect(
     page.getByRole("status").filter({ hasText: "narrowed warning" }),
   ).toBeVisible();
-  await page
+  await (
+    await scope(page)
+  )
     .getByRole("combobox", { name: "Service", exact: true })
     .fill("checkout");
   await expect
@@ -921,12 +986,15 @@ test("captured demo applications explain unavailable Find evidence", async ({
 }) => {
   await page.goto("/tests/browser/browser.html?page=applications&mode=demo");
   await expect(
-    page.getByRole("heading", { name: "Applications", exact: true }),
+    page.getByRole("heading", { name: "Explore", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open map for frontend", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/Captured Find window/i)).toBeVisible();
+  await expect(page.getByText("Demo data", { exact: true })).toHaveAttribute(
+    "title",
+    /Captured Find window/,
+  );
   const input = page.getByLabel(/Find an address, EPG, or device/).first();
   await input.fill("not-captured");
   await expect(
@@ -937,7 +1005,7 @@ test("captured demo applications explain unavailable Find evidence", async ({
 
 test("findings expose safe demo evidence actions", async ({ page }) => {
   await page.goto("/tests/browser/browser.html?mode=demo");
-  const finding = page
+  const finding = (await openFindings(page))
     .getByRole("article")
     .filter({ hasText: "Blocked conversation" })
     .first();
@@ -960,9 +1028,9 @@ test("findings expose safe demo evidence actions", async ({ page }) => {
     exact: true,
   });
   await expect(openDemo).toBeDisabled();
-  await expect(finding).toContainText(
-    /Synthetic demo evidence cannot be searched/i,
-  );
+  await expect(
+    page.getByRole("region", { name: "Map findings" }),
+  ).toContainText("Demo evidence · not searchable");
 
   await finding.getByRole("button", { name: "Show path", exact: true }).click();
   await expect(page.locator("[data-hit].selected").first()).toBeVisible();
@@ -981,7 +1049,7 @@ test("live evidence links preserve the graph window safely", async ({
     "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&earliest=1791373500&latest=1791374400",
   );
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
-  const liveFinding = page
+  const liveFinding = (await openFindings(page))
     .getByRole("article")
     .filter({ hasText: "Blocked conversation" })
     .first();
@@ -1045,7 +1113,7 @@ test("scope fields retain dark Toolkit surfaces under classic dashboard CSS", as
     content:
       'input[type="text"] { background-color: white; border: 1px solid #ccc; box-shadow: inset 0 1px 1px #ddd; margin-bottom: 9px; }',
   });
-  const field = page.getByRole("combobox", {
+  const field = (await scope(page)).getByRole("combobox", {
     name: "Environment",
     exact: true,
   });
@@ -1067,7 +1135,7 @@ test("inferred backend findings open their collected candidate path", async ({
   page,
 }) => {
   await page.goto("/tests/browser/browser.html?mode=demo");
-  const finding = page.getByRole("article", {
+  const finding = (await openFindings(page)).getByRole("article", {
     name: "Backend inferred",
     exact: true,
   });
@@ -1126,9 +1194,6 @@ test("partial client handoff keeps its selected path unresolved and labels aggre
   });
   await expect(checkoutFrontend).toBeVisible();
   await checkoutFrontend.click();
-  await expect(details).toContainText(
-    "Any backend links shown here summarize only connections with determined handoffs.",
-  );
   await expect(details).toContainText(
     "1 aggregate backends for determined connections",
   );
@@ -1190,7 +1255,7 @@ test("findings remain reachable below the map on narrow screens", async ({
 }) => {
   await page.setViewportSize({ width: 600, height: 900 });
   await page.goto("/tests/browser/browser.html?mode=demo");
-  const findings = page.getByRole("region", { name: "Map findings" });
+  const findings = await openFindings(page);
   await expect(findings).toBeVisible();
   const finding = findings.getByRole("article", {
     name: "Blocked conversation",
@@ -1214,6 +1279,7 @@ test("traced call actions open a validated collected trace", async ({
   await page
     .getByRole("button", { name: "Service frontend", exact: true })
     .click();
+  await detailsTab(page, "Flows");
   await page
     .getByRole("complementary", { name: "Details" })
     .getByRole("button", { name: /checkout.*Traced call/ })
@@ -1277,11 +1343,14 @@ test("map facets combine, clear, and keep full evidence exports", async ({
 }) => {
   await page.goto("/tests/browser/browser.html");
   await expect(
-    page.getByRole("button", { name: "Legend", exact: true }),
+    page.getByRole("button", { name: "More actions", exact: true }),
   ).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("region", { name: "Map legend" })).toHaveCount(0);
   await page.getByRole("button", { name: "Table", exact: true }).click();
   const total = await page.locator(".table-view tbody tr").count();
-  await page
+  await (
+    await filters(page)
+  )
     .getByLabel("Filter identity", { exact: true })
     .selectOption("external");
   const filtered = await page.locator(".table-view tbody tr").count();
@@ -1290,7 +1359,7 @@ test("map facets combine, clear, and keep full evidence exports", async ({
   await expect(page.locator(".atlas-filter-status")).toContainText(
     "Findings and exports use the full map",
   );
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await more(page, "Export");
   const downloaded = page.waitForEvent("download");
   await page.getByRole("button", { name: /Map data \(JSON\)/ }).click();
   const artifact = await downloaded;
@@ -1300,15 +1369,30 @@ test("map facets combine, clear, and keep full evidence exports", async ({
   expect(exported.nodes.length).toBe(
     Number(await page.locator(".adm").getAttribute("data-node-count")),
   );
-  await page.getByLabel("Blocked only", { exact: true }).check();
+  await (
+    await filters(page)
+  )
+    .getByLabel("Blocked only", { exact: true })
+    .check();
   await expect(page.locator(".atlas-filter-status")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Close filters", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Clear filters and focus", exact: true })
     .first()
     .click();
   await expect(page.locator(".table-view tbody tr")).toHaveCount(total);
-  await page.getByLabel("Hide infrastructure", { exact: true }).check();
-  await page.getByLabel("Hide infrastructure", { exact: true }).uncheck();
+  await (
+    await filters(page)
+  )
+    .getByLabel("Hide infrastructure", { exact: true })
+    .check();
+  await (
+    await filters(page)
+  )
+    .getByLabel("Hide infrastructure", { exact: true })
+    .uncheck();
   await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
 });
 
@@ -1343,7 +1427,7 @@ test("persona preference persists but explicit view links take precedence", asyn
   page,
 }) => {
   await page.goto("/tests/browser/browser.html");
-  await page.getByRole("button", { name: "Map settings", exact: true }).click();
+  await more(page, "Map settings");
   await page
     .getByLabel("Default view for persona", { exact: true })
     .selectOption("application");
@@ -1364,15 +1448,17 @@ test("Services clears network facets and only lists traced-call legend", async (
   page,
 }) => {
   await page.goto("/tests/browser/browser.html");
-  await page
+  await (
+    await filters(page)
+  )
     .getByLabel("Filter identity", { exact: true })
     .selectOption("external");
   await page.getByRole("button", { name: "Services", exact: true }).click();
-  await expect(page.getByLabel("Filter identity", { exact: true })).toHaveCount(
-    0,
-  );
+  await expect(
+    (await filters(page)).getByLabel("Filter identity", { exact: true }),
+  ).toHaveCount(0);
   await expect(page.locator(".atlas-filter-status")).toHaveCount(0);
-  await page.getByRole("button", { name: "Legend", exact: true }).click();
+  await more(page, "Legend");
   await expect(page.getByLabel("Legend", { exact: true })).toContainText(
     "Traced call",
   );
@@ -1383,7 +1469,7 @@ test("Services clears network facets and only lists traced-call legend", async (
   await expect(
     page.getByRole("button", { name: "Network", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Map settings", exact: true }).click();
+  await more(page, "Map settings");
   await page
     .getByLabel("Default view for persona", { exact: true })
     .selectOption("application");
@@ -1431,7 +1517,9 @@ test("candidate paths stay on map tabs and remain available from Table inspectio
   page,
 }) => {
   await page.goto("/tests/browser/browser.html");
-  await page
+  await (
+    await openFindings(page)
+  )
     .getByRole("article", { name: "Blocked conversation", exact: true })
     .getByRole("button", { name: "Show path", exact: true })
     .click();
@@ -1460,7 +1548,9 @@ test("inspector full names are readable and copy exact collected text", async ({
 }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/tests/browser/browser.html");
-  await page
+  await (
+    await openFindings(page)
+  )
     .getByRole("article", { name: "Blocked conversation", exact: true })
     .getByRole("button", { name: "Show path", exact: true })
     .click();
@@ -1512,7 +1602,9 @@ test("glossary explanations are available from the keyboard", async ({
   page,
 }) => {
   await page.goto("/tests/browser/browser.html");
-  await page
+  await (
+    await openFindings(page)
+  )
     .getByRole("article", { name: "Backend inferred", exact: true })
     .getByRole("button", { name: "Show path", exact: true })
     .click();
@@ -1532,7 +1624,9 @@ test("copy-name feedback handles denied access and prevents overlapping attempts
   page,
 }) => {
   await page.goto("/tests/browser/browser.html");
-  await page
+  await (
+    await openFindings(page)
+  )
     .getByRole("article", { name: "Blocked conversation", exact: true })
     .getByRole("button", { name: "Show path", exact: true })
     .click();
@@ -1613,7 +1707,7 @@ test("copy link preserves validated scope, time, tab, and highlight state", asyn
       },
     });
   });
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await page.getByRole("button", { name: "Copy link", exact: true }).click();
   const copied = await page.evaluate(() => {
     const value = (window as Window & { __ADM_CLIPBOARD__?: string })
@@ -1638,19 +1732,19 @@ test("saved views persist per user and can be reopened or deleted", async ({
   page,
 }) => {
   await page.goto("/tests/browser/browser.html?mode=demo");
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await page.getByLabel("View name", { exact: true }).fill("Checkout demo");
   await page.getByRole("button", { name: "Save view", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Checkout demo", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await expect(
     page.getByRole("link", { name: "Checkout demo", exact: true }),
   ).toBeVisible();
   await page.getByRole("link", { name: "Checkout demo", exact: true }).click();
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Checkout demo", exact: true }),
@@ -1669,7 +1763,7 @@ test("saved views report denied storage and do not render a false save", async (
     });
   });
   await page.goto("/tests/browser/browser.html?mode=demo");
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await page.getByLabel("View name", { exact: true }).fill("Denied");
   await page.getByRole("button", { name: "Save view", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("stored");
@@ -1684,7 +1778,7 @@ test("export downloads a nonempty PNG and print invokes the browser print API", 
       (window as Window & { __ADM_PRINT__?: boolean }).__ADM_PRINT__ = true;
     };
   });
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await more(page, "Export");
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Map image \(PNG\)/ }).click();
   const download = await downloadPromise;
@@ -1705,7 +1799,7 @@ test("ACI compare previous window identifies added connections", async ({
   page,
 }) => {
   await page.goto("/tests/browser/browser.html?mode=demo");
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await more(page, "Changes");
   await page
     .getByRole("button", { name: "Compare previous window", exact: true })
     .click();
@@ -1718,12 +1812,18 @@ test("image and print exports are unavailable for an empty filtered map", async 
   page,
 }) => {
   await page.goto("/tests/browser/browser.html?mode=demo");
-  await page
+  await (
+    await filters(page)
+  )
     .getByLabel("Filter identity", { exact: true })
     .selectOption("unknown");
-  await page.getByLabel("Blocked only", { exact: true }).check();
+  await (
+    await filters(page)
+  )
+    .getByLabel("Blocked only", { exact: true })
+    .check();
   await expect(page.locator(".map-canvas > svg")).toHaveCount(0);
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await more(page, "Export");
   await expect(
     page.getByRole("button", { name: /Map image \(PNG\)/ }),
   ).toBeDisabled();
@@ -1772,7 +1872,10 @@ test("unscoped live map waits for a scope instead of querying the demo", async (
 }) => {
   await page.goto("/tests/browser/browser.html?mode=live");
   await expect(
-    page.getByRole("combobox", { name: "Environment", exact: true }),
+    (await scope(page)).getByRole("combobox", {
+      name: "Environment",
+      exact: true,
+    }),
   ).toBeEnabled();
   await expect(
     page.getByRole("heading", { name: "Choose an application to map" }),
@@ -1792,7 +1895,7 @@ test("a sole live scope is preselected without building automatically", async ({
 }) => {
   await page.goto("/tests/browser/browser.html?mode=live&fault=single-scope");
   await expect(
-    page.getByRole("combobox", { name: "Service", exact: true }),
+    (await scope(page)).getByRole("combobox", { name: "Service", exact: true }),
   ).toHaveValue("frontend");
   await expect(
     page.getByRole("heading", { name: "Choose an application to map" }),
@@ -1814,12 +1917,12 @@ test("navigation follows map scope edits and browser history", async ({
     "/tests/browser/browser.html?mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
   );
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
-  const namespace = page.getByRole("combobox", {
+  const namespace = (await scope(page)).getByRole("combobox", {
     name: "Namespace",
     exact: true,
   });
   await namespace.fill("payments");
-  for (const name of ["Applications", "Data health"]) {
+  for (const name of ["Explore", "Admin"]) {
     await expect(page.getByRole("link", { name, exact: true })).toHaveAttribute(
       "href",
       /namespace=payments/,
@@ -1832,7 +1935,7 @@ test("navigation follows map scope edits and browser history", async ({
     dispatchEvent(new PopStateEvent("popstate"));
   });
   await expect(
-    page.getByRole("link", { name: "Applications", exact: true }),
+    page.getByRole("link", { name: "Explore", exact: true }),
   ).toHaveAttribute("href", /namespace=history-scope/);
 });
 
@@ -1854,10 +1957,12 @@ test("copy and saved views use the built scope after unbuilt edits", async ({
       },
     }),
   );
-  await page
+  await (
+    await scope(page)
+  )
     .getByRole("combobox", { name: "Namespace", exact: true })
     .fill("unbuilt");
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await page.getByRole("button", { name: "Copy link", exact: true }).click();
   expect(
     await page.evaluate(() => (window as Window & { copied?: string }).copied),
@@ -1873,7 +1978,7 @@ test("copy and save require a loaded snapshot but existing views remain accessib
   page,
 }) => {
   await page.goto("/tests/browser/browser.html?mode=live");
-  await page.getByRole("button", { name: "Saved views", exact: true }).click();
+  await more(page, "Saved views");
   await expect(
     page.getByRole("button", { name: "Copy link", exact: true }),
   ).toBeDisabled();
@@ -1894,7 +1999,10 @@ test("invalid deep links recover safely with a dismissible notice", async ({
   const notice = page.getByRole("alert").filter({ hasText: "link parameters" });
   await expect(notice).toBeVisible();
   await expect(
-    page.getByRole("combobox", { name: "Namespace", exact: true }),
+    (await scope(page)).getByRole("combobox", {
+      name: "Namespace",
+      exact: true,
+    }),
   ).toHaveValue("");
   expect(
     await page.evaluate(
@@ -1957,10 +2065,10 @@ test("applications catalog lists blocked and unknown-peer scopes first", async (
   );
   const catalog = page.locator("table").last();
   const first = catalog.locator("tbody > tr").first();
-  await expect(first).toContainText("Review first: 3 unknown peers");
-  await expect(first).toContainText(
-    "in the window ending 2026-10-18 03:55 UTC",
-  );
+  // Exceptions are colored in their own column instead of a prose badge.
+  await expect(first.locator("td.atlas-exception")).toHaveText(["3"]);
+  await expect(first).toContainText("2026-10-18 03:55");
+  await expect(first).not.toContainText("Review first");
   await expect(first).toContainText("checkout");
   const find = page.getByLabel("Find an address, EPG, or device");
   const findBox = await find.boundingBox();
@@ -1975,10 +2083,8 @@ test("narrow maps keep findings below the controls instead of overlapping them",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/tests/browser/browser.html");
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
-  const filters = await page.locator(".atlas-map-filters").boundingBox();
-  const findings = await page
-    .getByRole("region", { name: "Map findings" })
-    .boundingBox();
+  const filters = await page.locator(".toolbar").boundingBox();
+  const findings = await (await openFindings(page)).boundingBox();
   const mapArea = await page.locator(".map-area").boundingBox();
   expect(mapArea!.height).toBeGreaterThanOrEqual(400);
   expect(findings!.y).toBeGreaterThanOrEqual(filters!.y + filters!.height);
@@ -2029,7 +2135,9 @@ test("showing a candidate path keeps the map usable and fits both ends", async (
   await page.goto("/tests/browser/browser.html");
   await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
   const before = (await page.locator(".map-area").boundingBox())!.height;
-  await page
+  await (
+    await openFindings(page)
+  )
     .getByRole("article", { name: "Blocked conversation", exact: true })
     .getByRole("button", { name: "Show path", exact: true })
     .click();
@@ -2075,7 +2183,7 @@ test("applications tables use the page width and every column stays reachable", 
   await catalog.evaluate((table) => {
     table.parentElement!.scrollLeft = 0;
   });
-  const unknown = catalog.getByRole("columnheader", { name: /Unknown peers/ });
+  const unknown = catalog.getByRole("columnheader", { name: /Unknown \(1h\)/ });
   const box = (await unknown.boundingBox())!;
   const wrapper = (await catalog.locator("xpath=..").boundingBox())!;
   expect(box.x + box.width).toBeLessThanOrEqual(wrapper.x + wrapper.width + 1);
@@ -2099,4 +2207,221 @@ test("directed focus discloses empty, inferred and blocked evidence", async ({
   await expect(status).toContainText(
     "1 blocked conversation between shown cards, not followed.",
   );
+});
+
+test("Explore hosts trace and device placeholders that deep link", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=applications&mode=demo");
+  await expect(
+    page.getByRole("link", { name: "Explore", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  const trace = page.getByRole("form", { name: "Trace path" });
+  await expect(trace.getByRole("button", { name: "Trace" })).toBeDisabled();
+  await trace.getByLabel("Trace source").fill("10.30.40.25");
+  await trace.getByLabel("Trace destination").fill("orders-db-01");
+  await trace.getByRole("button", { name: "Trace" }).click();
+  // The trace draws inline on Explore and keeps the pair in the URL.
+  const view = page.getByRole("region", {
+    name: "Trace 10.30.40.25 to orders-db-01",
+  });
+  await expect(view).toContainText("win-client-01 → orders-db-01");
+  await expect(view.getByRole("list", { name: "Hops" })).toBeVisible();
+  await expect(page).toHaveURL(
+    /trace_src=10\.30\.40\.25&trace_dst=orders-db-01/,
+  );
+  await view.getByRole("link", { name: "Open on map" }).click();
+  await expect(page).toHaveURL(/\/map\?/);
+  const url = new URL(page.url());
+  expect(url.searchParams.get("trace_src")).toBe("10.30.40.25");
+  expect(url.searchParams.get("trace_dst")).toBe("orders-db-01");
+  await expect(page.locator(".atlas-map-header")).toBeVisible();
+
+  await page.goto("/tests/browser/browser.html?page=applications&mode=demo");
+  const device = page.getByRole("form", { name: "Device lookup" });
+  await device.getByLabel("Device name or ID").fill("pod-1/node-103");
+  await device.getByRole("button", { name: "Open" }).click();
+  await expect(page).toHaveURL(/\/device\?mode=demo&id=pod-1%2Fnode-103$/);
+  await expect(
+    page.getByRole("heading", { name: "leaf-103", exact: true }),
+  ).toBeVisible();
+});
+
+test("trace deep link draws the demo hop strip and highlights the map", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=map&mode=demo&scenario=aci&trace_src=10.30.40.25&trace_dst=10.20.30.40",
+  );
+  const trace = page.getByRole("region", {
+    name: "Trace 10.30.40.25 to 10.20.30.40",
+  });
+  await expect(trace).toContainText("win-client-01 → orders-db-01");
+  await expect(trace).toContainText("tcp/5432");
+  await expect(trace).toContainText("2 records");
+  await expect(trace).toContainText("Traced");
+  await expect(trace.getByText("Blocked").first()).toBeVisible();
+  const hops = trace.getByRole("list", { name: "Hops" }).getByRole("button");
+  await expect(hops).toHaveCount(7);
+  // IS-IS and COOP evidence narrow the ECMP choice to one spine (still inferred).
+  await expect(hops.nth(3)).toContainText("spine-201");
+  await expect(hops.nth(3)).toContainText("Inferred");
+  await expect(hops.nth(1)).not.toContainText("Inferred");
+  await expect(page.locator(".map-canvas .item.match").first()).toBeVisible();
+  await hops.nth(1).click();
+  const detail = trace.getByRole("complementary", { name: "Hop vmm-shop" });
+  await expect(detail).toContainText("Stream NetFlow");
+  await expect(detail).toContainText("vmnic2");
+  await expect(detail.getByRole("link", { name: "Open device" })).toBeVisible();
+  // Closing the trace drops it from the shared URL.
+  await trace.getByRole("button", { name: "Close trace" }).click();
+  await expect(trace).toHaveCount(0);
+  await expect(page).not.toHaveURL(/trace_src/);
+});
+
+test("map trace form runs a trace by name and keeps it in the URL", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=map&mode=demo");
+  const form = page.getByRole("form", { name: "Trace path" });
+  await form.getByLabel("Trace source").fill("win-client-01");
+  await form.getByLabel("Trace destination").fill("orders-db-01");
+  await form.getByRole("button", { name: "Trace" }).click();
+  await expect(page).toHaveURL(
+    /trace_src=win-client-01&trace_dst=orders-db-01/,
+  );
+  await expect(
+    page.getByRole("region", { name: "Trace win-client-01 to orders-db-01" }),
+  ).toContainText("Traced");
+  await form.getByLabel("Trace source").fill("10.0.0.250");
+  await form.getByRole("button", { name: "Trace" }).click();
+  await expect(
+    page.getByRole("region", { name: "Trace 10.0.0.250 to orders-db-01" }),
+  ).toContainText("not a known endpoint");
+});
+
+test("device page lists conversations and a row traces the pair", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=device&mode=demo&id=192.0.2.73",
+  );
+  await expect(
+    page.getByRole("heading", { name: "esx-03", exact: true }),
+  ).toBeVisible();
+  const kpis = page.getByLabel("Summary");
+  await expect(kpis).toContainText("1 flow");
+  await expect(kpis).toContainText("2 peers");
+  await expect(kpis).toContainText("60 B");
+  await expect(kpis).toContainText("0 blocked");
+  await expect(kpis).toContainText("Stream NetFlow · 192.0.2.73");
+  const table = page.getByRole("region", { name: "Conversations" });
+  await expect(table).toContainText("win-client-01");
+  await expect(table).toContainText("tcp/5432");
+  // Separate In and Out columns.
+  await expect(table.getByRole("cell", { name: "ifIndex 18" })).toBeVisible();
+  await expect(table.getByRole("cell", { name: "ifIndex 14" })).toBeVisible();
+  await table.getByRole("cell", { name: "60 B" }).click();
+  await expect(page).toHaveURL(/\/map\?.*trace_src=10\.30\.40\.25/);
+  await expect(
+    page.getByRole("region", { name: "Trace 10.30.40.25 to 10.20.30.40" }),
+  ).toContainText("Traced");
+});
+
+test("device page resolves a DN and shows blocked conversations", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=device&mode=demo&id=topology/pod-1/node-103",
+  );
+  await expect(
+    page.getByRole("heading", { name: "leaf-103", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Summary")).toContainText("1 blocked");
+  await page.goto("/tests/browser/browser.html?page=device&mode=demo&id=nope");
+  await expect(page.getByText("Not in inventory")).toBeVisible();
+});
+
+test("double-clicking a device card opens its page", async ({ page }) => {
+  await page.goto("/tests/browser/browser.html?page=map&mode=demo&tab=devices");
+  const card = page.locator(".device-card header").first();
+  await card.dblclick();
+  await expect(page).toHaveURL(/\/device\?mode=demo&id=/);
+  await expect(
+    page.getByLabel("Summary").or(page.getByText("Not in inventory")),
+  ).toBeVisible();
+});
+
+test("Admin groups Setup and Data health; Help is a header link", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/browser.html?page=data_health&mode=demo");
+  const tabs = page.getByRole("navigation", { name: "Admin" });
+  await expect(
+    tabs.getByRole("link", { name: "Data health", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("link", { name: "Admin", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("link", { name: "Help", exact: true }),
+  ).toHaveAttribute("href", /\/help$/);
+});
+
+test("map chrome stays within one header row at 1440x900", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // The real bootstrap, not the harness page, carries the production chrome.
+  await page.goto("/map?mode=demo");
+  await expect(page.locator(".adm")).toHaveAttribute("data-loaded", "true");
+  const area = (await page.locator(".map-area").boundingBox())!;
+  expect(area.y).toBeLessThanOrEqual(120);
+  await expect(page.getByRole("button", { name: /^Findings/ })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  await expect(page.getByRole("region", { name: "Map findings" })).toHaveCount(
+    0,
+  );
+});
+
+test("live Explore traces names without a built map", async ({ page }) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=path-trace",
+  );
+  const form = page.getByRole("form", { name: "Trace path" });
+  await form.getByLabel("Trace source").fill("win-client-01");
+  await form.getByLabel("Trace destination").fill("10.20.30.40");
+  await form.getByRole("button", { name: "Trace" }).click();
+  const view = page.getByRole("region", {
+    name: "Trace win-client-01 to 10.20.30.40",
+  });
+  await expect(view).toContainText("tcp/5432");
+  await expect(view).toContainText("Traced");
+  await expect(
+    view.getByRole("list", { name: "Hops" }).getByRole("button"),
+  ).toHaveCount(7);
+  const searches = await page.evaluate(() =>
+    (window.__ADM_REQUESTS__ ?? []).map((r) => r.spl),
+  );
+  expect(searches).toContain("| `adm_path_trace_resolve(win-client-01)`");
+  expect(searches).toContain("| `adm_path_trace(10.30.40.25,10.20.30.40)`");
+  await form.getByLabel("Trace source").fill("ghost");
+  await form.getByRole("button", { name: "Trace" }).click();
+  await expect(
+    page.getByRole("region", { name: "Trace ghost to 10.20.30.40" }),
+  ).toContainText('Source "ghost" not found.');
+});
+
+test("live trace search errors offer a retry", async ({ page }) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=trace-error",
+  );
+  const form = page.getByRole("form", { name: "Trace path" });
+  await form.getByLabel("Trace source").fill("10.30.40.25");
+  await form.getByLabel("Trace destination").fill("10.20.30.40");
+  await form.getByRole("button", { name: "Trace" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "timeout" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
 });

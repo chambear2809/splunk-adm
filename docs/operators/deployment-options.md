@@ -1,6 +1,6 @@
 # Deployment options and missing sources
 
-Use this guide to choose the sources and jobs for your deployment before following the [Splunk setup sequence](splunk-setup-guide.md). The original ACI pilot and the Catalyst → ACI / Meraki wireless → NX-OS demos are examples, not a requirement to install every product.
+Use this guide to choose the sources and jobs for your deployment before following the [Splunk setup sequence](splunk-setup-guide.md). Targets: Splunk Cloud and Enterprise 10.6+, with all modular inputs on a heavy forwarder ([reference topology](README.md#reference-topology)). Full source list: [data-source matrix](README.md#data-source-matrix). The original ACI pilot and the Catalyst → ACI / Meraki wireless → NX-OS demos are examples, not a requirement to install every product.
 
 ## Release and qualification boundary
 
@@ -22,6 +22,10 @@ Synthetic checks do not qualify actual controller API collection, exporter decod
 | Catalyst Center client observations (V2)                                                         | Source-qualified client identity and receipt-eligible attachment observations | No Catalyst client enrichment. Available flow records may still identify an IP endpoint. A snapshot by itself is not a traffic path.                                               |
 | Meraki association events (V2)                                                                   | Time- and source-scoped wireless attachment evidence                          | No association-based AP/SSID attribution. NetFlow alone does not establish that a client was wireless.                                                                             |
 | Hubble handoff evidence plus Kubernetes history                                                  | Evidence for a selected client's backend and receiving node                   | A Service frontend may remain visible while its backend boundary is unresolved; aggregate backend traffic cannot substitute for that client's evidence.                            |
+| ACI VMM + adjacency classes (`compHv`, `hvsAdj`, `compHpNic`, …) | vSphere host, VDS, VM port and host-uplink stages on path trace | VM paths stop at the leaf attachment; uplink shown as "not collected". |
+| VMware VDS IPFIX (Stream, `vmware_vds_ipfix`) | VDS hop "Seen"; ESXi host on the Device page | VDS hop stays "Inferred". |
+| ACI `isisAdjEp` + `coopEpRec` | Evidence narrowing the ECMP spine candidates | All topology spines stay candidates. Spines are never "Seen" (no spine NetFlow). |
+| Splunk Add-on for VMware, Cisco Intersight | Nothing yet (staged; no Atlas SPL) | No effect today. |
 
 Absent sources, permissions, ambiguous identities and incomplete reads must remain explicit gaps. Never fill a live-data gap with captured demo rows. Do not create unused vendor inputs or grant broad index access just to silence a warning.
 

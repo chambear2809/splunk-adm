@@ -1,7 +1,7 @@
 import { ControllerCatalogSection } from "../AppDynamicsCatalog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
-import TableExport from "@splunk/react-ui/Table";
+import Table from "../SimpleTable";
 import TextExport from "@splunk/react-ui/Text";
 import { ScopeBar } from "../map/ScopeBar";
 import { TimePicker } from "../map/TimePicker";
@@ -25,9 +25,7 @@ import {
   type NetworkClientFindRow,
 } from "../data/catalog";
 import {
-  DEMO_WINDOW,
   DEMO_SCENARIOS,
-  demoArgs as defaultDemoArgs,
   demoArgsFor,
   demoScenarioForArgs,
   demoWindowFor,
@@ -37,16 +35,14 @@ import { loadCatalogDemo, type FindQueryCapture } from "../data/catalogDemo";
 import { toolkitDefault } from "../app/interop";
 import { pageURL, stateParams, type UrlState } from "../app/urlState";
 import { argError } from "../provider";
-import { plural } from "../glossary";
 import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
-import {
-  applicationDemoEntryTarget,
-  applicationMapTarget,
-} from "./applicationMapTarget";
+import { applicationMapTarget } from "./applicationMapTarget";
+import { DeviceLookup, ExploreTabs, TracePathForm } from "./ExploreTools";
+import { TraceView } from "../trace/TraceView";
+import { usePathTrace } from "../trace/usePathTrace";
 
 const Button = toolkitDefault(ButtonExport);
-const Table = toolkitDefault(TableExport);
 const Text = toolkitDefault(TextExport);
 type SortKey = keyof CatalogRow;
 const utc = (epoch: string | number) => {
@@ -67,16 +63,13 @@ const isSearchResultLimitError = (
   (value instanceof Error && value.name === "SearchResultLimitError");
 const columns: { key: SortKey; label: string }[] = [
   { key: "service", label: "Service" },
-  { key: "environment", label: "Environment" },
-  { key: "cluster", label: "Cluster" },
-  { key: "namespace", label: "Namespace" },
-  { key: "pods", label: "Bound pods" },
+  { key: "environment", label: "Scope" },
+  { key: "pods", label: "Pods" },
   { key: "peers", label: "Peers" },
   { key: "conversations_1h", label: "Conversations (1h)" },
   { key: "blocked_1h", label: "Blocked (1h)" },
-  { key: "unknown_peers_1h", label: "Unknown peers (1h)" },
-  { key: "window_start", label: "Observation window start (UTC)" },
-  { key: "window_end", label: "Observation window end (UTC)" },
+  { key: "unknown_peers_1h", label: "Unknown (1h)" },
+  { key: "window_end", label: "Window end (UTC)" },
 ];
 
 export function ApplicationsPage({
@@ -92,32 +85,49 @@ export function ApplicationsPage({
 }) {
   // The demo bundle is loaded on demand in Splunk builds. Do not resolve demo
   // fixtures while rendering a live catalog route, where they are not prepared.
+  // Demo captures ship only with the development build; the packaged app is
+  // live-only, so every demo reference below is compiled out there.
+  const demoMode = !__ADM_SPLUNK_BUILD__ && state.mode === "demo";
   const demoArgs =
-    state.mode === "demo" ? demoArgsFor(state.scenario) : state.args;
+    !__ADM_SPLUNK_BUILD__ && state.mode === "demo"
+      ? demoArgsFor(state.scenario)
+      : state.args;
   const demoWindow =
-    state.mode === "demo"
+    !__ADM_SPLUNK_BUILD__ && state.mode === "demo"
       ? demoWindowFor(state.scenario)
       : { earliest: state.earliest, latest: state.latest };
-  const demoEntryTarget = applicationDemoEntryTarget(
-    state.mode,
-    demoArgs,
-    demoWindow.earliest,
-    demoWindow.latest,
-    {
-      args: defaultDemoArgs,
-      earliest: DEMO_WINDOW.earliest,
-      latest: DEMO_WINDOW.latest,
-    },
-  );
-  const [args, setArgs] = useState(
-    state.mode === "demo" ? demoArgsFor(state.scenario) : state.args,
-  );
+  const [args, setArgs] = useState(demoArgs);
   const [earliest, setEarliest] = useState(
-    state.mode === "demo" ? demoWindow.earliest : state.earliest,
+    demoMode ? demoWindow.earliest : state.earliest,
   );
   const [latest, setLatest] = useState(
-    state.mode === "demo" ? demoWindow.latest : state.latest,
+    demoMode ? demoWindow.latest : state.latest,
   );
+  const [traceRequest, setTraceRequest] = useState(state.trace);
+  const traceResult = usePathTrace({
+    request: traceRequest,
+    demo: demoMode,
+    client,
+    earliest,
+    latest,
+    timezone,
+  });
+  const changeTrace = (next?: { src: string; dst: string }) => {
+    setTraceRequest(next);
+    const params = new URLSearchParams(location.search);
+    params.delete("trace_src");
+    params.delete("trace_dst");
+    if (next) {
+      params.set("trace_src", next.src);
+      params.set("trace_dst", next.dst);
+    }
+    history.replaceState(null, "", `${location.pathname}?${params}`);
+  };
+  const scopeKnown =
+    demoMode ||
+    (Object.keys(args) as (keyof GraphArgs)[]).every(
+      (key) => !argError(key, args[key]),
+    );
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [findRows, setFindRows] = useState<FindRow[]>([]);
   const [networkClientRows, setNetworkClientRows] = useState<
@@ -279,7 +289,7 @@ export function ApplicationsPage({
     setFindError(undefined);
     setNetworkClientError(undefined);
     if (state.mode === "live") loadCatalog();
-    else {
+    else if (!__ADM_SPLUNK_BUILD__) {
       catalogController.current?.abort();
       findController.current?.abort();
       setCatalog([]);
@@ -300,9 +310,7 @@ export function ApplicationsPage({
           );
           setEarliest(capture.find.earliest);
           setLatest(capture.find.latest);
-          setWarning(
-            "Captured catalog; metrics reflect the captured observation window.",
-          );
+          setWarning(undefined);
         })
         .catch((reason: unknown) => {
           if (current === revision.current)
@@ -371,8 +379,8 @@ export function ApplicationsPage({
   ].filter(Boolean);
   const mapReason = (row: FindRow) =>
     row.scopeError ??
-    (state.mode === "demo" && !demoScenarioForArgs(row)
-      ? "No captured map is available for this scope."
+    (!__ADM_SPLUNK_BUILD__ && state.mode === "demo" && !demoScenarioForArgs(row)
+      ? "No captured map for this scope"
       : undefined);
   const open = (row: FindRow) => {
     if (mapReason(row)) return;
@@ -382,6 +390,8 @@ export function ApplicationsPage({
       earliest,
       latest,
       () => {
+        if (__ADM_SPLUNK_BUILD__)
+          return { scenario: state.scenario, earliest, latest };
         const rowScenario = demoScenarioForArgs(row) ?? state.scenario;
         const rowWindow = demoWindowFor(rowScenario);
         return {
@@ -420,10 +430,11 @@ export function ApplicationsPage({
           label="Open map"
           aria-label={`Open map for ${scopeLabel(row.service)}`}
           disabled={!!mapReason(row)}
+          title={mapReason(row)}
           onClick={() => open(row)}
         />
       </div>
-      {mapReason(row) && <small>{mapReason(row)}</small>}
+      {row.scopeError && <small>{row.scopeError}</small>}
     </div>
   );
   let findValidation: string | undefined;
@@ -433,11 +444,27 @@ export function ApplicationsPage({
     findValidation = "Enter an exact IP, EPG or attached-device value.";
   }
   const uncaptured =
-    state.mode === "demo" &&
+    demoMode &&
     !demoQueries.some((query) => query.query === findValue) &&
     !demoNetworkClientQueries.some((query) => query.query === findValue);
+  const changeFind = (value: string) => {
+    findController.current?.abort();
+    setFindValue(value);
+    setFindRows([]);
+    setNetworkClientRows([]);
+    setFindRan(false);
+    setFindLoading(false);
+    setFindError(undefined);
+    setNetworkClientError(undefined);
+  };
+  const findDisabled =
+    findLoading ||
+    !!findValidation ||
+    uncaptured ||
+    (state.mode === "live" && !client) ||
+    !!timeError(earliest, latest, timezone);
   const runFind = () => {
-    if (state.mode === "demo") {
+    if (demoMode) {
       const match = demoQueries.find((query) => query.query === findValue);
       const clientMatch = demoNetworkClientQueries.find(
         (query) => query.query === findValue,
@@ -464,7 +491,7 @@ export function ApplicationsPage({
       setFindError(undefined);
       setNetworkClientError(undefined);
       setFindRan(true);
-      setWarning("Captured Find result.");
+      setWarning(undefined);
       return;
     }
     if (!client) return;
@@ -583,417 +610,56 @@ export function ApplicationsPage({
           setFindLoading(false);
       });
   };
+  const capturedQueries = [...demoQueries, ...demoNetworkClientQueries]
+    .map((query) => query.query)
+    .filter((query, index, values) => values.indexOf(query) === index);
+  const text = findValue.trim().toLowerCase();
+  const textMatches = text
+    ? sorted.filter((row) =>
+        [row.service, row.namespace, row.cluster, row.environment].some(
+          (value) =>
+            String(value ?? "")
+              .toLowerCase()
+              .includes(text),
+        ),
+      )
+    : sorted;
+  // The omnibox narrows the catalog by name; addresses fall through to Find.
+  const shown = textMatches.length ? textMatches : sorted;
   return (
-    <main className="atlas-page atlas-page-wide">
-      <h1>Applications</h1>
-      {state.mode === "demo" && (
-        <label className="scenario">
-          <span>Demo scenario</span>
-          <select
-            aria-label="Demo scenario"
-            value={state.scenario}
-            onChange={(event) => {
-              const scenario = event.target.value as DemoScenario;
-              const nextWindow = demoWindowFor(scenario);
-              location.assign(
-                pageURL(
-                  "applications",
-                  stateParams({
-                    ...state,
-                    scenario,
-                    args: demoArgsFor(scenario),
-                    earliest: nextWindow.earliest,
-                    latest: nextWindow.latest,
-                  }),
-                ),
-              );
-            }}
-          >
-            {DEMO_SCENARIOS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+    <main className="atlas-page atlas-page-wide atlas-explore">
+      <h1 className="atlas-visually-hidden">Explore</h1>
+      <ExploreTabs active="applications" />
+      <div className="atlas-omnibox" role="search">
+        <label htmlFor="atlas-find-value" className="atlas-visually-hidden">
+          Find an address, EPG, or device
         </label>
-      )}
-      {state.mode === "demo" && state.scenario === "meraki-nxos" && (
-        <p className="muted">
-          Wireless attribution is correlated from Meraki association and MS390
-          IPFIX flow evidence; it does not establish a packet route.
-        </p>
-      )}
-      {state.mode === "demo" &&
-        (demoQueries.length > 0 || demoNetworkClientQueries.length > 0) && (
-          <p>
-            Captured Find window: {utc(earliest)}–{utc(latest)}. Map links use
-            the selected captured map window: {utc(demoWindow.earliest)}–
-            {utc(demoWindow.latest)}.
-          </p>
-        )}
-      {(state.mode === "live" || state.mode === "demo") && (
-        <>
-          <div className="atlas-find">
-            <label htmlFor="atlas-find-value">
-              Find an address, EPG, or device
-            </label>
-            <div className="atlas-find-controls">
-              <Text
-                inputId="atlas-find-value"
-                autoComplete="off"
-                spellCheck={false}
-                value={findValue}
-                onChange={(_event, { value }) => {
-                  findController.current?.abort();
-                  setFindValue(value);
-                  setFindRows([]);
-                  setNetworkClientRows([]);
-                  setFindRan(false);
-                  setFindLoading(false);
-                  setFindError(undefined);
-                  setNetworkClientError(undefined);
-                }}
-              />
-              <Button
-                label="Find"
-                onClick={runFind}
-                disabled={
-                  findLoading ||
-                  !!findValidation ||
-                  uncaptured ||
-                  (state.mode === "live" && !client) ||
-                  !!timeError(earliest, latest, timezone)
-                }
-              />
-            </div>
-          </div>
-          <p className="muted">
-            Find returns applications bound to a matching pod or observed
-            communicating with the matching endpoint. Exact IPv4 or MAC searches
-            also return source-qualified client attachment evidence when
-            available. Bound pods reflect retained bindings; counts describe
-            distinct direct conversations in the displayed window.
-          </p>
-          {uncaptured && (
-            <p>
-              Choose a captured query:{" "}
-              {[...demoQueries, ...demoNetworkClientQueries]
-                .map((query) => query.query)
-                .filter(
-                  (query, index, values) => values.indexOf(query) === index,
-                )
-                .join(", ")}
-              . Other values have no captured Find evidence.
-            </p>
-          )}
-          {state.mode === "live" && findValidation && <p>{findValidation}</p>}
-          {findLoading && <p>Searching the selected time window…</p>}
-          {findError && (
-            <p role="alert">
-              {findError} <Button label="Retry Find" onClick={runFind} />
-            </p>
-          )}
-          {networkClientError && (
-            <p role="alert">
-              {networkClientError}{" "}
-              <Button label="Retry Find" onClick={runFind} />
-            </p>
-          )}
-          {findRan &&
-            !findLoading &&
-            !findError &&
-            !networkClientError &&
-            !findRows.length &&
-            !networkClientRows.length && (
-              <p>
-                {state.mode === "demo"
-                  ? "This Find query is not included in the captured evidence."
-                  : "No matching applications found."}
-              </p>
-            )}
-          {findRows.length > 0 && (
-            <Table aria-label="Find results" horizontalOverflow="scroll">
-              <Table.Head>
-                <Table.HeadCell width={280}>Service</Table.HeadCell>
-                <Table.HeadCell width={140}>Environment</Table.HeadCell>
-                <Table.HeadCell width={180}>Cluster</Table.HeadCell>
-                <Table.HeadCell width={140}>Namespace</Table.HeadCell>
-              </Table.Head>
-              <Table.Body>
-                {findRows.map((row) => (
-                  <Table.Row key={row._key}>
-                    <Table.Cell title={row.scopeError}>
-                      {mapAction(row)}
-                    </Table.Cell>
-                    <Table.Cell>{scopeLabel(row.environment)}</Table.Cell>
-                    <Table.Cell>{scopeLabel(row.cluster)}</Table.Cell>
-                    <Table.Cell>{scopeLabel(row.namespace)}</Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
-          )}
-          {networkClientRows.length > 0 && (
-            <Table
-              aria-label="Network client evidence"
-              horizontalOverflow="scroll"
-            >
-              <Table.Head>
-                <Table.HeadCell>Client</Table.HeadCell>
-                <Table.HeadCell>Source and authority</Table.HeadCell>
-                <Table.HeadCell>Routing scope</Table.HeadCell>
-                <Table.HeadCell>Attachment evidence</Table.HeadCell>
-                <Table.HeadCell>SSID</Table.HeadCell>
-                <Table.HeadCell>Source and collection times</Table.HeadCell>
-              </Table.Head>
-              <Table.Body>
-                {networkClientRows.map((row) => (
-                  <Table.Row key={row._key}>
-                    <Table.Cell>
-                      {row.client_mac ??
-                        row.client_ip ??
-                        row.native_id ??
-                        row._key}
-                      {row.attachment_device_name && (
-                        <small>
-                          <br />
-                          Observed device: {row.attachment_device_name}
-                          {row.attachment_device_id
-                            ? ` · ${row.attachment_device_id}`
-                            : ""}
-                        </small>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {row.access_platform ?? row.source}
-                      {row.source_authority ? ` · ${row.source_authority}` : ""}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {row.scope ?? "Unmapped"}
-                      {row.routing_domain ? ` · ${row.routing_domain}` : ""}
-                      {row.cluster ? ` · ${row.cluster}` : ""}
-                    </Table.Cell>
-                    <Table.Cell>
-                      {row.attachment_status}
-                      {row.mapping_status &&
-                      row.mapping_status !== row.attachment_status
-                        ? ` · mapping ${row.mapping_status}`
-                        : ""}
-                      {row.attachment_basis ? ` · ${row.attachment_basis}` : ""}
-                      {row.diagnostic_status && ` · ${row.diagnostic_status}`}
-                      {row.diagnostic_reason ||
-                      row.quality_reason ||
-                      row.warning ? (
-                        <small>
-                          <br />
-                          {row.diagnostic_reason ??
-                            row.quality_reason ??
-                            row.warning}
-                        </small>
-                      ) : null}
-                    </Table.Cell>
-                    <Table.Cell>{row.ssid_number ?? "—"}</Table.Cell>
-                    <Table.Cell>
-                      {row.source_time !== undefined
-                        ? utc(row.source_time)
-                        : "Source time unavailable"}
-                      {row.attachment_event_time !== undefined && (
-                        <small>
-                          <br />
-                          Attachment event {utc(row.attachment_event_time)}
-                        </small>
-                      )}
-                      <small>
-                        <br />
-                        Received{" "}
-                        {row.attachment_received_time !== undefined ||
-                        row.received_time !== undefined
-                          ? utc(
-                              row.attachment_received_time ??
-                                row.received_time!,
-                            )
-                          : "time unavailable"}
-                        {row.attachment_collected_time !== undefined
-                          ? ` · collected ${utc(row.attachment_collected_time)}`
-                          : ""}
-                        {row.latest_received_time !== undefined &&
-                        row.latest_received_time !== row.received_time
-                          ? ` · latest ${utc(row.latest_received_time)}`
-                          : ""}
-                        {row.attachment_collected_time !== undefined
-                          ? ` · source collection ${utc(row.attachment_collected_time)}`
-                          : ""}
-                      </small>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
-          )}
-          <p>
-            Choose an application scope to explore its services and network
-            dependencies.
-          </p>
-          <p>
-            Qualified rows report a finite ownership/span observation window;
-            map views use that row window when available. Legacy rows may have
-            fewer metrics and remain quarantined.
-          </p>
-          {loading && <p>Loading application catalog…</p>}
-          {error && (
-            <p role="alert">
-              {error}{" "}
-              <Button
-                label="Retry"
-                onClick={() =>
-                  state.mode === "demo"
-                    ? setDemoRetry((value) => value + 1)
-                    : loadCatalog()
-                }
-              />
-            </p>
-          )}
-          {warning && <p role="status">{warning}</p>}
-          {!loading && !error && !sorted.length && (
-            <>
-              <p>No applications are available for this time window.</p>
-              {state.mode === "live" && (
-                <p>
-                  Qualified application identity is unavailable. Legacy catalog
-                  bindings are quarantined until temporal authority is
-                  established. Inspect Source evidence in Data health. An empty
-                  catalog does not establish that there are no dependencies.
-                </p>
-              )}
-            </>
-          )}
-          {!!sorted.length && (
-            <Table aria-label="Application catalog" horizontalOverflow="scroll">
-              <Table.Head>
-                {columns.map((column) => (
-                  <Table.HeadCell
-                    key={column.key}
-                    width={
-                      column.key === "service"
-                        ? 240
-                        : column.key.startsWith("window_")
-                          ? 150
-                          : column.key === "conversations_1h" ||
-                              column.key === "unknown_peers_1h"
-                            ? 140
-                            : column.key === "environment"
-                              ? 100
-                              : 90
-                    }
-                    tooltip={column.label}
-                    sortKey={column.key}
-                    sortDir={
-                      sort.key === column.key
-                        ? sort.descending
-                          ? "desc"
-                          : "asc"
-                        : "none"
-                    }
-                    onSort={(_event, data) =>
-                      setSort({
-                        key: column.key,
-                        descending: data.sortDir === "desc",
-                      })
-                    }
-                  >
-                    {column.label}
-                  </Table.HeadCell>
-                ))}
-              </Table.Head>
-              <Table.Body>
-                {sorted.map((row) => (
-                  <Table.Row key={row._key}>
-                    {columns.map((column) => (
-                      <Table.Cell key={column.key} title={row.scopeError}>
-                        {column.key === "service" ? (
-                          <div>
-                            {mapAction(row)}
-                            {(row.blocked_1h ?? 0) > 0 ||
-                            (row.unknown_peers_1h ?? 0) > 0 ? (
-                              <small className="atlas-attention">
-                                Review first:{" "}
-                                {[
-                                  row.blocked_1h
-                                    ? `${row.blocked_1h} blocked`
-                                    : "",
-                                  row.unknown_peers_1h
-                                    ? plural(
-                                        row.unknown_peers_1h,
-                                        "unknown peer",
-                                      )
-                                    : "",
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}{" "}
-                                in the window ending{" "}
-                                {typeof row.window_end === "number"
-                                  ? utc(row.window_end)
-                                  : "(time unavailable)"}
-                              </small>
-                            ) : null}
-                          </div>
-                        ) : ["window_start", "window_end"].includes(
-                            column.key,
-                          ) && typeof row[column.key] === "number" ? (
-                          new Date(
-                            (row[column.key] as number) * 1000,
-                          ).toISOString()
-                        ) : typeof row[column.key] === "string" ? (
-                          scopeLabel(row[column.key] as string)
-                        ) : (
-                          (row[column.key] ?? "—")
-                        )}
-                      </Table.Cell>
-                    ))}
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table>
-          )}
-        </>
-      )}
-      <ControllerCatalogSection state={state} client={client} />
-      <p>
-        <a href={pageURL("setup", stateParams(state))}>Check catalog setup</a>
-      </p>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!errors.length)
-            location.assign(
-              pageURL(
-                "map",
-                stateParams({
-                  ...state,
-                  args,
-                  scenario: state.scenario,
-                  earliest:
-                    state.mode === "demo" ? demoWindow.earliest : earliest,
-                  latest: state.mode === "demo" ? demoWindow.latest : latest,
-                }),
-              ),
-            );
-        }}
-      >
-        <ScopeBar
-          args={args}
-          onChange={setArgs}
-          live={state.mode === "live"}
-          client={client}
-          demoArgs={state.mode === "demo" ? demoArgs : undefined}
-          scenario={state.scenario}
+        <Text
+          inputId="atlas-find-value"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="Application, IP, MAC, EPG or device"
+          value={findValue}
+          onChange={(_event, { value }) => changeFind(value)}
+          onKeyDown={(event: React.KeyboardEvent) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              if (!findDisabled) runFind();
+            }
+          }}
+        />
+        <Button
+          label={findLoading ? "Finding…" : "Find"}
+          aria-label="Find"
+          onClick={runFind}
+          disabled={findDisabled}
         />
         <TimePicker
           earliest={earliest}
           latest={latest}
           timezone={timezone}
           live={inSplunk}
-          disabled={state.mode === "demo"}
+          disabled={demoMode}
           onChange={(start, end) => {
             findController.current?.abort();
             setEarliest(start);
@@ -1006,29 +672,393 @@ export function ApplicationsPage({
             setNetworkClientError(undefined);
           }}
         />
-        <Button
-          type="submit"
-          appearance="primary"
-          disabled={!!errors.length}
-          label="Open map"
+        {!__ADM_SPLUNK_BUILD__ && state.mode === "demo" && (
+          <>
+            <span
+              className="chip demo"
+              title={`Captured Find window ${utc(earliest)}–${utc(latest)}; map window ${utc(demoWindow.earliest)}–${utc(demoWindow.latest)}`}
+            >
+              Demo data
+            </span>
+            <select
+              className="atlas-compact-select"
+              aria-label="Demo scenario"
+              value={state.scenario}
+              onChange={(event) => {
+                const scenario = event.target.value as DemoScenario;
+                const nextWindow = demoWindowFor(scenario);
+                location.assign(
+                  pageURL(
+                    "applications",
+                    stateParams({
+                      ...state,
+                      scenario,
+                      args: demoArgsFor(scenario),
+                      earliest: nextWindow.earliest,
+                      latest: nextWindow.latest,
+                    }),
+                  ),
+                );
+              }}
+            >
+              {DEMO_SCENARIOS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+      </div>
+      <div className="atlas-explore-tools" aria-label="Investigate">
+        <TracePathForm
+          key={traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""}
+          initial={traceRequest}
+          onSubmit={(src, dst) => changeTrace({ src, dst })}
         />
-      </form>
-      <p>
-        <a
-          href={pageURL(
-            "map",
-            stateParams({
-              ...state,
-              mode: "demo",
-              args: demoEntryTarget.args,
-              earliest: demoEntryTarget.earliest,
-              latest: demoEntryTarget.latest,
-            }),
+        <DeviceLookup />
+      </div>
+      {traceRequest && (
+        <TraceView
+          key={`${traceRequest.src}>${traceRequest.dst}`}
+          request={traceRequest}
+          result={traceResult}
+          onCancel={traceResult.cancel}
+          onRetry={traceResult.retry}
+          onClose={() => changeTrace(undefined)}
+          actions={
+            scopeKnown ? (
+              <a
+                className="atlas-trace-btn"
+                href={pageURL(
+                  "map",
+                  stateParams({
+                    ...state,
+                    args,
+                    earliest,
+                    latest,
+                    trace: traceRequest,
+                  }),
+                )}
+              >
+                Open on map
+              </a>
+            ) : undefined
+          }
+        />
+      )}
+      {demoMode && uncaptured && capturedQueries.length > 0 && (
+        <p className="atlas-suggestions muted small">
+          {text && !textMatches.length ? "No captured evidence · try" : "Try"}
+          {capturedQueries.map((query) => (
+            <button
+              key={query}
+              type="button"
+              className="link"
+              onClick={() => changeFind(query)}
+            >
+              {query}
+            </button>
+          ))}
+        </p>
+      )}
+      {state.mode === "live" && findValue && findValidation && (
+        <p className="muted small">{findValidation}</p>
+      )}
+      {findLoading && <p role="status">Searching…</p>}
+      {findError && (
+        <p role="alert">
+          {findError} <Button label="Retry Find" onClick={runFind} />
+        </p>
+      )}
+      {networkClientError && (
+        <p role="alert">
+          {networkClientError} <Button label="Retry Find" onClick={runFind} />
+        </p>
+      )}
+      {findRan &&
+        !findLoading &&
+        !findError &&
+        !networkClientError &&
+        !findRows.length &&
+        !networkClientRows.length && (
+          <p>
+            {demoMode
+              ? "Not in captured evidence"
+              : "No matching applications found."}
+          </p>
+        )}
+      <div className="atlas-explore-results">
+        {findRows.length > 0 && (
+          <Table aria-label="Find results" horizontalOverflow="scroll">
+            <Table.Head>
+              <Table.HeadCell width={280}>Service</Table.HeadCell>
+              <Table.HeadCell width={140}>Environment</Table.HeadCell>
+              <Table.HeadCell width={180}>Cluster</Table.HeadCell>
+              <Table.HeadCell width={140}>Namespace</Table.HeadCell>
+            </Table.Head>
+            <Table.Body>
+              {findRows.map((row) => (
+                <Table.Row key={row._key}>
+                  <Table.Cell title={row.scopeError}>
+                    {mapAction(row)}
+                  </Table.Cell>
+                  <Table.Cell>{scopeLabel(row.environment)}</Table.Cell>
+                  <Table.Cell>{scopeLabel(row.cluster)}</Table.Cell>
+                  <Table.Cell>{scopeLabel(row.namespace)}</Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table>
+        )}
+        {networkClientRows.length > 0 && (
+          <NetworkClientTable rows={networkClientRows} />
+        )}
+      </div>
+      {loading && <p role="status">Loading applications…</p>}
+      {error && (
+        <p role="alert">
+          {error}{" "}
+          <Button
+            label="Retry"
+            onClick={() =>
+              demoMode ? setDemoRetry((value) => value + 1) : loadCatalog()
+            }
+          />
+        </p>
+      )}
+      {warning && (
+        <p role="status" className="muted small">
+          {warning}
+        </p>
+      )}
+      {!loading && !error && !sorted.length && (
+        <p>
+          No applications in this window.
+          {state.mode === "live" && (
+            <>
+              {" "}
+              Qualified identity unavailable ·{" "}
+              <a href={pageURL("data_health", stateParams(state))}>
+                Data health
+              </a>
+            </>
           )}
+        </p>
+      )}
+      {!!sorted.length && (
+        <Table aria-label="Application catalog" horizontalOverflow="scroll">
+          <Table.Head>
+            {columns.map((column) => (
+              <Table.HeadCell
+                key={column.label}
+                width={
+                  column.key === "service"
+                    ? 220
+                    : column.key === "environment"
+                      ? 220
+                      : column.key === "window_end"
+                        ? 160
+                        : column.key === "conversations_1h"
+                          ? 150
+                          : 100
+                }
+                sortKey={column.key}
+                sortDir={
+                  sort.key === column.key
+                    ? sort.descending
+                      ? "desc"
+                      : "asc"
+                    : "none"
+                }
+                onSort={(_event, data) =>
+                  setSort({
+                    key: column.key,
+                    descending: data.sortDir === "desc",
+                  })
+                }
+              >
+                {column.label}
+              </Table.HeadCell>
+            ))}
+          </Table.Head>
+          <Table.Body>
+            {shown.map((row) => (
+              <Table.Row key={row._key}>
+                {columns.map((column) => (
+                  <Table.Cell
+                    key={column.label}
+                    title={row.scopeError}
+                    className={
+                      (column.key === "blocked_1h" ||
+                        column.key === "unknown_peers_1h") &&
+                      (row[column.key] ?? 0) > 0
+                        ? "atlas-exception"
+                        : undefined
+                    }
+                  >
+                    {column.key === "service" ? (
+                      mapAction(row)
+                    ) : column.key === "environment" ? (
+                      [row.environment, row.cluster, row.namespace]
+                        .map((value) => scopeLabel(String(value ?? "")))
+                        .join(" · ")
+                    ) : column.key === "window_end" ? (
+                      typeof row.window_end === "number" ? (
+                        <span
+                          title={
+                            typeof row.window_start === "number"
+                              ? `${utc(row.window_start)} – ${utc(row.window_end)}`
+                              : undefined
+                          }
+                        >
+                          {utc(row.window_end).replace(" UTC", "")}
+                        </span>
+                      ) : (
+                        "—"
+                      )
+                    ) : typeof row[column.key] === "string" ? (
+                      scopeLabel(row[column.key] as string)
+                    ) : (
+                      (row[column.key] ?? "—")
+                    )}
+                  </Table.Cell>
+                ))}
+              </Table.Row>
+            ))}
+          </Table.Body>
+        </Table>
+      )}
+      <details className="atlas-disclosure">
+        <summary>Open by scope</summary>
+        <form
+          className="atlas-scope-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!errors.length)
+              location.assign(
+                pageURL(
+                  "map",
+                  stateParams({
+                    ...state,
+                    args,
+                    scenario: state.scenario,
+                    earliest: demoMode ? demoWindow.earliest : earliest,
+                    latest: demoMode ? demoWindow.latest : latest,
+                  }),
+                ),
+              );
+          }}
         >
-          Explore captured synthetic demo data
-        </a>
-      </p>
+          <ScopeBar
+            args={args}
+            onChange={setArgs}
+            live={state.mode === "live"}
+            client={client}
+            demoArgs={demoMode ? demoArgs : undefined}
+            scenario={state.scenario}
+          />
+          <Button
+            type="submit"
+            appearance="primary"
+            disabled={!!errors.length}
+            label="Open map"
+          />
+        </form>
+      </details>
+      {state.mode === "live" && client && (
+        <details className="atlas-disclosure">
+          <summary>AppDynamics applications</summary>
+          <ControllerCatalogSection state={state} client={client} />
+        </details>
+      )}
     </main>
+  );
+}
+
+function NetworkClientTable({ rows }: { rows: NetworkClientFindRow[] }) {
+  return (
+    <Table aria-label="Network client evidence" horizontalOverflow="scroll">
+      <Table.Head>
+        <Table.HeadCell>Client</Table.HeadCell>
+        <Table.HeadCell>Source and authority</Table.HeadCell>
+        <Table.HeadCell>Routing scope</Table.HeadCell>
+        <Table.HeadCell>Attachment evidence</Table.HeadCell>
+        <Table.HeadCell>SSID</Table.HeadCell>
+        <Table.HeadCell>Source and collection times</Table.HeadCell>
+      </Table.Head>
+      <Table.Body>
+        {rows.map((row) => (
+          <Table.Row key={row._key}>
+            <Table.Cell>
+              {row.client_mac ?? row.client_ip ?? row.native_id ?? row._key}
+              {row.attachment_device_name && (
+                <small>
+                  <br />
+                  Observed device: {row.attachment_device_name}
+                  {row.attachment_device_id
+                    ? ` · ${row.attachment_device_id}`
+                    : ""}
+                </small>
+              )}
+            </Table.Cell>
+            <Table.Cell>
+              {row.access_platform ?? row.source}
+              {row.source_authority ? ` · ${row.source_authority}` : ""}
+            </Table.Cell>
+            <Table.Cell>
+              {row.scope ?? "Unmapped"}
+              {row.routing_domain ? ` · ${row.routing_domain}` : ""}
+              {row.cluster ? ` · ${row.cluster}` : ""}
+            </Table.Cell>
+            <Table.Cell>
+              {row.attachment_status}
+              {row.mapping_status &&
+              row.mapping_status !== row.attachment_status
+                ? ` · mapping ${row.mapping_status}`
+                : ""}
+              {row.attachment_basis ? ` · ${row.attachment_basis}` : ""}
+              {row.diagnostic_status && ` · ${row.diagnostic_status}`}
+              {row.diagnostic_reason || row.quality_reason || row.warning ? (
+                <small>
+                  <br />
+                  {row.diagnostic_reason ?? row.quality_reason ?? row.warning}
+                </small>
+              ) : null}
+            </Table.Cell>
+            <Table.Cell>{row.ssid_number ?? "—"}</Table.Cell>
+            <Table.Cell>
+              {row.source_time !== undefined
+                ? utc(row.source_time)
+                : "Source time unavailable"}
+              {row.attachment_event_time !== undefined && (
+                <small>
+                  <br />
+                  Attachment event {utc(row.attachment_event_time)}
+                </small>
+              )}
+              <small>
+                <br />
+                Received{" "}
+                {row.attachment_received_time !== undefined ||
+                row.received_time !== undefined
+                  ? utc(row.attachment_received_time ?? row.received_time!)
+                  : "time unavailable"}
+                {row.attachment_collected_time !== undefined
+                  ? ` · collected ${utc(row.attachment_collected_time)}`
+                  : ""}
+                {row.latest_received_time !== undefined &&
+                row.latest_received_time !== row.received_time
+                  ? ` · latest ${utc(row.latest_received_time)}`
+                  : ""}
+                {row.attachment_collected_time !== undefined
+                  ? ` · source collection ${utc(row.attachment_collected_time)}`
+                  : ""}
+              </small>
+            </Table.Cell>
+          </Table.Row>
+        ))}
+      </Table.Body>
+    </Table>
   );
 }

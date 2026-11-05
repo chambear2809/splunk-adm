@@ -1,0 +1,92 @@
+[
+  {
+    "row_type": "device",
+    "device_id": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "name": "vmm-shop",
+    "device_kind": "virtual_switch",
+    "switch_type": "vds",
+    "platform": "VMware vSphere Distributed Switch (APIC VMM domain)",
+    "device_authority": "192.0.2.50",
+    "native_device_id": "192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "ipfix_observers": ["192.0.2.71", "192.0.2.73"],
+    "sources": "aci_vmm"
+  },
+  {
+    "row_type": "device",
+    "device_id": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+    "name": "esx-01",
+    "device_kind": "hypervisor",
+    "platform": "VMware ESXi",
+    "device_authority": "192.0.2.50",
+    "native_device_id": "comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+    "mgmt_ip": "192.0.2.71",
+    "parent_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "sources": "aci_vmm"
+  },
+  {
+    "row_type": "device",
+    "device_id": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-03",
+    "name": "esx-03",
+    "device_kind": "hypervisor",
+    "platform": "VMware ESXi",
+    "device_authority": "192.0.2.50",
+    "native_device_id": "comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-03",
+    "mgmt_ip": "192.0.2.73",
+    "parent_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "sources": "aci_vmm"
+  },
+  {
+    "row_type": "link",
+    "link_kind": "virtual_port",
+    "link_source": "aci_vmm",
+    "binding": "aci_fvRsHyper",
+    "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "b_device": "vm:00:50:56:aa:40:25",
+    "b_device_name": "win-client-01",
+    "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-03",
+    "mac": "00:50:56:aa:40:25",
+    "ip": "10.30.40.25",
+    "vlan": "1030",
+    "portgroup": "shop|clients|win-clients",
+    "attach_nodes": ["pod-1/node-103"],
+    "attach_interface": "eth1/5"
+  },
+  {
+    "row_type": "link",
+    "link_kind": "virtual_port",
+    "link_source": "aci_vmm",
+    "binding": "aci_fvRsHyper",
+    "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "b_device": "vm:00:50:56:aa:10:40",
+    "b_device_name": "orders-db-01",
+    "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+    "mac": "00:50:56:aa:10:40",
+    "ip": "10.20.30.40",
+    "vlan": "1040",
+    "portgroup": "shop|orders|db",
+    "attach_nodes": ["pod-1/node-102"],
+    "attach_interface": "eth1/6"
+  },
+  {
+    "row_type": "link",
+    "link_kind": "uplink",
+    "link_source": "aci_hvsAdj",
+    "binding": "hvsAdj_mgmt_ip+lldp_chassis_mac",
+    "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "a_interface": "vmnic2",
+    "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-03",
+    "b_device": "pod-1/node-103",
+    "b_interface": "Ethernet1/5"
+  },
+  {
+    "row_type": "link",
+    "link_kind": "uplink",
+    "link_source": "aci_hvsAdj",
+    "binding": "hvsAdj_mgmt_ip+lldp_chassis_mac",
+    "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+    "a_interface": "vmnic2",
+    "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+    "b_device": "pod-1/node-102",
+    "b_interface": "Ethernet1/6"
+  }
+]

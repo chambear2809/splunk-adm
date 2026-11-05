@@ -47,13 +47,22 @@ export function argError(key: keyof GraphArgs, value: string) {
     ? undefined
     : `${key[0].toUpperCase()}${key.slice(1)} may contain ${ARG_RULES[key].hint}.`;
 }
-export function buildGraphSearch(request: LiveRequest): string {
+/** "deferred" reads summaries only (progressive load); "raw" also merges the newest raw minutes. */
+export type GraphTail = "raw" | "deferred";
+export function buildGraphSearch(
+  request: LiveRequest,
+  tail?: GraphTail,
+): string {
   for (const key of Object.keys(ARG_RULES) as (keyof GraphArgs)[]) {
     const error = argError(key, String(request[key] ?? ""));
     if (error) throw new Error(error);
   }
   const { service, environment, cluster, namespace } = request;
-  return `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}")\``;
+  if (tail !== undefined && tail !== "raw" && tail !== "deferred")
+    throw new Error("Invalid graph tail mode.");
+  return tail
+    ? `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}","${tail}")\``
+    : `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}")\``;
 }
 export function splunkMessage(payload: unknown): string | undefined {
   let text: unknown;
@@ -176,10 +185,11 @@ export function loadLive(
   client: SearchClient,
   input: LiveRequest,
   signal: AbortSignal,
+  tail?: GraphTail,
 ): Promise<Graph> {
   let search: string;
   try {
-    search = buildGraphSearch(input);
+    search = buildGraphSearch(input, tail);
     if (
       hasSubMillisecondPrecision(input.earliest) ||
       hasSubMillisecondPrecision(input.latest)
@@ -217,17 +227,11 @@ export function loadTopology(
   signal: AbortSignal,
   latest?: string,
   timezone?: string,
+  search = TOPOLOGY_SEARCH,
 ): Promise<Topology> {
   return client
     .search(
-      request(
-        "`adm_topology`",
-        earliest,
-        MAX_TOPOLOGY_ROWS,
-        signal,
-        latest,
-        timezone,
-      ),
+      request(search, earliest, MAX_TOPOLOGY_ROWS, signal, latest, timezone),
     )
     .then(({ rows, warnings, errors }) => {
       if (errors.length)

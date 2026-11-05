@@ -595,6 +595,8 @@ it("reads complete staged Cisco integration state without writing or activating 
 it.each([
   { profile: "catalyst_campus_fnf", vpn_id: "", routing_domain: "" },
   { profile: "meraki_ms390_ipfix", vpn_id: "", routing_domain: "" },
+  { profile: "aci_leaf_netflow", vpn_id: "", routing_domain: "" },
+  { profile: "vmware_vds_ipfix", vpn_id: "", routing_domain: "" },
   {
     profile: "standard_netflow",
     observation_domain_present: "0",

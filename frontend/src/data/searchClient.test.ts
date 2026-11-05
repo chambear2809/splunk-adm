@@ -404,6 +404,26 @@ describe("ToolkitSearchClient", () => {
     runtime.result.next({ results: [{ a: 1 }] });
     await expect(pending).rejects.toBeInstanceOf(SearchResultLimitError);
   });
+  it("returns the first rows of an overflowing ranked search when asked", async () => {
+    const pending = new ToolkitSearchClient().search({
+      ...request(),
+      overflow: "truncate",
+    });
+    runtime.progress.next({ content: { resultCount: 5 } });
+    runtime.result.next({ results: [{ a: 1 }, { a: 2 }, { a: 3 }] });
+    const result = await pending;
+    expect(result.rows).toEqual([{ a: 1 }, { a: 2 }]);
+    expect(result.truncated).toEqual({ shown: 2, total: 5 });
+  });
+  it("still verifies the returned rows when truncating", async () => {
+    const pending = new ToolkitSearchClient().search({
+      ...request(),
+      overflow: "truncate",
+    });
+    runtime.progress.next({ content: { resultCount: 5 } });
+    runtime.result.next({ results: [{ a: 1 }] });
+    await expect(pending).rejects.toThrow(/did not match/);
+  });
   it("requires an exact safe final result count", async () => {
     let pending = new ToolkitSearchClient().search(request());
     runtime.progress.next({ content: { resultCount: 2 } });

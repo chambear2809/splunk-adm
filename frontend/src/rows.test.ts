@@ -3,7 +3,7 @@ import demo from "../../fixtures/demo-rows.json";
 import networkingAci from "../../fixtures/demo-networking-aci.json";
 import networkingNxos from "../../fixtures/demo-networking-nxos.json";
 import expected from "../../tests/splunk/expected/graph.json";
-import { MAX_ROWS, rowsToGraph, type Row } from "./rows";
+import { MAX_EDGES, MAX_NODES, rowsToGraph, type Row } from "./rows";
 
 const args = demo.args;
 const rows = (): Row[] => structuredClone(demo.rows) as Row[];
@@ -445,19 +445,47 @@ describe("rowsToGraph validation", () => {
     expect(g.coverage.warnings[0]).toMatch(/no spans/);
   });
 
-  it("surfaces the search's limit warning", () => {
+  it("replaces the search's size warning when it truncates", () => {
     const m = meta();
-    m.nodes = "501";
     m.warnings = [
       "Graph exceeds 500 nodes or 2,000 edges (501 nodes, 3 edges); narrow the window or the namespace.",
     ];
-    expect(() => rowsToGraph([m], args)).toThrow(/Graph exceeds 500 nodes/);
+    // Under the server caps the meta count is not trusted: nothing is cut.
+    m.nodes = "501";
+    const g = rowsToGraph([m], args);
+    expect(g.truncation).toBeUndefined();
   });
 
-  it("rejects more rows than the limit allows", () => {
-    expect(() =>
-      rowsToGraph(new Array(MAX_ROWS + 1).fill(meta()), args),
-    ).toThrow(/pilot limit/);
+  it("truncates more rows than the display limit instead of failing", () => {
+    const r = rows();
+    const m = r.find((x) => x.row_type === "meta")!;
+    const node = r.find((x) => x.row_type === "node" && x.kind === "workload")!;
+    const service = r.find(
+      (x) => x.row_type === "node" && x.kind === "service",
+    )!;
+    const extra: Row[] = [];
+    for (let i = 0; i < MAX_NODES + 50; i++)
+      extra.push({ ...node, id: `pod:extra/p${i}`, label: `p${i}` });
+    for (let i = 0; i < MAX_EDGES + 20; i++)
+      extra.push({
+        row_type: "edge",
+        id: `run:${i}`,
+        source: service.id,
+        target: `pod:extra/p${i % (MAX_NODES + 50)}`,
+        relationship: "runs_on",
+        confidence: "correlated",
+        count: "1",
+      });
+    m.warnings = ["Graph exceeds 500 nodes or 2,000 edges; narrow the window."];
+    const g = rowsToGraph([...r, ...extra], args);
+    expect(g.nodes.length).toBeLessThanOrEqual(MAX_NODES);
+    expect(g.edges.length).toBeLessThanOrEqual(MAX_EDGES);
+    expect(g.truncation).toMatchObject({ truncated: true });
+    expect(g.truncation!.total.edges).toBeGreaterThan(MAX_EDGES);
+    expect(g.coverage.warnings.some((w) => /^Graph exceeds/.test(w))).toBe(
+      false,
+    );
+    expect(g.coverage.warnings.at(-1)).toMatch(/^Map shows the top/);
   });
 
   it.each([
@@ -597,4 +625,33 @@ describe("actual staged Cisco graph rows", () => {
       });
     },
   );
+});
+
+describe("long-window read coverage", () => {
+  const withMeta = (extra: Record<string, string>) =>
+    rows().map((r) => (r.row_type === "meta" ? { ...r, ...extra } : r));
+
+  it("reads summary coverage and the raw tail from meta", () => {
+    const g = rowsToGraph(
+      withMeta({
+        read_coverage: "100",
+        summary_seconds: "3300",
+        raw_tail_seconds: "360",
+      }),
+      args,
+    );
+    expect(g.read).toMatchObject({
+      coverage: 100,
+      summarySeconds: 3300,
+      rawTailSeconds: 360,
+    });
+    expect(g.read!.windowSeconds).toBeGreaterThan(0);
+  });
+
+  it("omits read state without coverage and rejects invalid values", () => {
+    expect(graph().read).toBeUndefined();
+    expect(() =>
+      rowsToGraph(withMeta({ read_coverage: "-4" }), args),
+    ).toThrow();
+  });
 });

@@ -109,7 +109,7 @@ class NativeSearchTests(unittest.TestCase):
         self.assertEqual(
             calls[-1][:2], ("DELETE", "/services/search/v2/jobs/owned.123")
         )
-        self.assertTrue(any("count=1000&offset=0" in path for _, path, _ in calls))
+        self.assertTrue(any("count=4000&offset=0" in path for _, path, _ in calls))
 
     def test_finalized_truncated_missing_and_failed_metadata_rejected(self):
         bad = [
@@ -162,7 +162,7 @@ class NativeSearchTests(unittest.TestCase):
 
     def test_reads_all_pages_and_rejects_status_warning(self):
         paths = []
-        rows = [{"_atlas_total": "1001", "_raw": "{}"} for _ in range(1001)]
+        rows = [{"_atlas_total": "4001", "_raw": "{}"} for _ in range(4001)]
 
         def request(method, path, data=None):
             paths.append(path)
@@ -170,14 +170,14 @@ class NativeSearchTests(unittest.TestCase):
                 return {"sid": "owned"}
             if method == "DELETE":
                 return {}
-            if "offset=1000" in path:
-                return {"preview": False, "results": rows[1000:]}
+            if "offset=4000" in path:
+                return {"preview": False, "results": rows[4000:]}
             if "/results?" in path:
-                return {"preview": False, "results": rows[:1000]}
-            return done(resultCount=1001)
+                return {"preview": False, "results": rows[:4000]}
+            return done(resultCount=4001)
 
-        self.assertEqual(len(NativeSearch(request).run("search index=x")), 1001)
-        self.assertTrue(any("offset=1000" in path for path in paths))
+        self.assertEqual(len(NativeSearch(request).run("search index=x")), 4001)
+        self.assertTrue(any("offset=4000" in path for path in paths))
         request, _ = self.request(metadata=done(messages=[{"type": "WARN"}]))
         with self.assertRaises(SearchError):
             NativeSearch(request).run("search index=x")
@@ -452,15 +452,17 @@ class CommandTests(unittest.TestCase):
             patch.object(
                 admqualified.configparser, "ConfigParser", return_value=config
             ),
-            patch.object(admqualified.time, "time", return_value=200.75),
+            patch.object(admqualified.time, "time", return_value=1000.75),
             patch.object(admqualified, "NativeSearch") as native,
             patch.object(admqualified, "reduce_rows", return_value=[]) as reducer,
         ):
             native.return_value.run.return_value = []
             list(command.generate())
-            self.assertEqual(reducer.call_args.args[3:5], (65, 185))
+            # Five minutes spans several snapshots, so producer audit gaps
+            # cannot leave the catalog without a complete manifest.
+            self.assertEqual(reducer.call_args.args[3:5], (685, 985))
             self.assertIn(
-                "earliest=65 latest=185", native.return_value.run.call_args.args[0]
+                "earliest=685 latest=985", native.return_value.run.call_args.args[0]
             )
 
     def test_missing_caller_token_never_dispatches_nested_search(self):
@@ -510,6 +512,108 @@ class CommandTests(unittest.TestCase):
                 "namespace": "shop",
             },
         )
+
+    def test_long_graph_window_is_read_as_qualified_slices(self):
+        command = self.command()
+        command.mode = "graph"
+        command.service, command.environment = "app", "prod"
+        command.cluster, command.namespace = "c", "shop"
+        command.start, command.as_of = "1000", "1900"
+        config = Mock()
+        config.has_section.side_effect = lambda section: section == "profile"
+        config.__getitem__ = Mock(
+            return_value={**PROFILE, "enabled": "true", "namespaces": "shop"}
+        )
+        native = Mock()
+        native.run.return_value = ["rows"]
+        node = {"row_type": "node", "id": "service:c/shop/app/prod", "kind": "service"}
+        windows = []
+
+        def reduce(rows, profile, mode, start, as_of, selection):
+            windows.append((start, as_of))
+            if start == 1300:
+                raise SearchError("identity evidence is empty")
+            return [node, {"row_type": "meta", "spans": 2, "warnings": ["w"]}]
+
+        with (
+            patch.object(
+                admqualified.configparser, "ConfigParser", return_value=config
+            ),
+            patch.object(admqualified, "NativeSearch", return_value=native),
+            patch.object(admqualified, "reduce_rows", side_effect=reduce),
+        ):
+            out = list(command.generate())
+        self.assertEqual(sorted(windows), [(1000, 1300), (1300, 1600), (1600, 1900)])
+        meta = [r for r in out if r["row_type"] == "meta"][0]
+        self.assertEqual(
+            (meta["window_start"], meta["window_end"], meta["spans"]), (1000, 1900, 4)
+        )
+        # An empty slice was read: it contributes nothing and is no gap.
+        self.assertEqual((meta["window_slices"], meta["window_slices_read"]), (3, 3))
+        self.assertFalse(any(w.startswith("Read ") for w in meta["warnings"]))
+        for query in [c.args[0] for c in native.run.call_args_list]:
+            self.assertRegex(
+                query, r"earliest=(1000|1300|1600) latest=(1300|1600|1900) "
+            )
+
+    def test_long_graph_window_reports_unqualified_slice_as_unread(self):
+        command = self.command()
+        command.mode = "graph"
+        command.service, command.environment = "app", "prod"
+        command.cluster, command.namespace = "c", "shop"
+        command.start, command.as_of = "1000", "1900"
+        config = Mock()
+        config.has_section.side_effect = lambda section: section == "profile"
+        config.__getitem__ = Mock(
+            return_value={**PROFILE, "enabled": "true", "namespaces": "shop"}
+        )
+        native = Mock()
+        native.run.return_value = ["rows"]
+        node = {"row_type": "node", "id": "service:c/shop/app/prod", "kind": "service"}
+
+        def reduce(rows, profile, mode, start, as_of, selection):
+            if start == 1300:
+                raise SearchError("No complete interval snapshot covers the window.")
+            return [node, {"row_type": "meta", "spans": 2, "warnings": ["w"]}]
+
+        with (
+            patch.object(
+                admqualified.configparser, "ConfigParser", return_value=config
+            ),
+            patch.object(admqualified, "NativeSearch", return_value=native),
+            patch.object(admqualified, "reduce_rows", side_effect=reduce),
+        ):
+            out = list(command.generate())
+        meta = [r for r in out if r["row_type"] == "meta"][0]
+        self.assertEqual((meta["window_slices"], meta["window_slices_read"]), (3, 2))
+        self.assertEqual(meta["read_coverage"], 66)
+        self.assertIn("Read 2 of 3 five-minute slices", meta["warnings"][0])
+
+    def test_long_graph_window_fails_closed_on_truncated_slice(self):
+        command = self.command()
+        command.mode = "graph"
+        command.service, command.environment = "app", "prod"
+        command.cluster, command.namespace = "c", "shop"
+        command.start, command.as_of = "1000", "1900"
+        config = Mock()
+        config.has_section.side_effect = lambda section: section == "profile"
+        config.__getitem__ = Mock(
+            return_value={**PROFILE, "enabled": "true", "namespaces": "shop"}
+        )
+        with (
+            patch.object(
+                admqualified.configparser, "ConfigParser", return_value=config
+            ),
+            patch.object(admqualified, "NativeSearch") as native,
+            patch.object(
+                admqualified,
+                "reduce_rows",
+                side_effect=SearchError("identity evidence is truncated"),
+            ),
+        ):
+            native.return_value.run.return_value = ["rows"]
+            with self.assertRaises(SearchError):
+                list(command.generate())
 
 
 if __name__ == "__main__":
