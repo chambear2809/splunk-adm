@@ -24,6 +24,13 @@ import {
   type NodeKind,
   type Relationship,
 } from "./graph";
+import {
+  MAX_GRAPH_EDGES,
+  MAX_GRAPH_NODES,
+  SERVER_NODE_CAP,
+} from "./scale/limits";
+import { GRAPH_BOUND_ROWS } from "./scale/graphSearch";
+import { truncateGraph, truncationWarning } from "./scale/truncate";
 
 export type Row = Record<string, unknown>;
 export interface GraphArgs {
@@ -32,10 +39,13 @@ export interface GraphArgs {
   cluster: string;
   namespace: string;
 }
-export const MAX_NODES = 500;
-export const MAX_EDGES = 2000;
-/** All nodes, all edges and the meta row; anything larger is over the pilot limit. */
-export const MAX_ROWS = MAX_NODES + MAX_EDGES + 1;
+export const MAX_NODES = MAX_GRAPH_NODES;
+export const MAX_EDGES = MAX_GRAPH_EDGES;
+/**
+ * Rows one graph read may return: the meta row, the nodes the bounded search
+ * keeps and its top edges. Larger graphs are ranked and truncated, not rejected.
+ */
+export const MAX_ROWS = GRAPH_BOUND_ROWS;
 
 const fail = (message: string): never => {
   throw new Error(`Invalid graph search result: ${message}`);
@@ -399,10 +409,6 @@ export function rowsToGraph(
   options: { demo?: boolean } = {},
 ): Graph {
   if (!Array.isArray(rows)) return fail("rows must be an array");
-  if (rows.length > MAX_ROWS)
-    throw new Error(
-      `Graph exceeds the pilot limit (${MAX_NODES} nodes / ${MAX_EDGES} edges). Narrow the time range or namespace.`,
-    );
   const nodes: GraphNode[] = [],
     edges: GraphEdge[] = [],
     metas: Row[] = [];
@@ -418,13 +424,21 @@ export function rowsToGraph(
   }
   if (metas.length !== 1) fail("expected exactly one meta row");
   const meta = metas[0];
-  const warnings = many(meta, "warnings") ?? [];
   const metaCount = (key: string) => count(meta, key) ?? 0;
-  if (metaCount("nodes") > MAX_NODES || metaCount("edges") > MAX_EDGES)
-    throw new Error(
-      warnings.find((w) => w.startsWith("Graph exceeds")) ??
-        `Graph exceeds the pilot limit (${MAX_NODES} nodes / ${MAX_EDGES} edges).`,
-    );
+  // Volume is not an error: keep the heaviest relationships and say so. The
+  // search's own size warning is replaced by the truncation summary.
+  // Meta counts precede the bounded search's cut; trust them only when that
+  // cut was reached, so an approximate count never fakes a truncation.
+  const serverCut = (rowsSeen: number, cap: number, key: string) =>
+    rowsSeen >= cap ? Math.max(rowsSeen, metaCount(key)) : rowsSeen;
+  const reduced = truncateGraph(nodes, edges, serviceNodeId(args), {
+    nodes: serverCut(nodes.length, SERVER_NODE_CAP, "nodes"),
+    edges: serverCut(edges.length, MAX_GRAPH_EDGES, "edges"),
+  });
+  const warnings = (many(meta, "warnings") ?? []).filter(
+    (w) => !reduced.truncation || !/^Graph exceeds/i.test(w),
+  );
+  if (reduced.truncation) warnings.push(truncationWarning(reduced.truncation));
   const boundaryId = `${args.cluster}/${args.namespace}/${args.service}/${args.environment}`;
   const window = {
     start: epochIso(meta, "window_start"),
@@ -440,6 +454,25 @@ export function rowsToGraph(
   )
     fail("meta NAT evidence time window is incomplete or invalid");
   const generatedAt = epochIso(meta, "generated_at");
+  const coverage = count(meta, "read_coverage");
+  const windowSeconds =
+    (Date.parse(window.end) - Date.parse(window.start)) / 1000;
+  const read =
+    coverage !== undefined && coverage <= 100 && windowSeconds > 0
+      ? {
+          coverage: Math.floor(coverage),
+          windowSeconds: Math.round(windowSeconds),
+          ...(count(meta, "summary_seconds") !== undefined
+            ? { summarySeconds: count(meta, "summary_seconds") }
+            : {}),
+          ...(count(meta, "raw_tail_seconds") !== undefined
+            ? { rawTailSeconds: count(meta, "raw_tail_seconds") }
+            : {}),
+          ...(count(meta, "raw_pending_seconds")
+            ? { pendingSeconds: count(meta, "raw_pending_seconds") }
+            : {}),
+        }
+      : undefined;
   return parseGraph({
     schema_version: 1,
     snapshot_id: `adm_graph:${boundaryId}:${window.start}/${window.end}:${generatedAt}`,
@@ -454,8 +487,10 @@ export function rowsToGraph(
       ...args,
       root_node_id: serviceNodeId(args),
     },
-    nodes,
-    edges,
+    nodes: reduced.nodes,
+    edges: reduced.edges,
+    ...(reduced.truncation ? { truncation: reduced.truncation } : {}),
+    ...(read ? { read } : {}),
     coverage: {
       spans: metaCount("spans"),
       conversations: metaCount("conversations_in_scope"),

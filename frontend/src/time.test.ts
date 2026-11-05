@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatUtc, formatUtcRange, isoTime, formatInZone } from "./time";
+import {
+  formatUtc,
+  formatUtcRange,
+  graphWindowLabel,
+  isoTime,
+  formatInZone,
+} from "./time";
 
 describe("time", () => {
   it("formats the signed-in user's timezone and falls back on an invalid zone", () => {
@@ -33,5 +39,25 @@ describe("time", () => {
     expect(
       formatUtcRange("2026-10-07T23:30:00-02:00", "2026-10-08T00:30:00-02:00"),
     ).toBe("2026-10-08 01:30 → 02:30");
+  });
+  it("labels the counted graph window and refuses offset-less bounds", () => {
+    expect(
+      graphWindowLabel(
+        {
+          window: {
+            start: "2026-11-04T10:05:00Z",
+            end: "2026-11-04T14:03:21Z",
+          },
+        },
+        "UTC",
+      ),
+    ).toBe(
+      `${formatInZone("2026-11-04T10:05:00Z", "UTC")} → ${formatInZone("2026-11-04T14:03:21Z", "UTC")}`,
+    );
+    expect(
+      graphWindowLabel({
+        window: { start: "2026-11-04T10:05:00", end: "2026-11-04T14:03:21Z" },
+      }),
+    ).toBeUndefined();
   });
 });

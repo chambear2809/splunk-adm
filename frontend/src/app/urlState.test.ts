@@ -4,6 +4,7 @@ import {
   pageURL,
   parseUrlState,
   recoverUrlState,
+  SECTION_OF,
   stateParams,
 } from "./urlState";
 describe("Atlas deep links", () => {
@@ -95,7 +96,7 @@ it("recovers invalid deep links while preserving valid scope and strict stored-s
   );
   expect(state.args.service).toBe("api");
   expect(state.args.namespace).toBe("");
-  expect(state.earliest).toBe("-1h");
+  expect(state.earliest).toBe("-15m");
   expect(state.latest).toBe("now");
   expect(state.tab).toBe("network");
   expect(state.query).toBe("");
@@ -148,4 +149,53 @@ it("round trips a pinned Controller application and traffic window", () => {
   expect(
     recoverUrlState(new URLSearchParams("mode=live&appd_app=23")).state.appd,
   ).toBeUndefined();
+});
+
+describe("Explore, Admin, trace and device links", () => {
+  it("resolves section aliases to the Splunk view that renders them", () => {
+    expect(pageFromPath("/en-US/app/splunk_adm/explore")).toBe("applications");
+    expect(pageFromPath("/en-US/app/splunk_adm/admin")).toBe("setup");
+    expect(pageFromPath("/en-US/app/splunk_adm/device")).toBe("device");
+    expect(SECTION_OF.endpoints).toBe("explore");
+    expect(SECTION_OF.data_health).toBe("admin");
+  });
+
+  it("round trips a trace request and a device lookup", () => {
+    const state = parseUrlState(
+      new URLSearchParams(
+        "trace_src=10.42.0.15&trace_dst=orders-db-01&id=pod-1/node-103",
+      ),
+    );
+    expect(state.trace).toEqual({ src: "10.42.0.15", dst: "orders-db-01" });
+    expect(state.device).toBe("pod-1/node-103");
+    const params = stateParams(state);
+    expect(params.get("trace_src")).toBe("10.42.0.15");
+    expect(params.get("trace_dst")).toBe("orders-db-01");
+    expect(params.get("id")).toBe("pod-1/node-103");
+    expect(
+      pageURL(
+        "device",
+        new URLSearchParams({ id: "leaf-101" }),
+        "/en-US/app/splunk_adm/applications",
+      ),
+    ).toBe("/en-US/app/splunk_adm/device?id=leaf-101");
+  });
+
+  it("rejects half or unsafe trace and device parameters", () => {
+    expect(() =>
+      parseUrlState(new URLSearchParams("trace_src=10.0.0.1")),
+    ).toThrow("Invalid trace endpoints.");
+    expect(() =>
+      parseUrlState(new URLSearchParams("trace_src=a&trace_dst=%7Cdelete")),
+    ).toThrow("Invalid trace endpoints.");
+    expect(
+      parseUrlState(new URLSearchParams("id=%22x%22")).device,
+    ).toBeUndefined();
+    const { state, notice } = recoverUrlState(
+      new URLSearchParams("trace_src=a&trace_dst=b c&id=leaf-1"),
+    );
+    expect(state.trace).toBeUndefined();
+    expect(state.device).toBe("leaf-1");
+    expect(notice).toContain("trace_src");
+  });
 });

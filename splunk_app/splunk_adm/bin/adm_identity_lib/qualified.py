@@ -190,9 +190,12 @@ def overlap(a, b, c, d):
     return a < d and c < b
 
 
-def qualify(rows, profile, window_start, as_of):
+def qualify(rows, profile, window_start, as_of, horizon=None, max_input=MAX_INPUT):
+    """Qualify one window. ``horizon`` (default ``as_of``) bounds receipt time:
+    summaries accept evidence indexed up to an accepted lateness after the
+    window; the interactive reader keeps as-of knowledge."""
     try:
-        return _qualify(rows, profile, window_start, as_of)
+        return _qualify(rows, profile, window_start, as_of, horizon, max_input)
     except (EvidenceError, ValueError, TypeError, KeyError, OverflowError) as exc:
         message = (
             str(exc)
@@ -208,15 +211,16 @@ def qualify(rows, profile, window_start, as_of):
         }
 
 
-def _qualify(rows, profile, window_start, as_of):
+def _qualify(rows, profile, window_start, as_of, horizon=None, max_input=MAX_INPUT):
     p = profile_config(profile)
     start, cutoff = number(window_start, "window start"), number(as_of, "as-of")
+    known = cutoff if horizon is None else number(horizon, "horizon")
     require(
-        start < cutoff and cutoff - start <= 300,
+        start < cutoff and cutoff - start <= 300 and cutoff <= known,
         "Qualified identity windows must be between 0 and 300 seconds.",
     )
     require(
-        isinstance(rows, list) and len(rows) <= MAX_INPUT,
+        isinstance(rows, list) and len(rows) <= max_input,
         "Qualified identity input exceeds its budget.",
     )
     manifests, owners, span_events = {}, {}, {}
@@ -235,7 +239,7 @@ def _qualify(rows, profile, window_start, as_of):
         )
         event = number(row.get("event_time"), "event time")
         receipt = number(row.get("receipt_time"), "receipt time")
-        if receipt > cutoff:
+        if receipt > known:
             continue  # Not knowledge available at this as-of.
         require(
             start <= event <= cutoff,
@@ -282,7 +286,9 @@ def _qualify(rows, profile, window_start, as_of):
             number(raw.get(k), k) for k in ("valid_from", "valid_to", "observed_at")
         ]
         require(
-            vf < vt <= observed <= receipt <= cutoff and event == observed,
+            vf < vt <= observed <= receipt <= known
+            and observed <= cutoff
+            and event == observed,
             "Invalid interval observation/receipt clocks.",
         )
         kind = raw.get("kind")

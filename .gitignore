@@ -24,3 +24,6 @@ tests/splunk/.lab-secrets*
 /credentials
 /credentials.*
 !/credentials.example
+
+# Local, clickable demo guide with a real stack name (tools/demo_links.py)
+docs/demos/*.local.md

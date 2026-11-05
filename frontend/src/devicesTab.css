@@ -1,0 +1,140 @@
+/* Map → Devices tab: compact device rows grouped by kind. */
+.adm .devices-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.adm .devices-toolbar input[type="search"] {
+  width: 260px;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+  background: var(--adm-card);
+  color: var(--adm-ink);
+}
+.adm .devices-list {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.adm .devices-list.virtual {
+  display: block;
+  overflow: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.adm .devices-list.virtual .devices-item,
+.adm .devices-list.virtual .devices-group {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.adm .devices-group {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--adm-muted);
+}
+.adm .devices-group button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.adm .device-card.device-row {
+  padding: 6px 10px;
+  gap: 6px;
+}
+.adm .device-row header {
+  gap: 8px;
+}
+.adm .devices-row-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--adm-ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.adm .device-row-name {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.adm .device-row-name b {
+  color: var(--adm-ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.adm .device-row-chips,
+.adm .device-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.adm .chip.blocked {
+  background: var(--adm-error-bg);
+  color: var(--adm-error-ink);
+  border-color: var(--adm-blocked);
+}
+.adm .device-row-action {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+  text-decoration: none;
+}
+.adm .device-row-action:hover {
+  border-color: var(--adm-ink-2);
+}
+.adm .device-conv-panel {
+  display: grid;
+  gap: 4px;
+}
+.adm .device-conv-endpoint {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+}
+.adm .device-conv-service {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: help;
+}
+.adm .device-conv-more {
+  margin: 0;
+}
+.adm .devices-idle summary {
+  cursor: pointer;
+}
+.adm .devices-idle-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 12.5px;
+}

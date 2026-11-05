@@ -3,6 +3,7 @@
 
 Default: fixtures/raw/scenario.json (NX-OS). --scenario aci: fixtures/raw-aci/scenario.json (ACI pilot).
 --scenario networking: fixtures/raw-networking/scenario.json (cross-vendor client flows).
+--scenario vmware: fixtures/raw-vmware/scenario.json (vSphere VSS/VDS overlay for the ACI pilot).
 
 Every event shape follows the installed TA or collector code cited next to its
 builder. Field-level provenance and grounding gaps are listed in
@@ -21,11 +22,12 @@ _common = _import_module(f"{_package_name}.common")
 _nxos = _import_module(f"{_package_name}.nxos")
 _aci = _import_module(f"{_package_name}.aci")
 _networking = _import_module(f"{_package_name}.networking")
+_vmware = _import_module(f"{_package_name}.vmware")
 _cli = _import_module(f"{_package_name}.cli")
 
 # Keep the established import surface without exposing private package modules.
 # In particular, cli.aci is a module while the legacy aci symbol is a builder.
-_implementation_modules = (_common, _nxos, _aci, _networking, _cli)
+_implementation_modules = (_common, _nxos, _aci, _networking, _vmware, _cli)
 for _source in _implementation_modules:
     for _symbol in dir(_source):
         _value = getattr(_source, _symbol)
@@ -42,6 +44,7 @@ GENERATOR_SOURCE_FILES = (
     "tools/raw_fixtures/nxos.py",
     "tools/raw_fixtures/aci.py",
     "tools/raw_fixtures/networking.py",
+    "tools/raw_fixtures/vmware.py",
     "tools/raw_fixtures/cli.py",
 )
 
@@ -63,7 +66,7 @@ class _FixtureGeneratorModule(_ModuleType):
     def __setattr__(self, name, value):
         _ModuleType.__setattr__(self, name, value)
         if name.isupper():
-            for _target in (_common, _nxos, _aci, _networking, _cli):
+            for _target in (_common, _nxos, _aci, _networking, _vmware, _cli):
                 if name in _target.__dict__:
                     setattr(_target, name, value)
 

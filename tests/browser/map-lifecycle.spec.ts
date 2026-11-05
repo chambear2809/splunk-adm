@@ -17,6 +17,21 @@ import {
 } from "./map-lifecycle-fixtures";
 import type { LifecycleControl } from "./map-lifecycle-harness";
 
+/** Map overflow menu and Filters popover (see app.spec.ts). */
+async function more(page: Page, item: string) {
+  const menu = page.getByRole("region", { name: "More actions", exact: true });
+  if (!(await menu.count()))
+    await page
+      .getByRole("button", { name: "More actions", exact: true })
+      .click();
+  await menu.getByRole("button", { name: item, exact: true }).click();
+}
+async function filters(page: Page) {
+  const panel = page.getByRole("region", { name: "Filters", exact: true });
+  if (!(await panel.count()))
+    await page.getByRole("button", { name: /^Filters/ }).click();
+  return panel;
+}
 const url = "/tests/browser/map-lifecycle.html";
 const requests = (page: Page) =>
   page.evaluate(() => window.mapLifecycle.requests());
@@ -39,23 +54,23 @@ test("publishes a graph and its absolute-window topology atomically", async ({
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await resolve(page, 0);
+  // Inventory for the pinned window is dispatched beside the graph read.
   await count(page, 2);
   expect((await requests(page))[1]).toMatchObject({
+    search: "`adm_topology`",
     earliest: "1791373500",
     latest: "1791374400",
     timezone: "Pacific/Honolulu",
   });
+  await resolve(page, 0);
   await expect(snapshot(page)).toHaveAttribute("data-visible", "false");
   await resolve(page, 1);
   await expect(snapshot(page)).toHaveAttribute("data-visible", "true");
   await expect(snapshot(page)).toContainText('"graph-1"');
   await expect(snapshot(page)).toContainText('"topology-1"');
   await action(page, "refresh");
-  await count(page, 3);
-  await resolve(page, 2, 2);
   await count(page, 4);
+  await resolve(page, 2, 2);
   await expect(snapshot(page)).toContainText('"graph-1"');
   await expect(snapshot(page)).not.toContainText('"graph-2"');
   await resolve(page, 3, 2);
@@ -67,19 +82,19 @@ test("cancels an obsolete client and never publishes its late graph", async ({
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
+  await count(page, 2);
   await action(page, "replace");
   await expect.poll(async () => (await requests(page))[0].aborted).toBe(true);
+  expect((await requests(page))[1].aborted).toBe(true);
   await resolve(page, 0, 9);
   await expect(snapshot(page)).toHaveAttribute("data-busy", "false");
   await expect(snapshot(page)).toHaveAttribute("data-visible", "false");
-  expect(await requests(page)).toHaveLength(1);
+  expect(await requests(page)).toHaveLength(2);
   await action(page, "refresh");
-  await count(page, 2);
-  expect((await requests(page))[1].client).toBe("b");
-  await resolve(page, 1, 2);
-  await count(page, 3);
+  await count(page, 4);
+  expect((await requests(page))[2].client).toBe("b");
   await resolve(page, 2, 2);
+  await resolve(page, 3, 2);
   await expect(snapshot(page)).toContainText('"client":"b"');
   await expect(snapshot(page)).not.toContainText('"graph-9"');
 });
@@ -88,9 +103,8 @@ test("retains loaded provenance after draft edits and failed rebuilds", async ({
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await resolve(page, 0);
   await count(page, 2);
+  await resolve(page, 0);
   await resolve(page, 1);
   await expect(snapshot(page)).toHaveAttribute("data-visible", "true");
   await action(page, "edit");
@@ -98,12 +112,12 @@ test("retains loaded provenance after draft edits and failed rebuilds", async ({
   const state = JSON.parse(await snapshot(page).innerText());
   expect(state.loaded).toMatchObject({
     namespace: "shop",
-    earliest: "-1h",
-    latest: "now",
+    earliest: "1791373500",
+    latest: "1791374400",
     timezone: "Pacific/Honolulu",
   });
   await action(page, "refresh");
-  await count(page, 3);
+  await count(page, 4);
   await page.evaluate(() => window.mapLifecycle.reject(2));
   await expect(snapshot(page)).toContainText("Expected graph failure");
   await expect(snapshot(page)).toContainText('"graph-1"');
@@ -114,9 +128,8 @@ test("scope edits cancel inventory completion without replacing the snapshot", a
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await resolve(page, 0);
   await count(page, 2);
+  await resolve(page, 0);
   await action(page, "edit");
   await resolve(page, 1);
   await expect(snapshot(page)).toHaveAttribute("data-visible", "false");
@@ -128,16 +141,16 @@ test("a newer build wins when an older transport completes afterward", async ({
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await action(page, "refresh");
   await count(page, 2);
-  await resolve(page, 1, 2);
-  await count(page, 3);
+  await action(page, "refresh");
+  await count(page, 4);
   await resolve(page, 2, 2);
+  await resolve(page, 3, 2);
   await expect(snapshot(page)).toContainText('"graph-2"');
   await resolve(page, 0, 1);
+  await resolve(page, 1, 1);
   await expect(snapshot(page)).not.toContainText('"graph-1"');
-  expect(await requests(page)).toHaveLength(3);
+  expect(await requests(page)).toHaveLength(4);
 });
 
 test("demo refresh replaces graph and topology from the same fixture revision", async ({
@@ -156,7 +169,7 @@ test("switching to demo suppresses a pending live snapshot", async ({
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
+  await count(page, 2);
   await action(page, "demo");
   await expect(snapshot(page)).toContainText('"mode":"demo"');
   await resolve(page, 0);
@@ -166,9 +179,10 @@ test("switching to demo suppresses a pending live snapshot", async ({
 
 test("unmount aborts the active search", async ({ page }) => {
   await page.goto(url);
-  await count(page, 1);
+  await count(page, 2);
   await action(page, "unmount");
   expect((await requests(page))[0].aborted).toBe(true);
+  expect((await requests(page))[1].aborted).toBe(true);
 });
 
 test("keyboard dismissal returns focus to the selected map card", async ({
@@ -192,9 +206,8 @@ test("a replaced client cannot publish inventory for its already completed graph
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await resolve(page, 0);
   await count(page, 2);
+  await resolve(page, 0);
   await action(page, "replace");
   await resolve(page, 1);
   await expect(snapshot(page)).toHaveAttribute("data-visible", "false");
@@ -206,9 +219,8 @@ test("optional inventory failure publishes only the new graph with a visible war
   page,
 }) => {
   await page.goto(url);
-  await count(page, 1);
-  await resolve(page, 0);
   await count(page, 2);
+  await resolve(page, 0);
   await page.evaluate(() => window.mapLifecycle.reject(1));
   await expect(snapshot(page)).toHaveAttribute("data-visible", "true");
   await expect(snapshot(page)).toContainText('"graph-1"');
@@ -225,8 +237,7 @@ const mapCard = (page: Page, label: string) =>
   page.locator(".map-canvas .item[role=button]").filter({ hasText: label });
 const exportText = async (page: Page, name: RegExp): Promise<string> => {
   const menu = page.getByRole("region", { name: "Export", exact: true });
-  if (!(await menu.isVisible()))
-    await page.getByRole("button", { name: "Export", exact: true }).click();
+  if (!(await menu.isVisible())) await more(page, "Export");
   const downloading = page.waitForEvent("download");
   await page.getByRole("button", { name }).click();
   return readFile((await (await downloading).path())!, "utf8");
@@ -235,9 +246,8 @@ const exportedGraph = async (page: Page): Promise<Graph> =>
   JSON.parse(await exportText(page, /Map data \(JSON\)/)) as Graph;
 const loadMapSurface = async (page: Page) => {
   await page.goto(mapSurfaceURL);
-  await count(page, 1);
-  await resolve(page, 0, 1);
   await count(page, 2);
+  await resolve(page, 0, 1);
   await resolve(page, 1, 1);
   await expect(page.locator('.adm[data-loaded="true"]')).toBeVisible();
 };
@@ -248,18 +258,21 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
   await loadMapSurface(page);
   const oldCard = mapCard(page, OLD_CLIENT_LABEL);
   await expect(oldCard).toBeVisible();
-  await page.getByLabel("Hide infrastructure", { exact: true }).check();
+  await (
+    await filters(page)
+  )
+    .getByLabel("Hide infrastructure", { exact: true })
+    .check();
   await oldCard.focus();
   await oldCard.press("Enter");
   await page
     .getByLabel("Focus around selected card", { exact: true })
     .selectOption("1");
   await expect(details(page)).toContainText("CAMPUS-SW-01");
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await more(page, "Export");
   await page.getByRole("button", { name: "Build map", exact: true }).click();
-  await count(page, 3);
-  await resolve(page, 2, 2);
   await count(page, 4);
+  await resolve(page, 2, 2);
 
   // New graph rows have returned, while the old inventory is still loaded.
   // The visible map, selected inspector and full-data export must all remain
@@ -268,7 +281,7 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
   await expect(mapCard(page, NEW_CLIENT_LABEL)).toHaveCount(0);
   await expect(details(page)).toContainText("CAMPUS-SW-01");
   await expect(
-    page.getByLabel("Hide infrastructure", { exact: true }),
+    (await filters(page)).getByLabel("Hide infrastructure", { exact: true }),
   ).toBeChecked();
   const beforePublication = await exportedGraph(page);
   expect(beforePublication.nodes.some((node) => node.id === OLD_CLIENT)).toBe(
@@ -283,7 +296,7 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
   await expect(oldCard).toHaveCount(0);
   await expect(mapCard(page, NEW_CLIENT_LABEL)).toBeVisible();
   await expect(
-    page.getByLabel("Hide infrastructure", { exact: true }),
+    (await filters(page)).getByLabel("Hide infrastructure", { exact: true }),
   ).not.toBeChecked();
   await expect(
     page.getByLabel("Focus around selected card", { exact: true }),
@@ -291,7 +304,10 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
   await expect(
     details(page).getByRole("button", { name: "Clear selection", exact: true }),
   ).toHaveCount(0);
-  await expect(details(page)).not.toContainText(OLD_CLIENT_LABEL);
+  // With no selection and Findings closed the drawer is hidden but mounted.
+  await expect(page.locator("aside.inspector")).not.toContainText(
+    OLD_CLIENT_LABEL,
+  );
   await mapCard(page, NEW_CLIENT_LABEL).focus();
   await mapCard(page, NEW_CLIENT_LABEL).press("Enter");
   await expect(details(page)).toContainText(NEW_ATTACHMENT_LABEL);
@@ -330,7 +346,7 @@ test("MapPage refresh removes a selected client and replaces attachment, invento
 
   // A comparison is a separate query over the preceding absolute window.
   // Resolve it with the original captured membership, not the current rows.
-  await page.getByRole("button", { name: "Changes", exact: true }).click();
+  await more(page, "Changes");
   await page
     .getByRole("button", { name: "Compare previous window", exact: true })
     .click();
@@ -367,7 +383,11 @@ test("MapPage refresh replaces selected-client handoff and preserves conflicting
       .locator("tbody button")
       .filter({ hasText: "win-client-01" })
       .filter({ hasText: "checkout-api" });
-  await page.getByLabel("Filter port", { exact: true }).selectOption("8080");
+  await (
+    await filters(page)
+  )
+    .getByLabel("Filter port", { exact: true })
+    .selectOption("8080");
   await page.getByRole("button", { name: "Table", exact: true }).click();
   await conversation().click();
   await expect(details(page)).toContainText(backendLabel);
@@ -380,9 +400,8 @@ test("MapPage refresh replaces selected-client handoff and preserves conflicting
       .getByTitle(backendLabel, { exact: false }),
   ).toHaveCount(1);
   await page.getByRole("button", { name: "Build map", exact: true }).click();
-  await count(page, 3);
-  await resolve(page, 2, 3);
   await count(page, 4);
+  await resolve(page, 2, 3);
   await expect(details(page)).toContainText(backendLabel);
   await expect(details(page)).not.toContainText(
     "Client handoff coverage is partial",

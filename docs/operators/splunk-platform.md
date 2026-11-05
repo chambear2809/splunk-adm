@@ -1,6 +1,8 @@
 # Splunk platform team
 
-**Purpose:** prepare Splunk Enterprise 10.6 for the selected Application Atlas sources: indexes, HEC tokens, add-on placement and app configuration. First choose [deployment options](deployment-options.md); the original full pilot is not a requirement to install every product. Cloud requires its own runtime qualification and private-app vetting. The V2 migration helper does not support Cloud or distributed deployments.
+**Purpose:** prepare Splunk Cloud or Splunk Enterprise 10.6+ for the selected sources: indexes, HEC tokens, add-on placement and app configuration. Choose [deployment options](deployment-options.md) first. Cloud needs private-app vetting. The V2 migration helper does not support Cloud or distributed deployments.
+
+**Topology:** Atlas and search-time TAs on the search tier (Cloud or Enterprise search head). **All modular inputs on a heavy forwarder** (ACI/ND/NX-OS, Stream receiver, Intersight, VMware, eStreamer). On Cloud, indexes and HEC tokens are created through ACS; leave any vendor input on the Cloud search tier disabled. See the [operator index](README.md#reference-topology).
 
 ## What we need from you
 
@@ -18,7 +20,7 @@ Create the raw indexes for selected sources, plus the summary index for the acti
 
 | Index             | Data                                               | Notes                                                                     |
 | ----------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
-| `netflow`         | Splunk Stream NetFlow from ACI leaves              | Volume scales with flow count; see [network-stream.md](network-stream.md) |
+| `netflow`         | Stream NetFlow/IPFIX (ACI leaves, ESXi VDS)        | Volume scales with flow count; see [network-stream.md](network-stream.md) |
 | `cisco_dc`        | APIC and Nexus Dashboard objects, flows, endpoints | Polled every 5 minutes by default                                         |
 | `cisco_secure_fw` | FTD connection events                              | Default index of the Security Cloud eStreamer input                       |
 | `cisco_isovalent` | Isovalent Runtime Security events                  | Default index of the Security Cloud Isovalent input                       |
@@ -26,6 +28,8 @@ Create the raw indexes for selected sources, plus the summary index for the acti
 | `otel_traces`     | Application spans                                  |                                                                           |
 | `cilium_hubble`   | Hubble flow logs                                   | Usually the largest; keep retention short (7–14 days)                     |
 | `adm_summary`     | Application Atlas conversation rollups             | Written with the `stash` sourcetype, so it does not count against license |
+| `intersight`      | Intersight inventory (UCS FI, adapters, ports)     | Staged only; Atlas does not read it yet                                   |
+| `vmware-inv`, `vmware-perf`, `vmware-taskevent` | Splunk Add-on for VMware        | Staged only; Atlas does not read it yet                                   |
 
 ### Optional Cisco V2 indexes
 
@@ -59,6 +63,10 @@ The HEC token name becomes the event `source` (`http:<token name>`). Application
 | Splunk Add-on for Stream Forwarders | No                               | No                                                       | On the host that receives NetFlow (see [network-stream.md](network-stream.md)) |
 | Cisco Security Cloud                | Yes                              | Yes (its Isovalent sourcetype rename runs at index time) | Yes, if the eStreamer input runs there                                         |
 | Cisco DC Networking                 | Yes                              | Yes                                                      | Yes, where the APIC / Nexus Dashboard inputs run                               |
+| Splunk Add-on for VMware 4.2.1 + SA-Hydra 4.3.0 | No (not ACS self-service on Cloud) | No                                         | Yes: combined Data Collection Scheduler + DCN                                  |
+| Splunk Add-on for VMware Extractions 4.0.4 | Yes (search-time)         | No                                                       | No                                                                             |
+| Cisco Intersight Add-on 3.2.2       | Yes (Cloud 10.6: 3.1.1, same sourcetypes) | No                                              | Yes, where the Intersight inputs run                                           |
+| Splunk Add-on for VMware ESXi Logs 4.2.2 | Not needed                  | Not needed                                               | Not needed (syslog only, no Atlas use)                                         |
 
 Install only add-ons required by the selected sources. Optional Catalyst Center and Meraki inputs use the Cisco Enterprise Networking and Cisco Meraki add-ons, respectively. Their inspected versions and raw schemas are recorded in the [package manifest](../../research/package-manifest.json) and [Cisco handout](cisco-enterprise-networking.md). Verify each release's supported input/search/index-tier placement and Python runtime before installation; the local synthetic lab does not qualify vendor input execution.
 
@@ -68,7 +76,7 @@ DC Networking's own dashboards use the macros `cisco_dc_aci_index`, `cisco_dc_nd
 
 ## Application Atlas configuration
 
-Install from file (**Manage Apps → Install app from file**), then edit these macros under **Settings → Advanced search → Search macros** (app `splunk_adm`):
+Install on the search tier (Enterprise: **Manage Apps → Install app from file**; Cloud: private-app vetting + ACS), then edit these macros under **Settings → Advanced search → Search macros** (app `splunk_adm`):
 
 ```text
 adm_index_netflow       index=netflow
@@ -117,6 +125,10 @@ To import administrator-reviewed rows, create them as search results (for exampl
 Verify `| inputlookup adm_observer_scope | table observer_kind observer scope cluster`, and check the collection and lookup ACLs before granting viewer access. No system `limits.conf` override is needed.
 
 Unmapped observers remain isolated in authority-qualified `unmapped:<hash>` scopes. For each selected Kubernetes cluster, the `cluster` row is required: it also scopes Hubble flows and Service frontends (LoadBalancer IPs, NodePorts). The `apic` row also scopes ACI ACL-log records. The cluster, the ACI NetFlow exporters, Nexus Dashboard and the APIC must share one scope, or the map can't link a client's fabric conversation to the backend pod Hubble saw.
+
+### Network source scope profiles
+
+Each NetFlow/IPFIX exporter (ACI leaf, ESXi VDS, campus) also needs one row in KV collection `adm_network_source_scope` with a supported profile (`aci_leaf_netflow`, `vmware_vds_ipfix`, …). Unregistered exporters stay `unmapped`. Follow the [registration checklist](README.md#source-scope-profile-registration).
 
 Leave `adm_aci_policy_complete` at `0` unless the ACI team collects the optional policy classes in [aci-network.md](aci-network.md#optional-complete-policy-evaluation). With `0`, conversations without a matching permit show "Policy not evaluated" rather than "no permitting contract".
 
@@ -168,7 +180,7 @@ Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-s
 ## Open questions
 
 - Will Hubble flow volume need a separate indexer tier or shorter retention than 7 days?
-- For Splunk Cloud later: confirm private-app vetting for custom dashboard JavaScript and the Python version on the IDM / Victoria input tier.
+- Splunk Cloud: confirm private-app vetting for custom dashboard JavaScript. Inputs run on the HF, so confirm the HF Python runtime (Security Cloud 3.13, DC Networking 3.9).
 
 ## Sources
 

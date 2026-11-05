@@ -218,6 +218,8 @@ const EXPECTED_SOURCE_PROFILES: Record<string, ReadonlySet<string>> = {
     "catalyst_campus_fnf",
     "catalyst_sdwan_ipfix",
     "meraki_ms390_ipfix",
+    "aci_leaf_netflow",
+    "vmware_vds_ipfix",
   ]),
   catalyst_client_snapshot: new Set(["catalyst_client_snapshot"]),
   meraki_association: new Set(["meraki_association"]),

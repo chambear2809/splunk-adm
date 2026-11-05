@@ -153,14 +153,17 @@ try {
     path: "dist/atlas-phase5-setup-native.png",
     fullPage: true,
   });
-  stage = "demo setup";
+  // The Splunk build has no demo mode: a stale ?mode=demo link must open the
+  // live Setup page, read back saved state and issue no writes on load.
+  stage = "demo link opens live setup";
   const before = writes.length;
   const deploymentBefore = deploymentWrites.length;
   await page.goto(`${BASE}/en-US/app/splunk_adm/setup?mode=demo`);
-  await expect(root.getByText(/Setup is unavailable in Demo/)).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(root.getByRole("textbox")).toHaveCount(0);
+  await expect(
+    root.getByLabel("Expectation for Traces", { exact: true }),
+  ).toHaveValue("active", { timeout: 90000 });
+  await expect(root.getByText(/Setup is unavailable in Demo/)).toHaveCount(0);
+  await expect(root.getByText("Demo data", { exact: true })).toHaveCount(0);
   if (
     writes.length !== before ||
     writes.length !== 3 ||

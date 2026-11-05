@@ -1,51 +1,57 @@
 import { useState } from "react";
-import { edgeIdentity } from "../glossary";
-import { tunnelOf, type GraphEdge, type GraphIndex } from "../graph";
+import type { GraphEdge, GraphIndex } from "../graph";
 
 export function Legend({
   edges,
-  index,
   collapsed,
+  alwaysOpen = false,
 }: {
   edges: GraphEdge[];
   index: GraphIndex;
   collapsed: boolean;
+  /** Rendered inside a menu popover: no toggle of its own. */
+  alwaysOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [toggled, setOpen] = useState(false);
+  const open = alwaysOpen || toggled;
+  // Lines are neutral when observed, dashed when inferred, red when blocked.
   const types = new Map<string, string>();
   for (const edge of edges) {
-    if (edge.relationship === "calls") types.set("call", "Traced call");
-    else if (edge.relationship === "traffic_observation")
-      types.set("traffic observation", "Traffic observation");
-    else if (edge.relationship === "forwards_to") {
-      if (edge.confidence === "inferred")
-        types.set("forward inferred", "Backend inferred");
-      else types.set("forward", "To backend");
-    } else if (edge.relationship === "communicates_with") {
-      if (edge.acl_action === "drop") types.set("conv blocked", "Blocked");
-      else if (tunnelOf(edge)) types.set("tunnel", "Node tunnel");
-      else {
-        const identity = edgeIdentity(edge, (id) => index.node.get(id));
-        if (identity === "identified")
-          types.set("conv", "Network conversation");
-        else if (identity === "external")
-          types.set("conv external", "External");
-        else types.set("conv unknown", "Unknown or multiple owners");
-      }
-    }
+    if (edge.relationship === "runs_on") continue;
+    if (edge.acl_action === "drop") types.set("conv blocked", "Blocked");
+    else if (edge.confidence === "inferred")
+      types.set("forward inferred", "Inferred");
+    else types.set("conv", "Observed");
   }
+  // A traced-call-only view (Services) names what its lines are.
+  if (
+    types.has("conv") &&
+    edges.every(
+      (e) => e.relationship === "calls" || e.relationship === "runs_on",
+    )
+  )
+    types.set("conv", "Traced call");
+  const order = ["conv", "forward inferred", "conv blocked"];
+  const sorted = [...types].sort(
+    (a, b) => order.indexOf(a[0]) - order.indexOf(b[0]),
+  );
   return (
-    <div className="legend" aria-label="Legend">
-      <button
-        className="link"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        Legend
-      </button>
+    <div
+      className={`legend ${alwaysOpen ? "legend-panel" : ""}`}
+      aria-label="Legend"
+    >
+      {!alwaysOpen && (
+        <button
+          className="link"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          Legend
+        </button>
+      )}
       {open && (
         <>
-          {[...types].map(([cls, label]) => (
+          {sorted.map(([cls, label]) => (
             <span key={cls}>
               <svg width="28" height="10" aria-hidden>
                 <line x1="2" y1="5" x2="26" y2="5" className={`lg ${cls}`} />
@@ -53,15 +59,6 @@ export function Legend({
               {label}
             </span>
           ))}
-          {edges.some(
-            (e) =>
-              e.relationship === "communicates_with" &&
-              e.server_port !== undefined,
-          ) && (
-            <span>
-              <span className="lg-pill">8080/tcp</span>Server port
-            </span>
-          )}
           {collapsed && (
             <span className="legend-note">Pod lists collapsed to fit</span>
           )}

@@ -1,0 +1,224 @@
+{
+  "date": "2026-11-03",
+  "harness": "frontend/src/scale/bench.html via tests/browser/perf-scale.spec.ts (Playwright Desktop Chrome, headless, 1400x900, DPR 1, Vite dev server)",
+  "generator": "frontend/src/scale/generate.ts (deterministic seed 7)",
+  "before": {
+    "source": "HEAD 7aabd70 MapView/layout/TableView",
+    "results": [
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 500,
+        "edges": 2000,
+        "routed": 1750,
+        "cards": 500,
+        "canvas": false,
+        "layoutMs": 21,
+        "initialMs": 145,
+        "panP50": 63,
+        "panP95": 82
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 2000,
+        "edges": 10000,
+        "routed": 9000,
+        "cards": 2000,
+        "canvas": false,
+        "layoutMs": 73,
+        "initialMs": 651,
+        "panP50": 303,
+        "panP95": 387
+      }
+    ],
+    "notes": [
+      "4000/10000 did not complete within the 600 s test timeout",
+      "table cases not run on the old TableView (all rows rendered)"
+    ]
+  },
+  "after": {
+    "results": [
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 500,
+        "edges": 2000,
+        "routed": 1267,
+        "cards": 294,
+        "canvas": true,
+        "layoutMs": 23,
+        "initialMs": 84,
+        "panP50": 17,
+        "panP95": 23
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 500,
+        "edges": 2000,
+        "routed": 1750,
+        "cards": 500,
+        "canvas": true,
+        "layoutMs": 13,
+        "initialMs": 115,
+        "panP50": 16,
+        "panP95": 29
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 2000,
+        "edges": 10000,
+        "routed": 5133,
+        "cards": 298,
+        "canvas": true,
+        "layoutMs": 44,
+        "initialMs": 111,
+        "panP50": 16,
+        "panP95": 21
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 2000,
+        "edges": 10000,
+        "routed": 9000,
+        "cards": 2000,
+        "canvas": true,
+        "layoutMs": 52,
+        "initialMs": 524,
+        "panP50": 13,
+        "panP95": 60
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 4000,
+        "edges": 10000,
+        "routed": 5835,
+        "cards": 398,
+        "canvas": true,
+        "layoutMs": 36,
+        "initialMs": 124,
+        "panP50": 16,
+        "panP95": 23
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 4000,
+        "edges": 10000,
+        "routed": 8000,
+        "cards": 4000,
+        "canvas": true,
+        "layoutMs": 54,
+        "initialMs": 751,
+        "panP50": 21,
+        "panP95": 90
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 4000,
+        "edges": 20000,
+        "routed": 11337,
+        "cards": 398,
+        "canvas": true,
+        "layoutMs": 73,
+        "initialMs": 181,
+        "panP50": 17,
+        "panP95": 22
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 4000,
+        "edges": 20000,
+        "routed": 18000,
+        "cards": 4000,
+        "canvas": true,
+        "layoutMs": 99,
+        "initialMs": 1054,
+        "panP50": 26,
+        "panP95": 122
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 4000,
+        "edges": 50000,
+        "routed": 22014,
+        "cards": 397,
+        "canvas": true,
+        "layoutMs": 191,
+        "initialMs": 371,
+        "panP50": 33,
+        "panP95": 39
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 4000,
+        "edges": 50000,
+        "routed": 48000,
+        "cards": 4000,
+        "canvas": true,
+        "layoutMs": 294,
+        "initialMs": 1925,
+        "panP50": 101,
+        "panP95": 239
+      },
+      {
+        "kind": "map",
+        "variant": "default",
+        "nodes": 4000,
+        "edges": 100000,
+        "routed": 30208,
+        "cards": 397,
+        "canvas": true,
+        "layoutMs": 329,
+        "initialMs": 599,
+        "panP50": 39,
+        "panP95": 46
+      },
+      {
+        "kind": "map",
+        "variant": "expanded",
+        "nodes": 4000,
+        "edges": 100000,
+        "routed": 98000,
+        "cards": 4000,
+        "canvas": true,
+        "layoutMs": 779,
+        "initialMs": 3267,
+        "panP50": 249,
+        "panP95": 430
+      },
+      {
+        "kind": "table",
+        "rows": 10000,
+        "domRows": 54,
+        "initialMs": 34,
+        "scrollP50": 17,
+        "scrollP95": 18
+      },
+      {
+        "kind": "table",
+        "rows": 100000,
+        "domRows": 54,
+        "initialMs": 18,
+        "scrollP50": 17,
+        "scrollP95": 18
+      },
+      {
+        "kind": "table",
+        "rows": 400000,
+        "domRows": 54,
+        "initialMs": 17,
+        "scrollP50": 17,
+        "scrollP95": 18
+      }
+    ]
+  }
+}

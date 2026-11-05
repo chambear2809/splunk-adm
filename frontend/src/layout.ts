@@ -7,6 +7,9 @@ import {
   type GraphNode,
 } from "./graph";
 import { isUnknown } from "./glossary";
+import type { GraphTruncation } from "./graph";
+import { LOD_CARDS, STRAIGHT_ROUTE_EDGES } from "./scale/limits";
+import { edgeVolume, strokeWidth } from "./scale/weight";
 
 export type View = "network" | "services";
 export type LaneKind =
@@ -21,8 +24,10 @@ export interface LaneLabel {
 export interface Item {
   /** Graph node ID, or `summary:<group>` for a collapsed pod list. */
   nodeId: string;
-  /** Pods represented by a collapsed summary row. */
+  /** Nodes represented by a collapsed summary row. */
   members?: string[];
+  /** Summary text, e.g. "128 endpoints". */
+  label?: string;
   groupId: string;
   role: "header" | "row" | "summary";
   x: number;
@@ -84,6 +89,16 @@ export interface RoutedEdge {
   /** Every graph edge drawn by this line (parallel hand-offs share one). */
   members: string[];
   mid: { x: number; y: number };
+  /** Summed volume (bytes, else count) of every member. */
+  weight: number;
+  /** Stroke width from volume (log scale), set for aggregated or large maps. */
+  width?: number;
+  /** Members bundled because an end is a summary card. */
+  bundle?: number;
+  /** Card-pair bundle: drawn card to card, titled by the two cards. */
+  card?: { title: string };
+  /** Every member is inferred (drawn dashed). */
+  inferred?: boolean;
 }
 export interface Layout {
   width: number;
@@ -97,6 +112,11 @@ export interface Layout {
   /** Drawn item IDs in reading order (column, then top to bottom). */
   order: string[];
   collapsed: boolean;
+  /** Groups summarized by level-of-detail aggregation (not pod collapse). */
+  aggregated: number;
+  /** Lines drawn straight because there were too many to route. */
+  straight: boolean;
+  truncation?: GraphTruncation;
 }
 export interface LayoutOptions {
   /** Collapse pod lists of two or more into "N pods" rows. */
@@ -105,6 +125,18 @@ export interface LayoutOptions {
   expanded?: ReadonlySet<string>;
   /** Merge Service frontends into one card while retaining every node id as an anchor. */
   mergeFrontends?: boolean;
+  /** Summarize the largest groups when more than `lodCards` cards would show (default on). */
+  aggregate?: boolean;
+  lodCards?: number;
+  /** Routed lines above which channel routing is skipped. */
+  straightAbove?: number;
+  truncation?: GraphTruncation;
+  /** Draw one line per card pair (network view) instead of one per row pair. */
+  cardBundles?: boolean;
+  /** Omit inferred relationships (shown only on request). */
+  hideInferred?: boolean;
+  /** Collapse untraced workloads and other-namespace pods into summary cards. */
+  quiet?: boolean;
 }
 
 export const CARD_W = 196;
@@ -149,6 +181,8 @@ interface Draft {
   sort: string;
   stacked?: boolean;
   aliases?: string[];
+  /** Background noise collapsed by default (untraced workloads, other namespaces). */
+  quiet?: boolean;
 }
 
 const podOwner = (n: GraphNode) => n.attributes?.owner ?? n.label;
@@ -220,15 +254,16 @@ function draftGroups(
   const services = graph.nodes.filter((n) => n.kind === "service");
   const depth = new Map<string, number>([[root, 0]]);
   const queue = [root];
-  while (queue.length) {
-    const cur = queue.shift()!;
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
     for (const e of index.outgoing.get(cur) ?? [])
       if (e.relationship === "calls" && !depth.has(e.target)) {
         depth.set(e.target, depth.get(cur)! + 1);
         queue.push(e.target);
       }
   }
-  const maxDepth = Math.max(0, ...depth.values());
+  let maxDepth = 0;
+  for (const d of depth.values()) maxDepth = Math.max(maxDepth, d);
   for (const s of services) if (!depth.has(s.id)) depth.set(s.id, maxDepth + 1);
   const frontDoors = view === "network" ? graph.nodes.filter(isFrontDoor) : [];
   const appStart = view === "network" ? (frontDoors.length ? 2 : 1) : 0;
@@ -237,6 +272,15 @@ function draftGroups(
   for (const e of graph.edges)
     if (e.relationship === "runs_on" && !podService.has(e.target))
       podService.set(e.target, e.source);
+  const podsOf = new Map<string, GraphNode[]>();
+  if (view === "network")
+    for (const n of graph.nodes) {
+      const owner = podService.get(n.id);
+      if (owner === undefined) continue;
+      const list = podsOf.get(owner);
+      if (list) list.push(n);
+      else podsOf.set(owner, [n]);
+    }
   for (const s of services)
     drafts.push({
       id: `group:${s.id}`,
@@ -245,12 +289,9 @@ function draftGroups(
       kind: "service",
       lane: "application",
       header: s,
-      rows:
-        view === "network"
-          ? graph.nodes
-              .filter((n) => podService.get(n.id) === s.id)
-              .sort((a, b) => a.label.localeCompare(b.label))
-          : [],
+      rows: (podsOf.get(s.id) ?? []).sort((a, b) =>
+        a.label.localeCompare(b.label),
+      ),
       column: appStart + depth.get(s.id)!,
       sort: `0|${s.label}`,
     });
@@ -314,7 +355,9 @@ function draftGroups(
     drafts.push(d);
   }
 
-  let appEnd = appStart + Math.max(0, ...services.map((s) => depth.get(s.id)!));
+  let appEnd = appStart;
+  for (const s of services)
+    appEnd = Math.max(appEnd, appStart + depth.get(s.id)!);
   const columnOf = new Map<string, number>();
   for (const d of drafts) {
     if (d.header) columnOf.set(d.header.id, d.column);
@@ -324,11 +367,12 @@ function draftGroups(
   // Namespace pods without a traced service sit beside the pods they talk to.
   const unbound = new Map<string, GraphNode[]>();
   for (const n of graph.nodes)
-    if (n.kind === "workload" && n.namespace === ns && !podService.has(n.id))
-      unbound.set(podOwner(n), [...(unbound.get(podOwner(n)) ?? []), n]);
-  for (const [owner, pods] of [...unbound].sort(([a], [b]) =>
-    a.localeCompare(b),
-  )) {
+    if (n.kind === "workload" && n.namespace === ns && !podService.has(n.id)) {
+      const list = unbound.get(podOwner(n));
+      if (list) list.push(n);
+      else unbound.set(podOwner(n), [n]);
+    }
+  const placeUnbound = (key: string, title: string, pods: GraphNode[]) => {
     let asClient = 0,
       asServer = 0,
       minCol = Infinity,
@@ -349,16 +393,27 @@ function draftGroups(
         : maxCol + 1;
     appEnd = Math.max(appEnd, column);
     drafts.push({
-      id: `group:workloads:${owner}`,
-      title: owner,
+      id: `group:workloads:${key}`,
+      title,
       subtitle: "Workload · no traces",
       kind: "workloads",
       lane: "application",
       rows: pods.sort((a, b) => a.label.localeCompare(b.label)),
       column,
-      sort: `1|${owner}`,
+      sort: `1|${key}`,
+      quiet: options.quiet && pods.length > 1,
     });
-  }
+  };
+  const unboundGroups = [...unbound].sort(([a], [b]) => a.localeCompare(b));
+  // Quiet maps keep every untraced workload in one card instead of one each.
+  if (options.quiet && unboundGroups.length > 1)
+    placeUnbound(
+      "*",
+      "Untraced workloads",
+      unboundGroups.flatMap(([, pods]) => pods),
+    );
+  else
+    for (const [owner, pods] of unboundGroups) placeUnbound(owner, owner, pods);
 
   const depsCol = appEnd + 1;
   const outer = new Map<string, Draft>();
@@ -369,6 +424,7 @@ function draftGroups(
     title: string,
     kind: Draft["kind"],
     subtitle?: string,
+    quiet = false,
   ) => {
     const column = lane === "sources" ? 0 : depsCol;
     const id = `group:${lane}:${gid}`;
@@ -382,6 +438,7 @@ function draftGroups(
       column,
       sort: `2|${gid}`,
       stacked: lane === "infrastructure",
+      quiet: quiet && options.quiet,
     };
     d.rows.push(n);
     outer.set(id, d);
@@ -437,6 +494,7 @@ function draftGroups(
         n.namespace ?? "Other namespace",
         "namespace",
         "Namespace",
+        true,
       );
     else if (n.endpoint_kind === "vm") {
       const a = n.attributes ?? {};
@@ -501,10 +559,37 @@ export function computeLayout(
     drafts
       .filter(
         (d) =>
-          options.collapse && collapsible(d) && !options.expanded?.has(d.id),
+          (options.collapse || (d.quiet && d.rows.length > 1)) &&
+          collapsible(d) &&
+          !options.expanded?.has(d.id),
       )
       .map((d) => d.id),
   );
+  // Level of detail: past the card budget, summarize the largest groups
+  // (namespace, EPG, endpoints, nodes, workloads) until the map fits it.
+  const aggregatedIds = new Set<string>();
+  if (options.aggregate !== false) {
+    const budget = options.lodCards ?? LOD_CARDS;
+    const cards = (d: Draft) =>
+      (d.header ? 1 : 0) + (collapsedIds.has(d.id) ? 1 : d.rows.length);
+    let total = drafts.reduce((n, d) => n + cards(d), 0);
+    if (total > budget)
+      for (const d of [...drafts]
+        .filter(
+          (d) =>
+            d.rows.length >= 2 &&
+            !collapsedIds.has(d.id) &&
+            !options.expanded?.has(d.id),
+        )
+        .sort(
+          (a, b) => b.rows.length - a.rows.length || a.id.localeCompare(b.id),
+        )) {
+        if (total <= budget) break;
+        total -= d.rows.length - 1;
+        collapsedIds.add(d.id);
+        aggregatedIds.add(d.id);
+      }
+  }
   const rowCount = (d: Draft) => (collapsedIds.has(d.id) ? 1 : d.rows.length);
   const groupHeight = (d: Draft) =>
     (d.header || d.kind !== "service" ? HEADER_H : 0) +
@@ -555,8 +640,12 @@ export function computeLayout(
     const a = memberOf.get(e.source),
       b = memberOf.get(e.target);
     if (!a || !b || a === b) continue;
-    neighbors.set(a, [...(neighbors.get(a) ?? []), b]);
-    neighbors.set(b, [...(neighbors.get(b) ?? []), a]);
+    const na = neighbors.get(a),
+      nb = neighbors.get(b);
+    if (na) na.push(b);
+    else neighbors.set(a, [b]);
+    if (nb) nb.push(a);
+    else neighbors.set(b, [a]);
   }
   const rank = new Map<Draft, number>();
   const setRanks = () =>
@@ -596,7 +685,7 @@ export function computeLayout(
     }
     return h;
   });
-  const tallest = Math.max(0, ...heights);
+  const tallest = heights.reduce((m, h) => Math.max(m, h), 0);
   const groups: Group[] = [];
   const items = new Map<string, Item>();
   const order: string[] = [];
@@ -631,7 +720,7 @@ export function computeLayout(
         h,
         column: c,
         items: [],
-        collapsible: collapsible(d),
+        collapsible: collapsible(d) || aggregatedIds.has(d.id),
         collapsed: collapsedIds.has(d.id),
       };
       const add = (it: Item, ids: string[]) => {
@@ -664,6 +753,7 @@ export function computeLayout(
           {
             nodeId: id,
             members,
+            label: `${members.length.toLocaleString("en-US")} ${summaryNoun(d, members.length)}`,
             groupId: d.id,
             role: "summary",
             x,
@@ -715,7 +805,7 @@ export function computeLayout(
   // Trailing room for same-column loops and their labels (e.g. VXLAN · 8472/udp).
   const last = Math.max(0, columns - 1);
   const width = cols.x[last] + CARD_W + 20;
-  const { edges, pills } = routeEdges(
+  const { edges, pills, straight } = routeEdges(
     graph,
     view,
     items,
@@ -723,6 +813,12 @@ export function computeLayout(
     columns,
     cols,
     frontDoorIds,
+    {
+      straightAbove: options.straightAbove ?? STRAIGHT_ROUTE_EDGES,
+      weighted: aggregatedIds.size > 0,
+      cards: options.cardBundles === true && view === "network",
+      hideInferred: options.hideInferred === true,
+    },
   );
   return {
     width,
@@ -734,7 +830,20 @@ export function computeLayout(
     pills,
     order,
     collapsed: collapsedIds.size > 0,
+    aggregated: aggregatedIds.size,
+    straight,
+    ...((options.truncation ?? graph.truncation)
+      ? { truncation: options.truncation ?? graph.truncation }
+      : {}),
   };
+}
+
+function summaryNoun(d: Draft, n: number): string {
+  const one = n === 1;
+  if (d.rows.every((r) => r.kind === "workload")) return one ? "pod" : "pods";
+  if (d.kind === "nodes") return one ? "node" : "nodes";
+  if (d.kind === "frontdoor") return one ? "frontend" : "frontends";
+  return one ? "endpoint" : "endpoints";
 }
 
 export const rounded = (pts: [number, number][], r = 7): string => {
@@ -783,11 +892,87 @@ interface Plan {
   directed: boolean;
   pillKey?: string;
   label?: string;
+  weight: number;
+  bundled?: boolean;
+  blocked?: boolean;
+  card?: { title: string };
 }
 interface Attach {
   key: string;
   otherY: number;
   y?: number;
+}
+
+/** Representative member of a card bundle: problems first, then evidence strength. */
+const cardRank = (e: GraphEdge) =>
+  e.acl_action === "drop"
+    ? 0
+    : e.relationship === "calls"
+      ? 1
+      : e.relationship === "communicates_with"
+        ? 2
+        : e.relationship === "traffic_observation"
+          ? 3
+          : e.confidence === "inferred"
+            ? 5
+            : 4;
+const cardDirected = (e: GraphEdge) =>
+  e.relationship !== "traffic_observation" && e.direction_basis !== "unknown";
+
+/** "+N inferred" when a card line carries observed and inferred members. */
+const cardInferredBadge = (
+  members: string[],
+  edgeById: ReadonlyMap<string, GraphEdge>,
+) => {
+  const inferred = members.filter(
+    (id) => edgeById.get(id)?.confidence === "inferred",
+  ).length;
+  return inferred && inferred < members.length
+    ? `+${inferred} inferred`
+    : undefined;
+};
+
+/** Hover lines for a card bundle: link count, records, and the busiest ports. */
+export function bundleSummary(edges: GraphEdge[]): string[] {
+  let calls = 0,
+    records = 0,
+    blocked = 0,
+    inferred = 0;
+  const ports = new Map<string, number>();
+  for (const e of edges) {
+    if (e.relationship === "calls") calls += e.count;
+    else records += e.records ?? e.count;
+    if (e.acl_action === "drop") blocked++;
+    if (e.confidence === "inferred") inferred++;
+    const port = e.server_port ?? e.destination_port;
+    if (port !== undefined && e.relationship !== "calls") {
+      const k = `${port}${e.transport ? `/${e.transport}` : ""}`;
+      ports.set(k, (ports.get(k) ?? 0) + (e.records ?? e.count));
+    }
+  }
+  const n = (v: number) => v.toLocaleString("en-US");
+  const top = [...ports].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const lines = [
+    [
+      `${n(edges.length)} link${edges.length === 1 ? "" : "s"}`,
+      calls ? `${n(calls)} traced span${calls === 1 ? "" : "s"}` : "",
+      records ? `${n(records)} record${records === 1 ? "" : "s"}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+  ];
+  if (top.length)
+    lines.push(
+      `Ports ${top
+        .slice(0, 4)
+        .map(([k]) => k)
+        .join(", ")}${top.length > 4 ? ` +${top.length - 4}` : ""}`,
+    );
+  if (blocked) lines.push(`${n(blocked)} blocked by the fabric`);
+  if (inferred) lines.push(`${n(inferred)} inferred`);
+  return lines;
 }
 
 function routeEdges(
@@ -798,17 +983,54 @@ function routeEdges(
   columns: number,
   cols: Columns,
   frontDoors: ReadonlySet<string>,
-): { edges: RoutedEdge[]; pills: Pill[] } {
+  mode: {
+    straightAbove: number;
+    weighted: boolean;
+    cards?: boolean;
+    hideInferred?: boolean;
+  },
+): { edges: RoutedEdge[]; pills: Pill[]; straight: boolean } {
   const plans: Plan[] = [];
-  const sorted = [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
+  const sorted = [...graph.edges].sort((a, b) =>
+    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+  );
   // Hand-offs from one Service to one pod are drawn as a single line.
   const parallel = new Map<string, GraphEdge[]>();
   for (const e of sorted)
     if (e.relationship === "forwards_to") {
       const k = `${e.source}|${e.target}`;
-      parallel.set(k, [...(parallel.get(k) ?? []), e]);
+      const list = parallel.get(k);
+      if (list) list.push(e);
+      else parallel.set(k, [e]);
     }
+  // Lines into a summary card are bundled per card pair and relationship.
+  const bundles = new Map<string, Plan>();
+  const edgeById = new Map(graph.edges.map((e) => [e.id, e]));
   const drawn = new Set<string>();
+  const cardBundles = new Map<string, Plan>();
+  const groupById = new Map(groups.map((g) => [g.id, g]));
+  const groupTitle = new Map(groups.map((g) => [g.id, g.title]));
+  const anchors = new Map<string, Item>();
+  const anchor = (groupId: string): Item => {
+    const id = `card:${groupId}`;
+    let it = anchors.get(id);
+    if (!it) {
+      const g = groupById.get(groupId)!;
+      it = {
+        nodeId: id,
+        groupId,
+        role: "header",
+        x: g.x,
+        y: g.y,
+        w: g.w,
+        h: g.h,
+        column: g.column,
+      };
+      anchors.set(id, it);
+    }
+    return it;
+  };
+  const lookup = (id: string) => anchors.get(id) ?? items.get(id);
   for (const raw of sorted) {
     let e = raw;
     let members = [raw.id];
@@ -816,15 +1038,96 @@ function routeEdges(
       const k = `${raw.source}|${raw.target}`;
       if (drawn.has(k)) continue;
       drawn.add(k);
-      const group = parallel.get(k)!;
+      let group = parallel.get(k)!;
+      if (mode.hideInferred)
+        group = group.filter((g) => g.confidence !== "inferred");
+      if (!group.length) continue;
       e = group.find((g) => g.confidence === "observed") ?? group[0];
       members = group.map((g) => g.id);
-    }
+    } else if (mode.hideInferred && raw.confidence === "inferred") continue;
     if (e.relationship === "runs_on") continue;
     if (view === "services" && e.relationship !== "calls") continue;
     const s = items.get(e.source),
       t = items.get(e.target);
     if (!s || !t || s === t) continue;
+    if (mode.cards) {
+      // One line per card pair: the relationships it carries are listed on hover.
+      if (s.groupId === t.groupId) continue;
+      const gs = anchor(s.groupId),
+        gt = anchor(t.groupId);
+      const key =
+        gs.nodeId < gt.nodeId
+          ? `${gs.nodeId}|${gt.nodeId}`
+          : `${gt.nodeId}|${gs.nodeId}`;
+      const weight = members.reduce(
+        (sum, id) => sum + edgeVolume(edgeById.get(id)!),
+        0,
+      );
+      const b = cardBundles.get(key);
+      if (b) {
+        b.members.push(...members);
+        b.weight += weight;
+        if (
+          cardRank(e) < cardRank(b.edge) ||
+          (cardRank(e) === cardRank(b.edge) &&
+            edgeVolume(e) > edgeVolume(b.edge))
+        )
+          b.edge = e;
+        if (e.acl_action === "drop") b.blocked = true;
+        b.directed = b.directed && cardDirected(e) && b.s === gs;
+        continue;
+      }
+      const plan: Plan = {
+        edge: e,
+        s: gs,
+        t: gt,
+        directed: cardDirected(e),
+        members: [...members],
+        bundled: true,
+        blocked: e.acl_action === "drop",
+        weight,
+        card: {
+          title: `${groupTitle.get(s.groupId)} – ${groupTitle.get(t.groupId)}`,
+        },
+      };
+      cardBundles.set(key, plan);
+      plans.push(plan);
+      continue;
+    }
+    // In level-of-detail mode every card pair shares one line per relationship.
+    if (s.role === "summary" || t.role === "summary" || mode.weighted) {
+      const key = `${s.nodeId}|${t.nodeId}|${e.relationship}`;
+      const b = bundles.get(key);
+      if (b) {
+        b.members.push(...members);
+        b.weight += members.reduce(
+          (sum, id) => sum + edgeVolume(edgeById.get(id)!),
+          0,
+        );
+        if (edgeVolume(e) > edgeVolume(b.edge)) b.edge = e;
+        if (e.acl_action === "drop") b.blocked = true;
+        b.directed = b.directed && e.direction_basis !== "unknown";
+        continue;
+      }
+      const plan: Plan = {
+        edge: e,
+        s,
+        t,
+        directed:
+          e.relationship !== "traffic_observation" &&
+          e.direction_basis !== "unknown",
+        members: [...members],
+        bundled: true,
+        blocked: e.acl_action === "drop",
+        weight: members.reduce(
+          (sum, id) => sum + edgeVolume(edgeById.get(id)!),
+          0,
+        ),
+      };
+      bundles.set(key, plan);
+      plans.push(plan);
+      continue;
+    }
     const conv = e.relationship === "communicates_with";
     const directed =
       e.relationship === "traffic_observation"
@@ -834,7 +1137,17 @@ function routeEdges(
       e.server_port !== undefined
         ? `${e.server_port}/${e.transport ?? "?"}`
         : undefined;
-    const plan: Plan = { edge: e, s, t, directed, members };
+    const plan: Plan = {
+      edge: e,
+      s,
+      t,
+      directed,
+      members,
+      weight: members.reduce(
+        (sum, id) => sum + edgeVolume(edgeById.get(id)!),
+        0,
+      ),
+    };
     if (members.length > 1) {
       const group = members.map((id) => parallelEdge(parallel, e, id));
       const inferred = group.filter((g) => g.confidence === "inferred").length;
@@ -864,6 +1177,7 @@ function routeEdges(
 
   // Attachment points: one distinct y per edge (or pill) on each card side.
   const sides = new Map<string, Attach[]>();
+  const requested = new Set<string>();
   const sideKey = (it: Item, side: "left" | "right") => `${it.nodeId}|${side}`;
   const request = (
     it: Item,
@@ -871,9 +1185,12 @@ function routeEdges(
     key: string,
     otherY: number,
   ) => {
-    const list = sides.get(sideKey(it, side)) ?? [];
-    if (!list.some((a) => a.key === key)) list.push({ key, otherY });
-    sides.set(sideKey(it, side), list);
+    const k = sideKey(it, side);
+    if (requested.has(`${k}|${key}`)) return;
+    requested.add(`${k}|${key}`);
+    const list = sides.get(k);
+    if (list) list.push({ key, otherY });
+    else sides.set(k, [{ key, otherY }]);
   };
   const cy = (it: Item) => it.y + it.h / 2;
   const pillMembers = new Map<string, Plan[]>();
@@ -889,7 +1206,9 @@ function routeEdges(
     const tSide = sameCol ? loopSide : sSide === "right" ? "left" : "right";
     request(p.s, sSide, `edge:${p.edge.id}`, cy(p.t));
     if (p.pillKey) {
-      pillMembers.set(p.pillKey, [...(pillMembers.get(p.pillKey) ?? []), p]);
+      const list = pillMembers.get(p.pillKey);
+      if (list) list.push(p);
+      else pillMembers.set(p.pillKey, [p]);
       request(p.t, tSide, `pill:${p.pillKey}`, cy(p.s));
     } else request(p.t, tSide, `edge:${p.edge.id}`, cy(p.s));
   }
@@ -905,7 +1224,7 @@ function routeEdges(
   const point = new Map<string, number>();
   for (const [k, list] of sides) {
     const nodeId = k.slice(0, k.lastIndexOf("|"));
-    const it = items.get(nodeId)!;
+    const it = lookup(nodeId)!;
     list.sort((a, b) => a.otherY - b.otherY || a.key.localeCompare(b.key));
     const pad = it.role === "header" ? 9 : 7;
     const span = it.h - 2 * pad;
@@ -978,7 +1297,7 @@ function routeEdges(
       ys.push((col[i][1] + col[i + 1][0]) / 2);
     return ys;
   };
-  const topTrack = Math.min(...groups.map((g) => g.y)) - 14;
+  const topTrack = groups.reduce((m, g) => Math.min(m, g.y), Infinity) - 14;
   const slots = new Map<string, number>();
   const slot = (key: string) => {
     const n = slots.get(key) ?? 0;
@@ -1009,6 +1328,12 @@ function routeEdges(
       cy(a.t) - cy(b.t) ||
       a.edge.id.localeCompare(b.edge.id),
   );
+  const straight = plans.length > mode.straightAbove;
+  // Card lines stay one quiet width; volume is on hover, not in the ink.
+  const weighted = mode.weighted || straight || bundles.size > 0;
+  const maxWeight = weighted
+    ? plans.reduce((m, p) => Math.max(m, p.weight), 0)
+    : 0;
   for (const p of ordered) {
     const { s, t, edge } = p;
     const sameCol = s.column === t.column;
@@ -1029,7 +1354,14 @@ function routeEdges(
     }
     let pts: [number, number][];
     let mid: { x: number; y: number };
-    if (sameCol) {
+    if (straight && !sameCol) {
+      // Too many lines to route through channels: draw them directly.
+      pts = [
+        [sx, sy],
+        [tx, ty],
+      ];
+      mid = { x: (sx + tx) / 2, y: (sy + ty) / 2 };
+    } else if (sameCol) {
       const k = slot(`loop|${s.column}`) * 4;
       const left = loopSide === "left";
       const gx = left ? s.x - 14 - k : s.x + s.w + 14 + k;
@@ -1091,20 +1423,32 @@ function routeEdges(
       const w = p.label.length * 6.2 + 14;
       mid = { x: tx - ARROW - w - 8, y: ty - 12 };
     }
-    edges.push({
+    const routed: RoutedEdge = {
       id: edge.id,
       edge,
       points: pts,
-      d: rounded(pts),
+      d: straight ? `M${sx},${sy} L${tx},${ty}` : rounded(pts),
       arrow: p.directed && !p.pillKey ? "end" : "none",
       directed: p.directed,
       pill: p.pillKey,
-      label: p.label,
-      blocked: edge.acl_action === "drop" || undefined,
+      label: p.card
+        ? cardInferredBadge(p.members, edgeById)
+        : p.bundled && p.members.length > 1
+          ? `×${p.members.length.toLocaleString("en-US")}`
+          : p.label,
+      blocked:
+        (p.bundled ? p.blocked : edge.acl_action === "drop") || undefined,
       members: p.members,
       mid,
-    });
+      weight: p.weight,
+    };
+    if (weighted) routed.width = strokeWidth(p.weight, maxWeight);
+    if (p.bundled) routed.bundle = p.members.length;
+    if (p.card) routed.card = p.card;
+    if (p.members.every((id) => edgeById.get(id)?.confidence === "inferred"))
+      routed.inferred = true;
+    edges.push(routed);
   }
-  edges.sort((a, b) => a.id.localeCompare(b.id));
-  return { edges, pills };
+  edges.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { edges, pills, straight };
 }

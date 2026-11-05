@@ -19,8 +19,18 @@ Optional `frontends_json` registers configured frontend intent with `address`,
 must have a registered NetFlow exporter. This relates an observed address to the
 selected service context; it proves neither backend selection nor translation.
 
-The reader searches complete native source families in the selected window
-(maximum 300 seconds), with a 50,000-record limit per source query. It rejects
+The reader searches complete native source families per window of at most 300
+seconds, with a 50,000-record limit per source query. Longer graph windows (up to
+8 days) are read as independent 300-second slices, each qualified exactly as a
+short window, then unioned by qualified node ID. With
+[qualified summaries](../DATA_LAYER.md#qualified-graph-summaries) every
+summarized slice contributes (exact totals) and only the newest unsummarized
+minutes are read raw. Without them, up to 6 slices are read (all of them up to
+30 minutes; otherwise evenly spaced, including the newest). Graph metadata
+(`window_slices`, `window_slices_read`, `read_coverage`) and a warning state how
+much of the window was read; counts describe the slices read. A slice without complete
+evidence or without the selected service contributes nothing; a truncated slice
+fails the graph. It rejects
 incomplete searches and conflicting copies of the same indexed record. A pod
 join requires unique, non-host-network ownership covering the complete native
 observation interval. A service association at the event time requires explicit
@@ -86,6 +96,10 @@ definition = admqualified mode=catalog
 
 [adm_application_graph_read(4)]
 definition = admqualified mode=graph service="$service$" environment="$environment$" cluster="$cluster$" namespace="$namespace$"
+
+# Optional, with qualified summaries: progressive map load (summaries first).
+[adm_application_graph_read(5)]
+definition = admqualified mode=graph service="$service$" environment="$environment$" cluster="$cluster$" namespace="$namespace$" tail="$tail$"
 ```
 
 Splunk merges these overrides with the shipped arguments, strict validation,

@@ -2,16 +2,17 @@ import { ControllerMap } from "../AppDynamicsCatalog";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
-  BookOpen,
+  ChevronDown,
   CircleAlert,
-  Download,
+  MoreHorizontal,
   RefreshCw,
   Search,
   Settings2,
+  SlidersHorizontal,
   TriangleAlert,
   X,
 } from "lucide-react";
-import type { Graph, GraphEdge } from "../graph";
+import type { Graph, GraphEdge, GraphRead } from "../graph";
 import { isBlocked, plural, portLabel, warningTitle } from "../glossary";
 import type { View } from "../layout";
 import { MapView } from "../MapView";
@@ -22,8 +23,12 @@ import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
 import { PathStrip } from "../PathStrip";
+import { TraceView } from "../trace/TraceView";
+import { usePathTrace } from "../trace/usePathTrace";
+import { traceHighlight } from "../trace/traceModel";
+import { deviceURL, TracePathForm } from "./ExploreTools";
 import { DevicesView } from "../DevicesView";
-import { formatUtc, formatInZone } from "../time";
+import { formatUtc, formatInZone, graphWindowLabel } from "../time";
 import { argError } from "../provider";
 import { ScopeBar } from "../map/ScopeBar";
 import { TimePicker, pickerBound } from "../map/TimePicker";
@@ -42,7 +47,7 @@ import { ChangePanel } from "../ChangePanel";
 import { SavedViews } from "../SavedViews";
 import { useMapExports } from "../map/useMapExports";
 import "../print.css";
-import { FilterBar } from "../map/FilterBar";
+import { activeFacetCount, FilterBar, FocusSelect } from "../map/FilterBar";
 import {
   prefsFor,
   mapPreferences,
@@ -54,7 +59,9 @@ import { Legend } from "../map/Legend";
 import { TableView } from "../map/TableView";
 import type { GraphArgs } from "../rows";
 import { useTheme, type Theme } from "../theme";
-import type { Topology } from "../topology";
+import { resolveDevice, type Topology } from "../topology";
+import { ImpactButton } from "../impact/ImpactButton";
+import { useImpactOverlay } from "../impact/useImpactOverlay";
 
 const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["service", "Entry service", "OTel service.name"],
@@ -63,7 +70,17 @@ const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["namespace", "Namespace", "Kubernetes namespace"],
 ];
 type Tab = View | "devices" | "table";
-type Panel = "settings" | "help" | "warnings" | "export" | "changes" | "saved";
+type Panel =
+  | "settings"
+  | "help"
+  | "warnings"
+  | "export"
+  | "changes"
+  | "saved"
+  | "scope"
+  | "filters"
+  | "more"
+  | "legend";
 const FOCUS_PREFIX = {
   any: "Within",
   callers: "Observed callers within",
@@ -71,6 +88,7 @@ const FOCUS_PREFIX = {
 } as const;
 // Extra shell height while a candidate path is open, so the map keeps its size.
 const PATH_STRIP_ROOM = 260;
+const TRACE_ROOM = 150;
 const TABS: [Tab, string][] = [
   ["network", "Network"],
   ["services", "Services"],
@@ -210,6 +228,43 @@ function StandardMapPage({
     initialQuery: initialState.query,
   });
   const empty = visible && graph.nodes.length === 0;
+  const selectedBundle = useMemo(() => {
+    if (selection?.kind !== "edge") return undefined;
+    const routed = layout.edges.find(
+      (r) => r.card && r.members.includes(selection.id),
+    );
+    return routed?.card
+      ? { title: routed.card.title, edgeIds: routed.members }
+      : undefined;
+  }, [layout, selection]);
+  const [traceRequest, setTraceRequest] = useState(initialState.trace);
+  const traceResult = usePathTrace({
+    request: traceRequest,
+    demo: !__ADM_SPLUNK_BUILD__ && mode === "demo",
+    client: snapshot.client ?? client,
+    graph: mode === "live" && visible ? graph : undefined,
+    topology: mode === "live" && visible ? topology : undefined,
+    earliest,
+    latest,
+    timezone,
+  });
+  const tracedPath =
+    traceResult.status === "done" ? traceResult.trace : undefined;
+  const traceMatch = useMemo(
+    () =>
+      tracedPath && tracedPath.status !== "unresolved"
+        ? traceHighlight(tracedPath)
+        : undefined,
+    [tracedPath],
+  );
+  const impact = useImpactOverlay(graph, topo);
+  const openNode = (id: string) => {
+    const n = index.node.get(id);
+    const device = [n?.label, ...(n?.addresses ?? [])]
+      .map((raw) => resolveDevice(raw, topo))
+      .find(Boolean);
+    if (device) location.assign(deviceURL(device.id));
+  };
   const focusNotes: string[] = [];
   if (focus && focus.direction !== "any" && followedEdges) {
     const followed = displayGraph.edges.filter((edge) =>
@@ -254,7 +309,18 @@ function StandardMapPage({
   };
   const healthReport = useHealthStatus()?.report;
   useEffect(() => onModeChange?.(mode), [mode, onModeChange]);
-  const [panel, setPanel] = useState<Panel | null>(null);
+  // A live map starts unscoped: open the scope fields so they are the first step.
+  const [panel, setPanel] = useState<Panel | null>(() =>
+    initialState.mode === "live" &&
+    Object.values(initialState.args).some((value) => !value)
+      ? "scope"
+      : null,
+  );
+  useEffect(() => {
+    if (visible) setPanel((current) => (current === "scope" ? null : current));
+  }, [visible]);
+  const [findingsOpen, setFindingsOpen] = useState(false);
+  const filterCount = activeFacetCount(facets);
   const root = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
   useLayoutEffect(() => {
@@ -264,6 +330,7 @@ function StandardMapPage({
 
   const pathOpen =
     visible && !!pathTab && !!path && !!selectedEdge && !pathHidden;
+  const traceOpen = !!traceRequest;
   useEffect(() => {
     if (pathOpen)
       root.current
@@ -290,12 +357,21 @@ function StandardMapPage({
     else if (result === false) setPanel(null);
   };
   useEffect(() => {
-    writeUrlState({ args, earliest, latest, mode, scenario, tab, query });
-  }, [args, earliest, latest, mode, scenario, tab, query]);
+    writeUrlState({
+      args,
+      earliest,
+      latest,
+      mode,
+      scenario,
+      tab,
+      query,
+      ...(traceRequest ? { trace: traceRequest } : {}),
+    });
+  }, [args, earliest, latest, mode, scenario, tab, query, traceRequest]);
   const switchLive = () => {
     switchSnapshotLive();
     clearSelection();
-    setPanel(null);
+    setPanel("scope");
   };
   const argErrors = ARG_FIELDS.map(([key]) => argError(key, args[key])).filter(
     Boolean,
@@ -309,7 +385,14 @@ function StandardMapPage({
     exportJson,
     exportPng,
     exportPrint,
-  } = useMapExports({ graph, index, topo, root, close: () => setPanel(null) });
+  } = useMapExports({
+    graph,
+    index,
+    topo,
+    root,
+    close: () => setPanel(null),
+    edges: layout.edges,
+  });
   const togglePanel = (p: Panel) => setPanel((cur) => (cur === p ? null : p));
   const [errorHint, errorDetail] = error.split(" Splunk reported: ");
 
@@ -340,6 +423,7 @@ function StandardMapPage({
       index={index}
       live={mode === "live"}
       onShowPath={showFindingPath}
+      onClose={() => setFindingsOpen(false)}
     />
   );
 
@@ -370,9 +454,10 @@ function StandardMapPage({
       data-loaded={visible ? "true" : "false"}
       data-node-count={visible ? graph.nodes.length : 0}
       data-edge-count={visible ? graph.edges.length : 0}
+      data-line-count={visible ? layout.edges.length : 0}
       ref={root}
       style={{
-        height: `calc(max(600px, 100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px) + ${pathOpen ? PATH_STRIP_ROOM : 0}px)`,
+        height: `calc(max(600px, 100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px) + ${(pathOpen ? PATH_STRIP_ROOM : 0) + (traceOpen ? TRACE_ROOM : 0)}px)`,
       }}
       onKeyDown={(e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -380,19 +465,43 @@ function StandardMapPage({
         else if (selection) clearSelection();
       }}
     >
-      <div className="atlas-query-bar">
-        <ScopeBar
-          args={args}
-          live={mode === "live"}
-          autoSelectSingle
-          client={client}
-          scenario={scenario}
-          demoArgs={mode === "demo" ? demoArgsFor(scenario) : undefined}
-          onChange={(next) => {
-            cancelQuery();
-            setArgs(next);
-          }}
-        />
+      <header className="bar atlas-map-header">
+        <button
+          className="scope-button"
+          aria-label="Scope"
+          aria-expanded={panel === "scope"}
+          title={[args.environment, args.cluster, args.namespace, args.service]
+            .filter(Boolean)
+            .join(" · ")}
+          onClick={() => togglePanel("scope")}
+        >
+          <strong className="scope-service">
+            {(visible ? graph.boundary.service : args.service) ||
+              "Choose scope"}
+          </strong>
+          <span className="scope-dims">
+            {(visible
+              ? [
+                  graph.boundary.environment,
+                  graph.boundary.cluster,
+                  graph.boundary.namespace,
+                ]
+              : [args.environment, args.cluster, args.namespace]
+            )
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+          <ChevronDown size={14} aria-hidden />
+        </button>
+        {argErrors.length > 0 && panel !== "scope" && (
+          <button
+            className="chip warn"
+            onClick={() => setPanel("scope")}
+            title={argErrors.join(" ")}
+          >
+            Invalid scope
+          </button>
+        )}
         <TimePicker
           earliest={earliest}
           latest={latest}
@@ -405,97 +514,67 @@ function StandardMapPage({
             setLatest(end);
           }}
         />
-        <button
-          className="primary-button"
-          onClick={refresh}
-          disabled={
-            busy ||
-            mode === "demo" ||
-            argErrors.length > 0 ||
-            !!timeError(earliest, latest, timezone)
-          }
-        >
-          {busy ? "Building…" : "Build map"}
-        </button>
-        {mode === "demo" && (
-          <p className="atlas-query-note">
-            Demo shows a captured scope and time window. Switch to Splunk to
-            build another map.
-          </p>
+        {mode === "live" && (
+          <button
+            className="primary-button"
+            onClick={refresh}
+            disabled={
+              busy ||
+              argErrors.length > 0 ||
+              !!timeError(earliest, latest, timezone)
+            }
+          >
+            {busy ? "Building…" : "Build map"}
+          </button>
+        )}
+        {!__ADM_SPLUNK_BUILD__ && mode === "demo" && (
+          <span
+            className="chip demo"
+            title={
+              visible
+                ? `Captured window ${formatInZone(graph.window.start, timezone)} → ${formatInZone(graph.window.end, timezone)}`
+                : undefined
+            }
+          >
+            Demo data
+          </span>
+        )}
+        {mode === "live" && !visible && !busy && (
+          <span className="chip">Not loaded</span>
+        )}
+        {mode === "live" && visible && graphWindowLabel(graph, timezone) && (
+          <span
+            className="chip"
+            data-testid="graph-window"
+            title="The window this graph counts. Windows over five minutes start on a five-minute boundary."
+          >
+            {graphWindowLabel(graph, timezone)}
+          </span>
         )}
         {mode === "live" && isIncompleteWindow(latest, timezone) && (
-          <p className="atlas-query-note">
-            {" "}
-            <strong>Incomplete window</strong> — conversations use 5-minute
-            buckets. The latest 10 minutes may still be filling while rollups
-            catch up.
-          </p>
+          <span
+            className="chip warn"
+            title="Conversations use 5-minute buckets; the latest 10 minutes may still be filling."
+          >
+            Incomplete window
+          </span>
         )}
-      </div>
-      <header className="bar">
-        <div className="scope">
-          {visible ? (
-            <>
-              <strong className="scope-service">
-                {graph.boundary.service}
-              </strong>
-              <span className="scope-dims">
-                {graph.boundary.environment} · {graph.boundary.cluster} ·{" "}
-                {graph.boundary.namespace}
-              </span>
-              <span className="scope-time">
-                {formatInZone(graph.window.start, timezone)} →{" "}
-                {formatInZone(graph.window.end, timezone)}
-              </span>
-              {graph.demo && <span className="chip demo">Synthetic demo</span>}
-            </>
-          ) : (
-            <>
-              <strong className="scope-service">
-                {args.service || "No application selected"}
-              </strong>
-              <span className="scope-dims">
-                {[args.environment, args.cluster, args.namespace]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-              <span className="chip">Splunk · not loaded</span>
-            </>
-          )}
-          {busy && visible && (
-            <span className="chip" role="status">
-              <RefreshCw size={13} className="spin" /> Updating…
-            </span>
-          )}
-        </div>
+        {busy && visible && (
+          <span className="chip" role="status">
+            <RefreshCw size={13} className="spin" /> Updating…
+          </span>
+        )}
         {visible && !empty && (
           <div className="kpis" aria-label="Summary">
             <span className="kpi">
               <b>{totals.services}</b>{" "}
               {totals.services === 1 ? "service" : "services"}
             </span>
-            {totals.conversations > 0 && (
-              <button
-                className="kpi"
-                aria-pressed={facets.identity === "identified"}
-                onClick={() =>
-                  changeFacets({
-                    ...facets,
-                    identity:
-                      facets.identity === "identified"
-                        ? undefined
-                        : "identified",
-                  })
-                }
-              >
-                <b>{totals.identified}</b> of {totals.conversations}{" "}
-                conversations identified
-              </button>
-            )}
             {unknownChips.length > 0 && (
               <button
                 className="kpi warn"
                 aria-pressed={facets.identity === "unknown"}
+                title={unknownChips.join(" · ")}
                 onClick={() =>
                   changeFacets({
                     ...facets,
@@ -505,7 +584,7 @@ function StandardMapPage({
                 }
               >
                 <CircleAlert size={14} aria-hidden />
-                {unknownChips.join(" · ")}
+                {totals.unknownSources + totals.unknownOther} unknown
               </button>
             )}
             {totals.externalNodes > 0 && (
@@ -535,6 +614,7 @@ function StandardMapPage({
                 {totals.blocked} blocked
               </button>
             )}
+            {graph.read && <ReadChip read={graph.read} />}
             {warnings.length > 0 && (
               <button
                 className="kpi warn"
@@ -549,46 +629,104 @@ function StandardMapPage({
         )}
         <div className="actions">
           <button
-            className="secondary-button"
-            aria-expanded={panel === "changes"}
-            disabled={!visible || busy}
-            onClick={() => togglePanel("changes")}
-          >
-            Changes
-          </button>
-          <button
-            className="secondary-button"
-            aria-expanded={panel === "saved"}
-            onClick={() => togglePanel("saved")}
-          >
-            Saved views
-          </button>
-          <button
             className="icon-button"
-            aria-label="How to read this map"
-            aria-expanded={panel === "help"}
-            onClick={() => togglePanel("help")}
+            aria-label="More actions"
+            aria-haspopup="true"
+            aria-expanded={panel === "more"}
+            onClick={() => togglePanel("more")}
           >
-            <BookOpen size={17} />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="Export"
-            aria-expanded={panel === "export"}
-            onClick={() => togglePanel("export")}
-            disabled={!visible || empty}
-          >
-            <Download size={17} />
-          </button>
-          <button
-            className="icon-button"
-            aria-label="Map settings"
-            aria-expanded={panel === "settings"}
-            onClick={() => togglePanel("settings")}
-          >
-            <Settings2 size={17} />
+            <MoreHorizontal size={18} />
           </button>
         </div>
+        {panel === "scope" && (
+          <section
+            className="popover scope-popover"
+            aria-label="Application scope"
+          >
+            <ScopeBar
+              args={args}
+              live={mode === "live"}
+              autoSelectSingle
+              client={client}
+              scenario={scenario}
+              demoArgs={
+                !__ADM_SPLUNK_BUILD__ && mode === "demo"
+                  ? demoArgsFor(scenario)
+                  : undefined
+              }
+              onChange={(next) => {
+                cancelQuery();
+                setArgs(next);
+              }}
+            />
+            {!__ADM_SPLUNK_BUILD__ && mode === "demo" && (
+              <p className="muted small">
+                Demo scope is fixed ·{" "}
+                <button className="link" onClick={() => setPanel("settings")}>
+                  Map settings
+                </button>
+              </p>
+            )}
+          </section>
+        )}
+        {panel === "more" && (
+          <section className="popover more-menu" aria-label="More actions">
+            <button
+              className="menu-item"
+              disabled={!visible || busy}
+              onClick={() => setPanel("changes")}
+            >
+              Changes
+            </button>
+            <button className="menu-item" onClick={() => setPanel("saved")}>
+              Saved views
+            </button>
+            <button
+              className="menu-item"
+              disabled={
+                !visible || empty || tab === "devices" || tab === "table"
+              }
+              onClick={() => setPanel("legend")}
+            >
+              Legend
+            </button>
+            <button
+              className="menu-item"
+              disabled={!visible || empty}
+              onClick={() => setPanel("export")}
+            >
+              Export
+            </button>
+            <button className="menu-item" onClick={() => setPanel("settings")}>
+              Map settings
+            </button>
+            <button className="menu-item" onClick={() => setPanel("help")}>
+              How to read this map
+            </button>
+          </section>
+        )}
+        {panel === "legend" && visible && !empty && (
+          <section className="popover" aria-label="Map legend">
+            <div className="popover-head">
+              <h2>Legend</h2>
+              <button
+                className="icon-button"
+                aria-label="Close legend"
+                onClick={() => setPanel(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <Legend
+              alwaysOpen
+              edges={layout.edges.flatMap((e) =>
+                e.members.flatMap((id) => displayIndex.edge.get(id) ?? []),
+              )}
+              index={displayIndex}
+              collapsed={layout.collapsed}
+            />
+          </section>
+        )}
         {panel === "export" && (
           <ExportMenu
             close={() => setPanel(null)}
@@ -703,24 +841,29 @@ function StandardMapPage({
               />
               Group Service frontends
             </label>
-            <div className="segmented" role="group" aria-label="Data source">
-              <button aria-pressed={mode === "demo"} onClick={() => showDemo()}>
-                Demo
-              </button>
-              <button
-                aria-pressed={mode === "live"}
-                onClick={switchLive}
-                disabled={!client}
-                title={
-                  client
-                    ? undefined
-                    : "Available when the app runs inside Splunk"
-                }
-              >
-                Splunk
-              </button>
-            </div>
-            {mode === "demo" && !demoData && (
+            {!__ADM_SPLUNK_BUILD__ && (
+              <div className="segmented" role="group" aria-label="Data source">
+                <button
+                  aria-pressed={mode === "demo"}
+                  onClick={() => showDemo()}
+                >
+                  Demo
+                </button>
+                <button
+                  aria-pressed={mode === "live"}
+                  onClick={switchLive}
+                  disabled={!client}
+                  title={
+                    client
+                      ? undefined
+                      : "Available when the app runs inside Splunk"
+                  }
+                >
+                  Splunk
+                </button>
+              </div>
+            )}
+            {!__ADM_SPLUNK_BUILD__ && mode === "demo" && !demoData && (
               <label className="scenario">
                 <span>Demo scenario</span>
                 <select
@@ -738,16 +881,8 @@ function StandardMapPage({
                 </select>
               </label>
             )}
-            {mode === "demo" && (
-              <p className="muted">
-                Demo data is synthetic search output. Switch to Splunk to choose
-                an application.
-              </p>
-            )}
             <p className="muted small">
-              Uses the Application Atlas saved searches. Administrators can
-              configure index macros and schedules in{" "}
-              <a href={pageURL("setup")}>Setup</a>.
+              <a href={pageURL("setup")}>Admin · Setup</a>
             </p>
           </section>
         )}
@@ -787,62 +922,21 @@ function StandardMapPage({
             </div>
             <ul>
               <li>
-                Lanes run left to right: <b>Sources</b> that call in,{" "}
-                <b>Entry points</b> where they enter the cluster, the{" "}
-                <b>Application</b> (services with their pods inside), and the{" "}
-                <b>Dependencies</b> it calls. <b>Infrastructure</b> below them
-                holds Kubernetes nodes seen only in node-to-node tunnel traffic.
+                Lanes: <b>Sources</b> → <b>Entry points</b> → <b>Application</b>{" "}
+                → <b>Dependencies</b>; <b>Infrastructure</b> below.
               </li>
               <li>
-                <b>Entry points</b> are Kubernetes Service frontends: a
-                LoadBalancer VIP, a NodePort, or Cilium Gateway/Ingress (Envoy).
-                The grey line from a frontend to a pod says how that backend was
-                identified (Hubble, an SNAT translation, Envoy's
-                X-Forwarded-For). A dashed grey line marked <b>inferred</b>{" "}
-                rests on timing only. "Backend not determined" means no evidence
-                picked a pod.
+                Arrow = client → server; pill = server port; no arrow = unknown
+                direction.
               </li>
               <li>
-                <b>Contract</b> labels are intent: the ACI policy that should
-                permit the conversation according to collected objects. An{" "}
-                <b>ACL log</b> entry is an observation by the enforcing leaf.{" "}
-                <b>Blocked</b> (red, ⦸) means the fabric logged drops.
+                Dashed grey = <b>inferred</b> backend. Red ⦸ = <b>Blocked</b>.
               </li>
               <li>
-                Between two ACI leaves the path shows <b>one of N spines</b>:
-                traffic is spread over equal-cost spines (ECMP) and no source
-                says which one carried it.
+                Keyboard: ←/→ columns · ↑/↓ cards · Enter select · Esc clear.
               </li>
               <li>
-                Arrows point from client to server, and the pill at the server
-                end shows the service port. A line without an arrowhead means
-                the direction is unknown.
-              </li>
-              <li>
-                <b>Traced call</b> comes from OpenTelemetry spans.{" "}
-                <b>Network conversation</b> comes from flow records (Stream
-                NetFlow, Nexus Dashboard, FTD, Isovalent).
-              </li>
-              <li>
-                <b>Identified</b>: exactly one pod, node or VM owned each
-                address. <b>External</b>: a public address outside the fabric.{" "}
-                <b>Unknown IP</b> and <b>Multiple owners</b> stay on the map so
-                gaps are visible.
-              </li>
-              <li>
-                Candidate paths come from inventory (CDP, ACI fabric links, LLDP
-                and attachments). Observations mark where traffic was seen; they
-                don't prove the order packets took.
-              </li>
-              <li>
-                Traces and flows are sampled: a missing line is not proof that
-                no traffic exists.
-              </li>
-              <li>
-                <b>Keyboard:</b> Tab into the map, then ←/→ move between columns
-                (nearest card), ↑/↓ within a column, Enter selects or expands,
-                Esc clears. In the search box, Enter and Shift+Enter jump
-                between matches. Ctrl/⌘ + scroll zooms.
+                <a href={`${pageURL("help")}#about-evidence`}>About evidence</a>
               </li>
             </ul>
             <p className="muted small">
@@ -874,7 +968,9 @@ function StandardMapPage({
           </button>
         </div>
       )}
-      <div className={`body has-findings ${selection ? "has-selection" : ""}`}>
+      <div
+        className={`body ${findingsOpen ? "has-findings" : ""} ${selection ? "has-selection" : ""}`}
+      >
         <section className="map-panel">
           <div className="toolbar">
             <div className="segmented" role="group" aria-label="View">
@@ -895,7 +991,7 @@ function StandardMapPage({
               <Search size={15} aria-hidden />
               <input
                 aria-label="Highlight by name, IP, EPG, port or device"
-                placeholder="Highlight name, IP, EPG, port, leaf…"
+                placeholder="Highlight name, IP, EPG, port…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => {
@@ -927,19 +1023,8 @@ function StandardMapPage({
                 </span>
               )}
             </label>
-            {!selection && visible && !empty && (
-              <span className="toolbar-hint">
-                Select a card or line for details
-              </span>
-            )}
-          </div>
-          {visible && !empty && (
-            <>
-              <FilterBar
-                network={tab !== "services"}
-                graph={graph}
-                facets={facets}
-                onChange={changeFacets}
+            {visible && !empty && (
+              <FocusSelect
                 focus={{
                   hops: focus?.hops ?? 0,
                   direction: focus?.direction ?? "any",
@@ -954,32 +1039,95 @@ function StandardMapPage({
                   }
                 }}
               />
-              {narrowed && (
-                <div className="atlas-filter-status">
-                  <span>
-                    {displayGraph.nodes.length} of {graph.nodes.length} nodes
-                    retained ·{" "}
-                    {edgeCountLabel(
-                      displayGraph.edges.filter(
-                        (e) => e.relationship !== "runs_on",
-                      ),
-                    ) || "relationships"}{" "}
-                    of{" "}
-                    {edgeCountLabel(
-                      graph.edges.filter((e) => e.relationship !== "runs_on"),
-                    ) || "relationships"}
-                    {focus
-                      ? ` · ${FOCUS_PREFIX[focus.direction]} ${plural(focus.hops, "hop")} of ${label(focus.id)}`
-                      : ""}
-                    . Findings and exports use the full map.
-                    {focusNotes.length ? ` ${focusNotes.join(" ")}` : ""}
-                  </span>
-                  <button className="link" onClick={clearFilters}>
-                    Clear filters and focus
+            )}
+            {visible && !empty && (
+              <ImpactButton
+                compact
+                token={selection?.kind === "node" ? selection.id : undefined}
+                label={
+                  selection?.kind === "node" ? label(selection.id) : undefined
+                }
+              />
+            )}
+            <TracePathForm
+              compact
+              key={
+                traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""
+              }
+              initial={traceRequest}
+              onSubmit={(src, dst) => {
+                setTraceRequest({ src, dst });
+                if (tab === "table" || tab === "devices") setTab("network");
+              }}
+            />
+            <span className="toolbar-spacer" />
+            {visible && !empty && tab !== "services" && (
+              <button
+                className={`secondary-button ${filterCount ? "active" : ""}`}
+                aria-expanded={panel === "filters"}
+                onClick={() => togglePanel("filters")}
+              >
+                <SlidersHorizontal size={14} aria-hidden /> Filters
+                {filterCount ? ` (${filterCount})` : ""}
+              </button>
+            )}
+            {visible && (
+              <button
+                className="secondary-button"
+                aria-expanded={findingsOpen}
+                aria-controls="atlas-findings"
+                onClick={() => setFindingsOpen((open) => !open)}
+              >
+                Findings
+                <span className={`count-badge ${findings.length ? "has" : ""}`}>
+                  {findings.length}
+                </span>
+              </button>
+            )}
+            {panel === "filters" && visible && !empty && (
+              <section className="popover filters-popover" aria-label="Filters">
+                <div className="popover-head">
+                  <h2>Filters</h2>
+                  <button
+                    className="icon-button"
+                    aria-label="Close filters"
+                    onClick={() => setPanel(null)}
+                  >
+                    <X size={16} />
                   </button>
                 </div>
-              )}
-            </>
+                <FilterBar
+                  network={tab !== "services"}
+                  graph={graph}
+                  facets={facets}
+                  onChange={changeFacets}
+                />
+              </section>
+            )}
+          </div>
+          {visible && !empty && narrowed && (
+            <div className="atlas-filter-status">
+              <span>
+                {displayGraph.nodes.length} of {graph.nodes.length} nodes ·{" "}
+                {edgeCountLabel(
+                  displayGraph.edges.filter(
+                    (e) => e.relationship !== "runs_on",
+                  ),
+                ) || "relationships"}{" "}
+                of{" "}
+                {edgeCountLabel(
+                  graph.edges.filter((e) => e.relationship !== "runs_on"),
+                ) || "relationships"}
+                {focus
+                  ? ` · ${FOCUS_PREFIX[focus.direction]} ${plural(focus.hops, "hop")} of ${label(focus.id)}`
+                  : ""}
+                . Findings and exports use the full map.
+                {focusNotes.length ? ` ${focusNotes.join(" ")}` : ""}
+              </span>
+              <button className="link" onClick={clearFilters}>
+                Clear filters and focus
+              </button>
+            </div>
           )}
           <div className="map-area">
             {!visible ? (
@@ -988,17 +1136,18 @@ function StandardMapPage({
               ) : (
                 <div className="state">
                   <h2>Choose an application to map</h2>
-                  <p>
-                    Choose the environment, cluster, namespace and service
-                    above, then build the map.
-                  </p>
                   <button
                     className="primary-button"
-                    onClick={() =>
-                      root.current
-                        ?.querySelector<HTMLInputElement>('[role="combobox"]')
-                        ?.focus()
-                    }
+                    onClick={() => {
+                      setPanel("scope");
+                      requestAnimationFrame(() =>
+                        root.current
+                          ?.querySelector<HTMLInputElement>(
+                            '.scope-popover [role="combobox"]',
+                          )
+                          ?.focus(),
+                      );
+                    }}
                   >
                     Choose scope
                   </button>
@@ -1061,6 +1210,7 @@ function StandardMapPage({
               />
             ) : tab === "devices" ? (
               <DevicesView
+                onOpenDevice={(id) => location.assign(deviceURL(id))}
                 graph={displayGraph}
                 index={displayIndex}
                 topo={topo}
@@ -1078,18 +1228,25 @@ function StandardMapPage({
                 emphasisReason={
                   q
                     ? `Highlight matches “${q}”`
-                    : selection?.kind === "node"
-                      ? `Connections to ${label(selection.id)}`
-                      : "Selected connection and its path"
+                    : impact && !traceMatch
+                      ? impact.headline
+                      : traceMatch && traceRequest
+                        ? `Trace ${traceRequest.src} → ${traceRequest.dst}`
+                        : selection?.kind === "node"
+                          ? `Connections to ${label(selection.id)}`
+                          : "Selected connection and its path"
                 }
                 onClearEmphasis={() => {
                   setQuery("");
                   clearSelection();
+                  if (!q) setTraceRequest(undefined);
                 }}
-                matchNodes={matchNodes}
-                matchEdges={matchEdges}
+                matchNodes={matchNodes ?? traceMatch?.nodes ?? impact?.nodes}
+                matchEdges={matchEdges ?? traceMatch?.edges ?? impact?.edges}
+                impactClass={impact?.className}
                 selection={selection}
                 onSelect={(s) => (s ? select(s) : clearSelection())}
+                onOpenNode={openNode}
                 focusTarget={focusTarget}
                 focusRequest={focusRequest}
                 onFitScale={onFitScale}
@@ -1100,14 +1257,17 @@ function StandardMapPage({
               />
             )}
           </div>
-          {visible && !empty && (tab === "network" || tab === "services") && (
-            <Legend
-              edges={layout.edges.flatMap((e) =>
-                e.members.flatMap((id) => displayIndex.edge.get(id) ?? []),
-              )}
-              index={displayIndex}
-              collapsed={layout.collapsed}
-            />
+          {traceRequest && (
+            <div className="atlas-map-trace">
+              <TraceView
+                key={`${traceRequest.src}>${traceRequest.dst}`}
+                request={traceRequest}
+                result={traceResult}
+                onCancel={traceResult.cancel}
+                onRetry={traceResult.retry}
+                onClose={() => setTraceRequest(undefined)}
+              />
+            </div>
           )}
           {pathOpen && path && selectedEdge && (
             <PathStrip
@@ -1118,7 +1278,7 @@ function StandardMapPage({
             />
           )}
         </section>
-        <aside className="inspector" aria-label="Details">
+        <aside className="inspector" aria-label="Details" id="atlas-findings">
           {visible ? (
             <>
               {selectedFrontends &&
@@ -1152,7 +1312,8 @@ function StandardMapPage({
                   setPathHidden(false);
                 }}
                 pathOpen={pathTab && !!path && !pathHidden}
-                summary={summary}
+                summary={findingsOpen ? summary : null}
+                bundle={selectedBundle}
               />
               {selection && (
                 <MapDnsInspection
@@ -1209,5 +1370,41 @@ function Skeleton() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Long-window read state: summarized (exact) or a coverage percentage. */
+export function ReadChip({ read }: { read: GraphRead }) {
+  const tail = Math.round((read.rawTailSeconds ?? 0) / 60);
+  if (read.pendingSeconds)
+    return (
+      <span
+        className="kpi"
+        role="status"
+        title="Totals from five-minute summaries; the newest minutes are being read."
+      >
+        Summarized · newest {Math.max(1, Math.round(read.pendingSeconds / 60))}{" "}
+        min loading…
+      </span>
+    );
+  if (read.summarySeconds !== undefined && read.coverage === 100)
+    return (
+      <span
+        className="kpi"
+        title={`Exact totals from five-minute summaries${tail ? `; newest ${tail} min read raw` : ""}.`}
+      >
+        Summarized{tail ? ` · ${tail} min raw` : ""}
+      </span>
+    );
+  if (read.coverage === 100) return null;
+  return (
+    <span
+      className="kpi warn"
+      title="Counts describe the slices read, not the whole window."
+    >
+      {read.summarySeconds !== undefined
+        ? `Summary coverage ${read.coverage}%`
+        : `Sampled ${read.coverage}%`}
+    </span>
   );
 }

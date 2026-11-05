@@ -994,3 +994,63 @@ describe("active contract writer conflicts", () => {
     expect(unknown.contractConflict).toBeUndefined();
   });
 });
+
+describe("health as of a past window", () => {
+  // 2026-11-04: ACI classes stopped arriving 06:05 and resumed 14:08 UTC.
+  const end = 1793800800; // 14:00 UTC, inside the gap
+  it("dispatches every probe with now = the window end and judges freshness there", async () => {
+    const config = deployment("aci");
+    config.sourceConfiguration = { aci: "configured" };
+    const probe = vi.fn().mockImplementation(async ({ search: spl }) => ({
+      rows: /adm_health_source_aci/.test(spl)
+        ? [
+            {
+              kind: "source",
+              name: "ACI",
+              source_seen: "1",
+              records: "2942889",
+              latest_event: "1793772300",
+              latest_indexed: "1793772328",
+              status: "ok",
+              probe_lookback_seconds: "604800",
+            },
+          ]
+        : [],
+      warnings: [],
+      errors: [],
+    }));
+    const r = await loadHealth(
+      { search: probe },
+      new AbortController().signal,
+      config,
+      "full",
+      end,
+    );
+    expect(probe.mock.calls.length).toBeGreaterThan(0);
+    for (const [req] of probe.mock.calls)
+      expect(req).toMatchObject({ earliest: "-7d", latest: "now", now: end });
+    expect(r.asOf).toBe(end);
+    const aci = r.sources.find((s) => s.id === "aci")!;
+    expect(sourceAssessment(aci, r.asOf!)).toMatchObject({
+      state: "attention",
+      label: "Expected receipt is overdue",
+    });
+    // The same receipt was fresh five minutes after it arrived.
+    expect(sourceAssessment(aci, 1793772628).state).toBe("healthy");
+    const html = renderToStaticMarkup(<HealthResults report={r} />);
+    expect(html).toContain("As of 2026-11-04 14:00");
+    expect(html).toContain("Expected receipt is overdue");
+  });
+  it("current checks send no now override", async () => {
+    const probe = vi
+      .fn()
+      .mockResolvedValue({ rows: [], warnings: [], errors: [] });
+    const r = await loadHealth(
+      { search: probe },
+      new AbortController().signal,
+      deployment("aci"),
+    );
+    expect(r.asOf).toBeUndefined();
+    for (const [req] of probe.mock.calls) expect(req.now).toBeUndefined();
+  });
+});
