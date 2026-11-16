@@ -58,6 +58,24 @@ class CaseAPITest(unittest.TestCase):
         self.assertEqual(status, 201)
         return result
 
+    def test_denial_after_commit_does_not_prove_the_write_failed(self):
+        case = self.create()
+        path = "/cases/" + case["id"]
+        # Model loss of read access at the final response authorization boundary.
+        # The write itself is permitted, but its resulting document cannot leave.
+        self.store.entitlement = lambda _p, action, _c: action != "read"
+        payload = {"expected_revision": 1, "item": {"type": "note", "text": "One note"}}
+        self.assertEqual(
+            self.call("POST", path + "/entries", payload, key="stable")[0], 403
+        )
+        self.store.entitlement = lambda *_: True
+        stored = self.call("GET", path)[1]
+        self.assertEqual(stored["revision"], 2)
+        self.assertEqual(len(stored["entries"]), 1)
+        status, retried = self.call("POST", path + "/entries", payload, key="stable")
+        self.assertEqual(status, 200)
+        self.assertEqual(retried, stored)
+
     def test_lifecycle_revision_retry_and_access(self):
         case = self.create()
         path = "/cases/" + case["id"]
@@ -162,25 +180,31 @@ class CaseAPITest(unittest.TestCase):
     def test_evidence_requires_current_source_validation(self):
         case = self.create()
         path = "/cases/" + case["id"] + "/captures"
-        payload = {
-            "expected_revision": 1,
-            "item": {
-                "label": "capture",
-                "captured_at": "2026-01-01T00:00:00Z",
-                "data": {"source": "s"},
-            },
+        payload = {"expected_revision": 1, "reference": "trusted", "label": "capture"}
+        self.assertEqual(self.call("POST", path, payload, key="capture")[0], 422)
+        # A legacy boolean API validator cannot authorize any capture.
+        self.api = CaseAPI(self.store, source_validator=lambda *args: True)
+        self.assertEqual(self.call("POST", path, payload, key="capture")[0], 422)
+        self.store.capture_resolver = lambda principal, reference: {
+            "captured_at": "2026-01-01T00:00:00Z",
+            "data": {"count": 3},
+            "source": {"dataset": "trusted"},
         }
-        self.assertEqual(self.call("POST", path, payload, key="capture")[0], 403)
-        checks = []
-        self.api = CaseAPI(
-            self.store, source_validator=lambda *args: checks.append(args) or True
+        self.store.source_entitlement = lambda principal, kind, item: True
+        self.assertEqual(
+            self.call(
+                "POST", path, {**payload, "item": {"data": {"count": 99}}}, key="bad"
+            )[0],
+            400,
         )
-        self.assertEqual(self.call("POST", path, payload, key="capture")[0], 200)
-        self.api.source_validator = lambda *args: False
-        self.assertEqual(self.call("POST", path, payload, key="capture")[0], 403)
-        self.assertEqual(checks[0][:3], ("alice", case["id"], "capture"))
-        payload["item"]["data"]["entitlements"] = ["all"]
-        self.assertEqual(self.call("POST", path, payload, key="next")[0], 400)
+        result = self.call("POST", path, payload, key="capture")
+        self.assertEqual(result[0], 200)
+        self.assertEqual(result[1]["captures"][0]["data"]["count"], 3)
+        self.store.source_entitlement = lambda *args: False
+        retry = self.call("POST", path, payload, key="capture")
+        self.assertEqual(retry[0], 200)
+        self.assertEqual(retry[1]["captures"], [])
+        self.assertEqual(retry[1]["redactions"]["captures"], 1)
         self.assertEqual(
             self.call(
                 "POST",
@@ -192,6 +216,89 @@ class CaseAPITest(unittest.TestCase):
             )[0],
             403,
         )
+
+    def test_capture_selector_and_opaque_ids(self):
+        case = self.create()
+        path = "/cases/" + case["id"]
+        self.store.capture_resolver = lambda p, r: {
+            "captured_at": "2026-01-01T00:00:00Z",
+            "data": {"name": r},
+            "source": {"dataset": r},
+        }
+        self.store.source_entitlement = lambda *args: True
+        first = self.call(
+            "POST",
+            path + "/captures",
+            {"expected_revision": 1, "reference": "one"},
+            key="one",
+        )[1]
+        second = self.call(
+            "POST",
+            path + "/captures",
+            {"expected_revision": 2, "reference": "two"},
+            key="two",
+        )[1]
+        ids = second["capture_ids"]
+        self.assertEqual(ids[0], first["capture_ids"][0])
+        listed = self.call("GET", "/cases")[1]["items"][0]
+        self.assertEqual(listed["capture_ids"], ids)
+        self.assertEqual(listed["captures"], [])
+        for target in (path, path + "/export"):
+            status, result = self.call("GET", target, query={"capture_id": ids[1]})
+            self.assertEqual(status, 200)
+            self.assertEqual(result["captures"][0]["id"], ids[1])
+            self.assertEqual(result["redactions"]["captures"], 1)
+        self.assertEqual(self.call("GET", path, query={"capture_id": "bad"})[0], 400)
+        self.assertEqual(
+            self.call(
+                "GET",
+                path,
+                query={"capture_id": "00000000-0000-4000-8000-000000000000"},
+            )[0],
+            404,
+        )
+        self.assertEqual(
+            self.call("GET", path, principal="bob", query={"capture_id": "bad"})[0], 403
+        )
+        self.assertEqual(
+            self.call(
+                "POST",
+                path + "/entries",
+                {"expected_revision": 3, "item": {"type": "note", "text": "x"}},
+                query={"capture_id": ids[0]},
+            )[0],
+            400,
+        )
+
+    def test_unavailable_source_is_distinct_and_does_not_commit(self):
+        case = self.create()
+        path = "/cases/" + case["id"]
+        capture_path = path + "/captures"
+        payload = {"expected_revision": 1, "reference": "trusted"}
+        self.store.capture_resolver = lambda *args: (_ for _ in ()).throw(
+            RuntimeError("sensitive backend detail")
+        )
+        self.store.source_entitlement = lambda *args: True
+        self.assertEqual(
+            self.call("POST", capture_path, payload, key="cap"),
+            (422, {"error": "source_unavailable"}),
+        )
+        self.store.capture_resolver = lambda *args: {
+            "captured_at": "2026-01-01T00:00:00Z",
+            "data": {},
+            "source": {"id": "source"},
+        }
+        self.store.source_entitlement = lambda *args: False
+        self.assertEqual(
+            self.call("POST", capture_path, payload, key="cap"),
+            (422, {"error": "source_unavailable"}),
+        )
+        self.assertEqual(self.call("GET", path)[1]["revision"], 1)
+        self.assertEqual(
+            self.call("POST", capture_path, payload, principal="bob", key="bob")[0], 403
+        )
+        self.store.source_entitlement = lambda *args: True
+        self.assertEqual(self.call("POST", capture_path, payload, key="cap")[0], 200)
 
     def test_exceptions_do_not_leak(self):
         self.store.entitlement = lambda *args: (_ for _ in ()).throw(

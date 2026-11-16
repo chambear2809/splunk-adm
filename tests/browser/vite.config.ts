@@ -18,6 +18,7 @@ export default defineConfig({
       "tests/browser/inspector-interfaces-harness.tsx",
       "tests/browser/trace-gaps-harness.tsx",
       "tests/browser/investigation-harness.tsx",
+      "tests/browser/cases-harness.tsx",
       "tests/browser/journeys-harness.tsx",
       "tests/browser/planning-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",

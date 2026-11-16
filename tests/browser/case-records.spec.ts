@@ -70,6 +70,7 @@ test("shared notes preserve a draft across case creation and retry lost response
     .getByRole("button", { name: "Compare windows", exact: true })
     .click();
   await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByRole("button", { name: "Open shared cases" }).click();
   await page.getByLabel("New case title").fill("First investigation");
   await page.getByRole("button", { name: "Create shared case" }).click();
   await page.getByLabel("Add note").fill("Preserve this draft");
@@ -91,6 +92,9 @@ test("shared notes preserve a draft across case creation and retry lost response
   expect([...records.values()][1].entries).toHaveLength(1);
   await page.getByLabel("Member username").fill("bob");
   await page.getByRole("button", { name: "Share case", exact: true }).click();
+  await page
+    .getByLabel("I understand this export can contain sensitive case evidence.")
+    .check();
   const exported = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Export shared case", exact: true })

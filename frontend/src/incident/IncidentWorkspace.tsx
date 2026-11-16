@@ -13,7 +13,7 @@ import {
 } from "./model";
 import "./incident.css";
 import { InvestigationHandoff } from "../investigations/InvestigationHandoff";
-import { CaseRecords } from "../investigations/CaseRecords";
+import { comparisonReference } from "../investigations/reference";
 import type { CaseClient } from "../investigations/caseClient";
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 
@@ -429,7 +429,12 @@ export function IncidentWorkspace({
               key={incident.snapshot_id}
               comparison={result}
             />
-            <CaseRecords client={caseClient} window={incident.window} />
+            <JourneyLazyEvidence
+              kind="cases"
+              client={caseClient}
+              window={incident.window}
+              comparisonReference={comparisonReference(result)}
+            />
           </div>
           {result.recovery && (
             <details>

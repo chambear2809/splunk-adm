@@ -7,6 +7,7 @@ import {
 import type { EvidenceSelection } from "../../frontend/src/data/evidence";
 import type { SupplementalSourceConfiguration } from "../../frontend/src/data/evidenceConfig";
 import fixture from "../../fixtures/proxy/envoy-v1.40-http-access.json";
+import { createCaseClient } from "../../frontend/src/investigations/caseClient";
 
 const selection: EvidenceSelection = {
   schemaVersion: 1,
@@ -61,8 +62,20 @@ const result = {
   coverage: [],
 };
 const kind = new URLSearchParams(location.search).get("kind");
+const caseClient = createCaseClient({
+  baseUrl: "/test-cases",
+  transport: async () => {
+    throw new Error("Synthetic lost response");
+  },
+});
 createRoot(document.getElementById("root")!).render(
-  kind === "ownershipImport" ? (
+  kind === "cases" ? (
+    <JourneyLazyEvidence
+      kind="cases"
+      client={caseClient}
+      window={{ start: "2026-01-01T00:00:00Z", end: "2026-01-01T00:05:00Z" }}
+    />
+  ) : kind === "ownershipImport" ? (
     <JourneyLazyEvidence kind="ownershipImport" />
   ) : kind === "maintenance" ? (
     <JourneyLazyEvidence

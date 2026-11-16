@@ -114,6 +114,7 @@ for (const failure of ["js", "css", "version"] as const) {
 }
 
 for (const [kind, label, heading] of [
+  ["cases", "shared cases", "Shared cases"],
   ["ownershipImport", "business-service import", "Import business services"],
   ["maintenance", "maintenance planning", "Maintenance planning"],
   ["baseline", "dependency baseline", "Dependency baselines"],
@@ -126,7 +127,11 @@ for (const [kind, label, heading] of [
     const { requests } = await setupAssets(page);
     await page.goto(`/tests/browser/journey-assets.html?kind=${kind}`);
     expect(requests).toEqual([]);
-    await page.getByRole("button", { name: `Open ${label} evidence` }).click();
+    await page
+      .getByRole("button", {
+        name: kind === "cases" ? "Open shared cases" : `Open ${label} evidence`,
+      })
+      .click();
     await expect(
       page.getByRole("heading", { name: heading, exact: true }),
     ).toBeVisible();
@@ -136,6 +141,16 @@ for (const [kind, label, heading] of [
       await expect(
         page.getByText("Import has errors. No rows are ready to apply."),
       ).toBeVisible();
+    }
+    if (kind === "cases") {
+      await page.getByLabel("New case title").fill("Synthetic uncertain write");
+      await page.getByRole("button", { name: "Create shared case" }).click();
+      await expect(
+        page.getByRole("button", { name: "Retry same request" }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "Create shared case" }),
+      ).toBeDisabled();
     }
     expect(errors).toEqual([]);
   });

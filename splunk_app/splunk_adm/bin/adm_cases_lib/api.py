@@ -3,16 +3,22 @@
 The host must supply ``principal`` from its authenticated server-side context,
 never from request data, and must enforce transport and CSRF protections. It must
 also pass the raw request body and query parameters without collapsing duplicates.
-For protected evidence the optional source validator must independently verify
-that the authenticated principal may access the specific source and that the
-submitted evidence is bound to that source; request assertions are not authority.
+For protected evidence the store's trusted resolver obtains the server-side capture
+from a reference, and its source callback checks current access to saved evidence.
 """
 
 import json
 import re
 from collections.abc import Mapping
 
-from .store import Conflict, Forbidden, Invalid, NotFound, QuotaExceeded
+from .store import (
+    Conflict,
+    Forbidden,
+    Invalid,
+    NotFound,
+    QuotaExceeded,
+    SourceUnavailable,
+)
 
 _CASE_PATH = re.compile(
     r"^/cases/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:/(entries|captures|attachments|share|export|audit))?$"
@@ -75,10 +81,9 @@ def _number(value, default, minimum, maximum):
 class CaseAPI:
     """Return ``(status, JSON-compatible body, headers)`` for an HTTP request.
 
-    ``source_validator(principal, case_id, kind, item)`` must return exactly True
-    for every capture or attachment. It is called on retries too. All inputs other
-    than principal are untrusted. Query and headers must be mappings with single
-    string values; hosts must reject duplicate query/header keys before calling.
+    All inputs other than principal are untrusted. Query and headers must be
+    mappings with single string values; hosts must reject duplicates before calling.
+    The legacy source_validator argument grants no authority to admit captures.
     """
 
     def __init__(self, store, *, source_validator=None, max_body_bytes=128_000):
@@ -97,6 +102,8 @@ class CaseAPI:
             return self._response(400, {"error": "invalid_request"})
         except Forbidden:
             return self._response(403, {"error": "forbidden"})
+        except SourceUnavailable:
+            return self._response(422, {"error": "source_unavailable"})
         except NotFound:
             return self._response(404, {"error": "not_found"})
         except Conflict:
@@ -172,11 +179,15 @@ class CaseAPI:
                     limit=_number(query.get("limit"), 100, 1, 100),
                 )
             else:
-                _query(query, set())
+                _query(query, {"capture_id"})
                 result = (
-                    self.store.export(principal, case_id)
+                    self.store.export(
+                        principal, case_id, capture_id=query.get("capture_id")
+                    )
                     if resource == "export"
-                    else self.store.get(principal, case_id)
+                    else self.store.get(
+                        principal, case_id, capture_id=query.get("capture_id")
+                    )
                 )
             return self._response(200, result)
 
@@ -233,24 +244,35 @@ class CaseAPI:
                     data["grant"],
                 ),
             )
+        if resource == "captures":
+            if set(data) not in (
+                {"expected_revision", "reference"},
+                {"expected_revision", "reference", "label"},
+            ):
+                if (
+                    self.store.capture_resolver is None
+                    or self.store.source_entitlement is None
+                ):
+                    raise Forbidden("capture source unavailable")
+                raise Invalid("invalid data")
+            return self._response(
+                200,
+                self.store.append_capture(
+                    principal,
+                    request_id,
+                    case_id,
+                    data["expected_revision"],
+                    data["reference"],
+                    data.get("label", "Capture"),
+                ),
+            )
+        if resource == "attachments":
+            raise Forbidden("attachment source unavailable")
         if set(data) != {"expected_revision", "item"}:
             raise Invalid("invalid data")
         kind = {"entries": "entry", "captures": "capture", "attachments": "attachment"}[
             resource
         ]
-        if kind != "entry":
-            # Check case access before consulting the trusted evidence validator.
-            self.store.get(principal, case_id)
-            try:
-                valid = (
-                    self.source_validator is not None
-                    and self.source_validator(principal, case_id, kind, data["item"])
-                    is True
-                )
-            except Exception:
-                valid = False
-            if not valid:
-                raise Forbidden("source not authorized")
         return self._response(
             200,
             self.store.append(
