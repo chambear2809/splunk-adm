@@ -51,6 +51,8 @@ CASE_RUNTIME_FILES = frozenset(
                 "api.py",
                 "store.py",
                 "splunk_host.py",
+                "source.py",
+                "native.py",
                 "README.md",
             )
         },
@@ -68,6 +70,7 @@ CASE_EXPOSURES = {
     "expose:adm_cases": ("adm/investigations/cases", "GET,POST"),
     "expose:adm_case_resources": ("adm/investigations/cases/*", "GET,DELETE"),
     "expose:adm_case_entries": ("adm/investigations/cases/*/entries", "POST"),
+    "expose:adm_case_captures": ("adm/investigations/cases/*/captures", "POST"),
     "expose:adm_case_sharing": ("adm/investigations/cases/*/share", "POST"),
     "expose:adm_case_export": ("adm/investigations/cases/*/export", "GET"),
     "expose:adm_case_audit": ("adm/investigations/cases/*/audit", "GET"),
@@ -415,7 +418,7 @@ def _check_cases_contract(files, rest, web):
     if (
         not config.has_section("persistence")
         or dict(config["persistence"])
-        != {"mode": "disabled", "platform": "unqualified"}
+        != {"mode": "disabled", "platform": "unqualified", "capture_mode": "disabled"}
         or set(config.sections()) != {"persistence"}
     ):
         raise ValueError("case defaults must remain disabled and unqualified")
@@ -672,6 +675,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
         "splunk_adm/docs/DEPENDENCY_BASELINES.md",
+        "splunk_adm/docs/INVESTIGATION_RECORDS.md",
         "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md",
         "splunk_adm/docs/FEATURE_FOUNDATIONS.md",
         "splunk_adm/docs/FEATURE_DELIVERY.md",

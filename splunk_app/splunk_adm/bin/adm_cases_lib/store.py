@@ -22,6 +22,10 @@ class Forbidden(Exception):
     pass
 
 
+class SourceUnavailable(Exception):
+    """A trusted source could not provide or authorize a capture before insertion."""
+
+
 class NotFound(Exception):
     pass
 
@@ -81,6 +85,34 @@ def _now():
     return dt.datetime.now(dt.timezone.utc).isoformat()
 
 
+def _valid_uuid(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        return str(uuid.UUID(value)) == value
+    except (ValueError, AttributeError):
+        return False
+
+
+def _capture_ids(document):
+    return [
+        item["id"]
+        for item in document["captures"]
+        if isinstance(item, dict)
+        and _valid_uuid(item.get("id"))
+        and isinstance(item.get("source"), dict)
+        and item["source"]
+    ]
+
+
+def _check_capture_selector(document, capture_id):
+    if capture_id is not None:
+        if not _valid_uuid(capture_id):
+            raise Invalid("invalid capture id")
+        if capture_id not in _capture_ids(document):
+            raise NotFound("capture not found")
+
+
 class CaseStore:
     """Local records with per-case ACL and transactionally stored retry results.
 
@@ -95,6 +127,8 @@ class CaseStore:
         database_path,
         entitlement,
         *,
+        capture_resolver=None,
+        source_entitlement=None,
         max_cases=1000,
         max_case_bytes=1_000_000,
         max_items=1000,
@@ -106,6 +140,8 @@ class CaseStore:
     ):
         if (
             not callable(entitlement)
+            or (capture_resolver is not None and not callable(capture_resolver))
+            or (source_entitlement is not None and not callable(source_entitlement))
             or min(
                 max_cases,
                 max_case_bytes,
@@ -121,6 +157,8 @@ class CaseStore:
             raise ValueError("invalid store configuration")
         self.path = database_path
         self.entitlement = entitlement
+        self.capture_resolver = capture_resolver
+        self.source_entitlement = source_entitlement
         self.max_cases = max_cases
         self.max_case_bytes = max_case_bytes
         self.max_items = max_items
@@ -171,6 +209,61 @@ class CaseStore:
             raise Forbidden("entitlement unavailable") from exc
         if allowed is not True:
             raise Forbidden("not entitled")
+
+    def _project(self, principal, result, *, authorize_sources=True, capture_id=None):
+        """Reauthorize each protected item in this particular response snapshot."""
+        if not isinstance(result, dict) or not all(
+            key in result for key in ("captures", "attachments", "entries")
+        ):
+            return result
+        result = json.loads(_json(result))
+        _check_capture_selector(result, capture_id)
+        result["capture_ids"] = _capture_ids(result)
+        redactions = {}
+        for field, kind in (("captures", "capture"), ("attachments", "attachment")):
+            visible = []
+            for item in result[field]:
+                allowed = False
+                if (
+                    isinstance(item, dict)
+                    and isinstance(item.get("source"), dict)
+                    and item["source"]
+                    and authorize_sources
+                    and (
+                        capture_id is None
+                        or (field == "captures" and item.get("id") == capture_id)
+                    )
+                    and self.source_entitlement is not None
+                ):
+                    try:
+                        allowed = (
+                            self.source_entitlement(
+                                principal, kind, json.loads(_json(item))
+                            )
+                            is True
+                        )
+                    except Exception:
+                        allowed = False
+                if allowed:
+                    visible.append(
+                        {key: value for key, value in item.items() if key != "source"}
+                    )
+            redactions[field] = len(result[field]) - len(visible)
+            result[field] = visible
+        result["redactions"] = redactions
+        return result
+
+    def _project_checked(self, principal, result, action="read", capture_id=None):
+        projected = self._project(principal, result, capture_id=capture_id)
+        if isinstance(result, dict) and all(
+            key in result for key in ("captures", "attachments", "entries")
+        ):
+            # Source checks can be slow. Recheck current case access after them.
+            with closing(self._connect()) as db:
+                self._row(db, principal, "read", result["id"])
+                if action not in ("read", "create"):
+                    self._entitled(principal, action, result["id"])
+        return projected
 
     def _row(self, db, principal, action, case_id):
         _text(case_id, "case id", 64)
@@ -244,7 +337,9 @@ class CaseStore:
                         self._row(db, principal, "read", previous[2])
                         self._entitled(principal, action, case_id)
                     db.commit()
-                    return json.loads(previous[1])
+                    return self._project_checked(
+                        principal, json.loads(previous[1]), action
+                    )
                 if case_id is None:
                     self._entitled(principal, action, None)
                 else:
@@ -276,7 +371,7 @@ class CaseStore:
                     ),
                 )
                 db.commit()
-                return result
+                return self._project_checked(principal, result, action)
             except Exception:
                 db.rollback()
                 raise
@@ -321,18 +416,26 @@ class CaseStore:
 
         return self._mutation(principal, request_id, "create", None, data, None, apply)
 
-    def get(self, principal, case_id):
+    def get(self, principal, case_id, *, capture_id=None):
         with closing(self._connect()) as db:
-            return json.loads(self._row(db, principal, "read", case_id)[2])
+            return self._project_checked(
+                principal,
+                json.loads(self._row(db, principal, "read", case_id)[2]),
+                capture_id=capture_id,
+            )
 
-    def export(self, principal, case_id):
+    def export(self, principal, case_id, *, capture_id=None):
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
             try:
                 row = self._row(db, principal, "export", case_id)
+                document = json.loads(row[2])
+                _check_capture_selector(document, capture_id)
                 self._audit(db, case_id, principal, "export", row[1])
                 db.commit()
-                return json.loads(row[2])
+                return self._project_checked(
+                    principal, document, "export", capture_id=capture_id
+                )
             except Exception:
                 db.rollback()
                 raise
@@ -361,7 +464,11 @@ class CaseStore:
                     self._entitled(principal, "read", case_id)
                 except Forbidden:
                     continue
-                result.append(json.loads(document))
+                result.append(
+                    self._project(
+                        principal, json.loads(document), authorize_sources=False
+                    )
+                )
                 if len(result) > limit:
                     break
             return {
@@ -370,25 +477,14 @@ class CaseStore:
             }
 
     def append(self, principal, request_id, case_id, expected_revision, kind, item):
-        if kind == "capture":
-            _object(item, ("label", "captured_at", "data"))
-            _text(item["label"], "label", 256)
-            _instant(item["captured_at"])
-            if not isinstance(item["data"], dict):
-                raise Invalid("capture data must be an object")
-            target = "captures"
-        elif kind == "entry":
+        if kind == "entry":
             _object(item, ("type", "text"))
             if item["type"] not in ("note", "hypothesis", "question"):
                 raise Invalid("invalid entry type")
             _text(item["text"], "entry", 10000)
             target = "entries"
-        elif kind == "attachment":
-            _object(item, ("label", "media_type", "content"))
-            _text(item["label"], "label", 256)
-            _text(item["media_type"], "media type", 128)
-            _text(item["content"], "content", 100000)
-            target = "attachments"
+        elif kind in ("capture", "attachment"):
+            raise Forbidden("protected evidence requires a trusted resolver")
         else:
             raise Invalid("invalid item kind")
         _json(item)
@@ -429,6 +525,118 @@ class CaseStore:
             "write",
             case_id,
             {"kind": kind, "item": item},
+            expected_revision,
+            apply,
+        )
+
+    def append_capture(
+        self,
+        principal,
+        request_id,
+        case_id,
+        expected_revision,
+        reference,
+        label="Capture",
+    ):
+        _text(reference, "capture reference", 4096)
+        _text(label, "label", 256)
+        _text(principal, "principal", 256)
+        _text(request_id, "request id", 128)
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise Invalid("invalid expected revision")
+        if reference.strip() != reference or label.strip() != label:
+            raise Invalid("invalid capture reference or label")
+        # Check case access before any source request, without a write transaction.
+        # A concurrent writer is checked again under BEGIN IMMEDIATE by _mutation.
+        with closing(self._connect()) as db:
+            previous = db.execute(
+                "SELECT 1 FROM requests WHERE principal=? AND request_id=?",
+                (principal, request_id),
+            ).fetchone()
+            if not previous:
+                row = self._row(db, principal, "write", case_id)
+                if row[1] != expected_revision:
+                    raise Conflict("revision changed")
+        item = None
+        if not previous:
+            if self.capture_resolver is None or self.source_entitlement is None:
+                raise SourceUnavailable("capture source unavailable")
+            try:
+                resolved = self.capture_resolver(principal, reference)
+            except Exception as exc:
+                raise SourceUnavailable("capture source unavailable") from exc
+            if not isinstance(resolved, dict) or set(resolved) != {
+                "captured_at",
+                "data",
+                "source",
+            }:
+                raise SourceUnavailable("invalid resolved capture")
+            try:
+                _instant(resolved["captured_at"])
+            except Invalid as exc:
+                raise SourceUnavailable("invalid resolved capture") from exc
+            if (
+                not isinstance(resolved["data"], dict)
+                or not isinstance(resolved["source"], dict)
+                or not resolved["source"]
+            ):
+                raise SourceUnavailable("invalid resolved capture")
+            try:
+                resolved = json.loads(_json(resolved))
+            except Invalid as exc:
+                raise SourceUnavailable("invalid resolved capture") from exc
+            item = {
+                "id": str(uuid.uuid4()),
+                "revision": expected_revision + 1,
+                "author": principal,
+                "created_at": _now(),
+                "label": label,
+                **resolved,
+            }
+            try:
+                allowed = (
+                    self.source_entitlement(
+                        principal, "capture", json.loads(_json(item))
+                    )
+                    is True
+                )
+            except Exception as exc:
+                raise SourceUnavailable("source entitlement unavailable") from exc
+            if not allowed:
+                raise SourceUnavailable("source access unavailable")
+
+        def apply(db):
+            row = self._row(db, principal, "write", case_id)
+            if row[1] != expected_revision:
+                raise Conflict("revision changed")
+            # A receipt observed during preflight can only disappear if the case
+            # was deleted or externally altered; never persist without resolution.
+            if item is None:
+                raise Conflict("capture request changed")
+            doc = json.loads(row[2])
+            if (
+                sum(len(doc[key]) for key in ("captures", "entries", "attachments"))
+                >= self.max_items
+            ):
+                raise QuotaExceeded("item quota exceeded")
+            doc["revision"] += 1
+            doc["captures"].append(item)
+            encoded = _json(doc)
+            if len(encoded.encode()) > self.max_case_bytes:
+                raise QuotaExceeded("case size exceeded")
+            db.execute(
+                "UPDATE cases SET revision=?, document=? WHERE id=?",
+                (doc["revision"], encoded, case_id),
+            )
+            self._audit(db, case_id, principal, "append_capture", doc["revision"])
+            return json.loads(encoded)
+
+        return self._mutation(
+            principal,
+            request_id,
+            "write",
+            case_id,
+            {"kind": "trusted_capture", "reference": reference, "label": label},
             expected_revision,
             apply,
         )

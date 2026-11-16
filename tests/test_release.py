@@ -252,6 +252,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
             "splunk_adm/docs/DATA_LAYER.md": b"docs",
             "splunk_adm/docs/DEPENDENCY_BASELINES.md": b"baseline operator docs",
+            "splunk_adm/docs/INVESTIGATION_RECORDS.md": b"case source authorization docs",
             "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md": b"source observations",
             "splunk_adm/docs/FEATURE_FOUNDATIONS.md": b"evidence contracts",
             "splunk_adm/docs/FEATURE_DELIVERY.md": b"qualification limits",

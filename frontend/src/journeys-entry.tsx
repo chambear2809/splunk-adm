@@ -6,12 +6,14 @@ import type { JourneyEvidenceProps } from "./JourneyLazyEvidence";
 import { ImpactMaintenancePlanner } from "./maintenance/ImpactMaintenancePlanner";
 import { DependencyMonitor } from "./drift/DependencyMonitor";
 import { BusinessServiceImport } from "./businessServices/BusinessServiceImport";
+import { CaseRecords } from "./investigations/CaseRecords";
 
 export const assetVersion =
   typeof __ADM_JOURNEYS_ASSET_VERSION__ === "undefined"
     ? "development"
     : __ADM_JOURNEYS_ASSET_VERSION__;
 export function JourneyEvidenceInspection(props: JourneyEvidenceProps) {
+  if (props.kind === "cases") return <CaseRecords {...props} />;
   if (props.kind === "ownershipImport") return <BusinessServiceImport />;
   if (props.kind === "baseline") return <DependencyMonitor {...props} />;
   if (props.kind === "maintenance")

@@ -1,15 +1,15 @@
-"""Caller-authenticated host for opt-in, single-search-head note records.
+"""Caller-authenticated single-head cases with opt-in reproducible evidence.
 
-Protected graph captures are deliberately not admitted by this initial host.
-The runtime and topology checks are prerequisites, not installed qualification.
+Runtime checks and configuration opt-in are not installed qualification.
 """
 
+import hashlib
+import configparser
 import json
 import os
 from pathlib import Path
 import stat
-import sqlite3
-from contextlib import closing
+import subprocess
 
 from .store import CaseStore, Forbidden
 
@@ -42,11 +42,58 @@ def pairs(values, *, lower=False):
 
 
 class SplunkHost:
-    def __init__(self, token, request=None, database_root=None, topology=None):
+    def __init__(
+        self,
+        token,
+        request=None,
+        database_root=None,
+        topology=None,
+        native_request=None,
+        source_fingerprint=None,
+        configuration=None,
+    ):
         self.token = token
         self.request = request or self._request
         self.database_root = database_root
         self.topology = topology or self._topology
+        self.native_request = native_request
+        self.source_fingerprint = source_fingerprint or self._source_fingerprint
+        self.configuration = configuration or self._configuration
+
+    @staticmethod
+    def _configuration():
+        # Fixed, app-scoped local control flags only. Do not require investigators
+        # to read arbitrary conf endpoints, and never expose btool's raw output.
+        home = Path(os.environ.get("SPLUNK_HOME", ""))
+        if not home.is_absolute():
+            raise HostUnavailable()
+        result = subprocess.run(
+            [
+                str(home / "bin/splunk"),
+                "btool",
+                "--app=splunk_adm",
+                "--user=nobody",
+                "adm_investigations",
+                "list",
+                "persistence",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=True,
+        )
+        if len(result.stdout) > 16384:
+            raise HostUnavailable()
+        parsed = configparser.ConfigParser(interpolation=None)
+        parsed.read_string(result.stdout.decode("utf-8"))
+        if set(parsed.sections()) != {"persistence"}:
+            raise HostUnavailable()
+        return {
+            key: parsed["persistence"].get(
+                key, "disabled" if key == "capture_mode" else ""
+            )
+            for key in ("mode", "platform", "capture_mode")
+        }
 
     @staticmethod
     def _topology():
@@ -96,10 +143,12 @@ class SplunkHost:
         return principal
 
     def qualify(self):
-        config = self.request(APP + "/configs/conf-adm_investigations/persistence")
+        config = self.configuration()
         if (
             config.get("mode") != "single_search_head"
             or config.get("platform") != "enterprise"
+            or config.get("capture_mode", "disabled")
+            not in ("disabled", "reproducible_qualified_v1")
         ):
             raise HostUnavailable()
         server = self.request("/services/server/info")
@@ -116,6 +165,33 @@ class SplunkHost:
         cluster = self.topology()
         if cluster.get("disabled") not in (True, 1, "1", "true"):
             raise HostUnavailable()
+        return config
+
+    @staticmethod
+    def _source_fingerprint():
+        """Bind replay to installed code and fixed source configuration, not SID.
+
+        Configuration bytes are hashed locally and never returned or logged.
+        Capturing under a different identity still reruns the source searches.
+        """
+        app = Path(__file__).resolve().parents[2]
+        files = [app / "bin/admqualified.py"]
+        files.extend(sorted((app / "bin/adm_identity_lib").glob("*.py")))
+        files.extend(sorted((app / "bin/adm_cases_lib").glob("*.py")))
+        digest = hashlib.sha256()
+        for path in files:
+            if path.is_symlink() or not path.is_file():
+                raise HostUnavailable()
+            digest.update(str(path.relative_to(app)).encode())
+            digest.update(path.read_bytes())
+        for directory in ("default", "local"):
+            for name in ("adm_identity.conf", "commands.conf"):
+                path = app / directory / name
+                digest.update(f"{directory}/{name}".encode())
+                if path.is_symlink():
+                    raise HostUnavailable()
+                digest.update(path.read_bytes() if path.exists() else b"<absent>")
+        return digest.hexdigest()
 
     def database(self):
         # This path is runtime configuration, never supplied by an HTTP caller.
@@ -154,26 +230,35 @@ class SplunkHost:
         return database
 
     def store(self, principal):
-        self.qualify()
+        config = self.qualify()
         database = self.database()
 
         def entitled(caller, _action, _case):
-            # This host admits notes only. Protected source admission requires a
-            # separate server capture/entitlement adapter, not a caller assertion.
             if caller != principal or self.principal() != principal:
                 return False
-            if _case is not None:
-                with closing(sqlite3.connect(database)) as db:
-                    row = db.execute(
-                        "SELECT document FROM cases WHERE id=?", (_case,)
-                    ).fetchone()
-                if row:
-                    document = json.loads(row[0])
-                    if document.get("captures") or document.get("attachments"):
-                        return False
             return True
 
-        return CaseStore(database, entitled)
+        if config.get("capture_mode", "disabled") == "disabled":
+            # Legacy protected items are redacted by the store; notes and owner
+            # revocation/deletion remain usable without source permission.
+            return CaseStore(database, entitled)
+        from .native import NativeComparisonSearch
+        from .source import ComparisonSource
+
+        runner = NativeComparisonSearch(self.token, request=self.native_request)
+
+        def run(caller, query, start, end):
+            if caller != principal or self.principal() != principal:
+                raise Forbidden("Investigation access denied")
+            return runner.run(caller, query, start, end)
+
+        source = ComparisonSource(run, self.source_fingerprint)
+        return CaseStore(
+            database,
+            entitled,
+            capture_resolver=source.resolve,
+            source_entitlement=source.entitled,
+        )
 
 
 def handle(request, host):
@@ -191,16 +276,22 @@ def handle(request, host):
             raise ValueError("Only JSON is supported")
         if method == "GET" and path == "/capabilities":
             try:
-                host.qualify()
+                config = host.qualify()
                 available = True
             except HostUnavailable:
+                config = {}
                 available = False
             return (
                 200,
                 {
                     "available": available,
-                    "evidenceWrites": False,
-                    "mode": "notes_only",
+                    "evidenceWrites": available
+                    and config.get("capture_mode") == "reproducible_qualified_v1",
+                    "mode": (
+                        "notes_and_reproducible_evidence"
+                        if config.get("capture_mode") == "reproducible_qualified_v1"
+                        else "notes_only"
+                    ),
                     "qualified": False,
                 },
                 headers,
@@ -210,7 +301,6 @@ def handle(request, host):
             raise ValueError("Invalid payload")
         from .api import CaseAPI
 
-        # No source validator: capture and attachment writes fail closed.
         api = CaseAPI(host.store(principal))
         return api.handle(
             method,

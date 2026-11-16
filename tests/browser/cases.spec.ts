@@ -1,0 +1,393 @@
+import { expect, test } from "@playwright/test";
+
+test("an uncertain write survives denied retry until the same request can be confirmed", async ({
+  page,
+}) => {
+  const attempts: Array<{ key?: string; body: unknown }> = [];
+  const record = {
+    schema_version: 1,
+    id: "case-1",
+    revision: 1,
+    title: "Retry case",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [] as Record<string, unknown>[],
+    attachments: [],
+    captures: [
+      {
+        id: "capture-1",
+        revision: 1,
+        author: "alice",
+        created_at: "2026-01-01T01:00:00Z",
+        captured_at: "2026-01-01T01:00:00Z",
+        label: "Private source capture",
+        data: {},
+      },
+    ],
+  };
+  await page.route("**/test-cases/**", async (route) => {
+    const request = route.request(),
+      path = new URL(request.url()).pathname;
+    if (path.endsWith("/entries")) {
+      attempts.push({
+        key: request.headers()["idempotency-key"],
+        body: request.postDataJSON(),
+      });
+      if (attempts.length === 1) {
+        record.revision = 2;
+        record.entries = [
+          {
+            id: "entry-1",
+            revision: 2,
+            author: "alice",
+            created_at: "2026-01-01T01:01:00Z",
+            type: "note",
+            text: "Keep one note",
+          },
+        ];
+        return route.abort("failed");
+      }
+      if (attempts.length === 2)
+        return route.fulfill({ status: 403, json: { error: "forbidden" } });
+      return route.fulfill({ json: record });
+    }
+    return route.fulfill({
+      json: path.endsWith("/cases") ? { items: [record], next: null } : record,
+    });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?caseEvidenceReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?caseEvidenceReplay");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Retry case", exact: true }).click();
+  await expect(
+    page.getByText(/Private source capture · captured/),
+  ).toBeVisible();
+  await page.getByLabel("Add note").fill("Keep one note");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  const retry = page.getByRole("button", {
+    name: "Retry same request",
+    exact: true,
+  });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText("unconfirmed");
+  await expect(page.getByText(/Private source capture · captured/)).toHaveCount(
+    0,
+  );
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Create shared case" }),
+  ).toBeDisabled();
+  await retry.click();
+  await expect(retry).toHaveCount(0);
+  await expect(page.getByLabel("Add note")).toHaveValue("");
+  await expect(page.getByText("Keep one note", { exact: false })).toBeVisible();
+  expect(attempts).toHaveLength(3);
+  expect(attempts[0]).toEqual(attempts[1]);
+  expect(attempts[1]).toEqual(attempts[2]);
+  expect(record.entries).toHaveLength(1);
+});
+import { readFile } from "node:fs/promises";
+
+test("case evidence is saved only by consent and hidden after source access is revoked", async ({
+  page,
+}) => {
+  let denied = false;
+  let expired = false;
+  let requestBody: Record<string, unknown> | undefined;
+  const record = {
+    schema_version: 1,
+    id: "case-1",
+    revision: 1,
+    title: "Synthetic case",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [],
+    captures: [] as Record<string, unknown>[],
+    attachments: [],
+    redactions: { captures: 0, attachments: 0 },
+  };
+  await page.route("**/test-cases/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (expired) {
+      await route.fulfill({ status: 401, json: { error: "expired" } });
+    } else if (path.endsWith("/captures")) {
+      requestBody = request.postDataJSON();
+      record.revision++;
+      record.captures = [
+        {
+          id: "capture-1",
+          revision: 2,
+          author: "synthetic",
+          created_at: "2026-01-01T01:00:00Z",
+          label: "Synthetic comparison",
+          captured_at: "2026-01-01T01:00:00Z",
+          data: {
+            schema: 1,
+            scope: {
+              service: "checkout",
+              environment: "test",
+              cluster: "synthetic-cluster",
+              namespace: "synthetic",
+            },
+            windows: [
+              { start: 100, end: 200, rows: [{ source: "synthetic-row" }] },
+              { start: 200, end: 300, rows: [] },
+            ],
+          },
+        },
+      ];
+      await route.fulfill({ json: record });
+    } else if (path.endsWith("/cases")) {
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              ...record,
+              captures: [],
+              redactions: { captures: record.captures.length, attachments: 0 },
+            },
+          ],
+          next: null,
+        },
+      });
+    } else if (denied) {
+      await route.fulfill({
+        json: {
+          ...record,
+          captures: [],
+          redactions: { captures: 1, attachments: 0 },
+        },
+      });
+    } else await route.fulfill({ json: record });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?caseEvidenceReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?caseEvidenceReplay");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Synthetic case" }).click();
+  const save = page.getByRole("button", {
+    name: "Save comparison to shared case",
+  });
+  await expect(save).toBeDisabled();
+  await expect(page.getByText(/Service: checkout/)).toBeVisible();
+  await expect(page.getByText(/Baseline:/)).toBeVisible();
+  await page
+    .getByLabel("Comparison label (optional)")
+    .fill("Synthetic comparison");
+  await page
+    .getByLabel("I understand this saves source evidence to the shared case.")
+    .check();
+  await save.click();
+  expect(Object.keys(requestBody!).sort()).toEqual([
+    "expected_revision",
+    "label",
+    "reference",
+  ]);
+  expect(JSON.stringify(requestBody)).not.toContain("synthetic-row");
+  await page
+    .getByText("Synthetic comparison · captured", { exact: false })
+    .click();
+  await page.getByText("Show source rows and metadata").click();
+  await expect(page.getByText(/synthetic-row/)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Export shared case" }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("I understand this export can contain sensitive case evidence.")
+    .check();
+  const handoff = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download readable handoff" }).click();
+  const text = await readFile((await (await handoff).path())!, "utf8");
+  expect(text).toContain("Synthetic comparison");
+  expect(text).toContain("Baseline:");
+  expect(text).not.toContain("synthetic-row");
+  denied = true;
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export shared case" }).click();
+  await downloaded;
+  await expect(page.getByText(/synthetic-row/)).toHaveCount(0);
+  await expect(
+    page.getByText(/1 captures and 0 attachments withheld/),
+  ).toBeVisible();
+  denied = false;
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Synthetic case" }).click();
+  await page
+    .getByText("Synthetic comparison · captured", { exact: false })
+    .click();
+  await page.getByText("Show source rows and metadata").click();
+  await expect(page.getByText(/synthetic-row/)).toBeVisible();
+  denied = true;
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await expect(page.getByText(/synthetic-row/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Synthetic case" }).click();
+  await expect(
+    page.getByText(/1 captures and 0 attachments withheld/),
+  ).toBeVisible();
+  await expect(page.getByText(/synthetic-row/)).toHaveCount(0);
+  denied = false;
+  await page.getByRole("button", { name: "Synthetic case" }).click();
+  await page
+    .getByText("Synthetic comparison · captured", { exact: false })
+    .click();
+  await page.getByText("Show source rows and metadata").click();
+  await expect(page.getByText(/synthetic-row/)).toBeVisible();
+  await page.getByLabel("Add note").fill("Preserve my draft");
+  await page
+    .getByLabel("I understand this export can contain sensitive case evidence.")
+    .check();
+  expired = true;
+  await page.getByRole("button", { name: "Export shared case" }).click();
+  await expect(page.getByRole("alert")).toContainText("permission");
+  await expect(page.getByText(/synthetic-row/)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Export shared case" }),
+  ).toHaveCount(0);
+  expired = false;
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Synthetic case" }).click();
+  await expect(page.getByLabel("Add note")).toHaveValue("Preserve my draft");
+  await expect(
+    page.getByLabel(
+      "I understand this export can contain sensitive case evidence.",
+    ),
+  ).not.toBeChecked();
+});
+
+test("rechecks and exports a selected capture without reading the others", async ({
+  page,
+}) => {
+  const ids = [
+    "00000000-0000-4000-8000-000000000001",
+    "00000000-0000-4000-8000-000000000002",
+  ];
+  const requests: string[] = [];
+  const capture = (index: number) => ({
+    id: ids[index],
+    revision: index + 2,
+    author: "synthetic",
+    created_at: "2026-01-01T01:00:00Z",
+    label: `Capture ${index + 1}`,
+    captured_at: "2026-01-01T01:00:00Z",
+    data: {
+      scope: {
+        service: "checkout",
+        environment: "test",
+        cluster: "cluster",
+        namespace: "ns",
+      },
+      windows: [
+        { start: 100, end: 200, rows: [] },
+        { start: 200, end: 300, rows: [] },
+      ],
+    },
+  });
+  const record = {
+    schema_version: 1,
+    id: "case-1",
+    revision: 3,
+    title: "Two synthetic captures",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [],
+    attachments: [],
+    capture_ids: ids,
+    redactions: { captures: 1, attachments: 0 },
+    captures: [capture(0)],
+  };
+  await page.route("**/test-cases/**", async (route) => {
+    const url = new URL(route.request().url());
+    requests.push(url.pathname + url.search);
+    if (url.pathname.endsWith("/cases"))
+      await route.fulfill({
+        json: {
+          items: [
+            {
+              ...record,
+              captures: [],
+              redactions: { captures: 2, attachments: 0 },
+            },
+          ],
+          next: null,
+        },
+      });
+    else
+      await route.fulfill({
+        json: {
+          ...record,
+          captures: [
+            capture(url.searchParams.get("capture_id") === ids[1] ? 1 : 0),
+          ],
+        },
+      });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?caseEvidenceReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?caseEvidenceReplay");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Two synthetic captures" }).click();
+  await expect(
+    page.getByText("Capture 1 · captured", { exact: false }),
+  ).toBeVisible();
+  expect(requests).toEqual(["/test-cases/cases", "/test-cases/cases/case-1"]);
+  await page.getByRole("button", { name: "Recheck capture 2 of 2" }).click();
+  await expect(
+    page.getByText("Capture 2 · captured", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Capture 1 · captured", { exact: false }),
+  ).toHaveCount(0);
+  await page
+    .getByLabel("I understand this export can contain sensitive case evidence.")
+    .check();
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download readable handoff" }).click();
+  await download;
+  expect(requests.slice(2)).toEqual([
+    `/test-cases/cases/case-1?capture_id=${ids[1]}`,
+    `/test-cases/cases/case-1/export?capture_id=${ids[1]}`,
+  ]);
+  await expect(
+    page.getByText(/1 captures and 0 attachments withheld/),
+  ).toBeVisible();
+  await expect(page.getByText("Selected capture: 2 of 2")).toBeVisible();
+  await page.getByLabel("Add note").fill("Review the evidence");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(
+    page.getByText("Capture 1 · captured", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByText("Selected capture: 1 of 2")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Recheck capture 1 of 2" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByRole("button", { name: "Recheck capture 2 of 2" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await page
+    .getByLabel("I understand this export can contain sensitive case evidence.")
+    .check();
+  const updated = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export shared case" }).click();
+  await updated;
+  expect(requests.at(-1)).toBe(
+    `/test-cases/cases/case-1/export?capture_id=${ids[0]}`,
+  );
+});

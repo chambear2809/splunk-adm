@@ -23,8 +23,16 @@ import { handoffShort } from "./glossary";
 import { appsOf } from "./impact/model";
 import type { ImpactPlanningProps } from "./maintenance/ImpactMaintenancePlanner";
 import type { BaselineRepository, DependencySource } from "./drift/client";
+import type { CaseClient, CaseWindow } from "./investigations/caseClient";
+import { CaseError } from "./investigations/caseClient";
 
 export type JourneyEvidenceProps =
+  | {
+      kind: "cases";
+      client?: CaseClient;
+      window: CaseWindow;
+      comparisonReference?: string;
+    }
   | { kind: "ownershipImport" }
   | ({ kind: "maintenance" } & ImpactPlanningProps)
   | {
@@ -97,6 +105,7 @@ export function loadJourneyUi(): Promise<OptionalUi> {
         topology: Object.freeze({ clientHandoffResolution }),
         glossary: Object.freeze({ handoffShort }),
         impact: Object.freeze({ appsOf }),
+        caseClient: Object.freeze({ CaseError }),
       }),
     });
   pending = new Promise<OptionalUi>((resolve, reject) => {
@@ -196,9 +205,11 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
         tabIndex={-1}
         role="region"
         aria-label={
-          props.kind === "ownershipImport"
-            ? "Business-service import"
-            : "Journey investigation"
+          props.kind === "cases"
+            ? "Shared cases"
+            : props.kind === "ownershipImport"
+              ? "Business-service import"
+              : "Journey investigation"
         }
       >
         <Inspection {...props} />
@@ -206,17 +217,19 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
     );
   }
   const label =
-    props.kind === "ownershipImport"
-      ? "business-service import"
-      : props.kind === "nat"
-        ? "firewall translation"
-        : props.kind === "maintenance"
-          ? "maintenance planning"
-          : props.kind === "baseline"
-            ? "dependency baseline"
-            : props.kind === "proxy"
-              ? "proxy request"
-              : "service forwarding";
+    props.kind === "cases"
+      ? "shared case records"
+      : props.kind === "ownershipImport"
+        ? "business-service import"
+        : props.kind === "nat"
+          ? "firewall translation"
+          : props.kind === "maintenance"
+            ? "maintenance planning"
+            : props.kind === "baseline"
+              ? "dependency baseline"
+              : props.kind === "proxy"
+                ? "proxy request"
+                : "service forwarding";
   return (
     <section className="atlas-journeys">
       <button
@@ -226,7 +239,13 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
         disabled={loading}
         onClick={() => void open()}
       >
-        {loading ? "Loading journey evidence…" : `Open ${label} evidence`}
+        {props.kind === "cases"
+          ? loading
+            ? "Loading shared cases…"
+            : "Open shared cases"
+          : loading
+            ? "Loading journey evidence…"
+            : `Open ${label} evidence`}
       </button>
       {error && <p role="alert">{error}</p>}
     </section>

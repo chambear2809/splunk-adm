@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
+from types import SimpleNamespace
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/bin")
@@ -22,6 +24,46 @@ from adm_cases_lib.store import Forbidden
 
 
 class HostTest(unittest.TestCase):
+    def test_local_control_reader_is_fixed_app_scoped_and_returns_only_flags(self):
+        with (
+            mock.patch.dict(os.environ, {"SPLUNK_HOME": "/opt/splunk"}),
+            mock.patch(
+                "adm_cases_lib.splunk_host.subprocess.run",
+                return_value=SimpleNamespace(
+                    stdout=b"[persistence]\nmode = single_search_head\nplatform = enterprise\ncapture_mode = disabled\n"
+                ),
+            ) as command,
+        ):
+            self.assertEqual(
+                SplunkHost._configuration(),
+                {
+                    "mode": "single_search_head",
+                    "platform": "enterprise",
+                    "capture_mode": "disabled",
+                },
+            )
+            self.assertEqual(
+                command.call_args.args[0],
+                [
+                    "/opt/splunk/bin/splunk",
+                    "btool",
+                    "--app=splunk_adm",
+                    "--user=nobody",
+                    "adm_investigations",
+                    "list",
+                    "persistence",
+                ],
+            )
+            self.assertEqual(command.call_args.kwargs["timeout"], 3)
+            command.return_value = SimpleNamespace(
+                stdout=b"[other]\nmode = single_search_head\n"
+            )
+            with self.assertRaises(HostUnavailable):
+                SplunkHost._configuration()
+            command.return_value = SimpleNamespace(stdout=b"x" * 16385)
+            with self.assertRaises(HostUnavailable):
+                SplunkHost._configuration()
+
     def test_registration_forwards_authentication_and_exposes_exact_client_routes(self):
         default = Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/default"
         rest = configparser.ConfigParser(interpolation=None)
@@ -43,6 +85,7 @@ class HostTest(unittest.TestCase):
             "cases": {"GET", "POST"},
             "cases/*": {"GET", "DELETE"},
             "cases/*/entries": {"POST"},
+            "cases/*/captures": {"POST"},
             "cases/*/share": {"POST"},
             "cases/*/export": {"GET"},
             "cases/*/audit": {"GET"},
@@ -74,6 +117,9 @@ class HostTest(unittest.TestCase):
             request=lambda path: self.responses[path],
             database_root=self.directory.name,
             topology=lambda: self.responses[APP + "/configs/conf-server/shclustering"],
+            configuration=lambda: self.responses[
+                APP + "/configs/conf-adm_investigations/persistence"
+            ],
         )
 
     def call(self, method, path, body=None, headers=None):
@@ -170,20 +216,23 @@ class HostTest(unittest.TestCase):
             [["Content-Type", "application/json"], ["Idempotency-Key", "capture"]],
         )
         self.assertEqual(403, status)
-        # An externally populated protected record is not readable through the notes host.
-        from adm_cases_lib.store import CaseStore
+        # Simulate a legacy document without passing the new trusted admission.
+        import sqlite3
+        from contextlib import closing
 
-        raw = CaseStore(self.host.database(), lambda *_: True)
-        raw.append(
-            "alice",
-            "external",
-            case["id"],
-            1,
-            "attachment",
-            {"label": "secret", "media_type": "text/plain", "content": "protected"},
-        )
-        self.assertEqual(403, self.call("GET", "/cases/" + case["id"])[0])
-        self.assertEqual([], self.call("GET", "/cases")[1]["items"])
+        legacy = {**case, "attachments": [{"content": "protected"}]}
+        with closing(sqlite3.connect(self.host.database())) as db:
+            db.execute(
+                "UPDATE cases SET document=? WHERE id=?",
+                (json.dumps(legacy), case["id"]),
+            )
+            db.commit()
+        status, projected, _ = self.call("GET", "/cases/" + case["id"])
+        self.assertEqual(200, status)
+        self.assertEqual([], projected["attachments"])
+        self.assertEqual(1, projected["redactions"]["attachments"])
+        self.assertNotIn("protected", json.dumps(projected))
+        self.assertEqual([], self.call("GET", "/cases")[1]["items"][0]["attachments"])
 
     def test_unsafe_database_and_duplicate_fields_fail_closed(self):
         directory = Path(self.directory.name) / "splunk_adm_investigations"
@@ -199,6 +248,104 @@ class HostTest(unittest.TestCase):
             self.host,
         )
         self.assertEqual(400, result[0])
+
+    def test_current_reader_revalidation_and_disabled_notes_recovery(self):
+        # This is transport replay, not installed role/search-filter qualification.
+        from tests.test_cases_source import graph, reference
+
+        jobs = {}
+        issued = []
+        restricted = set()
+
+        def native(method, path, data, timeout):
+            self.assertGreater(timeout, 0)
+            if method == "POST":
+                sid = "capture_" + str(len(issued) + 1)
+                issued.append((self.host.principal(), data.copy()))
+                jobs[sid] = graph(int(data["earliest_time"]), int(data["latest_time"]))
+                if self.host.principal() in restricted:
+                    jobs[sid] = jobs[sid][1:]  # Same index grant, fewer visible rows.
+                return {"sid": sid}
+            sid = path.split("/")[5].split("?")[0]
+            if method == "DELETE":
+                del jobs[sid]
+                return {}
+            if "/results?" in path:
+                return {"preview": False, "results": jobs[sid]}
+            return {
+                "entry": [
+                    {
+                        "content": {
+                            "dispatchState": "DONE",
+                            "isDone": True,
+                            "isFinalized": False,
+                            "eventIsTruncated": False,
+                            "dropCount": 0,
+                            "resultCount": len(jobs[sid]),
+                        }
+                    }
+                ]
+            }
+
+        self.host.native_request = native
+        self.host.source_fingerprint = lambda: "synthetic-contract-1"
+        config = self.responses[APP + "/configs/conf-adm_investigations/persistence"]
+        config["capture_mode"] = "reproducible_qualified_v1"
+        self.assertTrue(self.call("GET", "/capabilities")[1]["evidenceWrites"])
+        case = self.host.store("alice").create(
+            "alice",
+            "create",
+            {
+                "schema_version": 1,
+                "title": "Source capture",
+                "window": {
+                    "start": "1970-01-01T00:03:20Z",
+                    "end": "1970-01-01T00:05:00Z",
+                },
+            },
+        )
+        path = "/cases/" + case["id"]
+        body = {"expected_revision": 1, "reference": reference(), "label": "Rechecked"}
+        headers = [["Content-Type", "application/json"], ["Idempotency-Key", "capture"]]
+        status, saved, _ = self.call("POST", path + "/captures", body, headers)
+        self.assertEqual(200, status)
+        self.assertEqual(1, len(saved["captures"]))
+        self.assertNotIn("source", saved["captures"][0])
+        self.assertEqual({}, jobs)
+        self.assertTrue(all(who == "alice" for who, _ in issued))
+        # A new HTTP request repeats proof instead of reusing the writer's cache.
+        count = len(issued)
+        self.assertEqual(1, len(self.call("GET", path)[1]["captures"]))
+        self.assertEqual(count + 2, len(issued))
+        self.host.store("alice").share("alice", "share", case["id"], 2, "bob", True)
+        self.responses["/services/authentication/current-context"]["username"] = "bob"
+        restricted.add("bob")
+        projected = self.call("GET", path)[1]
+        self.assertEqual([], projected["captures"])
+        self.assertEqual(1, projected["redactions"]["captures"])
+        self.assertEqual("bob", issued[-1][0])
+        self.assertEqual({}, jobs)
+        # Disabling the adapter never makes the case's notes inaccessible.
+        config["capture_mode"] = "disabled"
+        self.assertFalse(self.call("GET", "/capabilities")[1]["evidenceWrites"])
+        self.assertEqual(200, self.call("GET", path)[0])
+        self.assertEqual([], self.call("GET", path)[1]["captures"])
+        self.assertEqual(
+            422,
+            self.call(
+                "POST",
+                path + "/captures",
+                {**body, "expected_revision": 3},
+                [["Content-Type", "application/json"], ["Idempotency-Key", "disabled"]],
+            )[0],
+        )
+
+    def test_capture_config_and_fingerprint_fail_closed(self):
+        self.assertRegex(self.host.source_fingerprint(), r"^[0-9a-f]{64}$")
+        self.responses[APP + "/configs/conf-adm_investigations/persistence"][
+            "capture_mode"
+        ] = "arbitrary"
+        self.assertEqual(503, self.call("GET", "/cases")[0])
 
 
 if __name__ == "__main__":

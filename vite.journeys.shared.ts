@@ -36,6 +36,10 @@ export function journeysAssetVersion(): string {
     "frontend/src/businessServices/BusinessServiceImport.tsx",
     "frontend/src/businessServices/import.ts",
     "frontend/src/businessServices/localImport.ts",
+    "frontend/src/investigations/CaseRecords.tsx",
+    "frontend/src/investigations/CaseEvidence.tsx",
+    "frontend/src/investigations/caseHandoff.ts",
+    "frontend/src/investigations/caseClient.ts",
   ]) {
     hash.update(file);
     hash.update(readFileSync(resolve(file)));
@@ -51,6 +55,7 @@ export const JOURNEYS_HOST_MODULES = new Map([
   [resolve("frontend/src/topology"), "topology"],
   [resolve("frontend/src/glossary"), "glossary"],
   [resolve("frontend/src/impact/model"), "impact"],
+  [resolve("frontend/src/investigations/caseClient"), "caseClient"],
 ]);
 export function journeysHostModule(id: string): string | undefined {
   return JOURNEYS_HOST_MODULES.get(id.replace(/\.tsx?$/, ""));

@@ -10,6 +10,15 @@ export type CaseEntry = {
   type: "note" | "hypothesis" | "question";
   text: string;
 };
+export type CaseCapture = {
+  id: string;
+  revision: number;
+  author: string;
+  created_at: string;
+  label: string;
+  captured_at: string;
+  data: Record<string, unknown>;
+};
 export type CaseRecord = {
   schema_version: 1;
   id: string;
@@ -17,7 +26,9 @@ export type CaseRecord = {
   title: string;
   window: CaseWindow;
   entries: CaseEntry[];
-  captures: Record<string, unknown>[];
+  captures: CaseCapture[];
+  capture_ids?: string[];
+  redactions?: { captures: number; attachments: number };
   attachments: Record<string, unknown>[];
 };
 export type CaseList = { items: CaseRecord[]; next: string | null };
@@ -46,6 +57,9 @@ export class CaseError extends Error {
 const object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
 const str = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+const uuid = (v: unknown): v is string =>
+  typeof v === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v);
 const revision = (v: unknown): v is number =>
   Number.isSafeInteger(v) && (v as number) > 0;
 const time = (v: unknown): v is string =>
@@ -81,6 +95,16 @@ function record(v: unknown): v is CaseRecord {
       (e: unknown) =>
         metadata(e) && str(e.label) && time(e.captured_at) && object(e.data),
     ) &&
+    (v.capture_ids === undefined ||
+      (Array.isArray(v.capture_ids) &&
+        v.capture_ids.every(uuid) &&
+        new Set(v.capture_ids).size === v.capture_ids.length)) &&
+    (v.redactions === undefined ||
+      (object(v.redactions) &&
+        Number.isSafeInteger(v.redactions.captures) &&
+        (v.redactions.captures as number) >= 0 &&
+        Number.isSafeInteger(v.redactions.attachments) &&
+        (v.redactions.attachments as number) >= 0)) &&
     Array.isArray(v.attachments) &&
     v.attachments.every(
       (e: unknown) =>
@@ -104,14 +128,28 @@ const listing = (v: unknown): v is CaseList =>
 type Guard<T> = (v: unknown) => v is T;
 export interface CaseClient {
   list(signal?: AbortSignal, after?: string): Promise<CaseList>;
-  get(id: string, signal?: AbortSignal): Promise<CaseRecord>;
-  export(id: string, signal?: AbortSignal): Promise<CaseRecord>;
+  get(
+    id: string,
+    signal?: AbortSignal,
+    captureId?: string,
+  ): Promise<CaseRecord>;
+  export(
+    id: string,
+    signal?: AbortSignal,
+    captureId?: string,
+  ): Promise<CaseRecord>;
   create(title: string, window: CaseWindow): CaseMutation<CaseRecord>;
   append(
     id: string,
     expectedRevision: number,
     type: CaseEntry["type"],
     text: string,
+  ): CaseMutation<CaseRecord>;
+  capture(
+    id: string,
+    expectedRevision: number,
+    reference: string,
+    label?: string,
   ): CaseMutation<CaseRecord>;
   share(
     id: string,
@@ -149,6 +187,12 @@ export function createCaseClient(options: {
       );
     }
     if (!response.ok) {
+      if (mutation && [401, 403, 404].includes(response.status))
+        throw new CaseError(
+          "Access or permission is unavailable and the write outcome is unconfirmed. Restore access and retry the same request.",
+          response.status,
+          true,
+        );
       if (response.status >= 500)
         throw new CaseError(
           mutation
@@ -162,7 +206,9 @@ export function createCaseClient(options: {
           ? "You do not have permission to access this case."
           : response.status === 409
             ? "This case changed. Reload it before making another change."
-            : `The case request failed (${response.status}).`;
+            : response.status === 422
+              ? "Evidence cannot currently be revalidated. Your notes remain available."
+              : `The case request failed (${response.status}).`;
       throw new CaseError(message, response.status);
     }
     let value: unknown;
@@ -227,6 +273,11 @@ export function createCaseClient(options: {
     };
   };
   const itemPath = (id: string) => `/cases/${encodeURIComponent(id)}`;
+  const captureQuery = (captureId?: string) => {
+    if (captureId === undefined) return "";
+    if (!uuid(captureId)) throw new CaseError("Invalid capture selector.");
+    return `?capture_id=${encodeURIComponent(captureId)}`;
+  };
   return {
     list: (signal, after) =>
       read(
@@ -234,8 +285,10 @@ export function createCaseClient(options: {
         listing,
         signal,
       ),
-    get: (id, signal) => read(itemPath(id), record, signal),
-    export: (id, signal) => read(`${itemPath(id)}/export`, record, signal),
+    get: async (id, signal, captureId) =>
+      read(`${itemPath(id)}${captureQuery(captureId)}`, record, signal),
+    export: async (id, signal, captureId) =>
+      read(`${itemPath(id)}/export${captureQuery(captureId)}`, record, signal),
     create: (title, window) =>
       mutate("/cases", "POST", { schema_version: 1, title, window }, record),
     append: (id, expectedRevision, type, text) =>
@@ -244,6 +297,17 @@ export function createCaseClient(options: {
         "POST",
         { expected_revision: expectedRevision, item: { type, text } },
         record,
+      ),
+    capture: (id, expectedRevision, reference, label) =>
+      mutate(
+        `${itemPath(id)}/captures`,
+        "POST",
+        {
+          expected_revision: expectedRevision,
+          reference,
+          ...(label ? { label } : {}),
+        },
+        (v): v is CaseRecord => record(v) && v.id === id,
       ),
     share: (id, expectedRevision, member, grant) =>
       mutate(
