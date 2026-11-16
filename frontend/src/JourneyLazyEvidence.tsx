@@ -20,8 +20,20 @@ import {
 import type { SupplementalResult } from "./data/supplementalEvidence";
 import { clientHandoffResolution } from "./topology";
 import { handoffShort } from "./glossary";
+import { appsOf } from "./impact/model";
+import type { ImpactPlanningProps } from "./maintenance/ImpactMaintenancePlanner";
+import type { BaselineRepository, DependencySource } from "./drift/client";
 
 export type JourneyEvidenceProps =
+  | { kind: "ownershipImport" }
+  | ({ kind: "maintenance" } & ImpactPlanningProps)
+  | {
+      kind: "baseline";
+      window: EvidenceWindow;
+      mapWarnings?: string[];
+      source?: DependencySource;
+      repository?: BaselineRepository;
+    }
   | {
       kind: "nat";
       observations: NatObservation[];
@@ -84,6 +96,7 @@ export function loadJourneyUi(): Promise<OptionalUi> {
         proxyEvidence: Object.freeze({ PROXY_SCHEMA, proxySearchWindow }),
         topology: Object.freeze({ clientHandoffResolution }),
         glossary: Object.freeze({ handoffShort }),
+        impact: Object.freeze({ appsOf }),
       }),
     });
   pending = new Promise<OptionalUi>((resolve, reject) => {
@@ -182,18 +195,28 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
         ref={region}
         tabIndex={-1}
         role="region"
-        aria-label="Journey investigation"
+        aria-label={
+          props.kind === "ownershipImport"
+            ? "Business-service import"
+            : "Journey investigation"
+        }
       >
         <Inspection {...props} />
       </div>
     );
   }
   const label =
-    props.kind === "nat"
-      ? "firewall translation"
-      : props.kind === "proxy"
-        ? "proxy request"
-        : "service forwarding";
+    props.kind === "ownershipImport"
+      ? "business-service import"
+      : props.kind === "nat"
+        ? "firewall translation"
+        : props.kind === "maintenance"
+          ? "maintenance planning"
+          : props.kind === "baseline"
+            ? "dependency baseline"
+            : props.kind === "proxy"
+              ? "proxy request"
+              : "service forwarding";
   return (
     <section className="atlas-journeys">
       <button

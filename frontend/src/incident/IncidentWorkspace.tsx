@@ -15,6 +15,7 @@ import "./incident.css";
 import { InvestigationHandoff } from "../investigations/InvestigationHandoff";
 import { CaseRecords } from "../investigations/CaseRecords";
 import type { CaseClient } from "../investigations/caseClient";
+import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 
 export type IncidentWorkspaceProps = {
   /** The selected, fully returned incident map. Change the map selection in the parent to change this window. */
@@ -383,6 +384,14 @@ export function IncidentWorkspace({
           {tab === "Connections" && diff && (
             <div>
               <h3>Connections</h3>
+              <JourneyLazyEvidence
+                kind="baseline"
+                window={{
+                  start: Date.parse(incident.window.start) / 1000,
+                  end: Date.parse(incident.window.end) / 1000,
+                }}
+                mapWarnings={coverageReasons(incident)}
+              />
               <p>
                 {diff.addedEdges.length} newly observed ·{" "}
                 {diff.removedEdges.length} not observed ·{" "}

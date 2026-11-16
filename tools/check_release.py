@@ -120,6 +120,10 @@ QUALIFIED_RUNTIME_FILES = frozenset(
 )
 BUNDLED_RUNTIME_FILES = frozenset(
     {
+        *{
+            f"splunk_adm/bin/adm_baselines_lib/{name}.py"
+            for name in ("__init__", "api", "store")
+        },
         *CASE_RUNTIME_FILES,
         *SETTINGS_RUNTIME_FILES,
         *QUALIFIED_RUNTIME_FILES,
@@ -667,6 +671,10 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/NOTICE",
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
+        "splunk_adm/docs/DEPENDENCY_BASELINES.md",
+        "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md",
+        "splunk_adm/docs/FEATURE_FOUNDATIONS.md",
+        "splunk_adm/docs/FEATURE_DELIVERY.md",
         "splunk_adm/docs/DEPLOYMENT_HEALTH.md",
         "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md",
         "splunk_adm/docs/UPGRADES.md",

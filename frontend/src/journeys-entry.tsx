@@ -3,12 +3,19 @@ import { HubbleJourneyEvidence } from "./journeys/HubbleJourneyEvidence";
 import { JourneyEvidence } from "./journeys/JourneyEvidence";
 import { proxyJourneys } from "./journeys/model";
 import type { JourneyEvidenceProps } from "./JourneyLazyEvidence";
+import { ImpactMaintenancePlanner } from "./maintenance/ImpactMaintenancePlanner";
+import { DependencyMonitor } from "./drift/DependencyMonitor";
+import { BusinessServiceImport } from "./businessServices/BusinessServiceImport";
 
 export const assetVersion =
   typeof __ADM_JOURNEYS_ASSET_VERSION__ === "undefined"
     ? "development"
     : __ADM_JOURNEYS_ASSET_VERSION__;
 export function JourneyEvidenceInspection(props: JourneyEvidenceProps) {
+  if (props.kind === "ownershipImport") return <BusinessServiceImport />;
+  if (props.kind === "baseline") return <DependencyMonitor {...props} />;
+  if (props.kind === "maintenance")
+    return <ImpactMaintenancePlanner {...props} />;
   if (props.kind === "nat") return <FirewallJourneyEvidence {...props} />;
   if (props.kind === "hubble") return <HubbleJourneyEvidence {...props} />;
   return (

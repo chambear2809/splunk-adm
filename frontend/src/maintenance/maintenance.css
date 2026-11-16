@@ -7,6 +7,10 @@
 .adm .atlas-maintenance-table {
   overflow-x: auto;
 }
+.adm .atlas-maintenance-table:focus-visible {
+  outline: 3px solid var(--atlas-focus, #1266c5);
+  outline-offset: 2px;
+}
 .adm .atlas-maintenance table {
   border-collapse: collapse;
   width: 100%;
@@ -20,6 +24,11 @@
   border-bottom: 1px solid var(--atlas-border, #ccc);
   overflow-wrap: anywhere;
 }
+.adm .atlas-maintenance th:nth-child(2),
+.adm .atlas-maintenance td:nth-child(2) {
+  min-width: 6rem;
+  white-space: nowrap;
+}
 .adm .atlas-maintenance summary {
   cursor: pointer;
 }
@@ -31,4 +40,18 @@
 }
 .adm .atlas-maintenance dd {
   margin: 0 0 0.35rem;
+}
+.adm .atlas-maintenance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.adm .atlas-maintenance-planner button {
+  min-height: 32px;
+}
+.adm .atlas-maintenance-planner button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }

@@ -1,0 +1,47 @@
+{
+  "provenance": "Synthetic Unicode encoding contract; not traffic or deployed-source evidence.",
+  "vectors": [
+    {
+      "dependency": {
+        "authority": "collector:α",
+        "scope": "realm:東京",
+        "source": "service:café",
+        "destination": "service:订单💡",
+        "protocol": "tcp",
+        "port": 443,
+        "relation": "calls",
+        "direction": "forward",
+        "blocked": false
+      },
+      "signature": "[1,\"collector:α\",\"realm:東京\",\"service:café\",\"service:订单💡\",\"tcp\",443,\"calls\",\"forward\"]"
+    },
+    {
+      "dependency": {
+        "authority": "collector:α",
+        "scope": "realm:東京",
+        "source": "service:café",
+        "destination": "service:café",
+        "protocol": "tcp",
+        "port": 443,
+        "relation": "calls",
+        "direction": "forward",
+        "blocked": false
+      },
+      "signature": "[1,\"collector:α\",\"realm:東京\",\"service:café\",\"service:café\",\"tcp\",443,\"calls\",\"forward\"]"
+    },
+    {
+      "dependency": {
+        "authority": "collector:α",
+        "scope": "realm:東京",
+        "source": "service:line separator",
+        "destination": "service:配送",
+        "protocol": "tcp",
+        "port": 443,
+        "relation": "calls",
+        "direction": "forward",
+        "blocked": false
+      },
+      "signature": "[1,\"collector:α\",\"realm:東京\",\"service:line separator\",\"service:配送\",\"tcp\",443,\"calls\",\"forward\"]"
+    }
+  ]
+}

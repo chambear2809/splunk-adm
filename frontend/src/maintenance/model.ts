@@ -8,6 +8,8 @@ export interface Evidence<T> {
   qualified: boolean;
   state: EvidenceState;
   observedAt: number;
+  /** Optional source-established effective start for an operational state. */
+  validFrom?: number;
   validUntil: number;
 }
 export interface Capacity {
@@ -82,7 +84,7 @@ function eligible<T>(
   e: Evidence<T> | undefined,
   scope: string,
   at: number,
-  windowStart: number,
+  windowStart?: number,
 ): e is Evidence<T> {
   return (
     !!e &&
@@ -93,8 +95,13 @@ function eligible<T>(
     present(e.source) &&
     Number.isFinite(e.observedAt) &&
     Number.isFinite(e.validUntil) &&
-    e.observedAt <= windowStart &&
     e.observedAt <= at &&
+    (windowStart === undefined ||
+      (e.validFrom === undefined
+        ? e.observedAt <= windowStart
+        : Number.isFinite(e.validFrom) &&
+          e.validFrom <= e.observedAt &&
+          e.validFrom <= windowStart)) &&
     at < e.validUntil
   );
 }
@@ -158,8 +165,9 @@ export function assessMaintenance(input: AssessmentInput): Assessment {
           : "unknown";
       const cap =
         validWindow &&
-        eligible(a.capacity, s.scope, input.capturedAt, input.window.start) &&
-        validCapacity(a.capacity.value, input.window)
+        eligible(a.capacity, s.scope, input.capturedAt) &&
+        validCapacity(a.capacity.value, input.window) &&
+        a.capacity.observedAt >= a.capacity.value.interval.end
           ? a.capacity.value
           : undefined;
       return {
@@ -244,7 +252,26 @@ export function compareAssessments(
 ): { comparable: boolean; changed: string[] } {
   const same = (a: string[], b: string[]) =>
     JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+  const validIdentity = (assessment: Assessment) =>
+    present(assessment.id) &&
+    Number.isFinite(assessment.capturedAt) &&
+    Number.isFinite(assessment.window.start) &&
+    Number.isFinite(assessment.window.end) &&
+    assessment.window.start < assessment.window.end &&
+    assessment.capturedAt >= assessment.window.end &&
+    assessment.selectedElements.length > 0 &&
+    assessment.selectedElements.every(present) &&
+    new Set(assessment.selectedElements).size ===
+      assessment.selectedElements.length &&
+    assessment.services.length > 0 &&
+    assessment.services.every(
+      (service) => present(service.id) && present(service.scope),
+    ) &&
+    new Set(assessment.services.map((service) => service.id)).size ===
+      assessment.services.length;
   if (
+    !validIdentity(before) ||
+    !validIdentity(after) ||
     before.id === after.id ||
     before.capturedAt >= after.capturedAt ||
     before.window.end - before.window.start !==

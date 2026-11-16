@@ -106,6 +106,13 @@ await copyFile(
   "docs/CONNECTED_JOURNEYS.md",
   `${stage}/docs/CONNECTED_JOURNEYS.md`,
 );
+for (const file of [
+  "DEPENDENCY_BASELINES.md",
+  "FEATURE_SOURCE_OBSERVATIONS.md",
+  "FEATURE_FOUNDATIONS.md",
+  "FEATURE_DELIVERY.md",
+])
+  await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
 for (const file of ["THOUSANDEYES_DESIGN.md", "THOUSANDEYES_OPERATIONS.md"])
   await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
 await copyFile(
