@@ -30,6 +30,12 @@ THOUSANDEYES_CSS_PATH = "splunk_adm/appserver/static/thousandeyes.css"
 # The existing initial Atlas bundle ceiling remains unchanged.
 MAX_THOUSANDEYES_GZIP_BYTES = 48 * 1024
 MAX_THOUSANDEYES_CSS_BYTES = 16 * 1024
+JOURNEYS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/journeys.js"
+JOURNEYS_MANIFEST_PATH = "splunk_adm/appserver/static/journeys-manifest.json"
+JOURNEYS_CSS_PATH = "splunk_adm/appserver/static/journeys.css"
+JOURNEYS_DOC_PATH = "splunk_adm/docs/CONNECTED_JOURNEYS.md"
+MAX_JOURNEYS_GZIP_BYTES = 32 * 1024
+MAX_JOURNEYS_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -599,6 +605,9 @@ STATIC_ALLOWLIST = frozenset(
         THOUSANDEYES_BUNDLE_PATH,
         THOUSANDEYES_MANIFEST_PATH,
         THOUSANDEYES_CSS_PATH,
+        JOURNEYS_BUNDLE_PATH,
+        JOURNEYS_MANIFEST_PATH,
+        JOURNEYS_CSS_PATH,
     }
 )
 
@@ -733,6 +742,54 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         raise ValueError(
             "ThousandEyes asset version/hash does not match the main bundle"
         ) from exc
+    # Older packages without Journey registration remain valid. Once any part is
+    # present, require the complete independently versioned bundle and guide.
+    journey_files = {
+        JOURNEYS_BUNDLE_PATH,
+        JOURNEYS_MANIFEST_PATH,
+        JOURNEYS_CSS_PATH,
+        JOURNEYS_DOC_PATH,
+    }
+    journey_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (
+            b"ApplicationAtlasJourneys",
+            b"__AtlasJourneysHost",
+            b"pages/journeys.js",
+        )
+    )
+    if journey_registered or journey_files.intersection(files):
+        missing = sorted(journey_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Journey files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[JOURNEYS_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_JOURNEYS_GZIP_BYTES
+        ):
+            raise ValueError("Journey optional bundle exceeds its 32 KiB gzip budget")
+        if len(files[JOURNEYS_CSS_PATH]) > MAX_JOURNEYS_CSS_BYTES:
+            raise ValueError("Journey optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[JOURNEYS_MANIFEST_PATH])
+            journey_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(journey_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", journey_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[JOURNEYS_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[JOURNEYS_CSS_PATH]).hexdigest()
+                or journey_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or journey_version.encode() not in files[JOURNEYS_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Journey asset version/hash does not match the main bundle"
+            ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:
         config.read_string(files["splunk_adm/default/app.conf"].decode("utf-8"))

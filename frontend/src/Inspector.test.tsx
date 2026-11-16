@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Inspector } from "./Inspector";
+import { FirewallJourneyEvidence } from "./journeys/FirewallJourneyEvidence";
 import { indexGraph, type Graph } from "./graph";
 import { demoGraph, demoTopology } from "./provider";
 import { emptyTopology, indexTopology } from "./topology";
@@ -89,6 +90,12 @@ const inspector = (
 ) =>
   renderToStaticMarkup(
     <Inspector
+      evidenceWindow={
+        graph.nat_event_window ?? {
+          start: Date.parse(graph.window.start) / 1000,
+          end: Date.parse(graph.window.end) / 1000,
+        }
+      }
       selection={selection}
       index={indexGraph(graph)}
       topo={topo}
@@ -128,20 +135,35 @@ describe("network evidence inspectors", () => {
         reported_original_initiator_ip: "198.51.100.8",
       },
     ];
+    graph.window = {
+      start: new Date(1791373700 * 1000).toISOString(),
+      end: new Date(1791373900 * 1000).toISOString(),
+    };
     edge.nat_observations_truncated = true;
-    const html = inspector(graph, { kind: "edge", id: edge.id });
+    expect(inspector(graph, { kind: "edge", id: edge.id })).toContain(
+      "Open firewall translation evidence",
+    );
+    const html = renderToStaticMarkup(
+      <FirewallJourneyEvidence
+        observations={edge.nat_observations}
+        truncated={edge.nat_observations_truncated}
+        window={{
+          start: Date.parse(graph.window.start) / 1000,
+          end: Date.parse(graph.window.end) / 1000,
+        }}
+      />,
+    );
     expect(html).toContain("Firewall translation evidence");
     expect(html).toContain("Initiator → Responder");
-    expect(html).toContain("Reported tuple 198.51.100.8:51400");
-    expect(html).toContain("NAT translated tuple 192.0.2.44:35000");
-    expect(html).toContain(
-      "Cisco reported OriginalInitiatorIP 198.51.100.8 (separate field)",
-    );
-    expect(html).toContain("Scope firewall-prod · Device 192.0.2.1");
+    expect(html).toContain("Reported tuple");
+    expect(html).toContain("198.51.100.8:51400");
+    expect(html).toContain("NAT translated tuple");
+    expect(html).toContain("192.0.2.44:35000");
+    expect(html).toContain("Reported OriginalInitiatorIP (separate field)");
+    expect(html).toContain("firewall-prod");
+    expect(html).toContain("192.0.2.1");
     expect(html).toContain("Event fingerprint");
-    expect(html).toContain(
-      "additional evidence for this window may have been omitted",
-    );
+    expect(html).toContain("additional events may be absent");
     expect(html).not.toContain("Original tuple");
     expect(
       graph.edges.filter((item) => item.relationship === "forwards_to"),

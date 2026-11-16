@@ -3,6 +3,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { thousandEyesAssetVersion } from "./vite.thousandeyes.shared";
+import { journeysAssetVersion } from "./vite.journeys.shared";
 
 // Mirrors tools/check_release.py's 670 KiB release gate.
 const SPLUNK_BUNDLE_CEILING_GZIP = 670 * 1024;
@@ -107,6 +108,7 @@ export default defineConfig({
     "process.env.NODE_ENV": JSON.stringify("production"),
     __ADM_SPLUNK_BUILD__: "true",
     __ADM_TE_ASSET_VERSION__: JSON.stringify(thousandEyesAssetVersion()),
+    __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify(journeysAssetVersion()),
   },
   build: {
     outDir: "splunk_app/splunk_adm/appserver/static",

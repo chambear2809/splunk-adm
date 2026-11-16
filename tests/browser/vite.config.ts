@@ -18,6 +18,7 @@ export default defineConfig({
       "tests/browser/inspector-interfaces-harness.tsx",
       "tests/browser/trace-gaps-harness.tsx",
       "tests/browser/investigation-harness.tsx",
+      "tests/browser/journeys-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
     ],
   },
@@ -57,6 +58,9 @@ export default defineConfig({
   ],
   root: ".",
   cacheDir: "node_modules/.vite-browser",
-  define: { __ADM_SPLUNK_BUILD__: "false" },
+  define: {
+    __ADM_SPLUNK_BUILD__: "false",
+    __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify("development"),
+  },
   resolve: { preserveSymlinks: true },
 });

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Journey production asset test</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.amdCalls = 0;
+      window.define = function () {
+        window.amdCalls++;
+      };
+      window.define.amd = {};
+    </script>
+    <script src="/dist/journey-loader-test/probe.js"></script>
+  </body>
+</html>
