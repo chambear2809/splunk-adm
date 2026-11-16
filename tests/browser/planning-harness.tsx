@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  createDependencyClient,
+  type MonitorCapabilities,
+} from "../../frontend/src/drift/network";
 import { createRoot } from "react-dom/client";
 import SplunkThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
@@ -273,6 +277,46 @@ function ImpactReplay() {
     </ThemeProvider>
   );
 }
+const networkClient = createDependencyClient({
+  baseUrl: "/test-monitor",
+  transport: (url, init) => fetch(url, init),
+  selection: {
+    service: "synthetic-service",
+    environment: "test",
+    cluster: "synthetic-cluster",
+    namespace: "synthetic",
+  },
+});
+function NetworkReplay() {
+  const [capability, setCapability] = useState<MonitorCapabilities>();
+  useEffect(() => {
+    const controller = new AbortController();
+    void networkClient.capabilities(controller.signal).then(setCapability);
+    return () => controller.abort();
+  }, []);
+  return (
+    <ThemeProvider
+      family="enterprise"
+      colorScheme={theme}
+      density="comfortable"
+    >
+      <Shell page="impact">
+        <main className="adm atlas-page" data-adm-theme={theme}>
+          <h1>Synthetic dependency service replay</h1>
+          <DependencyMonitor
+            window={{ start: base, end: base + 300 }}
+            source={
+              capability?.sourceAvailable ? networkClient.source : undefined
+            }
+            repository={
+              capability?.available ? networkClient.repository : undefined
+            }
+          />
+        </main>
+      </Shell>
+    </ThemeProvider>
+  );
+}
 const ThemeProvider = toolkitDefault(SplunkThemeProviderExport);
 function Replay() {
   const [later, setLater] = useState(false);
@@ -315,5 +359,11 @@ function Replay() {
   );
 }
 createRoot(document.getElementById("root")!).render(
-  mode === "impact" ? <ImpactReplay /> : <Replay />,
+  mode === "impact" ? (
+    <ImpactReplay />
+  ) : mode === "network" ? (
+    <NetworkReplay />
+  ) : (
+    <Replay />
+  ),
 );

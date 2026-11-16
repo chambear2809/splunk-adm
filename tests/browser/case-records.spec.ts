@@ -11,7 +11,16 @@ test("shared notes preserve a draft across case creation and retry lost response
   await page.route("**/test-cases/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (request.method() === "POST" && path.endsWith("/cases")) {
+    if (path.endsWith("/capabilities")) {
+      await route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: false,
+          mode: "notes_only",
+          qualified: false,
+        },
+      });
+    } else if (request.method() === "POST" && path.endsWith("/cases")) {
       const body = request.postDataJSON();
       const id = `00000000-0000-4000-8000-${String(records.size + 1).padStart(12, "0")}`;
       const record = {

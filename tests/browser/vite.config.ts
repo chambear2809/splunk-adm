@@ -21,6 +21,7 @@ export default defineConfig({
       "tests/browser/cases-harness.tsx",
       "tests/browser/journeys-harness.tsx",
       "tests/browser/planning-harness.tsx",
+      "tests/browser/ownership-integration-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
     ],
   },

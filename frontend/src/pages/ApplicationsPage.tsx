@@ -1,3 +1,4 @@
+import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { ControllerCatalogSection } from "../AppDynamicsCatalog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
@@ -44,7 +45,7 @@ import { usePathTrace } from "../trace/usePathTrace";
 
 const Button = toolkitDefault(ButtonExport);
 const Text = toolkitDefault(TextExport);
-type SortKey = keyof CatalogRow;
+type SortKey = Exclude<keyof CatalogRow, "identityContext">;
 const utc = (epoch: string | number) => {
   const value = Number(epoch);
   if (!Number.isFinite(value) || value < 0 || value > 253402300799)
@@ -130,6 +131,8 @@ export function ApplicationsPage({
     (Object.keys(args) as (keyof GraphArgs)[]).every(
       (key) => !argError(key, args[key]),
     );
+  const ownershipTrigger = useRef<HTMLButtonElement>();
+  const [ownershipKey, setOwnershipKey] = useState<string>();
   const [catalog, setCatalog] = useState<CatalogRow[]>([]);
   const [findRows, setFindRows] = useState<FindRow[]>([]);
   const [networkClientRows, setNetworkClientRows] = useState<
@@ -628,6 +631,10 @@ export function ApplicationsPage({
     : sorted;
   // The omnibox narrows the catalog by name; addresses fall through to Find.
   const shown = textMatches.length ? textMatches : sorted;
+  const ownershipRow =
+    !loading && !error
+      ? shown.find((row) => row._key === ownershipKey)
+      : undefined;
   return (
     <main className="atlas-page atlas-page-wide atlas-explore">
       <h1 className="atlas-visually-hidden">Explore</h1>
@@ -902,7 +909,20 @@ export function ApplicationsPage({
                     }
                   >
                     {column.key === "service" ? (
-                      mapAction(row)
+                      <>
+                        {mapAction(row)}{" "}
+                        <button
+                          type="button"
+                          className="link"
+                          aria-label={`Business ownership for ${row.service}`}
+                          onClick={(event) => {
+                            ownershipTrigger.current = event.currentTarget;
+                            setOwnershipKey(row._key);
+                          }}
+                        >
+                          Ownership
+                        </button>
+                      </>
                     ) : column.key === "environment" ? (
                       [row.environment, row.cluster, row.namespace]
                         .map((value) => scopeLabel(String(value ?? "")))
@@ -932,6 +952,20 @@ export function ApplicationsPage({
             ))}
           </Table.Body>
         </Table>
+      )}
+      {ownershipRow && (
+        <section aria-label={`Ownership context for ${ownershipRow.service}`}>
+          <h2>{ownershipRow.service}: business ownership</h2>
+          <JourneyLazyEvidence
+            key={ownershipRow._key}
+            kind="ownership"
+            catalogRow={ownershipRow}
+            onClose={() => {
+              setOwnershipKey(undefined);
+              ownershipTrigger.current?.focus();
+            }}
+          />
+        </section>
       )}
       <details className="atlas-disclosure">
         <summary>Open by scope</summary>

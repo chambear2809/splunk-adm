@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { BaselineReview } from "./BaselineReview";
 import { eligibility, type WatchDefinition } from "./model";
 import {
@@ -10,6 +10,9 @@ import {
   type BaselineRepository,
   type CaptureReference,
   type DependencySource,
+  type WatchWithVersion,
+  type Occurrence,
+  type WatchStatus,
 } from "./client";
 import "./monitor.css";
 
@@ -21,20 +24,8 @@ type Props = {
   repository?: BaselineRepository;
   mapWarnings?: string[];
 };
-const identities = new WeakMap<object, number>();
-let identity = 0;
-const instance = (value?: object) => {
-  if (!value) return 0;
-  if (!identities.has(value)) identities.set(value, ++identity);
-  return identities.get(value);
-};
 export function DependencyMonitor(props: Props) {
-  return (
-    <DependencyMonitorContents
-      key={`${instance(props.source)}:${instance(props.repository)}`}
-      {...props}
-    />
-  );
+  return <DependencyMonitorContents {...props} />;
 }
 function DependencyMonitorContents({
   window,
@@ -47,6 +38,24 @@ function DependencyMonitorContents({
   const [items, setItems] = useState<BaselineMetadata[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [selected, setSelected] = useState<BaselineRecord>();
+  const [chosen, setChosen] = useState<BaselineMetadata>();
+  const [versions, setVersions] = useState<number[]>([]);
+  const [versionNext, setVersionNext] = useState<number | null>(null);
+  const [watchNext, setWatchNext] = useState<string | null>(null);
+  const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
+  const [occurrenceNext, setOccurrenceNext] = useState<number | null>(null);
+  const [occurrenceWatch, setOccurrenceWatch] = useState("");
+  const [watchStatus, setWatchStatus] = useState<{
+    signature: string;
+    at: number;
+    value: WatchStatus;
+  }>();
+  const clearOccurrences = useCallback(() => {
+    setOccurrences([]);
+    setOccurrenceNext(null);
+    setOccurrenceWatch("");
+    setWatchStatus(undefined);
+  }, []);
   const [watches, setWatches] = useState<WatchDefinition[]>([]);
   const [name, setName] = useState("");
   const [threshold, setThreshold] = useState("2");
@@ -59,6 +68,7 @@ function DependencyMonitorContents({
   const [pending, setPending] = useState<Mutation>();
   const generation = useRef(0);
   const active = useRef<AbortController>();
+  const mutationInFlight = useRef(false);
   const retryButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (pending && !busy) retryButton.current?.focus();
@@ -74,12 +84,22 @@ function DependencyMonitorContents({
   const [capturedContext, setCapturedContext] = useState("");
   const capture = capturedContext === context ? current : undefined;
   useEffect(() => {
-    generation.current++;
-    active.current?.abort();
-    setBusy(false);
+    if (!mutationInFlight.current) {
+      generation.current++;
+      active.current?.abort();
+      setBusy(false);
+    }
     setCurrent(undefined);
+    setSelected(undefined);
+    setChosen(undefined);
+    setVersions([]);
+    setWatches([]);
+    clearOccurrences();
+    setWatchStatus(undefined);
+    setItems([]);
+    setNext(null);
     setStatus("");
-  }, [source, context, repository]);
+  }, [source, context, repository, clearOccurrences]);
   const read = async (operation: (signal: AbortSignal) => Promise<void>) => {
     active.current?.abort();
     const controller = new AbortController();
@@ -88,12 +108,17 @@ function DependencyMonitorContents({
     setBusy(true);
     setError("");
     setStatus("");
+    setWatchStatus(undefined);
     try {
       await operation(controller.signal);
     } catch (reason) {
       if (serial === generation.current && !controller.signal.aborted) {
         setCurrent(undefined);
         setSelected(undefined);
+        setChosen(undefined);
+        setVersions([]);
+        clearOccurrences();
+        setWatchStatus(undefined);
         setWatches([]);
         setItems([]);
         setNext(null);
@@ -109,6 +134,7 @@ function DependencyMonitorContents({
   };
   const mutate = async (operation: Mutation) => {
     active.current?.abort();
+    mutationInFlight.current = true;
     const serial = ++generation.current;
     setBusy(true);
     setStatus("");
@@ -120,28 +146,57 @@ function DependencyMonitorContents({
       setPending(undefined);
       setItems((old) =>
         old.map((item) =>
-          item.id === metadata.id ? { ...item, ...metadata } : item,
+          item.id === metadata.id
+            ? {
+                ...item,
+                revision: metadata.revision,
+                ...(metadata.version ? { version: metadata.version } : {}),
+              }
+            : item,
         ),
       );
       setSelected(undefined);
+      setChosen(undefined);
+      clearOccurrences();
       setWatches([]);
       setStatus(
-        "Baseline change saved. List baselines and open the record to read its current revision.",
+        metadata.resultWithheld
+          ? "Evaluation was committed; its earlier result is withheld. Reopen authorized history for current details."
+          : metadata.inserted !== undefined && metadata.surfaced !== undefined
+            ? `Evaluation saved: ${metadata.inserted} observations recorded, ${metadata.surfaced} surfaced.`
+            : "Baseline change saved. List baselines and open the record to read its current revision.",
       );
     } catch (reason) {
       if (serial !== generation.current) return;
-      if (reason instanceof BaselineWriteError && !reason.uncertain) {
+      if (
+        reason instanceof BaselineWriteError &&
+        !reason.uncertain &&
+        !pending
+      ) {
         setPending(undefined);
         setCurrent(undefined);
         setSelected(undefined);
+        setChosen(undefined);
+        setVersions([]);
+        clearOccurrences();
+        setWatchStatus(undefined);
         setWatches([]);
         setItems([]);
         setNext(null);
-      } else setPending(operation);
+      } else {
+        setPending(operation);
+        setCurrent(undefined);
+        setSelected(undefined);
+        setChosen(undefined);
+        clearOccurrences();
+        setWatchStatus(undefined);
+        setWatches([]);
+      }
       setError(
         reason instanceof Error ? reason.message : "Baseline change failed.",
       );
     } finally {
+      mutationInFlight.current = false;
       if (serial === generation.current) setBusy(false);
     }
   };
@@ -183,7 +238,7 @@ function DependencyMonitorContents({
               if (
                 typeof result.reference !== "string" ||
                 !result.reference.trim() ||
-                result.reference.length > 1024 ||
+                result.reference.length > 4096 ||
                 checked.coverage.requested.start !== window.start ||
                 checked.coverage.requested.end !== window.end
               )
@@ -239,15 +294,44 @@ function DependencyMonitorContents({
                     disabled={busy || !!pending}
                     onClick={() =>
                       void read(async (signal) => {
-                        const result = await repository.get(item.id, signal);
-                        const checked = checkedCapture(result.capture);
-                        const definitions = await repository.watches(
-                          item.id,
-                          signal,
-                        );
+                        const history = repository.versions
+                          ? await repository.versions(item.id, signal)
+                          : { items: [{ version: item.version }], next: null };
+                        const definitions = repository.watchPage
+                          ? await repository.watchPage(item.id, signal)
+                          : {
+                              items: await repository.watches(item.id, signal),
+                              next: null,
+                            };
+                        const result = source
+                          ? await repository.get(item.id, signal)
+                          : undefined;
                         if (!signal.aborted) {
-                          setSelected({ ...result, capture: checked });
-                          setWatches(definitions);
+                          setChosen(
+                            result
+                              ? {
+                                  id: result.id,
+                                  name: result.name,
+                                  revision: result.revision,
+                                  version: item.version,
+                                }
+                              : item,
+                          );
+                          setVersions(
+                            history.items.map((entry) => entry.version),
+                          );
+                          setVersionNext(history.next);
+                          setWatches(definitions.items);
+                          setWatchNext(definitions.next);
+                          clearOccurrences();
+                          setSelected(
+                            result
+                              ? {
+                                  ...result,
+                                  capture: checkedCapture(result.capture),
+                                }
+                              : undefined,
+                          );
                         }
                       })
                     }
@@ -274,6 +358,245 @@ function DependencyMonitorContents({
             >
               Load more baselines
             </button>
+          )}
+          {chosen && (
+            <section aria-label="Baseline versions and watches">
+              <h3>{chosen.name} · version history</h3>
+              <p>
+                Version and watch metadata is listed separately from protected
+                source evidence.
+              </p>
+              {versions.map((version) => (
+                <button
+                  type="button"
+                  key={version}
+                  disabled={busy || !!pending || !source}
+                  onClick={() =>
+                    void read(async (signal) => {
+                      const result = await repository.get(
+                        chosen.id,
+                        signal,
+                        version,
+                      );
+                      if (!signal.aborted) {
+                        setSelected({
+                          ...result,
+                          capture: checkedCapture(result.capture),
+                        });
+                        clearOccurrences();
+                      }
+                    })
+                  }
+                >
+                  Open version {version}
+                </button>
+              ))}
+              {versionNext && repository.versions && (
+                <button
+                  type="button"
+                  disabled={busy || !!pending}
+                  onClick={() =>
+                    void read(async (signal) => {
+                      const result = await repository.versions!(
+                        chosen.id,
+                        signal,
+                        versionNext,
+                      );
+                      if (!signal.aborted) {
+                        setVersions((old) => [
+                          ...old,
+                          ...result.items.map((entry) => entry.version),
+                        ]);
+                        setVersionNext(result.next);
+                      }
+                    })
+                  }
+                >
+                  Load more versions
+                </button>
+              )}
+              <h3>Saved passive watches</h3>
+              {!watches.length && <p>No watch definitions.</p>}
+              {watches.map((definition) => {
+                const pinned = (definition as Partial<WatchWithVersion>)
+                  .baselineVersion;
+                return (
+                  <div key={definition.id}>
+                    <p>
+                      Watch {definition.id} · baseline version{" "}
+                      {pinned ?? "Unavailable"} · threshold{" "}
+                      {definition.threshold} · cooldown{" "}
+                      {definition.cooldownSeconds} seconds.
+                    </p>
+                    <p>
+                      Expected windows:{" "}
+                      {definition.expectedWindows.length
+                        ? definition.expectedWindows
+                            .map(
+                              (w) =>
+                                `${new Date(w.start * 1000).toISOString()} – ${new Date(w.end * 1000).toISOString()} UTC`,
+                            )
+                            .join("; ")
+                        : "None"}
+                    </p>
+                    {repository.evaluate && (
+                      <button
+                        type="button"
+                        disabled={
+                          busy ||
+                          !!pending ||
+                          !capture ||
+                          !!reasons.length ||
+                          !pinned
+                        }
+                        onClick={() => {
+                          if (!capture || !pinned) return;
+                          const requestId = crypto.randomUUID();
+                          void mutate({
+                            requestId,
+                            run: () =>
+                              repository.evaluate!(
+                                chosen.id,
+                                definition.id,
+                                chosen.revision,
+                                pinned,
+                                capture.reference,
+                                requestId,
+                              ),
+                          });
+                        }}
+                      >
+                        Evaluate current evidence
+                      </button>
+                    )}
+                    {repository.occurrences && (
+                      <button
+                        type="button"
+                        disabled={busy || !!pending || !source}
+                        onClick={() =>
+                          void read(async (signal) => {
+                            clearOccurrences();
+                            const result = await repository.occurrences!(
+                              chosen.id,
+                              definition.id,
+                              signal,
+                            );
+                            if (!signal.aborted) {
+                              setOccurrenceWatch(definition.id);
+                              setOccurrences(result.items);
+                              setOccurrenceNext(result.next);
+                            }
+                          })
+                        }
+                      >
+                        Read watch occurrences
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {watchNext && repository.watchPage && (
+                <button
+                  type="button"
+                  disabled={busy || !!pending}
+                  onClick={() =>
+                    void read(async (signal) => {
+                      const result = await repository.watchPage!(
+                        chosen.id,
+                        signal,
+                        watchNext,
+                      );
+                      if (!signal.aborted) {
+                        setWatches((old) => [...old, ...result.items]);
+                        setWatchNext(result.next);
+                      }
+                    })
+                  }
+                >
+                  Load more watches
+                </button>
+              )}
+              {occurrenceWatch && (
+                <section aria-label="Watch occurrences">
+                  <h4>Authorized occurrences for {occurrenceWatch}</h4>
+                  {occurrences.length ? (
+                    <ul>
+                      {occurrences.map((item) => (
+                        <li key={item.seq}>
+                          {item.signature} ·{" "}
+                          {new Date(item.window.start * 1000).toISOString()} –{" "}
+                          {new Date(item.window.end * 1000).toISOString()} UTC ·
+                          observed{" "}
+                          {new Date(item.observedAt * 1000).toISOString()}
+                          {repository.watchStatus && (
+                            <button
+                              type="button"
+                              disabled={busy || !!pending}
+                              onClick={() =>
+                                void read(async (signal) => {
+                                  const at = Math.floor(Date.now() / 1000);
+                                  const value = await repository.watchStatus!(
+                                    chosen.id,
+                                    occurrenceWatch,
+                                    item.signature,
+                                    at,
+                                    signal,
+                                  );
+                                  if (!signal.aborted)
+                                    setWatchStatus({
+                                      signature: item.signature,
+                                      at,
+                                      value,
+                                    });
+                                })
+                              }
+                            >
+                              Read status
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No occurrences in this page.</p>
+                  )}
+                  {watchStatus && (
+                    <p>
+                      Authorized status for {watchStatus.signature} at{" "}
+                      {new Date(watchStatus.at * 1000).toISOString()}:{" "}
+                      {watchStatus.value.count} observations; threshold{" "}
+                      {watchStatus.value.thresholdMet ? "met" : "not met"};
+                      expected window{" "}
+                      {watchStatus.value.expected ? "active" : "inactive"};
+                      cooldown{" "}
+                      {watchStatus.value.coolingDown ? "active" : "inactive"}.
+                    </p>
+                  )}
+                  {occurrenceNext && repository.occurrences && (
+                    <button
+                      type="button"
+                      disabled={busy || !!pending}
+                      onClick={() =>
+                        void read(async (signal) => {
+                          const result = await repository.occurrences!(
+                            chosen.id,
+                            occurrenceWatch,
+                            signal,
+                            occurrenceNext,
+                          );
+                          if (!signal.aborted) {
+                            setOccurrences((old) => [...old, ...result.items]);
+                            setOccurrenceNext(result.next);
+                          }
+                        })
+                      }
+                    >
+                      Load more occurrences
+                    </button>
+                  )}
+                </section>
+              )}
+            </section>
           )}
           <label htmlFor={`${field}-name`}>Baseline name</label>
           <input
@@ -325,6 +648,7 @@ function DependencyMonitorContents({
             <details>
               <summary>Passive watch</summary>
               <p>
+                A new watch is pinned to the latest saved baseline version.
                 Findings are reviewed here. No schedule, action or notification
                 is enabled.
               </p>

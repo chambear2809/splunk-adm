@@ -1,3 +1,4 @@
+import { identityContextFromRow } from "./data/identityContext";
 import {
   CONTRACT_BASES,
   ENDPOINT_KINDS,
@@ -479,6 +480,16 @@ export function rowsToGraph(
     generated_at: generatedAt,
     demo: options.demo ?? false,
     window,
+    ...(meta.identity_context !== undefined &&
+    meta.identity_context !== null &&
+    meta.identity_context !== ""
+      ? {
+          identityContext: identityContextFromRow(meta.identity_context, {
+            start: Date.parse(window.start) / 1000,
+            end: Date.parse(window.end) / 1000,
+          }),
+        }
+      : {}),
     ...(natWindowStart !== undefined && natWindowEnd !== undefined
       ? { nat_event_window: { start: natWindowStart, end: natWindowEnd } }
       : {}),

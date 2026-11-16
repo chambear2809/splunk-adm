@@ -1,3 +1,4 @@
+import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { ControllerMap } from "../AppDynamicsCatalog";
 import {
   lazy,
@@ -186,6 +187,13 @@ function StandardMapPage({
     showDemo: showDemoSnapshot,
     switchLive: switchSnapshotLive,
   } = useMapSnapshot({ client, initialState, timezone, demoData });
+  const ownershipUnavailable = busy
+    ? "Map source evidence is loading."
+    : error
+      ? "The map source could not be rechecked. Previous ownership references are withheld."
+      : snapshot.client !== client
+        ? "The map belongs to a previous source connection. Refresh it before checking ownership."
+        : undefined;
   const preferences = useMemo(
     () => (user ? prefsFor(user) : undefined),
     [user],
@@ -359,6 +367,8 @@ function StandardMapPage({
     if (visible) setPanel((current) => (current === "scope" ? null : current));
   }, [visible]);
   const [findingsOpen, setFindingsOpen] = useState(false);
+  const [ownershipOpen, setOwnershipOpen] = useState(false);
+  const moreTrigger = useRef<HTMLButtonElement>(null);
   const [incidentOpen, setIncidentOpen] = useState(false);
   const incidentTrigger = useRef<HTMLButtonElement>(null);
   const incidentDialog = useRef<HTMLDivElement>(null);
@@ -752,6 +762,7 @@ function StandardMapPage({
           )}
           <button
             className="icon-button"
+            ref={moreTrigger}
             aria-label="More actions"
             aria-haspopup="true"
             aria-expanded={panel === "more"}
@@ -799,6 +810,16 @@ function StandardMapPage({
               onClick={() => setPanel("changes")}
             >
               Changes
+            </button>
+            <button
+              className="menu-item"
+              disabled={!visible}
+              onClick={() => {
+                setOwnershipOpen(true);
+                setPanel(null);
+              }}
+            >
+              Business ownership
             </button>
             <button className="menu-item" onClick={() => setPanel("saved")}>
               Saved views
@@ -1068,6 +1089,18 @@ function StandardMapPage({
           </section>
         )}
       </header>
+      {visible && ownershipOpen && (
+        <JourneyLazyEvidence
+          initiallyOpen
+          onClose={() => {
+            setOwnershipOpen(false);
+            moreTrigger.current?.focus();
+          }}
+          kind="ownership"
+          graph={graph}
+          unavailableReason={ownershipUnavailable}
+        />
+      )}
       {incidentOpen && visible && mode === "live" && (
         <div
           ref={incidentDialog}
@@ -1080,7 +1113,9 @@ function StandardMapPage({
           <Suspense fallback={<p role="status">Opening investigation…</p>}>
             <IncidentWorkspace
               incident={graph}
+              sourceUnavailableReason={ownershipUnavailable}
               caseClient={caseClient}
+              nativePersistence={inSplunk}
               timezone={timezone}
               onBack={() => {
                 setIncidentOpen(false);

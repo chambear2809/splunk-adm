@@ -1,3 +1,4 @@
+import { rejectDuplicateKeys } from "../data/strictJson";
 /** Imported business claims are supplemental assertions, not traffic identity. */
 export type Criticality = "critical" | "high" | "medium" | "low" | "unknown";
 export type Validity =
@@ -25,15 +26,49 @@ export interface BusinessClaim {
   runbook?: Reference;
   escalation?: Reference;
 }
+export interface ClaimIdentity {
+  authority: string;
+  recordId: string;
+  revision: number;
+  scope: string;
+  memberKind: BusinessClaim["memberKind"];
+  memberId: string;
+}
+export interface TechnicalServiceTarget {
+  kind: "service";
+  authority: string;
+  scope: string;
+  configRevision: string;
+  key: {
+    service: string;
+    environment: string;
+    cluster: string;
+    namespace: string;
+  };
+}
+export interface BusinessBinding {
+  authority: string;
+  recordId: string;
+  revision: number;
+  snapshotId: string;
+  snapshotAt: number;
+  claim: ClaimIdentity;
+  target: TechnicalServiceTarget;
+  validity: Validity;
+  proofReference: string;
+}
 export interface ImportIssue {
   row?: number;
   message: string;
 }
 export interface ImportPreview {
   claims: BusinessClaim[];
+  bindings: BusinessBinding[];
   errors: ImportIssue[];
   conflicts: { rows: [number, number]; reason: string }[];
   conflictCount: number;
+  bindingConflicts: { rows: [number, number]; reason: string }[];
+  bindingConflictCount: number;
 }
 const ROOT_KEYS = [
   "schema_version",
@@ -58,6 +93,16 @@ const ROW_KEYS = [
   "valid_to",
   "runbook",
   "escalation",
+];
+const BINDING_KEYS = [
+  "record_id",
+  "revision",
+  "claim",
+  "target",
+  "validity_basis",
+  "valid_from",
+  "valid_to",
+  "proof_reference",
 ];
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/;
 const object = (v: unknown): v is Record<string, unknown> =>
@@ -113,6 +158,29 @@ function timestamp(value: unknown, name: string): number {
     throw new Error(`${name} is not a valid timestamp.`);
   return time / 1000;
 }
+function validity(row: Record<string, unknown>, snapshotAt: number): Validity {
+  if (row.validity_basis === "snapshot_current") {
+    if (row.valid_from != null || row.valid_to != null)
+      throw new Error("Current-only records cannot include interval dates.");
+    return { basis: "snapshot_current", at: snapshotAt };
+  }
+  if (row.validity_basis !== "source_interval")
+    throw new Error(
+      "validity_basis must be source_interval or snapshot_current.",
+    );
+  const from = timestamp(row.valid_from, "valid_from");
+  const to =
+    row.valid_to == null ? undefined : timestamp(row.valid_to, "valid_to");
+  if (from > snapshotAt || (to !== undefined && to <= from))
+    throw new Error(
+      "Validity interval must start by the snapshot and end after its start.",
+    );
+  return {
+    basis: "source_interval",
+    from,
+    ...(to !== undefined ? { to } : {}),
+  };
+}
 function reference(value: unknown, name: string): Reference | undefined {
   if (value === undefined || value === null) return undefined;
   if (!object(value))
@@ -141,88 +209,10 @@ function reference(value: unknown, name: string): Reference | undefined {
   return { label, url: url.href };
 }
 
-/** Detect repeated keys before JSON.parse can silently discard a conflicting value. */
-function rejectDuplicateKeys(input: string) {
-  let i = 0;
-  const ws = () => {
-    while (/\s/.test(input[i] ?? "") && i < input.length) i++;
-  };
-  const string = (): string => {
-    const start = i++;
-    while (i < input.length) {
-      if (input[i] === "\\") {
-        i += 2;
-        continue;
-      }
-      if (input[i++] === '"')
-        return JSON.parse(input.slice(start, i)) as string;
-    }
-    throw new Error("Invalid JSON.");
-  };
-  const value = (depth: number): void => {
-    if (depth > 20) throw new Error("JSON nesting is too deep.");
-    ws();
-    if (input[i] === '"') {
-      string();
-      return;
-    }
-    if (input[i] === "{") {
-      i++;
-      ws();
-      const keys = new Set<string>();
-      if (input[i] === "}") {
-        i++;
-        return;
-      }
-      while (i < input.length) {
-        ws();
-        if (input[i] !== '"') throw new Error("Invalid JSON.");
-        const key = string();
-        if (keys.has(key)) throw new Error(`Duplicate JSON field: ${key}.`);
-        keys.add(key);
-        ws();
-        if (input[i++] !== ":") throw new Error("Invalid JSON.");
-        value(depth + 1);
-        ws();
-        if (input[i] === "}") {
-          i++;
-          return;
-        }
-        if (input[i++] !== ",") throw new Error("Invalid JSON.");
-      }
-      throw new Error("Invalid JSON.");
-    }
-    if (input[i] === "[") {
-      i++;
-      ws();
-      if (input[i] === "]") {
-        i++;
-        return;
-      }
-      while (i < input.length) {
-        value(depth + 1);
-        ws();
-        if (input[i] === "]") {
-          i++;
-          return;
-        }
-        if (input[i++] !== ",") throw new Error("Invalid JSON.");
-      }
-      throw new Error("Invalid JSON.");
-    }
-    const match =
-      /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(
-        input.slice(i),
-      );
-    if (!match) throw new Error("Invalid JSON.");
-    i += match[0].length;
-  };
-  value(0);
-  ws();
-  if (i !== input.length) throw new Error("Invalid JSON.");
-}
-
-function overlaps(a: BusinessClaim, b: BusinessClaim): boolean {
+function overlaps(
+  a: { validity: Validity; snapshotAt: number },
+  b: { validity: Validity; snapshotAt: number },
+): boolean {
   if (
     a.validity.basis === "snapshot_current" ||
     b.validity.basis === "snapshot_current"
@@ -252,13 +242,87 @@ function overlaps(a: BusinessClaim, b: BusinessClaim): boolean {
   );
 }
 
+function parseBinding(
+  value: unknown,
+  authority: string,
+  snapshotId: string,
+  snapshotAt: number,
+): BusinessBinding {
+  if (!object(value)) throw new Error("Binding must be an object.");
+  fields(value, BINDING_KEYS);
+  if (!Number.isSafeInteger(value.revision) || (value.revision as number) < 0)
+    throw new Error("Binding revision must be a nonnegative integer.");
+  if (!object(value.claim) || !object(value.target))
+    throw new Error("Binding claim and target are required.");
+  const claim = value.claim;
+  const target = value.target;
+  fields(claim, [
+    "authority",
+    "record_id",
+    "revision",
+    "scope",
+    "member_kind",
+    "member_id",
+  ]);
+  fields(target, ["kind", "authority", "scope", "config_revision", "key"]);
+  if (
+    !Number.isSafeInteger(claim.revision) ||
+    (claim.revision as number) < 0 ||
+    !["service", "workload", "asset"].includes(String(claim.member_kind))
+  )
+    throw new Error("Invalid binding claim identity.");
+  if (target.kind !== "service" || !object(target.key))
+    throw new Error("Binding target must be a qualified service.");
+  const key = target.key;
+  fields(key, ["service", "environment", "cluster", "namespace"]);
+  const proofReference = text(value.proof_reference, "proof_reference");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$/.test(proofReference))
+    throw new Error("proof_reference must be a bounded non-URL identifier.");
+  return {
+    authority,
+    snapshotId,
+    snapshotAt,
+    recordId: text(value.record_id, "binding record_id", true),
+    revision: value.revision as number,
+    claim: {
+      authority: text(claim.authority, "claim authority", true),
+      recordId: text(claim.record_id, "claim record_id", true),
+      revision: claim.revision as number,
+      scope: text(claim.scope, "claim scope", true),
+      memberKind: claim.member_kind as BusinessClaim["memberKind"],
+      memberId: text(claim.member_id, "claim member_id", true),
+    },
+    target: {
+      kind: "service",
+      authority: text(target.authority, "target authority", true),
+      scope: text(target.scope, "target scope", true),
+      configRevision: text(
+        target.config_revision,
+        "target config_revision",
+        true,
+      ),
+      key: {
+        service: text(key.service, "target service", true),
+        environment: text(key.environment, "target environment", true),
+        cluster: text(key.cluster, "target cluster", true),
+        namespace: text(key.namespace, "target namespace", true),
+      },
+    },
+    validity: validity(value, snapshotAt),
+    proofReference,
+  };
+}
+
 /** Validate the entire batch. Invalid rows do not produce an applicable partial import. */
 export function previewBusinessServiceImport(input: string): ImportPreview {
   const fail = (message: string): ImportPreview => ({
     claims: [],
+    bindings: [],
     errors: [{ message }],
     conflicts: [],
     conflictCount: 0,
+    bindingConflicts: [],
+    bindingConflictCount: 0,
   });
   if (new TextEncoder().encode(input).length > 2_000_000)
     return fail("Import exceeds 2 MB.");
@@ -271,8 +335,12 @@ export function previewBusinessServiceImport(input: string): ImportPreview {
   }
   if (!object(root)) return fail("Import must be a JSON object.");
   try {
-    fields(root, ROOT_KEYS);
-    if (root.schema_version !== 1) throw new Error("schema_version must be 1.");
+    fields(
+      root,
+      root.schema_version === 2 ? [...ROOT_KEYS, "bindings"] : ROOT_KEYS,
+    );
+    if (root.schema_version !== 1 && root.schema_version !== 2)
+      throw new Error("schema_version must be 1 or 2.");
     const authority = text(root.authority, "authority", true);
     const snapshotId = text(root.snapshot_id, "snapshot_id", true);
     const snapshotAt = timestamp(root.snapshot_at, "snapshot_at");
@@ -288,29 +356,7 @@ export function previewBusinessServiceImport(input: string): ImportPreview {
       try {
         if (!object(row)) throw new Error("Record must be an object.");
         fields(row, ROW_KEYS);
-        const basis = row.validity_basis;
-        let validity: Validity;
-        if (basis === "snapshot_current") {
-          if (row.valid_from != null || row.valid_to != null)
-            throw new Error(
-              "Current-only records cannot include interval dates.",
-            );
-          validity = { basis, at: snapshotAt };
-        } else if (basis === "source_interval") {
-          const from = timestamp(row.valid_from, "valid_from");
-          const to =
-            row.valid_to == null
-              ? undefined
-              : timestamp(row.valid_to, "valid_to");
-          if (from > snapshotAt || (to !== undefined && to <= from))
-            throw new Error(
-              "Validity interval must start by the snapshot and end after its start.",
-            );
-          validity = { basis, from, ...(to !== undefined ? { to } : {}) };
-        } else
-          throw new Error(
-            "validity_basis must be source_interval or snapshot_current.",
-          );
+        const rowValidity = validity(row, snapshotAt);
         if (!Number.isSafeInteger(row.revision) || (row.revision as number) < 0)
           throw new Error("revision must be a nonnegative integer.");
         if (!["service", "workload", "asset"].includes(String(row.member_kind)))
@@ -337,7 +383,7 @@ export function previewBusinessServiceImport(input: string): ImportPreview {
           teamId: text(row.team_id, "team_id", true),
           teamName: text(row.team_name, "team_name"),
           criticality: row.criticality as Criticality,
-          validity,
+          validity: rowValidity,
           runbook: reference(row.runbook, "runbook"),
           escalation: reference(row.escalation, "escalation"),
         });
@@ -348,8 +394,32 @@ export function previewBusinessServiceImport(input: string): ImportPreview {
         });
       }
     });
+    const bindings: BusinessBinding[] = [];
+    if (root.schema_version === 2) {
+      const incoming = root.bindings === undefined ? [] : root.bindings;
+      if (!Array.isArray(incoming) || incoming.length > 1000)
+        throw new Error("bindings must be an array of at most 1,000 rows.");
+      incoming.forEach((row, index) => {
+        try {
+          bindings.push(parseBinding(row, authority, snapshotId, snapshotAt));
+        } catch (e) {
+          errors.push({
+            row: index + 1,
+            message: `Binding: ${e instanceof Error ? e.message : "Invalid record."}`,
+          });
+        }
+      });
+    }
     if (errors.length)
-      return { claims: [], errors, conflicts: [], conflictCount: 0 };
+      return {
+        claims: [],
+        bindings: [],
+        errors,
+        conflicts: [],
+        conflictCount: 0,
+        bindingConflicts: [],
+        bindingConflictCount: 0,
+      };
     const conflicts: ImportPreview["conflicts"] = [];
     let conflictCount = 0;
     const latest = new Map<string, number>();
@@ -383,7 +453,45 @@ export function previewBusinessServiceImport(input: string): ImportPreview {
           );
         }
       }
-    return { claims, errors, conflicts, conflictCount };
+    const bindingConflicts: ImportPreview["bindingConflicts"] = [];
+    let bindingConflictCount = 0;
+    const latestBinding = new Map<string, number>();
+    for (const binding of bindings)
+      latestBinding.set(
+        binding.recordId,
+        Math.max(latestBinding.get(binding.recordId) ?? -1, binding.revision),
+      );
+    for (let i = 0; i < bindings.length; i++)
+      for (let j = i + 1; j < bindings.length; j++) {
+        const a = bindings[i],
+          b = bindings[j];
+        const duplicate =
+          a.recordId === b.recordId && a.revision === b.revision;
+        const competing =
+          a.revision === latestBinding.get(a.recordId) &&
+          b.revision === latestBinding.get(b.recordId) &&
+          JSON.stringify(a.claim) === JSON.stringify(b.claim) &&
+          overlaps(a, b);
+        if (duplicate || competing) {
+          bindingConflictCount++;
+          if (bindingConflicts.length < 500)
+            bindingConflicts.push({
+              rows: [i + 1, j + 1],
+              reason: duplicate
+                ? "The same binding revision appears more than once."
+                : "Overlapping bindings for the same claim require review.",
+            });
+        }
+      }
+    return {
+      claims,
+      bindings,
+      errors,
+      conflicts,
+      conflictCount,
+      bindingConflicts,
+      bindingConflictCount,
+    };
   } catch (e) {
     return fail(e instanceof Error ? e.message : "Invalid import.");
   }

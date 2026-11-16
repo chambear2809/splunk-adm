@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
+    BASELINE_RUNTIME_FILES,
+    BASELINE_CONFIG_FILES,
     CASE_CONFIG_FILES,
     CASE_RUNTIME_FILES,
     QUALIFIED_CONFIG_FILES,
@@ -203,7 +205,10 @@ class ReleaseArchiveTests(unittest.TestCase):
             **{
                 name: (
                     (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
-                    if name in QUALIFIED_RUNTIME_FILES | CASE_RUNTIME_FILES
+                    if name
+                    in QUALIFIED_RUNTIME_FILES
+                    | CASE_RUNTIME_FILES
+                    | BASELINE_RUNTIME_FILES
                     else b"#!/usr/bin/env python3\n"
                     if name.endswith("adm_recovery.py")
                     else b"runtime\n"
@@ -215,6 +220,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                 for name in SETTINGS_RUNTIME_FILES
                 | SETTINGS_CONFIG_FILES
                 | CASE_CONFIG_FILES
+                | BASELINE_CONFIG_FILES
             },
             SETTINGS_REGISTRY_PATH: (
                 self.root / "config/deployment-health.json"
@@ -297,7 +303,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair()
         check_release(self.root / "dist", self.root / "package.json")
 
-    def test_accepts_legacy_package_without_case_registration(self):
+    def test_baseline_host_requires_case_runtime(self):
         install = self._files()
         for name in CASE_RUNTIME_FILES | CASE_CONFIG_FILES:
             del install[name]
@@ -307,7 +313,8 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             install[name] = install[name].split(marker)[0] + b"\n"
         self._write_pair(install)
-        check_release(self.root / "dist", self.root / "package.json")
+        with self.assertRaises(ValueError):
+            check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_unsafe_case_release_contract(self):
         variants = (
@@ -384,6 +391,89 @@ class ReleaseArchiveTests(unittest.TestCase):
                     ValueError, "case registration missing required files"
                 ):
                     check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_unsafe_baseline_release_contract(self):
+        variants = (
+            (
+                "splunk_adm/default/adm_baselines.conf",
+                b"mode = disabled",
+                b"mode = single_search_head",
+            ),
+            (
+                "splunk_adm/default/adm_baselines.conf",
+                b"platform = unqualified",
+                b"platform = enterprise",
+            ),
+            (
+                "splunk_adm/default/adm_baselines.conf",
+                b"source_mode = unavailable",
+                b"source_mode = qualified",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"handler = adm_baselines.BaselinesHandler",
+                b"handler = other.Handler",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"match = /adm/dependency-monitoring",
+                b"match = /adm/elsewhere",
+            ),
+            (
+                "splunk_adm/default/web.conf",
+                b"pattern = adm/dependency-monitoring/baselines/*/watches/*/evaluate",
+                b"pattern = adm/dependency-monitoring/**",
+            ),
+            (
+                "splunk_adm/default/web.conf",
+                b"pattern = adm/dependency-monitoring/capture",
+                b"skipCSRFProtection = true\npattern = adm/dependency-monitoring/capture",
+            ),
+        )
+        for name, before, after in variants:
+            with self.subTest(name=name, after=after):
+                files = self._files()
+                self.assertIn(before, files[name])
+                files[name] = files[name].replace(before, after)
+                self._write_pair(files)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+        for before, after in (
+            (b"capability = adm_investigate", b"capability = search"),
+            (b"requireAuthentication = true", b"requireAuthentication = false"),
+            (b"passSession = true", b"passSession = false"),
+            (b"passSystemAuth = false", b"passSystemAuth = true"),
+            (b"passHttpHeaders = true", b"passHttpHeaders = false"),
+        ):
+            with self.subTest(registration=before):
+                files = self._files()
+                path = "splunk_adm/default/restmap.conf"
+                prefix, stanza = files[path].split(
+                    b"[script:adm_dependency_monitoring]", 1
+                )
+                self.assertIn(before, stanza)
+                files[path] = (
+                    prefix
+                    + b"[script:adm_dependency_monitoring]"
+                    + stanza.replace(before, after)
+                )
+                self._write_pair(files)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+        for name in BASELINE_RUNTIME_FILES | BASELINE_CONFIG_FILES:
+            with self.subTest(missing=name):
+                files = self._files()
+                del files[name]
+                self._write_pair(files)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files["splunk_adm/default/web.conf"] += (
+            b"\n[expose:purge]\npattern = adm/dependency-monitoring/baselines/purge\nmethods = POST\n"
+        )
+        self._write_pair(files)
+        with self.assertRaises(ValueError):
+            check_release(self.root / "dist", self.root / "package.json")
 
     def test_runtime_inventory_matches_source_files(self):
         source_root = Path(__file__).parents[1] / "splunk_app/splunk_adm/bin"

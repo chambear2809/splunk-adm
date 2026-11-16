@@ -236,7 +236,13 @@ def compatible(a, b):
 
 
 class BaselineStore:
-    """Transactional ACL-protected versioned captures and passive watch records."""
+    """Transactional ACL-protected versioned captures and passive watch records.
+
+    Watch evaluations require proof for at most 100 distinct historical captures.
+    Exceeding that bound fails closed; history is never silently truncated.
+    """
+
+    MAX_HISTORY_PROOFS = 100
 
     def __init__(
         self,
@@ -308,6 +314,7 @@ class BaselineStore:
             CREATE TABLE IF NOT EXISTS watches (baseline_id TEXT NOT NULL REFERENCES baselines(id) ON DELETE CASCADE, id TEXT NOT NULL, definition TEXT NOT NULL, baseline_version INTEGER NOT NULL, PRIMARY KEY(baseline_id,id));
             CREATE TABLE IF NOT EXISTS occurrences (seq INTEGER PRIMARY KEY AUTOINCREMENT, baseline_id TEXT NOT NULL, watch_id TEXT NOT NULL, signature TEXT NOT NULL, start REAL NOT NULL, end REAL NOT NULL, observed REAL NOT NULL, reference TEXT, capture TEXT, UNIQUE(baseline_id,watch_id,signature,start,end), FOREIGN KEY(baseline_id,watch_id) REFERENCES watches(baseline_id,id) ON DELETE CASCADE);
             CREATE TABLE IF NOT EXISTS requests (principal TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, baseline_id TEXT NOT NULL, result TEXT NOT NULL, created_at REAL NOT NULL, PRIMARY KEY(principal,request_id));
+            CREATE TABLE IF NOT EXISTS surfaced (baseline_id TEXT NOT NULL, watch_id TEXT NOT NULL, signature TEXT NOT NULL, surfaced_at REAL NOT NULL, PRIMARY KEY(baseline_id,watch_id,signature), FOREIGN KEY(baseline_id,watch_id) REFERENCES watches(baseline_id,id) ON DELETE CASCADE);
             CREATE TABLE IF NOT EXISTS evidence (baseline_id TEXT NOT NULL REFERENCES baselines(id) ON DELETE CASCADE, evidence_key TEXT NOT NULL, reference TEXT NOT NULL, capture TEXT NOT NULL, size INTEGER NOT NULL, PRIMARY KEY(baseline_id,evidence_key));
             """)
             if "reference" not in {
@@ -421,8 +428,6 @@ class BaselineStore:
             (baseline_id, principal),
         ).fetchone():
             raise Forbidden("baseline access denied")
-        if action not in ("delete", "share"):
-            self._source_access(db, principal, baseline_id)
         return row
 
     def _check_source(self, principal, reference, capture):
@@ -434,18 +439,6 @@ class BaselineStore:
             raise Forbidden("source entitlement unavailable") from exc
         if allowed is not True:
             raise Forbidden("source access denied")
-
-    def _source_access(self, db, principal, baseline_id):
-        if db.execute(
-            "SELECT 1 FROM versions WHERE baseline_id=? AND evidence_key IS NULL UNION ALL SELECT 1 FROM occurrences WHERE baseline_id=? AND evidence_key IS NULL LIMIT 1",
-            (baseline_id, baseline_id),
-        ).fetchone():
-            raise Forbidden("source reference unavailable")
-        for reference, capture in db.execute(
-            "SELECT reference,capture FROM evidence WHERE baseline_id=?",
-            (baseline_id,),
-        ):
-            self._check_source(principal, json.loads(reference), json.loads(capture))
 
     def _capture(self, principal, reference):
         _text(reference, "source reference", 4096)
@@ -460,14 +453,91 @@ class BaselineStore:
         )
         return capture
 
+    def _retry(
+        self,
+        principal,
+        request_id,
+        action,
+        baseline_id,
+        expected,
+        payload,
+        operation_name,
+    ):
+        _text(request_id, "request id", 128)
+        digest = hashlib.sha256(
+            _json([action, operation_name, baseline_id, expected, payload]).encode()
+        ).hexdigest()
+        with closing(self._connect()) as db:
+            previous = db.execute(
+                "SELECT digest,baseline_id,result FROM requests WHERE principal=? AND request_id=?",
+                (principal, request_id),
+            ).fetchone()
+            if not previous:
+                return False, None
+            if previous[0] != digest:
+                raise Conflict("request id reused")
+            self._entitled(principal, action, baseline_id)
+            result = json.loads(previous[2])
+            if result is not None:
+                self._row(db, principal, "read", previous[1])
+            return True, result
+
+    @staticmethod
+    def _withheld_receipt(result):
+        return {
+            "id": result["id"],
+            "revision": result["revision"],
+            "resultWithheld": True,
+        }
+
+    def _history_proofs(self, db, baseline_id, watch_id):
+        # A surfaced time is trustworthy only if its originating occurrence is retained.
+        if db.execute(
+            "SELECT 1 FROM surfaced s WHERE s.baseline_id=? AND s.watch_id=? AND NOT EXISTS (SELECT 1 FROM occurrences o WHERE o.baseline_id=s.baseline_id AND o.watch_id=s.watch_id AND o.signature=s.signature AND o.observed=s.surfaced_at) LIMIT 1",
+            (baseline_id, watch_id),
+        ).fetchone():
+            raise Forbidden("history proof unavailable")
+        # Limit distinct evidence references before loading capture payloads.
+        keys = db.execute(
+            "SELECT DISTINCT evidence_key FROM occurrences WHERE baseline_id=? AND watch_id=? LIMIT ?",
+            (baseline_id, watch_id, self.MAX_HISTORY_PROOFS + 1),
+        ).fetchall()
+        if len(keys) > self.MAX_HISTORY_PROOFS or any(key[0] is None for key in keys):
+            raise Forbidden("history proof unavailable")
+        proofs = []
+        for (key,) in keys:
+            evidence = db.execute(
+                "SELECT reference,capture FROM evidence WHERE baseline_id=? AND evidence_key=?",
+                (baseline_id, key),
+            ).fetchone()
+            if evidence is None:
+                raise Forbidden("history proof unavailable")
+            proofs.append(evidence)
+        return proofs
+
+    def _authorize_proofs(self, principal, proofs):
+        for reference, capture in proofs:
+            self._check_source(principal, json.loads(reference), json.loads(capture))
+
+    def _recheck_revision(self, principal, baseline_id, revision):
+        with closing(self._connect()) as db:
+            current = self._row(db, principal, "read", baseline_id)
+            if current[2] != revision:
+                raise Conflict("revision changed")
+
+    def _prepare_capture(self, principal, reference):
+        capture = self._capture(principal, reference)
+        self._check_source(principal, reference, capture)
+        return capture
+
+    def _preflight(self, principal, baseline_id, expected):
+        with closing(self._connect()) as db:
+            row = self._row(db, principal, "write", baseline_id)
+            # A prior receipt is checked by _mutate; preflight must permit retries.
+            return row
+
     def _admit_evidence(self, db, principal, baseline_id, reference, capture):
         reference_json, capture_json = _json(reference), _json(capture)
-        key = hashlib.sha256(_json([reference_json, capture_json]).encode()).hexdigest()
-        if not db.execute(
-            "SELECT 1 FROM evidence WHERE baseline_id=? AND evidence_key=?",
-            (baseline_id, key),
-        ).fetchone():
-            self._check_source(principal, reference, capture)
         return self._store_evidence(db, baseline_id, reference_json, capture_json)
 
     def _mutate(
@@ -506,7 +576,13 @@ class BaselineStore:
                     elif action != "delete":
                         self._row(db, principal, "read", previous[1])
                     db.commit()
-                    return json.loads(previous[2])
+                    retry_result = json.loads(previous[2])
+                    if (
+                        operation_name in ("evaluate_window", "append_occurrence")
+                        and retry_result is not None
+                    ):
+                        return self._withheld_receipt(retry_result)
+                    return retry_result
                 if baseline_id is None:
                     self._entitled(principal, action, None)
                     row = None
@@ -555,7 +631,7 @@ class BaselineStore:
                 >= self.max_baselines
             ):
                 raise QuotaExceeded("baseline quota exceeded")
-            capture = self._capture(principal, reference)
+            capture = prepared_capture
             baseline_id = str(uuid.uuid4())
             db.execute(
                 "INSERT INTO baselines VALUES (?,?,?,?,?)",
@@ -571,6 +647,14 @@ class BaselineStore:
             )
             return {"id": baseline_id, "revision": 1, "version": 1}
 
+        # Resolve external evidence before acquiring the SQLite write lock.
+        found, retry = self._retry(
+            principal, request_id, "create", None, None, [name, reference], "create"
+        )
+        if found:
+            return retry
+        self._entitled(principal, "create", None)
+        prepared_capture = self._prepare_capture(principal, reference)
         return self._mutate(
             principal, request_id, "create", None, None, [name, reference], apply
         )
@@ -581,7 +665,7 @@ class BaselineStore:
         def apply(db, row):
             if row[3] >= self.max_versions:
                 raise QuotaExceeded("version quota exceeded")
-            capture = self._capture(principal, reference)
+            capture = prepared_capture
             previous = json.loads(
                 db.execute(
                     "SELECT e.capture FROM versions v JOIN evidence e ON e.baseline_id=v.baseline_id AND e.evidence_key=v.evidence_key WHERE v.baseline_id=? AND v.version=?",
@@ -603,6 +687,20 @@ class BaselineStore:
             )
             return {"id": baseline_id, "revision": row[2] + 1, "version": row[3] + 1}
 
+        found, retry = self._retry(
+            principal,
+            request_id,
+            "write",
+            baseline_id,
+            expected_revision,
+            reference,
+            "version",
+        )
+        if found:
+            return retry
+        self._preflight(principal, baseline_id, expected_revision)
+        self.get(principal, baseline_id)
+        prepared_capture = self._prepare_capture(principal, reference)
         return self._mutate(
             principal,
             request_id,
@@ -623,18 +721,24 @@ class BaselineStore:
             if type(version) is not int or version < 1:
                 raise Invalid("invalid version")
             capture = db.execute(
-                "SELECT e.capture FROM versions v JOIN evidence e ON e.baseline_id=v.baseline_id AND e.evidence_key=v.evidence_key WHERE v.baseline_id=? AND v.version=?",
+                "SELECT e.reference,e.capture FROM versions v JOIN evidence e ON e.baseline_id=v.baseline_id AND e.evidence_key=v.evidence_key WHERE v.baseline_id=? AND v.version=?",
                 (baseline_id, version),
             ).fetchone()
             if not capture:
                 raise NotFound("version not found")
-            return {
-                "id": baseline_id,
-                "name": row[1],
-                "revision": row[2],
-                "version": version,
-                "capture": json.loads(capture[0]),
-            }
+            reference, evidence = map(json.loads, capture)
+        self._check_source(principal, reference, evidence)
+        with closing(self._connect()) as db:
+            current = self._row(db, principal, action, baseline_id)
+            if current[2] != row[2]:
+                raise Conflict("revision changed")
+        return {
+            "id": baseline_id,
+            "name": row[1],
+            "revision": row[2],
+            "version": version,
+            "capture": evidence,
+        }
 
     def export(self, principal, baseline_id, version=None):
         return self.get(principal, baseline_id, version, action="export")
@@ -657,7 +761,6 @@ class BaselineStore:
                 try:
                     self._entitled(principal, "list", baseline_id)
                     self._entitled(principal, "read", baseline_id)
-                    self._source_access(db, principal, baseline_id)
                 except Forbidden:
                     continue
                 result.append(
@@ -685,8 +788,6 @@ class BaselineStore:
         def apply(db, row):
             if row[0] != principal:
                 raise Forbidden("owner required")
-            if grant:
-                self._source_access(db, principal, baseline_id)
             if member == row[0]:
                 raise Invalid("owner membership fixed")
             exists = db.execute(
@@ -821,7 +922,7 @@ class BaselineStore:
             ).fetchone()
             if not watch:
                 raise NotFound("watch not found")
-            capture = self._capture(principal, reference)
+            capture = prepared_capture
             observed_at = self.clock()
             if not _number(observed_at) or observed_at < 0:
                 raise RuntimeError("trusted clock unavailable")
@@ -888,22 +989,49 @@ class BaselineStore:
                     "UPDATE baselines SET revision=revision+1 WHERE id=?",
                     (baseline_id,),
                 )
-            else:
-                reference_json, capture_json = _json(reference), _json(capture)
-                key = hashlib.sha256(
-                    _json([reference_json, capture_json]).encode()
-                ).hexdigest()
-                if not db.execute(
-                    "SELECT 1 FROM evidence WHERE baseline_id=? AND evidence_key=?",
-                    (baseline_id, key),
-                ).fetchone():
-                    self._check_source(principal, reference, capture)
             return {
                 "id": baseline_id,
                 "revision": row[2] + (not bool(existing)),
                 "inserted": not bool(existing),
             }
 
+        found, retry = self._retry(
+            principal,
+            request_id,
+            "write",
+            baseline_id,
+            expected_revision,
+            [watch_id, signature_value, reference],
+            "append_occurrence",
+        )
+        if found:
+            return self._withheld_receipt(retry) if retry is not None else None
+        self._preflight(principal, baseline_id, expected_revision)
+        with closing(self._connect()) as db:
+            watch = db.execute(
+                "SELECT baseline_version FROM watches WHERE baseline_id=? AND id=?",
+                (baseline_id, watch_id),
+            ).fetchone()
+        if not watch:
+            raise NotFound("watch not found")
+        self.get(principal, baseline_id, watch[0])
+        prepared_capture = self._prepare_capture(principal, reference)
+        window = prepared_capture["coverage"]["returned"]
+        with closing(self._connect()) as db:
+            existing = db.execute(
+                "SELECT e.reference,e.capture FROM occurrences o LEFT JOIN evidence e ON e.baseline_id=o.baseline_id AND e.evidence_key=o.evidence_key WHERE o.baseline_id=? AND o.watch_id=? AND o.signature=? AND o.start=? AND o.end=?",
+                (
+                    baseline_id,
+                    watch_id,
+                    signature_value,
+                    window["start"],
+                    window["end"],
+                ),
+            ).fetchone()
+        if existing:
+            if any(value is None for value in existing):
+                raise Forbidden("history proof unavailable")
+            self._authorize_proofs(principal, [existing])
         return self._mutate(
             principal,
             request_id,
@@ -913,6 +1041,162 @@ class BaselineStore:
             [watch_id, signature_value, reference],
             apply,
             operation_name="append_occurrence",
+        )
+
+    def evaluate_window(
+        self,
+        principal,
+        request_id,
+        baseline_id,
+        expected_revision,
+        watch_id,
+        baseline_version,
+        reference,
+    ):
+        """Evaluate a trusted complete capture against the watch's pinned version."""
+        _text(watch_id, "watch id", 128)
+        _text(reference, "source reference", 4096)
+        if type(baseline_version) is not int or baseline_version < 1:
+            raise Invalid("invalid baseline version")
+        payload = [watch_id, baseline_version, reference]
+        found, retry = self._retry(
+            principal,
+            request_id,
+            "write",
+            baseline_id,
+            expected_revision,
+            payload,
+            "evaluate_window",
+        )
+        if found:
+            return self._withheld_receipt(retry) if retry is not None else None
+        row = self._preflight(principal, baseline_id, expected_revision)
+        if row[2] != expected_revision:
+            raise Conflict("revision changed")
+        with closing(self._connect()) as db:
+            watch = db.execute(
+                "SELECT definition,baseline_version FROM watches WHERE baseline_id=? AND id=?",
+                (baseline_id, watch_id),
+            ).fetchone()
+            proofs = self._history_proofs(db, baseline_id, watch_id)
+        if not watch:
+            raise NotFound("watch not found")
+        if watch[1] != baseline_version:
+            raise Conflict("watch version changed")
+        baseline = self.get(principal, baseline_id, baseline_version)["capture"]
+        self._authorize_proofs(principal, proofs)
+        capture = self._prepare_capture(principal, reference)
+        if not compatible(baseline, capture):
+            raise Invalid("incompatible evidence")
+        now = self.clock()
+        if not _number(now) or now < 0:
+            raise RuntimeError("trusted clock unavailable")
+        if now < capture["coverage"]["knowledgeHorizon"]:
+            raise Invalid("evidence horizon is in the future")
+        before = {signature(d): d for d in baseline["dependencies"]}
+        after = {signature(d): d for d in capture["dependencies"]}
+        findings = []
+        for sig in sorted(before.keys() | after.keys()):
+            old, new = before.get(sig), after.get(sig)
+            if (old is None) != (new is None) or (
+                old is not None
+                and new is not None
+                and (
+                    (old["blocked"] is False and new["blocked"] is True)
+                    or (
+                        "redundancyDomains" in old
+                        and "redundancyDomains" in new
+                        and len(old["redundancyDomains"])
+                        > len(new["redundancyDomains"])
+                    )
+                )
+            ):
+                findings.append(sig)
+        window = capture["coverage"]["returned"]
+
+        def apply(db, row):
+            current_watch = db.execute(
+                "SELECT definition,baseline_version FROM watches WHERE baseline_id=? AND id=?",
+                (baseline_id, watch_id),
+            ).fetchone()
+            if current_watch != watch:
+                raise Conflict("watch changed")
+            definition = json.loads(watch[0])
+            inserted = surfaced = 0
+            for sig in findings:
+                exists = db.execute(
+                    "SELECT 1 FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=? AND start=? AND end=?",
+                    (baseline_id, watch_id, sig, window["start"], window["end"]),
+                ).fetchone()
+                if exists:
+                    continue
+                if (
+                    db.execute(
+                        "SELECT count(*) FROM occurrences WHERE baseline_id=?",
+                        (baseline_id,),
+                    ).fetchone()[0]
+                    >= self.max_occurrences
+                ):
+                    raise QuotaExceeded("occurrence quota exceeded")
+                key = self._admit_evidence(
+                    db, principal, baseline_id, reference, capture
+                )
+                db.execute(
+                    "INSERT INTO occurrences(baseline_id,watch_id,signature,start,end,observed,evidence_key) VALUES (?,?,?,?,?,?,?)",
+                    (
+                        baseline_id,
+                        watch_id,
+                        sig,
+                        window["start"],
+                        window["end"],
+                        now,
+                        key,
+                    ),
+                )
+                inserted += 1
+                count = db.execute(
+                    "SELECT count(*) FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=?",
+                    (baseline_id, watch_id, sig),
+                ).fetchone()[0]
+                last = db.execute(
+                    "SELECT surfaced_at FROM surfaced WHERE baseline_id=? AND watch_id=? AND signature=?",
+                    (baseline_id, watch_id, sig),
+                ).fetchone()
+                expected = any(
+                    w["start"] < window["end"] and window["start"] < w["end"]
+                    for w in definition["expectedWindows"]
+                )
+                if (
+                    count >= definition["threshold"]
+                    and not expected
+                    and (last is None or now >= last[0] + definition["cooldownSeconds"])
+                ):
+                    db.execute(
+                        "INSERT INTO surfaced VALUES (?,?,?,?) ON CONFLICT(baseline_id,watch_id,signature) DO UPDATE SET surfaced_at=excluded.surfaced_at",
+                        (baseline_id, watch_id, sig, now),
+                    )
+                    surfaced += 1
+            if inserted:
+                db.execute(
+                    "UPDATE baselines SET revision=revision+1 WHERE id=?",
+                    (baseline_id,),
+                )
+            return {
+                "id": baseline_id,
+                "revision": row[2] + bool(inserted),
+                "inserted": inserted,
+                "surfaced": surfaced,
+            }
+
+        return self._mutate(
+            principal,
+            request_id,
+            "write",
+            baseline_id,
+            expected_revision,
+            payload,
+            apply,
+            operation_name="evaluate_window",
         )
 
     def list_versions(self, principal, baseline_id, *, after=0, limit=50):
@@ -967,29 +1251,35 @@ class BaselineStore:
         ):
             raise Invalid("invalid pagination")
         with closing(self._connect()) as db:
-            self._row(db, principal, "read", baseline_id)
-            if not db.execute(
-                "SELECT 1 FROM watches WHERE baseline_id=? AND id=?",
+            row = self._row(db, principal, "read", baseline_id)
+            watch = db.execute(
+                "SELECT baseline_version FROM watches WHERE baseline_id=? AND id=?",
                 (baseline_id, watch_id),
-            ).fetchone():
+            ).fetchone()
+            if not watch:
                 raise NotFound("watch not found")
             rows = db.execute(
-                "SELECT seq,signature,start,end,observed FROM occurrences WHERE baseline_id=? AND watch_id=? AND seq>? ORDER BY seq LIMIT ?",
-                (baseline_id, watch_id, after, limit + 1),
+                "SELECT o.seq,o.signature,o.start,o.end,o.observed,e.reference,e.capture FROM occurrences o LEFT JOIN evidence e ON e.baseline_id=o.baseline_id AND e.evidence_key=o.evidence_key WHERE o.baseline_id=? AND o.watch_id=? AND o.seq>? ORDER BY o.seq LIMIT ?",
+                (baseline_id, watch_id, after, min(limit + 1, self.MAX_HISTORY_PROOFS)),
             ).fetchall()
-            items = [
-                {
-                    "seq": r[0],
-                    "signature": r[1],
-                    "window": {"start": r[2], "end": r[3]},
-                    "observedAt": r[4],
-                }
-                for r in rows[:limit]
-            ]
-            return {
-                "items": items,
-                "next": items[-1]["seq"] if len(rows) > limit else None,
+        self.get(principal, baseline_id, watch[0])
+        if any(r[5] is None or r[6] is None for r in rows):
+            raise Forbidden("history proof unavailable")
+        self._authorize_proofs(principal, {(r[5], r[6]) for r in rows})
+        self._recheck_revision(principal, baseline_id, row[2])
+        items = [
+            {
+                "seq": r[0],
+                "signature": r[1],
+                "window": {"start": r[2], "end": r[3]},
+                "observedAt": r[4],
             }
+            for r in rows[:limit]
+        ]
+        has_more = len(rows) > limit or (
+            limit == self.MAX_HISTORY_PROOFS and len(rows) == limit
+        )
+        return {"items": items, "next": items[-1]["seq"] if has_more else None}
 
     def evaluate(self, principal, baseline_id, watch_id, signature_value, now):
         _text(watch_id, "watch id", 128)
@@ -997,24 +1287,37 @@ class BaselineStore:
         if not _number(now) or now < 0:
             raise Invalid("invalid time")
         with closing(self._connect()) as db:
-            self._row(db, principal, "read", baseline_id)
-            definition = db.execute(
-                "SELECT definition FROM watches WHERE baseline_id=? AND id=?",
+            row = self._row(db, principal, "read", baseline_id)
+            watch = db.execute(
+                "SELECT definition,baseline_version FROM watches WHERE baseline_id=? AND id=?",
                 (baseline_id, watch_id),
             ).fetchone()
-            if not definition:
+            if not watch:
                 raise NotFound("watch not found")
-            definition = json.loads(definition[0])
-            count, last = db.execute(
-                "SELECT count(*),max(observed) FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=? AND observed<=?",
+            proofs = self._history_proofs(db, baseline_id, watch_id)
+            count = db.execute(
+                "SELECT count(*) FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=? AND observed<=?",
                 (baseline_id, watch_id, signature_value, now),
+            ).fetchone()[0]
+            last_row = db.execute(
+                "SELECT surfaced_at FROM surfaced WHERE baseline_id=? AND watch_id=? AND signature=?",
+                (baseline_id, watch_id, signature_value),
             ).fetchone()
-            return {
-                "count": count,
-                "thresholdMet": count >= definition["threshold"],
-                "expected": any(
-                    w["start"] <= now < w["end"] for w in definition["expectedWindows"]
-                ),
-                "coolingDown": last is not None
-                and now < last + definition["cooldownSeconds"],
-            }
+        self.get(principal, baseline_id, watch[1])
+        self._authorize_proofs(principal, proofs)
+        self._recheck_revision(principal, baseline_id, row[2])
+        definition = json.loads(watch[0])
+        last = last_row[0] if last_row else None
+        # Only the most recent surface is retained. An earlier query cannot
+        # reconstruct whether a prior surface was still cooling down.
+        if last is not None and now < last:
+            raise Invalid("historical cooldown unavailable")
+        return {
+            "count": count,
+            "thresholdMet": count >= definition["threshold"],
+            "expected": any(
+                w["start"] <= now < w["end"] for w in definition["expectedWindows"]
+            ),
+            "coolingDown": last is not None
+            and now < last + definition["cooldownSeconds"],
+        }

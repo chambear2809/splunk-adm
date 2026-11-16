@@ -4,6 +4,7 @@ import { createStaticURL } from "@splunk/splunk-utils/url";
 import {
   validNatObservation,
   type GraphIndex,
+  type Graph,
   type NatObservation,
 } from "./graph";
 import {
@@ -21,6 +22,7 @@ import type { SupplementalResult } from "./data/supplementalEvidence";
 import { clientHandoffResolution } from "./topology";
 import { handoffShort } from "./glossary";
 import { appsOf } from "./impact/model";
+import type { CatalogRow } from "./data/catalog";
 import type { ImpactPlanningProps } from "./maintenance/ImpactMaintenancePlanner";
 import type { BaselineRepository, DependencySource } from "./drift/client";
 import type { CaseClient, CaseWindow } from "./investigations/caseClient";
@@ -34,11 +36,26 @@ export type JourneyEvidenceProps =
       comparisonReference?: string;
     }
   | { kind: "ownershipImport" }
+  | {
+      kind: "ownership";
+      initiallyOpen?: boolean;
+      onClose?: () => void;
+      graph?: Graph;
+      catalogRow?: CatalogRow;
+      unavailableReason?: string;
+    }
   | ({ kind: "maintenance" } & ImpactPlanningProps)
   | {
       kind: "baseline";
       window: EvidenceWindow;
       mapWarnings?: string[];
+      nativePersistence?: boolean;
+      selection?: {
+        service: string;
+        environment: string;
+        cluster: string;
+        namespace: string;
+      };
       source?: DependencySource;
       repository?: BaselineRepository;
     }
@@ -167,8 +184,13 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
   const generation = React.useRef(0);
   const region = React.useRef<HTMLDivElement>(null);
   const trigger = React.useRef<HTMLButtonElement>(null);
+  const restoreFocus = React.useRef(false);
   React.useEffect(() => {
     if (ui) region.current?.focus();
+    else if (restoreFocus.current) {
+      trigger.current?.focus();
+      restoreFocus.current = false;
+    }
   }, [ui]);
   React.useEffect(() => {
     if (error) trigger.current?.focus();
@@ -179,7 +201,7 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
     },
     [],
   );
-  const open = async () => {
+  const open = React.useCallback(async () => {
     const current = ++generation.current;
     setLoading(true);
     setError(undefined);
@@ -196,7 +218,11 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
     } finally {
       if (current === generation.current) setLoading(false);
     }
-  };
+  }, []);
+  const initiallyOpen = props.kind === "ownership" && props.initiallyOpen;
+  React.useEffect(() => {
+    if (initiallyOpen) void open();
+  }, [initiallyOpen, open]);
   if (ui) {
     const Inspection = ui.JourneyEvidenceInspection;
     return (
@@ -209,9 +235,24 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
             ? "Shared cases"
             : props.kind === "ownershipImport"
               ? "Business-service import"
-              : "Journey investigation"
+              : props.kind === "ownership"
+                ? "Business ownership"
+                : "Journey investigation"
         }
       >
+        {props.kind === "ownership" && (
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              restoreFocus.current = true;
+              setUi(undefined);
+              props.onClose?.();
+            }}
+          >
+            Close business ownership
+          </button>
+        )}
         <Inspection {...props} />
       </div>
     );
@@ -221,15 +262,17 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
       ? "shared case records"
       : props.kind === "ownershipImport"
         ? "business-service import"
-        : props.kind === "nat"
-          ? "firewall translation"
-          : props.kind === "maintenance"
-            ? "maintenance planning"
-            : props.kind === "baseline"
-              ? "dependency baseline"
-              : props.kind === "proxy"
-                ? "proxy request"
-                : "service forwarding";
+        : props.kind === "ownership"
+          ? "business ownership"
+          : props.kind === "nat"
+            ? "firewall translation"
+            : props.kind === "maintenance"
+              ? "maintenance planning"
+              : props.kind === "baseline"
+                ? "dependency baseline"
+                : props.kind === "proxy"
+                  ? "proxy request"
+                  : "service forwarding";
   return (
     <section className="atlas-journeys">
       <button

@@ -27,6 +27,15 @@ test("an uncertain write survives denied retry until the same request can be con
   await page.route("**/test-cases/**", async (route) => {
     const request = route.request(),
       path = new URL(request.url()).pathname;
+    if (path.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: false,
+          mode: "notes_only",
+          qualified: false,
+        },
+      });
     if (path.endsWith("/entries")) {
       attempts.push({
         key: request.headers()["idempotency-key"],
@@ -75,6 +84,9 @@ test("an uncertain write survives denied retry until the same request can be con
     exact: true,
   });
   await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Refresh availability" }),
+  ).toBeDisabled();
   await retry.click();
   await expect(page.getByRole("alert")).toContainText("unconfirmed");
   await expect(page.getByText(/Private source capture · captured/)).toHaveCount(
@@ -115,7 +127,16 @@ test("case evidence is saved only by consent and hidden after source access is r
   await page.route("**/test-cases/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (expired) {
+    if (path.endsWith("/capabilities")) {
+      await route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: true,
+          mode: "notes_and_reproducible_evidence",
+          qualified: false,
+        },
+      });
+    } else if (expired) {
       await route.fulfill({ status: 401, json: { error: "expired" } });
     } else if (path.endsWith("/captures")) {
       requestBody = request.postDataJSON();
@@ -310,7 +331,16 @@ test("rechecks and exports a selected capture without reading the others", async
   await page.route("**/test-cases/**", async (route) => {
     const url = new URL(route.request().url());
     requests.push(url.pathname + url.search);
-    if (url.pathname.endsWith("/cases"))
+    if (url.pathname.endsWith("/capabilities"))
+      await route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: true,
+          mode: "notes_and_reproducible_evidence",
+          qualified: false,
+        },
+      });
+    else if (url.pathname.endsWith("/cases"))
       await route.fulfill({
         json: {
           items: [
@@ -347,7 +377,11 @@ test("rechecks and exports a selected capture without reading the others", async
   await expect(
     page.getByText("Capture 1 · captured", { exact: false }),
   ).toBeVisible();
-  expect(requests).toEqual(["/test-cases/cases", "/test-cases/cases/case-1"]);
+  expect(requests).toEqual([
+    "/test-cases/capabilities",
+    "/test-cases/cases",
+    "/test-cases/cases/case-1",
+  ]);
   await page.getByRole("button", { name: "Recheck capture 2 of 2" }).click();
   await expect(
     page.getByText("Capture 2 · captured", { exact: false }),
@@ -361,7 +395,7 @@ test("rechecks and exports a selected capture without reading the others", async
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "Download readable handoff" }).click();
   await download;
-  expect(requests.slice(2)).toEqual([
+  expect(requests.slice(3)).toEqual([
     `/test-cases/cases/case-1?capture_id=${ids[1]}`,
     `/test-cases/cases/case-1/export?capture_id=${ids[1]}`,
   ]);
@@ -390,4 +424,113 @@ test("rechecks and exports a selected capture without reading the others", async
   expect(requests.at(-1)).toBe(
     `/test-cases/cases/case-1/export?capture_id=${ids[0]}`,
   );
+});
+
+test("availability gates writes, supports retry, and preserves drafts through refresh", async ({
+  page,
+}) => {
+  let capabilityRead = 0;
+  let writes = 0;
+  let releaseRefresh: (() => void) | undefined;
+  const holdRefresh = new Promise<void>((resolve) => {
+    releaseRefresh = resolve;
+  });
+  const record = {
+    schema_version: 1,
+    id: "case-1",
+    revision: 1,
+    title: "Capability case",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [],
+    captures: [],
+    attachments: [],
+  };
+  await page.route("**/test-cases/**", async (route) => {
+    const request = route.request(),
+      url = new URL(request.url());
+    if (url.pathname.endsWith("/capabilities")) {
+      capabilityRead++;
+      if (capabilityRead === 1)
+        return route.fulfill({
+          json: {
+            available: false,
+            evidenceWrites: false,
+            mode: "notes_only",
+            qualified: false,
+          },
+        });
+      if (capabilityRead === 2) return route.fulfill({ status: 503, json: {} });
+      if (capabilityRead === 4) await holdRefresh;
+      const evidenceWrites = capabilityRead >= 4;
+      return route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites,
+          mode: evidenceWrites
+            ? "notes_and_reproducible_evidence"
+            : "notes_only",
+          qualified: false,
+        },
+      });
+    }
+    if (request.method() !== "GET") writes++;
+    if (url.pathname.endsWith("/cases") && request.method() === "GET")
+      return route.fulfill({ json: { items: [record], next: null } });
+    return route.fulfill({ json: record });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?caseEvidenceReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?caseEvidenceReplay");
+  await expect(page.getByRole("status")).toContainText("unavailable");
+  await expect(
+    page.getByRole("button", { name: "Create shared case" }),
+  ).toHaveCount(0);
+  expect(writes).toBe(0);
+  await page.getByRole("button", { name: "Retry availability check" }).click();
+  await expect(page.getByRole("status")).toContainText("unavailable");
+  expect(writes).toBe(0);
+  await page.getByRole("button", { name: "Retry availability check" }).click();
+  await expect(
+    page.getByText(
+      "Comparison evidence saving is unavailable. Shared notes remain available.",
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Capability case" }).click();
+  await page.getByLabel("Add note").fill("Retained draft");
+  await expect(
+    page.getByRole("button", { name: "Save note", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Save comparison to shared case" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel(
+      "I understand this saves source evidence to the shared case.",
+    ),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Refresh availability" }).click();
+  await expect(page.getByRole("status")).toContainText("Checking");
+  await expect(
+    page.getByRole("button", { name: "Create shared case" }),
+  ).toHaveCount(0);
+  expect(writes).toBe(0);
+  releaseRefresh!();
+  await expect(
+    page.getByRole("button", { name: "List shared cases" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Capability case" }).click();
+  await expect(page.getByLabel("Add note")).toHaveValue("Retained draft");
+  await expect(
+    page.getByLabel(
+      "I understand this saves source evidence to the shared case.",
+    ),
+  ).toBeEnabled();
 });

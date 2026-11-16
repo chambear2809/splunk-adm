@@ -41,8 +41,14 @@ const caseClient = new URLSearchParams(location.search).has("cases")
             },
           ],
         };
-        const data =
-          url.endsWith("/cases") && init.method === "GET"
+        const data = url.endsWith("/capabilities")
+          ? {
+              available: true,
+              evidenceWrites: false,
+              mode: "notes_only",
+              qualified: false,
+            }
+          : url.endsWith("/cases") && init.method === "GET"
             ? { items: [sample], next: null }
             : sample;
         return Promise.resolve(

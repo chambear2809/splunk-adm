@@ -241,3 +241,33 @@ it("validates capture indices and selects only a UUID on reads and exports", asy
   });
   await expect(invalid.get("case-1")).rejects.toBeInstanceOf(CaseError);
 });
+
+it("validates capabilities and refuses contradictory or malformed responses", async () => {
+  const transport = vi
+    .fn<CaseTransport>()
+    .mockResolvedValueOnce(
+      json({
+        available: true,
+        evidenceWrites: false,
+        mode: "notes_only",
+        qualified: false,
+      }),
+    )
+    .mockResolvedValueOnce(
+      json({
+        available: false,
+        evidenceWrites: true,
+        mode: "notes_only",
+        qualified: false,
+      }),
+    )
+    .mockResolvedValueOnce(json({ available: true }));
+  const client = createCaseClient({ baseUrl: "/api", transport });
+  await expect(client.capabilities()).resolves.toMatchObject({
+    available: true,
+    evidenceWrites: false,
+  });
+  expect(transport.mock.calls[0][0]).toBe("/api/capabilities");
+  await expect(client.capabilities()).rejects.toBeInstanceOf(CaseError);
+  await expect(client.capabilities()).rejects.toBeInstanceOf(CaseError);
+});

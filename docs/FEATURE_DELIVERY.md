@@ -13,12 +13,52 @@ and deployment gaps. Passing local checks does not close those gaps.
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Incident timeline and explanations          | `Investigate` opens a windowed comparison from a live map with findings and coverage notes.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Current source receipt does not qualify rendered live comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
-| Dependency baselines and drift              | Local durable version and passive-watch domain engine and injectable review UI support baseline capture and comparison contracts.                                                                                                                    | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | No qualified complete source adapter or authenticated HTTP host for the engine; no real-source baseline or operational watch scheduling is qualified.                                                                                                                                                                                                                                                         |
+| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; installed host/Web, real-source baseline, backup/restore and operational scheduling remain unqualified.                                                                                                                                                           |
 | Investigation records and evidence packages | Private shared cases now support notes, immutable server-rechecked comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. Direct REST qualification passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Installed Web proxy, real-source collection, hard transport bounds, attachment uploads, cleanup scheduling and backup/restore remain unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
-| Business-service ownership                  | Admin Setup exposes strict import preview and explicit browser-local save/clear. Qualified-member annotation logic retains temporal limits, provenance and conflicts.                                                                                | Focused import tests, lint, and type checks pass.                                                                                                                                                                                                 | Browser-local imports are not shared or source-authorized. Catalog, Impact, investigation and maintenance still require qualified member identity bindings and annotation integration. No qualified ownership/criticality feed or vendor adapter.                                                                                                                                                             |
+| Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | No installed candidate qualification or current journey capture. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
-## Verification performed
+## Current integration increment
+
+The current integration adds capability-gated case controls, the
+authenticated but disabled dependency-monitoring host/client, manual watch
+evaluation with protected historical evidence checks, and ownership context in
+existing catalog/Map/incident/Impact entrypoints. No new top-level navigation,
+notification, owner-dispatched search or infrastructure action is enabled.
+
+Native ownership references require explicit service/environment/cluster/namespace
+fields plus source authority, scope, configuration SHA-256 and exact observation
+window from a qualified raw reader. Full contiguous raw slices propagate matching
+provenance; mixed, missing, sampled, summary-only or malformed contexts do not.
+This is finite identity provenance, not proof of unsampled dependency coverage or
+continuous service lifetime. Names, IPs and concatenated graph IDs are not parsed
+to manufacture bindings. Failed/denied refreshes and changed source connections
+withhold the retained native ownership context.
+
+Independent review corrected historical occurrence disclosure on fresh duplicate
+requests, future cooldown state on historical reads, duplicate JSON metadata
+keys, and stale watch status/pagination on selection changes. Strict baseline
+source eligibility remains unchanged. See [baseline operations](DEPENDENCY_BASELINES.md)
+and [ownership contract](../frontend/src/businessServices/README.md).
+
+The integrated increment passes full lint, 124 Vitest files (1,317 tests),
+198 focused baseline/identity/case/release Python checks, and Ruff (234 files).
+The package and release verifier pass with the main JavaScript at 685,029 gzip
+bytes (1,051 below its unchanged 686,080-byte ceiling) and optional investigation
+JavaScript at 30,124 bytes against its unchanged 32 KiB ceiling. The final full browser suite passes: 189 tests, one skipped.
+
+Astra rendered the actual Catalog, Map and Impact pages through an explicitly
+synthetic replay at 1,440 and 320 px in light/dark themes. All twelve combinations
+fit the viewport. Review verified keyboard opening/closing and focus restoration,
+32 px ownership controls, native-only consented exports, and suppression during
+source loading, denial and replacement. Corrections added narrow KPI wrapping,
+kept Map ownership under More actions to preserve the compact default map, and
+added a close action that restores workspace space. This is engineering design
+acceptance, not a usability study or real-source/installed qualification.
+
+The preceding installed case qualification remains scoped to its archive.
+
+## Earlier verification performed
 
 The protected case evidence increment passed full lint, 120 Vitest files (1,294
 tests), 103 focused case/source/native/host/release Python checks, Ruff and the
@@ -44,8 +84,10 @@ It exercised two non-admin investigators with identical four-index grants but
 different native search filters, two independent comparison captures, targeted
 read and export of the second, public provenance hashes, source revocation,
 old retry responses, changed-source configuration and preservation of notes.
-All 62 packaged Python files in the final candidate match that qualified backend
-byte for byte. Source inputs were explicitly synthetic protocol/span/Hubble
+That archived increment contained 62 packaged Python files. Subsequent changes
+to shared qualified identity output and the new baseline host are locally
+validated separately; the current candidate is not byte-identical to that
+installed archive and does not inherit its installed qualification. Source inputs were explicitly synthetic protocol/span/Hubble
 fixtures processed by installed Splunk; this does not qualify current Cloud data.
 
 Initial installed checks correctly exposed a fixture indexing-horizon mismatch
@@ -94,8 +136,8 @@ optional investigation asset. The main bundle report measures 684,456 gzip bytes
 681,436 bytes with Python's gzip implementation. The optional JavaScript report
 is 16,123 bytes against its unchanged 32 KiB limit. See
 [Dependency baselines and maintenance captures](DEPENDENCY_BASELINES.md) for
-interfaces, retention limits and rollout prerequisites. No new baseline HTTP
-endpoint or schedule is registered.
+interfaces, retention limits and rollout prerequisites. At that earlier increment no baseline HTTP endpoint was registered. The current
+increment registers a disabled authenticated host; schedules remain disabled.
 
 Earlier increment verification follows; its counts and access statements are
 historical, not the current completion status.

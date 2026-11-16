@@ -11,65 +11,106 @@ original windows and can be explicitly downloaded. Source inputs require a
 separate unchecked consent control; assessment details can themselves contain
 sensitive names and owners.
 
-The investigation Connections section offers dependency-baseline review. In
-the packaged app there is currently no qualified complete dependency source or
-authenticated baseline transport. It reports that limitation instead of saving
-a ranked map. The injected source/repository workflow is covered by a synthetic
-browser replay, including eligibility, comparison, lost-response retry, passive
-watch definitions and denied-access clearing. This is not a deployed baseline
-service.
+The investigation Connections section connects to an authenticated baseline
+service at `adm/dependency-monitoring`. The handler and exact Splunk Web routes
+are packaged, but storage is disabled and the production source is unavailable
+by default. The app reports those limits instead of saving a ranked map. The
+injected source/repository workflow has synthetic tests; those tests do not
+qualify an installed service or its evidence.
 
-## Dedicated persistence contract
+## Persistence and access
 
-`splunk_app/splunk_adm/bin/adm_baselines_lib` provides a SQLite domain engine and
-a transport-neutral `BaselineAPI`. No REST handler, capability, Web proxy route,
-schedule or notification is registered for it. It does not use settings or case
-storage. Creating a store requires a trusted source validator; protected reads
-also require the separate current-source entitlement callback, which denies by
-default. A client-supplied qualification flag is never sufficient.
+`default/adm_baselines.conf` ships with `mode = disabled`,
+`platform = unqualified`, and `source_mode = unavailable`. The host requires
+an authenticated principal with the dedicated `adm_investigate` capability,
+which is shipped without a role assignment. Runtime checks additionally require
+Enterprise 10.6.0.5 and a standalone search head. Cloud and search head cluster
+storage are unsupported. These runtime checks do not constitute installed
+qualification. `source_mode = unavailable` is the only shipped source mode;
+there is no production source provider or configuration flag that establishes
+source completeness. A trusted Python-injected provider is used in tests only.
 
-Baselines are private initially. Explicit principal sharing is revocable and
-does not bypass current source access. Versions are immutable; watch definitions
-retain their baseline version. Mutations use revision preconditions and stable
-request keys. Captures are deduplicated within each baseline, with an aggregate
-8 MiB default evidence limit, 100 versions, 100 watches and 10,000 occurrences.
-The store also bounds baseline, membership, record and request counts. Listing,
-versions, watches and occurrences are paginated.
+Once enabled and runtime-qualified, the host uses the fixed private path
+`$SPLUNK_DB/splunk_adm_baselines/baselines.sqlite`. It checks directory and file
+ownership and permissions and rejects links. This database is separate from
+settings and investigation storage; clients cannot choose its location. It is
+local and not replicated. The host derives identity from the current Splunk
+session, rejects duplicate raw query and header fields, and uses the registered
+Splunk Web CSRF protections. Direct API callers must use an appropriately secure,
+authenticated transport.
+
+Baselines are private initially. Owners can grant and revoke principal access,
+and source authorization is checked independently of baseline membership.
+Baseline, version and watch lists contain metadata and require baseline ACL and
+current capability access. Reading or exporting a version also checks current
+source access to that selected stored capture. Occurrence pages contain
+source-derived facts and require access to the watch's pinned baseline and the
+relevant occurrence evidence, including pagination lookahead. Access and
+revision are rechecked after source authorization. Owners can revoke sharing or
+delete a baseline after losing source access.
+
+Versions are immutable and each watch retains its baseline version. Mutations
+use revision preconditions and stable request keys. Captures are deduplicated
+within each baseline, with an aggregate 8 MiB default evidence limit, 100
+versions, 100 watches and 10,000 occurrences. The store also bounds baseline,
+membership, record and request counts. Lists and occurrence results are
+paginated.
+
+Manual watch evaluation compares a trusted, complete source capture with the
+watch's pinned baseline. The server derives findings and applies distinct-window
+recurrence, expected windows and cooldown using the trusted server clock. It
+checks current access to the pinned version and all retained evidence that can
+contribute to the watch history before returning counts or making a change. The
+history proof limit is 100 distinct stored captures per watch evaluation; an
+unavailable proof or a history above that limit fails closed without a write.
+The status endpoint uses the same history checks. It rejects a requested time
+before the latest surfaced finding when the earlier cooldown state cannot be
+reconstructed. Evaluations do not schedule searches, deliver notifications or
+perform actions.
+
+A successful initial manual evaluation returns inserted and surfaced counts.
+A retry using the same request key acknowledges the committed revision with
+`resultWithheld: true`, without replaying source-derived counts. Legacy
+occurrence-write retries have the same withheld-result behavior. Reconcile the
+record and, where authorized, its evidence rather than treating a withheld
+result as a new evaluation. Occurrence receipt times come from the trusted
+clock and follow the capture's knowledge horizon; clients cannot supply
+`observedAt`.
 
 Deleted-baseline request receipts remain available for safe retries for 30 days
 by default. An independently authorized maintenance method can purge aged
-deleted receipts. Live receipts remain subject to a quota; reserved revocation
-and deletion capacity lets an owner remove access or delete data after ordinary
-write capacity is reached. There is no automatic cleanup schedule, live-record
-age retention, installed backup/restore qualification or standalone audit feed.
-
-The API strictly validates methods, paths, JSON fields, media type, size,
-revision and idempotency headers. The future host must derive the principal
-from its authenticated server context, reject duplicate raw headers/query keys,
-enforce CSRF and TLS, and configure source validation and current source access.
-Do not expose the adapter directly or authorize by a routing-scope label.
+deleted receipts; it is not exposed through the public host. Live receipts
+remain subject to a quota, with reserved capacity for revocation and deletion.
+There is no automatic cleanup schedule, live-record age retention or standalone
+audit feed.
 
 ## Evidence prerequisites
 
-A baseline requires exact requested/returned bounds, stable semantic endpoint
-identity, source/configuration/normalization versions, an adequate lateness
-horizon and explicit complete, uncapped, unsampled collection. Source changes,
-permission changes and incompatible normalization prevent comparison. Missing
-traffic remains “not observed”; it is not proof of removal. Watch findings are
-passive and require compatible source-backed captures; no owner-context search
-or notification is exposed through the viewer.
+The app has no production collector that can currently establish a complete
+baseline. A qualified source must provide and validate a collector manifest for
+the exact selection and requested window, including collection coverage,
+sampling and caps, and evidence of loss or truncation. It must establish a
+watermark and a knowledge horizon that accounts for required event lateness,
+and verify exact requested and returned bounds. It also needs stable logical
+endpoint identity, including historical workload-to-controller identity where
+applicable, reliable port and protocol identity, and source, configuration and
+normalization revisions. Current caller access must be independently enforced
+both when capturing and when reading stored evidence. Incompatible revisions,
+unknown coverage or permission, sampling, loss, stale evidence and an incomplete
+lateness horizon cannot qualify a capture.
 
-Occurrence receipt times come from the store's trusted clock and must follow the
-capture's knowledge horizon. Clients cannot supply `observedAt`; same-request
-retries retain the original receipt time. Native event time and capture windows
-remain separate from this receipt timestamp.
+Missing traffic remains “not observed”; it is not proof of removal. Current
+bounded Cloud observations establish event receipt and sampled field presence
+only; event counts do not qualify the source for complete dependency evidence.
+They do not establish historical pod-to-controller identity, complete
+dependencies, readiness intervals or measured failover headroom. See
+[source observations](FEATURE_SOURCE_OBSERVATIONS.md).
 
-Current bounded Cloud observations establish event receipt and sampled field
-presence only. They do not provide historical pod-to-controller identity,
-complete dependencies, readiness intervals or measured failover headroom. See
-[source observations](FEATURE_SOURCE_OBSERVATIONS.md). Those contracts and an
-authenticated target-specific host must be implemented and qualified before
-calling baseline monitoring complete.
+The baseline host, its Splunk Web integration and backup/restore have not been
+qualified in an installed deployment. Older installed investigation/case
+qualification cannot be assumed to remain valid after changes to the shared
+qualified search backend; repeat the applicable installed checks against the
+current package before relying on it.
 
 ## Upgrade and rollback
 

@@ -178,7 +178,7 @@ class BaselineTests(unittest.TestCase):
         self.assertFalse(duplicate["inserted"])
         self.assertEqual(
             self.store.evaluate("alice", ident, "w", sig, 23),
-            {"count": 1, "thresholdMet": True, "expected": True, "coolingDown": True},
+            {"count": 1, "thresholdMet": True, "expected": True, "coolingDown": False},
         )
         self.assertFalse(
             self.store.evaluate("alice", ident, "w", sig, 30)["coolingDown"]
@@ -239,17 +239,18 @@ class BaselineTests(unittest.TestCase):
         for read in (
             lambda: self.store.get("bob", ident),
             lambda: self.store.export("bob", ident),
-            lambda: self.store.list_versions("bob", ident),
-            lambda: self.store.list_watches("bob", ident),
-            lambda: self.store.occurrences("bob", ident, "w"),
-            lambda: self.store.evaluate("bob", ident, "w", "signature", 1),
         ):
             with self.assertRaises(Forbidden):
                 read()
-        self.assertEqual(self.store.list("bob")["items"], [])
-        self.source_denied.add(("alice", "a"))
+        self.assertEqual(len(self.store.list("bob")["items"]), 1)
+        self.store.list_versions("bob", ident)
+        self.store.list_watches("bob", ident)
         with self.assertRaises(Forbidden):
-            self.create()
+            self.store.occurrences("bob", ident, "w")
+        with self.assertRaises(Forbidden):
+            self.store.evaluate("bob", ident, "w", "signature", 1)
+        self.source_denied.add(("alice", "a"))
+        self.assertEqual(self.create()["id"], ident)
         self.store.share("alice", "revoke", ident, 3, "bob", False)
         self.assertEqual(
             self.store.share("alice", "revoke", ident, 3, "bob", False)["revision"], 4
@@ -291,8 +292,78 @@ class BaselineTests(unittest.TestCase):
         with self.assertRaises(Forbidden):
             self.store.occurrences("alice", ident, "w")
         with self.assertRaises(Forbidden):
-            self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b")
+            self.store.evaluate("alice", ident, "w", sig, 30)
+        self.assertEqual(
+            self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b"),
+            {"id": ident, "revision": 3, "resultWithheld": True},
+        )
         self.store.delete("alice", "delete", ident, 3)
+
+    def test_duplicate_occurrence_authorizes_original_evidence(self):
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 10, "expectedWindows": []},
+        )
+        self.sources["b"]["dependencies"][0]["blocked"] = True
+        self.sources["alternative"] = copy.deepcopy(self.sources["b"])
+        sig = signature(self.sources["b"]["dependencies"][0])
+        self.store.append_occurrence("alice", "first", ident, 2, "w", sig, "b")
+        self.source_denied.add(("alice", "b"))
+        with self.assertRaises(Forbidden):
+            self.store.append_occurrence(
+                "alice", "duplicate", ident, 3, "w", sig, "alternative"
+            )
+        self.assertEqual(self.store.get("alice", ident)["revision"], 3)
+        self.source_denied.clear()
+        original = self.store.source_entitlement
+        checked = []
+
+        def checking(principal, reference, evidence):
+            if reference == "b":
+                with sqlite3.connect(self.store.path, timeout=0.1) as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    db.rollback()
+                checked.append(reference)
+                self.store.share("alice", "race", ident, 3, "bob", True)
+            return original(principal, reference, evidence)
+
+        self.store.source_entitlement = checking
+        with self.assertRaises(Conflict):
+            self.store.append_occurrence(
+                "alice", "duplicate", ident, 3, "w", sig, "alternative"
+            )
+        self.assertEqual(checked, ["b"])
+        self.store.source_entitlement = original
+        result = self.store.append_occurrence(
+            "alice", "duplicate", ident, 4, "w", sig, "alternative"
+        )
+        self.assertFalse(result["inserted"])
+
+    def test_historical_cooldown_before_latest_surface_is_unavailable(self):
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 10, "expectedWindows": []},
+        )
+        self.sources["b"]["dependencies"][0]["blocked"] = True
+        sig = signature(self.sources["b"]["dependencies"][0])
+        self.now = 22
+        self.store.evaluate_window("alice", "evaluate", ident, 2, "w", 1, "b")
+        with self.assertRaises(Invalid):
+            self.store.evaluate("alice", ident, "w", sig, 21)
+        self.assertTrue(
+            self.store.evaluate("alice", ident, "w", sig, 22)["coolingDown"]
+        )
+        self.assertFalse(
+            self.store.evaluate("alice", ident, "w", sig, 32)["coolingDown"]
+        )
 
     def test_occurrence_uses_trusted_clock_and_preserves_retry(self):
         ident = self.create()["id"]
@@ -313,12 +384,12 @@ class BaselineTests(unittest.TestCase):
         self.now = 100
         self.assertEqual(
             self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b"),
-            result,
+            {"id": ident, "revision": result["revision"], "resultWithheld": True},
         )
         self.assertEqual(
             self.store.occurrences("alice", ident, "w")["items"][0]["observedAt"], 22
         )
-        self.assertTrue(
+        self.assertFalse(
             self.store.evaluate("alice", ident, "w", sig, 23)["coolingDown"]
         )
         self.assertFalse(
@@ -377,6 +448,181 @@ class BaselineTests(unittest.TestCase):
         )
         self.store.occurrences("alice", ident, "w2")
         self.assertCountEqual(calls, ["a", "b"])
+
+    def test_selected_version_and_metadata_access(self):
+        ident = self.create()["id"]
+        self.store.version("alice", "v", ident, 1, "b")
+        self.store.share("alice", "grant", ident, 2, "bob", True)
+        self.source_denied.add(("bob", "a"))
+        self.assertEqual(self.store.get("bob", ident, 2)["capture"], capture(10))
+        with self.assertRaises(Forbidden):
+            self.store.get("bob", ident, 1)
+        self.assertEqual(len(self.store.list_versions("bob", ident)["items"]), 2)
+        self.store.share("alice", "revoke", ident, 3, "bob", False)
+        with self.assertRaises(Forbidden):
+            self.store.get("bob", ident, 2)
+
+    def test_source_callbacks_do_not_hold_writer_and_revision_rechecked(self):
+        ident = self.create()["id"]
+        original = self.store.source_validator
+
+        def validator(principal, ref):
+            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.rollback()
+            self.store.share("alice", "grant-during-source", ident, 1, "bob", True)
+            return original(principal, ref)
+
+        self.store.source_validator = validator
+        with self.assertRaises(Conflict):
+            self.store.version("alice", "version-race", ident, 1, "b")
+        self.assertEqual(self.store.get("alice", ident)["version"], 1)
+
+    def test_source_entitlement_runs_outside_writer(self):
+        def check(principal, reference, evidence):
+            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.rollback()
+            return True
+
+        self.store.source_entitlement = check
+        ident = self.create()["id"]
+        self.store.version("alice", "version", ident, 1, "b")
+        self.assertEqual(self.store.get("alice", ident)["version"], 2)
+
+    def test_get_rechecks_acl_after_source_callback(self):
+        ident = self.create()["id"]
+        self.store.share("alice", "grant", ident, 1, "bob", True)
+
+        def entitlement(principal, reference, evidence):
+            self.store.share("alice", "revoke", ident, 2, "bob", False)
+            return True
+
+        self.store.source_entitlement = entitlement
+        with self.assertRaises(Forbidden):
+            self.store.get("bob", ident)
+
+    def test_manual_evaluation_dedup_recurrence_and_cooldown(self):
+        ident = self.create()["id"]
+        definition = {
+            "id": "w",
+            "threshold": 2,
+            "cooldownSeconds": 15,
+            "expectedWindows": [{"start": 30, "end": 40}],
+        }
+        self.store.set_watch("alice", "watch", ident, 1, definition)
+        for i, start in enumerate((10, 20, 30, 40, 50)):
+            ref = "window" + str(i)
+            self.sources[ref] = capture(start)
+            self.sources[ref]["dependencies"][0]["blocked"] = True
+        self.now = 22
+        first = self.store.evaluate_window("alice", "e0", ident, 2, "w", 1, "window0")
+        self.assertEqual((first["inserted"], first["surfaced"]), (1, 0))
+        self.source_denied.add(("alice", "window0"))
+        self.assertEqual(
+            self.store.evaluate_window("alice", "e0", ident, 2, "w", 1, "window0"),
+            {"id": ident, "revision": first["revision"], "resultWithheld": True},
+        )
+        self.now = 32
+        with self.assertRaises(Forbidden):
+            self.store.evaluate_window("alice", "denied", ident, 3, "w", 1, "window1")
+        self.source_denied.clear()
+        second = self.store.evaluate_window("alice", "e1", ident, 3, "w", 1, "window1")
+        self.assertEqual(second["surfaced"], 1)
+        duplicate = self.store.evaluate_window(
+            "alice", "dup", ident, 4, "w", 1, "window1"
+        )
+        self.assertEqual((duplicate["inserted"], duplicate["surfaced"]), (0, 0))
+        self.now = 42
+        expected = self.store.evaluate_window(
+            "alice", "e2", ident, 4, "w", 1, "window2"
+        )
+        self.assertEqual(expected["surfaced"], 0)
+        self.now = 52
+        surfaced = self.store.evaluate_window(
+            "alice", "e3", ident, 5, "w", 1, "window3"
+        )
+        self.assertEqual(surfaced["surfaced"], 1)
+        self.now = 62
+        cooled = self.store.evaluate_window("alice", "e4", ident, 6, "w", 1, "window4")
+        self.assertEqual(cooled["surfaced"], 0)
+        with self.assertRaises(Conflict):
+            self.store.evaluate_window("alice", "bad-pin", ident, 7, "w", 2, "window4")
+        self.sources["bad"] = capture(60)
+        self.sources["bad"]["coverage"]["complete"] = False
+        with self.assertRaises(Invalid):
+            self.store.evaluate_window("alice", "bad", ident, 7, "w", 1, "bad")
+
+    def test_history_proof_limit_and_revision_recheck(self):
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
+        )
+        for i, start in enumerate((10, 20, 30)):
+            ref = "h" + str(i)
+            self.sources[ref] = capture(start)
+            self.sources[ref]["dependencies"][0]["blocked"] = True
+        self.now = 32
+        self.store.evaluate_window("alice", "e0", ident, 2, "w", 1, "h0")
+        self.store.evaluate_window("alice", "e1", ident, 3, "w", 1, "h1")
+        self.store.MAX_HISTORY_PROOFS = 1
+        with self.assertRaises(Forbidden):
+            self.store.evaluate(
+                "alice", ident, "w", signature(capture()["dependencies"][0]), 40
+            )
+        with self.assertRaises(Forbidden):
+            self.store.evaluate_window("alice", "e2", ident, 4, "w", 1, "h2")
+        self.assertEqual(self.store.get("alice", ident)["revision"], 4)
+        self.store.MAX_HISTORY_PROOFS = 100
+        self.now = 42
+        original = self.store.source_entitlement
+        fired = []
+
+        def changing(principal, reference, evidence):
+            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.rollback()
+            if reference == "h0" and not fired:
+                fired.append(True)
+                self.store.share("alice", "concurrent-grant", ident, 4, "bob", True)
+            return original(principal, reference, evidence)
+
+        self.store.source_entitlement = changing
+        with self.assertRaises(Conflict):
+            self.store.evaluate_window("alice", "e2", ident, 4, "w", 1, "h2")
+        self.assertEqual(self.store.get("alice", ident)["revision"], 5)
+
+    def test_page_proofs_and_lookahead_do_not_leak_revoked_history(self):
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
+        )
+        for i, start in enumerate((10, 20, 30)):
+            ref = "h" + str(i)
+            self.sources[ref] = capture(start)
+            self.sources[ref]["dependencies"][0]["blocked"] = True
+            self.now = start + 12
+            self.store.evaluate_window("alice", "e" + str(i), ident, 2 + i, "w", 1, ref)
+        self.source_denied.add(("alice", "h2"))
+        first = self.store.occurrences("alice", ident, "w", limit=1)
+        self.assertEqual(len(first["items"]), 1)
+        with self.assertRaises(Forbidden):
+            self.store.occurrences("alice", ident, "w", after=first["next"], limit=1)
+        with self.assertRaises(Forbidden):
+            self.store.evaluate(
+                "alice", ident, "w", signature(capture()["dependencies"][0]), 50
+            )
+        with self.assertRaises(Forbidden):
+            self.store.evaluate_window("alice", "e3", ident, 5, "w", 1, "h1")
+        self.assertEqual(self.store.get("alice", ident)["revision"], 5)
 
     def test_inline_evidence_migration(self):
         ident = self.create()["id"]

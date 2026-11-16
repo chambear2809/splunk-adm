@@ -75,6 +75,19 @@ export function assertComparison(
     keys.some((key) => reference.boundary[key] !== result.boundary[key])
   )
     throw new Error("The returned map has a different scope or schema.");
+  const a = reference.identityContext,
+    b = result.identityContext;
+  if (
+    !!a !== !!b ||
+    (a &&
+      b &&
+      ["contract", "authority", "scope", "configRevision"].some(
+        (key) => a[key as keyof typeof a] !== b[key as keyof typeof b],
+      ))
+  )
+    throw new Error(
+      "The maps use different source identity configurations. Reload comparable captures.",
+    );
 }
 
 /** Stop after cancellation even when an underlying loader ignores its signal. */

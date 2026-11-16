@@ -1,5 +1,9 @@
 import { argError } from "../provider";
 import type { GraphArgs } from "../rows";
+import {
+  identityContextFromRow,
+  type IdentityContext,
+} from "./identityContext";
 
 export interface CatalogRow extends GraphArgs {
   _key: string;
@@ -15,6 +19,7 @@ export interface CatalogRow extends GraphArgs {
   window_start?: number;
   window_end?: number;
   identity_contract?: "qualified_v2";
+  identityContext?: IdentityContext;
 }
 export type FindRow = Pick<
   CatalogRow,
@@ -161,6 +166,7 @@ export function parseCatalogRows(
           "_key",
           ...fields,
           "identity_contract",
+          "identity_context",
           "pods",
           "first_seen",
           "last_seen",
@@ -191,6 +197,20 @@ export function parseCatalogRows(
         result[field] = integer(row[field], field);
       if (row.identity_contract !== undefined)
         result.identity_contract = row.identity_contract;
+      if (row.identity_context !== undefined) {
+        if (
+          result.identity_contract !== "qualified_v2" ||
+          result.window_start === undefined ||
+          result.window_end === undefined
+        )
+          throw new Error(
+            "Catalog identity provenance lacks qualified window context.",
+          );
+        result.identityContext = identityContextFromRow(row.identity_context, {
+          start: result.window_start,
+          end: result.window_end,
+        });
+      }
       return validateRelations(result);
     });
 }

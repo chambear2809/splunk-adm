@@ -261,6 +261,62 @@ class QualifiedIdentityTests(unittest.TestCase):
             )
         )
 
+    def test_qualified_context_and_typed_service_identity_are_profile_bound(self):
+        rows = interval_rows() + [span()]
+        result = qualify(rows, PROFILE, 0, 100)
+        context = result["identity_context"]
+        keys = (
+            "cluster",
+            "environment",
+            "scope",
+            "producer_id",
+            "interval_index",
+            "interval_source",
+            "interval_sourcetype",
+            "span_index",
+            "span_source",
+            "span_sourcetype",
+            "namespaces",
+        )
+        expected_hash = hashlib.sha256(
+            canonical({key: PROFILE[key] for key in keys}).encode()
+        ).hexdigest()
+        self.assertEqual(
+            context,
+            {
+                "schemaVersion": 1,
+                "contract": "qualified_v2",
+                "authority": "producer-a",
+                "scope": "scope-a",
+                "configRevision": expected_hash,
+                "observedWindow": {"start": 0, "end": 100},
+            },
+        )
+        graph = graph_rows(result)
+        node = next(item for item in graph if item["row_type"] == "node")
+        meta = next(item for item in graph if item["row_type"] == "meta")
+        self.assertEqual(node["attr_service"], "checkout")
+        self.assertEqual(json.loads(meta["identity_context"]), context)
+        self.assertEqual(
+            json.loads(result["catalog_rows"][0]["identity_context"]), context
+        )
+        self.assertEqual(
+            qualify(rows, {**PROFILE, "slice_workers": 3}, 0, 100)["identity_context"][
+                "configRevision"
+            ],
+            expected_hash,
+        )
+        changed = qualify(rows, {**PROFILE, "scope": "scope-b"}, 0, 100)[
+            "identity_context"
+        ]
+        self.assertEqual(changed["scope"], "scope-b")
+        self.assertNotEqual(changed["configRevision"], expected_hash)
+        fractional = qualify(rows, PROFILE, 0.5, 100.5)
+        self.assertTrue(fractional["complete"])
+        self.assertNotIn("identity_context", fractional)
+        self.assertNotIn("identity_context", fractional["catalog_rows"][0])
+        self.assertNotIn("identity_context", graph_rows(fractional)[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

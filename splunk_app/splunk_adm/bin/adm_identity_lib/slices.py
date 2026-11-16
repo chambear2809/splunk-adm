@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 
 from .protocol import canonical
 
@@ -72,6 +73,137 @@ def _observation_key(edge):
             _list(edge.get("evidence")),
         ]
     )
+
+
+def _unique_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate context field")
+        result[key] = value
+    return result
+
+
+def _merged_identity_context(outputs, start, as_of, total, windows):
+    """Preserve provenance only for a complete, contiguous raw-slice read.
+
+    This reports the observation window; it makes no lifetime or traffic claim.
+    Any missing, ambiguous, summarized, or malformed context is unavailable.
+    """
+    try:
+        if (
+            type(start) is not int
+            or type(as_of) is not int
+            or type(total) is not int
+            or as_of > 9007199254740991
+        ):
+            return None
+        planned, planned_total = plan(start, as_of)
+        if (
+            total != planned_total
+            or len(planned) != total
+            or list(windows) != planned
+            or len(outputs) != total
+            or any(
+                not isinstance(window, (tuple, list))
+                or len(window) != 2
+                or any(type(value) is not int for value in window)
+                for window in windows
+            )
+        ):
+            return None
+        common = None
+        disallowed = {
+            "sampled",
+            "is_sampled",
+            "sampled_windows",
+            "progressive",
+            "capped",
+            "truncated",
+            "summary",
+            "is_summary",
+            "summary_run",
+            "summary_contract",
+            "window_slices",
+            "window_slices_read",
+            "window_seconds_read",
+            "read_coverage",
+            "raw_pending_seconds",
+            "summary_slices",
+            "summary_seconds",
+            "summary_through",
+            "raw_seconds",
+            "raw_tail_seconds",
+        }
+        for rows, window in zip(outputs, planned):
+            meta_rows = [
+                row
+                for row in rows
+                if isinstance(row, dict) and row.get("row_type") == "meta"
+            ]
+            if len(meta_rows) != 1:
+                return None
+            meta = meta_rows[0]
+            if (
+                disallowed.intersection(meta)
+                or type(meta.get("window_start")) is not int
+                or type(meta.get("window_end")) is not int
+                or (meta["window_start"], meta["window_end"]) != window
+            ):
+                return None
+            encoded = meta.get("identity_context")
+            if not isinstance(encoded, str) or len(encoded) > 4096:
+                return None
+            context = json.loads(encoded, object_pairs_hook=_unique_pairs)
+            if not isinstance(context, dict) or set(context) != {
+                "schemaVersion",
+                "contract",
+                "authority",
+                "scope",
+                "configRevision",
+                "observedWindow",
+            }:
+                return None
+            observation = context["observedWindow"]
+            if (
+                type(context["schemaVersion"]) is not int
+                or context["schemaVersion"] != 1
+                or context["contract"] != "qualified_v2"
+                or not isinstance(context["authority"], str)
+                or not re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,254}", context["authority"]
+                )
+                or not isinstance(context["scope"], str)
+                or not re.fullmatch(
+                    r"[A-Za-z0-9][A-Za-z0-9_.:/@-]{0,254}", context["scope"]
+                )
+                or not isinstance(context["configRevision"], str)
+                or not re.fullmatch(r"[0-9a-f]{64}", context["configRevision"])
+                or not isinstance(observation, dict)
+                or set(observation) != {"start", "end"}
+                or type(observation["start"]) is not int
+                or type(observation["end"]) is not int
+                or (observation["start"], observation["end"]) != window
+            ):
+                return None
+            identity = {
+                k: context[k]
+                for k in (
+                    "schemaVersion",
+                    "contract",
+                    "authority",
+                    "scope",
+                    "configRevision",
+                )
+            }
+            if common is not None and identity != common:
+                return None
+            common = identity
+        if common is None:
+            return None
+        return canonical({**common, "observedWindow": {"start": start, "end": as_of}})
+    except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+        return None
 
 
 def merge(outputs, start, as_of, total, sampled_windows):
@@ -175,6 +307,9 @@ def merge(outputs, start, as_of, total, sampled_windows):
     ):
         if any(key in m for m in metas):
             meta[key] = sum(int(m.get(key) or 0) for m in metas)
+    context = _merged_identity_context(outputs, start, as_of, total, sampled_windows)
+    if context is not None:
+        meta["identity_context"] = context
     return [*nodes.values(), *edges.values(), meta]
 
 

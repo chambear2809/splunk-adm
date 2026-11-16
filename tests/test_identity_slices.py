@@ -1,4 +1,5 @@
 from pathlib import Path
+import copy
 import json
 import sys
 import unittest
@@ -31,6 +32,25 @@ def observation(eid, records, last_seen, port=8080, source="pod:a"):
     }
 
 
+def contextual_slice(start, end):
+    context = {
+        "schemaVersion": 1,
+        "contract": "qualified_v2",
+        "authority": "producer-a",
+        "scope": "scope-a",
+        "configRevision": "a" * 64,
+        "observedWindow": {"start": start, "end": end},
+    }
+    return [
+        {
+            "row_type": "meta",
+            "window_start": start,
+            "window_end": end,
+            "identity_context": json.dumps(context),
+        }
+    ]
+
+
 class SlicePlanTests(unittest.TestCase):
     def test_short_windows_are_contiguous_and_cover_the_window(self):
         slices, total = plan(1000, 1900)
@@ -56,6 +76,95 @@ class SlicePlanTests(unittest.TestCase):
 
 
 class SliceMergeTests(unittest.TestCase):
+    def test_context_propagates_only_complete_matching_raw_slices(self):
+        outputs = [contextual_slice(0, 300), contextual_slice(300, 600)]
+        meta = merge(outputs, 0, 600, 2, [(0, 300), (300, 600)])[-1]
+        self.assertEqual(
+            json.loads(meta["identity_context"]),
+            {
+                "schemaVersion": 1,
+                "contract": "qualified_v2",
+                "authority": "producer-a",
+                "scope": "scope-a",
+                "configRevision": "a" * 64,
+                "observedWindow": {"start": 0, "end": 600},
+            },
+        )
+        for field, value in (
+            ("authority", "other"),
+            ("scope", "other"),
+            ("configRevision", "b" * 64),
+            ("contract", "other"),
+            ("schemaVersion", 2),
+        ):
+            changed = copy.deepcopy(outputs)
+            context = json.loads(changed[1][0]["identity_context"])
+            context[field] = value
+            changed[1][0]["identity_context"] = json.dumps(context)
+            with self.subTest(field=field):
+                self.assertNotIn(
+                    "identity_context",
+                    merge(changed, 0, 600, 2, [(0, 300), (300, 600)])[-1],
+                )
+
+    def test_context_omitted_for_missing_malformed_summary_and_sampling(self):
+        good = [contextual_slice(0, 300), contextual_slice(300, 600)]
+        invalid = []
+        missing = copy.deepcopy(good)
+        del missing[1][0]["identity_context"]
+        invalid.append(missing)
+        for bad in (
+            "{",
+            '{"schemaVersion":1,"schemaVersion":1}',
+            json.dumps({"schemaVersion": True}),
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "contract": "qualified_v2",
+                    "authority": "producer-a",
+                    "scope": "scope-a",
+                    "configRevision": "bad",
+                    "observedWindow": {"start": 300, "end": 600},
+                }
+            ),
+        ):
+            changed = copy.deepcopy(good)
+            changed[1][0]["identity_context"] = bad
+            invalid.append(changed)
+        for marker, value in (
+            ("summary_slices", 1),
+            ("sampled", True),
+            ("read_coverage", 100),
+        ):
+            changed = copy.deepcopy(good)
+            changed[0][0][marker] = value
+            invalid.append(changed)
+        wrong_window = copy.deepcopy(good)
+        wrong_window[1][0]["window_start"] = 301
+        invalid.append(wrong_window)
+        duplicate_meta = copy.deepcopy(good)
+        duplicate_meta[0].append(copy.deepcopy(duplicate_meta[0][0]))
+        invalid.append(duplicate_meta)
+        for changed in invalid:
+            self.assertNotIn(
+                "identity_context",
+                merge(changed, 0, 600, 2, [(0, 300), (300, 600)])[-1],
+            )
+        self.assertNotIn(
+            "identity_context", merge(good[:1], 0, 600, 2, [(0, 300), (300, 600)])[-1]
+        )
+        self.assertNotIn(
+            "identity_context", merge(good, 0, 900, 3, [(0, 300), (600, 900)])[-1]
+        )
+        self.assertNotIn(
+            "identity_context", merge(good, 0, 600, 2, [(0, 250), (250, 600)])[-1]
+        )
+        sampled, total = plan(0, 2100)
+        outputs = [contextual_slice(start, end) for start, end in sampled]
+        self.assertNotIn(
+            "identity_context", merge(outputs, 0, 2100, total, sampled)[-1]
+        )
+
     def test_unions_by_qualified_id_and_sums_counts(self):
         call = {
             "row_type": "edge",

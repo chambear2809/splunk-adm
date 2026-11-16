@@ -13,10 +13,27 @@ export type BaselineMetadata = {
   revision: number;
   version: number;
 };
-export type BaselineReceipt = Pick<
-  BaselineMetadata,
-  "id" | "revision" | "version"
->;
+export type BaselineReceipt = {
+  id: string;
+  revision: number;
+  version?: number;
+  inserted?: number;
+  surfaced?: number;
+  resultWithheld?: true;
+};
+export type WatchWithVersion = WatchDefinition & { baselineVersion: number };
+export type WatchStatus = {
+  count: number;
+  thresholdMet: boolean;
+  expected: boolean;
+  coolingDown: boolean;
+};
+export type Occurrence = {
+  seq: number;
+  signature: string;
+  window: { start: number; end: number };
+  observedAt: number;
+};
 export type BaselineRecord = BaselineMetadata & { capture: Capture };
 export interface BaselineRepository {
   list(
@@ -46,6 +63,37 @@ export interface BaselineRepository {
     requestId: string,
   ): Promise<BaselineReceipt>;
   watches(id: string, signal: AbortSignal): Promise<WatchDefinition[]>;
+  versions?(
+    id: string,
+    signal: AbortSignal,
+    after?: number,
+  ): Promise<{ items: { version: number }[]; next: number | null }>;
+  watchPage?(
+    id: string,
+    signal: AbortSignal,
+    after?: string,
+  ): Promise<{ items: WatchWithVersion[]; next: string | null }>;
+  occurrences?(
+    id: string,
+    watch: string,
+    signal: AbortSignal,
+    after?: number,
+  ): Promise<{ items: Occurrence[]; next: number | null }>;
+  watchStatus?(
+    id: string,
+    watch: string,
+    signature: string,
+    now: number,
+    signal: AbortSignal,
+  ): Promise<WatchStatus>;
+  evaluate?(
+    id: string,
+    watch: string,
+    expectedRevision: number,
+    baselineVersion: number,
+    reference: string,
+    requestId: string,
+  ): Promise<BaselineReceipt>;
 }
 
 const object = (value: unknown): value is Record<string, unknown> =>

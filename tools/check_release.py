@@ -75,6 +75,61 @@ CASE_EXPOSURES = {
     "expose:adm_case_export": ("adm/investigations/cases/*/export", "GET"),
     "expose:adm_case_audit": ("adm/investigations/cases/*/audit", "GET"),
 }
+BASELINE_RUNTIME_FILES = frozenset(
+    {
+        "splunk_adm/bin/adm_baselines.py",
+        *(
+            f"splunk_adm/bin/adm_baselines_lib/{name}.py"
+            for name in ("__init__", "api", "store", "splunk_host")
+        ),
+    }
+)
+BASELINE_CONFIG_FILES = frozenset(
+    {
+        "splunk_adm/default/adm_baselines.conf",
+        "splunk_adm/README/adm_baselines.conf.spec",
+    }
+)
+BASELINE_EXPOSURES = {
+    "expose:adm_baseline_capabilities": (
+        "adm/dependency-monitoring/capabilities",
+        "GET",
+    ),
+    "expose:adm_baseline_capture": ("adm/dependency-monitoring/capture", "GET"),
+    "expose:adm_baselines": ("adm/dependency-monitoring/baselines", "GET,POST"),
+    "expose:adm_baseline_resource": (
+        "adm/dependency-monitoring/baselines/*",
+        "GET,DELETE",
+    ),
+    "expose:adm_baseline_versions": (
+        "adm/dependency-monitoring/baselines/*/versions",
+        "GET,POST",
+    ),
+    "expose:adm_baseline_version": (
+        "adm/dependency-monitoring/baselines/*/versions/*",
+        "GET",
+    ),
+    "expose:adm_baseline_watches": (
+        "adm/dependency-monitoring/baselines/*/watches",
+        "GET,POST",
+    ),
+    "expose:adm_baseline_occurrences": (
+        "adm/dependency-monitoring/baselines/*/watches/*/occurrences",
+        "GET,POST",
+    ),
+    "expose:adm_baseline_evaluate": (
+        "adm/dependency-monitoring/baselines/*/watches/*/evaluate",
+        "GET,POST",
+    ),
+    "expose:adm_baseline_export": (
+        "adm/dependency-monitoring/baselines/*/export",
+        "GET",
+    ),
+    "expose:adm_baseline_share": (
+        "adm/dependency-monitoring/baselines/*/share",
+        "POST",
+    ),
+}
 SETTINGS_RUNTIME_FILES = frozenset(
     {
         SETTINGS_ENTRYPOINT,
@@ -123,10 +178,7 @@ QUALIFIED_RUNTIME_FILES = frozenset(
 )
 BUNDLED_RUNTIME_FILES = frozenset(
     {
-        *{
-            f"splunk_adm/bin/adm_baselines_lib/{name}.py"
-            for name in ("__init__", "api", "store")
-        },
+        *BASELINE_RUNTIME_FILES,
         *CASE_RUNTIME_FILES,
         *SETTINGS_RUNTIME_FILES,
         *QUALIFIED_RUNTIME_FILES,
@@ -401,7 +453,12 @@ def _check_cases_contract(files, rest, web):
     if (
         not rest.has_section(stanza)
         or dict(rest[stanza]) != expected
-        or set(rest.sections()) != {"script:adm_deployment_settings", stanza}
+        or set(rest.sections())
+        != {
+            "script:adm_deployment_settings",
+            stanza,
+            "script:adm_dependency_monitoring",
+        }
     ):
         raise ValueError(
             "case registration must use the exact authenticated capability and handler"
@@ -440,6 +497,66 @@ def _check_cases_contract(files, rest, web):
         ):
             raise ValueError("case entrypoint must define CasesHandler")
     return set(CASE_EXPOSURES)
+
+
+def _check_baselines_contract(files, rest, web):
+    if (CASE_RUNTIME_FILES | CASE_CONFIG_FILES) - files.keys():
+        raise ValueError(
+            "baseline host requires the case runtime and authorization configuration"
+        )
+    missing = sorted((BASELINE_RUNTIME_FILES | BASELINE_CONFIG_FILES) - files.keys())
+    if missing:
+        raise ValueError(
+            f"baseline registration missing required files: {', '.join(missing)}"
+        )
+    expected = {
+        "match": "/adm/dependency-monitoring",
+        "script": "adm_baselines.py",
+        "scripttype": "persist",
+        "handler": "adm_baselines.BaselinesHandler",
+        "python.version": "python3",
+        "python.required": "3.13",
+        "requireauthentication": "true",
+        "capability": "adm_investigate",
+        "output_modes": "json",
+        "passpayload": "true",
+        "passsession": "true",
+        "passsystemauth": "false",
+        "passhttpheaders": "true",
+    }
+    stanza = "script:adm_dependency_monitoring"
+    if not rest.has_section(stanza) or dict(rest[stanza]) != expected:
+        raise ValueError(
+            "baseline registration must use the exact authenticated capability and handler"
+        )
+    for section, (pattern, methods) in BASELINE_EXPOSURES.items():
+        if not web.has_section(section) or dict(web[section]) != {
+            "pattern": pattern,
+            "methods": methods,
+        }:
+            raise ValueError(
+                "baseline browser exposure must use exact routes, methods, and native CSRF"
+            )
+    config = _packaged_config(files, "default/adm_baselines.conf")
+    if set(config.sections()) != {"persistence"} or dict(config["persistence"]) != {
+        "mode": "disabled",
+        "platform": "unqualified",
+        "source_mode": "unavailable",
+    }:
+        raise ValueError(
+            "baseline defaults must remain disabled, unqualified and source unavailable"
+        )
+    for name in BASELINE_RUNTIME_FILES:
+        try:
+            tree = ast.parse(files[name], filename=name)
+        except (SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(f"invalid baseline Python runtime: {name}") from exc
+        if name.endswith("/adm_baselines.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "BaselinesHandler"
+            for node in tree.body
+        ):
+            raise ValueError("baseline entrypoint must define BaselinesHandler")
+    return set(BASELINE_EXPOSURES)
 
 
 def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
@@ -508,6 +625,7 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         raise ValueError("settings endpoint must have one unambiguous registration")
     web = _packaged_config(files, "default/web.conf")
     case_exposures = _check_cases_contract(files, rest, web)
+    baseline_exposures = _check_baselines_contract(files, rest, web)
     exposure = "expose:adm_deployment_settings"
     if (
         not web.has_section(exposure)
@@ -530,7 +648,8 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         or web.get(macro_read, "pattern", fallback="")
         != "configs/v1/conftypes/macros/stanzas:get"
         or web.get(macro_read, "methods", fallback="") != "POST"
-        or set(web.sections()) != {exposure, macro_read} | case_exposures
+        or set(web.sections())
+        != {exposure, macro_read} | case_exposures | baseline_exposures
     ):
         raise ValueError(
             "metadata browser exposure must use the exact read-only macro getter, POST only, and native CSRF protection"
@@ -705,6 +824,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/metadata/default.meta",
         *(BUNDLED_RUNTIME_FILES - CASE_RUNTIME_FILES),
         *SETTINGS_CONFIG_FILES,
+        *BASELINE_CONFIG_FILES,
         *QUALIFIED_CONFIG_FILES,
         SETTINGS_REGISTRY_PATH,
     }

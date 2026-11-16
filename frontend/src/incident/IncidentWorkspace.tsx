@@ -24,6 +24,8 @@ export type IncidentWorkspaceProps = {
   loadWindow: (window: Window, signal: AbortSignal) => Promise<Graph>;
   timezone?: string;
   caseClient?: CaseClient;
+  nativePersistence?: boolean;
+  sourceUnavailableReason?: string;
   onBack?: () => void;
   /** Parent may highlight paths; it retains control of map selection. */
   onHighlight?: (edgeIds: string[]) => void;
@@ -53,6 +55,8 @@ export function IncidentWorkspace({
   loadWindow,
   timezone,
   caseClient,
+  nativePersistence = false,
+  sourceUnavailableReason,
   onBack,
   onHighlight,
 }: IncidentWorkspaceProps) {
@@ -355,6 +359,13 @@ export function IncidentWorkspace({
               )}
             </div>
           )}
+          {tab === "Overview" && (
+            <JourneyLazyEvidence
+              kind="ownership"
+              graph={incident}
+              unavailableReason={sourceUnavailableReason}
+            />
+          )}
           {tab === "Timeline" && (
             <div>
               <h3>Evidence timeline</h3>
@@ -386,6 +397,8 @@ export function IncidentWorkspace({
               <h3>Connections</h3>
               <JourneyLazyEvidence
                 kind="baseline"
+                selection={incident.boundary}
+                nativePersistence={nativePersistence}
                 window={{
                   start: Date.parse(incident.window.start) / 1000,
                   end: Date.parse(incident.window.end) / 1000,

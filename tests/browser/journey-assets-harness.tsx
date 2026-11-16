@@ -64,7 +64,17 @@ const result = {
 const kind = new URLSearchParams(location.search).get("kind");
 const caseClient = createCaseClient({
   baseUrl: "/test-cases",
-  transport: async () => {
+  transport: async (url) => {
+    if (url.endsWith("/capabilities"))
+      return new Response(
+        JSON.stringify({
+          available: true,
+          evidenceWrites: false,
+          mode: "notes_only",
+          qualified: false,
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      );
     throw new Error("Synthetic lost response");
   },
 });

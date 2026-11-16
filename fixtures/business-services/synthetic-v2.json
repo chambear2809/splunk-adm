@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "authority": "cmdb-east",
+  "snapshot_id": "synthetic-snapshot",
+  "snapshot_at": "2026-03-01T00:00:00Z",
+  "records": [
+    {
+      "record_id": "membership-1",
+      "revision": 2,
+      "service_id": "business-payments",
+      "service_name": "Payments",
+      "member_kind": "service",
+      "member_id": "business-member-1",
+      "scope": "business-east",
+      "team_id": "commerce",
+      "team_name": "Commerce",
+      "criticality": "high",
+      "validity_basis": "source_interval",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_to": "2026-02-01T00:00:00Z"
+    }
+  ],
+  "bindings": [
+    {
+      "record_id": "binding-1",
+      "revision": 1,
+      "claim": {
+        "authority": "cmdb-east",
+        "record_id": "membership-1",
+        "revision": 2,
+        "scope": "business-east",
+        "member_kind": "service",
+        "member_id": "business-member-1"
+      },
+      "target": {
+        "kind": "service",
+        "authority": "native-producer",
+        "scope": "cluster-east",
+        "config_revision": "config-v1",
+        "key": {
+          "service": "orders/api",
+          "environment": "prod",
+          "cluster": "cluster-a",
+          "namespace": "shop"
+        }
+      },
+      "validity_basis": "source_interval",
+      "valid_from": "2026-01-05T00:00:00Z",
+      "valid_to": "2026-02-01T00:00:00Z",
+      "proof_reference": "mapping-ticket-123"
+    }
+  ]
+}
