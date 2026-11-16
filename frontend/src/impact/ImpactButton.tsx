@@ -18,12 +18,18 @@ export function ImpactButton({
   label,
   interfaces = [],
   compact = false,
+  scope,
+  earliest,
+  latest,
 }: {
   token?: string;
   /** Accessible name suffix, e.g. the card or device name. */
   label?: string;
   interfaces?: string[];
   compact?: boolean;
+  scope?: string;
+  earliest?: string;
+  latest?: string;
 }) {
   const ok = !!token && isImpactToken(token);
   const ifs = [
@@ -55,7 +61,7 @@ export function ImpactButton({
     <span className="atlas-impact-entry">
       <a
         className={`atlas-impact-btn ${compact ? "compact" : ""}`}
-        href={impactURL([token])}
+        href={impactURL([token], { scope, earliest, latest })}
         aria-label={`Impact if ${label ?? token} fails`}
         title="If this fails"
       >
@@ -67,7 +73,15 @@ export function ImpactButton({
           <ul>
             {ifs.map((i) => (
               <li key={i}>
-                <a href={impactURL([`${token}|${i}`])}>{i}</a>
+                <a
+                  href={impactURL([`${token}|${i}`], {
+                    scope,
+                    earliest,
+                    latest,
+                  })}
+                >
+                  {i}
+                </a>
               </li>
             ))}
           </ul>

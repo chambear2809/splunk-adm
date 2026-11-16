@@ -204,6 +204,26 @@ describe("redundancy-aware severity", () => {
     expect(r.alternate).toEqual(["k8s-vm-01"]);
     expect(run([HV27, HV9], svc).severity).toBe("outage");
   });
+  it("keeps an unknown alternative unknown when the known backend is down", () => {
+    const missing = ep("203.0.113.99", "unresolved", { kind: "pod" });
+    const svc = conv("unknown-alternative", bm, vm2, {
+      backends: [vm2, missing],
+      observers: ["netflow:192.0.2.252:ifIndex 369098753>?"],
+    });
+    const r = run(["198.51.100.2", "leaf101"], svc);
+    expect(r.severity).toBe("unknown");
+    expect(r.reason).toBe("alternative connectivity unknown");
+    expect(r.alternate).toEqual([]);
+  });
+  it("does not count an unseen attachment as a surviving alternative", () => {
+    const missing = ep("203.0.113.99", "unresolved", { kind: "pod" });
+    const svc = conv("unseen-alternative", bm, vm2, {
+      backends: [vm2, missing],
+    });
+    const r = run(["198.51.100.2"], svc);
+    expect(r.severity).toBe("unknown");
+    expect(r.alternate).toEqual([]);
+  });
   it("an endpoint element takes its own conversations down", () => {
     expect(run(["198.51.100.2"], vmToVm).severity).toBe("outage");
   });

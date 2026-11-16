@@ -517,6 +517,26 @@ class SummaryEquivalenceTests(unittest.TestCase):
             rollup.fingerprint(PROFILE, config()),
         )
 
+    def test_physically_complete_incomplete_manifest_is_not_coverage(self):
+        identity, native = scenario()
+        docs = summary_docs(identity, native, WINDOWS)
+        failed = rollup.summarize(
+            None,
+            None,
+            config(),
+            300,
+            600,
+            600,
+            rollup.fingerprint(PROFILE, config()),
+            status="incomplete",
+        )
+        mixed = [doc for doc in docs if doc["q_slice"] == 0] + failed
+        graph, (chosen, excluded, _) = summary_graph(mixed, CHECKOUT, 0, 600, WINDOWS)
+        self.assertEqual(sorted(chosen), [0])
+        self.assertEqual(len(excluded), 1)
+        self.assertIsNotNone(graph)
+        self.assertEqual(chosen[0]["status"], "ok")
+
     def test_empty_slices_are_covered_without_contributing(self):
         docs = rollup.summarize(None, None, None, 0, 300, 300, "a" * 24, "empty")
         self.assertEqual([d["q_kind"] for d in docs], ["m"])

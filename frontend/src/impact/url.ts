@@ -8,7 +8,12 @@ export interface ImpactRequest {
   mode: ImpactMode;
   earliest: string;
   latest: string;
+  scope?: string;
 }
+
+export const isImpactScope = (value: string) =>
+  /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/.test(value) &&
+  !/^unmapped:/i.test(value);
 
 /** Same default window as the rest of the app (urlState). */
 export const DEFAULT_IMPACT_WINDOW = "-15m";
@@ -32,11 +37,13 @@ export function parseImpactParams(params: URLSearchParams): ImpactRequest {
   const raw =
     params.get("window") ?? params.get("earliest") ?? DEFAULT_IMPACT_WINDOW;
   const latest = params.get("latest") ?? "now";
+  const scope = params.get("scope") ?? "";
   return {
     elements,
     mode: mode === "depends" ? "depends" : "fails",
     earliest: isSafeTime(raw) ? raw : DEFAULT_IMPACT_WINDOW,
     latest: isSafeTime(latest) ? latest : "now",
+    ...(isImpactScope(scope) ? { scope } : {}),
   };
 }
 
@@ -46,7 +53,12 @@ const current = () =>
 /** Impact link for one or more elements; keeps the time window. */
 export function impactURL(
   elements: string[],
-  opts: { mode?: ImpactMode; earliest?: string; latest?: string } = {},
+  opts: {
+    mode?: ImpactMode;
+    earliest?: string;
+    latest?: string;
+    scope?: string;
+  } = {},
   params: URLSearchParams = current(),
 ): string {
   const next = new URLSearchParams();
@@ -59,5 +71,7 @@ export function impactURL(
   const latest = opts.latest ?? params.get("latest");
   if (latest && latest !== "now" && isSafeTime(latest))
     next.set("latest", latest);
+  const scope = opts.scope ?? params.get("scope");
+  if (scope && isImpactScope(scope)) next.set("scope", scope);
   return pageURL("impact", next);
 }

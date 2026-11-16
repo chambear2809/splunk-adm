@@ -1,8 +1,6 @@
 import type { Graph, GraphNode } from "../graph";
 import type { SearchClient } from "../data/searchClient";
-import { requireNoSearchErrors } from "../data/searchClient";
 import {
-  indexTopology,
   resolveDevice,
   rowsToTopology,
   type Topology,
@@ -15,12 +13,7 @@ import {
   type ImpactElement,
   type PortChannel,
 } from "./elements";
-import {
-  accessFor,
-  pathContext,
-  type ImpactEndpoint,
-  type PathContext,
-} from "./paths";
+import { accessFor, type ImpactEndpoint, type PathContext } from "./paths";
 
 export const MAX_IMPACT_ROWS = 2500;
 export const IMPACT_INVENTORY_SEARCH = "| `adm_impact_inventory`";
@@ -146,7 +139,6 @@ const KIND_ORDER = [
   "k8s_node",
   "endpoint",
 ];
-const REPLICABLE = new Set(["Deployment", "ReplicaSet", "DaemonSet"]);
 // A hostNetwork pod shares its node's address: the address is the node.
 const pickKind = (kinds: string[]) =>
   kinds.includes("k8s_node") && kinds.includes("k8s_hostnet_pod")
@@ -154,6 +146,10 @@ const pickKind = (kinds: string[]) =>
     : (KIND_ORDER.find((k) => kinds.includes(k)) ?? kinds[0]);
 
 export interface HubbleApps {
+  /** Explicit source and scope boundaries required before any association. */
+  cluster?: string;
+  scope?: string;
+  sourceAuthority?: string;
   srcNode?: string;
   dstNode: string;
   srcApp?: string;
@@ -184,10 +180,9 @@ export function attributeApps(
   const hostedOn = (e: ImpactEndpoint) => {
     const n = nodeOf(e);
     if (!n) return [];
-    return (
-      hosted.get(`${lower(e.cluster)}|${n}`) ??
-      (e.cluster ? [] : (hosted.get(`|${n}`) ?? []))
-    );
+    const scope = lower(e.graph?.attributes?.scope);
+    if (!scope || !e.cluster) return [];
+    return hosted.get(`${scope}|${lower(e.cluster)}|${n}`) ?? [];
   };
   for (const c of conversations) {
     if (c.app || c.dst.app || c.src.app) continue;
@@ -195,11 +190,12 @@ export function attributeApps(
     const b = nodeOf(c.dst);
     if (!a && !b) continue;
     const overlaps = (h: HubbleApps) =>
-      c.firstSeen === undefined ||
-      h.lastSeen === undefined ||
-      h.firstSeen === undefined ||
-      c.lastSeen === undefined ||
-      (h.firstSeen <= c.lastSeen && h.lastSeen >= c.firstSeen);
+      c.firstSeen !== undefined &&
+      c.lastSeen !== undefined &&
+      h.firstSeen !== undefined &&
+      h.lastSeen !== undefined &&
+      h.firstSeen <= c.lastSeen &&
+      h.lastSeen >= c.firstSeen;
     const portOk = (h: HubbleApps) =>
       c.port === undefined ||
       OVERLAY_PORTS.has(c.port) ||
@@ -213,8 +209,28 @@ export function attributeApps(
           ((lower(h.srcNode) === a && lower(h.dstNode) === b) ||
             (lower(h.srcNode) === b && lower(h.dstNode) === a))
         : lower(h.dstNode) === b || (!!a && !!b && lower(h.dstNode) === a);
+    const scope = lower(c.src.graph?.attributes?.scope);
+    const otherScope = lower(c.dst.graph?.attributes?.scope);
+    const cluster = lower(c.src.cluster);
+    const otherCluster = lower(c.dst.cluster);
+    const authority = lower(c.src.graph?.attributes?.source_authority);
+    const otherAuthority = lower(c.dst.graph?.attributes?.source_authority);
     const seen = hubble
-      .filter((h) => pairOk(h) && overlaps(h) && portOk(h))
+      .filter(
+        (h) =>
+          !!scope &&
+          scope === otherScope &&
+          !!cluster &&
+          cluster === otherCluster &&
+          lower(h.scope) === scope &&
+          lower(h.cluster) === cluster &&
+          !!authority &&
+          authority === otherAuthority &&
+          lower(h.sourceAuthority) === authority &&
+          pairOk(h) &&
+          overlaps(h) &&
+          portOk(h),
+      )
       .sort((x, y) => y.flows - x.flows);
     if (seen.length) {
       c.apps = [...new Set(seen.map((h) => h.dstApp))]
@@ -381,28 +397,8 @@ export function rowsToImpact(rows: unknown): LiveImpactRows {
         : {}),
       ...(num(r.last_seen) !== undefined ? { lastSeen: num(r.last_seen) } : {}),
     };
-    // A replicated pod: its owner's replicas on other nodes are alternates.
-    const owner = str(r.dst_owner);
-    const replicaNodes = list(r.dst_replica_nodes).filter(
-      (n) => lower(n) !== lower(d.node),
-    );
-    if (
-      d.kind === "pod" &&
-      owner &&
-      REPLICABLE.has(str(r.dst_owner_kind) ?? "") &&
-      replicaNodes.length
-    )
-      c.backends = [
-        d,
-        ...replicaNodes.slice(0, 8).map((n) => ({
-          key: `replica:${owner}@${lower(n)}`,
-          name: `${owner} on ${n}`,
-          kind: "pod",
-          node: n,
-          ...(d.cluster ? { cluster: d.cluster } : {}),
-          app: owner,
-        })),
-      ];
+    // Bare node names from the current reader have no replica identity,
+    // validity interval, or scope. They cannot establish alternatives.
     conversations.push(c);
   }
   attributeApps(conversations, hubble, hosted);
@@ -458,17 +454,6 @@ export function graphConversations(graph: Graph): ImpactConversation[] {
         .map((id) => node.get(id))
         .filter((n): n is GraphNode => !!n)
         .map(graphEndpoint);
-    } else if (t.kind === "workload" && t.attributes?.owner) {
-      const replicas = graph.nodes.filter(
-        (n) =>
-          n.kind === "workload" &&
-          n.id !== t.id &&
-          n.attributes?.owner === t.attributes?.owner &&
-          n.namespace === t.namespace &&
-          n.cluster === t.cluster &&
-          REPLICABLE.has(n.attributes?.owner_kind ?? ""),
-      );
-      if (replicas.length) backends = [dst, ...replicas.map(graphEndpoint)];
     }
     out.push({
       id: e.id,
@@ -541,91 +526,23 @@ export function resolveAll(
   );
 }
 
-/** Live: inventory, then one bounded impact search for every element together. */
+/** The current live reader cannot establish a scoped, time-qualified result. */
 export async function loadLiveImpact(opts: {
   tokens: string[];
   client: SearchClient;
   earliest: string;
   latest?: string;
+  scope?: string;
   timezone?: string;
   signal: AbortSignal;
   loadBaseTopology: () => Promise<Topology>;
   merge: (base: Topology, rows: readonly unknown[]) => Topology;
 }): Promise<ImpactData> {
-  const { client, earliest, latest, timezone, signal } = opts;
-  const run = (search: string, maxRows: number) =>
-    client.search({
-      search,
-      earliest,
-      latest,
-      timezone,
-      maxRows,
-      allowEmpty: true,
-      signal,
-    });
-  const [base, inventory] = await Promise.all([
-    opts.loadBaseTopology(),
-    run(IMPACT_INVENTORY_SEARCH, 20000).then(
-      (r) => requireNoSearchErrors(r, "Impact inventory").rows,
-    ),
-  ]);
-  const topology = opts.merge(base, inventory);
-  const topo = indexTopology(topology);
-  const ctx = pathContext(topo);
-  const portChannels = portChannelRows(inventory, topo);
-  const elements = resolveAll(
-    opts.tokens,
-    topology,
-    topo,
-    undefined,
-    portChannels,
+  if (!opts.scope)
+    throw new Error("Select a routing scope to assess live impact.");
+  throw new Error(
+    "Live impact analysis is unavailable until the source can verify routing scope, identity and the selected time window.",
   );
-  // Application and EPG members come from identity.
-  const extra: string[] = [];
-  const notes: string[] = [];
-  for (const e of elements) {
-    const name =
-      e.kind === "app" || e.kind === "epg" ? (e.app ?? e.epg) : undefined;
-    if (!name) continue;
-    const member = impactMembersSearch(name);
-    if (!member) {
-      notes.push(
-        memberNameNote(e.kind === "epg" ? "EPG" : "application", name),
-      );
-      continue;
-    }
-    const r = await run(member, 256);
-    for (const row of r.rows) {
-      const ip = str((row as Record<string, unknown>).ip);
-      if (ip && isIp(ip)) {
-        extra.push(ip);
-        e.endpoints.add(`ip:${lower(ip)}`);
-      }
-    }
-  }
-  const anchors = anchorsFor(elements, ctx);
-  anchors.endpoints.push(...extra);
-  const search = impactSearch(anchors);
-  const result = requireNoSearchErrors(
-    await run(search, MAX_IMPACT_ROWS),
-    "Impact",
-  );
-  const live = rowsToImpact(result.rows);
-  const withNodes = pathContext(topo, undefined, live.k8sNodes);
-  return {
-    topology,
-    topo,
-    ctx: withNodes,
-    elements,
-    conversations: live.conversations,
-    total: live.total,
-    truncated: live.truncated,
-    capped: live.capped,
-    source: live.source ?? "raw",
-    portChannels,
-    search,
-    ...(notes.length ? { notes } : {}),
-  };
 }
 
 const MEMBER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.:/|-]{0,127}$/;

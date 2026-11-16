@@ -106,6 +106,14 @@ class PathTraceMacroTests(unittest.TestCase):
             self.d["adm_path_trace_resolve(1)"].startswith("inputlookup "), body
         )
 
+    def test_scoped_observations_require_a_time_qualified_unambiguous_mapping(self):
+        body = self.d["adm_path_trace(3)"]
+        self.assertIn('lower(trim(mapping_status))=="mapped"', body)
+        self.assertIn("tonumber(valid_from)<=info_min_time", body)
+        self.assertIn("tonumber(valid_end)>=info_max_time", body)
+        self.assertIn("adm_mapping_count==1", body)
+        self.assertIn("adm_mapping_scopes==1", body)
+
     def test_l3out_paths_and_subnets_are_bounded_separately(self):
         body = self.d["adm_l3out_path_evidence(2)"]
         self.assertIn("streamstats count AS adm_rank by row_type", body)
@@ -182,6 +190,39 @@ class PathTraceMacroTests(unittest.TestCase):
             self.assertIn(f"AS {field}", body)
         self.assertEqual(body.count("`adm_path_pod_nodes($src$,$dst$)`"), 2)
         self.assertIn("cluster namespace node valid_from valid_to", body)
+
+    def test_scoped_trace_fails_closed_for_ambiguous_scope_and_identity_caps(self):
+        body = self.d["adm_path_trace(3)"]
+        for clause in (
+            "adm_mapping_count==1",
+            "adm_mapping_scopes==1",
+            'mvindex(adm_map_scopes, 0)=="$scope$"',
+            "adm_start<info_max_time AND adm_end>=info_min_time",
+            "scope_mapping_verified==1",
+            "tonumber(valid_from)<info_max_time",
+            "tonumber(valid_end)>info_min_time",
+            "head 33 | eventstats count AS adm_identity_count",
+            'row_type="identity_overflow"',
+            'row_type=="identity_overflow" OR adm_identity_count<=32',
+            "entity_id entity_kind",
+        ):
+            self.assertIn(clause, body)
+        for unsafe in (
+            "`adm_index_netflow`",
+            "`adm_vsphere_topology(1)`",
+            "`adm_fabric_path_evidence",
+            "`adm_l3out_path_evidence",
+        ):
+            self.assertNotIn(unsafe, body)
+
+    def test_scoped_resolver_rejects_incomplete_identity_results(self):
+        body = self.d["adm_path_trace_resolve(2)"]
+        self.assertIn('scope="$scope$"', body)
+        self.assertIn("scope_mapping_verified==1", body)
+        self.assertIn("tonumber(valid_from)<info_max_time", body)
+        self.assertIn("tonumber(valid_end)>info_min_time", body)
+        self.assertIn("head 65 | eventstats count AS adm_identity_count", body)
+        self.assertIn('row_type="identity_overflow"', body)
 
     def test_hubble_fields_keep_every_verdict(self):
         norm = self.d["adm_path_flow_normalize"]

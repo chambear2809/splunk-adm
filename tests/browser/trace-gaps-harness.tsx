@@ -85,9 +85,12 @@ const request =
     ? { src: "10.244.1.10", dst: "10.244.2.20" }
     : { src: "192.0.2.3", dst: "198.51.100.2" };
 const rows = scenario === "pod" ? podRows : aclRows;
+const rowsInScope = rows.map((row) =>
+  row.row_type === "observation" ? { ...row, scope: "lab" } : row,
+);
 const client: SearchClient = {
   search: async (r) => ({
-    rows: r.search.includes("adm_path_trace(") ? rows : [],
+    rows: r.search.includes("adm_path_trace(") ? rowsInScope : [],
     warnings: [],
     errors: [],
   }),
@@ -95,7 +98,7 @@ const client: SearchClient = {
 
 function Harness() {
   const result = usePathTrace({
-    request,
+    request: { ...request, scope: "lab" },
     demo: false,
     client,
     earliest: "-15m",

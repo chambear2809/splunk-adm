@@ -501,7 +501,18 @@ export function classifier(ctx: PathContext): Classifier {
       // A Service with several backends survives while one backend is reachable.
       const alive = results
         .map((x, i) => [x, c.backends![i]] as const)
-        .filter(([x]) => x.severity !== "outage");
+        .filter(
+          ([x], i) =>
+            (x.severity === "unaffected" || x.severity === "degraded") &&
+            ((path(c)[i].a.known && path(c)[i].b.known) || path(c)[i].local),
+        );
+      const unknown = results.some(
+        (x, i) =>
+          x.severity === "unknown" ||
+          (x.severity !== "outage" &&
+            !(path(c)[i].a.known && path(c)[i].b.known) &&
+            !path(c)[i].local),
+      );
       const worst = results.reduce((w, x) =>
         SEVERITY_RANK[x.severity] > SEVERITY_RANK[w.severity] ? x : w,
       );
@@ -509,6 +520,13 @@ export function classifier(ctx: PathContext): Classifier {
       // A pod with replicas: its own leg decides unless it is out.
       const replica = c.backends![0].key === c.dst.key;
       if (replica && results[0].severity !== "outage") r = results[0];
+      else if (!alive.length && unknown)
+        r = {
+          severity: "unknown",
+          alternate: [],
+          reason: "alternative connectivity unknown",
+          failedAt,
+        };
       else if (!alive.length)
         r = {
           ...worst,

@@ -163,14 +163,19 @@ describe("Explore, Admin, trace and device links", () => {
   it("round trips a trace request and a device lookup", () => {
     const state = parseUrlState(
       new URLSearchParams(
-        "trace_src=10.42.0.15&trace_dst=orders-db-01&id=pod-1/node-103",
+        "trace_src=10.42.0.15&trace_dst=orders-db-01&trace_scope=tenant-a%2Fprod&id=pod-1/node-103",
       ),
     );
-    expect(state.trace).toEqual({ src: "10.42.0.15", dst: "orders-db-01" });
+    expect(state.trace).toEqual({
+      src: "10.42.0.15",
+      dst: "orders-db-01",
+      scope: "tenant-a/prod",
+    });
     expect(state.device).toBe("pod-1/node-103");
     const params = stateParams(state);
     expect(params.get("trace_src")).toBe("10.42.0.15");
     expect(params.get("trace_dst")).toBe("orders-db-01");
+    expect(params.get("trace_scope")).toBe("tenant-a/prod");
     expect(params.get("id")).toBe("pod-1/node-103");
     expect(
       pageURL(
@@ -188,6 +193,11 @@ describe("Explore, Admin, trace and device links", () => {
     expect(() =>
       parseUrlState(new URLSearchParams("trace_src=a&trace_dst=%7Cdelete")),
     ).toThrow("Invalid trace endpoints.");
+    expect(() =>
+      parseUrlState(
+        new URLSearchParams("trace_src=a&trace_dst=b&trace_scope=unmapped%3Ax"),
+      ),
+    ).toThrow("Invalid trace scope.");
     expect(
       parseUrlState(new URLSearchParams("id=%22x%22")).device,
     ).toBeUndefined();
@@ -197,5 +207,10 @@ describe("Explore, Admin, trace and device links", () => {
     expect(state.trace).toBeUndefined();
     expect(state.device).toBe("leaf-1");
     expect(notice).toContain("trace_src");
+    const recoveredScope = recoverUrlState(
+      new URLSearchParams("trace_scope=unmapped%3Ax"),
+    );
+    expect(recoveredScope.state.trace).toBeUndefined();
+    expect(recoveredScope.notice).toContain("trace_scope");
   });
 });

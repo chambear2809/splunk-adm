@@ -28,7 +28,7 @@ import {
   type ImpactMode,
   type Split,
 } from "./model";
-import { impactURL, parseImpactParams } from "./url";
+import { impactURL, isImpactScope, parseImpactParams } from "./url";
 import "./impact.css";
 
 type Load =
@@ -395,6 +395,7 @@ export function ImpactPage({
   const [mode, setMode] = useState<ImpactMode>(initial.mode);
   const [earliest, setEarliest] = useState(initial.earliest);
   const [latest, setLatest] = useState(initial.latest);
+  const [scope, setScope] = useState(initial.scope ?? "");
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "idle" });
 
@@ -403,7 +404,7 @@ export function ImpactPage({
     if (typeof window === "undefined") return;
     const href = impactURL(
       elements,
-      { mode, earliest, latest },
+      { mode, earliest, latest, scope },
       new URLSearchParams(),
     );
     const query = href.slice(href.indexOf("?"));
@@ -413,10 +414,14 @@ export function ImpactPage({
         "",
         `${location.pathname}${query}${location.hash}`,
       );
-  }, [elements, mode, earliest, latest]);
+  }, [elements, mode, earliest, latest, scope]);
 
   useEffect(() => {
     if (!elements.length) {
+      setLoad({ status: "idle" });
+      return;
+    }
+    if (!demo && !isImpactScope(scope)) {
       setLoad({ status: "idle" });
       return;
     }
@@ -430,6 +435,7 @@ export function ImpactPage({
             client,
             earliest,
             latest,
+            scope,
             timezone,
             signal: controller.signal,
             loadBaseTopology: () =>
@@ -458,7 +464,7 @@ export function ImpactPage({
           }),
       );
     return () => controller.abort();
-  }, [elements, demo, client, earliest, latest, timezone, nonce]);
+  }, [elements, demo, client, earliest, latest, timezone, scope, nonce]);
 
   const data = load.status === "done" ? load.data : undefined;
   const cls = useMemo(() => data && classifier(data.ctx), [data]);
@@ -513,6 +519,16 @@ export function ImpactPage({
       <ExploreTabs />
       <div className="atlas-explore-tools">
         <ElementPicker elements={elements} onChange={setElements} />
+        {!demo && (
+          <label>
+            Routing scope
+            <input
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+              autoComplete="off"
+            />
+          </label>
+        )}
         <div
           className="atlas-impact-mode"
           role="radiogroup"
@@ -550,6 +566,11 @@ export function ImpactPage({
         {demo && <span className="chip demo">Demo data</span>}
       </div>
       <div className="adm atlas-impact" data-adm-theme={theme}>
+        {!demo && elements.length > 0 && !isImpactScope(scope) && (
+          <p role="status">
+            Enter a mapped routing scope to assess live impact.
+          </p>
+        )}
         {!elements.length && (
           <p role="status" className="muted">
             Pick an element: a leaf, spine, FI, ESXi host, VM, app or interface
@@ -586,7 +607,7 @@ export function ImpactPage({
                     <a
                       href={impactURL(
                         [...elements.filter((x) => x !== e.token), d.id],
-                        { mode, earliest, latest },
+                        { mode, earliest, latest, scope },
                       )}
                     >
                       {d.name}

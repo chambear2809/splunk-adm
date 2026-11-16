@@ -2241,7 +2241,9 @@ test("Explore hosts trace and device placeholders that deep link", async ({
   const device = page.getByRole("form", { name: "Device lookup" });
   await device.getByLabel("Device name or ID").fill("pod-1/node-103");
   await device.getByRole("button", { name: "Open" }).click();
-  await expect(page).toHaveURL(/\/device\?mode=demo&id=pod-1%2Fnode-103$/);
+  await expect(page).toHaveURL(/\/device\?/);
+  expect(new URL(page.url()).searchParams.get("id")).toBe("pod-1/node-103");
+  expect(new URL(page.url()).searchParams.get("mode")).toBe("demo");
   await expect(
     page.getByRole("heading", { name: "leaf-103", exact: true }),
   ).toBeVisible();
@@ -2346,7 +2348,9 @@ test("double-clicking a device card opens its page", async ({ page }) => {
   await page.goto("/tests/browser/browser.html?page=map&mode=demo&tab=devices");
   const card = page.locator(".device-card header").first();
   await card.dblclick();
-  await expect(page).toHaveURL(/\/device\?mode=demo&id=/);
+  await expect(page).toHaveURL(/\/device\?/);
+  expect(new URL(page.url()).searchParams.get("id")).toBeTruthy();
+  expect(new URL(page.url()).searchParams.get("mode")).toBe("demo");
   await expect(
     page.getByLabel("Summary").or(page.getByText("Not in inventory")),
   ).toBeVisible();
@@ -2384,7 +2388,9 @@ test("map chrome stays within one header row at 1440x900", async ({ page }) => {
   );
 });
 
-test("live Explore traces names without a built map", async ({ page }) => {
+test("live Explore requires an explicit routing scope before searching", async ({
+  page,
+}) => {
   await page.goto(
     "/tests/browser/browser.html?page=applications&mode=live&fault=path-trace",
   );
@@ -2392,24 +2398,15 @@ test("live Explore traces names without a built map", async ({ page }) => {
   await form.getByLabel("Trace source").fill("win-client-01");
   await form.getByLabel("Trace destination").fill("10.20.30.40");
   await form.getByRole("button", { name: "Trace" }).click();
-  const view = page.getByRole("region", {
-    name: "Trace win-client-01 to 10.20.30.40",
-  });
-  await expect(view).toContainText("tcp/5432");
-  await expect(view).toContainText("Traced");
-  await expect(
-    view.getByRole("list", { name: "Hops" }).getByRole("button"),
-  ).toHaveCount(7);
+  await expect(page.getByRole("alert")).toContainText(
+    "Select a verified routing scope",
+  );
   const searches = await page.evaluate(() =>
     (window.__ADM_REQUESTS__ ?? []).map((r) => r.spl),
   );
-  expect(searches).toContain("| `adm_path_trace_resolve(win-client-01)`");
-  expect(searches).toContain("| `adm_path_trace(10.30.40.25,10.20.30.40)`");
-  await form.getByLabel("Trace source").fill("ghost");
-  await form.getByRole("button", { name: "Trace" }).click();
-  await expect(
-    page.getByRole("region", { name: "Trace ghost to 10.20.30.40" }),
-  ).toContainText('Source "ghost" not found.');
+  expect(searches.some((search) => search.includes("adm_path_trace"))).toBe(
+    false,
+  );
 });
 
 test("live trace search errors offer a retry", async ({ page }) => {
@@ -2419,6 +2416,7 @@ test("live trace search errors offer a retry", async ({ page }) => {
   const form = page.getByRole("form", { name: "Trace path" });
   await form.getByLabel("Trace source").fill("10.30.40.25");
   await form.getByLabel("Trace destination").fill("10.20.30.40");
+  await form.getByLabel("Routing scope").fill("fabric-a");
   await form.getByRole("button", { name: "Trace" }).click();
   await expect(
     page.getByRole("alert").filter({ hasText: "timeout" }),

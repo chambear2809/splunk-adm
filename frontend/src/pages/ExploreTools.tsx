@@ -9,22 +9,31 @@ export function traceURL(
   src: string,
   dst: string,
   params: URLSearchParams = currentParams(),
+  scope?: string,
 ): string {
   const next = new URLSearchParams(params);
   next.delete("id");
   next.set("trace_src", src);
   next.set("trace_dst", dst);
+  if (scope) next.set("trace_scope", scope);
+  else next.delete("trace_scope");
   return pageURL("map", next);
 }
 
-/** Device page link; the device id is the only state it needs. */
+/** Device links retain the selected time and other navigation context. */
 export function deviceURL(
   deviceId: string,
   params: URLSearchParams = currentParams(),
 ): string {
-  const next = new URLSearchParams();
-  const mode = params.get("mode");
-  if (mode) next.set("mode", mode);
+  const next = new URLSearchParams(params);
+  next.delete("trace_src");
+  next.delete("trace_dst");
+  next.delete("trace_scope");
+  if (next.has("window") && !next.has("earliest")) {
+    next.set("earliest", next.get("window")!);
+    if (!next.has("latest")) next.set("latest", "now");
+  }
+  next.delete("window");
   next.set("id", deviceId);
   return pageURL("device", next);
 }
@@ -33,18 +42,20 @@ const navigate = (href: string) => location.assign(href);
 
 /** Source → destination trace request (IP or name). */
 export function TracePathForm({
-  onSubmit = (src, dst) => navigate(traceURL(src, dst)),
+  onSubmit = (src, dst, scope) =>
+    navigate(traceURL(src, dst, currentParams(), scope)),
   initial,
   compact = false,
 }: {
-  onSubmit?: (src: string, dst: string) => void;
-  initial?: { src: string; dst: string };
+  onSubmit?: (src: string, dst: string, scope?: string) => void;
+  initial?: { src: string; dst: string; scope?: string };
   /** Map toolbar: no visible label. */
   compact?: boolean;
 }) {
   const id = useId();
   const [src, setSrc] = useState(initial?.src ?? "");
   const [dst, setDst] = useState(initial?.dst ?? "");
+  const [scope, setScope] = useState(initial?.scope ?? "");
   const valid = isSafeIdentifier(src.trim()) && isSafeIdentifier(dst.trim());
   return (
     <form
@@ -52,7 +63,7 @@ export function TracePathForm({
       aria-label="Trace path"
       onSubmit={(event) => {
         event.preventDefault();
-        if (valid) onSubmit(src.trim(), dst.trim());
+        if (valid) onSubmit(src.trim(), dst.trim(), scope.trim() || undefined);
       }}
     >
       <label htmlFor={`${id}-src`} className={compact ? "sr-only" : undefined}>
@@ -81,6 +92,15 @@ export function TracePathForm({
       <button className="atlas-button" type="submit" disabled={!valid}>
         Trace
       </button>
+      <input
+        className="atlas-input"
+        aria-label="Routing scope"
+        placeholder="Routing scope"
+        autoComplete="off"
+        spellCheck={false}
+        value={scope}
+        onChange={(e) => setScope(e.target.value)}
+      />
     </form>
   );
 }

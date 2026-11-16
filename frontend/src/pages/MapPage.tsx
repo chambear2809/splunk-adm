@@ -1,5 +1,13 @@
 import { ControllerMap } from "../AppDynamicsCatalog";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Ban,
   ChevronDown,
@@ -62,6 +70,8 @@ import { useTheme, type Theme } from "../theme";
 import { resolveDevice, type Topology } from "../topology";
 import { ImpactButton } from "../impact/ImpactButton";
 import { useImpactOverlay } from "../impact/useImpactOverlay";
+import type { Window as IncidentWindow } from "../incident/model";
+import { loadLive } from "../provider";
 
 const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["service", "Entry service", "OTel service.name"],
@@ -103,6 +113,12 @@ const themeOverride = (): Theme | undefined => {
       : null;
   return t === "dark" || t === "light" ? t : undefined;
 };
+
+const IncidentWorkspace = lazy(() =>
+  import("../incident/IncidentWorkspace").then((module) => ({
+    default: module.IncidentWorkspace,
+  })),
+);
 
 export function MapPage(props: Parameters<typeof StandardMapPage>[0]) {
   const state =
@@ -257,13 +273,31 @@ function StandardMapPage({
         : undefined,
     [tracedPath],
   );
+  const graphWindowParams = useMemo(() => {
+    const start = Date.parse(graph.window.start) / 1000;
+    const end = Date.parse(graph.window.end) / 1000;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end)
+      return undefined;
+    const params = new URLSearchParams(
+      typeof location === "undefined" ? "" : location.search,
+    );
+    params.set("earliest", String(start));
+    params.set("latest", String(end));
+    params.delete("window");
+    return params;
+  }, [graph.window.start, graph.window.end]);
+  const selectedRoutingScope =
+    traceRequest?.scope ??
+    (selection?.kind === "node"
+      ? index.node.get(selection.id)?.attributes?.scope
+      : undefined);
   const impact = useImpactOverlay(graph, topo);
   const openNode = (id: string) => {
     const n = index.node.get(id);
     const device = [n?.label, ...(n?.addresses ?? [])]
       .map((raw) => resolveDevice(raw, topo))
       .find(Boolean);
-    if (device) location.assign(deviceURL(device.id));
+    if (device) location.assign(deviceURL(device.id, graphWindowParams));
   };
   const focusNotes: string[] = [];
   if (focus && focus.direction !== "any" && followedEdges) {
@@ -320,6 +354,77 @@ function StandardMapPage({
     if (visible) setPanel((current) => (current === "scope" ? null : current));
   }, [visible]);
   const [findingsOpen, setFindingsOpen] = useState(false);
+  const [incidentOpen, setIncidentOpen] = useState(false);
+  const incidentTrigger = useRef<HTMLButtonElement>(null);
+  const incidentDialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!incidentOpen) return;
+    const container = root.current;
+    const dialog = incidentDialog.current;
+    const trigger = incidentTrigger.current;
+    if (!container || !dialog) return;
+    const backgrounds = new Set<HTMLElement>();
+    let branch: HTMLElement = container;
+    while (branch.parentElement && branch.parentElement !== document.body) {
+      for (const child of branch.parentElement.children) {
+        if (child instanceof HTMLElement && child !== branch)
+          backgrounds.add(child);
+      }
+      branch = branch.parentElement;
+    }
+    for (const child of container.children) {
+      if (child instanceof HTMLElement && child !== dialog)
+        backgrounds.add(child);
+    }
+    const previousInert = [...backgrounds].map((element) => element.inert);
+    backgrounds.forEach((element) => {
+      element.inert = true;
+    });
+    const focusable = () =>
+      [
+        ...dialog.querySelectorAll<HTMLElement>(
+          'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex]:not([tabindex="-1"])',
+        ),
+      ].filter((element) => {
+        const closedDetails = element.closest("details:not([open])");
+        return (
+          (!closedDetails ||
+            closedDetails.querySelector("summary") === element) &&
+          !element.closest("[hidden]") &&
+          !element.closest("[inert]")
+        );
+      });
+    const containTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0];
+      const last = items.at(-1);
+      if (!first || !last) {
+        event.preventDefault();
+        dialog.focus();
+      } else if (!items.includes(document.activeElement as HTMLElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    dialog.addEventListener("keydown", containTab);
+    dialog
+      .querySelector<HTMLElement>("button, input, select, [tabindex]")
+      ?.focus();
+    return () => {
+      dialog.removeEventListener("keydown", containTab);
+      [...backgrounds].forEach((element, index) => {
+        element.inert = previousInert[index];
+      });
+      trigger?.focus();
+    };
+  }, [incidentOpen]);
   const filterCount = activeFacetCount(facets);
   const root = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -461,7 +566,10 @@ function StandardMapPage({
       }}
       onKeyDown={(e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
-        if (panel) setPanel(null);
+        if (incidentOpen) {
+          setIncidentOpen(false);
+          incidentTrigger.current?.focus();
+        } else if (panel) setPanel(null);
         else if (selection) clearSelection();
       }}
     >
@@ -628,6 +736,15 @@ function StandardMapPage({
           </div>
         )}
         <div className="actions">
+          {visible && mode === "live" && (
+            <button
+              ref={incidentTrigger}
+              className="secondary-button"
+              onClick={() => setIncidentOpen(true)}
+            >
+              Investigate
+            </button>
+          )}
           <button
             className="icon-button"
             aria-label="More actions"
@@ -946,6 +1063,52 @@ function StandardMapPage({
           </section>
         )}
       </header>
+      {incidentOpen && visible && mode === "live" && (
+        <div
+          ref={incidentDialog}
+          tabIndex={-1}
+          className="atlas-incident-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Investigation workspace"
+        >
+          <Suspense fallback={<p role="status">Opening investigation…</p>}>
+            <IncidentWorkspace
+              incident={graph}
+              timezone={timezone}
+              onBack={() => {
+                setIncidentOpen(false);
+                incidentTrigger.current?.focus();
+              }}
+              loadWindow={async (window: IncidentWindow, signal) => {
+                const source = snapshot.client ?? client;
+                if (!source) throw new Error("Splunk search is unavailable.");
+                const start = Date.parse(window.start) / 1000;
+                const end = Date.parse(window.end) / 1000;
+                if (
+                  !Number.isFinite(start) ||
+                  !Number.isFinite(end) ||
+                  start >= end
+                )
+                  throw new Error("Choose a valid absolute comparison window.");
+                return loadLive(
+                  source,
+                  {
+                    service: graph.boundary.service,
+                    environment: graph.boundary.environment,
+                    cluster: graph.boundary.cluster,
+                    namespace: graph.boundary.namespace,
+                    earliest: String(start),
+                    latest: String(end),
+                    timezone,
+                  },
+                  signal,
+                );
+              }}
+            />
+          </Suspense>
+        </div>
+      )}
       {error && (
         <div className="banner error" role="alert">
           <CircleAlert size={16} aria-hidden />
@@ -1044,6 +1207,9 @@ function StandardMapPage({
               <ImpactButton
                 compact
                 token={selection?.kind === "node" ? selection.id : undefined}
+                scope={selectedRoutingScope}
+                earliest={graphWindowParams?.get("earliest") ?? undefined}
+                latest={graphWindowParams?.get("latest") ?? undefined}
                 label={
                   selection?.kind === "node" ? label(selection.id) : undefined
                 }
@@ -1055,8 +1221,8 @@ function StandardMapPage({
                 traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""
               }
               initial={traceRequest}
-              onSubmit={(src, dst) => {
-                setTraceRequest({ src, dst });
+              onSubmit={(src, dst, scope) => {
+                setTraceRequest({ src, dst, ...(scope ? { scope } : {}) });
                 if (tab === "table" || tab === "devices") setTab("network");
               }}
             />
@@ -1210,7 +1376,9 @@ function StandardMapPage({
               />
             ) : tab === "devices" ? (
               <DevicesView
-                onOpenDevice={(id) => location.assign(deviceURL(id))}
+                onOpenDevice={(id) =>
+                  location.assign(deviceURL(id, graphWindowParams))
+                }
                 graph={displayGraph}
                 index={displayIndex}
                 topo={topo}
@@ -1263,6 +1431,7 @@ function StandardMapPage({
                 key={`${traceRequest.src}>${traceRequest.dst}`}
                 request={traceRequest}
                 result={traceResult}
+                navigationParams={graphWindowParams}
                 onCancel={traceResult.cancel}
                 onRetry={traceResult.retry}
                 onClose={() => setTraceRequest(undefined)}

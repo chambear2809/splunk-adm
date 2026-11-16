@@ -23,14 +23,20 @@ describe("Explore placeholders", () => {
     expect(url.searchParams.has("id")).toBe(false);
   });
 
-  it("builds a device link with only the mode and id", () => {
+  it("carries a historical window and context into the device link", () => {
     const href = deviceURL(
       "pod-1/node-103",
-      new URLSearchParams("service=frontend&mode=live"),
+      new URLSearchParams(
+        "service=frontend&mode=live&earliest=1000&latest=1900&trace_src=a&trace_dst=b",
+      ),
     );
     const url = new URL(href, "http://local");
     expect(url.pathname.endsWith("/device")).toBe(true);
-    expect([...url.searchParams.keys()]).toEqual(["mode", "id"]);
+    expect(url.searchParams.get("service")).toBe("frontend");
+    expect(url.searchParams.get("earliest")).toBe("1000");
+    expect(url.searchParams.get("latest")).toBe("1900");
+    expect(url.searchParams.get("id")).toBe("pod-1/node-103");
+    expect(url.searchParams.has("trace_src")).toBe(false);
   });
 
   it("renders labelled, initially disabled forms", () => {

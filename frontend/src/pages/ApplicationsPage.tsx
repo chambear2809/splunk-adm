@@ -112,14 +112,16 @@ export function ApplicationsPage({
     latest,
     timezone,
   });
-  const changeTrace = (next?: { src: string; dst: string }) => {
+  const changeTrace = (next?: { src: string; dst: string; scope?: string }) => {
     setTraceRequest(next);
     const params = new URLSearchParams(location.search);
     params.delete("trace_src");
     params.delete("trace_dst");
+    params.delete("trace_scope");
     if (next) {
       params.set("trace_src", next.src);
       params.set("trace_dst", next.dst);
+      if (next.scope) params.set("trace_scope", next.scope);
     }
     history.replaceState(null, "", `${location.pathname}?${params}`);
   };
@@ -714,7 +716,9 @@ export function ApplicationsPage({
         <TracePathForm
           key={traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""}
           initial={traceRequest}
-          onSubmit={(src, dst) => changeTrace({ src, dst })}
+          onSubmit={(src, dst, scope) =>
+            changeTrace({ src, dst, ...(scope ? { scope } : {}) })
+          }
         />
         <DeviceLookup />
       </div>

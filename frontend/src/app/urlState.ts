@@ -43,7 +43,7 @@ export type UrlState = {
   tab: "network" | "services" | "devices" | "table";
   query: string;
   /** Requested source → destination trace (Map `trace_src` / `trace_dst`). */
-  trace?: { src: string; dst: string };
+  trace?: { src: string; dst: string; scope?: string };
   /** Device lookup target (Device page `id`). */
   device?: string;
   appd?: {
@@ -147,11 +147,18 @@ export function parseUrlState(
     throw new Error("Invalid Controller snapshot link.");
   const traceSrc = params.get("trace_src");
   const traceDst = params.get("trace_dst");
+  const traceScope = params.get("trace_scope");
   if (
     (traceSrc !== null || traceDst !== null) &&
     (!isSafeIdentifier(traceSrc ?? "") || !isSafeIdentifier(traceDst ?? ""))
   )
     throw new Error("Invalid trace endpoints.");
+  if (
+    traceScope !== null &&
+    (!/^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/.test(traceScope) ||
+      /^unmapped:/i.test(traceScope))
+  )
+    throw new Error("Invalid trace scope.");
   // `id` is shared with other views' deep links; only a safe value is a device.
   const rawDevice = params.get("id");
   const device =
@@ -168,7 +175,13 @@ export function parseUrlState(
   return {
     ...(appd ? { appd } : {}),
     ...(traceSrc && traceDst
-      ? { trace: { src: traceSrc, dst: traceDst } }
+      ? {
+          trace: {
+            src: traceSrc,
+            dst: traceDst,
+            ...(traceScope ? { scope: traceScope } : {}),
+          },
+        }
       : {}),
     ...(device ? { device } : {}),
     args,
@@ -244,16 +257,20 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
       }
     }
   }
-  if (clean.has("trace_src") || clean.has("trace_dst")) {
+  if (
+    clean.has("trace_src") ||
+    clean.has("trace_dst") ||
+    clean.has("trace_scope")
+  ) {
     const probe = new URLSearchParams();
-    for (const key of ["trace_src", "trace_dst"]) {
+    for (const key of ["trace_src", "trace_dst", "trace_scope"]) {
       const value = clean.get(key);
       if (value !== null) probe.set(key, value);
     }
     try {
       parseUrlState(probe, inSplunk);
     } catch {
-      for (const key of ["trace_src", "trace_dst"]) {
+      for (const key of ["trace_src", "trace_dst", "trace_scope"]) {
         clean.delete(key);
         dropped.push(key);
       }
@@ -289,6 +306,7 @@ export function stateParams(state: UrlState): URLSearchParams {
   if (state.trace) {
     params.set("trace_src", state.trace.src);
     params.set("trace_dst", state.trace.dst);
+    if (state.trace.scope) params.set("trace_scope", state.trace.scope);
   }
   if (state.device) params.set("id", state.device);
   if (state.appd) {
@@ -327,6 +345,7 @@ export function writeUrlState(state: UrlState) {
       "appd_scope",
       "trace_src",
       "trace_dst",
+      "trace_scope",
     ])
       params.delete(key);
     stateParams(state).forEach((value, key) => params.set(key, value));

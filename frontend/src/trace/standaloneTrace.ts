@@ -1,7 +1,6 @@
 import { pathTraceSearch } from "../data/deviceFlows";
 import { requireNoSearchErrors, type SearchClient } from "../data/searchClient";
 import type { EndpointKind, Graph, GraphNode } from "../graph";
-import { loadTopology } from "../provider";
 import { emptyTopology } from "../topology";
 import { isSafeIdentifier } from "../app/urlState";
 
@@ -12,6 +11,7 @@ const MAX_TRACE_ROWS = 2000;
 
 const first = (v: unknown): string | undefined => {
   const x = Array.isArray(v) ? v[0] : v;
+  if (typeof x === "number" && Number.isFinite(x)) return String(x);
   return typeof x === "string" && x.trim() ? x.trim() : undefined;
 };
 const all = (v: unknown): string[] =>
@@ -20,10 +20,16 @@ const all = (v: unknown): string[] =>
     .map((x) => x.trim());
 
 /** Server-side name → address lookup; the value must be a safe identifier. */
-export function pathTraceResolveSearch(value: string): string {
+export function pathTraceResolveSearch(value: string, scope?: string): string {
   if (!isSafeIdentifier(value) || /[,"`$]/.test(value))
     throw new Error("Invalid endpoint name.");
-  return `| \`adm_path_trace_resolve(${value})\``;
+  if (
+    !scope ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(scope) ||
+    scope.toLowerCase().startsWith("unmapped:")
+  )
+    throw new Error("Select a verified routing scope before tracing.");
+  return `| \`adm_path_trace_resolve(${value},${scope})\``;
 }
 
 /** Distinct IP literals from adm_path_trace_resolve rows. */
@@ -224,6 +230,69 @@ interface Window {
   latest?: string;
   timezone?: string;
   signal: AbortSignal;
+  scope?: string;
+}
+
+/** Live traces require exact, absolute half-open bounds. */
+export function traceWindow(earliest: string, latest?: string) {
+  const number = (value: string | undefined) =>
+    value && /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : NaN;
+  const start = number(earliest),
+    end = number(latest);
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    start < 0 ||
+    end <= start
+  )
+    throw new Error("Select an absolute time window before tracing.");
+  return { start, end };
+}
+
+/** Qualify identity rows before they are passed to the legacy path renderer. */
+export function qualifiedEndpointRows(
+  rows: readonly unknown[],
+  scope: string,
+  start: number,
+  end: number,
+) {
+  const eligible = rows.filter((raw): raw is Record<string, unknown> => {
+    if (!raw || typeof raw !== "object") return false;
+    const row = raw as Record<string, unknown>;
+    const from = first(row.valid_from);
+    const validFrom = from === undefined ? NaN : Number(from);
+    const validEnd = first(row.valid_end) ?? first(row.valid_to);
+    return (
+      row.row_type === "endpoint" &&
+      first(row.scope) === scope &&
+      first(row.scope_mapping_verified) === "1" &&
+      !!first(row.entity_id) &&
+      Number.isFinite(validFrom) &&
+      validFrom < end &&
+      (!validEnd ||
+        (Number.isFinite(Number(validEnd)) && Number(validEnd) > start))
+    );
+  });
+  const claims = new Map<string, Set<string>>();
+  for (const row of eligible) {
+    const ip = first(row.ip),
+      id = first(row.entity_id);
+    if (!ip || !id || row.trace_role === "pod_node") continue;
+    const ids = claims.get(ip) ?? new Set<string>();
+    ids.add(id);
+    claims.set(ip, ids);
+  }
+  if ([...claims.values()].some((ids) => ids.size > 1))
+    throw new Error(
+      "Multiple identities cover an endpoint in this window. Narrow the selection.",
+    );
+  return eligible.filter((row) => {
+    const validEnd = first(row.valid_end) ?? first(row.valid_to);
+    return (
+      Number(first(row.valid_from)) <= start &&
+      (!validEnd || Number(validEnd) >= end)
+    );
+  });
 }
 
 /** One side: an IP literal as-is, otherwise exactly one resolved address. */
@@ -236,7 +305,7 @@ export async function resolveTraceAddress(
   if (isIpLiteral(query)) return query;
   const result = requireNoSearchErrors(
     await client.search({
-      search: pathTraceResolveSearch(query),
+      search: pathTraceResolveSearch(query, w.scope),
       earliest: w.earliest,
       latest: w.latest,
       timezone: w.timezone,
@@ -246,7 +315,16 @@ export async function resolveTraceAddress(
     }),
     `${side} lookup`,
   );
-  const ips = resolvedAddresses(result.rows);
+  if (result.rows.some((r) => r.row_type === "identity_overflow"))
+    throw new Error(`${side} lookup exceeded its identity limit.`);
+  const { start, end } = traceWindow(w.earliest, w.latest);
+  const candidates = qualifiedEndpointRows(
+    result.rows.map((row) => ({ ...row, row_type: "endpoint" })),
+    w.scope!,
+    start,
+    end,
+  );
+  const ips = resolvedAddresses(candidates);
   if (ips.length === 1) return ips[0];
   throw new Error(
     ips.length
@@ -256,38 +334,53 @@ export async function resolveTraceAddress(
 }
 
 /**
- * Trace without a built map: names resolve server-side, then adm_path_trace
- * returns observations, identities and vSphere rows; fabric links come from
- * adm_topology in the same window.
+ * Read scoped observations and identity candidates for an absolute window.
+ * The scoped search does not yet qualify topology or NetFlow.
  */
 export async function loadStandaloneTrace(
   client: SearchClient,
   request: { src: string; dst: string },
   w: Window,
 ) {
+  const { start, end } = traceWindow(w.earliest, w.latest);
+  // Validate scope before issuing name, topology or observation searches.
+  pathTraceSearch("1.1.1.1", "2.2.2.2", w.scope);
   const [src, dst] = await Promise.all([
     resolveTraceAddress(client, request.src, "Source", w),
     resolveTraceAddress(client, request.dst, "Destination", w),
   ]);
-  const [trace, topology] = await Promise.all([
-    client.search({
-      search: pathTraceSearch(src, dst),
-      earliest: w.earliest,
-      latest: w.latest,
-      timezone: w.timezone,
-      maxRows: MAX_TRACE_ROWS,
-      allowEmpty: true,
-      signal: w.signal,
-    }),
-    loadTopology(client, w.earliest, w.signal, w.latest, w.timezone).catch(() =>
-      emptyTopology(),
-    ),
-  ]);
+  const trace = await client.search({
+    search: pathTraceSearch(src, dst, w.scope),
+    earliest: w.earliest,
+    latest: w.latest,
+    timezone: w.timezone,
+    maxRows: MAX_TRACE_ROWS,
+    allowEmpty: true,
+    signal: w.signal,
+  });
   const rows = requireNoSearchErrors(trace, "Path trace").rows;
+  if (
+    rows.some(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        (r as Record<string, unknown>).row_type === "identity_overflow",
+    )
+  )
+    throw new Error(
+      "Endpoint identity results exceeded the limit; narrow the selection.",
+    );
+  const identities = qualifiedEndpointRows(rows, w.scope!, start, end);
   return {
     addresses: { src, dst },
-    rows,
-    graph: endpointGraph(rows, [src, dst]),
-    topology,
+    rows: rows.filter(
+      (r) =>
+        r &&
+        typeof r === "object" &&
+        (r as Record<string, unknown>).row_type === "observation" &&
+        first((r as Record<string, unknown>).scope) === w.scope,
+    ),
+    graph: endpointGraph(identities, [src, dst]),
+    topology: emptyTopology(),
   };
 }

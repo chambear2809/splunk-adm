@@ -204,11 +204,21 @@ export function deviceFlowsSearch(device: string): string {
   return `| \`adm_device_flows(${device})\``;
 }
 /** The SPL for one address pair; names must be resolved to IPs first. */
-export function pathTraceSearch(src: string, dst: string): string {
+export function pathTraceSearch(
+  src: string,
+  dst: string,
+  scope?: string,
+): string {
   const ip = /^[0-9A-Fa-f:.]{2,45}$/;
   if (!ip.test(src) || !ip.test(dst))
     throw new Error("Path trace search expects two IP literals.");
-  return `| \`adm_path_trace(${src},${dst})\``;
+  if (
+    !scope ||
+    !/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(scope) ||
+    scope.toLowerCase().startsWith("unmapped:")
+  )
+    throw new Error("Select a verified routing scope before tracing.");
+  return `| \`adm_path_trace(${src},${dst},${scope})\``;
 }
 
 /** ACI node and vSphere device identities for the Device page. */

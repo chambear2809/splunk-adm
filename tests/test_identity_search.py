@@ -589,6 +589,18 @@ class CommandTests(unittest.TestCase):
         self.assertEqual(meta["read_coverage"], 66)
         self.assertIn("Read 2 of 3 five-minute slices", meta["warnings"][0])
 
+    def test_raw_summary_fallback_keeps_unqualified_slices_unread(self):
+        for message in (
+            "No complete interval snapshot covers the window.",
+            "identity evidence is incomplete",
+            "identity evidence is truncated",
+            "search exceeded the evidence budget",
+        ):
+            with self.subTest(message=message):
+                self.assertEqual(admqualified.raw_slice_outcome(message), "unread")
+        self.assertEqual(admqualified.raw_slice_outcome("empty search result"), "empty")
+        self.assertEqual(admqualified.raw_slice_outcome("permission denied"), "error")
+
     def test_long_graph_window_fails_closed_on_truncated_slice(self):
         command = self.command()
         command.mode = "graph"

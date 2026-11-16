@@ -1,9 +1,56 @@
 import { describe, expect, it } from "vitest";
 import type { SearchClient, SearchRequest } from "../data/searchClient";
 import type { Row } from "../rows";
-import { loadDevicePage } from "./DevicePage";
+import {
+  absoluteDeviceWindow,
+  deviceHistoryState,
+  loadDevicePage,
+} from "./DevicePage";
+import { traceURL } from "./ExploreTools";
+import { impactURL } from "../impact/url";
 
 const signal = new AbortController().signal;
+
+describe("device navigation window", () => {
+  it("pins relative bounds together and passes the selected interval to trace and impact", () => {
+    const selected = absoluteDeviceWindow("-15m", "now", "UTC", 2000);
+    expect(selected).toEqual({ earliest: "1100", latest: "2000" });
+    const params = new URLSearchParams({
+      ...selected,
+      mode: "live",
+      id: "leaf-1",
+    });
+    const trace = new URL(
+      traceURL("192.0.2.1", "192.0.2.2", params),
+      "http://local",
+    );
+    const impact = new URL(impactURL(["leaf-1"], {}, params), "http://local");
+    expect([
+      trace.searchParams.get("earliest"),
+      trace.searchParams.get("latest"),
+    ]).toEqual(["1100", "2000"]);
+    expect([
+      impact.searchParams.get("window"),
+      impact.searchParams.get("latest"),
+    ]).toEqual(["1100", "2000"]);
+  });
+
+  it("restores historical entries and rejects incomplete or malformed windows", () => {
+    expect(
+      deviceHistoryState(
+        new URLSearchParams("id=leaf-1&earliest=1000&latest=1900"),
+      ),
+    ).toEqual({ device: "leaf-1", earliest: "1000", latest: "1900" });
+    expect(() =>
+      deviceHistoryState(new URLSearchParams("id=leaf-1&earliest=1000")),
+    ).toThrow("Both time window bounds");
+    expect(() =>
+      deviceHistoryState(
+        new URLSearchParams("id=leaf-1&earliest=2000&latest=1000"),
+      ),
+    ).toThrow("Earliest must precede latest");
+  });
+});
 
 describe("loadDevicePage", () => {
   it("resolves a demo leaf by DN and loads its flows", async () => {

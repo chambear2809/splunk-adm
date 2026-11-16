@@ -8,10 +8,12 @@ import {
   endpointGraph,
   loadStandaloneTrace,
   pathTraceResolveSearch,
+  qualifiedEndpointRows,
   resolvedAddresses,
+  traceWindow,
 } from "./standaloneTrace";
 import { emptyTopology } from "../topology";
-import { assembleTrace } from "./usePathTrace";
+import { assembleScopedTrace, assembleTrace } from "./usePathTrace";
 
 /** adm_ip_identity rows the trace search appends for the demo pair. */
 const endpointRows = [
@@ -19,6 +21,10 @@ const endpointRows = [
     row_type: "endpoint",
     ip: "10.30.40.25",
     scope: "prod",
+    scope_mapping_verified: 1,
+    entity_id: "client",
+    valid_from: 0,
+    valid_end: 300,
     entity_kind: "vm",
     entity_name: "win-client-01",
     attach_device: "pod-1/node-103",
@@ -31,6 +37,10 @@ const endpointRows = [
     row_type: "endpoint",
     ip: "10.20.30.40",
     scope: "prod",
+    scope_mapping_verified: 1,
+    entity_id: "database",
+    valid_from: 0,
+    valid_end: 300,
     entity_kind: "vm",
     entity_name: "orders-db-01",
     attach_device: "pod-1/node-102",
@@ -45,17 +55,17 @@ const fakeClient = (requests: SearchRequest[]): SearchClient => ({
     requests.push(request);
     if (request.search === "`adm_topology`")
       return { rows: aciTopologyRows, warnings: [], errors: [] };
-    if (request.search.includes("adm_path_trace_resolve(win-client-01)"))
+    if (request.search.includes("adm_path_trace_resolve(win-client-01,"))
       return {
-        rows: [{ entity_name: "win-client-01", ip: ["10.30.40.25"] }],
+        rows: [{ ...endpointRows[0], ip: ["10.30.40.25"] }],
         warnings: [],
         errors: [],
       };
-    if (request.search.includes("adm_path_trace_resolve(db)"))
+    if (request.search.includes("adm_path_trace_resolve(db,"))
       return {
         rows: [
-          { entity_name: "orders-db-01", ip: "10.20.30.40" },
-          { entity_name: "orders-db-02", ip: "10.20.30.41" },
+          { ...endpointRows[1], ip: "10.20.30.40" },
+          { ...endpointRows[1], entity_id: "other-db", ip: "10.20.30.41" },
         ],
         warnings: [],
         errors: [],
@@ -64,7 +74,24 @@ const fakeClient = (requests: SearchRequest[]): SearchClient => ({
       return { rows: [], warnings: [], errors: [] };
     if (request.search.includes("adm_path_trace("))
       return {
-        rows: [...demoPathTraceRows(), ...endpointRows, ...vsphereRows],
+        rows: [
+          ...demoPathTraceRows(),
+          ...endpointRows,
+          ...vsphereRows,
+          {
+            row_type: "observation",
+            scope: "prod",
+            flow_source: "ftd",
+            records: "2",
+            drops: "1",
+          },
+          {
+            row_type: "observation",
+            scope: "other",
+            flow_source: "ftd",
+            records: "20",
+          },
+        ],
         warnings: [],
         errors: [],
       };
@@ -72,35 +99,46 @@ const fakeClient = (requests: SearchRequest[]): SearchClient => ({
   },
 });
 const w = {
-  earliest: "-1h",
-  latest: "now",
+  earliest: "100",
+  latest: "200",
+  scope: "prod",
   signal: new AbortController().signal,
 };
 
 describe("trace without a built map", () => {
-  it("resolves a name server-side and assembles the full path", async () => {
+  it("returns only scoped observations and qualified identity", async () => {
     const requests: SearchRequest[] = [];
-    const r = await loadStandaloneTrace(
+    const result = await loadStandaloneTrace(
       fakeClient(requests),
       { src: "win-client-01", dst: "10.20.30.40" },
       w,
     );
-    expect(r.addresses).toEqual({ src: "10.30.40.25", dst: "10.20.30.40" });
     expect(requests.map((q) => q.search)).toContain(
-      "| `adm_path_trace(10.30.40.25,10.20.30.40)`",
+      "| `adm_path_trace(10.30.40.25,10.20.30.40,prod)`",
     );
-    expect(requests.every((q) => q.earliest === "-1h")).toBe(true);
-    const { trace } = assembleTrace(r.addresses, r.graph, r.topology, r.rows);
-    expect(trace.status).toBe("traced");
-    expect(trace.hops.map((h) => h.label)).toEqual([
+    expect(requests.every((q) => q.earliest === "100")).toBe(true);
+    expect(result.graph.nodes.map((n) => n.label)).toEqual([
       "win-client-01",
-      "vmm-shop",
-      "leaf-103",
-      "One of 2 spines",
-      "leaf-102",
-      "vmm-shop",
       "orders-db-01",
     ]);
+    expect(result.topology.devices).toEqual([]);
+    expect(result.rows).toHaveLength(1);
+    const trace = assembleScopedTrace(
+      result.addresses,
+      result.graph,
+      result.rows,
+    ).trace;
+    expect(trace.status).toBe("partial");
+    expect(trace.hops).toHaveLength(1);
+    expect(trace.hops[0].kind).toBe("gap");
+    expect(
+      trace.notes.some((note) => note.includes("counts are not combined")),
+    ).toBe(true);
+    expect(
+      trace.notes.some((note) =>
+        note.includes("2 observed records, including 1 drop"),
+      ),
+    ).toBe(true);
   });
 
   it("refuses ambiguous and unknown names", async () => {
@@ -125,9 +163,59 @@ describe("trace without a built map", () => {
       resolvedAddresses([{ ip: ["10.0.0.1", "bad", "10.0.0.1"] }]),
     ).toEqual(["10.0.0.1"]);
     expect(() => pathTraceResolveSearch("a,b")).toThrow();
-    expect(pathTraceResolveSearch("orders-db-01")).toBe(
-      "| `adm_path_trace_resolve(orders-db-01)`",
+    expect(pathTraceResolveSearch("orders-db-01", "prod")).toBe(
+      "| `adm_path_trace_resolve(orders-db-01,prod)`",
     );
+  });
+
+  it("filters scope and validity and rejects competing identities", () => {
+    const row = {
+      row_type: "endpoint",
+      ip: "10.1.1.1",
+      scope: "prod",
+      scope_mapping_verified: 1,
+      entity_id: "vm-a",
+      valid_from: 0,
+      valid_end: 300,
+    };
+    expect(
+      qualifiedEndpointRows(
+        [
+          row,
+          { ...row, scope: "other", entity_id: "vm-b" },
+          { ...row, entity_id: "old", valid_end: 100 },
+        ],
+        "prod",
+        100,
+        200,
+      ),
+    ).toEqual([row]);
+    expect(() =>
+      qualifiedEndpointRows(
+        [row, { ...row, entity_id: "vm-b" }],
+        "prod",
+        100,
+        200,
+      ),
+    ).toThrow(/Multiple identities/);
+    expect(() =>
+      qualifiedEndpointRows(
+        [row, { ...row, entity_id: "vm-b", valid_from: 150 }],
+        "prod",
+        100,
+        200,
+      ),
+    ).toThrow(/Multiple identities/);
+    expect(
+      qualifiedEndpointRows(
+        [{ ...row, scope_mapping_verified: 0 }],
+        "prod",
+        100,
+        200,
+      ),
+    ).toEqual([]);
+    expect(() => traceWindow("-1h", "now")).toThrow(/absolute/);
+    expect(() => pathTraceResolveSearch("db")).toThrow(/scope/);
   });
 });
 

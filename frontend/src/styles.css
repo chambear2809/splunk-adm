@@ -2305,6 +2305,62 @@
     flex-wrap: wrap;
   }
 }
+@media (max-width: 700px) {
+  .atlas-tool.compact[aria-label="Trace path"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    flex: 1 1 320px;
+    min-width: 0;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] .atlas-input {
+    width: auto;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] input:nth-of-type(1) {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] > span {
+    grid-row: 1;
+    grid-column: 2;
+    text-align: center;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] input:nth-of-type(2) {
+    grid-row: 1;
+    grid-column: 3 / 5;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] input:nth-of-type(3) {
+    grid-row: 2;
+    grid-column: 1 / 4;
+  }
+  .atlas-tool.compact[aria-label="Trace path"] button {
+    grid-row: 2;
+    grid-column: 4;
+  }
+  .atlas-explore-tools,
+  .atlas-tool[aria-label="Trace path"] {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .atlas-tool[aria-label="Trace path"] {
+    flex-wrap: wrap;
+  }
+  .atlas-tool:not(.compact)[aria-label="Trace path"] .atlas-input {
+    width: clamp(90px, calc((100vw - 90px) / 2), 160px);
+  }
+  .adm .toolbar {
+    flex-wrap: wrap;
+  }
+  .adm .toolbar > .toolbar-spacer {
+    display: none;
+  }
+  .adm .atlas-map-header .chip[data-testid="graph-window"] {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
 
 /* Explore: search-first omnibox above compact tools and the catalog. */
 .atlas-explore .atlas-omnibox {
@@ -2393,6 +2449,7 @@
 }
 .atlas-tool.compact .atlas-input {
   width: 128px;
+  min-width: 0;
   height: 28px;
   font-size: 13px;
 }

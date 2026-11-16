@@ -56,6 +56,18 @@ EMPTY_MARKERS = (
 UNQUALIFIED_MARKERS = ("No complete interval snapshot", "incomplete")
 
 
+def raw_slice_outcome(error):
+    """Classify a raw-slice failure without treating unqualified data as empty."""
+    message = str(error)
+    if any(marker in message for marker in UNQUALIFIED_MARKERS):
+        return "unread"
+    if any(marker in message for marker in EMPTY_MARKERS):
+        return "empty"
+    if "budget" in message or "truncated" in message:
+        return "unread"
+    return "error"
+
+
 def sample_gaps(gaps, limit=MAX_GAP_READS):
     """Unsummarized slices read raw: all of them up to ``limit``, else ``limit``
     evenly spaced ones (always the oldest and the newest)."""
@@ -565,12 +577,11 @@ class AdmQualified(GeneratingCommand):
                 try:
                     return self._window(profile, config, selection, *window)
                 except (SearchError, ValueError) as exc:
-                    if any(marker in str(exc) for marker in EMPTY_MARKERS):
-                        return None
-                    if "budget" in str(exc) or "truncated" in str(exc):
-                        # Over the interactive evidence budget: not read, and
-                        # coverage says so; summaries split such slices.
+                    outcome = raw_slice_outcome(exc)
+                    if outcome == "unread":
                         unread.append(window)
+                        return None
+                    if outcome == "empty":
                         return None
                     raise
 

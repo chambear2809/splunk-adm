@@ -164,7 +164,7 @@ describe("app attribution for node-address traffic", () => {
     firstSeen: 100,
     lastSeen: 200,
   });
-  it("Hubble pod flows on the same node pair and time name the app", () => {
+  it("does not attribute unscoped Hubble flows on matching node names", () => {
     const c = tunnel();
     attributeApps(
       [c],
@@ -191,9 +191,9 @@ describe("app attribution for node-address traffic", () => {
       ],
       new Map([["lab|appd-k8-1", ["hosted-x"]]]),
     );
-    expect(c.apps).toEqual([{ name: "recommender", basis: "hubble" }]);
+    expect(c.apps).toBeUndefined();
   });
-  it("without a Hubble source node, the receiving node must be an end", () => {
+  it("does not attribute an unscoped Hubble receiving node", () => {
     const c = tunnel();
     attributeApps(
       [c],
@@ -217,9 +217,9 @@ describe("app attribution for node-address traffic", () => {
       ],
       new Map(),
     );
-    expect(c.apps).toEqual([{ name: "persistence", basis: "hubble" }]);
+    expect(c.apps).toBeUndefined();
   });
-  it("falls back to apps hosted on either node, marked inferred, in the same cluster only", () => {
+  it("does not attribute hosted apps without a routing scope", () => {
     const c = tunnel();
     attributeApps(
       [c],
@@ -229,19 +229,16 @@ describe("app attribution for node-address traffic", () => {
         ["other|appd-k8-5", ["nope"]],
       ]),
     );
-    expect(c.apps).toEqual([{ name: "auth", basis: "hosted" }]);
+    expect(c.apps).toBeUndefined();
   });
-  it("hosted-on apps are not counted, only listed as possibly affected", () => {
+  it("unscoped hosted apps are not listed as affected", () => {
     const c = tunnel();
     attributeApps([c], [], new Map([["lab|appd-k8-1", ["auth"]]]));
     const f = el("10.110.96.3");
     const r = failsImpact([f], [c], pathContext(topo));
     expect(r.apps).toEqual([]);
     expect(r.kpis.apps).toEqual({ outage: 0, degraded: 0, unknown: 0 });
-    expect(r.possibleApps).toMatchObject([{ app: "auth", basis: "hosted" }]);
-    expect(r.headline).toMatch(
-      /^10\.110\.96\.3 down: \d+ outage · 0 workloads degraded · ~1 possibly affected · /,
-    );
+    expect(r.possibleApps).toEqual([]);
     expect(r.headlineMain).not.toContain("possibly");
   });
 });

@@ -534,7 +534,8 @@ def choose_runs(rows, start, end):
         complete = [
             r
             for r in runs
-            if r["expected"] > 0
+            if r["status"] in ("ok", "empty")
+            and r["expected"] > 0
             and r["docs"] == r["expected"]
             and r["rows"] % r["expected"] == 0
             and r["horizon"] >= slice_start + SLICE

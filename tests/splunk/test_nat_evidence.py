@@ -6,6 +6,7 @@ live FMC/FTD eStreamer emission. Run with the task-owned lab environment.
 
 from __future__ import annotations
 
+import configparser
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,40 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "fixtures" / "raw-nat-ftd" / "ftd_connection_nat.ndjson"
 OTEL_FIXTURE = ROOT / "fixtures" / "raw" / "otel_traces.ndjson"
 FRONTEND_VALIDATOR = ROOT / "tests" / "splunk" / "validate_nat_graph.mjs"
+
+
+class NatProjectionContractTest(unittest.TestCase):
+    """Check the shipped pipelines retain one common FTD evidence contract."""
+
+    def test_v2_projections_preserve_same_validation_and_cap_as_v1(self):
+        config = configparser.RawConfigParser(strict=False)
+        path = ROOT / "splunk_app" / "splunk_adm" / "default" / "macros.conf"
+        config.read_string(path.read_text().replace("\\\n", ""))
+        first = config["adm_flow_enrich"]["definition"]
+        second = config["adm_flow_enrich_v2"]["definition"]
+
+        def nat_validation(definition: str) -> str:
+            return definition.split("| eval adm_ftd_nat_ports_valid=", 1)[1].split(
+                "| fields _time _indextime adm_*", 1
+            )[0]
+
+        self.assertEqual(nat_validation(first), nat_validation(second))
+        for version in ("", "_v2"):
+            rollup = config[f"adm_conversation_rollup{version}"]["definition"]
+            self.assertIn("values(adm_nat_observation) AS adm_nat_observations", rollup)
+            self.assertIn(
+                "nat_observations_truncated=if(mvcount(adm_nat_observations)>32", rollup
+            )
+            self.assertIn("mvindex(mvsort(adm_nat_observations), 0, 31)", rollup)
+            self.assertIn("nat_observations nat_observations_truncated", rollup)
+            reader = config[f"adm_graph_inputs{version}(4)"]["definition"]
+            self.assertIn(
+                "spath input=nat_observations output=adm_nat_contexts", reader
+            )
+            self.assertIn("values(adm_nat_contexts) AS adm_nat_contexts", reader)
+            self.assertIn(
+                "max(nat_observations_truncated) AS adm_nat_truncated", reader
+            )
 
 
 @unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires disposable Splunk lab")
@@ -316,7 +351,10 @@ class NatEvidenceTest(unittest.TestCase):
             time.sleep(1)
         self.fail(f"{label} did not reach exactly {expected} searchable rows")
 
-    def rollups(self) -> dict[str, dict]:
+    def rollups(self, version: int = 1) -> dict[str, dict]:
+        macro = (
+            "adm_conversation_rollup_v2" if version == 2 else "adm_conversation_rollup"
+        )
         projection = (
             "| table adm_record scope client_ip server_ip server_port transport "
             "observer scope_mapping_verified bytes_c2s bytes_s2c packets records nat_observations nat_observations_truncated"
@@ -345,11 +383,11 @@ class NatEvidenceTest(unittest.TestCase):
             if name not in ("unmapped", "reported_invalid", "eventtype")
         )
         rows = lab.search(
-            f"| `adm_conversation_rollup` | where scope IN ({scope_list}) {projection}",
+            f"| `{macro}` | where scope IN ({scope_list}) {projection}",
             *window,
         )
         unmapped = lab.search(
-            "| `adm_conversation_rollup` "
+            f"| `{macro}` "
             f"| where observer={json.dumps('ftd:' + self.devices['unmapped'])} {projection}",
             *window,
         )
@@ -505,6 +543,33 @@ class NatEvidenceTest(unittest.TestCase):
         self.assertEqual(int(capped["bytes_s2c"]), 33 * 4800)
         self.assertEqual(len(json.loads(capped["nat_observations"])), 32)
         self.assertEqual(str(capped["nat_observations_truncated"]), "1")
+
+    def test_v2_rollup_preserves_v1_nat_evidence_and_boundaries(self):
+        # All inputs are synthetic. Compare whole returned tuples and counters,
+        # including invalid tuples, unmapped scopes and the 32-record cap.
+        first = self.rollups()
+        second = self.rollups(version=2)
+        self.assertEqual(first.keys(), second.keys())
+        for scope, old in first.items():
+            with self.subTest(scope=scope):
+                new = second[scope]
+                for field in (
+                    "client_ip",
+                    "server_ip",
+                    "server_port",
+                    "transport",
+                    "scope_mapping_verified",
+                    "bytes_c2s",
+                    "bytes_s2c",
+                    "packets",
+                    "records",
+                    "nat_observations_truncated",
+                ):
+                    self.assertEqual(old.get(field), new.get(field), field)
+                self.assertEqual(
+                    json.loads(old.get("nat_observations", "[]")),
+                    json.loads(new.get("nat_observations", "[]")),
+                )
 
     def test_nat_observation_alone_does_not_create_a_backend_handoff(self):
         row = self.rollups()[self.scopes["nat"]]
@@ -836,6 +901,22 @@ class NatEvidenceTest(unittest.TestCase):
             "graph-test conversation summaries",
         )
 
+        lab.search(
+            "| `adm_conversation_rollup_v2` "
+            f"| where scope IN ({scopes_literal}) "
+            '| collect index=`adm_summary_index_v2_name` source="adm:conversation"',
+            bucket_start,
+            bucket_start + 300,
+        )
+        self.wait_for_exact_search_count(
+            'search `adm_index_summary_v2` source="adm:conversation" '
+            f"scope={json.dumps(self.graph_scope)} | stats count AS count",
+            bucket_start,
+            bucket_start + 300,
+            3,
+            "V2 graph-test conversation summaries",
+        )
+
         args = {
             "service": "frontend",
             "environment": "demo",
@@ -966,3 +1047,31 @@ class NatEvidenceTest(unittest.TestCase):
         self.assertEqual(fractional["nat_event_window"]["start"], bucket_start)
         self.assertEqual(fractional["nat_event_window"]["end"], event_time + 0.5)
         self.assertEqual(exact["nat_event_window"]["end"], event_time)
+
+        # The V2 reader must deliver the same evidence, timing and counters
+        # to the frontend without creating translation-derived edges.
+        v2_cases = []
+        for latest in (bucket_start + 300, event_time + 0.5, event_time):
+            rows = lab.search(
+                '`adm_graph_v2("frontend","demo","' + cluster + '","shop")`',
+                bucket_start,
+                latest,
+            )
+            v2_cases.append({"rows": rows, "args": args})
+        v2_full, v2_fractional, v2_exact = self._frontend_graphs(v2_cases)
+        for old, new in zip(
+            (full, fractional, exact), (v2_full, v2_fractional, v2_exact), strict=True
+        ):
+            old_edges = {edge["id"]: edge for edge in communication_edges(old)}
+            new_edges = {edge["id"]: edge for edge in communication_edges(new)}
+            self.assertEqual(old_edges.keys(), new_edges.keys())
+            for edge_id, old_edge in old_edges.items():
+                new_edge = new_edges[edge_id]
+                for field in (
+                    "count",
+                    "bytes",
+                    "nat_observations",
+                    "nat_observations_truncated",
+                ):
+                    self.assertEqual(old_edge.get(field), new_edge.get(field), field)
+            self.assertEqual(old.get("nat_event_window"), new.get("nat_event_window"))

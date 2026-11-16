@@ -98,6 +98,7 @@ export function TraceView({
   onCancel,
   onRetry,
   actions,
+  navigationParams,
 }: {
   request: TraceRequest;
   result: TraceResult;
@@ -106,6 +107,8 @@ export function TraceView({
   onRetry?: () => void;
   /** Extra header controls, e.g. "Open on map". */
   actions?: ReactNode;
+  /** Exact bounds and scope of the graph that produced this trace. */
+  navigationParams?: URLSearchParams;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<number>();
@@ -146,7 +149,9 @@ export function TraceView({
         ? plural(records, "record")
         : conversations
           ? plural(conversations, "conversation")
-          : "No records"
+          : trace?.status === "partial"
+            ? "Source coverage incomplete"
+            : "No records"
       : undefined,
     trace
       ? trace.status === "partial"
@@ -231,6 +236,11 @@ export function TraceView({
           {trace.reason}
         </p>
       )}
+      {trace?.status === "partial" && trace.notes.length > 0 && (
+        <p className="atlas-trace-error" role="note">
+          {trace.notes.join(" ")}
+        </p>
+      )}
       {result.status === "loading" && (
         <p className="atlas-trace-loading" role="status">
           <RefreshCw size={13} className="spin" aria-hidden /> Tracing…
@@ -288,6 +298,8 @@ export function TraceView({
               kind={hopIcon(hop, done.topo).kind}
               blocked={blocked.get(selected)}
               summary={done.summary}
+              navigationParams={navigationParams}
+              scope={request.scope}
               lastSeen={hopLastSeen(hop, done.summary)}
               deviceId={
                 hop.device && done.topo.byId.has(hop.device)
@@ -369,6 +381,8 @@ function HopDetail({
   kind,
   blocked,
   summary,
+  navigationParams,
+  scope,
   lastSeen,
   deviceId,
   onClose,
@@ -377,6 +391,8 @@ function HopDetail({
   kind: string;
   blocked?: BlockedHop;
   summary: TraceSummary;
+  navigationParams?: URLSearchParams;
+  scope?: string;
   lastSeen?: number;
   deviceId?: string;
   onClose: () => void;
@@ -402,7 +418,7 @@ function HopDetail({
         hop.notSeen.map((a, i) => (
           <Fragment key={a.device}>
             {i > 0 && ", "}
-            <a href={deviceURL(a.device)}>{a.label}</a>
+            <a href={deviceURL(a.device, navigationParams)}>{a.label}</a>
           </Fragment>
         )),
     ],
@@ -420,7 +436,7 @@ function HopDetail({
         hop.alternatives.map((a, i) => (
           <Fragment key={a.device}>
             {i > 0 && ", "}
-            <a href={deviceURL(a.device)}>{a.label}</a>
+            <a href={deviceURL(a.device, navigationParams)}>{a.label}</a>
           </Fragment>
         )),
     ],
@@ -451,7 +467,10 @@ function HopDetail({
           ))}
       </dl>
       {deviceId && (
-        <a className="atlas-trace-btn" href={deviceURL(deviceId)}>
+        <a
+          className="atlas-trace-btn"
+          href={deviceURL(deviceId, navigationParams)}
+        >
           Open device
         </a>
       )}
@@ -464,6 +483,9 @@ function HopDetail({
         interfaces={
           deviceId ? [hop.in, hop.out].filter((i): i is string => !!i) : []
         }
+        scope={scope}
+        earliest={navigationParams?.get("earliest") ?? undefined}
+        latest={navigationParams?.get("latest") ?? undefined}
       />
     </aside>
   );

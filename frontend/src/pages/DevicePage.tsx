@@ -1,7 +1,12 @@
 import { ImpactButton } from "../impact/ImpactButton";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { Ban, RefreshCw } from "lucide-react";
-import { pageURL, type UrlState } from "../app/urlState";
+import {
+  isSafeIdentifier,
+  pageURL,
+  URL_STATE_CHANGED,
+  type UrlState,
+} from "../app/urlState";
 import {
   demoDeviceFlows,
   demoVsphereTopology,
@@ -26,6 +31,7 @@ import {
 import { requireNoSearchErrors, type SearchClient } from "../data/searchClient";
 import { plural, prettyBytes, sourceLabel } from "../glossary";
 import { TimePicker } from "../map/TimePicker";
+import { resolveTime, timeError } from "../data/timeBounds";
 import { loadTopology } from "../provider";
 import { VirtualTable, type VirtualColumn } from "../scale/VirtualTable";
 import type { Theme } from "../theme";
@@ -49,6 +55,50 @@ import {
 import { DeviceLookup, deviceURL, ExploreTabs, traceURL } from "./ExploreTools";
 
 const TOKEN = /^[A-Za-z0-9_.:/-]{1,128}$/;
+
+/** Resolve both bounds against one clock so drilldowns retain the queried window. */
+export function absoluteDeviceWindow(
+  earliest: string,
+  latest: string,
+  timezone?: string,
+  now = Date.now() / 1000,
+) {
+  const error = timeError(earliest, latest, timezone, now);
+  if (error) throw new Error(error);
+  const start = resolveTime(earliest, timezone, now);
+  const end = resolveTime(latest, timezone, now);
+  if (start === undefined || end === undefined)
+    throw new Error("Unsupported time window.");
+  return { earliest: String(start), latest: String(end) };
+}
+
+/** Read a history entry without silently replacing a partial or invalid window. */
+export function deviceHistoryState(params: URLSearchParams, timezone?: string) {
+  const start = params.get("earliest");
+  const end = params.get("latest");
+  if ((start === null) !== (end === null))
+    throw new Error("Both time window bounds are required.");
+  const device = params.get("id");
+  if (device !== null && !isSafeIdentifier(device))
+    throw new Error("Invalid device identifier.");
+  return {
+    ...absoluteDeviceWindow(start ?? "-15m", end ?? "now", timezone),
+    device: device ?? undefined,
+  };
+}
+
+function writeDeviceWindow(
+  window: { earliest: string; latest: string },
+  action: "push" | "replace",
+) {
+  const url = new URL(location.href);
+  url.searchParams.set("earliest", window.earliest);
+  url.searchParams.set("latest", window.latest);
+  // An Impact window left in navigation context would override earliest.
+  url.searchParams.delete("window");
+  history[action === "push" ? "pushState" : "replaceState"](null, "", url);
+  dispatchEvent(new Event(URL_STATE_CHANGED));
+}
 
 type Load =
   | { status: "loading" }
@@ -188,13 +238,15 @@ const counter = (
   );
 
 const name = (ip: string, label?: string) => (label ? `${label}` : ip);
-const COLUMNS: VirtualColumn<DeviceConversation>[] = [
+const columns = (
+  params: URLSearchParams,
+): VirtualColumn<DeviceConversation>[] => [
   {
     key: "src",
     header: "Source",
     render: (c) => (
       <a
-        href={traceURL(c.src, c.dst)}
+        href={traceURL(c.src, c.dst, params)}
         data-trace-link
         title={`Trace ${c.src} → ${c.dst}`}
       >
@@ -361,13 +413,64 @@ export function DevicePage({
   theme?: Theme;
 }) {
   const demo = !__ADM_SPLUNK_BUILD__ && !live;
-  const [earliest, setEarliest] = useState(state.earliest);
-  const [latest, setLatest] = useState(state.latest);
+  const [navigation, setNavigation] = useState(() => {
+    try {
+      if (typeof location !== "undefined")
+        return {
+          value: deviceHistoryState(
+            new URLSearchParams(location.search),
+            timezone,
+          ),
+          error: "",
+        };
+      return {
+        value: {
+          ...absoluteDeviceWindow(state.earliest, state.latest, timezone),
+          device: state.device,
+        },
+        error: "",
+      };
+    } catch (error) {
+      return {
+        value: undefined,
+        error: error instanceof Error ? error.message : "Invalid time window.",
+      };
+    }
+  });
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "loading" });
-  const query = state.device;
+  const query = navigation.value?.device;
+  const earliest = navigation.value?.earliest ?? "";
+  const latest = navigation.value?.latest ?? "";
   useEffect(() => {
-    if (!query) return;
+    if (navigation.value && typeof location !== "undefined")
+      writeDeviceWindow(navigation.value, "replace");
+    // Only normalize the initial entry; subsequent picker edits create history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const value = deviceHistoryState(
+          new URLSearchParams(location.search),
+          timezone,
+        );
+        writeDeviceWindow(value, "replace");
+        setLoad({ status: "loading" });
+        setNavigation({ value, error: "" });
+      } catch (error) {
+        setNavigation({
+          value: undefined,
+          error:
+            error instanceof Error ? error.message : "Invalid time window.",
+        });
+      }
+    };
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, [timezone]);
+  useEffect(() => {
+    if (!query || !navigation.value) return;
     const controller = new AbortController();
     setLoad({ status: "loading" });
     loadDevicePage({
@@ -389,8 +492,17 @@ export function DevicePage({
           }),
       );
     return () => controller.abort();
-  }, [query, demo, client, earliest, latest, timezone, nonce]);
-  const done = load.status === "done" ? load : undefined;
+  }, [
+    query,
+    demo,
+    client,
+    earliest,
+    latest,
+    timezone,
+    nonce,
+    navigation.value,
+  ]);
+  const done = navigation.value && load.status === "done" ? load : undefined;
   const device = done?.device;
   const flows = done?.flows;
   const summary = useMemo(() => flows && deviceFlowSummary(flows), [flows]);
@@ -412,14 +524,26 @@ export function DevicePage({
       <div className="atlas-explore-tools">
         <DeviceLookup key={query} initial={query} />
         <TimePicker
-          earliest={earliest}
-          latest={latest}
+          earliest={earliest || state.earliest}
+          latest={latest || state.latest}
           timezone={timezone}
           live={inSplunk}
           disabled={demo}
           onChange={(start, end) => {
-            setEarliest(start);
-            setLatest(end);
+            try {
+              const next = absoluteDeviceWindow(start, end, timezone);
+              writeDeviceWindow(next, "push");
+              setLoad({ status: "loading" });
+              setNavigation({ value: { ...next, device: query }, error: "" });
+            } catch (error) {
+              setNavigation({
+                value: undefined,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "Invalid time window.",
+              });
+            }
           }}
         />
         {demo && <span className="chip demo">Demo data</span>}
@@ -428,7 +552,7 @@ export function DevicePage({
         <header className="atlas-device-head">
           <h1 id="device-title">{title}</h1>
           {meta.length > 0 && <p className="muted">{meta.join(" · ")}</p>}
-          {(device || query) && (
+          {navigation.value && (device || query) && (
             <ImpactButton
               token={device?.mgmt_ip ?? device?.id ?? query}
               label={title}
@@ -438,7 +562,8 @@ export function DevicePage({
             />
           )}
         </header>
-        {!query && <p role="status">No device selected</p>}
+        {navigation.error && <p role="alert">{navigation.error}</p>}
+        {!navigation.error && !query && <p role="status">No device selected</p>}
         {query && load.status === "loading" && (
           <p role="status" className="muted">
             <RefreshCw size={13} className="spin" aria-hidden /> Loading…
@@ -518,7 +643,11 @@ export function DevicePage({
                     : "Conversations"
                 }
                 rows={flows.conversations}
-                columns={COLUMNS}
+                columns={columns(
+                  new URLSearchParams(
+                    typeof location === "undefined" ? "" : location.search,
+                  ),
+                )}
                 rowKey={conversationKey}
                 empty="No flows in this window"
               />

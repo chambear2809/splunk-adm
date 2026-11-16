@@ -132,9 +132,10 @@ describe("device flows", () => {
       "| `adm_device_flows(pod-1/node-103)`",
     );
     expect(() => deviceFlowsSearch("a) | delete")).toThrow();
-    expect(pathTraceSearch("10.1.1.1", "10.1.1.2")).toBe(
-      "| `adm_path_trace(10.1.1.1,10.1.1.2)`",
+    expect(pathTraceSearch("10.1.1.1", "10.1.1.2", "prod")).toBe(
+      "| `adm_path_trace(10.1.1.1,10.1.1.2,prod)`",
     );
+    expect(() => pathTraceSearch("10.1.1.1", "10.1.1.2")).toThrow(/scope/);
     expect(() => pathTraceSearch("web01", "10.1.1.2")).toThrow();
   });
 });

@@ -3,6 +3,7 @@ import { impactCsv } from "./csv";
 import {
   impactMembersSearch,
   impactSearch,
+  loadLiveImpact,
   memberNameNote,
   rowsToImpact,
   windowHours,
@@ -25,6 +26,30 @@ describe("impact members", () => {
 });
 
 describe("impact search and rows", () => {
+  it("fails closed before dispatching live impact without a qualified source", async () => {
+    let called = false;
+    await expect(
+      loadLiveImpact({
+        tokens: ["leaf101"],
+        client: {
+          search: async () => {
+            called = true;
+            return { rows: [], warnings: [], errors: [] };
+          },
+        },
+        earliest: "1000",
+        latest: "1600",
+        scope: "scope-a",
+        signal: new AbortController().signal,
+        loadBaseTopology: async () => {
+          called = true;
+          throw new Error("unexpected topology query");
+        },
+        merge: (base) => base,
+      }),
+    ).rejects.toThrow("Live impact analysis is unavailable");
+    expect(called).toBe(false);
+  });
   it("passes only validated tokens and '-' for an empty side", () => {
     expect(
       impactSearch({
@@ -36,7 +61,7 @@ describe("impact search and rows", () => {
       "| `adm_impact_element(-,-,summary)`",
     );
   });
-  it("parses adm_impact_element rows; a replicated pod gets its replicas as alternates", () => {
+  it("does not promote unqualified replica node names into alternatives", () => {
     const r = rowsToImpact([
       {
         row_type: "conversation",
@@ -68,7 +93,7 @@ describe("impact search and rows", () => {
     const c = r.conversations[0];
     expect(c.src.kind).toBe("vm");
     expect(c.dst).toMatchObject({ kind: "pod", node: "appd-k8-3", app: "web" });
-    expect(c.backends?.map((b) => b.node)).toEqual(["appd-k8-3", "appd-k8-5"]);
+    expect(c.backends).toBeUndefined();
     expect(r.k8sNodes.get("appd-k8-5")).toBe("10.110.96.7");
     expect(r).toMatchObject({
       total: 9,
@@ -77,6 +102,25 @@ describe("impact search and rows", () => {
       source: "raw",
     });
     expect(() => rowsToImpact({})).toThrow();
+  });
+  it("rejects replica lists without cluster, scope and interval evidence", () => {
+    const result = rowsToImpact([
+      {
+        row_type: "conversation",
+        src: "192.0.2.1",
+        dst: "192.0.2.2",
+        protocol: "tcp",
+        dst_kinds: "pod",
+        dst_owner: "orders",
+        dst_owner_kind: "Deployment",
+        dst_cluster: "cluster-a",
+        dst_node: "node-a",
+        // The reader does not say whether these nodes belong to another
+        // cluster or to an earlier interval.
+        dst_replica_nodes: ["cluster-b-node", "retired-node"],
+      },
+    ]);
+    expect(result.conversations[0].backends).toBeUndefined();
   });
   it("derives per-hour rates from the window", () => {
     expect(windowHours("-1h")).toBe(1);
@@ -102,6 +146,26 @@ describe("impact URL", () => {
       latest: "now",
     });
   });
+  it("preserves only a valid explicit scope on impact links", () => {
+    const href = impactURL(
+      ["leaf101"],
+      { earliest: "1000", latest: "1600", scope: "scope-a" },
+      new URLSearchParams(),
+    );
+    const state = parseImpactParams(new URLSearchParams(href.split("?")[1]));
+    expect(state).toMatchObject({
+      scope: "scope-a",
+      earliest: "1000",
+      latest: "1600",
+    });
+    expect(
+      parseImpactParams(new URLSearchParams("scope=unmapped%3Asecret")).scope,
+    ).toBeUndefined();
+    expect(
+      parseImpactParams(new URLSearchParams("scope=%22%20OR%20index%3D*"))
+        .scope,
+    ).toBeUndefined();
+  });
   it("defaults to the app's -15m window", () => {
     expect(DEFAULT_IMPACT_WINDOW).toBe("-15m");
     expect(parseImpactParams(new URLSearchParams("element=leaf101"))).toEqual({
@@ -126,7 +190,7 @@ describe("impact URL", () => {
 });
 
 describe("demo replicas and export", () => {
-  it("a pod whose own leg survives is unaffected; a lost pod fails over to its replica", async () => {
+  it("does not infer pod alternatives from matching owner names", async () => {
     const d = await loadDemoImpact(["leaf-101"]);
     const r = failsImpact(d.elements, d.conversations, d.ctx, {
       hours: d.hours,
@@ -134,7 +198,7 @@ describe("demo replicas and export", () => {
     const rows = r.rows.filter((c) => c.conv.dst.name?.startsWith("frontend-"));
     for (const c of rows) {
       expect(c.alternate).not.toContain(c.conv.dst.name);
-      expect(["other replica", "other backend"]).toContain(c.reason);
+      expect(c.reason).not.toBe("other replica");
     }
     const csv = impactCsv(r, {
       window: "-1h to now",
