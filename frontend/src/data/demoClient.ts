@@ -12,6 +12,10 @@ import aciTopology from "../../../fixtures/demo-topology-aci.json";
 import networkingAci from "../../../fixtures/demo-networking-aci.json";
 import networkingNxos from "../../../fixtures/demo-networking-nxos.json";
 import networkingTopology from "../../../fixtures/demo-networking-topology.json";
+import vsphereOverlay from "../../../fixtures/demo-topology-aci-vsphere.json";
+import pathTraceDemo from "../../../fixtures/demo-path-trace-aci.json";
+import deviceFlowsDemo from "../../../fixtures/demo-device-flows-aci.json";
+import { rowsToDeviceFlows, type DeviceFlows } from "./deviceFlows";
 import { type Graph } from "../graph";
 import { rowsToGraph, type GraphArgs } from "../rows";
 import { emptyTopology, rowsToTopology, type Topology } from "../topology";
@@ -192,3 +196,30 @@ export async function fetchPreviousDemo(
     signal?.removeEventListener("abort", abort);
   }
 }
+
+/**
+ * ACI demo topology plus the vSphere rows `adm_vsphere_topology(1)` derives from
+ * the APIC VMM classes of the same fixture (host management IPs from
+ * fixtures/raw-vmware/scenario.json). Development builds only.
+ */
+export const demoVsphereTopology = (): Topology => {
+  const base = scenarioData("aci").topology;
+  const rows = Array.isArray(base) ? base : (base as { rows?: unknown[] }).rows;
+  return rowsToTopology([...(rows ?? []), ...vsphereOverlay]);
+};
+/** adm_path_trace observation rows for the demo pair win-client-01 → orders-db-01. */
+export const demoPathTraceRows = (): readonly Record<string, unknown>[] =>
+  pathTraceDemo.rows;
+export const DEMO_PATH_TRACE_PAIR = {
+  src: "10.30.40.25",
+  dst: "10.20.30.40",
+} as const;
+/** adm_device_flows rows for a demo device, or an empty result. */
+export const demoDeviceFlows = (device: string): DeviceFlows =>
+  rowsToDeviceFlows(
+    device,
+    (deviceFlowsDemo.devices as Record<string, unknown[]>)[device] ?? [],
+  );
+export const DEMO_FLOW_DEVICES: readonly string[] = __ADM_SPLUNK_BUILD__
+  ? []
+  : Object.keys(deviceFlowsDemo.devices);

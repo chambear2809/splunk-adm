@@ -1,85 +1,164 @@
-# Application Atlas: what we need from each team
+# Application Atlas operator guides
 
-Application Atlas maps which systems a Kubernetes application talks to, over which ports, seen by which network devices, and under which ACI policy. It builds that map inside Splunk from data your systems already produce. This folder lists, per team, exactly what to configure and what to send back before the pilot.
+Index for operators. Support targets: **Splunk Cloud Platform** and **Splunk Enterprise 10.6+**. Configure only the sources you select; see [deployment options](deployment-options.md). Ordered runbook: [splunk-setup-guide.md](splunk-setup-guide.md).
 
-The original pilot is one Cisco ACI fabric (with Nexus Dashboard) and one Kubernetes cluster running Cilium on Splunk Enterprise 10.6. NX-OS and Cisco networking demos are additional synthetic validation scenarios; they do not establish customer or Cloud qualification. Start with [deployment options and missing sources](deployment-options.md) to choose the inputs and features you actually need. Each team handout applies only when that source is selected.
+## Reference topology
 
-The shipped public readers remain V1 and V2 writers remain disabled. The optional Cisco networking integration adds a separate local qualification scenario with Catalyst clients reaching an ACI application and Meraki wireless clients reaching an NX-OS application. Both applications use distinct Cilium clusters. The [Cisco networking handout](cisco-enterprise-networking.md) describes source requirements and field limitations. [Final engineering qualification](../ATLAS_FINAL_QUALIFICATION.md) records the complete standalone suite, separate V2 migration/browser acceptance and bounded same-host SHC results. These do not qualify a customer deployment, production failure domains/capacity, actual collector/exporter operation or Cloud. The V2 migration helper still accepts only its qualified standalone target; SHC validation covers V1/staged V2 and shared settings, not V2 cutover.
+| Tier | Runs | Does not run |
+| --- | --- | --- |
+| Splunk Cloud search tier | Application Atlas (`splunk_adm`), search-time TAs, indexes (ACS), HEC tokens | Modular inputs. Leave every vendor input there disabled. |
+| Heavy forwarder (HF) | All modular inputs: DC Networking (ACI/ND/NX-OS), Stream forwarder (NetFlow/IPFIX receiver), Intersight, VMware (DCS + DCN), Security Cloud eStreamer | Atlas, Atlas searches |
+| Kubernetes | Splunk OTel Collector (Helm) → HEC on Cloud | — |
+| Enterprise (on-prem) | Same split; search head replaces the Cloud search tier, indexes via `indexes.conf` | — |
 
-## Data flow
+Cloud indexes: [`splunk-cloud-acs-admin-setup`][s-acs]. HEC: [`splunk-hec-service-setup`][s-hec]. Restarts: [`splunk-platform-restart-orchestrator`][s-restart].
+
+## Data-source matrix
+
+Versions are the inspected pins in [`research/package-manifest.json`](../../research/package-manifest.json). Index = default; change the matching `adm_index_*` macro if yours differs.
+
+| Source | TA / app (version) | Install | Index / sourcetype | Atlas uses it for | Skill | Runbook |
+| --- | --- | --- | --- | --- | --- | --- |
+| ACI / APIC | Cisco DC Networking 1.2.2 (7777) | HF inputs; Cloud search-time | `cisco_dc` (`adm_index_dcn`) / `cisco:dc:aci:class`, `cisco:dc:aci:stats` | Endpoints, EPG/BD, fabric topology, contracts, ACL log, VMM/vSphere ports and uplinks, spine evidence | [`cisco-dc-networking-setup`][s-dcn] | [aci-network](aci-network.md), [VMM classes](ACI_VMM_ADJACENCY_CLASSES.md), [spine evidence](ACI_SPINE_PATH_EVIDENCE.md) |
+| Nexus Dashboard | DC Networking 1.2.2 | HF inputs | `cisco_dc` / `cisco:dc:nd:flows`, `cisco:dc:nd:endpoints` | Fabric flow observations, endpoint history | [`cisco-dc-networking-setup`][s-dcn] | [aci-network](aci-network.md#nexus-dashboard-inputs) |
+| NX-OS (NX-API) | DC Networking 1.2.2 | HF inputs | `cisco_dc` / `cisco:dc:nexus9k` | Device names, ifIndex → interface, CDP links | [`cisco-dc-networking-setup`][s-dcn] | [aci-network](aci-network.md) |
+| NetFlow v9 — ACI leaves | Stream Forwarders 8.1.3 (HF); Stream App 8.1.6 + Wire Data 8.1.6 (search tier) | HF receiver | `netflow` / `stream:netflow` | Observed conversations; leaf + ingress port "Seen". V2 profile `aci_leaf_netflow` | [`splunk-stream-setup`][s-stream] | [network-stream](network-stream.md) |
+| IPFIX — VMware VDS (ESXi) | Same Stream packages | HF receiver | `netflow` / `stream:netflow` | VDS hop "Seen" on path trace and Device page. V2 profile `vmware_vds_ipfix` | [`splunk-stream-setup`][s-stream] | [network-stream](network-stream.md#vmware-vds-ipfix) |
+| IPFIX — Catalyst / SD-WAN / Meraki MS390 | Same Stream packages; Enterprise Networking NetFlow Add-on 4.0.0 | HF receiver | `netflow` / `stream:netflow` | V2 traffic observations. Profiles `catalyst_campus_fnf`, `catalyst_sdwan_ipfix`, `meraki_ms390_ipfix` | [`cisco-catalyst-enhanced-netflow-setup`][s-cefn] | [cisco-enterprise-networking](cisco-enterprise-networking.md) |
+| Catalyst Center | Enterprise Networking Add-on 4.0.60 + App 4.0.20 | HF inputs | `cisco_catalyst` / `cisco:dnac:client` | V2 wired-client identity | [`cisco-catalyst-ta-setup`][s-cat] | [cisco-enterprise-networking](cisco-enterprise-networking.md) |
+| Meraki | Meraki Add-on 3.5.0 | HF inputs | `cisco_meraki` / `meraki:accesspoints` | V2 wireless association | [`cisco-meraki-ta-setup`][s-mer] | [cisco-enterprise-networking](cisco-enterprise-networking.md) |
+| Kubernetes objects + traces | Splunk OTel Collector for Kubernetes, Helm 0.161.0 | Cluster → HEC | `k8s` / `kube:object:*`; `otel_traces` / `otel:traces` | Pod/Service/Node identity history, service calls | [`splunk-observability-otel-collector-setup`][s-otel] | [kubernetes-platform](kubernetes-platform.md), [application-teams](application-teams.md) |
+| Cilium / Hubble flows | OTel Collector file tail | Cluster → HEC | `cilium_hubble` / `cilium:hubble:flow` | Pod flows, Service → backend handoff | [`cisco-isovalent-platform-setup`][s-iso], [`splunk-observability-isovalent-integration`][s-isoint] | [cilium-isovalent](cilium-isovalent.md) |
+| Isovalent Runtime Security | Cisco Security Cloud 3.7.2 (7404) | HEC; app on search tier (index-time rename) | `cisco_isovalent` / `cisco:isovalent:processConnect` | Process connection evidence | [`cisco-security-cloud-setup`][s-scc] | [cilium-isovalent](cilium-isovalent.md) |
+| FMC / FTD | Cisco Security Cloud 3.7.2 | HF eStreamer input | `cisco_secure_fw` / `cisco:sfw:estreamer` | Firewall observations, same-event NAT | [`cisco-security-cloud-setup`][s-scc] | [firewall-security](firewall-security.md) |
+| AppDynamics | Atlas importer (`tools.import_appdynamics`); AppD Add-on 3.3.0 | Operator host → HEC | `adm_index_appdynamics_inventory` (unset) / `adm:appdynamics_inventory` | Node/IP inventory, backend candidates | [`cisco-appdynamics-setup`][s-appd] | [appdynamics-evidence](appdynamics-evidence.md) |
+| ThousandEyes | ThousandEyes App 0.9.0 (7719) | Vendor app | `thousandeyes` / `cisco:thousandeyes:*` | Synthetic tests, measured paths (optional) | [`cisco-thousandeyes-setup`][s-te] | [thousandeyes](thousandeyes.md) |
+| VMware vCenter | Splunk Add-on for VMware 4.2.1 + SA-Hydra 4.3.0 (3215); VMware Extractions 4.0.4 (5641) on search tier | HF (DCS + DCN). Not ACS self-service on Cloud | `vmware-inv`, `vmware-perf`, `vmware-taskevent` / `vmware:inv:*`, `vmware:perf:*` | VDS port keys and vmnic uplink names (`adm_interface_names`). vSphere topology itself comes from APIC VMM classes | [`splunk-vmware-ta-setup`][s-vmw] | [lab setup](INTERSIGHT_VMWARE_LAB_SETUP.md) |
+| VMware ESXi logs | ESXi Logs 4.2.2 (5603) | Syslog | syslog sourcetypes | **Not used**; no topology value. Skip | — | — |
+| Cisco Intersight (UCS FI, adapter vNIC, ports) | Intersight Add-on 3.2.2 (7828) on HF; 3.1.1 on Cloud 10.6 | HF inputs | `intersight` / `cisco:intersight:*` | **Not consumed yet**. The FI hop comes from APIC `hvsAdj`/`lldpAdjEp`; Intersight vNIC MACs are planned to pin vmnic ↔ FI port | [`cisco-intersight-setup`][s-int] | [lab setup](INTERSIGHT_VMWARE_LAB_SETUP.md) |
+| DNS (Stream / Hubble L7) | Stream App 8.1.6; Hubble | HF / cluster | `adm_index_dns_stream` (unset) / `stream:dns` | Optional resolution evidence | [`splunk-stream-setup`][s-stream] (platform only) | [dns-evidence](dns-evidence.md) |
+| Envoy access logs | Customer producer | HEC | `adm_index_proxy_envoy` (unset) / `atlas:proxy:envoy_access` | Optional request evidence | — | [proxy-evidence](proxy-evidence.md) |
+| AWS VPC Flow Logs | AWS add-on | Vendor input | `adm_index_aws_vpc_flow` (unset) | Optional cloud flow evidence | [`splunk-aws-ta-setup`][s-aws] (platform only) | [aws-vpc-flow-evidence](aws-vpc-flow-evidence.md) |
+| Observability Cloud health / detectors | Atlas exporters | Operator host → HEC | `adm_index_o11y_health`, `adm_index_o11y_detector_events` (unset) | Optional health evidence | — | [o11y-health](o11y-health.md), [o11y-detector-events](o11y-detector-events.md) |
+| Asset history (CMDB/IPAM export) | Atlas importer | Operator host → HEC | `adm_index_asset_history` (unset) / `adm:asset_history` | Optional ownership history | — | [asset-history](asset-history.md) |
+
+"Unset" = macro defaults to `index=unconfigured_*` until the administrator sets it.
+
+## Required ACI classes
+
+All on the HF, `apic_input_type = classInfo` unless noted, interval 300 s, index `cisco_dc` (or your `adm_index_dcn`).
+
+| Input | Classes Atlas reads | Status |
+| --- | --- | --- |
+| `stats` (shipped, `stats` type) | `fvCEp` (+ `fvIp`, `fvRsCEpToPathEp` children) | Required |
+| `classInfo_faultInst` (shipped) | `topSystem compVm compHv fvCEp fvRsCons fvRsProv fvRsVm fvRsHyper` | Required |
+| `classInfo_fvRsCEpToPathEp` (shipped) | `fvRsCEpToPathEp acllogPermitL3Pkt acllogDropL3Pkt` | Required (ACL log optional) |
+| `classInfo_adm` (custom) | `fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet` | Required |
+| `classInfo_adm` (custom, extension) | `compHpNic compVNic hvsAdj` — vSphere host uplinks | Required for vSphere paths ([VMM classes](ACI_VMM_ADJACENCY_CLASSES.md)) |
+| `classInfo_adm` (custom, extension) | `isisAdjEp coopEpRec` — spine evidence | Required for spine-hop support ([spine evidence](ACI_SPINE_PATH_EVIDENCE.md)) |
+| `classInfo_adm_network` (custom) | `fvRsBd` | Optional: EPG → BD |
+| `classInfo_adm_policy` (custom) | `fvCtx fvAEPg fvEPg fvESg vzAny vzRsAnyToCons vzRsAnyToProv vzRsAnyToConsIf vzInTerm vzOutTerm vzTaboo fvRsProtBy vzRsSubjGraphAtt` | Optional: "no permitting contract" (`adm_aci_policy_complete=1`) |
+
+- The pinned skill's `application-atlas` preset covers only the first eight `classInfo_adm` classes. Pass the full 13-class list with `--classinfo-classes`.
+- `compVNic` is collected but not read yet.
+- Spines cannot export NetFlow (APIC 6.1). Spine hops are inferred and labelled with their evidence; never "Seen".
+
+Full list for `classInfo_adm`:
 
 ```text
-ACI leaves ──NetFlow v9──► Splunk Stream forwarder ──► index netflow
-APIC / Nexus Dashboard ──API polling (DC Networking add-on)──► index cisco_dc
-FMC ──eStreamer (Cisco Security Cloud app)──► index cisco_secure_fw
-Isovalent Runtime Security ──HEC──► index cisco_isovalent
-Kubernetes API (pods, services, endpointslices, ingresses, gateways, nodes) ──Splunk OTel Collector──► index k8s
-Application spans ──Splunk OTel Collector──► index otel_traces
-Hubble flow log file on each node ──Splunk OTel Collector──► index cilium_hubble
-                                   │
-                      Application Atlas scheduled searches
-                                   │
-                      index adm_summary + KV store lookups ──► dependency map
+fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet compHpNic compVNic hvsAdj isisAdjEp coopEpRec
 ```
 
-The diagram shows the original V1 pilot. Optional V2 inputs add Catalyst Center client observations to `cisco_catalyst`, Meraki events/inventory to `cisco_meraki`, and profiled Stream/IPFIX traffic to `netflow`. V2 derived traffic/conversations use the separate `adm_summary_v2` index and client-history/catalog KV collections; see the [Cisco handout](cisco-enterprise-networking.md).
+## Source-scope profile registration
 
-## Who does what
+Applies to the V2 contract (`adm_flows_netflow_v2`, staged) and source-qualified VDS matches: each NetFlow/IPFIX exporter must map to exactly one profile and scope, or its flows stay `unmapped`. Stored in KV collection `adm_network_source_scope`. V1 readers scope exporters through `adm_observer_scope` `exporter` rows ([routing scope lookup](splunk-platform.md#routing-scope-lookup)); do both. Supported `stream_ipfix` profiles: `standard_netflow`, `aci_leaf_netflow`, `vmware_vds_ipfix`, `catalyst_campus_fnf`, `catalyst_sdwan_ipfix`, `meraki_ms390_ipfix`.
 
-| Team                       | Handout                                                                                                  | What we need                                                                                                                            | Needed before                                |
-| -------------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Splunk platform            | [splunk-platform.md](splunk-platform.md), step by step in [splunk-setup-guide.md](splunk-setup-guide.md) | Indexes, HEC tokens, add-on placement, app install and configuration, roles                                                             | Everything else (other teams send data here) |
-| ACI / network              | [aci-network.md](aci-network.md)                                                                         | Read-only APIC and Nexus Dashboard accounts, extra ACI object classes, LLDP, ACI NetFlow export, optional contract logging              | Pilot start                                  |
-| Splunk Stream / NetFlow    | [network-stream.md](network-stream.md)                                                                   | Stream forwarder with a NetFlow receiver, NetFlow stream enabled                                                                        | ACI NetFlow export                           |
-| Campus / Meraki networking | [cisco-enterprise-networking.md](cisco-enterprise-networking.md)                                         | Catalyst Center client inventory, Meraki association and inventory events, supported flow exporters, and explicit source scope profiles | Optional Cisco integration qualification     |
-| Kubernetes platform        | [kubernetes-platform.md](kubernetes-platform.md)                                                         | Splunk OTel Collector Helm values, RBAC, Hubble file tail, LLDP on nodes                                                                | Pilot start                                  |
-| Cilium / Isovalent         | [cilium-isovalent.md](cilium-isovalent.md)                                                               | Hubble flow export, load-balancing facts, Isovalent HEC export, Enterprise export sample                                                | Pilot start                                  |
-| Firewall / security        | [firewall-security.md](firewall-security.md)                                                             | FTD connection events via eStreamer, NAT sample                                                                                         | Only if traffic crosses the FTD              |
-| Application owners         | [application-teams.md](application-teams.md)                                                             | OpenTelemetry resource attributes, client spans, trace propagation through ingress                                                      | Pilot start                                  |
+| Profile | `domain_kind` | `observation_domain_present` / `_id` | `vpn_id` | `routing_domain` |
+| --- | --- | --- | --- | --- |
+| `standard_netflow` | `exporter` | `0` / blank | blank | blank |
+| `aci_leaf_netflow` | `exporter` | `1` / required | blank | blank |
+| `vmware_vds_ipfix` | `exporter` | `1` / required | blank | blank |
+| `catalyst_campus_fnf` | `exporter` | `1` / required | blank | any |
+| `catalyst_sdwan_ipfix` | `exporter` | `1` / required | required | = `vpn_id` |
+| `meraki_ms390_ipfix` | `exporter` | `1` / required | blank | blank |
+
+Checklist (administrator):
+
+- [ ] List live exporters: `` `adm_index_netflow` sourcetype=stream:netflow earliest=-15m | stats count by exporter_ip observation_domain_id ``.
+- [ ] Build `adm_network_source_scope.csv`, one row per exporter + observation domain: `source=stream_ipfix`, `source_authority=<exporter_ip, lowercase>`, `domain_kind=exporter`, `observation_domain_present`, `observation_domain_id`, `vpn_id`, `routing_domain`, `scope`, `cluster`, `profile`.
+- [ ] Use the same `scope` as the ACI/Kubernetes observers that share the routing domain (see [routing scope lookup](splunk-platform.md#routing-scope-lookup)). No fleet-wide default.
+- [ ] Upload the CSV to the app (Lookup File Editing or lookup upload).
+- [ ] Enable **ADM - Migrate network source scope**, run once from the app (`| savedsearch "ADM - Migrate network source scope"`), then disable it. Expect `blocked=0`, `rows_written` = row count.
+- [ ] If `blocked=1`: fix blank, duplicate or conflicting rows; nothing was written.
+- [ ] **Admin → Data health**: Stream source scope profiles show `mapped`, not `unmapped`, `ambiguous`, `unsupported` or `incomplete`.
+- [ ] Upgrades: run the [IPFIX authority normalization](../UPGRADES.md#ipfix-exporter-authority-normalization) check.
+
+## Team handouts
+
+| Team | Handout |
+| --- | --- |
+| Splunk platform | [splunk-platform](splunk-platform.md), [splunk-setup-guide](splunk-setup-guide.md), [deployment-options](deployment-options.md) |
+| ACI / Nexus | [aci-network](aci-network.md), [ACI_VMM_ADJACENCY_CLASSES](ACI_VMM_ADJACENCY_CLASSES.md), [ACI_SPINE_PATH_EVIDENCE](ACI_SPINE_PATH_EVIDENCE.md) |
+| Stream / NetFlow / IPFIX | [network-stream](network-stream.md), [ingest-processors](ingest-processors.md) |
+| Campus / Meraki | [cisco-enterprise-networking](cisco-enterprise-networking.md) |
+| Kubernetes | [kubernetes-platform](kubernetes-platform.md) |
+| Cilium / Isovalent | [cilium-isovalent](cilium-isovalent.md), [qualified-native-network](qualified-native-network.md) |
+| Firewall | [firewall-security](firewall-security.md) |
+| Application owners | [application-teams](application-teams.md) |
+| Observability Cloud | [o11y-health](o11y-health.md), [o11y-detector-events](o11y-detector-events.md), [o11y-navigation](o11y-navigation.md) |
+| VMware / UCS | [INTERSIGHT_VMWARE_LAB_SETUP](INTERSIGHT_VMWARE_LAB_SETUP.md) (lab) |
+
+Lab runbooks and records (lab addresses allowed; not deployment contracts): [local-access-and-tenant-jobs](local-access-and-tenant-jobs.md), [INTERSIGHT_VMWARE_LAB_SETUP](INTERSIGHT_VMWARE_LAB_SETUP.md), [netflow-trial-2026-10-31](netflow-trial-2026-10-31.md), [device-path-trial-follow-up](device-path-trial-follow-up.md).
+
+## Using Atlas
+
+| Section | Pages | Needs |
+| --- | --- | --- |
+| Explore | Applications (catalog, Find), Endpoints, Device (all flows through one device), path-trace form | Identity + flow sources |
+| Map | Dependency map (network, services, devices, table); src → dst path trace | Path trace adds ACI topology + VMM/spine classes. Limit 4,000 nodes / 10,000 edges; above that the top N edges are kept (structure, then bytes, then connections) with a warning |
+| Admin | Setup, Data health | Admin role for writes; writes ship disabled |
+
+Help is a separate page.
+
+Macros behind path trace and Device: `adm_path_trace`, `adm_path_trace_resolve`, `adm_fabric_path_evidence`, `adm_vsphere_topology`, `adm_vsphere_uplinks`, `adm_device_flows`, `adm_graph_edge_cut`, `adm_graph_edge_limit`. Design: [VSPHERE_SWITCH_DESIGN](../VSPHERE_SWITCH_DESIGN.md).
 
 ## Automation skills
 
-[splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) has skills that automate most of this setup. Each renders a plan for review, applies only the requested change and validates it, from Claude Code, Codex or Cursor, or by running its scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
+Vendored at `vendor/splunk-cisco-skills` (pinned submodule, commit `1c93cd8`). Run from that directory: `cd vendor/splunk-cisco-skills && bash skills/<skill>/scripts/setup.sh --help`. Always `--dry-run` first. Check [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md][s-compat]. Setup in Claude Code / Cursor / Codex: [main README](../../README.md#operator-setup-skills). Mutation through the MCP server stays disabled.
 
-It's vendored in this repo at `vendor/splunk-cisco-skills` (pinned submodule), discoverable from Claude Code, Cursor and Codex — see the [main README's "Operator setup skills" section](../../README.md#operator-setup-skills). Run scripts with that directory as the working directory, since they resolve `shared/` and credentials relative to their own repo root: `cd vendor/splunk-cisco-skills && bash skills/<skill-name>/scripts/setup.sh --help`.
+## Send back
 
-| Team                    | Skills                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Splunk platform         | [splunk-hec-service-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-hec-service-setup), [splunk-app-install](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-app-install), [splunk-knowledge-objects-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-knowledge-objects-setup), [splunk-lookup-file-editing-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-lookup-file-editing-setup), [splunk-kvstore-admin-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-kvstore-admin-setup), [splunk-data-source-readiness-doctor](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-data-source-readiness-doctor); full sequence in [splunk-setup-guide.md](splunk-setup-guide.md) |
-| ACI / network           | [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-dc-networking-setup), [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-product-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Splunk Stream / NetFlow | [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-stream-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Kubernetes platform     | [splunk-observability-otel-collector-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-otel-collector-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Cilium / Isovalent      | [cisco-isovalent-platform-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-isovalent-platform-setup), [splunk-observability-isovalent-integration](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-isovalent-integration), [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-security-cloud-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| Firewall / security     | [cisco-security-cloud-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-security-cloud-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Campus / Meraki / SD-WAN | [cisco-catalyst-ta-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-catalyst-ta-setup), [cisco-meraki-ta-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-meraki-ta-setup), [cisco-enterprise-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-enterprise-networking-setup), [cisco-catalyst-enhanced-netflow-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-catalyst-enhanced-netflow-setup) |
-| Application owners      | [splunk-observability-k8s-auto-instrumentation-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-k8s-auto-instrumentation-setup)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-
-The ACI `classInfo_adm`/`adm-policy` presets and Hubble flow export both have skill support (see [aci-network.md](aci-network.md) and [cilium-isovalent.md](cilium-isovalent.md)). The app already parses the inspected Enterprise Hubble-compatible export envelope (see [samples](../../fixtures/samples/hubble-enterprise/README.md)); exporter/chart configuration support is a separate question. Check the pinned skill's chart limitations and request redacted samples for other formats.
-
-The optional DNS, Envoy, AWS VPC Flow Logs, asset-history, and Observability Cloud health sources have operator handouts below, but no dedicated skill for their Atlas-specific ingest and qualification contracts. The Stream, Isovalent, AWS, and Observability skills cover related platform setup only; follow each handout for producer requirements and validation. Asset history has a repository importer, documented in its handout.
-
-## Deployment intent and handoff
-
-The Splunk administrator saves selected sources, cadence and receipt freshness in **Setup** after [qualifying settings persistence](../DEPLOYMENT_HEALTH.md#supported-write-contract-and-deployment-gate). Writes ship disabled; Cloud and unqualified targets remain read-only. No saved expectations means unknown deployment health. Source selection scopes health checks and job prerequisites; it does not configure collectors or activate V2. Teams should report the coverage gaps for sources they selected.
-
-## Send us back (one consolidated list)
-
-- [ ] Selected sources and omitted products, expected collection cadence, required features/jobs, and known evidence gaps.
-- [ ] If Cisco enrichment is selected: Catalyst Center/Meraki add-on and controller versions, organization/site/network scope, compatible exporter templates, source profiles, and the qualification evidence listed in the [Cisco handout](cisco-enterprise-networking.md#what-to-send-back).
-- [ ] Versions (for selected sources only): Splunk, APIC, Nexus Dashboard, leaf/spine NX-OS (ACI mode), Cilium, Isovalent/Tetragon, Kubernetes, Splunk OTel Collector chart, FMC/FTD, Splunk Stream.
-- [ ] Address plan: Kubernetes node subnet(s), pod CIDR(s), LoadBalancer IP pool(s), NodePort range, client and VM subnets, external/NAT ranges.
-- [ ] ACI names: tenant(s), VRF(s), bridge domains, EPGs, L3Outs and external EPGs used by the app and its clients.
-- [ ] Routing scope table: one row per observer (see [splunk-platform.md](splunk-platform.md#routing-scope-lookup)).
-- [ ] One hour of sample events per new sourcetype once data flows (export as JSON from Splunk search).
-- [ ] An Isovalent Enterprise flow-export sample event, if you use Isovalent's exporter instead of (or alongside) Hubble's built-in file export.
-- [ ] Contacts: one owner per system for pilot questions.
+- [ ] Selected sources, omitted products, cadence, required jobs, known gaps.
+- [ ] Versions: Splunk, APIC, ND, NX-OS, vCenter/ESXi, Intersight, Cilium/Isovalent, Kubernetes, OTel chart, FMC/FTD, Stream.
+- [ ] Address plan: node, pod, LoadBalancer, NodePort, client/VM, NAT ranges.
+- [ ] ACI names: tenants, VRFs, BDs, EPGs, L3Outs, external EPGs, VMM domains.
+- [ ] Routing scope rows ([observers](splunk-platform.md#routing-scope-lookup)) and source-scope profile rows (above).
+- [ ] One hour of sample events per new sourcetype.
+- [ ] One owner per system.
 
 ## Data handling
 
-Flow and trace data contain internal IP addresses, host and pod names, and (for Hubble L7 and spans) HTTP paths and headers. Each handout notes where to limit or redact. Never put tokens or passwords in tickets, chat or these documents; share them through your normal secret-management process.
+Flows and traces contain internal IPs, host/pod names and, for Hubble L7 and spans, HTTP paths and headers. Redact per handout. Never put tokens or passwords in tickets, chat or docs; use your secret manager.
 
 ## Optional evidence and endpoint/service investigations
 
-The [DNS evidence handout](dns-evidence.md) covers separate Stream DNS and Hubble DNS L7 adapters, verified scope mappings, caller access, explicit evidence exports, and disable-first rollback. The Endpoints page accepts a scoped IP and bounded time window without Kubernetes or traces. DNS remains unselected by default; [candidate qualification](../DNS_EVIDENCE_QUALIFICATION.md) records the remaining source and environment gates.
+DNS, Envoy, AWS VPC Flow Logs, asset history, AppDynamics, ThousandEyes and Observability Cloud stay unselected by default. Each handout defines its producer schema, index, scope mapping and qualification limits. Shared rules: [SUPPLEMENTAL_EVIDENCE_CONTRACT](../SUPPLEMENTAL_EVIDENCE_CONTRACT.md). DNS gates: [DNS_EVIDENCE_QUALIFICATION](../DNS_EVIDENCE_QUALIFICATION.md).
 
-The other optional evidence sources use the same scoped endpoint or service workflows: [Envoy request routing](proxy-evidence.md), [AWS VPC Flow Logs](aws-vpc-flow-evidence.md), [asset history import](asset-history.md), and [Splunk Observability Cloud health](o11y-health.md). Each handout defines its exact initial producer schema, authority mapping, index, field/time semantics and qualification limits. The [shared evidence contract](../SUPPLEMENTAL_EVIDENCE_CONTRACT.md) explains why these observations remain distinct from graph traffic totals and policy intent. Leave a source unselected until its ingest contract and viewer permissions have been checked.
+[s-compat]: https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md
+[s-acs]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-cloud-acs-admin-setup
+[s-hec]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-hec-service-setup
+[s-restart]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-platform-restart-orchestrator
+[s-dcn]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-dc-networking-setup
+[s-stream]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-stream-setup
+[s-cefn]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-catalyst-enhanced-netflow-setup
+[s-cat]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-catalyst-ta-setup
+[s-mer]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-meraki-ta-setup
+[s-otel]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-otel-collector-setup
+[s-iso]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-isovalent-platform-setup
+[s-isoint]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-observability-isovalent-integration
+[s-scc]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-security-cloud-setup
+[s-appd]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-appdynamics-setup
+[s-te]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-thousandeyes-setup
+[s-vmw]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-vmware-ta-setup
+[s-int]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-intersight-setup
+[s-aws]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-aws-ta-setup

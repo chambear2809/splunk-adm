@@ -1,6 +1,7 @@
+import { ImpactButton } from "./impact/ImpactButton";
 import { InfoTip } from "./InfoTip";
 import { InspectorTitle } from "./InspectorTitle";
-import { Fragment } from "react";
+import { Fragment, useId, useState } from "react";
 import { ChevronRight, Route, X } from "lucide-react";
 import {
   tunnelLabel,
@@ -55,6 +56,15 @@ import {
   vlanInterface,
   vlanTime,
 } from "./vlan";
+import {
+  mergeObserverRows,
+  observerInterfaceRows,
+} from "./data/observerInterfaces";
+import { BundleInterfaces, ObserverInterfaces } from "./ObserverInterfaces";
+
+/** Bound on conversations aggregated into one card's interface table. */
+const CARD_INTERFACE_EDGES = 200;
+const BUNDLE_INTERFACE_LINKS = 20;
 
 function VlanEvidence({
   edges,
@@ -129,6 +139,58 @@ function VlanEvidence({
         </p>
       )}
     </section>
+  );
+}
+
+const LB_TERMS: Record<string, "DSR" | "SNAT" | "Hybrid"> = {
+  dsr: "DSR",
+  snat: "SNAT",
+  hybrid: "Hybrid",
+};
+
+type DetailTab = "overview" | "flows" | "evidence";
+const DETAIL_TABS: [DetailTab, string][] = [
+  ["overview", "Overview"],
+  ["flows", "Flows"],
+  ["evidence", "Evidence"],
+];
+
+/** Overview / Flows / Evidence; inactive panels stay mounted but hidden. */
+function DetailTabs({
+  panels,
+}: {
+  panels: Record<DetailTab, React.ReactNode>;
+}) {
+  const [tab, setTab] = useState<DetailTab>("overview");
+  const id = useId();
+  return (
+    <>
+      <div className="inspector-tabs" role="tablist" aria-label="Details">
+        {DETAIL_TABS.map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            id={`${id}-${key}`}
+            aria-selected={tab === key}
+            aria-controls={`${id}-${key}-panel`}
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {DETAIL_TABS.map(([key]) => (
+        <div
+          key={key}
+          role="tabpanel"
+          id={`${id}-${key}-panel`}
+          aria-labelledby={`${id}-${key}`}
+          hidden={tab !== key}
+        >
+          {panels[key]}
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -454,11 +516,11 @@ export function handoffText(edge: GraphEdge, index: GraphIndex): string {
   });
 }
 
+/** Badges mark exceptions only; an identified endpoint needs no badge. */
 export function IdentityBadge({ state }: { state: IdentityState }) {
+  if (state === "identified") return null;
   return (
-    <span
-      className={`status ${state === "identified" ? "ok" : state === "external" ? "neutral" : "warn"}`}
-    >
+    <span className={`status ${state === "external" ? "neutral" : "warn"}`}>
       {identityLabel[state]}
     </span>
   );
@@ -549,6 +611,72 @@ function ConnectionList({
   );
 }
 
+const BUNDLE_LIST_MAX = 50;
+
+/** Every link one card-pair line groups; selecting one opens its details below. */
+function BundleMembers({
+  bundle,
+  selected,
+  index,
+  onSelect,
+}: {
+  bundle: { title: string; edgeIds: string[] };
+  selected: string;
+  index: GraphIndex;
+  onSelect: (s: Selection) => void;
+}) {
+  const edges = bundle.edgeIds
+    .map((id) => index.edge.get(id))
+    .filter((e): e is GraphEdge => !!e)
+    .sort(
+      (a, b) =>
+        Number(a.confidence === "inferred") -
+          Number(b.confidence === "inferred") ||
+        (b.records ?? b.count) - (a.records ?? a.count) ||
+        a.id.localeCompare(b.id),
+    );
+  const label = (id: string) => index.node.get(id)?.label ?? id;
+  return (
+    <details className="atlas-bundle-members">
+      <summary>
+        {bundle.title} <span className="count">{edges.length} links</span>
+      </summary>
+      <ul className="edge-list">
+        {edges.slice(0, BUNDLE_LIST_MAX).map((e) => (
+          <li key={e.id}>
+            <button
+              aria-current={e.id === selected || undefined}
+              onClick={() => onSelect({ kind: "edge", id: e.id })}
+            >
+              <span className="peer">
+                <b>
+                  {label(e.source)} → {label(e.target)}
+                </b>
+                <small>
+                  {[
+                    relationshipLabel[e.relationship],
+                    e.confidence === "inferred" ? "inferred" : undefined,
+                    (e.records ?? e.count).toLocaleString(),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </small>
+              </span>
+              <ChevronRight size={15} aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {edges.length > BUNDLE_LIST_MAX && (
+        <p className="muted small">
+          {(edges.length - BUNDLE_LIST_MAX).toLocaleString()} more in the Table
+          view
+        </p>
+      )}
+    </details>
+  );
+}
+
 export function Inspector({
   selection,
   index,
@@ -558,6 +686,7 @@ export function Inspector({
   onShowPath,
   summary,
   pathOpen = false,
+  bundle,
 }: {
   selection: Selection | null;
   index: GraphIndex;
@@ -567,6 +696,8 @@ export function Inspector({
   onShowPath: (edgeId: string) => void;
   summary: React.ReactNode;
   pathOpen?: boolean;
+  /** The card-pair line the selected edge is drawn in, when it groups several. */
+  bundle?: { title: string; edgeIds: string[] };
 }) {
   const node =
     selection?.kind === "node" ? index.node.get(selection.id) : undefined;
@@ -637,6 +768,28 @@ export function Inspector({
     : undefined;
   return (
     <div className="inspector-body">
+      {bundle && bundle.edgeIds.length > 1 && (
+        <>
+          <BundleMembers
+            bundle={bundle}
+            selected={edge.id}
+            index={index}
+            onSelect={onSelect}
+          />
+          <BundleInterfaces
+            links={bundle.edgeIds
+              .slice(0, BUNDLE_INTERFACE_LINKS)
+              .map((id) => index.edge.get(id))
+              .filter((e): e is GraphEdge => !!e)
+              .map((e) => ({
+                id: e.id,
+                title: `${lookup(e.source)?.label ?? e.source} → ${lookup(e.target)?.label ?? e.target}`,
+                rows: observerInterfaceRows(e, index, topo),
+              }))}
+            more={Math.max(0, bundle.edgeIds.length - BUNDLE_INTERFACE_LINKS)}
+          />
+        </>
+      )}
       <div className="inspector-head">
         <div>
           <span className={`chip ${edge.relationship}`}>
@@ -657,292 +810,285 @@ export function Inspector({
           <Route size={15} /> Show candidate path
         </button>
       )}
-      <Facts
-        rows={[
-          [
-            trafficObservation
-              ? "Observation source"
-              : forward
-                ? "Service"
-                : unknownDir
-                  ? "Endpoint A"
-                  : "Client",
-            from?.label,
-          ],
-          [
-            trafficObservation
-              ? "Observed peer"
-              : forward
-                ? "Backend pod"
-                : unknownDir
-                  ? "Endpoint B"
-                  : "Server",
-            to?.label,
-          ],
-          [
-            "Determined by",
-            forward && siblings.length <= 1
-              ? handoffText(edge, index)
-              : undefined,
-          ],
-          [
-            "Confidence",
-            forward && siblings.length <= 1 ? (
-              <span
-                className={`status ${edge.confidence === "inferred" ? "warn" : "ok"}`}
-              >
-                <InfoTip
-                  term={
-                    edge.confidence === "inferred" ? "inferred" : "Determined"
-                  }
-                >
-                  {handoffConfidence(edge.confidence)}
-                </InfoTip>
-              </span>
-            ) : undefined,
-          ],
-          [
-            "Received on",
-            clientHandoffCoverage ? undefined : receivedOn(receivedNodes),
-          ],
-          [
-            "Identity",
-            conv ? (
-              <IdentityBadge state={edgeIdentity(edge, lookup)} />
-            ) : undefined,
-          ],
-          [
-            "Backend",
-            clientHandoffCoverage ??
-              (backends.length
-                ? backends.map((b) => backendChoiceSummary(b)).join(", ")
-                : to?.attributes?.handoff === "service_only"
-                  ? `Not determined (${to.attributes.candidates ?? "?"} candidates)`
-                  : undefined),
-          ],
-          ["Service port", conv ? portLabel(edge) : undefined],
-          ["Direction", directionLabel(edge)],
-          [
-            "Encapsulation",
-            tunnelOf(edge) ? (
-              tunnelOf(edge) === "ipip" ? (
-                <>
-                  {" "}
-                  <InfoTip term="IPIP" /> between nodes (Cilium{" "}
-                  <InfoTip term="DSR" /> to a remote backend); the client
-                  connection inside is not visible here
-                </>
-              ) : (
-                `${tunnelLabel(tunnelOf(edge)!)} between nodes; pod traffic inside is not visible here`
-              )
-            ) : undefined,
-          ],
-          [
-            trafficObservation
-              ? "Flow records"
-              : conv || forward
-                ? "Connections"
-                : "Spans",
-            trafficObservation
-              ? (edge.records ?? edge.count).toLocaleString()
-              : conv && edge.traffic_observations?.length
-                ? "Not aggregated from flow records"
-                : (siblings.length > 1
-                    ? siblings.reduce((n, s) => n + s.count, 0)
-                    : edge.count
-                  ).toLocaleString(),
-          ],
-          [
-            "Bytes",
-            conv
-              ? edge.traffic_observations?.length
-                ? "Not aggregated; see per-observation counters"
-                : edge.bytes !== undefined
-                  ? prettyBytes(edge.bytes)
-                  : "Not reported by these sources"
-              : undefined,
-          ],
-          [
-            "Application call",
-            edge.span_ids?.length && conv
-              ? "Matched to an OTel client span by peer address, port and time"
-              : undefined,
-          ],
-        ]}
-      />
-      {siblings.length > 1 && (
-        <>
-          <h3>
-            How the backend was chosen{" "}
-            <span className="count">{siblings.length}</span>
-          </h3>
-          <ul className="seen-list">
-            {[...siblings]
-              .sort(
-                (a, b) =>
-                  Number(a.confidence !== "observed") -
-                  Number(b.confidence !== "observed"),
-              )
-              .map((s) => (
-                <li key={s.id}>
-                  <b>
-                    <span
-                      className={`status ${s.confidence === "inferred" ? "warn" : "ok"}`}
-                    >
-                      <InfoTip
-                        term={
-                          s.confidence === "inferred"
-                            ? "inferred"
-                            : "Determined"
-                        }
+      <DetailTabs
+        key={edge.id}
+        panels={{
+          overview: (
+            <>
+              <Facts
+                rows={[
+                  [
+                    trafficObservation
+                      ? "Observation source"
+                      : forward
+                        ? "Service"
+                        : unknownDir
+                          ? "Endpoint A"
+                          : "Client",
+                    from?.label,
+                  ],
+                  [
+                    trafficObservation
+                      ? "Observed peer"
+                      : forward
+                        ? "Backend pod"
+                        : unknownDir
+                          ? "Endpoint B"
+                          : "Server",
+                    to?.label,
+                  ],
+                  [
+                    "Determined by",
+                    forward && siblings.length <= 1
+                      ? handoffText(edge, index)
+                      : undefined,
+                  ],
+                  [
+                    "Confidence",
+                    forward && siblings.length <= 1 ? (
+                      <span
+                        className={`status ${edge.confidence === "inferred" ? "warn" : "ok"}`}
                       >
-                        {handoffConfidence(s.confidence)}
-                      </InfoTip>
-                    </span>{" "}
-                    {handoffShort[s.handoff_basis!]}
-                  </b>
-                  <small>
-                    {handoffText(s, index)} · {plural(s.count, "connection")}
-                  </small>
-                </li>
-              ))}
-          </ul>
-        </>
-      )}
-      {(contract || acl) && (
-        <>
-          <h3>Fabric policy</h3>
-          {contract && (
-            <p className={`policy-line ${edge.contract_basis}`}>
-              {contract}
-              {edge.contract_basis === "intent" && edge.contract_subject && (
-                <small className="muted">
-                  {" "}
-                  Subject {edge.contract_subject}
-                  {edge.contract_filter && ` · filter ${edge.contract_filter}`}
-                </small>
+                        <InfoTip
+                          term={
+                            edge.confidence === "inferred"
+                              ? "inferred"
+                              : "Determined"
+                          }
+                        >
+                          {handoffConfidence(edge.confidence)}
+                        </InfoTip>
+                      </span>
+                    ) : undefined,
+                  ],
+                  [
+                    "Received on",
+                    clientHandoffCoverage
+                      ? undefined
+                      : receivedOn(receivedNodes),
+                  ],
+                  [
+                    "Identity",
+                    conv && edgeIdentity(edge, lookup) !== "identified" ? (
+                      <IdentityBadge state={edgeIdentity(edge, lookup)} />
+                    ) : undefined,
+                  ],
+                  [
+                    "Backend",
+                    clientHandoffCoverage ??
+                      (backends.length
+                        ? backends
+                            .map((b) => backendChoiceSummary(b))
+                            .join(", ")
+                        : to?.attributes?.handoff === "service_only"
+                          ? `Not determined (${to.attributes.candidates ?? "?"} candidates)`
+                          : undefined),
+                  ],
+                  ["Service port", conv ? portLabel(edge) : undefined],
+                  ["Direction", directionLabel(edge)],
+                  [
+                    "Encapsulation",
+                    tunnelOf(edge)
+                      ? tunnelOf(edge) === "ipip"
+                        ? "IPIP between nodes (Cilium DSR); inner client connection not visible"
+                        : `${tunnelLabel(tunnelOf(edge)!)} between nodes; inner pod traffic not visible`
+                      : undefined,
+                  ],
+                  [
+                    trafficObservation
+                      ? "Flow records"
+                      : conv || forward
+                        ? "Connections"
+                        : "Spans",
+                    trafficObservation
+                      ? (edge.records ?? edge.count).toLocaleString()
+                      : conv && edge.traffic_observations?.length
+                        ? "Not aggregated from flow records"
+                        : (siblings.length > 1
+                            ? siblings.reduce((n, s) => n + s.count, 0)
+                            : edge.count
+                          ).toLocaleString(),
+                  ],
+                  [
+                    "Bytes",
+                    conv
+                      ? edge.traffic_observations?.length
+                        ? "Not aggregated; see per-observation counters"
+                        : edge.bytes !== undefined
+                          ? prettyBytes(edge.bytes)
+                          : "Not reported by these sources"
+                      : undefined,
+                  ],
+                  [
+                    "Application call",
+                    edge.span_ids?.length && conv
+                      ? "Matched to an OTel client span by peer address, port and time"
+                      : undefined,
+                  ],
+                ]}
+              />
+              {siblings.length > 1 && (
+                <>
+                  <h3>
+                    How the backend was chosen{" "}
+                    <span className="count">{siblings.length}</span>
+                  </h3>
+                  <ul className="seen-list">
+                    {[...siblings]
+                      .sort(
+                        (a, b) =>
+                          Number(a.confidence !== "observed") -
+                          Number(b.confidence !== "observed"),
+                      )
+                      .map((s) => (
+                        <li key={s.id}>
+                          <b>
+                            <span
+                              className={`status ${s.confidence === "inferred" ? "warn" : "ok"}`}
+                            >
+                              {handoffConfidence(s.confidence)}
+                            </span>{" "}
+                            {handoffShort[s.handoff_basis!]}
+                          </b>
+                          <small>
+                            {handoffText(s, index)} ·{" "}
+                            {plural(s.count, "connection")}
+                          </small>
+                        </li>
+                      ))}
+                  </ul>
+                </>
               )}
-            </p>
-          )}
-          {edge.contract_basis === "intent" && (
-            <p className="muted small">
-              <InfoTip term="Intent" /> from collected ACI policy objects, not
-              proof the fabric permitted this traffic.
-            </p>
-          )}
-          {policyReason(edge) && (
-            <p className="muted small">{policyReason(edge)}</p>
-          )}
-          {acl && (
-            <p
-              className={`policy-line ${edge.acl_action === "drop" ? "blocked" : "observed"}`}
-            >
-              {acl}
-            </p>
-          )}
-        </>
-      )}
-      {conv && <VlanEvidence edges={[edge]} topo={topo} index={index} />}
-      {conv && (
-        <NatEvidence
-          observations={edge.nat_observations ?? []}
-          truncated={edge.nat_observations_truncated}
-        />
-      )}
-      {(conv || trafficObservation) && edge.traffic_observations && (
-        <TrafficEvidence observations={edge.traffic_observations} />
-      )}
-      {edge.attachment_evidence?.length ? (
-        <section aria-label="Client attachment evidence">
-          <h3>
-            Client attachment evidence{" "}
-            <span className="count">{edge.attachment_evidence.length}</span>
-          </h3>
-          <p className="muted small">
-            Association records describe attachment evidence at a point in time;
-            they do not prove a packet route.
-          </p>
-          <ul className="seen-list">
-            {edge.attachment_evidence.map((a, i) => (
-              <li
-                key={`${a.client_native_id ?? "client"}-${a.event_time ?? i}`}
-              >
-                <b>
-                  {a.status ?? "Attachment status unavailable"}
-                  {a.basis ? ` · ${a.basis}` : ""}
-                </b>
-                <small>
-                  {[
-                    a.device_name,
-                    a.device_mac,
-                    a.device_serial,
-                    a.ssid_number ? `SSID ${a.ssid_number}` : undefined,
-                    a.client_source,
-                    a.client_authority,
-                    a.client_native_id,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                  <br />
-                  Event{" "}
-                  {evidenceTime(
-                    a.event_time === undefined
-                      ? undefined
-                      : String(a.event_time),
-                  ) ?? "unavailable"}{" "}
-                  · received{" "}
-                  {evidenceTime(
-                    a.received_time === undefined
-                      ? undefined
-                      : String(a.received_time),
-                  ) ?? "unavailable"}
-                  {a.collected_time !== undefined
-                    ? ` · collected ${evidenceTime(String(a.collected_time)) ?? "unavailable"}`
-                    : ""}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-      {seen.length > 0 && !pathOpen && (
-        <>
-          <h3>Seen by</h3>
-          <ul className="seen-list">
-            {seen.map((d) => (
-              <li key={d.key}>
-                <b>
-                  <Device raw={d.label} topo={topo} />
-                </b>
-                <small>
-                  {d.sources.join(" · ")}
-                  {d.interfaces.length ? ` · ${d.interfaces.join(", ")}` : ""}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {pathOpen && seen.length > 0 && (
-        <p className="muted small">
-          Where it was seen is shown in the path below.
-        </p>
-      )}
-      {(edge.sources?.length ?? 0) > 0 && (
-        <p className="muted">
-          Evidence: {edge.sources!.map(sourceLabel).join(", ")}
-        </p>
-      )}
-      <details className="ids">
-        <summary>Identifiers</summary>
-        <code>{edge.id}</code>
-        {edge.span_ids?.map((s) => (
-          <code key={s}>span {s}</code>
-        ))}
-        {edge.evidence.map((s) => (
-          <code key={s}>{s}</code>
-        ))}
-      </details>
+              {(contract || acl) && (
+                <>
+                  <h3>Fabric policy</h3>
+                  {contract && (
+                    <p className={`policy-line ${edge.contract_basis}`}>
+                      {contract}
+                      {edge.contract_basis === "intent" &&
+                        edge.contract_subject && (
+                          <small className="muted">
+                            {" "}
+                            Subject {edge.contract_subject}
+                            {edge.contract_filter &&
+                              ` · filter ${edge.contract_filter}`}
+                          </small>
+                        )}
+                    </p>
+                  )}
+                  {edge.contract_basis === "intent" && (
+                    <p className="muted small">
+                      <InfoTip term="Intent" />
+                    </p>
+                  )}
+                  {policyReason(edge) && (
+                    <p className="muted small">{policyReason(edge)}</p>
+                  )}
+                  {acl && (
+                    <p
+                      className={`policy-line ${edge.acl_action === "drop" ? "blocked" : "observed"}`}
+                    >
+                      {acl}
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          ),
+          flows: (
+            <>
+              {conv && (
+                <VlanEvidence edges={[edge]} topo={topo} index={index} />
+              )}
+              {conv && (
+                <NatEvidence
+                  observations={edge.nat_observations ?? []}
+                  truncated={edge.nat_observations_truncated}
+                />
+              )}
+              {(conv || trafficObservation) && edge.traffic_observations && (
+                <TrafficEvidence observations={edge.traffic_observations} />
+              )}
+              {seen.length > 0 && (
+                <ObserverInterfaces
+                  title="Seen by"
+                  rows={observerInterfaceRows(edge, index, topo)}
+                />
+              )}
+            </>
+          ),
+          evidence: (
+            <>
+              {edge.attachment_evidence?.length ? (
+                <section aria-label="Client attachment evidence">
+                  <h3>
+                    Client attachment evidence{" "}
+                    <span className="count">
+                      {edge.attachment_evidence.length}
+                    </span>
+                  </h3>
+                  <ul className="seen-list">
+                    {edge.attachment_evidence.map((a, i) => (
+                      <li
+                        key={`${a.client_native_id ?? "client"}-${a.event_time ?? i}`}
+                      >
+                        <b>
+                          {a.status ?? "Attachment status unavailable"}
+                          {a.basis ? ` · ${a.basis}` : ""}
+                        </b>
+                        <small>
+                          {[
+                            a.device_name,
+                            a.device_mac,
+                            a.device_serial,
+                            a.ssid_number ? `SSID ${a.ssid_number}` : undefined,
+                            a.client_source,
+                            a.client_authority,
+                            a.client_native_id,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                          <br />
+                          Event{" "}
+                          {evidenceTime(
+                            a.event_time === undefined
+                              ? undefined
+                              : String(a.event_time),
+                          ) ?? "unavailable"}{" "}
+                          · received{" "}
+                          {evidenceTime(
+                            a.received_time === undefined
+                              ? undefined
+                              : String(a.received_time),
+                          ) ?? "unavailable"}
+                          {a.collected_time !== undefined
+                            ? ` · collected ${evidenceTime(String(a.collected_time)) ?? "unavailable"}`
+                            : ""}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+              {(edge.sources?.length ?? 0) > 0 && (
+                <p className="muted">
+                  Evidence: {edge.sources!.map(sourceLabel).join(", ")}
+                </p>
+              )}
+              <details className="ids">
+                <summary>Identifiers</summary>
+                <code>{edge.id}</code>
+                {edge.span_ids?.map((s) => (
+                  <code key={s}>span {s}</code>
+                ))}
+                {edge.evidence.map((s) => (
+                  <code key={s}>{s}</code>
+                ))}
+              </details>
+            </>
+          ),
+        }}
+      />
     </div>
   );
 }
@@ -1025,238 +1171,251 @@ function NodeDetails({
           </span>
           <InspectorTitle key={node.id} name={node.label} />
         </div>
+        <ImpactButton compact token={node.id} label={node.label} />
         {close}
       </div>
-      {unknown && (
-        <p className="callout warn">
-          {node.endpoint_kind === "ambiguous"
-            ? "More than one identity record claims this address in the time range."
-            : "No identity record covers this address in the time range. Check the identity saved searches and the observer scope lookup."}
-        </p>
-      )}
-      {networkClient && (
-        <>
-          {wirelessCorrelated && (
-            <p className="callout neutral">
-              {networkClientAttachmentMessage(attrs)}
-            </p>
-          )}
-          {!wirelessCorrelated && (
-            <p
-              className={`callout ${attachmentStatus === "conflict" || attachmentStatus === "stale" || attrs.source_time_status === "stale" || attrs.history_coverage === "unconfirmed" ? "warn" : "neutral"}`}
-            >
-              {networkClientAttachmentMessage(attrs)}
-            </p>
-          )}
-          <Facts
-            rows={[
-              ["Source", sourceLabel(attrs.access_platform ?? "") || undefined],
-              ["Authority", attrs.source_authority],
-              ["Routing domain", attrs.routing_domain],
-              ["MAC address", attrs.client_mac],
-              ["Attachment status", attachmentStatus],
-              ["Evidence basis", attrs.attachment_basis],
-              [
-                "Source event time",
-                evidenceTime(attrs.source_time ?? attrs.attachment_event_time),
-              ],
-              ["Source time status", attrs.source_time_status],
-              [
-                "Received time",
-                evidenceTime(
-                  attrs.received_time ?? attrs.attachment_received_time,
-                ),
-              ],
-              [
-                "History coverage",
-                attrs.history_coverage === "retained_evidence"
-                  ? "Retained evidence only"
-                  : attrs.history_coverage === "unconfirmed"
-                    ? "Unconfirmed"
-                    : attrs.history_coverage,
-              ],
-              [
-                "Source collection time",
-                evidenceTime(
-                  attrs.collected_time ?? attrs.attachment_collected_time,
-                ),
-              ],
-              ["Access point or device", attrs.attachment_device_name],
-              ["Attachment device ID", attrs.attachment_device_id],
-              ["Attachment device MAC", attrs.attachment_device_mac],
-              ["SSID number", attrs.ssid_number],
-            ]}
-          />
-        </>
-      )}
-      {attrs.network_history_capped === "1" && (
-        <p className="callout neutral">
-          Network history is capped; this view may omit older observations.
-        </p>
-      )}
-      {frontDoor && (
-        <p className="callout neutral">
-          Where clients enter{" "}
-          {attrs.service ? <b>{attrs.service}</b> : "this Service"}. Cilium
-          translates the frontend to a backend pod; each line to a pod says how
-          that pod was identified.
-        </p>
-      )}
-      {node.kind === "service" && (
-        <p className="callout neutral">
-          Service membership is based only on qualified OTel span association in
-          the selected window; it is not a continuous service-lifetime or
-          packet-route claim.
-        </p>
-      )}
-      {aggregateHandoffCoverage && (
-        <p className="callout warn">
-          {aggregateHandoffCoverage} Any backend links shown here summarize only
-          connections with determined handoffs.
-        </p>
-      )}
-      {node.endpoint_kind === "k8s_node_proxy" && (
-        <p className="callout neutral">
-          Cilium Envoy on {attrs.node ?? "this node"}: Gateway API and Ingress
-          connections to backend pods come from this address.
-        </p>
-      )}
-      {node.endpoint_kind === "external" && (
-        <p className="callout neutral">
-          Public address outside the fabric. External hosts have no identity
-          records by design.
-        </p>
-      )}
-      <Facts
-        rows={[
-          ["Namespace", node.namespace],
-          ["Cluster", node.cluster],
-          ["Addresses", node.addresses?.join(", ")],
-          ...displayAttributes.map(([k, label]): [string, React.ReactNode] => [
-            label,
-            k === "attach_device" ? (
-              <Device
-                raw={attrs[k]}
-                topo={topo}
-                context={nodeDeviceContext(node)}
+      <DetailTabs
+        key={node.id}
+        panels={{
+          overview: (
+            <>
+              {unknown && (
+                <p className="callout warn">
+                  {node.endpoint_kind === "ambiguous"
+                    ? "Multiple identity records claim this address"
+                    : "No identity record for this address in this window"}
+                </p>
+              )}
+              {networkClient && (
+                <>
+                  {wirelessCorrelated && (
+                    <p className="callout neutral">
+                      {networkClientAttachmentMessage(attrs)}
+                    </p>
+                  )}
+                  {!wirelessCorrelated && (
+                    <p
+                      className={`callout ${attachmentStatus === "conflict" || attachmentStatus === "stale" || attrs.source_time_status === "stale" || attrs.history_coverage === "unconfirmed" ? "warn" : "neutral"}`}
+                    >
+                      {networkClientAttachmentMessage(attrs)}
+                    </p>
+                  )}
+                  <Facts
+                    rows={[
+                      [
+                        "Source",
+                        sourceLabel(attrs.access_platform ?? "") || undefined,
+                      ],
+                      ["Authority", attrs.source_authority],
+                      ["Routing domain", attrs.routing_domain],
+                      ["MAC address", attrs.client_mac],
+                      ["Attachment status", attachmentStatus],
+                      ["Evidence basis", attrs.attachment_basis],
+                      [
+                        "Source event time",
+                        evidenceTime(
+                          attrs.source_time ?? attrs.attachment_event_time,
+                        ),
+                      ],
+                      ["Source time status", attrs.source_time_status],
+                      [
+                        "Received time",
+                        evidenceTime(
+                          attrs.received_time ?? attrs.attachment_received_time,
+                        ),
+                      ],
+                      [
+                        "History coverage",
+                        attrs.history_coverage === "retained_evidence"
+                          ? "Retained evidence only"
+                          : attrs.history_coverage === "unconfirmed"
+                            ? "Unconfirmed"
+                            : attrs.history_coverage,
+                      ],
+                      [
+                        "Source collection time",
+                        evidenceTime(
+                          attrs.collected_time ??
+                            attrs.attachment_collected_time,
+                        ),
+                      ],
+                      ["Access point or device", attrs.attachment_device_name],
+                      ["Attachment device ID", attrs.attachment_device_id],
+                      ["Attachment device MAC", attrs.attachment_device_mac],
+                      ["SSID number", attrs.ssid_number],
+                    ]}
+                  />
+                </>
+              )}
+              {attrs.network_history_capped === "1" && (
+                <p className="callout neutral">
+                  Network history is capped; this view may omit older
+                  observations.
+                </p>
+              )}
+              {aggregateHandoffCoverage && (
+                <p className="callout warn">{aggregateHandoffCoverage}</p>
+              )}
+              {node.endpoint_kind === "k8s_node_proxy" && (
+                <p className="callout neutral">
+                  Cilium Envoy on {attrs.node ?? "this node"} (Gateway/Ingress
+                  source)
+                </p>
+              )}
+              {node.endpoint_kind === "external" && (
+                <p className="callout neutral">
+                  Public address outside the fabric
+                </p>
+              )}
+              <Facts
+                rows={[
+                  ["Namespace", node.namespace],
+                  ["Cluster", node.cluster],
+                  ["Addresses", node.addresses?.join(", ")],
+                  ...displayAttributes.map(
+                    ([k, label]): [string, React.ReactNode] => [
+                      label,
+                      k === "attach_device" ? (
+                        <Device
+                          raw={attrs[k]}
+                          topo={topo}
+                          context={nodeDeviceContext(node)}
+                        />
+                      ) : k === "lb_mode" && LB_TERMS[attrs[k]] ? (
+                        <InfoTip term={LB_TERMS[attrs[k]]} />
+                      ) : k === "vlan" && attrs.vlan_status === "varies" ? (
+                        "Varies in selected range"
+                      ) : k === "vlan" && attrs.vlan_status === "incomplete" ? (
+                        "Unavailable: endpoint evidence is incomplete"
+                      ) : k === "bridge_domain" &&
+                        attrs.bridge_domain_status === "varies" ? (
+                        "Varies in selected range"
+                      ) : k === "bridge_domain" &&
+                        attrs.bridge_domain_status === "incomplete" ? (
+                        "Unavailable: endpoint evidence is incomplete"
+                      ) : (
+                        attributeValue(k, attrs[k])
+                      ),
+                    ],
+                  ),
+                  [
+                    "Backends",
+                    frontDoor
+                      ? aggregateHandoffCoverage
+                        ? forwards.length
+                          ? `${forwards.length} aggregate backends for determined connections`
+                          : "No determined backend connections"
+                        : forwards.length
+                          ? `${forwards.length} identified`
+                          : attrs.handoff === "service_only"
+                            ? `Not determined (${attrs.candidates ?? "?"} candidates)`
+                            : "None in this time range"
+                      : undefined,
+                  ],
+                  [
+                    node.kind === "service" ? "Pods" : "Runs",
+                    runsOn.length
+                      ? runsOn
+                          .map(
+                            (e) =>
+                              index.node.get(
+                                e.source === node.id ? e.target : e.source,
+                              )?.label,
+                          )
+                          .join(", ")
+                      : undefined,
+                  ],
+                ]}
               />
-            ) : k === "traffic_policy" && attrs[k] === "Local" ? (
-              <InfoTip term="Local" />
-            ) : k === "lb_mode" && attrs[k] === "dsr" ? (
-              <InfoTip term="DSR" />
-            ) : k === "lb_mode" && attrs[k] === "snat" ? (
-              <InfoTip term="SNAT" />
-            ) : k === "lb_mode" && attrs[k] === "hybrid" ? (
-              <InfoTip term="Hybrid" />
-            ) : k === "vlan" && attrs.vlan_status === "varies" ? (
-              "Varies in selected range"
-            ) : k === "vlan" && attrs.vlan_status === "incomplete" ? (
-              "Unavailable: endpoint evidence is incomplete"
-            ) : k === "bridge_domain" &&
-              attrs.bridge_domain_status === "varies" ? (
-              "Varies in selected range"
-            ) : k === "bridge_domain" &&
-              attrs.bridge_domain_status === "incomplete" ? (
-              "Unavailable: endpoint evidence is incomplete"
-            ) : (
-              attributeValue(k, attrs[k])
-            ),
-          ]),
-          [
-            "Backends",
-            frontDoor
-              ? aggregateHandoffCoverage
-                ? forwards.length
-                  ? `${forwards.length} aggregate backends for determined connections`
-                  : "No determined backend connections"
-                : forwards.length
-                  ? `${forwards.length} identified`
-                  : attrs.handoff === "service_only"
-                    ? `Not determined (${attrs.candidates ?? "?"} candidates)`
-                    : "None in this time range"
-              : undefined,
-          ],
-          [
-            node.kind === "service" ? "Pods" : "Runs",
-            runsOn.length
-              ? runsOn
-                  .map(
-                    (e) =>
-                      index.node.get(e.source === node.id ? e.target : e.source)
-                        ?.label,
-                  )
-                  .join(", ")
-              : undefined,
-          ],
-        ]}
+              <VlanEvidence edges={vlan} topo={topo} index={index} />
+            </>
+          ),
+          flows: (
+            <>
+              {networkClient &&
+                incident.flatMap((e) => e.traffic_observations ?? []).length >
+                  0 && (
+                  <TrafficEvidence
+                    observations={incident.flatMap(
+                      (e) => e.traffic_observations ?? [],
+                    )}
+                  />
+                )}
+              <ObserverInterfaces
+                title="Seen by"
+                rows={mergeObserverRows(
+                  links
+                    .filter((e) => e.relationship === "communicates_with")
+                    .slice(0, CARD_INTERFACE_EDGES)
+                    .map((e) => observerInterfaceRows(e, index, topo)),
+                )}
+              />
+              <ConnectionList
+                title="Inbound"
+                edges={inbound}
+                self={node.id}
+                index={index}
+                onSelect={onSelect}
+              />
+              <ConnectionList
+                title="Outbound"
+                edges={outbound}
+                self={node.id}
+                index={index}
+                onSelect={onSelect}
+              />
+              <ConnectionList
+                title="Direction unknown"
+                edges={unknownDir}
+                self={node.id}
+                index={index}
+                onSelect={onSelect}
+              />
+              {!links.length && !observationCount && (
+                <p className="muted">
+                  No calls or conversations in this time range.
+                </p>
+              )}
+            </>
+          ),
+          evidence: (
+            <>
+              {node.kind === "service" && runsOn.length > 0 && (
+                <section aria-label="Service membership evidence">
+                  <h3>
+                    Membership evidence{" "}
+                    <span className="count">{runsOn.length}</span>
+                  </h3>
+                  <ul className="seen-list">
+                    {runsOn.map((e) => (
+                      <li key={e.id}>
+                        <b>
+                          {index.node.get(
+                            e.target === node.id ? e.source : e.target,
+                          )?.label ?? "Workload"}
+                        </b>
+                        <small>
+                          {e.evidence.length
+                            ? e.evidence.join(" · ")
+                            : e.span_ids?.length
+                              ? `${e.span_ids.length} qualified span${e.span_ids.length === 1 ? "" : "s"}`
+                              : "Qualified OTel span association"}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <details className="ids">
+                <summary>Identifiers</summary>
+                <code>{node.id}</code>
+                {attrs.scope && <code>Routing scope {attrs.scope}</code>}
+                {node.reason && <p className="muted">{node.reason}</p>}
+              </details>
+            </>
+          ),
+        }}
       />
-      {node.kind === "service" && runsOn.length > 0 && (
-        <section aria-label="Service membership evidence">
-          <h3>
-            Membership evidence <span className="count">{runsOn.length}</span>
-          </h3>
-          <ul className="seen-list">
-            {runsOn.map((e) => (
-              <li key={e.id}>
-                <b>
-                  {index.node.get(e.target === node.id ? e.source : e.target)
-                    ?.label ?? "Workload"}
-                </b>
-                <small>
-                  {e.evidence.length
-                    ? e.evidence.join(" · ")
-                    : e.span_ids?.length
-                      ? `${e.span_ids.length} qualified span${e.span_ids.length === 1 ? "" : "s"}`
-                      : "Qualified OTel span association"}
-                </small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <VlanEvidence edges={vlan} topo={topo} index={index} />
-      {networkClient &&
-        incident.flatMap((e) => e.traffic_observations ?? []).length > 0 && (
-          <TrafficEvidence
-            observations={incident.flatMap((e) => e.traffic_observations ?? [])}
-          />
-        )}
-      <ConnectionList
-        title="Inbound"
-        edges={inbound}
-        self={node.id}
-        index={index}
-        onSelect={onSelect}
-      />
-      <ConnectionList
-        title="Outbound"
-        edges={outbound}
-        self={node.id}
-        index={index}
-        onSelect={onSelect}
-      />
-      <ConnectionList
-        title="Direction unknown"
-        edges={unknownDir}
-        self={node.id}
-        index={index}
-        onSelect={onSelect}
-      />
-      {observationCount > 0 && (
-        <p className="callout neutral">
-          Workload observations are separate from traced service calls; grouping
-          does not prove a route or translation.
-        </p>
-      )}
-      {!links.length && !observationCount && (
-        <p className="muted">No calls or conversations in this time range.</p>
-      )}
-      <details className="ids">
-        <summary>Identifiers</summary>
-        <code>{node.id}</code>
-        {attrs.scope && <code>Routing scope {attrs.scope}</code>}
-        {node.reason && <p className="muted">{node.reason}</p>}
-      </details>
     </div>
   );
 }

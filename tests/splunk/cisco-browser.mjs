@@ -194,7 +194,9 @@ try {
         Object.assign(item, await graphCounts(adm, scenario));
         const graphSearch = searchPayloads
           .slice(beforeMap)
-          .find((entry) => entry.search.includes("adm_graph("));
+          .find((entry) =>
+            /`adm_(application_graph_read|graph)\(/.test(entry.search),
+          );
         expect(
           graphSearch,
           `${scenario.label} live public graph search`,
@@ -209,19 +211,24 @@ try {
         });
         await attachment.waitFor({ state: "visible", timeout: 30000 });
         const attachmentText = await attachment.innerText();
-        expect(attachmentText).toContain(scenario.attachmentDeviceId);
+        // The device ID and evidence basis are machine-readable attributes; the label is the name.
+        const attachmentItem = attachment.locator(
+          `[data-device-id="${scenario.attachmentDeviceId}"]`,
+        );
+        await expect(attachmentItem).toHaveCount(1);
+        const attachmentDetail = `${attachmentText}\n${(await attachmentItem.getAttribute("title")) ?? ""}`;
         expect(attachmentText).toContain(scenario.attachmentDeviceName);
         item.attachmentDevice = true;
         if (scenario.cluster === "cilium-nxos-west") {
-          expect(attachmentText).toContain("meraki_association_flow");
-          expect(attachmentText).toContain(`SSID ${scenario.ssidNumber}`);
-          item.associationBasis = attachmentText.includes(
+          expect(attachmentDetail).toContain("meraki_association_flow");
+          expect(attachmentDetail).toContain(`SSID ${scenario.ssidNumber}`);
+          item.associationBasis = attachmentDetail.includes(
             "meraki_association_flow",
           );
-          item.ssidNumber = attachmentText.includes(
+          item.ssidNumber = attachmentDetail.includes(
             `SSID ${scenario.ssidNumber}`,
           );
-          item.inventedSsidName = /SSID name/i.test(attachmentText);
+          item.inventedSsidName = /SSID name/i.test(attachmentDetail);
           expect(item.inventedSsidName).toBe(false);
         }
 

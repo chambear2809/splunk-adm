@@ -1,0 +1,113 @@
+{
+  "description": "adm_path_trace(10.30.40.25,10.20.30.40)-shaped observation rows for the ACI demo: the VDS IPFIX record of fixtures/raw-vmware/vds_ipfix.ndjson (exporter esx-03 192.0.2.73, port 18 > uplink port 14) and the ACI ACL-log drop of conversation c8 at leaf-103. fabric_evidence rows are adm_fabric_path_evidence output over fixtures/raw-vmware/aci_fabric_evidence.ndjson (leaf-103's adjacency to spine-202 is down, so it is absent).",
+  "rows": [
+    {
+      "row_type": "observation",
+      "observer": "netflow:192.0.2.73:ifIndex 18>ifIndex 14",
+      "flow_source": "netflow",
+      "observer_device": "192.0.2.73",
+      "direction": "forward",
+      "records": "1",
+      "bytes": "60",
+      "packets": "1",
+      "dest_ports": "5432",
+      "protocols": "tcp",
+      "observation_domains": "7",
+      "drops": "0",
+      "permits": "0"
+    },
+    {
+      "row_type": "observation",
+      "observer": "aci_acllog:pod-1/node-103",
+      "flow_source": "aci_acllog",
+      "observer_device": "pod-1/node-103",
+      "direction": "forward",
+      "records": "1",
+      "dest_ports": "5432",
+      "protocols": "tcp",
+      "drops": "1",
+      "permits": "0"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "isis_adjacency",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-103",
+      "interface": "eth1/49.9",
+      "peer_node": "pod-1/node-201",
+      "oper_state": "up"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "isis_adjacency",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-102",
+      "interface": "eth1/49.9",
+      "peer_node": "pod-1/node-201",
+      "oper_state": "up"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "isis_adjacency",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-102",
+      "interface": "eth1/50.9",
+      "peer_node": "pod-1/node-202",
+      "oper_state": "up"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "isis_adjacency",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-101",
+      "interface": "eth1/49.9",
+      "peer_node": "pod-1/node-201",
+      "oper_state": "up"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "isis_adjacency",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-101",
+      "interface": "eth1/50.9",
+      "peer_node": "pod-1/node-202",
+      "oper_state": "up"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "coop_endpoint",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-201",
+      "mac": "00:50:56:AA:10:40",
+      "citizen": "10.0.200.102",
+      "coop_flags": "mac-pub"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "coop_endpoint",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-202",
+      "mac": "00:50:56:AA:10:40",
+      "citizen": "10.0.200.102",
+      "coop_flags": "mac-pub"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "coop_endpoint",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-201",
+      "mac": "00:50:56:AA:40:25",
+      "citizen": "10.0.200.103",
+      "coop_flags": "mac-pub"
+    },
+    {
+      "row_type": "fabric_evidence",
+      "evidence_kind": "coop_endpoint",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-202",
+      "mac": "00:50:56:AA:40:25",
+      "citizen": "10.0.200.103",
+      "coop_flags": "mac-pub"
+    }
+  ]
+}

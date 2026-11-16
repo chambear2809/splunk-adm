@@ -1,7 +1,7 @@
 import { DeploymentWriteError } from "../data/deploymentClient";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
-import TableExport from "@splunk/react-ui/Table";
+import Table from "../SimpleTable";
 import TextExport from "@splunk/react-ui/Text";
 import { toolkitDefault } from "../app/interop";
 import { jobRunAssessment } from "../health";
@@ -25,7 +25,6 @@ import {
 } from "../data/setupClient";
 
 const Button = toolkitDefault(ButtonExport);
-const Table = toolkitDefault(TableExport);
 const Text = toolkitDefault(TextExport);
 const recoveryURL =
   "https://github.com/chambear2809/splunk-adm/blob/main/docs/RECOVERY.md";
@@ -280,16 +279,12 @@ export function SetupPage({
   const retryingUncertainFinalSlot =
     uncertainSave.current && deployment?.canRetry === true;
   return (
-    <main className="atlas-page" aria-labelledby="setup-title">
-      <h1 id="setup-title">Setup</h1>
-      <p>
-        Administrator access is required. Review the checklist before enabling
-        scheduled builders.
-      </p>
+    <section className="atlas-admin-panel" aria-labelledby="setup-title">
+      <h2 id="setup-title">Setup</h2>
+      <p className="muted">Admin only</p>
       {!live || !client ? (
         <p role="status">
-          Setup is unavailable in Demo. Open this page inside Splunk with
-          administrator access to read and change live configuration.
+          Setup unavailable in Demo · open in Splunk as an admin
         </p>
       ) : (
         <>
@@ -332,11 +327,8 @@ export function SetupPage({
                 </p>
               ))}
               <h2>Deployment expectations</h2>
-              <p>
-                Choose the sources this deployment collects. Cadence is the
-                expected collection interval; freshness is the longest allowed
-                receipt age. These settings do not activate a data contract or a
-                scheduled writer.
+              <p className="muted">
+                Cadence: expected interval · Freshness: max receipt age
               </p>
               <p>
                 {deployment?.state === "configured"
@@ -563,10 +555,8 @@ export function SetupPage({
                 </>
               )}
               <h2>Index macros</h2>
-              <p>
-                Enter one lowercase index name per macro. Existing definitions
-                are shown for review. The summary reader and writer must name
-                the same index.
+              <p className="muted">
+                One lowercase index per macro · summary reader = writer
               </p>
               <Table horizontalOverflow="scroll" aria-label="Index macros">
                 <Table.Head>
@@ -682,12 +672,12 @@ export function SetupPage({
               <h2>Cisco integration status</h2>
               <p>
                 {snapshot.ciscoIntegration.state === "active"
-                  ? "Version 2 selectors and scheduled writer configuration were observed. This is a read-only configuration check; review Data health for receipt and run evidence."
+                  ? "Cisco v2 active · see Data health for receipt"
                   : snapshot.ciscoIntegration.state === "staged"
-                    ? "All requested Cisco settings were read. Cisco v2 remains staged and does not change the active v1 reader or writer."
+                    ? "Cisco v2 remains staged · v1 reader and writer unchanged"
                     : snapshot.ciscoIntegration.state === "incomplete"
-                      ? "Cisco integration configuration is incomplete or needs operator review. No v2 readiness is claimed."
-                      : "Cisco integration state is unavailable. Check administrator permissions and the operator guide. No v2 readiness is claimed."}
+                      ? "Cisco v2 incomplete · operator review needed"
+                      : "Cisco v2 state unavailable · check admin permissions"}
               </p>
               {!!snapshot.ciscoIntegration.reasons.length && (
                 <ul>
@@ -696,18 +686,15 @@ export function SetupPage({
                   ))}
                 </ul>
               )}
-              <p>
-                This section only reads configuration. Review exact source
-                profiles and cluster rows through the{" "}
+              <p className="muted">
+                Read-only · cutover needs the{" "}
                 <a
                   href="https://github.com/chambear2809/splunk-adm/blob/main/docs/operators/cisco-enterprise-networking.md"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Cisco networking operator handout
+                  Cisco networking handout
                 </a>
-                . The documented migration and bounded validation steps are
-                required before any reader or scheduled writer cutover.
               </p>
               <h3>Contract and v2 reader/writer</h3>
               <Table
@@ -919,16 +906,12 @@ export function SetupPage({
                 </p>
               ))}
               {!prerequisites && (
-                <p>
-                  Enable actions require saved deployment expectations and each
-                  builder’s selected source macros and dependencies. Observer
-                  mappings and summary index checks apply to builders that use
-                  them.
+                <p className="muted">
+                  Needs saved expectations and source macros
                 </p>
               )}
-              <p>
-                Enable schedule uses each search’s existing cadence. Last runs
-                come from adm_health_jobs; unavailable evidence stays unknown.
+              <p className="muted">
+                Existing cadence · last runs from adm_health_jobs
               </p>
               <Table horizontalOverflow="scroll" aria-label="Builder schedules">
                 <Table.Head>
@@ -1024,20 +1007,18 @@ export function SetupPage({
           )}
         </>
       )}
-      <p>
-        Prune searches must remain disabled until recovery policy is reviewed.{" "}
+      <p className="muted">
+        Prune searches: keep disabled ·{" "}
         <a href={recoveryURL} target="_blank" rel="noopener noreferrer">
-          Read the recovery policy
+          Recovery policy
         </a>
-        .
       </p>
-      <p>
-        On Splunk Cloud, an operator creates indexes through{" "}
+      <p className="muted">
+        Splunk Cloud indexes:{" "}
         <a href={acsURL} target="_blank" rel="noopener noreferrer">
-          Admin Config Service (ACS)
+          ACS
         </a>
-        . Refresh this checklist after index creation.
       </p>
-    </main>
+    </section>
   );
 }

@@ -9,6 +9,7 @@ import {
   Eye,
   Globe,
   HardDrive,
+  Layers,
   Network,
   Server,
   ShieldCheck,
@@ -25,6 +26,7 @@ const CARD_TEXT_W = 152;
 function StageIcon({ stage }: { stage: Stage }) {
   const p = { size: 16, strokeWidth: 1.8, "aria-hidden": true };
   if (stage.kind === "switch") return <Network {...p} />;
+  if (stage.kind === "virtual_switch") return <Layers {...p} />;
   if (stage.kind === "firewall") return <BrickWall {...p} />;
   if (stage.kind === "host") return <Server {...p} />;
   if (stage.kind === "gap") return <Unplug {...p} />;
@@ -89,9 +91,8 @@ export function PathStrip({
     <section className="path-strip" aria-label={`Candidate path: ${title}`}>
       <header>
         <h3>Candidate path</h3>
-        <p title={title}>
-          {title} · from inventory; observations mark where traffic was seen,
-          not packet order.
+        <p title="From inventory; observations mark where traffic was seen, not packet order.">
+          {title}
         </p>
         <div className="path-legend" aria-hidden="true">
           <span>
@@ -166,7 +167,9 @@ export function PathStrip({
                   ? "endpoint"
                   : s.observed
                     ? "seen"
-                    : "unseen";
+                    : s.kind === "virtual_switch"
+                      ? "inferred"
+                      : "unseen";
           return (
             <li key={i} className={`stage ${status} ${s.kind}`}>
               {s.kind === "gap" ? (
@@ -200,6 +203,8 @@ export function PathStrip({
                         "Endpoint"
                       ) : s.observed ? (
                         "Seen"
+                      ) : s.kind === "virtual_switch" ? (
+                        "Inferred"
                       ) : (
                         "Not seen"
                       )}

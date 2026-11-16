@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import type { Graph, GraphEdge, GraphIndex } from "./graph";
 import type { Finding } from "./findings";
 import { evidenceSearch, flowRequest, searchUrl } from "./drilldown";
@@ -40,12 +41,21 @@ export function EvidenceActions({
           e.relationship === "communicates_with" && e.target === edge.source,
       ));
   const canCopy = edge.relationship === "communicates_with";
+  const searchHint = !live
+    ? "Demo evidence is not searchable"
+    : unavailable ||
+      (edge.relationship === "calls"
+        ? "Opens the first collected trace in this window."
+        : edge.relationship === "traffic_observation"
+          ? "Opens this exact source observation with its tuple and provenance."
+          : "Search includes this tuple across visible observation scopes.");
   return (
     <section className="evidence-actions" aria-label="Evidence actions">
       <div className="finding-buttons">
         {live && href ? (
           <a
             className="secondary-button"
+            title={searchHint}
             href={href}
             target="_blank"
             rel="noopener noreferrer"
@@ -53,13 +63,14 @@ export function EvidenceActions({
             Open in Search
           </a>
         ) : (
-          <button className="secondary-button" disabled>
+          <button className="secondary-button" disabled title={searchHint}>
             Open in Search
           </button>
         )}
         <button
           className="secondary-button"
           disabled={!canCopy}
+          title={canCopy ? undefined : "Needs a network conversation"}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(flowRequest(edge, index));
@@ -79,35 +90,13 @@ export function EvidenceActions({
           className="secondary-button"
           onClick={() => onShowPath(edge)}
           disabled={!canShowPath}
+          title={canShowPath ? undefined : "Needs a network conversation"}
         >
           Show path
         </button>
       </div>
-      {live && href && (
-        <p className="muted small">
-          {edge.relationship === "calls"
-            ? "Opens the first collected trace in this window."
-            : edge.relationship === "traffic_observation"
-              ? "Opens this exact source observation with its tuple and provenance."
-              : "Search includes this tuple across visible observation scopes."}
-        </p>
-      )}
-      {!live && (
-        <p className="muted small">
-          Synthetic demo evidence cannot be searched in your live indexes.
-        </p>
-      )}
-      {unavailable && <p className="muted small">{unavailable}</p>}
-      {!canShowPath && (
-        <p className="muted small">
-          No network conversation is available for a candidate path.
-        </p>
-      )}
-      {!canCopy && (
-        <p className="muted small">
-          A firewall request needs a network conversation.
-        </p>
-      )}
+      {live && href && <p className="atlas-visually-hidden">{searchHint}</p>}
+      {live && unavailable && <p className="muted small">{unavailable}</p>}
       {message && (
         <p role="status" className="small">
           {message}
@@ -123,35 +112,35 @@ export function FindingsList({
   index,
   live,
   onShowPath,
+  onClose,
 }: {
   findings: Finding[];
   graph: Graph;
   index: GraphIndex;
   live: boolean;
   onShowPath: (edge: GraphEdge) => void;
+  onClose?: () => void;
 }) {
   return (
     <section className="findings" aria-label="Map findings">
-      <h2 className="summary-title">
-        Findings <span className="muted">({findings.length})</span>
-      </h2>
-      <p className="muted small">
-        Observations from this map’s window. Missing identity or policy is a
-        limit of the collected evidence.
-      </p>
-      {findings.some((finding) => finding.kind === "stale_source") && (
-        <p className="muted small">
-          Source findings use the last app-wide pipeline health check,
-          independent of map filters. Quiet sources or missing index access can
-          explain missing data.
-        </p>
+      <div className="inspector-head">
+        <h2 className="summary-title">
+          Findings <span className="muted">({findings.length})</span>
+        </h2>
+        {onClose && (
+          <button
+            className="icon-button"
+            aria-label="Close findings"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      {!live && findings.length > 0 && (
+        <p className="muted small">Demo evidence · not searchable</p>
       )}
-      {findings.length === 0 && (
-        <p>
-          No findings in the collected evidence. This does not establish
-          complete coverage.
-        </p>
-      )}
+      {findings.length === 0 && <p className="muted">No findings</p>}
       {findings.map((finding) => {
         const edge = finding.edgeId
           ? index.edge.get(finding.edgeId)

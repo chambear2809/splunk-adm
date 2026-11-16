@@ -362,16 +362,11 @@ export function EndpointsPage({
       ].slice(0, 20)
     : [];
   return (
-    <main className="page endpoints-page">
-      <header>
-        <h1>Endpoint investigation</h1>
-        <p>
-          Inspect observed conversations for one scoped address and time window.
-        </p>
-      </header>
-      {!live && (
-        <p role="status">Endpoint investigations require live summary data.</p>
-      )}
+    <section className="page endpoints-page" aria-labelledby="endpoints-title">
+      <h2 id="endpoints-title" className="atlas-visually-hidden">
+        Endpoint investigation
+      </h2>
+      {!live && <p role="status">Requires live data</p>}
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -707,6 +702,6 @@ export function EndpointsPage({
             })()}
         </section>
       )}
-    </main>
+    </section>
   );
 }

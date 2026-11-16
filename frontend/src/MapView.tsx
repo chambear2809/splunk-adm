@@ -20,9 +20,19 @@ import {
   type GraphIndex,
   type GraphNode,
 } from "./graph";
-import { edgeIdentity, endpointKindLabel, isUnknown } from "./glossary";
+import {
+  edgeIdentity,
+  endpointKindLabel,
+  isUnknown,
+  prettyBytes,
+} from "./glossary";
 import type { Item, Layout, RoutedEdge } from "./layout";
-import { HEADER_H, policyBadge, policyText } from "./layout";
+import { bundleSummary, HEADER_H, policyBadge, policyText } from "./layout";
+import { EdgeCanvas } from "./scale/EdgeCanvas";
+import { createHitIndex } from "./scale/hitIndex";
+import { CANVAS_EDGES } from "./scale/limits";
+import { truncationChip } from "./scale/truncate";
+import "./scale/scale.css";
 
 export type Selection = { kind: "node" | "edge"; id: string };
 export interface Transform {
@@ -203,7 +213,9 @@ export function itemText(
         ? policyBadge(n.attributes ?? {}) || undefined
         : undefined;
   const kindText = summary
-    ? "Pods"
+    ? it.label && !/pods?$/.test(it.label)
+      ? "Summary"
+      : "Pods"
     : n?.endpoint_kind
       ? endpointKindLabel[n.endpoint_kind]
       : n?.kind === "workload"
@@ -212,7 +224,7 @@ export function itemText(
   const text =
     displayTitle ??
     (summary
-      ? `${it.members!.length} pods`
+      ? (it.label ?? `${it.members!.length} pods`)
       : n?.endpoint_kind === "k8s_service"
         ? header
           ? (n.attributes?.service ?? n.label)
@@ -301,7 +313,7 @@ export function createEmphasis(
     const edge = index.edge.get(id);
     if (edge) matchEnds.add(edge.source).add(edge.target);
   }
-  const ids = (item: Item) => item.members ?? [item.nodeId];
+  const ids = itemIds;
   return {
     itemDim: (item) =>
       matching
@@ -347,6 +359,11 @@ export function emphasisCounts(
   };
 }
 
+const itemIds = (item: Item) => item.members ?? [item.nodeId];
+/** Bundles are neutral; only blocked traffic keeps a colour. */
+const bundleClass = (r: RoutedEdge) =>
+  r.blocked ? "bundle blocked" : r.inferred ? "bundle inferred" : "bundle";
+
 export function MapView({
   layout,
   index,
@@ -363,6 +380,8 @@ export function MapView({
   label,
   emphasisReason,
   onClearEmphasis,
+  onOpenNode,
+  impactClass,
 }: {
   layout: Layout;
   index: GraphIndex;
@@ -382,6 +401,10 @@ export function MapView({
   label: string;
   emphasisReason?: string;
   onClearEmphasis?: () => void;
+  /** Double-click on a card, e.g. to open a device page. */
+  onOpenNode?: (id: string) => void;
+  /** Impact overlay class for a card's or line's member IDs. */
+  impactClass?: (ids: readonly string[]) => string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -574,7 +597,6 @@ export function MapView({
   );
   const { itemDim, edgeDim } = emphasisPredicates;
   const selectedEdge = selection?.kind === "edge" ? selection.id : undefined;
-  const ids = (item: Item) => item.members ?? [item.nodeId];
   const emphasis = useMemo(
     () =>
       emphasisCounts(layout, index, { matchNodes, matchEdges, neighborhood }),
@@ -627,126 +649,523 @@ export function MapView({
     const cols = new Map<number, string[]>();
     for (const id of layout.order) {
       const it = layout.items.get(id)!;
-      cols.set(it.column, [...(cols.get(it.column) ?? []), id]);
+      const list = cols.get(it.column);
+      if (list) list.push(id);
+      else cols.set(it.column, [id]);
     }
     return cols;
   }, [layout]);
-  const moveFocus = (id: string | undefined) => {
-    if (!id) return;
-    setActive(id);
-    itemRefs.current.get(id)?.focus();
-    const it = layout.items.get(id);
-    if (it) setT((cur) => ensureVisible(cur, it, size));
-  };
-  const onItemKey = (ev: React.KeyboardEvent, it: Item) => {
-    const col = columnItems.get(it.column)!;
-    const i = col.indexOf(it.nodeId);
-    const nearest = (c: number) => {
-      const list = columnItems.get(c);
-      if (!list?.length) return undefined;
-      const mid = it.y + it.h / 2;
-      return list.reduce((best, cand) => {
-        const a = layout.items.get(cand)!,
-          b = layout.items.get(best)!;
-        return Math.abs(a.y + a.h / 2 - mid) < Math.abs(b.y + b.h / 2 - mid)
-          ? cand
-          : best;
-      });
-    };
-    const keyMap: Record<string, () => string | undefined> = {
-      ArrowDown: () => col[Math.min(col.length - 1, i + 1)],
-      ArrowUp: () => col[Math.max(0, i - 1)],
-      ArrowRight: () => nearest(it.column + 1),
-      ArrowLeft: () => nearest(it.column - 1),
-      Home: () => layout.order[0],
-      End: () => layout.order[layout.order.length - 1],
-    };
-    if (keyMap[ev.key]) {
-      ev.preventDefault();
-      moveFocus(keyMap[ev.key]());
-    } else if (ev.key === "Enter" || ev.key === " ") {
-      ev.preventDefault();
-      if (it.role === "summary") onExpand(it.groupId);
-      else onSelect({ kind: "node", id: it.nodeId });
-    } else if (ev.key === "Escape") {
-      ev.preventDefault();
-      ev.stopPropagation();
-      onSelect(null);
-    }
-  };
+  const moveFocus = useCallback(
+    (id: string | undefined) => {
+      if (!id) return;
+      setActive(id);
+      itemRefs.current.get(id)?.focus();
+      const it = layout.items.get(id);
+      if (it) setT((cur) => ensureVisible(cur, it, size));
+    },
+    [layout, size],
+  );
+  const onItemKey = useCallback(
+    (ev: React.KeyboardEvent, it: Item) => {
+      const col = columnItems.get(it.column)!;
+      const i = col.indexOf(it.nodeId);
+      const nearest = (c: number) => {
+        const list = columnItems.get(c);
+        if (!list?.length) return undefined;
+        const mid = it.y + it.h / 2;
+        return list.reduce((best, cand) => {
+          const a = layout.items.get(cand)!,
+            b = layout.items.get(best)!;
+          return Math.abs(a.y + a.h / 2 - mid) < Math.abs(b.y + b.h / 2 - mid)
+            ? cand
+            : best;
+        });
+      };
+      const keyMap: Record<string, () => string | undefined> = {
+        ArrowDown: () => col[Math.min(col.length - 1, i + 1)],
+        ArrowUp: () => col[Math.max(0, i - 1)],
+        ArrowRight: () => nearest(it.column + 1),
+        ArrowLeft: () => nearest(it.column - 1),
+        Home: () => layout.order[0],
+        End: () => layout.order[layout.order.length - 1],
+      };
+      if (keyMap[ev.key]) {
+        ev.preventDefault();
+        moveFocus(keyMap[ev.key]());
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        if (it.role === "summary") onExpand(it.groupId);
+        else onSelect({ kind: "node", id: it.nodeId });
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        onSelect(null);
+      }
+    },
+    [columnItems, layout, moveFocus, onExpand, onSelect],
+  );
 
   const selectedItem =
     selection?.kind === "node" ? layout.items.get(selection.id) : undefined;
+  const hoverId = hover?.id;
+  const routedById = useMemo(
+    () => new Map(layout.edges.map((r) => [r.id, r])),
+    [layout.edges],
+  );
   const hovered = hover && index.edge.get(hover.id);
-  const tip = hovered && describeEdge(hovered);
-
-  const renderEdge = (r: RoutedEdge) => {
-    const cls = edgeClass(r.edge);
-    const selected = !!selectedEdge && r.members.includes(selectedEdge);
-    const marker =
-      r.arrow === "none"
-        ? undefined
-        : `url(#adm-arrow-${selected ? "ink" : cls.replace(" ", "-")})`;
-    const dim = r.members.every((id) => {
-      const e = index.edge.get(id);
-      return !e || edgeDim(e);
-    });
-    return (
-      <g
-        key={r.id}
-        className={`edge ${cls} ${selected ? "selected" : ""} ${dim && hover?.id !== r.id ? "dim" : ""} ${hover?.id === r.id ? "hover" : ""} ${r.members.some((id) => matchEdges?.has(id)) ? "match" : ""}`}
-        data-hit
-        onClick={(ev) => {
-          ev.stopPropagation();
-          onSelect({ kind: "edge", id: r.id });
-        }}
-        onPointerMove={(ev) => {
-          const rect = box.current!.getBoundingClientRect();
-          setHover({
-            id: r.id,
-            x: ev.clientX - rect.left,
-            y: ev.clientY - rect.top,
-          });
-        }}
-        onPointerLeave={() => setHover(undefined)}
-      >
-        <path d={r.d} className="edge-hit" />
-        <path d={r.d} className="edge-line" markerEnd={marker} />
-        {r.blocked && (
-          <g
-            className="blocked-badge"
-            transform={`translate(${r.mid.x},${r.mid.y})`}
-          >
-            <title>Blocked by the fabric (ACI ACL log drop)</title>
-            <rect x={-38} y={-10} width={76} height={20} rx={10} />
-            <circle cx={-25} cy={0} r={5} />
-            <line x1={-28.5} y1={3.5} x2={-21.5} y2={-3.5} />
-            <text x={5} y={4} textAnchor="middle">
-              Blocked
-            </text>
-          </g>
-        )}
-        {r.label && (
-          <g className="edge-label">
-            <rect
-              x={r.mid.x + 6}
-              y={r.mid.y - 10}
-              width={textWidth(r.label, `650 11px ${FAMILY}`) + 14}
-              height={20}
-              rx={10}
-            />
-            <text x={r.mid.x + 13} y={r.mid.y + 4}>
-              {r.label}
-            </text>
-          </g>
-        )}
-      </g>
-    );
+  const hoveredRoute = hover && routedById.get(hover.id);
+  const baseTip = hovered && describeEdge(hovered);
+  const tip =
+    baseTip && hoveredRoute?.card
+      ? {
+          title: hoveredRoute.card.title,
+          lines: bundleSummary(
+            hoveredRoute.members
+              .map((id) => index.edge.get(id))
+              .filter((e): e is GraphEdge => !!e),
+          ),
+        }
+      : baseTip && hoveredRoute?.bundle && hoveredRoute.bundle > 1
+        ? {
+            title: baseTip.title,
+            lines: [
+              `${hoveredRoute.bundle.toLocaleString()} relationships bundled · ${prettyBytes(hoveredRoute.weight)} total · heaviest shown`,
+              ...baseTip.lines,
+            ],
+          }
+        : baseTip;
+  const useCanvas = layout.edges.length > CANVAS_EDGES;
+  const routeClass = useCallback(
+    (r: RoutedEdge) =>
+      r.card || (r.bundle && r.bundle > 1) ? bundleClass(r) : edgeClass(r.edge),
+    [edgeClass],
+  );
+  const routeDim = useCallback(
+    (r: RoutedEdge) =>
+      r.members.every((id) => {
+        const e = index.edge.get(id);
+        return !e || edgeDim(e);
+      }),
+    [index, edgeDim],
+  );
+  const hitIndex = useMemo(
+    () => (useCanvas ? createHitIndex(layout.edges) : undefined),
+    [useCanvas, layout.edges],
+  );
+  const highlight = useMemo(() => {
+    if (!useCanvas) return [];
+    const list: RoutedEdge[] = [];
+    const sel = selectedEdge && routedEdgeByMember.get(selectedEdge);
+    if (sel) list.push(sel);
+    const h = hoverId && routedById.get(hoverId);
+    if (h && h !== sel) list.push(h);
+    return list;
+  }, [useCanvas, selectedEdge, hoverId, routedEdgeByMember, routedById]);
+  const canvasHit = (ev: React.PointerEvent) => {
+    if (!hitIndex || !box.current) return undefined;
+    const rect = box.current.getBoundingClientRect();
+    const x = (ev.clientX - rect.left - t.x) / t.k,
+      y = (ev.clientY - rect.top - t.y) / t.k;
+    return hitIndex.hit(x, y, 6 / t.k);
   };
+
+  const edgesLayer = useMemo(() => {
+    if (useCanvas) return null;
+    const renderEdge = (r: RoutedEdge) => {
+      const cls = routeClass(r);
+      const selected = !!selectedEdge && r.members.includes(selectedEdge);
+      const marker =
+        r.arrow === "none"
+          ? undefined
+          : `url(#adm-arrow-${selected ? "ink" : cls.replace(" ", "-")})`;
+      const dim = routeDim(r);
+      return (
+        <g
+          key={r.id}
+          className={`edge ${cls} ${selected ? "selected" : ""} ${dim && hoverId !== r.id ? "dim" : ""} ${hoverId === r.id ? "hover" : ""} ${r.members.some((id) => matchEdges?.has(id)) ? "match" : ""} ${impactClass?.(r.members) ?? ""}`}
+          data-hit
+          onClick={(ev) => {
+            ev.stopPropagation();
+            onSelect({ kind: "edge", id: r.id });
+          }}
+          onPointerMove={(ev) => {
+            const rect = box.current!.getBoundingClientRect();
+            setHover({
+              id: r.id,
+              x: ev.clientX - rect.left,
+              y: ev.clientY - rect.top,
+            });
+          }}
+          onPointerLeave={() => setHover(undefined)}
+        >
+          <path d={r.d} className="edge-hit" />
+          <path
+            d={r.d}
+            className="edge-line"
+            markerEnd={marker}
+            style={r.width ? { strokeWidth: r.width } : undefined}
+          />
+          {r.blocked && (
+            <g
+              className="blocked-badge"
+              transform={`translate(${r.mid.x},${r.mid.y})`}
+            >
+              <title>Blocked by the fabric (ACI ACL log drop)</title>
+              <rect x={-38} y={-10} width={76} height={20} rx={10} />
+              <circle cx={-25} cy={0} r={5} />
+              <line x1={-28.5} y1={3.5} x2={-21.5} y2={-3.5} />
+              <text x={5} y={4} textAnchor="middle">
+                Blocked
+              </text>
+            </g>
+          )}
+          {r.label && (
+            <g className="edge-label">
+              <rect
+                x={r.mid.x + 6}
+                y={r.mid.y - 10}
+                width={textWidth(r.label, `650 11px ${FAMILY}`) + 14}
+                height={20}
+                rx={10}
+              />
+              <text x={r.mid.x + 13} y={r.mid.y + 4}>
+                {r.label}
+              </text>
+            </g>
+          )}
+        </g>
+      );
+    };
+    return <g className="edges">{layout.edges.map(renderEdge)}</g>;
+  }, [
+    useCanvas,
+    layout.edges,
+    routeClass,
+    routeDim,
+    selectedEdge,
+    hoverId,
+    matchEdges,
+    onSelect,
+    impactClass,
+  ]);
+  const staticLayer = useMemo(
+    () => (
+      <>
+        {layout.lanes.map((lane) => (
+          <g key={`${lane.x}:${lane.y}`} className="lane">
+            <text x={lane.x} y={lane.y} className="lane-title">
+              {lane.title.toUpperCase()}
+            </text>
+            <line
+              x1={lane.x}
+              x2={lane.x + lane.width}
+              y1={lane.y + 9}
+              y2={lane.y + 9}
+              className="lane-rule"
+            />
+          </g>
+        ))}
+        {layout.groups.map((g) => (
+          <g key={g.id} className={`group ${g.kind}`}>
+            <rect
+              x={g.x}
+              y={g.y}
+              width={g.w}
+              height={g.h}
+              rx={10}
+              className="group-card"
+            />
+            {!g.headerNodeId && (
+              <>
+                <text x={g.x + 14} y={g.y + 19} className="group-title">
+                  {fitText(g.title, g.w - 28, HEADER_FONT)}
+                </text>
+                {g.subtitle && (
+                  <text x={g.x + 14} y={g.y + 35} className="group-sub">
+                    {fitText(g.subtitle, g.w - 28, META_FONT)}
+                  </text>
+                )}
+              </>
+            )}
+            {g.headerNodeId && g.items.length > 1 && (
+              <line
+                x1={g.x}
+                x2={g.x + g.w}
+                y1={g.y + HEADER_H}
+                y2={g.y + HEADER_H}
+                className="group-rule"
+              />
+            )}
+          </g>
+        ))}
+      </>
+    ),
+    [layout],
+  );
+  const pillsLayer = useMemo(
+    () => (
+      <g className="pills">
+        {pillRenderData.map(({ p, edges, dim, selected, cls }) => {
+          // A pill shared with permitted conversations keeps their colour.
+          return (
+            <g
+              key={p.id}
+              className={`pill ${dim ? "dim" : ""} ${selected ? "selected" : ""}`}
+            >
+              <title>{`${p.label} · ${edges.length} conversation${edges.length === 1 ? "" : "s"}`}</title>
+              <line
+                x1={p.connector.x1}
+                x2={p.connector.x2 + (p.side === "left" ? -1 : 1)}
+                y1={p.connector.y}
+                y2={p.connector.y}
+                className={`pill-link ${cls}`}
+                markerEnd={`url(#adm-arrow-${selected ? "ink" : cls})`}
+              />
+              <rect x={p.x} y={p.y} width={p.w} height={p.h} rx={p.h / 2} />
+              <text x={p.x + p.w / 2} y={p.y + p.h / 2 + 4} textAnchor="middle">
+                {p.label}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    ),
+    [pillRenderData],
+  );
+  const itemsLayer = useMemo(
+    () => (
+      <>
+        {layout.groups.flatMap((g) =>
+          g.items.map((it) => {
+            const n = it.role === "summary" ? undefined : node(it.nodeId);
+            const {
+              header,
+              summary,
+              unknown,
+              noBackend,
+              meta,
+              kindText,
+              text,
+              fitted,
+            } = itemText(
+              it,
+              n,
+              deviceLabel,
+              it.role === "header" && g.kind === "frontdoor"
+                ? g.title
+                : undefined,
+            );
+            const stacked = fitted.stacked;
+            const chipW = CHIP_W;
+            const selected = !!selectedItem && selectedItem === it;
+            const labelY = header
+              ? it.y + 19
+              : stacked
+                ? it.y + 17
+                : it.y + it.h / 2 + 4.5;
+            const sideY = header
+              ? stacked
+                ? it.y + 35
+                : it.y + 19
+              : stacked
+                ? it.y + it.h - 9
+                : it.y + it.h / 2 + 4.5;
+            // A stacked header shares its subtitle line with the side text.
+            const subW =
+              it.w -
+              46 -
+              (header && stacked
+                ? noBackend
+                  ? chipW + 6
+                  : meta
+                    ? textWidth(meta, META_FONT) + 12
+                    : 0
+                : 0);
+            const focusRing =
+              focused === it.nodeId ||
+              (matching &&
+                focusTarget?.kind === "node" &&
+                layout.items.get(focusTarget.id) === it);
+            return (
+              <g
+                key={it.nodeId}
+                ref={(el) => {
+                  if (el) itemRefs.current.set(it.nodeId, el);
+                  else itemRefs.current.delete(it.nodeId);
+                }}
+                className={`item ${it.role} ${n?.kind ?? "workload"} ${unknown ? "unknown" : ""} ${n?.endpoint_kind === "external" ? "external" : ""} ${selected ? "selected" : ""} ${itemDim(it) ? "dim" : ""} ${matching && itemIds(it).some((id) => matchNodes!.has(id)) ? "match" : ""} ${impactClass?.(itemIds(it)) ?? ""}`}
+                data-hit
+                role="button"
+                tabIndex={it.nodeId === active ? 0 : -1}
+                aria-label={
+                  summary
+                    ? `${text} in ${g.title}, collapsed. Press Enter to show them.`
+                    : `${kindText} ${n?.endpoint_kind === "k8s_service" ? `${text} · ${n.label}` : text}${unknown ? ", identity unknown" : ""}`
+                }
+                aria-pressed={summary ? undefined : selected}
+                aria-expanded={summary ? false : undefined}
+                onFocus={() => {
+                  setFocused(it.nodeId);
+                  setActive(it.nodeId);
+                }}
+                onBlur={() => setFocused(undefined)}
+                onKeyDown={(ev) => onItemKey(ev, it)}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setActive(it.nodeId);
+                  if (summary) onExpand(it.groupId);
+                  else onSelect({ kind: "node", id: it.nodeId });
+                }}
+                onDoubleClick={
+                  onOpenNode && !summary
+                    ? (ev) => {
+                        ev.stopPropagation();
+                        onOpenNode(it.nodeId);
+                      }
+                    : undefined
+                }
+              >
+                <title>
+                  {it.members && header
+                    ? `${text}: ${it.members.map((id) => node(id)?.label ?? id).join(", ")}`
+                    : summary
+                      ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
+                      : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
+                </title>
+                <rect
+                  x={it.x + 3}
+                  y={it.y + 3}
+                  width={it.w - 6}
+                  height={it.h - 6}
+                  rx={7}
+                  className="item-bg"
+                />
+                <NodeIcon
+                  node={n}
+                  x={it.x + 12}
+                  y={it.y + (header ? 8 : stacked ? 6 : (it.h - 15) / 2)}
+                />
+                <text x={it.x + 34} y={labelY} className="item-label">
+                  {fitted.name}
+                </text>
+                {header && (
+                  <text x={it.x + 34} y={it.y + 35} className="item-sub">
+                    {fitText(
+                      `${g.subtitle ?? ""}${
+                        g.items.length > 1
+                          ? ` · ${g.collapsed ? g.items[1].members!.length : g.items.length - 1} pod${(g.collapsed ? g.items[1].members!.length : g.items.length - 1) === 1 ? "" : "s"}`
+                          : ""
+                      }`,
+                      subW,
+                      META_FONT,
+                    )}
+                  </text>
+                )}
+                {summary && (
+                  <g className="summary-more">
+                    <text
+                      x={it.x + it.w - 32}
+                      y={it.y + it.h / 2 + 4.5}
+                      textAnchor="end"
+                    >
+                      Show
+                    </text>
+                    <ChevronDown
+                      x={it.x + it.w - 28}
+                      y={it.y + it.h / 2 - 7}
+                      size={14}
+                      aria-hidden
+                    />
+                  </g>
+                )}
+                {noBackend && (
+                  <g className="status-chip">
+                    <title>
+                      Backend not determined ({n?.attributes?.candidates ?? "?"}{" "}
+                      candidates)
+                    </title>
+                    <rect
+                      x={it.x + it.w - 10 - chipW}
+                      y={sideY - 13}
+                      width={chipW}
+                      height={18}
+                      rx={9}
+                    />
+                    <text
+                      x={it.x + it.w - 10 - chipW / 2}
+                      y={sideY}
+                      textAnchor="middle"
+                    >
+                      No backend
+                    </text>
+                  </g>
+                )}
+                {unknown && (
+                  <g className="status-chip">
+                    <rect
+                      x={stacked ? it.x + 32 : it.x + it.w - 108}
+                      y={stacked ? sideY - 12 : it.y + it.h / 2 - 10}
+                      width={98}
+                      height={stacked ? 16 : 20}
+                      rx={8}
+                    />
+                    <text
+                      x={stacked ? it.x + 81 : it.x + it.w - 59}
+                      y={stacked ? sideY : it.y + it.h / 2 + 4}
+                      textAnchor="middle"
+                    >
+                      {kindText}
+                    </text>
+                  </g>
+                )}
+                {!unknown && meta && (
+                  <text
+                    x={stacked && !header ? it.x + 34 : it.x + it.w - 12}
+                    y={sideY}
+                    textAnchor={stacked && !header ? "start" : "end"}
+                    className="item-meta"
+                  >
+                    {meta}
+                  </text>
+                )}
+                {focusRing && (
+                  <rect
+                    x={it.x + 1}
+                    y={it.y + 1}
+                    width={it.w - 2}
+                    height={it.h - 2}
+                    rx={9}
+                    className="focus-ring"
+                  />
+                )}
+              </g>
+            );
+          }),
+        )}
+      </>
+    ),
+    [
+      layout,
+      node,
+      deviceLabel,
+      selectedItem,
+      focused,
+      matching,
+      focusTarget,
+      itemDim,
+      matchNodes,
+      active,
+      onItemKey,
+      onExpand,
+      onSelect,
+      onOpenNode,
+      impactClass,
+    ],
+  );
 
   return (
     <div
-      className="map-canvas"
+      className={useCanvas ? "map-canvas atlas-canvas-mode" : "map-canvas"}
       ref={box}
       onPointerDown={(ev) => {
         // Cards, lines and the zoom buttons handle their own clicks.
@@ -763,12 +1182,28 @@ export function MapView({
             x: d.t.x + ev.clientX - d.x,
             y: d.t.y + ev.clientY - d.y,
           });
+        else if (
+          hitIndex &&
+          !(ev.target as Element).closest("[data-hit], .zoom-controls")
+        ) {
+          const r = canvasHit(ev);
+          const rect = box.current!.getBoundingClientRect();
+          if (r)
+            setHover({
+              id: r.id,
+              x: ev.clientX - rect.left,
+              y: ev.clientY - rect.top,
+            });
+          else if (hover) setHover(undefined);
+        }
       }}
       onPointerUp={(ev) => {
         const d = drag.current;
         drag.current = null;
-        if (d && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 4)
-          onSelect(null);
+        if (d && Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 4) {
+          const r = canvasHit(ev);
+          onSelect(r ? { kind: "edge", id: r.id } : null);
+        }
       }}
     >
       {emphasisReason &&
@@ -796,9 +1231,25 @@ export function MapView({
             )}
           </div>
         )}
+      {useCanvas && (
+        <EdgeCanvas
+          edges={layout.edges}
+          classOf={routeClass}
+          dimOf={routeDim}
+          transform={t}
+          width={size.w}
+          height={size.h}
+          highlight={highlight}
+        />
+      )}
       <svg
         role="group"
         aria-label={label}
+        aria-description={
+          useCanvas
+            ? `${layout.edges.length.toLocaleString()} connections are drawn as an image. Use the Table view for a keyboard-accessible list.`
+            : undefined
+        }
         width={size.w || undefined}
         height={size.h || undefined}
         className="map-svg"
@@ -815,6 +1266,9 @@ export function MapView({
             "forward",
             "forward-inferred",
             "tunnel",
+            "bundle",
+            "bundle-blocked",
+            "bundle-inferred",
             "ink",
           ].map((c) => (
             <marker
@@ -835,284 +1289,39 @@ export function MapView({
           data-export-root
           transform={`translate(${t.x},${t.y}) scale(${t.k})`}
         >
-          {layout.lanes.map((lane) => (
-            <g key={`${lane.x}:${lane.y}`} className="lane">
-              <text x={lane.x} y={lane.y} className="lane-title">
-                {lane.title.toUpperCase()}
-              </text>
-              <line
-                x1={lane.x}
-                x2={lane.x + lane.width}
-                y1={lane.y + 9}
-                y2={lane.y + 9}
-                className="lane-rule"
-              />
-            </g>
-          ))}
-          {layout.groups.map((g) => (
-            <g key={g.id} className={`group ${g.kind}`}>
-              <rect
-                x={g.x}
-                y={g.y}
-                width={g.w}
-                height={g.h}
-                rx={10}
-                className="group-card"
-              />
-              {!g.headerNodeId && (
-                <>
-                  <text x={g.x + 14} y={g.y + 19} className="group-title">
-                    {fitText(g.title, g.w - 28, HEADER_FONT)}
-                  </text>
-                  {g.subtitle && (
-                    <text x={g.x + 14} y={g.y + 35} className="group-sub">
-                      {fitText(g.subtitle, g.w - 28, META_FONT)}
-                    </text>
-                  )}
-                </>
-              )}
-              {g.headerNodeId && g.items.length > 1 && (
-                <line
-                  x1={g.x}
-                  x2={g.x + g.w}
-                  y1={g.y + HEADER_H}
-                  y2={g.y + HEADER_H}
-                  className="group-rule"
-                />
-              )}
-            </g>
-          ))}
-          <g className="edges">{layout.edges.map(renderEdge)}</g>
-          <g className="pills">
-            {pillRenderData.map(({ p, edges, dim, selected, cls }) => {
-              // A pill shared with permitted conversations keeps their colour.
-              return (
-                <g
-                  key={p.id}
-                  className={`pill ${dim ? "dim" : ""} ${selected ? "selected" : ""}`}
-                >
-                  <title>{`${p.label} · ${edges.length} conversation${edges.length === 1 ? "" : "s"}`}</title>
-                  <line
-                    x1={p.connector.x1}
-                    x2={p.connector.x2 + (p.side === "left" ? -1 : 1)}
-                    y1={p.connector.y}
-                    y2={p.connector.y}
-                    className={`pill-link ${cls}`}
-                    markerEnd={`url(#adm-arrow-${selected ? "ink" : cls})`}
-                  />
-                  <rect x={p.x} y={p.y} width={p.w} height={p.h} rx={p.h / 2} />
-                  <text
-                    x={p.x + p.w / 2}
-                    y={p.y + p.h / 2 + 4}
-                    textAnchor="middle"
-                  >
-                    {p.label}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-          {layout.groups.flatMap((g) =>
-            g.items.map((it) => {
-              const n = it.role === "summary" ? undefined : node(it.nodeId);
-              const {
-                header,
-                summary,
-                unknown,
-                noBackend,
-                meta,
-                kindText,
-                text,
-                fitted,
-              } = itemText(
-                it,
-                n,
-                deviceLabel,
-                it.role === "header" && g.kind === "frontdoor"
-                  ? g.title
-                  : undefined,
-              );
-              const stacked = fitted.stacked;
-              const chipW = CHIP_W;
-              const selected = !!selectedItem && selectedItem === it;
-              const labelY = header
-                ? it.y + 19
-                : stacked
-                  ? it.y + 17
-                  : it.y + it.h / 2 + 4.5;
-              const sideY = header
-                ? stacked
-                  ? it.y + 35
-                  : it.y + 19
-                : stacked
-                  ? it.y + it.h - 9
-                  : it.y + it.h / 2 + 4.5;
-              // A stacked header shares its subtitle line with the side text.
-              const subW =
-                it.w -
-                46 -
-                (header && stacked
-                  ? noBackend
-                    ? chipW + 6
-                    : meta
-                      ? textWidth(meta, META_FONT) + 12
-                      : 0
-                  : 0);
-              const focusRing =
-                focused === it.nodeId ||
-                (matching &&
-                  focusTarget?.kind === "node" &&
-                  layout.items.get(focusTarget.id) === it);
-              return (
-                <g
-                  key={it.nodeId}
-                  ref={(el) => {
-                    if (el) itemRefs.current.set(it.nodeId, el);
-                    else itemRefs.current.delete(it.nodeId);
-                  }}
-                  className={`item ${it.role} ${n?.kind ?? "workload"} ${unknown ? "unknown" : ""} ${n?.endpoint_kind === "external" ? "external" : ""} ${selected ? "selected" : ""} ${itemDim(it) ? "dim" : ""} ${matching && ids(it).some((id) => matchNodes!.has(id)) ? "match" : ""}`}
-                  data-hit
-                  role="button"
-                  tabIndex={it.nodeId === active ? 0 : -1}
-                  aria-label={
-                    summary
-                      ? `${text} in ${g.title}, collapsed. Press Enter to show them.`
-                      : `${kindText} ${n?.endpoint_kind === "k8s_service" ? `${text} · ${n.label}` : text}${unknown ? ", identity unknown" : ""}`
-                  }
-                  aria-pressed={summary ? undefined : selected}
-                  aria-expanded={summary ? false : undefined}
-                  onFocus={() => {
-                    setFocused(it.nodeId);
-                    setActive(it.nodeId);
-                  }}
-                  onBlur={() => setFocused(undefined)}
-                  onKeyDown={(ev) => onItemKey(ev, it)}
-                  onClick={(ev) => {
-                    ev.stopPropagation();
-                    setActive(it.nodeId);
-                    if (summary) onExpand(it.groupId);
-                    else onSelect({ kind: "node", id: it.nodeId });
-                  }}
-                >
-                  <title>
-                    {it.members && header
-                      ? `${text}: ${it.members.map((id) => node(id)?.label ?? id).join(", ")}`
-                      : summary
-                        ? `${text}: ${it.members!.map((m) => node(m)?.label).join(", ")}`
-                        : `${kindText}: ${n?.endpoint_kind === "k8s_service" ? `${n.label}${policyText(n.attributes ?? {}) ? ` · ${policyText(n.attributes ?? {})}` : ""}` : text}`}
-                  </title>
-                  <rect
-                    x={it.x + 3}
-                    y={it.y + 3}
-                    width={it.w - 6}
-                    height={it.h - 6}
-                    rx={7}
-                    className="item-bg"
-                  />
-                  <NodeIcon
-                    node={n}
-                    x={it.x + 12}
-                    y={it.y + (header ? 8 : stacked ? 6 : (it.h - 15) / 2)}
-                  />
-                  <text x={it.x + 34} y={labelY} className="item-label">
-                    {fitted.name}
-                  </text>
-                  {header && (
-                    <text x={it.x + 34} y={it.y + 35} className="item-sub">
-                      {fitText(
-                        `${g.subtitle ?? ""}${
-                          g.items.length > 1
-                            ? ` · ${g.collapsed ? g.items[1].members!.length : g.items.length - 1} pod${(g.collapsed ? g.items[1].members!.length : g.items.length - 1) === 1 ? "" : "s"}`
-                            : ""
-                        }`,
-                        subW,
-                        META_FONT,
-                      )}
-                    </text>
-                  )}
-                  {summary && (
-                    <g className="summary-more">
-                      <text
-                        x={it.x + it.w - 32}
-                        y={it.y + it.h / 2 + 4.5}
-                        textAnchor="end"
-                      >
-                        Show
-                      </text>
-                      <ChevronDown
-                        x={it.x + it.w - 28}
-                        y={it.y + it.h / 2 - 7}
-                        size={14}
-                        aria-hidden
-                      />
-                    </g>
-                  )}
-                  {noBackend && (
-                    <g className="status-chip">
-                      <title>
-                        Backend not determined (
-                        {n?.attributes?.candidates ?? "?"} candidates)
-                      </title>
-                      <rect
-                        x={it.x + it.w - 10 - chipW}
-                        y={sideY - 13}
-                        width={chipW}
-                        height={18}
-                        rx={9}
-                      />
-                      <text
-                        x={it.x + it.w - 10 - chipW / 2}
-                        y={sideY}
-                        textAnchor="middle"
-                      >
-                        No backend
-                      </text>
-                    </g>
-                  )}
-                  {unknown && (
-                    <g className="status-chip">
-                      <rect
-                        x={stacked ? it.x + 32 : it.x + it.w - 108}
-                        y={stacked ? sideY - 12 : it.y + it.h / 2 - 10}
-                        width={98}
-                        height={stacked ? 16 : 20}
-                        rx={8}
-                      />
-                      <text
-                        x={stacked ? it.x + 81 : it.x + it.w - 59}
-                        y={stacked ? sideY : it.y + it.h / 2 + 4}
-                        textAnchor="middle"
-                      >
-                        {kindText}
-                      </text>
-                    </g>
-                  )}
-                  {!unknown && meta && (
-                    <text
-                      x={stacked && !header ? it.x + 34 : it.x + it.w - 12}
-                      y={sideY}
-                      textAnchor={stacked && !header ? "start" : "end"}
-                      className="item-meta"
-                    >
-                      {meta}
-                    </text>
-                  )}
-                  {focusRing && (
-                    <rect
-                      x={it.x + 1}
-                      y={it.y + 1}
-                      width={it.w - 2}
-                      height={it.h - 2}
-                      rx={9}
-                      className="focus-ring"
-                    />
-                  )}
-                </g>
-              );
-            }),
-          )}
+          {staticLayer}
+          {edgesLayer}
+          {pillsLayer}
+          {itemsLayer}
         </g>
       </svg>
+      {(layout.truncation || layout.aggregated > 0 || useCanvas) && (
+        <div className="atlas-scale-chips" role="status">
+          {layout.truncation && (
+            <span
+              className="atlas-scale-chip"
+              title={`Ranked by ${layout.truncation.ranking}. ${layout.truncation.shown.nodes.toLocaleString()} of ${layout.truncation.total.nodes.toLocaleString()} nodes shown. Narrow the scope to see the rest.`}
+            >
+              {truncationChip(layout.truncation)}
+            </span>
+          )}
+          {layout.aggregated > 0 && (
+            <span
+              className="atlas-scale-chip"
+              title="Large groups are summarized; select a summary card to expand it. Line width follows traffic volume."
+            >
+              {layout.aggregated.toLocaleString()} group
+              {layout.aggregated === 1 ? "" : "s"} summarized
+            </span>
+          )}
+          {useCanvas && (
+            <span className="atlas-scale-chip">
+              {layout.edges.length.toLocaleString()} lines drawn
+              {layout.straight ? " direct" : ""}
+            </span>
+          )}
+        </div>
+      )}
       {tip && hover && (
         <div
           className="map-tooltip"

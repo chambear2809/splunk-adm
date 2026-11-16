@@ -42,3 +42,14 @@ export function formatInZone(value: string, tz?: string): string {
     return new Intl.DateTimeFormat(undefined, options).format(new Date(value));
   }
 }
+
+/** "start → end" of a graph's counted window in the zone, or undefined when
+ * either bound is not an ISO timestamp with an explicit offset. */
+export function graphWindowLabel(
+  graph: { window: { start: string; end: string } },
+  tz?: string,
+): string | undefined {
+  const { start, end } = graph.window;
+  if (!isoTime(start) || !isoTime(end)) return undefined;
+  return `${formatInZone(start, tz)} → ${formatInZone(end, tz)}`;
+}

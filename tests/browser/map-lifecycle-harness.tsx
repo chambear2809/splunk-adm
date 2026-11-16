@@ -60,6 +60,9 @@ const clientFor = (client: string): SearchClient => ({
   // Deliberately ignore abort when resolving: providers must suppress late data
   // even if a transport finishes after it receives the cancellation signal.
   search: (request) => {
+    // The VMM half of the map inventory carries nothing in these fixtures.
+    if (request.search === "| `adm_map_vsphere_inventory`")
+      return Promise.resolve({ rows: [], warnings: [], errors: [] });
     if (
       surface === "map" &&
       !isGraphSearch(request.search) &&
@@ -83,8 +86,12 @@ const initialState = parseUrlState(
   new URLSearchParams({
     ...(surface === "map" ? lifecycleArgs : rows.args),
     mode: new URLSearchParams(location.search).get("mode") ?? "live",
-    earliest: "-1h",
-    latest: "now",
+    // The captured graph windows, so the inventory pinned beside the graph
+    // read is the exact window the graph returns (relative bounds are
+    // covered by useGraphQuery.test.ts).
+    ...(surface === "map"
+      ? lifecycleWindow
+      : { earliest: "1791373500", latest: "1791374400" }),
   }),
 );
 const demoData = {

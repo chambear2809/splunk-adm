@@ -1,0 +1,72 @@
+.adm .atlas-incident-overlay {
+  position: fixed;
+  inset: 3.5rem 1rem 1rem;
+  z-index: 1000;
+  overflow: auto;
+  background: var(--adm-surface, #fff);
+  box-shadow: 0 8px 36px #0004;
+}
+
+.adm .atlas-incident {
+  padding: 1rem;
+  border: 1px solid var(--adm-card-border, #c5cbd1);
+  overflow-wrap: anywhere;
+}
+.adm .atlas-incident-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 1rem;
+}
+.adm .atlas-incident-header h2 {
+  margin: 0;
+}
+.adm .atlas-incident-windows,
+.adm .atlas-incident-finding {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--adm-card-border, #c5cbd1);
+}
+.adm .atlas-incident-window-row {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+.adm .atlas-incident-window-row label {
+  display: grid;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+.adm .atlas-incident-window-row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.adm .atlas-incident-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+.adm .atlas-incident-tabs [aria-current] {
+  font-weight: bold;
+  text-decoration: underline;
+}
+.adm .atlas-incident-timeline li {
+  margin-bottom: 1rem;
+}
+.adm .atlas-incident-timeline span {
+  display: block;
+}
+@media (max-width: 700px) {
+  .adm .atlas-incident-overlay {
+    inset: 0;
+  }
+  .adm .atlas-incident-header,
+  .adm .atlas-incident-window-row {
+    flex-direction: column;
+  }
+  .adm .atlas-incident-window-row label {
+    width: 100%;
+  }
+}

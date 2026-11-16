@@ -1,0 +1,133 @@
+{
+  "_provenance": "Impact demo redundancy overlay for the ACI demo fabric, in the row shape adm_impact_inventory returns (adm_vsphere_uplinks(1) hvsAdj/lldpAdjEp uplinks and adm_vsphere_topology(1) virtual_port rows, as captured live in fixtures/path-trace-vds-fi-vpc.json). esx-01 is re-cabled through a UCS fabric interconnect pair (one hvsAdj LLDP neighbour per FI, no pinned vmnic) to a vPC on leaf-101/leaf-102, and orders-db-01 is learned on that vPC (fvRsCEpToPathEp protpaths). It replaces esx-01's direct uplink in the Impact demo only.",
+  "rows": [
+    {
+      "row_type": "port_channel",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-101",
+      "port_channel": "po1",
+      "policy": "vpc-1-21-UCS-FI",
+      "members": ["eth1/21"]
+    },
+    {
+      "row_type": "port_channel",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-102",
+      "port_channel": "po1",
+      "policy": "vpc-1-21-UCS-FI",
+      "members": ["eth1/21"]
+    },
+    {
+      "row_type": "port_channel",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-101",
+      "port_channel": "po2",
+      "policy": "vpc-1-22-UCS-FI",
+      "members": ["eth1/22"]
+    },
+    {
+      "row_type": "port_channel",
+      "apic_host": "192.0.2.50",
+      "node": "pod-1/node-102",
+      "port_channel": "po2",
+      "policy": "vpc-1-22-UCS-FI",
+      "members": ["eth1/22"]
+    },
+    {
+      "row_type": "device",
+      "device_id": "vsphere:192.0.2.50/lldp/02:00:00:00:0a:01",
+      "name": "ucs-fi-a.example.com",
+      "device_kind": "network_device",
+      "mgmt_ip": "192.0.2.241",
+      "device_authority": "192.0.2.50",
+      "native_device_id": "02:00:00:00:0a:01",
+      "sources": "aci_hvsAdj"
+    },
+    {
+      "row_type": "device",
+      "device_id": "vsphere:192.0.2.50/lldp/02:00:00:00:0b:01",
+      "name": "ucs-fi-b.example.com",
+      "device_kind": "network_device",
+      "mgmt_ip": "192.0.2.242",
+      "device_authority": "192.0.2.50",
+      "native_device_id": "02:00:00:00:0b:01",
+      "sources": "aci_hvsAdj"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_hvsAdj",
+      "binding": "hvsAdj_lldp",
+      "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+      "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+      "b_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0a:01",
+      "b_interface": "Veth801"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_hvsAdj",
+      "binding": "hvsAdj_lldp",
+      "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+      "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+      "b_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0b:01",
+      "b_interface": "Veth802"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_lldpAdjEp",
+      "binding": "lldp_mgmt_ip",
+      "a_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0a:01",
+      "a_interface": "Uplink PC Member",
+      "b_device": "pod-1/node-101",
+      "b_interface": "Ethernet1/21"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_lldpAdjEp",
+      "binding": "lldp_mgmt_ip",
+      "a_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0a:01",
+      "a_interface": "Uplink PC Member",
+      "b_device": "pod-1/node-102",
+      "b_interface": "Ethernet1/21"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_lldpAdjEp",
+      "binding": "lldp_mgmt_ip",
+      "a_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0b:01",
+      "a_interface": "Uplink PC Member",
+      "b_device": "pod-1/node-101",
+      "b_interface": "Ethernet1/22"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "uplink",
+      "link_source": "aci_lldpAdjEp",
+      "binding": "lldp_mgmt_ip",
+      "a_device": "vsphere:192.0.2.50/lldp/02:00:00:00:0b:01",
+      "a_interface": "Uplink PC Member",
+      "b_device": "pod-1/node-102",
+      "b_interface": "Ethernet1/22"
+    },
+    {
+      "row_type": "link",
+      "link_kind": "virtual_port",
+      "link_source": "aci_vmm",
+      "binding": "aci_fvRsHyper",
+      "a_device": "vsphere:192.0.2.50/vmm/VMware/vmm-shop/vcenter-01",
+      "b_device": "vm:00:50:56:aa:10:40",
+      "b_device_name": "orders-db-01",
+      "hypervisor": "vsphere:192.0.2.50/comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01/hv-host-01",
+      "mac": "00:50:56:aa:10:40",
+      "ip": "10.20.30.40",
+      "vlan": "1040",
+      "portgroup": "shop|orders|db",
+      "attach_nodes": ["pod-1/node-101", "pod-1/node-102"],
+      "attach_interface": "vpc-1-22-UCS-FI"
+    }
+  ]
+}

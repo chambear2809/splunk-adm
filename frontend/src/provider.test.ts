@@ -35,6 +35,14 @@ describe("buildGraphSearch", () => {
     expect(() =>
       buildGraphSearch({ ...ok, namespace: 'x")|delete' }),
     ).toThrow());
+  it("selects the progressive five-argument read only for a valid tail", () => {
+    expect(buildGraphSearch(ok, "deferred")).toBe(
+      '| `adm_application_graph_read("frontend","demo","demo-cluster","shop","deferred")`',
+    );
+    expect(() =>
+      buildGraphSearch(ok, '") | delete' as unknown as "raw"),
+    ).toThrow();
+  });
 });
 describe("messages", () => {
   it("normalizes and bounds messages", () => {

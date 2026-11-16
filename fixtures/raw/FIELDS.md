@@ -125,3 +125,15 @@ Entities and conversations labelled `ec-` or `edge_case` in `scenario.json` exer
 - **hostNetwork pod** (`cilium-x7k2p`): `spec.hostNetwork: true` and `podIP` equal to `hostIP` (Kubernetes PodSpec); DaemonSet labels `controller-revision-hash`, `pod-template-generation`, `k8s-app`.
 - **Missing cluster** (`legacy-agent-...`): pod events without the `k8s.cluster.name` HEC field, as when the chart's `clusterName` is unset.
 - **Trace outside the boundary** (`batch-worker`): one SERVER span in namespace `batch`.
+
+## Live-shaped path trace rows (not generated)
+
+`../path-trace-vds-fi-vpc.json` and `../path-trace-l3out.json` are `adm_path_trace(2)` results from the Splunk Cloud lab (2026-11-04) with every row and field name unchanged and values replaced by documentation addresses and names (see each file's `_provenance`). The L3Out rows come from `adm_l3out_path_evidence(2)` over live `cisco:dc:aci:class` events collected by the DC Networking TA classInfo input:
+
+| Component | Live attributes the macro reads | Emitted row fields |
+| --- | --- | --- |
+| `l3extRsPathL3OutAtt` | `dn` (`uni/tn-<tenant>/out-<l3out>/lnodep-…/lifp-…/rspathL3OutAtt-[<tDn>]`), `tDn` (`topology/pod-1/paths-102/pathep-[eth1/24]`; vPC form `protpaths-<a>-<b>`), `ifInstT` (`sub-interface` live; the class also defines `l3-port` and `ext-svi`), `encap` (`vlan-304`), `addr` (an interface CIDR, `198.51.100.6/30` in the fixture; `0.0.0.0` on vPC SVIs, whose member addresses are on the uncollected `l3extMember`); also present but unused: `mac`, `mode`, `mtu`, `state` (`unformed` on a working path), `autostate`, `encapScope`, `ipv6Dad`, `llAddr`, `targetDscp` | `row_type=l3out_path`, `apic_host`, `tenant`, `l3out`, `l3out_dn`, `path_dn`, `nodes` (`pod-N/node-N`), `interface` (`adm_if_norm`), `if_type`, `encap`, `address` |
+| `l3extSubnet` | `dn` (`…/instP-<epg>/extsubnet-[<ip>]`), `ip` (`0.0.0.0/0` live), `scope` (`import-security` live) | `row_type=l3out_subnet`, `apic_host`, `tenant`, `l3out`, `l3out_dn`, `instp`, `subnet`, `subnet_scope` (only subnets that `cidrmatch` either trace address) |
+| `isisAdjEp` (via `adm_fabric_path_evidence`) | `dn` (`topology/pod-1/node-202/sys/isis/inst-default/dom-overlay-1/if-[eth1/31.36]/adj-l1-adj-<sysId>`), `operSt=up`, `sysId`; peer node resolved through `fabricLink` `n1`/`s1`/`p1`/`n2`/`s2`/`p2` | `row_type=fabric_evidence`, `evidence_kind=isis_adjacency`, `node`, `interface`, `peer_node`, `peer_sys_id` (redacted) |
+
+SNMP `ifDescr` rows are trimmed to the ports on the path; the border leaf reports the L3Out sub-interface as `Ethernet1/24.15` (ACI's internal sub-interface number, not the VLAN). COOP (`coopEpRec`) has no record for addresses outside the fabric, so the L3Out spine hop is supported by IS-IS adjacency only.

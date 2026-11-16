@@ -29,13 +29,14 @@ import {
   indexTopology,
   nodeDeviceContext,
   observationsByDevice,
+  resolveInventoryEndpoints,
   type Topology,
 } from "../topology";
 import { useMatches } from "./useMatches";
 type Tab = View | "devices" | "table";
 
 export function useMapPresentation({
-  graph,
+  graph: rawGraph,
   topology,
   tab,
   setTab,
@@ -97,8 +98,13 @@ export function useMapPresentation({
     setCollapse(false);
     setExpanded(new Set());
   };
-  const index = useMemo(() => indexGraph(graph), [graph]);
   const topo = useMemo(() => indexTopology(topology), [topology]);
+  // Unknown addresses that inventory binds to one vNIC (IP and MAC) get its name.
+  const graph = useMemo(
+    () => resolveInventoryEndpoints(rawGraph, topo),
+    [rawGraph, topo],
+  );
+  const index = useMemo(() => indexGraph(graph), [graph]);
   const node = useCallback((id: string) => index.node.get(id), [index]);
   const view: View = tab === "services" ? "services" : "network";
   const filtered = useMemo(() => filterGraph(graph, facets), [graph, facets]);
@@ -145,8 +151,22 @@ export function useMapPresentation({
         collapse,
         expanded,
         mergeFrontends,
+        cardBundles: true,
+        quiet: true,
+        hideInferred: facets.hideInferred === true,
+        // Filters narrow the shown subset; the chip keeps the search's cut.
+        truncation: graph.truncation,
       }),
-    [displayGraph, displayIndex, view, collapse, expanded, mergeFrontends],
+    [
+      displayGraph,
+      displayIndex,
+      view,
+      collapse,
+      expanded,
+      mergeFrontends,
+      graph.truncation,
+      facets.hideInferred,
+    ],
   );
   useEffect(() => resetView(), [view]);
   const onFitScale = useCallback(
@@ -198,7 +218,10 @@ export function useMapPresentation({
         : undefined,
     [selectedEdge, graph, index, topo, backend],
   );
-  const label = (id: string) => index.node.get(id)?.label ?? id;
+  const label = useCallback(
+    (id: string) => index.node.get(id)?.label ?? id,
+    [index],
+  );
   const deviceLabel = useCallback(
     (raw: string, host?: GraphNode) =>
       deviceName(raw, topo, nodeDeviceContext(host)).name,

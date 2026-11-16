@@ -17,6 +17,115 @@ not remove graph rows, inspector evidence or export content. No new browser timi
 or benchmark was executed for this change; the historical measurements below
 remain historical evidence rather than a measured speedup for this revision.
 
+## Map search waterfall (0.8.4)
+
+Splunk Cloud 10.6, `teastore-webui`, 2026-11-04, logged-in browser; per-job
+waterfall in [benchmarks/2026-11-map-waterfall.md](benchmarks/2026-11-map-waterfall.md).
+0.8.2 ran its four map jobs serially (summary graph, inventory, full graph,
+inventory again). 0.8.4:
+
+- **Pinned window.** Relative bounds are resolved once in the browser
+  (`pinRequest`), so the summary read, inventory and full read share one exact
+  window. Inventory for the expected graph window (start on a 300 s summary
+  slice) is dispatched beside the graph. If the returned window differs, that
+  speculative read is cancelled and inventory is read again for the returned window.
+- **Split inventory.** `adm_topology` and `adm_map_vsphere_inventory` (the VMM
+  half of `adm_topology_with_vsphere`, without the uplink append the map
+  always filtered out) run side by side. Rows are concatenated in the macro's
+  order (row-equal live at 15 min, 24 h and 7 d).
+- **Full read** starts once the summary graph returns. It reuses the
+  exact-window inventory instead of reading it again. At most 3 browser jobs run at
+  once.
+- `performance.measure`: `atlas:graph:deferred|full`, `atlas:inventory`,
+  `atlas:map:first|full`.
+
+| Window | Draw 0.8.2 | Draw 0.8.4 | In-app draw 0.8.4 | Full 0.8.2 | Full 0.8.4  |
+| ------ | ---------- | ---------- | ----------------- | ---------- | ----------- |
+| 15 min | 12.0 s¹    | 8.8 s      | 4.5 s             | 23.0 s     | 17.8 s      |
+| 1 h    | 8.7 s      | 6.9–7.4 s  | 4.2–4.5 s         | 21.9 s     | 14.8–19.8 s |
+| 4 h    | 10.7 s     | 6.3–7.2 s  | 3.8–4.7 s         | 26.0 s     | 13.8–17.6 s |
+| 24 h   | 9.7 s      | 7.2–8.7 s  | 4.3–5.6 s         | 26.2 s     | 18.7–20.1 s |
+| 7 d    | 13.7 s     | 7.8–9.4 s  | 5.4–6.0 s         | 32.2 s     | 18.7–21.8 s |
+
+Draw and Full are measured from navigation, which includes 2.4–3.1 s of Splunk
+Web page load before the app mounts. In-app draw is `atlas:map:first`, from
+dispatch to publication. ¹ Cold cache. Totals are unchanged ("Exact totals",
+read coverage 100). The remaining time is server-side: three concurrent jobs
+slow the summary graph from 2.2 s to 3–4.7 s, `adm_topology` takes 3.4–3.9 s at
+7 d, and the toolkit polls job status every 1 s.
+
+## Map inventory read (0.8.1)
+
+Splunk Cloud 10.6, 2026-11-04, server `runDuration` of `| search \`adm_topology_with_vsphere\``
+(two runs each; the browser session had expired, so no navigation timing was taken):
+15 min 2.4–2.6 s, 1 h 2.8–3.0 s, 4 h 3.1 s, 24 h 3.3–5.7 s, 7 d 6.7 s (0.8.0: 3.8 s at 4 h, 6.0 s at 24 h,
+25.7 s at 7 d). Rows are unchanged (55: 12 devices, 42 links, 1 meta at 15 min and 7 d). The
+deferred graph read for the same windows took 1.4–3.0 s.
+
+## Live map windows (0.8.0, qualified summaries)
+
+Splunk Cloud 10.6, `teastore-webui`, 2026-11-04, after a 7-day summary
+backfill. Same script and metric as 0.7.3 (navigation to rendered map). First
+render shows summarized totals; the newest unsummarized minutes then merge
+(**Full**). Graph read alone (server, `tail=deferred`): 2.7 s (24 h) – 3.9 s
+(7 d); the rest of First is the unchanged inventory read
+(`adm_topology_with_vsphere`: 5 s at 4 h, 7 s at 24 h, 26 s at 7 d).
+
+| Window | Read             | First  | Full | Relationships | Lines |
+| ------ | ---------------- | ------ | ---- | ------------- | ----- |
+| 15 min | exact, 7 min raw | 9.8 s  | 25 s | 134           | 16    |
+| 1 h    | exact, 7 min raw | 8.6 s  | 27 s | 174           | 16    |
+| 4 h    | exact, 7 min raw | 10.6 s | 36 s | 285           | 23    |
+| 24 h   | exact, 3 min raw | 13.7 s | 29 s | 367           | 32    |
+| 7 d    | exact, 4 min raw | 35.8 s | 74 s | 367           | 32    |
+
+Exactness: summary manifests accounted for 7,751,110 native events over 24 h
+(288/288 slices), equal to `tstats count`; a 10-minute summary graph equalled
+an independent per-slice qualification of the same raw events (20 nodes, 145
+relationships, 8,280 records). Screenshots: `live-map-teastore-webui-*-080.png`.
+
+## Live map windows (0.7.3)
+
+Splunk Cloud 10.6, `teastore-webui`, qualified identity, `slice_workers=2`,
+2026-11-04. Time from Build map to rendered map; lines are drawn card-pair lines.
+Windows over 5 minutes read at most 6 qualified 5-minute slices (all up to 30
+minutes, else evenly spaced including the newest); the map warns how many.
+
+| Window | Slices read | Render | Relationships | Lines |
+| ------ | ----------- | ------ | ------------- | ----- |
+| 15 min | 3 of 3      | 29 s   | 183           | 20    |
+| 1 h    | 6 of 12     | 54 s   | 194           | 20    |
+| 4 h    | 6 of 48     | 55 s   | 205           | 20    |
+| 24 h   | 6 of 288    | 61 s   | 191           | 21    |
+| 7 d    | 6 of 2016   | 45 s   | 138           | 20    |
+
+Before (0.7.2, 5 min): 182 relationships drawn as 181 lines; over 5 min failed.
+Live screenshots are kept out of the repo (they include the Splunk Cloud header and account); cropped demo-guide images are in `docs/demos/live/`.
+
+## Map and table scale
+
+Large scopes degrade instead of failing. The graph read is a ranked top-N
+search (meta row, nodes, then relationships by relationship kind, bytes and
+connections); the browser keeps at most 4,000 nodes and 10,000 relationships
+and shows "Top N of M connections". Past 300 cards the layout summarizes the
+largest groups (namespace, EPG, endpoints, nodes, workloads) into expandable
+cards, bundles lines per card pair with counts, and sets line width from volume
+on a log scale. Past 1,500 lines routing is straight; past 1,000 lines they are
+drawn on a canvas with grid hit-testing, while cards stay focusable SVG and the
+Table view is the keyboard-accessible list. Tables are windowed, sortable and
+filterable. Details: [2026-11-03 scale benchmark](benchmarks/2026-11-03-scale.md).
+
+| case (default LOD) | initial | pan/zoom p95 |
+| ------------------ | ------- | ------------ |
+| 500 nodes / 2k     | 84 ms   | 23 ms        |
+| 4k nodes / 10k     | 124 ms  | 23 ms        |
+| 4k nodes / 100k    | 599 ms  | 46 ms        |
+| table 100k rows    | 18 ms   | 18 ms scroll |
+
+Repeat: `ADM_SCALE_BENCH=1 ADM_SCALE_OUTPUT=dist/scale.json npx playwright test
+tests/browser/perf-scale.spec.ts` (opt-in; it asserts the 4k/10k and 100k-row
+budgets unless `ADM_SCALE_NO_ASSERT=1`).
+
 The standalone `tests/performance` harness builds the real `MapPage`, parsers,
 indexes, layout, filters, inspector and export code into a production Vite bundle.
 It uses the ReactDOM production profiling build so React commit/render durations

@@ -1,191 +1,140 @@
 # ACI and Nexus Dashboard team
 
-**Purpose:** give Splunk read-only access to the ACI fabric and Nexus Dashboard, and export NetFlow from the leaves, so the dependency map can name endpoints, show fabric paths and ACI policy, and mark where traffic was seen.
+Gives Atlas read-only fabric inventory, policy and flow observations. All DC Networking inputs run on the **heavy forwarder**; on Splunk Cloud the search tier carries the TA for search time only. Source selection: [deployment options](deployment-options.md). Class summary: [operator index](README.md#required-aci-classes).
 
-For source selection and release limits, see [deployment options](deployment-options.md). Use this handout when ACI/APIC or Nexus Dashboard evidence is selected. ACI policy and candidate fabric paths are unavailable without the corresponding objects; other available traffic and workload evidence can still contribute. Configure only the approved fabric/tenant scope and record uncollected classes as gaps.
+## Checklist
 
-## What we need from you
-
-- [ ] A read-only APIC account and a read-only Nexus Dashboard account for the Cisco DC Networking add-on.
-- [ ] The four existing APIC inputs and the required `classInfo_adm` topology input enabled; add the optional policy and network classInfo inputs where needed.
-- [ ] LLDP enabled on the leaf ports facing Kubernetes nodes.
-- [ ] ACI NetFlow v9 export from the leaves to the Splunk Stream receiver, sourced from each leaf's out-of-band address.
-- [ ] Nexus Dashboard flow and endpoint inputs for the pilot site.
-- [ ] Optional: contract logging on the application's ports.
-
-## APIC and Nexus Dashboard accounts
-
-Create one read-only local user on APIC (password or certificate; the add-on supports both via its APIC Authentication Type setting) and one on Nexus Dashboard, then add them in the add-on under **Configuration → ACI Account** and **ND Account**. Read access to all tenants and fabric objects is required; confirm the read-only role name for your APIC release.
+- [ ] Read-only APIC and Nexus Dashboard accounts in DC Networking 1.2.2 on the HF (**Configuration → ACI Account / ND Account**; password or certificate).
+- [ ] Shipped APIC inputs enabled: `stats`, `classInfo_faultInst`, `classInfo_fvRsCEpToPathEp`, `health_fvTenant`.
+- [ ] Custom `classInfo_adm` input with the 13 classes below.
+- [ ] Optional: `classInfo_adm_network` (`fvRsBd`), `classInfo_adm_policy`.
+- [ ] LLDP receive on leaf ports facing Kubernetes nodes and ESXi hosts / UCS FIs.
+- [ ] NetFlow v9 from **leaves** to the HF Stream receiver; each leaf OOB address in `adm_observer_scope` (V1) and registered with profile `aci_leaf_netflow` (V2, [checklist](README.md#source-scope-profile-registration)).
+- [ ] ND `endpoints` and `flows` inputs for the site.
+- [ ] TA dashboard macros `cisco_dc_aci_index`, `cisco_dc_nd_index`, `cisco_dc_n9k_index` set to your index (default `main`).
 
 ## APIC inputs
 
-Enable these existing inputs (add-on **Inputs** page, or the equivalent `inputs.conf` keys) with your account and `index = cisco_dc`:
+Index: `cisco_dc` (or the value of `adm_index_dcn`).
 
-| Input                       | Collects                                                                                                | Why                                                  |
-| --------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `stats`                     | `fvCEp` with attachment paths                                                                           | Endpoint IP, MAC, EPG and leaf port                  |
-| `classInfo_faultInst`       | `topSystem`, `compVm`, `compHv`, `fvCEp`, `fvRsCons`, `fvRsProv`, `fvRsVm`, `fvRsHyper`                 | Switch names and roles, VM names, contract relations |
-| `health_fvTenant`           | `fvTenant`, `fvAp`, `fvEPg`, `fvBD`, `vzFilter`, `vzEntry`, `vzBrCP`, `fvCtx`, `l3extOut`, `fabricNode` | Tenant/EPG names, contract filters, node roles       |
-| `classInfo_fvRsCEpToPathEp` | `fvRsCEpToPathEp`, `acllogPermitL3Pkt`, `acllogDropL3Pkt` and others                                    | Attachment paths, contract permit/drop logs          |
+| Input | Type | Atlas reads |
+| --- | --- | --- |
+| `stats` (shipped) | stats | `fvCEp` + `fvIp`, `fvRsCEpToPathEp` → endpoint IP/MAC, EPG, leaf port |
+| `classInfo_faultInst` (shipped) | classInfo | `topSystem compVm compHv fvCEp fvRsCons fvRsProv fvRsVm fvRsHyper` → switch roles, VM/host, contracts |
+| `health_fvTenant` (shipped) | health | Tenant/EPG names, filters, node roles |
+| `classInfo_fvRsCEpToPathEp` (shipped) | classInfo | Attachment paths; `acllogPermitL3Pkt`/`acllogDropL3Pkt` |
+| `classInfo_adm` (custom) | classInfo | Fabric links, host LLDP, contracts, L3Out subnets, vSphere uplinks, spine evidence |
 
-Add one new `classInfo` input for fabric links, host LLDP neighbors and the contract objects. `vzBrCP` and `vzEntry` are repeated here because the default `health_fvTenant` input writes them merged with health records.
+`classInfo_adm` classes:
 
-The `cisco-dc-networking-setup` skill's `application-atlas` preset (alias `adm`) creates this input for you, named `classInfo_adm`:
+```text
+fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet compHpNic compVNic hvsAdj isisAdjEp coopEpRec
+```
+
+`vzBrCP`/`vzEntry` repeat because `health_fvTenant` merges them with health records. The pinned skill preset `application-atlas` (alias `adm`) creates only the first eight; pass the full list:
 
 ```sh
 cd vendor/splunk-cisco-skills
 bash skills/cisco-dc-networking-setup/scripts/setup.sh \
-  --classinfo-preset application-atlas --account "<your ACI account name>" --index "cisco_dc" --dry-run
-# review the rendered plan, then rerun without --dry-run
+  --classinfo-input classInfo_adm --account "<ACI account>" --index cisco_dc \
+  --classinfo-classes "fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet compHpNic compVNic hvsAdj isisAdjEp coopEpRec" \
+  --dry-run   # review, then rerun without --dry-run
 ```
 
-Or create it by hand:
+Equivalent stanza (HF, `local/inputs.conf`):
 
 ```ini
 [cisco_nexus_aci://classInfo_adm]
-apic_account = <your ACI account name>
+apic_account = <ACI account>
 apic_input_type = classInfo
-apic_arguments = fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet
+apic_arguments = fabricLink lldpAdjEp vzBrCP vzSubj vzRsSubjFiltAtt vzEntry l3extInstP l3extSubnet compHpNic compVNic hvsAdj isisAdjEp coopEpRec
 interval = 300
 index = cisco_dc
 disabled = 0
 ```
+
+vSphere and spine details: [ACI_VMM_ADJACENCY_CLASSES](ACI_VMM_ADJACENCY_CLASSES.md), [ACI_SPINE_PATH_EVIDENCE](ACI_SPINE_PATH_EVIDENCE.md).
 
 ### Optional: EPG to bridge-domain and VLAN facts
 
-Enable a separate 300-second classInfo input for `fvRsBd`. This relation is
-APIC-only: it resolves an EPG to its configured bridge domain and must not be
-inferred from a VLAN number. The relation's `tDn` and `tnFvBDName` are the
-authoritative BD facts. An endpoint's `fvCEp.encap` is the access VLAN
-observed for that endpoint; it is not a single VLAN guarantee for every
-endpoint in an EPG. An access VLAN can differ from the BD's internal or VXLAN
-identifier.
-
-Render and review the input without applying it:
+Input `classInfo_adm_network`, class `fvRsBd`, 300 s. APIC only.
 
 ```sh
-cd vendor/splunk-cisco-skills
 bash skills/cisco-dc-networking-setup/scripts/setup.sh \
-  --classinfo-input classInfo_adm_network \
-  --classinfo-classes "fvRsBd" \
-  --account "<your ACI account name>" --index "cisco_dc" --dry-run
-```
-
-The equivalent stanza is:
-
-```ini
-[cisco_nexus_aci://classInfo_adm_network]
-apic_account = <your ACI account name>
-apic_input_type = classInfo
-apic_arguments = fvRsBd
-interval = 300
-index = cisco_dc
-disabled = 0
-```
-
-Validate that the class arrives after enabling the input:
-
-```sh
+  --classinfo-input classInfo_adm_network --classinfo-classes "fvRsBd" \
+  --account "<ACI account>" --index cisco_dc --dry-run
 bash skills/cisco-dc-networking-setup/scripts/validate.sh \
   --classinfo-input classInfo_adm_network --classinfo-classes fvRsBd --index cisco_dc
 ```
 
-This input requires APIC. Nexus Dashboard's `displayBd` is a useful endpoint
-display fallback when APIC is unavailable, but it does not establish an APIC
-EPG relation. NetFlow can report an observed `ingress_vlan` when the exporter
-record includes VLAN fields; treat that as observation evidence only. Some
-exporter or record-policy combinations do not include VLAN, and ACI NetFlow
-does not provide egress VLAN or a BD mapping. Do not infer a BD from VLAN
-alone.
+| Fact | Authority | Not authority |
+| --- | --- | --- |
+| EPG → BD | `fvRsBd.tDn`, `tnFvBDName` | VLAN number |
+| Endpoint access VLAN | `fvCEp.encap` | Not one VLAN for the whole EPG |
+| Observed ingress VLAN | NetFlow `ingress_vlan` (when the record carries it) | No egress VLAN, no BD |
+| ND display BD | `displayBd` | Not an APIC EPG relation |
 
 ### Optional: complete policy evaluation
 
-With only the input above, the map names a permitting contract where one matches, and otherwise shows "Policy not evaluated". It never says "no contract permits this", because vzAny, taboos, preferred groups, ESGs and VRF enforcement can also permit or deny traffic. To let the map report "no permitting contract", also collect the `adm-policy` preset:
+Default: the map names a permitting contract when one matches, else "Policy not evaluated" — never "no contract permits this". To allow "no permitting contract", add input `classInfo_adm_policy`:
 
 ```sh
 bash skills/cisco-dc-networking-setup/scripts/setup.sh \
-  --classinfo-preset adm-policy --account "<your ACI account name>" --index "cisco_dc" --dry-run
+  --classinfo-preset adm-policy --account "<ACI account>" --index cisco_dc --dry-run
 ```
 
-Or by hand:
+Classes: `fvCtx fvAEPg fvEPg fvESg vzAny vzRsAnyToCons vzRsAnyToProv vzRsAnyToConsIf vzInTerm vzOutTerm vzTaboo fvRsProtBy vzRsSubjGraphAtt`.
 
-```ini
-[cisco_nexus_aci://classInfo_adm_policy]
-apic_account = <your ACI account name>
-apic_input_type = classInfo
-apic_arguments = fvCtx fvAEPg fvEPg fvESg vzAny vzRsAnyToCons vzRsAnyToProv vzRsAnyToConsIf vzInTerm vzOutTerm vzTaboo fvRsProtBy vzRsSubjGraphAtt
-interval = 300
-index = cisco_dc
-disabled = 0
-```
-
-Then ask the Splunk team to set the app macro `adm_aci_policy_complete` to `1`. Only do this when every policy construct used in the VRF is covered by these classes. Check arrival per class with `bash skills/cisco-dc-networking-setup/scripts/validate.sh --classinfo-preset application-atlas --index cisco_dc` (and `adm-policy` for the second input).
+Then set macro `adm_aci_policy_complete=1` — only when every policy construct in the VRF is covered. Validate each input with `validate.sh --classinfo-preset application-atlas|adm-policy --index cisco_dc`.
 
 ## LLDP on host ports
 
-Leaf ports facing Kubernetes nodes need an interface policy with LLDP receive enabled. The Kubernetes team runs an LLDP agent on each node that advertises the Kubernetes node name as its system name. This is how the map attaches nodes to leaf ports when nodes sit behind a floating-SVI L3Out, where their IPs are not ACI endpoints.
+Leaf access ports facing Kubernetes nodes need LLDP receive. Nodes run an LLDP agent advertising the Kubernetes node name (needed for floating-SVI L3Out nodes, whose IPs are not ACI endpoints). ESXi uplinks are learned from `hvsAdj` plus leaf `lldpAdjEp`.
 
 ## ACI NetFlow export
 
-Configure a NetFlow v9 exporter toward the Splunk Stream receiver (address and UDP port from the Stream owner, see [network-stream.md](network-stream.md)):
+| Setting | Value |
+| --- | --- |
+| Version | v9 |
+| Source IP type | `oob-mgmt-ip` (exporter = leaf OOB address = `topSystem.oobMgmtAddr`) |
+| Destination | HF Stream receiver IP / UDP port ([network-stream](network-stream.md)) |
+| Record match | src/dst IPv4, src/dst port, protocol |
+| Attach to | BDs of K8s nodes, client and server VMs; K8s L3Out interface profile |
+| Nodes | **Leaves only.** Spines have no NetFlow attach point (APIC 6.1) |
+| Atlas scope | `adm_observer_scope` `exporter` row (V1); profile `aci_leaf_netflow` (V2) |
 
-| Setting              | Value                                                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Exporter version     | v9                                                                                                            |
-| Source IP type       | `oob-mgmt-ip` (so each record names the leaf by its OOB address)                                              |
-| Destination          | Stream receiver IP and UDP port                                                                               |
-| Record match keys    | source/destination IPv4, source/destination port, protocol                                                    |
-| Monitors attached to | the bridge domains of Kubernetes nodes, client VMs and server VMs, and the Kubernetes L3Out interface profile |
-
-Verify with your APIC release:
-
-- the exact GUI path and field names;
-- leaf hardware support;
-- whether NetFlow and Nexus Dashboard flow telemetry can run on the same leaf, or the fabric node control policy forces you to pick one per leaf. If you must choose, tell us which leaves use which. The map works with either source alone. Without NetFlow on the leaf that receives LoadBalancer traffic, the map can't tell which node received a DSR connection.
-
-ACI NetFlow records carry the ingress interface only, not egress or VRF.
+- Records carry ingress interface only (no egress, no VRF).
+- Confirm per APIC release: GUI path, leaf hardware support, NetFlow vs ND flow telemetry per leaf (fabric node control policy). Either source alone works; without NetFlow on the LoadBalancer ingress leaf, DSR receiving node is unknown.
 
 ## Nexus Dashboard inputs
 
-Enable `endpoints` and `flows` (existing stanzas) with your ND account, `index = cisco_dc`, and the pilot site. Flow telemetry must be enabled in Nexus Dashboard for the VRFs carrying the application's traffic.
+Enable `endpoints` and `flows` with the ND account, index `cisco_dc`, and the site. Enable flow telemetry for the application VRFs.
 
 ## Contract logging (optional)
 
-To show observed permit/drop evidence in addition to contract intent, set the `log` directive on the contract subject filters for the application's ports. ACI keeps ACL-log records in a bounded, sampled buffer, so they confirm traffic but do not count it.
+Set `log` on contract subject filters for the application ports. ACL-log records are sampled and bounded: they confirm traffic, not count it.
 
-## How to verify
+## Verify
 
 ```spl
-index=cisco_dc sourcetype=cisco:dc:aci:class component IN (topSystem, fabricLink, lldpAdjEp, fvRsBd, vzSubj, vzRsSubjFiltAtt, l3extInstP, l3extSubnet) | stats count by component
-index=cisco_dc sourcetype=cisco:dc:aci:stats component=fvCEp | head 5
-index=cisco_dc sourcetype=cisco:dc:nd:flows | head 5
-index=netflow sourcetype=stream:netflow | stats count by exporter_ip
+`adm_index_dcn` sourcetype=cisco:dc:aci:class | stats count by component
+`adm_index_dcn` sourcetype=cisco:dc:aci:stats component=fvCEp | head 5
+`adm_index_dcn` sourcetype=cisco:dc:nd:flows | head 5
+`adm_index_netflow` sourcetype=stream:netflow | stats count by exporter_ip observation_domain_id
 ```
 
-Every leaf OOB address should appear as an `exporter_ip`.
+- [ ] Every class in the tables above appears as a `component`.
+- [ ] Every leaf OOB address appears as an `exporter_ip`; no spine does.
+- [ ] Events come from the HF `host`, not the Cloud search tier.
 
-## Automation skills
+## Send back
 
-Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
-
-- [cisco-dc-networking-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-dc-networking-setup): DC Networking accounts and the default inputs for APIC, Nexus Dashboard and Nexus 9000, plus the `application-atlas`/`adm` and `adm-policy` custom `classInfo` presets used above (`--classinfo-preset`), or any other class list with `--classinfo-input`/`--classinfo-classes`.
-- [cisco-product-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/cisco-product-setup): entry point that routes a Cisco product (ACI, Nexus 9000) to the right setup skill.
-- [splunk-stream-setup](https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-stream-setup): the Stream forwarder's NetFlow receiver that your ACI NetFlow exporter targets (owned by the Stream team; see [network-stream.md](network-stream.md)).
-
-## What to send back
-
-- APIC and Nexus Dashboard versions; leaf and spine models.
-- Node list (node ID, name, role, OOB address).
-- Tenant, VRF, bridge domain, EPG, L3Out and external EPG names used by the application, its clients and its databases.
-- The LoadBalancer VIP and pod CIDR prefixes as configured in the L3Out external EPG subnets.
-- One hour of sample events for each component above.
-
-## Open questions
-
-- Are Kubernetes nodes in an EPG/bridge domain, behind a floating-SVI L3Out, or both?
-- Is vzAny, a preferred group, ESGs, a service graph (PBR), an unenforced VRF, or contracts with source-port or TCP-flag (`est`) filters used in the application VRF? The map doesn't evaluate those. Where they could apply, or where policy for an address isn't collected, it shows "Policy not evaluated" instead of naming a contract, so tell us which apply.
-- Which leaves run NetFlow vs Nexus Dashboard flow telemetry?
+- APIC, ND versions; leaf/spine models; node list (ID, name, role, OOB address).
+- Tenants, VRFs, BDs, EPGs, L3Outs, external EPGs, VMM domains used by the application.
+- LoadBalancer VIP and pod CIDR prefixes in L3Out external EPG subnets.
+- Which leaves run NetFlow vs ND flow telemetry.
+- Whether vzAny, preferred groups, ESGs, PBR service graphs, unenforced VRFs or `est`/source-port filters are used (Atlas shows "Policy not evaluated" for these).
 
 ## Sources
 
-Input stanzas and classes: DC Networking 1.2.2 `default/inputs.conf:81-127`, `README/inputs.conf.spec:25-32`, `appserver/static/js/build/globalConfig.json` (account fields). Class writer and sourcetype: `bin/cisco_nexus_aci.py:467-490,549-609`; `default/props.conf:191`. `fvRsBd` relation attributes (`dn`, `state`, `tCl`, `tDn`, `tnFvBDName`) and bridge-domain/EPG model: [Cisco APIC Management Information Model](https://developer.cisco.com/site/apic-mim-ref/), release 6.1(x), classes `fvAEPg`, `fvRsBd`, and `fvBD`. NetFlow exporter and VLAN fields: APIC MIM `netflow:ExporterPol`/`netflow:RecordPol` and [Splunk App for Stream](https://docs.splunk.com/Documentation/Stream/8.1.6/DeployStream/NetFlow) 8.1.6. ACL-log and contract model: same MIM. Contract and topology use: `docs/DATA_LAYER.md`.
+DC Networking 1.2.2 `default/inputs.conf:81-127`, `bin/cisco_nexus_aci.py:467-609`, `default/props.conf:191`. APIC MIM 6.1(x): `fvRsBd`, `fvBD`, `netflow:ExporterPol`, `netflow:RecordPol`, `hvs:Adj`, `comp:HpNic`, `isis:AdjEp`, `coop:EpRec`. Stream 8.1.6 NetFlow docs. Data use: [DATA_LAYER](../DATA_LAYER.md), [VSPHERE_SWITCH_DESIGN](../VSPHERE_SWITCH_DESIGN.md).

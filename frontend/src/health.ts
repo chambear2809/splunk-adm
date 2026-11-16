@@ -57,7 +57,12 @@ export interface HealthReport {
   qualityRequired?: boolean;
   warnings: string[];
   checkedAt: number;
+  /** Evaluated as of this past instant (a selected window's end), not now. */
+  asOf?: number;
 }
+/** The instant freshness is judged against. */
+export const evaluatedAt = (report: HealthReport) =>
+  report.asOf ?? report.checkedAt;
 export interface OptionalEvidenceHealth {
   id: string;
   name: string;
@@ -485,6 +490,7 @@ export async function loadHealth(
   signal: AbortSignal,
   deployment?: DeploymentSnapshot,
   scope: "full" | "jobs" = "full",
+  asOf?: number,
 ): Promise<HealthReport> {
   const qualitySourceNames = selectedQualitySources(deployment);
   const qualityRequired =
@@ -506,6 +512,8 @@ export async function loadHealth(
             search: `| \`${probe.macro}\``,
             earliest: "-7d",
             latest: "now",
+            // Every relative bound in the probes (-7d, -24h, now) ends at asOf.
+            ...(asOf !== undefined ? { now: asOf } : {}),
             maxRows: probe.part === "quality" ? 500 : 100,
             signal,
           }),
@@ -625,6 +633,7 @@ export async function loadHealth(
     qualityRequired,
     warnings: [...new Set(warnings)],
     checkedAt: Date.now() / 1000,
+    ...(asOf !== undefined ? { asOf } : {}),
   };
 }
 

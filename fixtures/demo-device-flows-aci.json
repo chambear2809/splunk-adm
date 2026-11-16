@@ -1,0 +1,53 @@
+{
+  "description": "adm_device_flows-shaped rows for the ACI demo. 192.0.2.73: esx-03 exporting VDS IPFIX (fixtures/raw-vmware/vds_ipfix.ndjson). pod-1/node-103: leaf-103 ACL-log records of conversation c8 (fixtures/raw-aci).",
+  "devices": {
+    "192.0.2.73": [
+      {
+        "device": "192.0.2.73",
+        "src": "10.30.40.25",
+        "src_name": "win-client-01",
+        "dst": "10.20.30.40",
+        "dst_name": "orders-db-01",
+        "dest_port": "5432",
+        "protocol": "tcp",
+        "bytes": "60",
+        "packets": "1",
+        "flows": "1",
+        "first_seen": "1791374220",
+        "last_seen": "1791374220",
+        "interfaces": "ifIndex 18 > ifIndex 14",
+        "blocked": "0",
+        "drops": "0",
+        "permits": "0",
+        "sources": "netflow",
+        "total_conversations": "1",
+        "total_flows": "1",
+        "total_bytes": "60",
+        "truncated": "0",
+        "records_capped": "0"
+      }
+    ],
+    "pod-1/node-103": [
+      {
+        "device": "pod-1/node-103",
+        "src": "10.30.40.25",
+        "src_name": "win-client-01",
+        "dst": "10.20.30.40",
+        "dst_name": "orders-db-01",
+        "dest_port": "5432",
+        "protocol": "tcp",
+        "flows": "1",
+        "first_seen": "1791374220",
+        "last_seen": "1791374220",
+        "blocked": "1",
+        "drops": "1",
+        "permits": "0",
+        "sources": "aci_acllog",
+        "total_conversations": "1",
+        "total_flows": "1",
+        "truncated": "0",
+        "records_capped": "0"
+      }
+    ]
+  }
+}

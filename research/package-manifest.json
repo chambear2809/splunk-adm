@@ -475,6 +475,81 @@
         "validation": "Exact deployed archive SHA-256 and safe archive paths verified on 2026-10-31; no links, special files, duplicate paths, local/ configuration, .env or passwords.conf. Reviewed runtime evidence retained in protected deployment records.",
         "deployed_source_snapshot": "integrations/ta-releases/20261031-r1/appdynamics"
       }
+    },
+    {
+      "title": "Splunk Add-on for VMware",
+      "splunkbase_id": "3215",
+      "version": "4.2.1",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-add-on-for-vmware_421.tgz",
+      "extracted_path": "research/extracted/splunk-add-on-for-vmware_421/Splunk_TA_vmware",
+      "source_url": "https://splunkbase.splunk.com/app/3215",
+      "sha256": "89d007007f74d8110dbcd1aa5747d0c5e053f22582124a2cdfda7088d7344eb6",
+      "bytes": 2399137,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "Splunk_TA_vmware": "4.2.1",
+        "SA-Hydra": "4.3.0"
+      },
+      "installed": true,
+      "executed": false,
+      "notes": "Downloaded by the operator from Splunkbase (authenticated) on 2026-11-03; Splunkbase publishes no digest.",
+      "installed_on": "lab heavy forwarder splunk-ta (2026-11-04); see docs/operators/INTERSIGHT_VMWARE_LAB_SETUP.md"
+    },
+    {
+      "title": "Splunk Add-on for VMware Extractions",
+      "splunkbase_id": "5641",
+      "version": "4.0.4",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-add-on-for-vmware-extractions_404.tgz",
+      "extracted_path": "research/extracted/splunk-add-on-for-vmware-extractions_404/TA-VMW-FieldExtractions",
+      "source_url": "https://splunkbase.splunk.com/app/5641",
+      "sha256": "a7c0b49717d26e8c156d749713a693bfec1dea23b4e92c3302ea9eec69569446",
+      "bytes": 173199,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "TA-VMW-FieldExtractions": "4.0.4"
+      },
+      "installed": false,
+      "executed": false,
+      "notes": "Downloaded by the operator from Splunkbase (authenticated) on 2026-11-03; Splunkbase publishes no digest."
+    },
+    {
+      "title": "Splunk Add-on for VMware ESXi Logs",
+      "splunkbase_id": "5603",
+      "version": "4.2.2",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/splunk-add-on-for-vmware-esxi-logs_422.tgz",
+      "extracted_path": "research/extracted/splunk-add-on-for-vmware-esxi-logs_422/Splunk_TA_esxilogs",
+      "source_url": "https://attack-range-appbinaries.s3.us-west-2.amazonaws.com/splunk-add-on-for-vmware-esxi-logs_422.tgz",
+      "sha256": "6512931ca4b71e7a12cda463c227e2856a16827da72c2436b0f55dde05586880",
+      "bytes": 171003,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "Splunk_TA_esxilogs": "4.2.2"
+      },
+      "installed": false,
+      "executed": false,
+      "notes": "Mirror download on 2026-11-03; byte count matches the Splunkbase API, no publisher digest. Syslog sourcetypes only; no topology value."
+    },
+    {
+      "title": "Cisco Intersight Add-on for Splunk",
+      "splunkbase_id": "7828",
+      "version": "3.2.2",
+      "status": "downloaded_and_statically_inspected",
+      "archive_path": "research/packages/cisco-intersight-add-on-for-splunk_322.spl",
+      "extracted_path": "research/extracted/cisco-intersight-add-on-for-splunk_322/Splunk_TA_Cisco_Intersight",
+      "source_url": "https://splunkbase.splunk.com/app/7828",
+      "sha256": "5046084bbe9d0ce76dcdd442e1b231f9f0a86cc5aef5bb3536d0e73b2c333a5f",
+      "bytes": 4214160,
+      "publisher_digest_verified": false,
+      "app_conf_versions": {
+        "Splunk_TA_Cisco_Intersight": "3.2.2"
+      },
+      "installed": true,
+      "executed": false,
+      "notes": "Downloaded by the operator from Splunkbase (authenticated) on 2026-11-03. Splunkbase ID to confirm.",
+      "installed_on": "lab heavy forwarder splunk-ta (2026-11-04); see docs/operators/INTERSIGHT_VMWARE_LAB_SETUP.md"
     }
   ],
   "pending": [],

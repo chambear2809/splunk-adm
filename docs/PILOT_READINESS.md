@@ -35,8 +35,10 @@ from `adm_deployment_settings`. Without configured intent, the result is unknown
 visible events never select sources. Explicit `--source` scopes a read-only
 investigation without persisting settings. Values come from the shared
 `config/deployment-health.json` registry and include `netflow`, `dcn`, `aci`, `nd`,
-`nxos`, `ftd`, `isovalent`, `k8s`, `traces`, `hubble`, `catalyst`, `meraki`, `sdwan`
-and the legacy `summary` inspection option. Without `--lab`, at least one
+`nxos`, `ftd`, `isovalent`, `k8s`, `traces`, `hubble`, `catalyst`, `meraki`, `sdwan`,
+the optional evidence sources (`dns_stream`, `dns_hubble`, `proxy_envoy`,
+`aws_vpc_flow`, `asset_history`, `o11y_health`, `o11y_detector_events`,
+`appdynamics_inventory`, `thousandeyes`) and the legacy `summary` inspection option. Without `--lab`, at least one
 `--source` is required and the CLI analyzes an empty snapshot for output-shape
 inspection; a connector can call `analyze(snapshot, selected_sources)` directly. The
 checker does not accept credentials or URLs, dispatch saved searches, write

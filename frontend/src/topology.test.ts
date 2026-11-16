@@ -1886,3 +1886,196 @@ describe("Client attachment references", () => {
     expect(references()).toHaveLength(0);
   });
 });
+
+describe("virtual switching", () => {
+  const vds = "vsphere:apic/vmm/VMware/dom/vc";
+  const v2 = (id: string) =>
+    `vsphere:${id
+      .padEnd(64, "0")
+      .replace(/[^a-f0-9]/g, "a")
+      .slice(0, 64)}`;
+  it("parses hypervisor, virtual switch, virtual port and uplink rows", () => {
+    const t = rowsToTopology([
+      {
+        row_type: "device",
+        device_id: vds,
+        name: "dom",
+        device_kind: "virtual_switch",
+        switch_type: "vds",
+        ipfix_observers: ["10.0.0.11"],
+      },
+      {
+        row_type: "device",
+        device_id: "vsphere:apic/hv-1",
+        name: "esx-1",
+        device_kind: "hypervisor",
+        mgmt_ip: "10.0.0.11",
+        parent_device: vds,
+      },
+      {
+        row_type: "device",
+        device_id: "leaf-1",
+        name: "leaf-1",
+        device_kind: "switch",
+      },
+      {
+        row_type: "link",
+        link_kind: "virtual_port",
+        a_device: vds,
+        b_device: "vm:aa",
+        b_device_name: "vm-a",
+        hypervisor: "vsphere:apic/hv-1",
+        mac: "AA",
+        ip: "10.1.0.5",
+        vlan: "30",
+        attach_nodes: ["pod-1/node-101", "pod-1/node-102"],
+      },
+      {
+        row_type: "link",
+        link_kind: "uplink",
+        a_device: vds,
+        a_interface: "vmnic2",
+        b_device: "leaf-1",
+        b_interface: "eth1/5",
+        hypervisor: "vsphere:apic/hv-1",
+        binding: "lldp_chassis_mac",
+      },
+    ]);
+    expect(t.devices.map((d) => d.kind)).toEqual([
+      "virtual_switch",
+      "hypervisor",
+      "switch",
+    ]);
+    expect(t.devices[0].ipfix_observers).toEqual(["10.0.0.11"]);
+    expect(t.links[0].attach_nodes).toEqual([
+      "pod-1/node-101",
+      "pod-1/node-102",
+    ]);
+    const i = indexTopology(t);
+    expect(i.virtualPorts.get("aa")?.[0]).toMatchObject({
+      switch: vds,
+      vm: "vm:aa",
+      vlan: "30",
+    });
+    expect(i.virtualPorts.get("10.1.0.5")).toHaveLength(1);
+    expect(i.uplinks.get(`${vds.toLowerCase()}|vsphere:apic/hv-1`)).toEqual([
+      expect.objectContaining({
+        device: "leaf-1",
+        port: "eth1/5",
+        uplink: "vmnic2",
+      }),
+    ]);
+    // Uplinks never become switch adjacency (no transit through a host).
+    expect(i.adjacency.size).toBe(0);
+    expect(parseObserver("netflow:10.0.0.11:ifIndex 18>ifIndex 14", i)).toEqual(
+      [
+        expect.objectContaining({
+          label: "dom on esx-1",
+          resolved: true,
+          in: "port 18",
+          out: "port 14",
+        }),
+      ],
+    );
+  });
+
+  it("requires a mapped scope before a source-qualified VDS observes traffic", () => {
+    const id = v2("vds");
+    const t = indexTopology(
+      rowsToTopology([
+        {
+          row_type: "device",
+          device_id: id,
+          name: "dom",
+          device_kind: "virtual_switch",
+          ipfix_observers: ["10.0.0.11|7"],
+          mapping_status: "mapped",
+          scope: "prod",
+          cluster: "c",
+        },
+      ]),
+    );
+    expect(parseObserver("netflow:10.0.0.11", t, {})[0].resolved).toBe(false);
+    expect(
+      parseObserver("netflow:10.0.0.11", t, {
+        scope: "prod",
+        observationDomain: "8",
+      })[0].resolved,
+    ).toBe(false);
+    expect(
+      parseObserver("netflow:10.0.0.11", t, {
+        scope: "prod",
+        observationDomain: "7",
+      })[0],
+    ).toMatchObject({ resolved: true, label: "dom" });
+  });
+
+  it("labels hosts by source and virtual devices by kind", () => {
+    expect(deviceKindLabel("host", "c1")).toBe("Kubernetes host · c1");
+    expect(deviceKindLabel("host", undefined, ["kubernetes_node"])).toBe(
+      "Kubernetes host",
+    );
+    expect(deviceKindLabel("host", undefined, ["catalyst"])).toBe("Host");
+    expect(deviceKindLabel("hypervisor")).toBe("Hypervisor");
+    expect(deviceKindLabel("virtual_switch")).toBe("Virtual switch");
+  });
+
+  it("renders an overlay segment as an unattributed gap", () => {
+    const rows = [
+      {
+        row_type: "device",
+        device_id: vds,
+        name: "dom",
+        device_kind: "virtual_switch",
+        switch_type: "vds",
+      },
+      {
+        row_type: "device",
+        device_id: "leaf-1",
+        name: "leaf-1",
+        device_kind: "switch",
+        aci_node: "pod-1/node-101",
+      },
+      ...["10.1.0.5", "10.1.0.6"].map((ip) => ({
+        row_type: "link",
+        link_kind: "virtual_port",
+        a_device: vds,
+        b_device: `vm:${ip}`,
+        ip,
+        overlay: "nsx",
+        attach_nodes: ["pod-1/node-101"],
+      })),
+    ];
+    const g: Graph = {
+      service: "",
+      nodes: ["10.1.0.5", "10.1.0.6"].map((ip) => ({
+        id: ip,
+        label: ip,
+        kind: "endpoint",
+        endpoint_kind: "vm",
+        addresses: [ip],
+      })),
+      edges: [
+        {
+          id: "e",
+          source: "10.1.0.5",
+          target: "10.1.0.6",
+          relationship: "communicates_with",
+          evidence: [],
+          confidence: "observed",
+          count: 1,
+        },
+      ],
+    } as unknown as Graph;
+    const p = buildPath(
+      g.edges[0],
+      g,
+      indexGraph(g),
+      indexTopology(rowsToTopology(rows)),
+    );
+    expect(p.stages.map((s) => s.title)).toContain(
+      "Overlay nsx transport between hosts: underlay hops not attributed",
+    );
+    expect(p.stages.some((s) => s.title === "leaf-1")).toBe(false);
+  });
+});

@@ -151,25 +151,6 @@ class ReleaseArchiveTests(unittest.TestCase):
                 }
             ).encode(),
             **{
-                f"splunk_adm/appserver/static/demo/{name}.json": b"{}"
-                for name in (
-                    "demo-scopes",
-                    "demo-catalog",
-                    "demo-find",
-                    "demo-rows",
-                    "demo-rows-aci",
-                    "demo-rows-aci-prev",
-                    "demo-topology",
-                    "demo-topology-aci",
-                    "demo-networking-aci",
-                    "demo-networking-nxos",
-                    "demo-networking-topology",
-                    "demo-networking-scopes",
-                    "demo-networking-catalog",
-                    "demo-networking-find",
-                )
-            },
-            **{
                 f"splunk_adm/default/data/ui/views/{page}.xml": b"view"
                 for page in (
                     "applications",
@@ -178,6 +159,8 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "data_health",
                     "setup",
                     "help",
+                    "device",
+                    "impact",
                 )
             },
             "splunk_adm/appserver/static/adm.css": b"css",
@@ -199,6 +182,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md": b"dns qualification docs",
             "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md": b"dns scenario docs",
             "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md": b"dns design docs",
+            "splunk_adm/docs/VSPHERE_SWITCH_DESIGN.md": b"vsphere design docs",
             "splunk_adm/docs/DNS_INGESTION_RESEARCH.md": b"dns research docs",
             "splunk_adm/docs/operators/dns-evidence.md": b"dns operator docs",
             "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
@@ -254,6 +238,71 @@ class ReleaseArchiveTests(unittest.TestCase):
         )
         self._write_pair(install)
         check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_demo_fixtures_in_archive(self):
+        for path in (
+            "splunk_adm/appserver/static/demo/demo-rows-aci.json",
+            "splunk_adm/appserver/static/demo/README.txt",
+            "splunk_adm/appserver/static/fixtures/demo-find.json",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"{}"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "demo fixture"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_fixture_shaped_files_anywhere(self):
+        for path in (
+            "splunk_adm/appserver/static/path-trace-aci.json",
+            "splunk_adm/appserver/static/raw-aci/scenario.json",
+            "splunk_adm/docs/fixtures/demo-rows.json",
+            "splunk_adm/bin/raw-aci/events.ndjson",
+            "splunk_adm/lookups/scenario.json",
+            "splunk_adm/default/data/events.ndjson",
+            "splunk_adm/docs/path-trace-live.json",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"{}"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "demo fixture"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_static_files_are_allowlisted(self):
+        for path in (
+            "splunk_adm/appserver/static/captured.json",
+            "splunk_adm/appserver/static/pages/atlas.js.map",
+            "splunk_adm/appserver/static/data/rows.csv",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"{}"
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "unlisted static file"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_demo_code_in_bundles(self):
+        for path in (
+            "splunk_adm/appserver/static/pages/atlas.js",
+            "splunk_adm/appserver/static/pages/extra.js",
+        ):
+            for marker in (
+                b"app/splunk_adm/demo/",
+                b"Demo data is not prepared",
+                b"ACI pilot fabric",
+            ):
+                with self.subTest(path=path, marker=marker):
+                    install = self._files()
+                    install[path] = (
+                        install.get(path, b"bundle aaaaaaaaaaaaaaaaaaaaaaaa")
+                        + b"label:`"
+                        + marker
+                        + b"`"
+                    )
+                    self._write_pair(install)
+                    with self.assertRaisesRegex(ValueError, "demo code"):
+                        check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_development_records_in_archive(self):
         for name in (

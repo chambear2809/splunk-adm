@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { createStaticURL } from "@splunk/splunk-utils/url";
 import { parseScopes, type ScopeOption } from "./scopes";
 import { requireNoSearchErrors, type SearchClient } from "./searchClient";
 import demoScopes from "../../../fixtures/demo-scopes.json";
@@ -37,24 +36,15 @@ export function useScopeOptions(
         requireNoSearchErrors(result, "Scope options search");
         return { rows: parseScopes(result.rows), warnings: result.warnings };
       }
-      if (!__ADM_SPLUNK_BUILD__)
-        return {
-          rows: parseScopes(
-            scenario === "catalyst-aci" || scenario === "meraki-nxos"
-              ? networkingScopes.rows
-              : demoScopes.rows,
-          ),
-        };
-      const response = await fetch(
-        createStaticURL(
-          `app/splunk_adm/demo/${scenario === "catalyst-aci" || scenario === "meraki-nxos" ? "demo-networking-scopes.json" : "demo-scopes.json"}`,
+      if (__ADM_SPLUNK_BUILD__)
+        throw new Error("Scope options are available from live searches only.");
+      return {
+        rows: parseScopes(
+          scenario === "catalyst-aci" || scenario === "meraki-nxos"
+            ? networkingScopes.rows
+            : demoScopes.rows,
         ),
-        { signal: controller.signal },
-      );
-      if (!response.ok)
-        throw new Error(`Scope fixture request failed (${response.status}).`);
-      const payload = await response.json();
-      return { rows: parseScopes(payload.rows) };
+      };
     };
     void load()
       .then((result) => {

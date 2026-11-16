@@ -58,7 +58,7 @@ or portable requirements:
 | Profile      | Target                                                                     | Historical result                                                                                                                                    |
 | ------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `enterprise` | Standalone `10.237.100.70`, API over pinned SSH and verified localhost TLS | Authentication passed; HEC TLS verified directly from the cluster                                                                                    |
-| `cloud`      | `prd-shw-328c3dced6b93f.splunkcloud.com:8089`                              | Authentication passed over verified HTTPS; trace destination forbidden                                                                               |
+| `cloud`      | `<stack>.splunkcloud.com:8089`                              | Authentication passed over verified HTTPS; trace destination forbidden                                                                               |
 | `hf`         | Heavy forwarder `10.110.253.20`                                            | Recovered target/password and existing SSH host-key record; live authentication and certificate validation deferred until the other VPN is available |
 
 Cloud and HF are separate targets even though HF forwards to Cloud. Do not set

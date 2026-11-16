@@ -2,27 +2,38 @@ import type { Graph } from "../graph";
 import type { Facets, FocusDirection } from "../filters";
 import { observedPort } from "../glossary";
 
+/** Number of active facets, shown on the Filters button. */
+export const activeFacetCount = (facets: Facets) =>
+  [
+    facets.identity,
+    facets.port,
+    facets.source,
+    facets.blocked || undefined,
+    facets.hideInfrastructure || undefined,
+    facets.hideInferred || undefined,
+  ].filter((value) => value !== undefined).length;
+
 export function FilterBar({
   graph,
   facets,
   onChange,
-  focus,
-  onFocus,
-  canFocus,
   network = true,
 }: {
   graph: Graph;
   facets: Facets;
   onChange: (facets: Facets) => void;
-  focus: { hops: number; direction: FocusDirection };
-  onFocus: (hops: number, direction: FocusDirection) => void;
-  canFocus: boolean;
   network?: boolean;
 }) {
   const ports = availablePorts(graph);
   const sources = [
     ...new Set(graph.edges.flatMap((e) => e.sources ?? [])),
   ].sort();
+  if (!network)
+    return (
+      <div className="atlas-map-filters" aria-label="Map filters">
+        <p className="muted small">No filters for Services</p>
+      </div>
+    );
   return (
     <div className="atlas-map-filters" aria-label="Map filters">
       {network && (
@@ -100,55 +111,79 @@ export function FilterBar({
             />
             Hide infrastructure
           </label>
+          <label className="atlas-filter-check">
+            <input
+              type="checkbox"
+              checked={!!facets.hideInferred}
+              onChange={(e) =>
+                onChange({ ...facets, hideInferred: e.target.checked })
+              }
+            />
+            Hide inferred
+          </label>
         </>
       )}
-      <label>
-        Focus
-        <select
-          aria-label="Focus around selected card"
-          title={
-            canFocus || focus.hops
-              ? undefined
-              : "Select a card on the map to focus on its connections"
-          }
-          value={
-            focus.direction === "any"
-              ? String(focus.hops)
-              : `${focus.direction}:${focus.hops}`
-          }
-          disabled={!canFocus && !focus.hops}
-          onChange={(e) => {
-            const [direction, hops] = e.target.value.includes(":")
-              ? e.target.value.split(":")
-              : ["any", e.target.value];
-            onFocus(Number(hops), direction as FocusDirection);
-          }}
-        >
-          <option value="0">All connections</option>
-          <optgroup label="Any direction">
-            {[1, 2, 3].map((hops) => (
-              <option key={hops} value={String(hops)}>
-                {hops === 1 ? "1 hop" : `${hops} hops`}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Callers: observed reaching the selection">
-            {[1, 2, 3].map((hops) => (
-              <option key={hops} value={`callers:${hops}`}>
-                Callers · {hops === 1 ? "1 hop" : `${hops} hops`}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Dependencies: observed from the selection">
-            {[1, 2, 3].map((hops) => (
-              <option key={hops} value={`dependencies:${hops}`}>
-                Dependencies · {hops === 1 ? "1 hop" : `${hops} hops`}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-      </label>
     </div>
+  );
+}
+
+/** Neighborhood focus for the selected card; compact enough for the toolbar. */
+export function FocusSelect({
+  focus,
+  onFocus,
+  canFocus,
+}: {
+  focus: { hops: number; direction: FocusDirection };
+  onFocus: (hops: number, direction: FocusDirection) => void;
+  canFocus: boolean;
+}) {
+  return (
+    <label className="atlas-focus">
+      <span className="atlas-visually-hidden">Focus</span>
+      <select
+        aria-label="Focus around selected card"
+        title={
+          canFocus || focus.hops
+            ? undefined
+            : "Select a card on the map to focus on its connections"
+        }
+        value={
+          focus.direction === "any"
+            ? String(focus.hops)
+            : `${focus.direction}:${focus.hops}`
+        }
+        disabled={!canFocus && !focus.hops}
+        onChange={(e) => {
+          const [direction, hops] = e.target.value.includes(":")
+            ? e.target.value.split(":")
+            : ["any", e.target.value];
+          onFocus(Number(hops), direction as FocusDirection);
+        }}
+      >
+        <option value="0">Focus: off</option>
+        <optgroup label="Any direction">
+          {[1, 2, 3].map((hops) => (
+            <option key={hops} value={String(hops)}>
+              {hops === 1 ? "1 hop" : `${hops} hops`}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Callers: observed reaching the selection">
+          {[1, 2, 3].map((hops) => (
+            <option key={hops} value={`callers:${hops}`}>
+              Callers · {hops === 1 ? "1 hop" : `${hops} hops`}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Dependencies: observed from the selection">
+          {[1, 2, 3].map((hops) => (
+            <option key={hops} value={`dependencies:${hops}`}>
+              Dependencies · {hops === 1 ? "1 hop" : `${hops} hops`}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+    </label>
   );
 }
 

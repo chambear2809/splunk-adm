@@ -46,15 +46,16 @@ export function ChangePanel({
     setResult(undefined);
     try {
       const bounds = previousWindow(graph);
-      const previous = graph.demo
-        ? await previousDemoGraph(scenario, controller.signal)
-        : client
-          ? await loadLive(
-              client,
-              { ...graph.boundary, ...bounds, timezone },
-              controller.signal,
-            )
-          : undefined;
+      const previous =
+        !__ADM_SPLUNK_BUILD__ && graph.demo
+          ? await previousDemoGraph(scenario, controller.signal)
+          : client
+            ? await loadLive(
+                client,
+                { ...graph.boundary, ...bounds, timezone },
+                controller.signal,
+              )
+            : undefined;
       if (!previous)
         throw new Error(
           "A previous captured window is not available for this demo. Choose the ACI demo to compare windows.",

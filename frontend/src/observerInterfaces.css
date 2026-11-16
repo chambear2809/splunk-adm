@@ -1,0 +1,49 @@
+/* Inspector observer interface table: Device · In · Out · Records · Evidence. */
+.adm .atlas-ifs {
+  table-layout: fixed;
+  font-size: 12px;
+  margin: 4px 0 12px;
+}
+.adm .atlas-ifs :is(th, td) {
+  padding: 4px 5px;
+  overflow-wrap: break-word;
+}
+.adm .atlas-ifs thead th {
+  color: var(--adm-muted);
+  font-weight: 600;
+}
+.adm .atlas-ifs thead th:nth-child(1) {
+  width: 23%;
+}
+.adm .atlas-ifs thead th:nth-child(2),
+.adm .atlas-ifs thead th:nth-child(3) {
+  width: 23%;
+}
+.adm .atlas-ifs thead th:nth-child(4) {
+  width: 13%;
+}
+.adm .atlas-ifs tbody th {
+  font-weight: 600;
+  white-space: normal;
+}
+.adm .atlas-ifs code {
+  font-family: inherit;
+  font-size: inherit;
+  background: none;
+  padding: 0;
+}
+.adm .atlas-ifs code.raw {
+  color: var(--adm-muted);
+}
+.adm .atlas-ifs .atlas-ifs-inferred {
+  display: block;
+  color: var(--adm-muted);
+}
+.adm .atlas-ifs .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.adm .atlas-ifs .atlas-ifs-link th {
+  color: var(--adm-ink-2);
+  background: var(--adm-card);
+}

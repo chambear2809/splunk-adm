@@ -7,6 +7,8 @@ const require = createRequire(new URL("../../package.json", import.meta.url));
 const { chromium, expect } = require("@playwright/test");
 const { activation } = require("./research/cisco-pipeline-interface.json");
 const contractSelectors = activation.cutover_selectors.map(({ name }) => name);
+// Map graph reads go through the reader wrapper (which expands adm_graph).
+const GRAPH_SEARCH = /`adm_(application_graph_read|graph)\(/;
 
 async function documentMetadata(
   page,
@@ -229,19 +231,32 @@ try {
     await control.press("Enter");
   }
 
+  /** One-row map header overflow: Changes, Saved views, Legend, Export, settings, help. */
+  async function more(item) {
+    const menu = page.getByRole("region", {
+      name: "More actions",
+      exact: true,
+    });
+    if (!(await menu.count()))
+      await page
+        .getByRole("button", { name: "More actions", exact: true })
+        .click();
+    await menu.getByRole("button", { name: item, exact: true }).click();
+  }
+
   async function waitForSearch(after, timeout = 60000) {
     const deadline = Date.now() + timeout;
     while (
       !searchPayloads
         .slice(after)
-        .some((item) => item.search.includes("adm_graph(")) &&
+        .some((item) => GRAPH_SEARCH.test(item.search)) &&
       Date.now() < deadline
     ) {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     return searchPayloads
       .slice(after)
-      .find((item) => item.search.includes("adm_graph("));
+      .find((item) => GRAPH_SEARCH.test(item.search));
   }
 
   const rl = createInterface({ input: process.stdin });
@@ -277,7 +292,7 @@ try {
       expect(
         searchPayloads
           .slice(beforeUnscoped)
-          .filter((request) => request.search.includes("adm_graph(")),
+          .filter((request) => GRAPH_SEARCH.test(request.search)),
       ).toHaveLength(0);
       evidence.unscopedLiveMap = { graphSearches: 0, requiresScope: true };
       stage = "live map";
@@ -304,6 +319,14 @@ try {
       evidence.themeOk = evidence.theme === theme;
       evidence.timezone = await adm.getAttribute("data-timezone");
       evidence.timezoneOk = evidence.timezone === timezone;
+      // The scoped map shows a one-row header; scope fields live in the
+      // Scope popover.
+      const scopeButton = adm.getByRole("button", {
+        name: "Scope",
+        exact: true,
+      });
+      if ((await scopeButton.getAttribute("aria-expanded")) !== "true")
+        await scopeButton.click();
       evidence.scopeFieldStyle = await page
         .getByRole("combobox", { name: "Environment", exact: true })
         .evaluate((element) => {
@@ -315,6 +338,8 @@ try {
             shadow: style.boxShadow,
           };
         });
+      if ((await scopeButton.getAttribute("aria-expanded")) === "true")
+        await scopeButton.click();
       evidence.scopeService = await adm.locator(".scope-service").innerText();
       evidence.scopeDims = await adm.locator(".scope-dims").innerText();
       evidence.notLoaded = text.includes("Splunk · not loaded");
@@ -329,13 +354,23 @@ try {
       evidence.demoRequests = demoRequests;
 
       stage = "map readability";
-      if (
-        (await adm
-          .getByRole("button", { name: "Legend", exact: true })
-          .getAttribute("aria-expanded")) !== "false"
-      )
-        throw new Error("Legend should start collapsed");
+      // One-row map header: Legend is in More actions, filters in a panel.
+      if (await adm.getByRole("region", { name: "Map legend" }).count())
+        throw new Error("Legend should start closed");
       await adm
+        .getByRole("button", { name: "More actions", exact: true })
+        .click();
+      await adm
+        .getByRole("region", { name: "More actions", exact: true })
+        .getByRole("button", { name: "Legend", exact: true })
+        .click();
+      await adm.getByRole("region", { name: "Map legend" }).waitFor();
+      await adm
+        .getByRole("button", { name: "Close legend", exact: true })
+        .click();
+      await adm.getByRole("button", { name: /^Filters/ }).click();
+      await adm
+        .getByRole("region", { name: "Filters", exact: true })
         .getByLabel("Filter identity", { exact: true })
         .selectOption("unknown");
       await adm.locator(".atlas-filter-status").waitFor();
@@ -345,6 +380,9 @@ try {
         )
       )
         throw new Error("Missing filter scope explanation");
+      await adm
+        .getByRole("button", { name: "Close filters", exact: true })
+        .click();
       await adm
         .getByRole("button", { name: "Clear filters and focus", exact: true })
         .first()
@@ -434,8 +472,13 @@ try {
 
       stage = "scope controls";
       const beforeBuild = searchPayloads.length;
-      const previousWindow =
-        (await adm.locator(".scope-time").textContent()) ?? "";
+      // Scope fields are in the Scope popover of the one-row header.
+      const scopeToggle = adm.getByRole("button", {
+        name: "Scope",
+        exact: true,
+      });
+      if ((await scopeToggle.getAttribute("aria-expanded")) !== "true")
+        await scopeToggle.click();
       await chooseScope("Environment", "demo");
       await chooseScope("Cluster", "demo-cluster");
       await chooseScope("Namespace", "shop");
@@ -470,16 +513,11 @@ try {
         .getByRole("button", { name: "Build map", exact: true })
         .click();
       const buildSearch = await waitForSearch(beforeBuild);
-      await page.waitForFunction(
-        (previous) => {
-          const current = document
-            .querySelector(".scope-time")
-            ?.textContent?.trim();
-          return current && current !== previous.trim();
-        },
-        previousWindow,
-        { timeout: 150000 },
-      );
+      if (!buildSearch?.earliest)
+        throw new Error("Build map issued no bounded graph search");
+      await page
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
       await page
         .getByText(/Incomplete window/i)
         .waitFor({ state: "visible", timeout: 60000 });
@@ -531,6 +569,10 @@ try {
         evidence.legacy.nodeCount === evidence.reload.nodeCount &&
         evidence.legacy.edgeCount === evidence.reload.edgeCount;
       stage = "live evidence search";
+      // Findings are a header toggle in the one-row map header.
+      const findingsToggle = page.getByRole("button", { name: /^Findings/ });
+      if ((await findingsToggle.getAttribute("aria-expanded")) !== "true")
+        await findingsToggle.click();
       const liveFinding = page
         .getByRole("article")
         .filter({ hasText: "Unknown endpoint identity" })
@@ -638,7 +680,7 @@ try {
       );
       stage = "live applications heading";
       await page
-        .getByRole("heading", { name: "Applications", exact: true })
+        .getByRole("heading", { name: "Explore", exact: true })
         .waitFor({ state: "visible", timeout: 60000 });
       stage = "live application catalog table";
       const catalogTable = page.locator(
@@ -673,10 +715,10 @@ try {
         { waitUntil: "domcontentloaded" },
       );
       await page
-        .getByRole("heading", { name: "Applications", exact: true })
+        .getByRole("heading", { name: "Explore", exact: true })
         .waitFor({ state: "visible", timeout: 60000 });
       stage = "live application Find";
-      const findControls = page.locator("#atlas-root .atlas-find");
+      const findControls = page.locator("#atlas-root .atlas-omnibox");
       const findInput = findControls.getByLabel(
         /Find an address, EPG, or device/,
       );
@@ -712,7 +754,7 @@ try {
         latest: findMapUrl.searchParams.get("latest"),
       };
       stage = "phase8 live changes compare";
-      await page.getByRole("button", { name: "Changes", exact: true }).click();
+      await more("Changes");
       await page
         .getByRole("button", { name: "Compare previous window", exact: true })
         .click();
@@ -731,127 +773,69 @@ try {
       await page.keyboard.press("Escape");
       await page.unroute("**/demo/*.json");
 
-      stage = "packaged demo applications";
+      // The Splunk build has no demo mode: stale ?mode=demo links must open
+      // the live views without requesting captured demo data.
+      stage = "demo link opens live applications";
+      let staleDemoRequests = 0;
+      await page.route("**/demo/*.json", (route) => {
+        staleDemoRequests += 1;
+        void route.abort();
+      });
       await page.goto(
         `${BASE}/en-US/app/splunk_adm/applications?mode=demo&scenario=aci`,
         { waitUntil: "domcontentloaded" },
       );
       await page
-        .getByRole("heading", { name: "Applications", exact: true })
-        .waitFor({ state: "visible", timeout: 60000 });
-      await page
-        .getByRole("button", { name: "Open map for frontend", exact: true })
+        .getByRole("heading", { name: "Explore", exact: true })
         .waitFor({ state: "visible", timeout: 60000 });
       if (
         (await page.locator("text=Application Atlas could not load").count()) >
         0
       )
-        throw new Error("Packaged Applications demo failed to load");
-      evidence.demoApplications = { loaded: true, frontend: true };
+        throw new Error("Applications failed to load from a demo link");
+      const applicationsDemoChip = await page
+        .getByText("Demo data", { exact: true })
+        .count();
 
-      stage = "demo map";
+      stage = "demo link opens live map";
       await page.goto(
-        `${BASE}/en-US/app/splunk_adm/map?mode=demo&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop`,
+        `${BASE}/en-US/app/splunk_adm/map?mode=demo&earliest=${encodeURIComponent(earliest)}&latest=${encodeURIComponent(latest)}&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop`,
         { waitUntil: "domcontentloaded" },
       );
       const demo = page.locator(".adm");
-      await demo
-        .getByText("Synthetic demo", { exact: true })
-        .waitFor({ timeout: 60000 });
-      evidence.demo = {
-        synthetic: true,
+      await page
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
+      evidence.demoLinkLive = {
+        applications: applicationsDemoChip === 0,
+        map:
+          (await demo.getByText("Synthetic demo", { exact: true }).count()) ===
+          0,
         cards: await demo.locator("[data-hit]").count(),
+        demoRequests: staleDemoRequests,
       };
-      await demo.getByLabel("Hide infrastructure", { exact: true }).check();
-      await demo.locator(".atlas-filter-status").waitFor();
-      await demo.getByLabel("Hide infrastructure", { exact: true }).uncheck();
+      await page.unroute("**/demo/*.json");
+      await (async () => {
+        const panel = demo.getByRole("region", {
+          name: "Filters",
+          exact: true,
+        });
+        if (!(await panel.count()))
+          await demo.getByRole("button", { name: /^Filters/ }).click();
+        await panel.getByLabel("Hide infrastructure", { exact: true }).check();
+        await demo.locator(".atlas-filter-status").waitFor();
+        await panel
+          .getByLabel("Hide infrastructure", { exact: true })
+          .uncheck();
+        await demo
+          .getByRole("button", { name: "Close filters", exact: true })
+          .click();
+      })();
       if (await demo.locator(".atlas-filter-status").count())
-        throw new Error("Demo filter did not clear");
-      stage = "phase7 demo tooltip";
-      await page
-        .getByRole("article", { name: "Backend inferred", exact: true })
-        .getByRole("button", { name: "Show path", exact: true })
-        .click();
-      const glossaryButton = page
-        .getByRole("button", { name: "Explain Determined", exact: true })
-        .first();
-      await glossaryButton.focus();
-      await page.getByRole("tooltip").waitFor();
-      if (
-        !(await page.getByRole("tooltip").innerText()).includes(
-          "linked the frontend to a backend pod",
-        )
-      )
-        throw new Error("Missing glossary explanation");
-      await root.screenshot({ path: `dist/atlas-phase7-tooltip-${theme}.png` });
-      await glossaryButton.press("Tab");
-      await page.getByRole("tooltip").waitFor({ state: "hidden" });
-      const longHeading = demo.locator(".atlas-inspector-title h2");
-      if (
-        !(await longHeading.evaluate((el) => el.scrollWidth > el.clientWidth))
-      )
-        throw new Error("Long inspector name did not truncate");
-      await demo.locator(".atlas-inspector-title summary").click();
-      await root.screenshot({
-        path: `dist/atlas-phase7-long-name-${theme}.png`,
-      });
-      await demo
-        .getByRole("button", { name: "Clear selection", exact: true })
-        .click();
-      evidence.phase7.tooltip = true;
-      evidence.phase7.longName = true;
-
-      const demoFinding = page
-        .getByRole("article")
-        .filter({ hasText: "Blocked conversation" })
-        .first();
-      await demoFinding.waitFor({ state: "visible", timeout: 60000 });
-      const demoCopy = demoFinding.getByRole("button", {
-        name: "Copy request",
-        exact: true,
-      });
-      await demoCopy.click();
-      const copied = await demoFinding
-        .getByRole("status")
-        .innerText()
-        .catch(() => "");
-      const clipboard = await page.evaluate(() =>
-        navigator.clipboard.readText(),
-      );
-      evidence.demoFindings = {
-        copied: /request copied/i.test(copied),
-        csv: /,|\n/.test(clipboard),
-        openDisabled: await demoFinding
-          .getByRole("button", { name: "Open in Search", exact: true })
-          .isDisabled(),
-      };
-
-      stage = "phase8 changes compare";
-      await demo.getByRole("button", { name: "Changes", exact: true }).click();
-      await page
-        .getByRole("button", { name: "Compare previous window", exact: true })
-        .click();
-      await page
-        .getByText(/^Previous:/)
-        .waitFor({ state: "visible", timeout: 60000 });
-      await page
-        .getByText(/^Current:/)
-        .waitFor({ state: "visible", timeout: 60000 });
-      await demo.screenshot({ path: `dist/atlas-phase8-changes-${theme}.png` });
-      evidence.phase8Changes = {
-        previous: true,
-        current: true,
-        added:
-          (await page.getByText(/^[1-9]\d* connections added/).count()) > 0,
-      };
-      if (!evidence.phase8Changes.added)
-        throw new Error("demo comparison did not report added connections");
-      await page.keyboard.press("Escape");
+        throw new Error("Map filter did not clear");
 
       stage = "phase8 saved views and link";
-      await page
-        .getByRole("button", { name: "Saved views", exact: true })
-        .click();
+      await more("Saved views");
       await page.evaluate(() => {
         const original = navigator.clipboard.writeText.bind(
           navigator.clipboard,
@@ -895,8 +879,9 @@ try {
         .getAttribute("href");
       await page.reload({ waitUntil: "domcontentloaded" });
       await page
-        .getByRole("button", { name: "Saved views", exact: true })
-        .click();
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
+      await more("Saved views");
       await page
         .getByRole("link", { name: "Native demo view", exact: true })
         .waitFor({ state: "visible", timeout: 60000 });
@@ -904,8 +889,9 @@ try {
         .getByRole("link", { name: "Native demo view", exact: true })
         .click();
       await page
-        .getByRole("button", { name: "Saved views", exact: true })
-        .click();
+        .locator('.adm[data-loaded="true"]')
+        .waitFor({ timeout: 150000 });
+      await more("Saved views");
       await page.getByRole("button", { name: "Delete", exact: true }).click();
       await page
         .getByRole("link", { name: "Native demo view", exact: true })
@@ -928,7 +914,7 @@ try {
             ?.getAttribute("viewBox");
         };
       });
-      await page.getByRole("button", { name: "Export", exact: true }).click();
+      await more("Export");
       const pngDownload = page.waitForEvent("download");
       await page.getByRole("button", { name: /Map image \(PNG\)/ }).click();
       const png = await pngDownload;
@@ -996,7 +982,9 @@ try {
               path,
               name === "data_health"
                 ? "Data health"
-                : name[0].toUpperCase() + name.slice(1),
+                : name === "applications"
+                  ? "Explore"
+                  : name[0].toUpperCase() + name.slice(1),
             ),
         );
         evidence.routes[name] = route;
@@ -1060,7 +1048,7 @@ try {
       evidence.setupRestStatus = setupRest.status();
       evidence.searchRequests = [...searchRequests];
       evidence.graphRequests = searchPayloads.filter((item) =>
-        item.search.includes("adm_graph"),
+        GRAPH_SEARCH.test(item.search),
       ).length;
       evidence.atlasScripts = [...atlasScripts];
       evidence.consoleErrorCount = consoleErrors.length;
@@ -1100,7 +1088,7 @@ try {
           stage,
           path: new URL(page.url()).pathname,
           headingCount: await page
-            .getByRole("heading", { name: "Applications", exact: true })
+            .getByRole("heading", { name: "Explore", exact: true })
             .count()
             .catch(() => 0),
           catalogTableCount: await page

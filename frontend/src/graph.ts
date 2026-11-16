@@ -1,3 +1,4 @@
+import { MAX_GRAPH_EDGES, MAX_GRAPH_NODES } from "./scale/limits";
 import { isoTime } from "./time";
 import { sameNatIp, usableNatIp } from "./ip";
 export type NodeKind = "service" | "workload" | "endpoint" | "client";
@@ -237,6 +238,14 @@ export interface NatObservation {
   translated_responder_port: number;
   reported_original_initiator_ip?: string;
 }
+/** Present when the map shows a ranked subset of a larger result. */
+export interface GraphTruncation {
+  truncated: true;
+  shown: { nodes: number; edges: number };
+  total: { nodes: number; edges: number };
+  /** How the shown subset was chosen, e.g. "relationship, then bytes, then connections". */
+  ranking: string;
+}
 export interface Graph {
   schema_version: 1;
   snapshot_id: string;
@@ -263,6 +272,20 @@ export interface Graph {
     ambiguous_conversations: number;
     warnings: string[];
   };
+  truncation?: GraphTruncation;
+  /** Long-window read coverage (qualified summaries and raw slices). */
+  read?: GraphRead;
+}
+export interface GraphRead {
+  /** Percent of the window whose evidence was read; 100 means exact totals. */
+  coverage: number;
+  windowSeconds: number;
+  /** Seconds answered from five-minute summaries (absent without summaries). */
+  summarySeconds?: number;
+  /** Newest minutes read raw because they are not yet summarized. */
+  rawTailSeconds?: number;
+  /** Seconds not yet read (progressive load: a full read follows). */
+  pendingSeconds?: number;
 }
 const COVERAGE_COUNTS = [
   "spans",
@@ -760,13 +783,49 @@ export function parseGraph(value: unknown): Graph {
   const windowEnd = exactNatWindow?.end ?? Date.parse(w.end as string) / 1000;
   if (
     !Array.isArray(value.nodes) ||
-    value.nodes.length > 500 ||
+    value.nodes.length > MAX_GRAPH_NODES ||
     !Array.isArray(value.edges) ||
-    value.edges.length > 2000
+    value.edges.length > MAX_GRAPH_EDGES
   )
     throw new Error(
-      "Graph exceeds the pilot limit (500 nodes / 2,000 edges). Narrow the time range or namespace.",
+      `Graph exceeds the display limit (${MAX_GRAPH_NODES.toLocaleString("en-US")} nodes / ${MAX_GRAPH_EDGES.toLocaleString("en-US")} edges). Narrow the time range or namespace.`,
     );
+  const truncation = value.truncation;
+  if (truncation !== undefined) {
+    const pair = (v: unknown) =>
+      object(v) &&
+      Number.isSafeInteger(v.nodes) &&
+      Number.isSafeInteger(v.edges);
+    if (
+      !object(truncation) ||
+      truncation.truncated !== true ||
+      typeof truncation.ranking !== "string" ||
+      !pair(truncation.shown) ||
+      !pair(truncation.total) ||
+      (truncation.shown as { nodes: number }).nodes !== value.nodes.length ||
+      (truncation.shown as { edges: number }).edges !== value.edges.length ||
+      (truncation.total as { nodes: number }).nodes < value.nodes.length ||
+      (truncation.total as { edges: number }).edges < value.edges.length
+    )
+      throw new Error("Snapshot truncation summary is invalid.");
+  }
+  const read = value.read;
+  if (read !== undefined) {
+    const seconds = (v: unknown) =>
+      v === undefined || (Number.isSafeInteger(v) && (v as number) >= 0);
+    if (
+      !object(read) ||
+      !Number.isSafeInteger(read.coverage) ||
+      (read.coverage as number) < 0 ||
+      (read.coverage as number) > 100 ||
+      !Number.isSafeInteger(read.windowSeconds) ||
+      (read.windowSeconds as number) <= 0 ||
+      !seconds(read.summarySeconds) ||
+      !seconds(read.rawTailSeconds) ||
+      !seconds(read.pendingSeconds)
+    )
+      throw new Error("Snapshot read coverage is invalid.");
+  }
   const natObservationsInWindow = (v: unknown) =>
     validNatObservations(v) &&
     v.every(

@@ -284,7 +284,10 @@ try {
     const attachments = page.getByRole("region", {
       name: "Client attachment devices",
     });
-    await expect(attachments).toContainText(scenario.attachmentDeviceId);
+    // The device ID stays machine-readable; the visible label is the device name.
+    await expect(
+      attachments.locator(`[data-device-id="${scenario.attachmentDeviceId}"]`),
+    ).toHaveCount(1);
     await expect(attachments).toContainText(scenario.attachmentDeviceName);
     expect(
       searches

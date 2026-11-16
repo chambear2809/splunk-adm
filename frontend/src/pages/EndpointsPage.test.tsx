@@ -18,7 +18,7 @@ describe("EndpointsPage", () => {
     expect(html).toContain('aria-label="Verified routing scope"');
     expect(html).toContain('aria-label="Start time"');
     expect(html).toContain('aria-label="End time"');
-    expect(html).toContain("Inspect observed conversations");
+    expect(html).not.toContain("Requires live data");
     expect(html).toContain(":40.000");
   });
   it("returns only to a validated same-origin application map and protects CSV formulas", () => {

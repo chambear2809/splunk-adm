@@ -5,7 +5,9 @@ Choose the script for your audience:
 - [Networking sales engineers](NETWORKING_SE.md): a 20-minute client-to-application investigation across Catalyst/ACI and Meraki/NX-OS, with an optional endpoint/DNS segment.
 - [Splunk sales engineers](SPLUNK_SE.md): a 25-minute evidence, search-contract and operations walkthrough, including endpoint/DNS behavior.
 
-Both scripts use repository synthetic data. They require no customer credentials, Splunk installation, collector changes or lab lifecycle. Prepare and rehearse before the meeting; these are demonstrations of behavior, not source or deployment qualification.
+- [Live lab scenarios](LIVE_LAB_SCENARIOS.md): click-through links into real lab data on Splunk Cloud (traces, contract deny, vPC failover, pod reschedule, device, impact, map, collector gap). Needs VPN and a lab login.
+
+The two scripts above use repository synthetic data. They require no customer credentials, Splunk installation, collector changes or lab lifecycle. Prepare and rehearse before the meeting; these are demonstrations of behavior, not source or deployment qualification.
 
 ## Presenter setup
 

@@ -1,0 +1,252 @@
+/* Path trace: source left → destination right. Color only marks problems. */
+.atlas-trace {
+  border: 1px solid var(--adm-line, #e1e1e1);
+  border-radius: 8px;
+  background: var(--adm-surface, #fff);
+  padding: 8px 12px 10px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.atlas-trace-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--adm-ink-2, #555);
+  min-width: 0;
+}
+.atlas-trace-pair {
+  color: var(--adm-ink, #111);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+.atlas-trace-spacer {
+  flex: 1;
+}
+.atlas-trace-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+.atlas-trace-chip.blocked,
+.atlas-hop-badge.blocked {
+  background: var(--adm-error-bg, #fdecec);
+  color: var(--adm-error-ink, #8a1f1f);
+}
+.atlas-trace-chip.open {
+  border: 1px solid var(--adm-card-border, #c3cbd4);
+  color: var(--adm-muted, #4a5560);
+  font-weight: 550;
+}
+.atlas-trace-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--adm-card-border, #c3cbd4);
+  background: transparent;
+  color: var(--adm-ink, #111);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  justify-self: start;
+}
+.atlas-trace-btn:hover {
+  border-color: var(--adm-ink-2, #555);
+}
+.atlas-trace-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--adm-ink-2, #555);
+  cursor: pointer;
+}
+.atlas-trace-icon:hover {
+  background: var(--adm-card-head, #f2f2f2);
+}
+.atlas-trace-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 !important;
+  color: var(--adm-error-ink, #8a1f1f);
+  font-size: 12.5px;
+}
+.atlas-trace-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 !important;
+  color: var(--adm-muted, #6b6b6b);
+  font-size: 12.5px;
+}
+.atlas-trace-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.atlas-trace-body.has-detail {
+  grid-template-columns: minmax(0, 1fr) 260px;
+}
+.atlas-trace-hops {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+.atlas-trace-hops > li {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.atlas-trace-link {
+  color: var(--adm-muted, #6b6b6b);
+  margin: 0 2px;
+  flex: none;
+}
+.atlas-hop {
+  display: grid;
+  gap: 1px;
+  width: 136px;
+  padding: 6px 9px;
+  border: 1px solid var(--adm-card-border, #c3cbd4);
+  border-radius: 8px;
+  background: var(--adm-card, #fff);
+  color: var(--adm-ink, #111);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.atlas-hop:hover {
+  border-color: var(--adm-ink-2, #555);
+}
+.atlas-hop[aria-pressed="true"] {
+  border-color: var(--adm-select-ring, var(--adm-ink, #111));
+  box-shadow: 0 0 0 1px var(--adm-select-ring, var(--adm-ink, #111));
+}
+.atlas-hop.inferred {
+  border-style: dashed;
+}
+.atlas-hop.gap {
+  border-style: dotted;
+  border-color: var(--adm-warn-icon, #b26b00);
+}
+.atlas-hop.blocked {
+  border-color: var(--adm-blocked, #d03b3b);
+}
+.atlas-hop > * {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atlas-hop-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--adm-ink-2, #555);
+  font-size: 11px;
+}
+.atlas-hop-kind {
+  font-weight: 600;
+}
+.atlas-hop-badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.atlas-hop-badge.inferred {
+  background: var(--adm-card-head, #f2f2f2);
+  color: var(--adm-muted, #6b6b6b);
+}
+.atlas-hop-badge.gap {
+  background: var(--adm-warn-bg, #fff2d6);
+  color: var(--adm-warn-ink, #7a4a00);
+}
+.atlas-hop-name {
+  font-size: 13px;
+}
+.atlas-hop-ports {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--adm-ink-2, #555);
+}
+.atlas-trace-more {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px dashed var(--adm-card-border, #c3cbd4);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--adm-ink-2, #555);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.atlas-trace-detail {
+  border-left: 1px solid var(--adm-line, #e1e1e1);
+  padding-left: 10px;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.atlas-trace-detail header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.atlas-trace-detail h3 {
+  margin: 0;
+  font-size: 13.5px;
+}
+.atlas-trace-detail dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 10px;
+  margin: 0;
+}
+.atlas-trace-detail dt {
+  color: var(--adm-muted, #6b6b6b);
+}
+.atlas-trace-detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.atlas-trace-notes {
+  font-size: 12px;
+  color: var(--adm-ink-2, #555);
+}
+.atlas-trace-notes summary {
+  cursor: pointer;
+}
+.atlas-trace-notes ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.atlas-trace .spin {
+  animation: atlas-trace-spin 1s linear infinite;
+}
+@keyframes atlas-trace-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

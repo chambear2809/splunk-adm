@@ -1,3 +1,4 @@
+import { ifIndexOf, isNxosDevice, unnamedIfIndexLabel } from "./ifIndex";
 import {
   validClientHandoffMetadata,
   type ClientHandoffRecord,
@@ -27,7 +28,9 @@ export type DeviceKind =
   | "router"
   | "host"
   | "network_client"
-  | "network_device";
+  | "network_device"
+  | "hypervisor"
+  | "virtual_switch";
 export interface Device {
   id: string;
   name: string;
@@ -70,6 +73,12 @@ export interface Device {
   overlay_peer_system_ip?: string;
   overlay_peer_color?: string;
   overlay_protocol?: string;
+  /** virtual_switch: "vds" (distributed), "vss" (standard) or "vmm". */
+  switch_type?: string;
+  /** hypervisor: the virtual switch it is a member of. */
+  parent_device?: string;
+  /** virtual_switch: exporter addresses (optionally `ip|observation_domain_id`) qualified as its IPFIX observers. */
+  ipfix_observers?: string[];
   sources: string[];
 }
 export interface Link {
@@ -82,10 +91,28 @@ export interface Link {
     | "physical"
     | "wireless_association"
     | "overlay_context"
-    | "traffic_observation";
+    | "traffic_observation"
+    | "virtual_port"
+    | "uplink";
   scope?: string;
   cluster?: string;
   mapping_status?: string;
+  /** virtual_port / uplink: hypervisor the port or uplink belongs to. */
+  hypervisor?: string;
+  /** virtual_port: VM name, vNIC MAC/IP, portgroup, VLAN, switch port key. */
+  b_device_name?: string;
+  mac?: string;
+  ip?: string;
+  portgroup?: string;
+  vlan?: string;
+  port_key?: string;
+  /** virtual_port: fabric attachment of the endpoint (ACI pod-N/node-N, two for vPC). */
+  attach_nodes?: string[];
+  attach_interface?: string;
+  /** How a virtual port or uplink was bound to its identities. */
+  binding?: string;
+  /** Overlay segment (e.g. NSX); underlay hops are not attributed. */
+  overlay?: string;
 }
 export interface Interface {
   device_id: string;
@@ -116,12 +143,16 @@ const DEVICE_KINDS: DeviceKind[] = [
   "host",
   "network_client",
   "network_device",
+  "hypervisor",
+  "virtual_switch",
 ];
 const LINK_KINDS: Link["kind"][] = [
   "physical",
   "wireless_association",
   "overlay_context",
   "traffic_observation",
+  "virtual_port",
+  "uplink",
 ];
 export const MAX_TOPOLOGY_ROWS = 20000;
 
@@ -193,11 +224,15 @@ export function rowsToTopology(rows: unknown): Topology {
         "overlay_peer_system_ip",
         "overlay_peer_color",
         "overlay_protocol",
+        "switch_type",
+        "parent_device",
       ] as const) {
         const v = one(row, k);
         if (v !== undefined) device[k] = v;
       }
       device.aliases = many(row, "aliases") ?? [];
+      const observers = many(row, "ipfix_observers");
+      if (observers?.length) device.ipfix_observers = observers;
       topo.devices.push(device);
     } else if (type === "link") {
       const source = one(row, "link_source") ?? "cdp";
@@ -209,7 +244,26 @@ export function rowsToTopology(rows: unknown): Topology {
           : undefined);
       if (!kind || !LINK_KINDS.includes(kind as Link["kind"]))
         throw new Error(`Invalid topology link kind ${String(kind)}.`);
+      const extra: Partial<Link> = {};
+      for (const k of [
+        "hypervisor",
+        "b_device_name",
+        "mac",
+        "ip",
+        "portgroup",
+        "vlan",
+        "port_key",
+        "attach_interface",
+        "binding",
+        "overlay",
+      ] as const) {
+        const v = one(row, k);
+        if (v !== undefined) extra[k] = v;
+      }
+      const nodes = many(row, "attach_nodes");
+      if (nodes?.length) extra.attach_nodes = nodes;
       topo.links.push({
+        ...extra,
         a_device: need(row, "a_device"),
         a_interface: one(row, "a_interface"),
         b_device: need(row, "b_device"),
@@ -270,10 +324,43 @@ export interface TopologyIndex {
   /** Host attachment from LLDP: qualified canonical host ID → leaf and port. */
   lldpHost: Map<string, { device: string; port?: string }>;
   ambiguousIfName: Set<string>;
+  /** Virtual switch ports keyed by lower-case vNIC MAC and by IP; several entries are ambiguous. */
+  virtualPorts: Map<string, VirtualPort[]>;
+  /** Host uplinks keyed by `switch|hypervisor` (canonical lower-case IDs). Never switch adjacency. */
+  uplinks: Map<string, Uplink[]>;
+  /** Virtual switches by qualified IPFIX observer key (`ip` or `ip|domain`). */
+  ipfixObservers: Map<string, Device[]>;
+}
+
+/** A VM vNIC on a virtual switch, from a virtual_port link. */
+export interface VirtualPort {
+  switch: string;
+  vm: string;
+  vm_name?: string;
+  hypervisor?: string;
+  mac?: string;
+  ip?: string;
+  portgroup?: string;
+  vlan?: string;
+  port_key?: string;
+  attach_nodes?: string[];
+  attach_interface?: string;
+  overlay?: string;
+  binding?: string;
+  scope?: string;
+}
+/** A hypervisor uplink (vmnic) bound to a physical switch port. */
+export interface Uplink {
+  switch: string;
+  hypervisor?: string;
+  uplink?: string;
+  device: string;
+  port?: string;
+  binding?: string;
 }
 const key = (s: string) => s.trim().toLowerCase();
 const SOURCE_ID =
-  /^(?:aci|nxos|meraki|host|network_client|catalyst|sdwan_router):[a-f0-9]{64}$/;
+  /^(?:aci|nxos|meraki|host|network_client|catalyst|sdwan_router|vsphere):[a-f0-9]{64}$/;
 const isV2Device = (d: Device) =>
   d.mapping_status !== undefined || SOURCE_ID.test(d.id);
 
@@ -285,6 +372,8 @@ export interface DeviceResolutionContext {
   cluster?: string;
   authority?: string;
   families?: string[];
+  /** IPFIX observation domain of the record being resolved (VDS observer binding). */
+  observationDomain?: string;
 }
 
 // Families that export IPFIX/NetFlow. FTD is excluded (eStreamer, resolved by its own observer path);
@@ -505,7 +594,10 @@ export function indexTopology(topo: Topology): TopologyIndex {
     ipCandidates = new Map<string, Device[]>(),
     ifName = new Map<string, string>(),
     adjacency = new Map<string, { to: string; out?: string; in?: string }[]>(),
-    lldpHost = new Map<string, { device: string; port?: string }>();
+    lldpHost = new Map<string, { device: string; port?: string }>(),
+    virtualPorts = new Map<string, VirtualPort[]>(),
+    uplinks = new Map<string, Uplink[]>(),
+    ipfixObservers = new Map<string, Device[]>();
   const ambiguousHosts = new Set<string>();
   const ambiguousIds = new Set<string>();
   const ambiguousKeys = new Set<string>();
@@ -552,6 +644,9 @@ export function indexTopology(topo: Topology): TopologyIndex {
     if (d.aci_node) addCandidate(aliasCandidates, d.aci_node, d);
     for (const alias of d.aliases ?? [])
       addCandidate(aliasCandidates, alias, d);
+    if (d.kind === "virtual_switch")
+      for (const o of d.ipfix_observers ?? [])
+        addCandidate(ipfixObservers, o, d);
     addAlias(byKey, ambiguousKeys, d.id, d);
     if (!isV2Device(d)) {
       addAlias(byKey, ambiguousKeys, d.name, d);
@@ -566,14 +661,21 @@ export function indexTopology(topo: Topology): TopologyIndex {
   }
   for (const i of topo.interfaces)
     if (i.ifindex !== undefined) {
-      const canonical = byId.get(i.device_id)?.id ?? i.device_id;
-      const nameKey = `${key(canonical)}|${i.ifindex}`;
-      const previous = ifName.get(nameKey);
-      if (previous && interfaceKey(previous) !== interfaceKey(i.interface)) {
-        ifName.delete(nameKey);
-        ambiguousIfName.add(nameKey);
-      } else if (!ambiguousIfName.has(nameKey))
-        ifName.set(nameKey, i.interface);
+      // SNMP/VMware interface rows name their exporter by address: register
+      // them under the device that address resolves to and under the address.
+      const canonical =
+        byId.get(i.device_id)?.id ??
+        byIp.get(key(i.device_id))?.id ??
+        i.device_id;
+      for (const owner of new Set([key(canonical), key(i.device_id)])) {
+        const nameKey = `${owner}|${i.ifindex}`;
+        const previous = ifName.get(nameKey);
+        if (previous && interfaceKey(previous) !== interfaceKey(i.interface)) {
+          ifName.delete(nameKey);
+          ambiguousIfName.add(nameKey);
+        } else if (!ambiguousIfName.has(nameKey))
+          ifName.set(nameKey, i.interface);
+      }
     }
   const add = (a: string, b: string, out?: string, inn?: string) => {
     const list = adjacency.get(a) ?? [];
@@ -598,6 +700,9 @@ export function indexTopology(topo: Topology): TopologyIndex {
     adjacency,
     lldpHost,
     ambiguousIfName,
+    virtualPorts,
+    uplinks,
+    ipfixObservers,
   } as TopologyIndex;
   for (const l of topo.links) {
     const kind =
@@ -610,6 +715,10 @@ export function indexTopology(topo: Topology): TopologyIndex {
     )
       continue;
     const linkContext = { scope: l.scope, cluster: l.cluster };
+    if (kind === "virtual_port" || kind === "uplink") {
+      indexVirtualLink(l, kind, partialIndex, linkContext);
+      continue;
+    }
     const endpointA = resolveDevice(l.a_device, partialIndex, linkContext);
     const endpointB = resolveDevice(l.b_device, partialIndex, linkContext);
     // Client-to-switch attachment is point evidence, not switch adjacency.
@@ -687,7 +796,72 @@ export function indexTopology(topo: Topology): TopologyIndex {
     adjacency,
     lldpHost,
     ambiguousIfName,
+    virtualPorts,
+    uplinks,
+    ipfixObservers,
   };
+}
+
+/** A V2 link qualifies only when mapped and in its endpoints' scope and cluster. */
+const v2LinkQualified = (l: Link, ...devices: Device[]) =>
+  !devices.some(isV2Device) ||
+  (l.mapping_status === "mapped" &&
+    !!l.scope &&
+    !!l.cluster &&
+    devices.every((d) => d.scope === l.scope && d.cluster === l.cluster));
+
+function indexVirtualLink(
+  l: Link,
+  kind: "virtual_port" | "uplink",
+  topo: TopologyIndex,
+  context: DeviceResolutionContext,
+) {
+  const sw = resolveDevice(l.a_device, topo, context);
+  if (!sw || (kind === "virtual_port" && sw.kind !== "virtual_switch")) return;
+  const hv = l.hypervisor
+    ? resolveDevice(l.hypervisor, topo, context)
+    : undefined;
+  if (l.hypervisor && (!hv || hv.kind !== "hypervisor")) return;
+  if (kind === "uplink") {
+    const peer = resolveDevice(l.b_device, topo, context);
+    if (!peer || !v2LinkQualified(l, sw, peer, ...(hv ? [hv] : []))) return;
+    const k = `${key(sw.id)}|${hv ? key(hv.id) : ""}`;
+    const list = topo.uplinks.get(k) ?? [];
+    list.push({
+      switch: sw.id,
+      hypervisor: hv?.id,
+      uplink: l.a_interface,
+      device: peer.id,
+      port: l.b_interface,
+      binding: l.binding,
+    });
+    topo.uplinks.set(k, list);
+    return;
+  }
+  if (!v2LinkQualified(l, sw, ...(hv ? [hv] : []))) return;
+  const port: VirtualPort = {
+    switch: sw.id,
+    vm: l.b_device,
+    vm_name: l.b_device_name,
+    hypervisor: hv?.id,
+    mac: l.mac?.toLowerCase(),
+    ip: l.ip,
+    portgroup: l.portgroup,
+    vlan: l.vlan,
+    port_key: l.port_key ?? l.a_interface,
+    attach_nodes: l.attach_nodes,
+    attach_interface: l.attach_interface,
+    overlay: l.overlay,
+    binding: l.binding,
+    scope: l.scope,
+  };
+  for (const k of new Set([port.mac, port.ip && key(port.ip)]))
+    if (k) {
+      const list = topo.virtualPorts.get(k) ?? [];
+      if (!list.some((p) => p.switch === port.switch && p.vm === port.vm))
+        list.push(port);
+      topo.virtualPorts.set(k, list);
+    }
 }
 
 /** One place where a conversation was seen, resolved to a device when possible. */
@@ -703,18 +877,35 @@ export interface ObservationPoint {
   out?: string;
 }
 
+/** Collected name of one exporter ifIndex, under any of the device's keys. */
+export function collectedIfName(
+  topo: TopologyIndex,
+  owners: (string | undefined)[],
+  n: number,
+): string | undefined {
+  for (const owner of owners) {
+    if (!owner) continue;
+    const nameKey = `${key(owner)}|${n}`;
+    if (topo.ambiguousIfName.has(nameKey)) return undefined;
+    const name = topo.ifName.get(nameKey);
+    if (name) return name;
+  }
+  return undefined;
+}
+
 function resolveIf(
   topo: TopologyIndex,
   device: string,
   raw?: string,
+  exporter?: string,
 ): string | undefined {
   if (!raw || raw === "?") return undefined;
-  const m = /^ifIndex\s+(\d+)$/i.exec(raw.trim());
-  if (m) {
-    const nameKey = `${key(device)}|${m[1]}`;
-    if (topo.ambiguousIfName.has(nameKey)) return `ifIndex ${m[1]}`;
-    const name = topo.ifName.get(nameKey);
-    return name ? interfaceLabel(name) : `ifIndex ${m[1]}`;
+  const n = ifIndexOf(raw);
+  if (n !== undefined) {
+    const name = collectedIfName(topo, [device, exporter], n);
+    return name
+      ? interfaceLabel(name)
+      : unnamedIfIndexLabel(n, isNxosDevice(topo.byId.get(device)));
   }
   return interfaceLabel(raw);
 }
@@ -807,6 +998,26 @@ export function parseObserver(
   }
   const m = OBSERVER_INTERFACES.exec(rest);
   const ip = m ? m[1] : rest;
+  if (source !== "ftd") {
+    const vds = virtualSwitchObserver(ip, topo, context);
+    if (vds) {
+      const hosts = (topo.ipCandidates.get(key(ip)) ?? []).filter(
+        (d) => d.kind === "hypervisor" && d.parent_device === vds.id,
+      );
+      const host = hosts.length === 1 ? hosts[0] : undefined;
+      return [
+        {
+          source,
+          key: host ? virtualSwitchKey(vds.id, host.id) : key(vds.id),
+          label: host ? `${vds.name} on ${host.name}` : vds.name,
+          resolved: true,
+          role: "switch",
+          in: m ? virtualPortLabel(m[2], topo, ip) : undefined,
+          out: m ? virtualPortLabel(m[3], topo, ip) : undefined,
+        },
+      ];
+    }
+  }
   const device = resolveDevice(
     ip,
     topo,
@@ -824,11 +1035,58 @@ export function parseObserver(
         (source === "ftd" ? `Firewall ${ip}` : `Exporter ${ip}`),
       resolved: !!device,
       role: source === "ftd" ? "firewall" : "switch",
-      in: m ? resolveIf(topo, name, m[2]) : undefined,
-      out: m ? resolveIf(topo, name, m[3]) : undefined,
+      in: m ? resolveIf(topo, name, m[2], ip) : undefined,
+      out: m ? resolveIf(topo, name, m[3], ip) : undefined,
     },
   ];
 }
+
+/**
+ * A virtual switch that exports IPFIX from this address (an ESXi host exporting
+ * VDS IPFIX), qualified by `ip|observation_domain_id` or a bare `ip` binding.
+ * Source-qualified switches also require the observation's scope.
+ */
+export function virtualSwitchObserver(
+  ip: string,
+  topo: TopologyIndex,
+  context: DeviceResolutionContext = {},
+): Device | undefined {
+  if (context.conflict || !ip) return undefined;
+  const candidates = [
+    ...(context.observationDomain !== undefined
+      ? (topo.ipfixObservers.get(key(`${ip}|${context.observationDomain}`)) ??
+        [])
+      : []),
+    ...(topo.ipfixObservers.get(key(ip)) ?? []),
+  ].filter(
+    (d) =>
+      !isV2Device(d) ||
+      (d.mapping_status === "mapped" &&
+        context.scope !== undefined &&
+        d.scope === context.scope),
+  );
+  const unique = new Map(candidates.map((d) => [d.id, d]));
+  return unique.size === 1 ? [...unique.values()][0] : undefined;
+}
+/** Observation key of a distributed switch's per-host instance. */
+export const virtualSwitchKey = (switchId: string, hostId: string) =>
+  `${key(switchId)}@${key(hostId)}`;
+/**
+ * VDS IPFIX ingress/egress interfaces carry distributed port keys: named from
+ * VMware inventory (vNIC or vmnic uplink) when collected for the exporting host.
+ */
+const virtualPortLabel = (
+  raw: string | undefined,
+  topo: TopologyIndex,
+  exporter: string,
+) => {
+  if (!raw || raw === "?") return undefined;
+  const n = ifIndexOf(raw);
+  if (n === undefined) return raw.trim();
+  // Port 0 is not a distributed port (no ingress or egress port reported).
+  if (n === 0) return undefined;
+  return collectedIfName(topo, [exporter], n) ?? `port ${n}`;
+};
 
 /** Observer strings of an edge, plus its ACL-log enforcing leaf. */
 export function edgeObservers(edge: GraphEdge): string[] {
@@ -846,7 +1104,7 @@ export interface DeviceObservation {
   sources: string[];
   interfaces: string[];
 }
-function parseEdgeObserver(
+export function parseEdgeObserver(
   observer: string,
   edge: GraphEdge,
   topo: TopologyIndex,
@@ -879,11 +1137,14 @@ function parseEdgeObserver(
   if (contextKeys.size > 1) return [];
   const observation =
     contextKeys.size === 1 ? compatibleObservations[0] : undefined;
-  const scopedContext = observation
+  const scopedContext: DeviceResolutionContext = observation
     ? {
         ...context,
         scope: context.scope ?? observation.scope,
         cluster: context.cluster ?? observation.cluster,
+        ...(observation.observation_domain_id !== undefined
+          ? { observationDomain: String(observation.observation_domain_id) }
+          : {}),
       }
     : context;
   const points = parseObserver(observer, topo, scopedContext);
@@ -935,13 +1196,23 @@ export function observationsByDevice(
 }
 
 export type StageKind =
-  "entity" | "host" | "switch" | "firewall" | "handoff" | "gap";
+  | "entity"
+  | "host"
+  | "switch"
+  | "virtual_switch"
+  | "firewall"
+  | "handoff"
+  | "gap";
 export interface Stage {
   kind: StageKind;
   title: string;
   subtitle?: string;
   /** Equal-cost devices this stage may be any one of (ECMP). */
   alternatives?: string[];
+  /** The alternatives are the members of one vPC pair. */
+  vpc?: boolean;
+  /** vPC members with no observation of the flow in the window. */
+  notSeen?: string[];
   /** Service handoff: how the backend was determined. */
   handoff?: {
     state: "observed" | "inferred" | "undetermined";
@@ -950,6 +1221,8 @@ export interface Stage {
   /** Interfaces in path order (toward the server). */
   ports?: { in?: string; out?: string };
   observed?: boolean;
+  /** Matches observations of one per-host virtual switch instance. */
+  observerKey?: string;
   observedBy: string[];
   seenInterfaces: string[];
   nodeId?: string;
@@ -973,8 +1246,18 @@ export interface CandidatePath {
 interface Attachment {
   stages: Stage[];
   device?: string;
+  /** Equal attachment choices, e.g. the two leaves of a vPC. */
+  devices?: string[];
   port?: string;
   host?: string;
+  /** Overlay segment: underlay hops between hosts are not attributed. */
+  overlay?: string;
+  /** Hypervisor, virtual switch and VLAN of a vNIC: equal segments switch locally. */
+  segment?: string;
+  /** Leading stages that stay on the host (pod and node, or VM and its virtual switch). */
+  hostStages?: number;
+  /** Leading stages up to and including the shared virtual switch segment. */
+  segmentStages?: number;
 }
 const stage = (s: Omit<Stage, "observedBy" | "seenInterfaces">): Stage => ({
   ...s,
@@ -1133,9 +1416,23 @@ function attachment(
       nodeId: hostNode?.id,
     });
     const at = hostAttachment(hostName, hostNode, topo);
+    const hostId = hostNode?.id ?? hostIdentity(podCluster(node), hostName);
+    // A node that is a VM attaches through its vNIC's virtual switch port.
+    const vport = at.device ? undefined : virtualPortFor(hostNode, topo);
+    if (vport && hostNode) {
+      const via = virtualAttachment(host, vport, hostNode, topo);
+      return {
+        ...via,
+        stages: [entity, ...via.stages],
+        host: hostId,
+        hostStages: 2,
+        segmentStages: 3,
+      };
+    }
     return {
       stages: [entity, host],
-      host: hostNode?.id ?? hostIdentity(podCluster(node), hostName),
+      host: hostId,
+      hostStages: 2,
       device: at.device,
       port: at.port,
     };
@@ -1161,6 +1458,9 @@ function attachment(
   }
   if (node.endpoint_kind === "k8s_node") {
     const at = hostAttachment(node.label, node, topo);
+    // A node that is a VM attaches through its vNIC's virtual switch port.
+    const vport = at.device ? undefined : virtualPortFor(node, topo);
+    if (vport) return virtualAttachment(entity, vport, node, topo);
     return {
       stages: [entity],
       host: node.id,
@@ -1169,6 +1469,8 @@ function attachment(
     };
   }
   const context = nodeDeviceContext(node);
+  const vport = virtualPortFor(node, topo);
+  if (vport) return virtualAttachment(entity, vport, node, topo);
   const attached = attrs.attach_device
     ? resolveDevice(attrs.attach_device, topo, context)
     : undefined;
@@ -1189,6 +1491,242 @@ function attachment(
   };
 }
 
+/**
+ * Names unresolved endpoint addresses that ACI VMM inventory binds to exactly
+ * one vNIC in this window. The inventory record must carry both the address and
+ * a MAC (fvCEp IP+MAC); names never qualify, and two vNICs claiming the address
+ * leave it unresolved. The node keeps its ID, so no relationship is merged.
+ */
+export function resolveInventoryEndpoints(
+  graph: Graph,
+  topo: TopologyIndex,
+): Graph {
+  let changed = false;
+  const nodes = graph.nodes.map((n) => {
+    if (n.kind !== "endpoint" || n.endpoint_kind !== "unresolved") return n;
+    const ips = n.addresses ?? [];
+    if (ips.length !== 1) return n;
+    const ports = [
+      ...new Map(
+        (topo.virtualPorts.get(key(ips[0])) ?? []).map((p) => [
+          `${p.switch}|${p.vm}`,
+          p,
+        ]),
+      ).values(),
+    ];
+    if (ports.length !== 1) return n;
+    const p = ports[0];
+    if (!p.mac || !p.ip || key(p.ip) !== key(ips[0]) || !p.vm_name) return n;
+    // The MAC must not be claimed by a different vNIC either.
+    const byMac = new Set(
+      (topo.virtualPorts.get(p.mac) ?? []).map((q) => `${q.switch}|${q.vm}`),
+    );
+    if (byMac.size !== 1) return n;
+    const [tenant, app_profile, epg] = (p.portgroup ?? "").split("|");
+    changed = true;
+    return {
+      ...n,
+      label: p.vm_name,
+      endpoint_kind: "vm",
+      attributes: {
+        ...n.attributes,
+        vm_name: p.vm_name,
+        mac: p.mac,
+        ...(tenant && app_profile && epg ? { tenant, app_profile, epg } : {}),
+        identity_basis: "ACI VMM endpoint (IP and MAC) in this time range",
+      },
+    } satisfies GraphNode;
+  });
+  return changed ? { ...graph, nodes } : graph;
+}
+
+/** The single virtual switch port of an endpoint, matched by vNIC MAC, else IP. */
+export function virtualPortFor(
+  node: GraphNode | undefined,
+  topo: TopologyIndex,
+): VirtualPort | undefined {
+  if (!node || node.kind === "workload" || node.kind === "service")
+    return undefined;
+  const scope = node.attributes?.scope;
+  const pick = (k?: string) => {
+    if (!k) return undefined;
+    const list = (topo.virtualPorts.get(key(k)) ?? []).filter(
+      (p) => !scope || !p.scope || p.scope === scope,
+    );
+    const unique = new Map(list.map((p) => [`${p.switch}|${p.vm}`, p]));
+    return unique.size === 1 ? [...unique.values()][0] : undefined;
+  };
+  const byMac = pick(node.attributes?.mac);
+  if (byMac) return byMac;
+  if (node.attributes?.mac) return undefined;
+  const ips = node.addresses ?? [];
+  return ips.length === 1 ? pick(ips[0]) : undefined;
+}
+
+const switchTypeLabel = (d?: Device) =>
+  d?.switch_type === "vds"
+    ? "VDS"
+    : d?.switch_type === "vss"
+      ? "VSS"
+      : "Virtual switch";
+
+/** Endpoint → virtual switch (portgroup/VLAN) → uplink → physical switch. */
+function virtualAttachment(
+  entity: Stage,
+  port: VirtualPort,
+  node: GraphNode,
+  topo: TopologyIndex,
+): Attachment {
+  const sw = topo.byId.get(port.switch);
+  const hv = port.hypervisor ? topo.byId.get(port.hypervisor) : undefined;
+  const uplinks =
+    topo.uplinks.get(
+      `${key(port.switch)}|${port.hypervisor ? key(port.hypervisor) : ""}`,
+    ) ?? [];
+  const context = nodeDeviceContext(node);
+  let devices: string[];
+  let leafPort: string | undefined;
+  let middle: Stage | undefined;
+  const single = <T>(xs: T[]) => (new Set(xs).size === 1 ? xs[0] : undefined);
+  if (uplinks.length) {
+    const peers = [...new Set(uplinks.map((u) => u.device))];
+    // A peer that has its own uplinks (e.g. a UCS fabric interconnect) sits between host and fabric.
+    const next = peers.map((p) => topo.uplinks.get(`${key(p)}|`) ?? []);
+    if (next.every((n) => n.length)) {
+      const peerPorts = uplinks.map((u) => u.port);
+      middle =
+        peers.length === 1
+          ? {
+              ...deviceStage(topo, peers[0], { in: single(peerPorts) }),
+              kind: "switch",
+            }
+          : layerStage(topo, peers, false);
+      if (peers.length > 1) {
+        middle.subtitle = `${peers.map((id) => topo.byId.get(id)?.name ?? id).join(", ")} · host uplinks`;
+        if (single(peerPorts)) middle.ports = { in: single(peerPorts) };
+      }
+      const second = next.flat();
+      devices = [...new Set(second.map((u) => u.device))];
+      leafPort = single(second.map((u) => u.port));
+    } else {
+      devices = peers;
+      leafPort = single(uplinks.map((u) => u.port));
+    }
+  } else {
+    const attachDevice = node.attributes?.attach_device;
+    const fromGraph = attachDevice
+      ? resolveDevice(attachDevice, topo, context)
+      : undefined;
+    const nodes = fromGraph
+      ? [fromGraph.id]
+      : (port.attach_nodes ?? [])
+          .map((n) => resolveDevice(n, topo, context)?.id)
+          .filter((x): x is string => !!x);
+    if (!fromGraph && attachDevice && !topo.containsV2Devices)
+      nodes.push(attachDevice);
+    devices = [...new Set(nodes)];
+    leafPort = node.attributes?.attach_interface ?? port.attach_interface;
+  }
+  const uplinkNames = [
+    ...new Set(uplinks.map((u) => u.uplink).filter(Boolean)),
+  ] as string[];
+  const vswitch = stage({
+    kind: "virtual_switch",
+    title: sw?.name ?? port.switch,
+    subtitle: [
+      switchTypeLabel(sw),
+      hv && `on ${hv.name}`,
+      port.portgroup && `portgroup ${port.portgroup}`,
+      port.vlan && `VLAN ${port.vlan}`,
+      port.overlay && `overlay ${port.overlay}`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    nodeId: sw?.id ?? port.switch,
+    ...(port.hypervisor
+      ? { observerKey: virtualSwitchKey(port.switch, port.hypervisor) }
+      : {}),
+    ports: {
+      in: port.port_key ? `port ${port.port_key}` : undefined,
+      out: uplinkNames.length ? uplinkNames.join(", ") : undefined,
+    },
+  });
+  const stages = [entity, vswitch];
+  const segment = port.hypervisor
+    ? `${port.hypervisor}|${port.switch}|${port.vlan ?? ""}`
+    : undefined;
+  if (middle && !port.overlay) stages.push(middle);
+  // An overlay segment is carried between hosts by the underlay: no fabric attachment is attributed.
+  if (port.overlay) devices = [];
+  if (!uplinks.length && devices.length)
+    stages.push(
+      gap(`Uplink from ${hv?.name ?? "the host"} to the fabric not collected`),
+    );
+  return {
+    stages,
+    device: devices.length === 1 ? devices[0] : undefined,
+    devices: devices.length > 1 ? devices : undefined,
+    port: leafPort,
+    // Same host, switch and VLAN: switched locally without reaching the fabric.
+    host: segment,
+    segment,
+    hostStages: 2,
+    segmentStages: 2,
+    overlay: port.overlay,
+  };
+}
+
+/**
+ * Shortest paths between two sets of attachment switches (e.g. vPC pairs).
+ * Shared members mean the traffic can be switched there without a spine.
+ */
+export function fabricLayersMulti(
+  topo: TopologyIndex,
+  from: string[],
+  to: string[],
+  context: DeviceResolutionContext = {},
+): Layer[] | undefined {
+  const a = from.map((x) => resolveDevice(x, topo, context));
+  const b = to.map((x) => resolveDevice(x, topo, context));
+  if (!a.length || !b.length || a.some((d) => !d) || b.some((d) => !d))
+    return undefined;
+  const starts = [...new Set(a.map((d) => key(d!.id)))].sort();
+  const goals = [...new Set(b.map((d) => key(d!.id)))].sort();
+  const shared = starts.filter((x) => goals.includes(x));
+  if (shared.length) return [{ ids: shared }];
+  const ds = multiDistances(topo, starts);
+  const total = Math.min(
+    ...goals.map((g) => ds.get(g) ?? Number.POSITIVE_INFINITY),
+  );
+  if (!Number.isFinite(total)) return undefined;
+  const dg = multiDistances(topo, goals);
+  const layers: Layer[] = [];
+  for (let d = 0; d <= total; d++)
+    layers.push({
+      ids: [...ds]
+        .filter(([id, n]) => n === d && dg.get(id) === total - d)
+        .map(([id]) => id)
+        .sort(),
+    });
+  return layers;
+}
+function multiDistances(
+  topo: TopologyIndex,
+  from: string[],
+): Map<string, number> {
+  const dist = new Map(from.map((f) => [f, 0]));
+  const queue = [...from];
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
+    for (const next of topo.adjacency.get(cur) ?? [])
+      if (!dist.has(next.to)) {
+        dist.set(next.to, dist.get(cur)! + 1);
+        queue.push(next.to);
+      }
+  }
+  return dist;
+}
+
 interface Layer {
   ids: string[];
   in?: string;
@@ -1197,8 +1735,8 @@ interface Layer {
 function distances(topo: TopologyIndex, from: string): Map<string, number> {
   const dist = new Map([[from, 0]]);
   const queue = [from];
-  while (queue.length) {
-    const cur = queue.shift()!;
+  for (let head = 0; head < queue.length; head++) {
+    const cur = queue[head];
     for (const next of topo.adjacency.get(cur) ?? [])
       if (!dist.has(next.to)) {
         dist.set(next.to, dist.get(cur)! + 1);
@@ -1252,9 +1790,17 @@ const gap = (title: string): Stage => stage({ kind: "gap", title });
 export const fabricLabel = (fabric?: string) =>
   fabric?.startsWith("apic:") ? `ACI (APIC ${fabric.slice(5)})` : fabric;
 
-export function deviceKindLabel(kind: DeviceKind, cluster?: string): string {
+export function deviceKindLabel(
+  kind: DeviceKind,
+  cluster?: string,
+  sources?: string[],
+): string {
   if (kind === "host")
-    return `Kubernetes host${cluster ? ` · ${cluster}` : ""}`;
+    return sources?.length && !sources.includes("kubernetes_node")
+      ? `Host${cluster ? ` · ${cluster}` : ""}`
+      : `Kubernetes host${cluster ? ` · ${cluster}` : ""}`;
+  if (kind === "hypervisor") return "Hypervisor";
+  if (kind === "virtual_switch") return "Virtual switch";
   if (kind === "access_point") return "Access point";
   if (kind === "router") return "Router";
   if (kind === "network_client") return "Network client";
@@ -1278,11 +1824,13 @@ function deviceStage(
     kind:
       d?.kind === "firewall"
         ? "firewall"
-        : d?.kind === "host"
-          ? "host"
-          : d?.kind === "switch" || d?.kind === "controller"
-            ? "switch"
-            : "entity",
+        : d?.kind === "virtual_switch"
+          ? "virtual_switch"
+          : d?.kind === "host" || d?.kind === "hypervisor"
+            ? "host"
+            : d?.kind === "switch" || d?.kind === "controller"
+              ? "switch"
+              : "entity",
     title: d?.name ?? id,
     ...(d ? { nodeId: d.id } : {}),
     subtitle:
@@ -1292,8 +1840,10 @@ function deviceStage(
           ? "Router · inventory identity"
           : d?.kind === "network_client"
             ? `Network client · ${d.attachment_status ?? d.mapping_status ?? "observed evidence"}`
-            : d?.kind === "host"
-              ? `${deviceKindLabel(d.kind, d.cluster)} · inventory identity`
+            : d?.kind === "host" ||
+                d?.kind === "hypervisor" ||
+                d?.kind === "virtual_switch"
+              ? `${deviceKindLabel(d.kind, d.cluster, d.sources)} · inventory identity`
               : d
                 ? d.aci_node
                   ? `ACI ${d.role ?? "switch"} · ${d.aci_node.split("/").at(-1)}`
@@ -1308,12 +1858,82 @@ function deviceStage(
 }
 
 /** Switch stages from one attachment to another, or an explicit gap. */
+type SegmentEnd = {
+  device?: string;
+  devices?: string[];
+  port?: string;
+  overlay?: string;
+};
+function layerStage(topo: TopologyIndex, ids: string[], vpc: boolean): Stage {
+  const devices = ids.map((id) => topo.byId.get(id));
+  const spines = devices.every((d) => d?.role === "spine");
+  return stage({
+    kind: "switch",
+    title: `One of ${ids.length} ${spines ? "spines" : vpc ? "leaves" : "switches"}`,
+    subtitle: `${devices.map((d, j) => d?.name ?? ids[j]).join(", ")} · ${vpc ? "vPC" : "ECMP"}`,
+    alternatives: ids,
+    ...(vpc ? { vpc: true } : {}),
+  });
+}
 function fabricSegment(
   topo: TopologyIndex,
-  from: { device?: string; port?: string },
-  to: { device?: string; port?: string },
+  from: SegmentEnd,
+  to: SegmentEnd,
   names: { from: string; to: string },
 ): Stage[] {
+  if (from.overlay || to.overlay)
+    return [
+      gap(
+        `Overlay ${from.overlay ?? to.overlay} transport between hosts: underlay hops not attributed`,
+      ),
+    ];
+  if (from.devices || to.devices) {
+    const a = from.devices ?? (from.device ? [from.device] : []);
+    const b = to.devices ?? (to.device ? [to.device] : []);
+    const layers =
+      a.length && b.length ? fabricLayersMulti(topo, a, b) : undefined;
+    if (layers)
+      return layers.map((layer, i) => {
+        const ports = {
+          in: i === 0 && !from.devices ? from.port : undefined,
+          out: i === layers.length - 1 && !to.devices ? to.port : undefined,
+        };
+        if (layer.ids.length === 1)
+          return deviceStage(topo, layer.ids[0], ports);
+        const vpc =
+          (i === 0 && !!from.devices) ||
+          (i === layers.length - 1 && !!to.devices);
+        const st = layerStage(topo, layer.ids, vpc);
+        if (vpc && layers.length === 1) {
+          const port = from.port === to.port ? from.port : undefined;
+          if (port) st.ports = { in: interfaceLabel(port) };
+        } else if (vpc && i === 0 && from.port)
+          st.ports = { in: interfaceLabel(from.port) };
+        else if (vpc && i === layers.length - 1 && to.port)
+          st.ports = { out: interfaceLabel(to.port) };
+        return st;
+      });
+    // One side is a vPC pair, the other unknown: keep the known attachment.
+    const known = (ids: string[], vpc: boolean, port?: string) => {
+      if (ids.length === 1) return deviceStage(topo, ids[0], {});
+      const st = layerStage(topo, ids, vpc);
+      if (vpc && port) st.ports = { in: interfaceLabel(port) };
+      return st;
+    };
+    if (!a.length && !b.length)
+      return [gap("No attachment data for either side")];
+    if (!a.length)
+      return [
+        gap(`Attachment of ${names.from} unknown`),
+        known(b, !!to.devices, to.port),
+      ];
+    if (!b.length)
+      return [
+        known(a, !!from.devices, from.port),
+        gap(`Attachment of ${names.to} unknown`),
+      ];
+    return [gap("No collected link between these switches")];
+  }
   if (from.device && to.device) {
     const layers = fabricLayers(topo, from.device, to.device);
     if (layers && layers.length === 1)
@@ -1326,14 +1946,7 @@ function fabricSegment(
         };
         if (layer.ids.length === 1)
           return deviceStage(topo, layer.ids[0], ports);
-        const devices = layer.ids.map((id) => topo.byId.get(id));
-        const spines = devices.every((d) => d?.role === "spine");
-        return stage({
-          kind: "switch",
-          title: `One of ${layer.ids.length} ${spines ? "spines" : "switches"}`,
-          subtitle: `${devices.map((d, j) => d?.name ?? layer.ids[j]).join(", ")} · ECMP`,
-          alternatives: layer.ids,
-        });
+        return layerStage(topo, layer.ids, false);
       });
     return [
       deviceStage(topo, from.device, { in: from.port }),
@@ -1678,6 +2291,9 @@ export function buildPath(
   const legObservers: string[] = [];
   let backends: CandidatePath["backends"] = [];
   let backend: string | undefined;
+  const observations = edgeObservers(edge).flatMap((o) =>
+    parseEdgeObserver(o, edge, topo, resolutionContext),
+  );
   const client = attachment(index.node.get(edge.source), graph, index, topo);
   const target = index.node.get(edge.target);
   const nameOf = (n?: GraphNode) => n?.label ?? "this endpoint";
@@ -1694,6 +2310,11 @@ export function buildPath(
     backend = leg.backend;
     legObservers.push(...leg.observers);
     if (leg.recv.host && leg.recv.host === client.host) {
+      stages.splice(
+        0,
+        stages.length,
+        ...client.stages.slice(0, client.hostStages ?? client.stages.length),
+      );
       stages.push(...leg.recv.stages.slice(client.stages.length ? 1 : 0));
     } else {
       stages.push(
@@ -1707,10 +2328,41 @@ export function buildPath(
     stages.push(...leg.stages);
   } else {
     const server = attachment(target, graph, index, topo);
-    sameHost = !!client.host && client.host === server.host;
+    // Leaf observations of the pair mean the flow was routed through the
+    // fabric even when both ends share a host segment.
+    const attachKeys = new Set(
+      [client.device, ...(client.devices ?? [])]
+        .concat([server.device, ...(server.devices ?? [])])
+        .filter((id): id is string => !!id)
+        .map((id) => key(resolveDevice(id, topo, resolutionContext)?.id ?? id)),
+    );
+    const viaFabric = observations.some((o) => attachKeys.has(o.key));
+    sameHost = !viaFabric && !!client.host && client.host === server.host;
+    const sameSegment =
+      !viaFabric &&
+      !sameHost &&
+      !!client.segment &&
+      client.segment === server.segment;
     if (sameHost) {
-      // Pod-to-pod on one node never reaches the fabric.
+      // Pod-to-pod on one node, or VM-to-VM on one host segment, never
+      // reaches an uplink or the fabric.
+      stages.splice(
+        0,
+        stages.length,
+        ...client.stages.slice(0, client.hostStages ?? client.stages.length),
+      );
       if (server.stages[0]?.kind === "entity") stages.push(server.stages[0]);
+    } else if (sameSegment) {
+      // Nodes on one hypervisor segment: switched by the shared virtual switch.
+      sameHost = true;
+      stages.splice(
+        0,
+        stages.length,
+        ...client.stages.slice(0, client.segmentStages ?? client.stages.length),
+        ...server.stages
+          .slice(0, (server.segmentStages ?? server.stages.length) - 1)
+          .reverse(),
+      );
     } else
       stages.push(
         ...fabricSegment(topo, client, server, {
@@ -1721,9 +2373,6 @@ export function buildPath(
       );
   }
 
-  const observations = edgeObservers(edge).flatMap((o) =>
-    parseEdgeObserver(o, edge, topo, resolutionContext),
-  );
   // A firewall is placed next to the side that leaves the fabric.
   const firewalls = observations.filter((o) => o.role === "firewall");
   const outside = (n?: GraphNode) =>
@@ -1760,10 +2409,21 @@ export function buildPath(
           : legObservations;
     const keys = new Set<string>();
     const ids = s.alternatives ?? (s.nodeId ? [s.nodeId] : []);
+    // Keys per vPC member, to narrow the pair to the member that observed.
+    const memberKeys = new Map<string, Set<string>>();
     for (const id of ids) {
       const d = resolveDevice(id, topo, resolutionContext);
-      if (d) keys.add(key(d.id));
+      const own = new Set<string>();
+      if (d) own.add(key(d.id));
+      if (!topo.containsV2Devices) {
+        own.add(key(id));
+        const named = topo.byId.get(id);
+        if (named) own.add(key(named.name));
+      }
+      own.forEach((k) => keys.add(k));
+      memberKeys.set(id, own);
     }
+    if (s.observerKey) keys.add(s.observerKey);
     if (s.kind === "host") {
       const graphHost = s.nodeId ? index.node.get(s.nodeId) : undefined;
       const host = resolveDevice(s.title, topo, {
@@ -1783,8 +2443,15 @@ export function buildPath(
         if (d) keys.add(key(d.name));
       }
     }
+    // A Kubernetes node stage matches its Cilium (Hubble/Tetragon) observer
+    // by node name; host sensors report the Kubernetes node name.
+    const nodeName = s.kind === "host" ? key(s.title) : undefined;
+    const seenMembers = new Set<string>();
     for (const o of pool) {
-      if (!keys.has(o.key)) continue;
+      if (!keys.has(o.key) && !(o.role === "host" && o.key === nodeName))
+        continue;
+      for (const [id, own] of memberKeys)
+        if (own.has(o.key)) seenMembers.add(id);
       placed.add(o.key);
       const src = sourceLabel(o.source);
       if (!s.observedBy.includes(src)) s.observedBy.push(src);
@@ -1792,6 +2459,26 @@ export function buildPath(
       if (ifs && !s.seenInterfaces.includes(ifs)) s.seenInterfaces.push(ifs);
     }
     s.observed = s.observedBy.length > 0;
+    // vPC: only one member observed the flow in the window.
+    if (s.vpc && s.alternatives && s.alternatives.length > 1) {
+      const seen = s.alternatives.filter((id) => seenMembers.has(id));
+      if (seen.length === 1) {
+        const member = seen[0];
+        const others = s.alternatives.filter((id) => id !== member);
+        const name = (id: string) =>
+          topo.byId.get(id)?.name ?? resolveDevice(id, topo)?.name ?? id;
+        s.title = name(member);
+        s.nodeId = resolveDevice(member, topo)?.id ?? member;
+        const role = topo.byId.get(member)?.aci_node ? "ACI leaf" : "Switch";
+        s.subtitle = `${role} · vPC peer ${others.map(name).join(", ")} not seen`;
+        s.notSeen = others;
+        delete s.alternatives;
+        // Its observed ingress is the member's own.
+        const ingress = s.seenInterfaces.filter((x) => !x.includes(" → "));
+        if (!s.ports?.in && ingress.length === 1)
+          s.ports = { ...s.ports, in: ingress[0] };
+      }
+    }
   });
   const unplaced = observationsByDevice(
     edge,
@@ -1958,6 +2645,32 @@ const ROLE_ORDER: ObservationPoint["role"][] = [
   "fabric",
   "host",
 ];
+/**
+ * The inventory device behind a flow exporter, under the same rules the
+ * attachment references use: the exporter attests itself, and the device's
+ * scope and cluster match the observation exactly.
+ */
+export function observationExporterDevice(
+  observation: TrafficObservation,
+  topo: TopologyIndex,
+): Device | undefined {
+  if (!observation.exporter_ip || !exporterAuthorityAgrees(observation, topo))
+    return undefined;
+  const device = resolveDevice(
+    observation.exporter_ip,
+    topo,
+    exporterResolutionContext(
+      { scope: observation.scope, cluster: observation.cluster },
+      topo,
+    ),
+  );
+  return device &&
+    device.cluster === observation.cluster &&
+    device.scope === observation.scope
+    ? device
+    : undefined;
+}
+
 /** Every observer, the interfaces it reported and the conversations it saw. */
 export function deviceSummaries(
   edges: GraphEdge[],

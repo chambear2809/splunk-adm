@@ -1,0 +1,244 @@
+{
+  "description": "vSphere overlay for the ACI pilot fabric (fixtures/raw-aci/scenario.json): one vCenter, two ESXi hosts with a standard switch (VSS) and a distributed switch (VDS) whose vmnic2 uplinks are the LLDP peers already reported by leaf-102 eth1/6 and leaf-103 eth1/5. Facts only; event shapes follow Splunk_TA_vmware 4.2.1 (see FIELDS.md).",
+  "window": {
+    "start": "2026-10-07T11:45:00Z",
+    "end": "2026-10-07T12:00:00Z"
+  },
+  "vcenter": "vc-01.example.internal",
+  "root_folder": "group-d1",
+  "datacenter": {
+    "moid": "datacenter-2",
+    "name": "dc-01"
+  },
+  "cluster": {
+    "moid": "domain-c7",
+    "name": "prod-cluster"
+  },
+  "vds": [
+    {
+      "name": "dvs-prod",
+      "uuid": "50 2a 6f 1c 7d 3e 4b 5a-9c 8d 7e 6f 5a 4b 3c 2d",
+      "ipfix_observation_domain_id": 7,
+      "portgroups": [
+        {
+          "moid": "dvportgroup-101",
+          "key": "dvportgroup-101",
+          "name": "dvpg-clients"
+        },
+        {
+          "moid": "dvportgroup-102",
+          "key": "dvportgroup-102",
+          "name": "dvpg-db"
+        }
+      ]
+    }
+  ],
+  "hosts": [
+    {
+      "name": "esx-01",
+      "moid": "host-21",
+      "uuid": "4c4c4544-0031-3010-8044-b1c04f303031",
+      "vmk_ip": "192.0.2.71",
+      "version": "8.0.3",
+      "pnics": [
+        {
+          "device": "vmnic0",
+          "mac": "00:50:56:01:01:00"
+        },
+        {
+          "device": "vmnic1",
+          "mac": "00:50:56:01:01:01"
+        },
+        {
+          "device": "vmnic2",
+          "mac": "00:50:56:01:01:06"
+        }
+      ],
+      "vswitches": [
+        {
+          "name": "vSwitch0",
+          "pnics": [
+            "vmnic0",
+            "vmnic1"
+          ],
+          "portgroups": [
+            {
+              "name": "Management Network",
+              "vlan": 0
+            },
+            {
+              "name": "VM Network",
+              "vlan": 1060
+            }
+          ]
+        }
+      ],
+      "proxy_switches": [
+        {
+          "vds": "dvs-prod",
+          "uplinks": [
+            {
+              "device": "vmnic2",
+              "port_key": "12",
+              "name": "uplink1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "esx-03",
+      "moid": "host-23",
+      "uuid": "4c4c4544-0031-3010-8044-b1c04f303033",
+      "vmk_ip": "192.0.2.73",
+      "version": "8.0.3",
+      "pnics": [
+        {
+          "device": "vmnic0",
+          "mac": "00:50:56:01:03:00"
+        },
+        {
+          "device": "vmnic1",
+          "mac": "00:50:56:01:03:01"
+        },
+        {
+          "device": "vmnic2",
+          "mac": "00:50:56:01:03:05"
+        }
+      ],
+      "vswitches": [
+        {
+          "name": "vSwitch0",
+          "pnics": [
+            "vmnic0",
+            "vmnic1"
+          ],
+          "portgroups": [
+            {
+              "name": "Management Network",
+              "vlan": 0
+            }
+          ]
+        }
+      ],
+      "proxy_switches": [
+        {
+          "vds": "dvs-prod",
+          "uplinks": [
+            {
+              "device": "vmnic2",
+              "port_key": "14",
+              "name": "uplink1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "vms": [
+    {
+      "name": "win-client-01",
+      "moid": "vm-301",
+      "instance_uuid": "5003a1b2-0000-4000-8000-000000000301",
+      "host": "esx-03",
+      "guest": "Microsoft Windows Server 2022 (64-bit)",
+      "nics": [
+        {
+          "key": 4000,
+          "label": "Network adapter 1",
+          "mac": "00:50:56:aa:40:25",
+          "ip": "10.30.40.25",
+          "vds": "dvs-prod",
+          "portgroup": "dvpg-clients",
+          "port_key": "18"
+        }
+      ]
+    },
+    {
+      "name": "orders-db-01",
+      "moid": "vm-302",
+      "instance_uuid": "5003a1b2-0000-4000-8000-000000000302",
+      "host": "esx-01",
+      "guest": "Red Hat Enterprise Linux 9 (64-bit)",
+      "nics": [
+        {
+          "key": 4000,
+          "label": "Network adapter 1",
+          "mac": "00:50:56:aa:10:40",
+          "ip": "10.20.30.40",
+          "vds": "dvs-prod",
+          "portgroup": "dvpg-db",
+          "port_key": "27"
+        }
+      ]
+    },
+    {
+      "name": "util-01",
+      "moid": "vm-303",
+      "instance_uuid": "5003a1b2-0000-4000-8000-000000000303",
+      "host": "esx-01",
+      "guest": "Ubuntu Linux (64-bit)",
+      "nics": [
+        {
+          "key": 4000,
+          "label": "Network adapter 1",
+          "mac": "00:50:56:aa:60:10",
+          "ip": "10.60.10.10",
+          "vswitch": "vSwitch0",
+          "portgroup": "VM Network"
+        }
+      ]
+    }
+  ],
+  "ipfix": [
+    {
+      "summary": "win-client-01 -> orders-db-01 tcp/5432 (ACI conversation c8) leaves the VM on dvs-prod port 18 of esx-03 toward uplink port 14; the VDS exports it before leaf-103 drops it.",
+      "exporter_host": "esx-03",
+      "vds": "dvs-prod",
+      "src": "10.30.40.25:51009",
+      "dst": "10.20.30.40:5432",
+      "protoid": 6,
+      "start": "2026-10-07T11:57:00.000Z",
+      "end": "2026-10-07T11:57:00.000Z",
+      "bytes": 60,
+      "packets": 1,
+      "ingress_port_key": "18",
+      "egress_port_key": "14",
+      "src_mac": "00:50:56:aa:40:25",
+      "dest_mac": "00:22:bd:f8:19:ff"
+    }
+  ],
+  "aci_vmm": {
+    "controller_dn": "comp/prov-VMware/ctrlr-[vmm-shop]-vcenter-01",
+    "hv_oids": {
+      "esx-01": "host-01",
+      "esx-03": "host-03"
+    },
+    "leaf_chassis_mac": {
+      "leaf-102": "00:22:bd:f8:01:02",
+      "leaf-103": "00:22:bd:f8:01:03"
+    }
+  },
+  "aci_fabric": {
+    "down_adjacencies": [
+      [
+        "leaf-103",
+        "spine-202"
+      ]
+    ]
+  },
+  "aci_port_channels": [
+    {
+      "leaf": "leaf-102",
+      "id": "po3",
+      "policy": "esx-01-pc",
+      "members": ["eth1/6"]
+    },
+    {
+      "leaf": "leaf-103",
+      "id": "po4",
+      "policy": "esx-03-pc",
+      "members": ["eth1/5"]
+    }
+  ]
+}

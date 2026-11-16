@@ -221,17 +221,13 @@ class ViewerBrowserTest(unittest.TestCase):
                     found.get("earliest"), str(int(self.window[1]) - 3600), evidence
                 )
                 self.assertEqual(found.get("latest"), self.window[1], evidence)
-                self.assertTrue(evidence.get("demo", {}).get("synthetic"), evidence)
-                self.assertGreater(
-                    evidence.get("demo", {}).get("cards", 0), 0, evidence
-                )
-                self.assertTrue(
-                    evidence.get("demoFindings", {}).get("copied"), evidence
-                )
-                self.assertTrue(evidence.get("demoFindings", {}).get("csv"), evidence)
-                self.assertTrue(
-                    evidence.get("demoFindings", {}).get("openDisabled"), evidence
-                )
+                # The Splunk build has no demo mode: stale ?mode=demo links
+                # open the live views and never request captured demo data.
+                stale_demo = evidence.get("demoLinkLive", {})
+                self.assertTrue(stale_demo.get("applications"), evidence)
+                self.assertTrue(stale_demo.get("map"), evidence)
+                self.assertGreater(stale_demo.get("cards", 0), 0, evidence)
+                self.assertEqual(stale_demo.get("demoRequests"), 0, evidence)
                 for route in evidence.get("routes", {}).values():
                     self.assertFalse(route["loginRedirect"], route)
                     self.assertTrue(

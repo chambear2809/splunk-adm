@@ -181,7 +181,6 @@ describe("network evidence inspectors", () => {
     expect(html).not.toContain(backendLabel);
 
     const aggregateHtml = inspector(graph, { kind: "node", id: service.id });
-    expect(aggregateHtml).toContain("Any backend links shown here summarize");
     expect(aggregateHtml).toContain(
       "aggregate backends for determined connections",
     );
@@ -371,9 +370,9 @@ describe("network evidence inspectors", () => {
       ],
     });
     const html = inspector(graph, { kind: "node", id: source.id });
-    expect(html).toContain(
-      "Workload observations are separate from traced service calls",
-    );
+    // The caveat lives once in Help; the inspector lists the observed flows.
+    expect(html).toContain("Outbound");
+    expect(html).not.toContain("Workload observations are separate");
     expect(html).not.toContain("No calls or conversations in this time range.");
     const edgeHtml = inspector(graph, {
       kind: "edge",

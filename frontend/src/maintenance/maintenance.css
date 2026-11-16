@@ -1,0 +1,34 @@
+.adm .atlas-maintenance {
+  margin: 1rem 0;
+}
+.adm .atlas-maintenance h2 {
+  margin-bottom: 0.5rem;
+}
+.adm .atlas-maintenance-table {
+  overflow-x: auto;
+}
+.adm .atlas-maintenance table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 54rem;
+}
+.adm .atlas-maintenance th,
+.adm .atlas-maintenance td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--atlas-border, #ccc);
+  overflow-wrap: anywhere;
+}
+.adm .atlas-maintenance summary {
+  cursor: pointer;
+}
+.adm .atlas-maintenance dl {
+  margin: 0.5rem 0;
+}
+.adm .atlas-maintenance dt {
+  font-weight: 600;
+}
+.adm .atlas-maintenance dd {
+  margin: 0 0 0.35rem;
+}

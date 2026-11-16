@@ -3,10 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   DevicesView,
   MAX_ATTACHMENT_REFERENCES,
-  MAX_OBSERVER_ENTRIES,
   trafficObserverGroups,
 } from "./DevicesView";
-import { indexGraph } from "./graph";
+import { indexGraph, type Graph, type TrafficObservation } from "./graph";
 import { demoGraph, demoTopology } from "./provider";
 import { indexTopology } from "./topology";
 
@@ -50,21 +49,21 @@ describe("DevicesView attachment references", () => {
   it("caps the list and states how many references were omitted", () => {
     const total = MAX_ATTACHMENT_REFERENCES + 2;
     const html = render(total - 1);
-    const section = html.slice(html.indexOf("attachment-references"));
+    const start = html.indexOf("attachment-references");
+    const end = html.indexOf("devices-idle", start);
+    const section = html.slice(start, end < 0 ? undefined : end);
     expect(section.split("<li").length - 1).toBe(MAX_ATTACHMENT_REFERENCES);
-    expect(html).toContain(
-      `2 additional attachment references were omitted because the list is capped at ${MAX_ATTACHMENT_REFERENCES}.`,
-    );
+    expect(html).toContain(`Showing ${MAX_ATTACHMENT_REFERENCES} of ${total}`);
   });
 
-  it("uses the singular form for one omitted reference", () => {
+  it("counts the shown references against the total", () => {
     expect(render(MAX_ATTACHMENT_REFERENCES)).toContain(
-      `1 additional attachment reference was omitted because the list is capped at ${MAX_ATTACHMENT_REFERENCES}.`,
+      `Showing ${MAX_ATTACHMENT_REFERENCES} of ${MAX_ATTACHMENT_REFERENCES + 1}`,
     );
   });
 
-  it("shows no omission note within the cap", () => {
-    expect(render(MAX_ATTACHMENT_REFERENCES - 1)).not.toContain("omitted");
+  it("shows no count note within the cap", () => {
+    expect(render(MAX_ATTACHMENT_REFERENCES - 1)).not.toContain("Showing ");
   });
 
   it("shows source age and retained-history uncertainty alongside receipt time", () => {
@@ -76,151 +75,23 @@ describe("DevicesView attachment references", () => {
   });
 });
 
-describe("DevicesView traffic observers", () => {
-  it("caps rendered records while retaining the source total", () => {
+describe("DevicesView compact device rows", () => {
+  const withObservations = (observations: TrafficObservation[]) => {
     const graph = structuredClone(demoGraph("catalyst-aci"));
     const edge = graph.edges.find(
       (candidate) => candidate.relationship === "communicates_with",
     )!;
-    graph.edges.push({
-      ...edge,
-      id: "large-observer",
-      relationship: "traffic_observation",
-      traffic_observations: Array.from(
-        { length: MAX_OBSERVER_ENTRIES + 7 },
-        (_, index) => ({
-          source: "hubble",
-          source_authority: "hubble",
-          observation_point: "node-a",
-          scope: "scope-a",
-          cluster: "cluster-a",
-          records: index + 1,
-        }),
-      ),
-    });
-    const html = renderToStaticMarkup(
-      <DevicesView
-        graph={graph}
-        index={indexGraph(graph)}
-        topo={indexTopology(demoTopology("catalyst-aci"))}
-        onSelect={() => {}}
-      />,
-    );
-    expect(html).toContain("7 additional source records omitted from display");
-    expect(html).toContain("total flow records remains 1,653");
-  });
-
-  it("does not merge records with different source or domain attestation", () => {
-    const graph = structuredClone(demoGraph("catalyst-aci"));
-    const edge = graph.edges.find(
-      (candidate) => candidate.relationship === "communicates_with",
-    )!;
-    graph.edges.push({
-      ...edge,
-      id: "observer-contexts",
-      relationship: "traffic_observation",
-      traffic_observations: [
-        {
-          source: "hubble",
-          profile: "flow-v1",
-          exporter_ip: "192.0.2.10",
-          scope: "scope-a",
-          cluster: "cluster-a",
-          observation_domain_present: 0,
-          records: 1,
-        },
-        {
-          source: "hubble",
-          profile: "flow-v1",
-          exporter_ip: "192.0.2.10",
-          scope: "scope-a",
-          cluster: "cluster-a",
-          observation_domain_present: 0,
-          observation_domain_id: "domain-b",
-          records: 2,
-        },
-        {
-          source: "netflow",
-          profile: "flow-v1",
-          exporter_ip: "192.0.2.10",
-          scope: "scope-a",
-          cluster: "cluster-a",
-          records: 3,
-        },
-        {
-          source: "hubble",
-          profile: "flow-v1",
-          scope: "scope-a",
-          cluster: "cluster-a",
-          records: 4,
-        },
-      ],
-    });
-    const groups = trafficObserverGroups(graph).filter((group) =>
-      ["hubble", "netflow"].includes(group.source),
-    );
-    expect(groups).toHaveLength(4);
-    expect(groups.map((group) => group.records).sort()).toEqual([1, 2, 3, 4]);
-  });
-
-  it("keeps NetFlow sensors and Hubble observer contexts separate", () => {
-    const graph = structuredClone(demoGraph("catalyst-aci"));
-    const edge = graph.edges.find(
-      (candidate) => candidate.relationship === "communicates_with",
-    )!;
-    const observations = [
-      {
-        source: "netflow",
-        source_authority: "netflow-a",
-        profile: "13",
-        scope: "blue",
-        cluster: "cluster-a",
-        exporter_ip: "192.0.2.13",
-        source_ip: "192.0.2.10",
-        destination_ip: "192.0.2.20",
-        source_port: 1234,
-        destination_port: 443,
-        transport: "tcp",
-        records: 13,
-      },
-      {
-        source: "netflow",
-        source_authority: "netflow-a",
-        profile: "14",
-        scope: "blue",
-        cluster: "cluster-a",
-        exporter_ip: "192.0.2.14",
-        source_ip: "192.0.2.10",
-        destination_ip: "192.0.2.20",
-        source_port: 443,
-        destination_port: 1234,
-        transport: "tcp",
-        is_reply: true,
-        records: 14,
-      },
-      {
-        source: "hubble",
-        source_authority: "hubble",
-        observation_point: "node-a",
-        scope: "red",
-        cluster: "cluster-b",
-        source_ip: "192.0.2.30",
-        destination_ip: "192.0.2.40",
-        source_port: 8080,
-        destination_port: 8443,
-        transport: "tcp",
-        is_reply: false,
-        records: 1,
-      },
-    ];
     graph.edges.push({
       ...edge,
       id: "native-observations",
       relationship: "traffic_observation",
       traffic_observations: observations,
-      sources: ["netflow", "hubble"],
+      sources: ["hubble"],
     });
-    const html = renderToStaticMarkup(
+    return graph;
+  };
+  const html = (graph: Graph) =>
+    renderToStaticMarkup(
       <DevicesView
         graph={graph}
         index={indexGraph(graph)}
@@ -228,15 +99,90 @@ describe("DevicesView traffic observers", () => {
         onSelect={() => {}}
       />,
     );
-    expect(html).toContain("Flow exporters and observers");
-    expect(html).toContain("192.0.2.13");
-    expect(html).toContain("192.0.2.14");
-    expect(html).toContain("node-a");
-    expect(html).toContain("Flow records");
-    expect(html).toContain("13");
-    expect(html).toContain("14");
-    expect(html).toContain("Reply true");
-    expect(html).toContain("Reply false");
-    expect(html).not.toContain("Forwarded to backend");
+
+  it("renders one humanized row per observer and no raw tuples", () => {
+    const observations = Array.from({ length: 400 }, (_, i) => ({
+      source: "hubble",
+      source_authority: "cilium-lab",
+      observation_point: "appd-k8-2/TO_ENDPOINT",
+      profile: "k8-fabrix-ai-pod-network",
+      scope: "K8-Fabrix-AI",
+      cluster: "cilium-lab",
+      source_ip: i % 2 ? "10.245.4.189" : "10.245.4.148",
+      destination_ip: i % 2 ? "10.245.4.148" : "10.245.4.189",
+      source_port: i % 2 ? 8080 : 40000 + i,
+      destination_port: i % 2 ? 40000 + i : 8080,
+      transport: "tcp",
+      is_reply: i % 2 === 1,
+      records: 1,
+    }));
+    const out = html(withObservations(observations));
+    expect(out).toContain("appd-k8-2 · Cilium (to endpoint)");
+    expect(out).toContain("1 conversation<");
+    expect(out).not.toContain("Reply true");
+    expect(out).not.toContain("10.245.4.189:8080");
+    expect(out).not.toMatch(/Source [\d.]+:\d+ → Destination/);
+    // Raw metadata is a tooltip, not visible copy.
+    expect(out).toMatch(/title="[^"]*Authority cilium-lab[^"]*"/);
+    expect(out).not.toContain(">Domain present");
+    // Blocked is an exception chip: hidden when nothing is blocked.
+    expect(out).toContain(">1 blocked<");
+    expect(out).not.toContain(">0 blocked<");
+  });
+
+  it("links devices to their page and to impact", () => {
+    const out = html(structuredClone(demoGraph("catalyst-aci")));
+    expect(out).toMatch(/href="[^"]*device\?id=[^"]+"/);
+    expect(out).toMatch(/href="[^"]*impact\?element=[^"]+"/);
+    expect(out).toContain("Filter devices");
+    // Conversation tables open on demand.
+    expect(out).not.toContain("Last seen");
+  });
+
+  it("keeps observer contexts separate as rows", () => {
+    const graph = withObservations([
+      {
+        source: "hubble",
+        source_authority: "hubble",
+        observation_point: "node-a/TO_STACK",
+        cluster: "cluster-a",
+        records: 1,
+      },
+      {
+        source: "hubble",
+        source_authority: "hubble",
+        observation_point: "node-a/TO_ENDPOINT",
+        cluster: "cluster-a",
+        records: 1,
+      },
+    ]);
+    const out = html(graph);
+    expect(out).toContain("node-a · Cilium (to stack)");
+    expect(out).toContain("node-a · Cilium (to endpoint)");
+    expect(
+      trafficObserverGroups(graph).filter((g) => g.source === "hubble"),
+    ).toHaveLength(2);
+  });
+
+  it("windows the list when there are many devices", () => {
+    const observers = 300;
+    const graph = withObservations(
+      Array.from({ length: observers }, (_, i) => ({
+        source: "hubble",
+        source_authority: "hubble",
+        observation_point: `node-${i}/TO_ENDPOINT`,
+        cluster: "cluster-a",
+        source_ip: "10.0.0.1",
+        destination_ip: "10.0.0.2",
+        source_port: 50000,
+        destination_port: 443,
+        records: 1,
+      })),
+    );
+    const out = html(graph);
+    expect(out).toContain("devices-list virtual");
+    const rendered = out.split("data-device-row=").length - 1;
+    expect(rendered).toBeGreaterThan(0);
+    expect(rendered).toBeLessThan(observers / 4);
   });
 });

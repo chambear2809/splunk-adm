@@ -5,6 +5,8 @@ import re
 from typing import Any
 
 MAX_ROWS = 50000
+# Result page size. Each page stays well below the 48 MiB response bound.
+PAGE_ROWS = 4000
 MODES = {"catalog", "graph"}
 
 
@@ -60,20 +62,40 @@ def bounded_query(
     cluster=None,
     start=None,
     as_of=None,
+    horizon=None,
 ) -> str:
     from .qualified import profile_config
 
     profile = profile_config(profile)
     validate_args(mode, service, environment, namespace, cluster, start, as_of)
+    known = _horizon(as_of, horizon)
     families = [
         f'(index={profile["interval_index"]} source="{profile["interval_source"]}" sourcetype="{profile["interval_sourcetype"]}")',
         f'(index={profile["span_index"]} source="{profile["span_source"]}" sourcetype="{profile["span_sourcetype"]}")',
     ]
     return (
-        f"search ({' OR '.join(families)}) earliest={start} latest={as_of} _index_latest={as_of} "
+        f"search ({' OR '.join(families)}) earliest={start} latest={as_of} _index_latest={known} "
         "| eval event_time=_time,receipt_time=_indextime | fields _raw index source sourcetype event_time receipt_time "
         "| eventstats count AS _atlas_total | head 50001"
     )
+
+
+def _horizon(as_of, horizon):
+    if horizon is None:
+        return as_of
+    import math
+
+    try:
+        value = int(horizon)
+    except (TypeError, ValueError):
+        raise SearchError("horizon must be an integer epoch") from None
+    if (
+        not math.isfinite(value)
+        or value < int(float(as_of))
+        or value - float(as_of) > 86400
+    ):
+        raise SearchError("horizon must lie within one day after the window")
+    return value
 
 
 def complete_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -123,7 +145,9 @@ class NativeSearch:
         self.clock = clock or time.monotonic
         self.sleep = sleep or time.sleep
 
-    def run(self, query, allow_empty=False):
+    def run(self, query, allow_empty=False, evidence=True, max_rows=MAX_ROWS):
+        """Run one owned job. ``evidence`` rows must carry the completion
+        marker and raw events; summary reads return transformed rows."""
         from urllib.parse import quote
 
         deadline = self.clock() + 45
@@ -183,14 +207,15 @@ class NativeSearch:
             total = content.get("resultCount")
             if (
                 not re.fullmatch(r"[0-9]+", str(total))
-                or not 0 <= int(total) <= MAX_ROWS
+                or not 0 <= int(total) <= max_rows
             ):
                 raise SearchError("identity search exceeds its result budget")
             total = int(total)
             rows, notes = [], list(content.get("messages", []))
-            for offset in range(0, max(total, 1), 1000):
+            for offset in range(0, max(total, 1), PAGE_ROWS):
                 result = request(
-                    "GET", path + "/results?count=1000&offset=" + str(offset)
+                    "GET",
+                    path + f"/results?count={PAGE_ROWS}&offset=" + str(offset),
                 )
                 if result.get("preview") not in (False, 0, "0") or not isinstance(
                     result.get("results"), list
@@ -200,7 +225,7 @@ class NativeSearch:
                     )
                 rows.extend(result["results"])
                 notes.extend(result.get("messages", []))
-                if len(rows) > MAX_ROWS:
+                if len(rows) > max_rows:
                     raise SearchError("identity result budget exceeded")
             if len(rows) != total:
                 raise SearchError("identity search result pages are incomplete")
@@ -212,6 +237,8 @@ class NativeSearch:
                 raise SearchError("identity search returned warnings or errors")
             if total == 0 and allow_empty:
                 return []
+            if not evidence:
+                return rows
             return complete_rows(rows)
         finally:
             try:
@@ -222,7 +249,7 @@ class NativeSearch:
                 pass
 
 
-def bounded_network_query(profiles, identity_profile, start, as_of):
+def bounded_network_query(profiles, identity_profile, start, as_of, horizon=None):
     """Read full registered source families, never IP-token/extracted-field subsets.
 
     Source completion proves the evidence budget, not absence of network traffic.
@@ -231,6 +258,7 @@ def bounded_network_query(profiles, identity_profile, start, as_of):
     from .native_network import validate_profiles
 
     validate_args("graph", start=start, as_of=as_of)
+    known = _horizon(as_of, horizon)
     profiles = validate_profiles(profiles, identity_profile)
     families = sorted(
         {
@@ -239,7 +267,7 @@ def bounded_network_query(profiles, identity_profile, start, as_of):
         }
     )
     return (
-        f"search ({' OR '.join(families)}) earliest={start} latest={as_of} _index_latest={as_of} "
+        f"search ({' OR '.join(families)}) earliest={start} latest={as_of} _index_latest={known} "
         "| eval event_time=_time,receipt_time=_indextime "
         "| fields _raw index source sourcetype event_time receipt_time host k8s.cluster.name _bkt _cd "
         "| eventstats count AS _atlas_total | head 50001"

@@ -15,6 +15,8 @@ export interface SearchRequest {
   earliest: string;
   latest?: string;
   timezone?: string;
+  /** Epoch seconds that relative times (including `now` in the SPL) resolve against. */
+  now?: number;
   maxRows: number;
   /** Catalog and Find may legitimately return zero rows. Graph callers retain strict defaults. */
   allowEmpty?: boolean;
@@ -31,8 +33,17 @@ export interface SearchRequest {
     sid?: string;
   }) => void;
   optionalSource?: OptionalSource;
+  /**
+   * "error" (default) rejects with SearchResultLimitError when the job has more
+   * than maxRows results. "truncate" returns the first maxRows rows and reports
+   * the cut in RunResult.truncated; use it only with searches whose results are
+   * ranked so that the first rows are the ones to keep.
+   */
+  overflow?: "error" | "truncate";
 }
 export interface RunResult {
+  /** Set when overflow "truncate" cut the result set. */
+  truncated?: { shown: number; total: number };
   rows: Row[];
   warnings: string[];
   /** ERROR/FATAL job messages; callers that require complete results reject these. */
@@ -175,6 +186,9 @@ export class ToolkitSearchClient implements SearchClient {
           search: request.search,
           earliest_time: request.earliest,
           latest_time: request.latest ?? "now",
+          ...(request.now !== undefined && Number.isFinite(request.now)
+            ? { now: String(Math.floor(request.now)) }
+            : {}),
           ...(request.budget
             ? {
                 max_time: String(request.budget.serverSeconds),
@@ -410,7 +424,8 @@ export class ToolkitSearchClient implements SearchClient {
                   throw new Error("Search returned invalid results.");
                 if (results.length === 0 && !request.allowEmpty)
                   throw new Error("Search returned no rows.");
-                if (results.length > request.maxRows)
+                const truncate = request.overflow === "truncate";
+                if (results.length > request.maxRows && !truncate)
                   throw new SearchResultLimitError(request.maxRows);
                 if (
                   !results.every(
@@ -419,7 +434,7 @@ export class ToolkitSearchClient implements SearchClient {
                   )
                 )
                   throw new Error("Search returned an invalid row.");
-                const rows = results as Row[];
+                const rows = (results as Row[]).slice(0, request.maxRows);
                 const stateContent = (
                   finalState as
                     { content?: Record<string, unknown> } | undefined
@@ -439,9 +454,12 @@ export class ToolkitSearchClient implements SearchClient {
                   );
                 if (count === 0 && !request.allowEmpty)
                   throw new Error("Search returned no rows.");
-                if (count > request.maxRows)
+                if (count > request.maxRows && !truncate)
                   throw new SearchResultLimitError(request.maxRows);
-                if (rows.length !== count)
+                const cut = count > request.maxRows;
+                if (
+                  cut ? rows.length !== request.maxRows : rows.length !== count
+                )
                   throw new Error(
                     "Splunk result count did not match returned rows; results could not be verified.",
                   );
@@ -452,6 +470,9 @@ export class ToolkitSearchClient implements SearchClient {
                   ]),
                 ];
                 finish({
+                  ...(cut
+                    ? { truncated: { shown: rows.length, total: count } }
+                    : {}),
                   rows,
                   warnings: [
                     ...new Set([...warnings, ...splunkWarnings(payload)]),

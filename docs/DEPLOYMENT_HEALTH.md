@@ -245,6 +245,14 @@ does not substitute for indexed receipt. Neither proves collector/API permission
 checkpoint progress or uninterrupted collection. Those checks remain unknown
 unless independently verified. Health is not production qualification.
 
+**Admin → Data health** accepts `earliest`/`latest` (epoch or relative) in the
+URL and from its time picker. A `latest` before now evaluates the page **as of
+that instant**: every probe is dispatched with the search `now` set to it, so
+the seven-day receipt and scheduler windows, the 24-hour quality window and the
+graph-summary check end there, and freshness is judged against it. Saved-search
+configuration (disabled, scheduled) is always current. The shared header
+indicator keeps judging the current time.
+
 Catalyst defaults allow an hourly poll (three-hour freshness). Meraki associations,
 Nexus Dashboard discovery and Kubernetes object feeds can be quiet; lack of new
 receipt does not by itself prove collection failed. Configuration rows use mapping
