@@ -1,6 +1,12 @@
 import { createFetchInit } from "@splunk/splunk-utils/fetch";
 import { createRESTURL } from "@splunk/splunk-utils/url";
 
+export type CaseCapabilities = {
+  available: boolean;
+  evidenceWrites: boolean;
+  mode: "notes_only" | "notes_and_reproducible_evidence";
+  qualified: boolean;
+};
 export type CaseWindow = { start: string; end: string };
 export type CaseEntry = {
   id: string;
@@ -125,8 +131,18 @@ const listing = (v: unknown): v is CaseList =>
   v.items.every(record) &&
   (v.next === null || str(v.next));
 
+const capabilities = (v: unknown): v is CaseCapabilities =>
+  object(v) &&
+  typeof v.available === "boolean" &&
+  typeof v.evidenceWrites === "boolean" &&
+  (v.mode === "notes_only" || v.mode === "notes_and_reproducible_evidence") &&
+  typeof v.qualified === "boolean" &&
+  v.evidenceWrites ===
+    (v.available && v.mode === "notes_and_reproducible_evidence");
+
 type Guard<T> = (v: unknown) => v is T;
 export interface CaseClient {
+  capabilities(signal?: AbortSignal): Promise<CaseCapabilities>;
   list(signal?: AbortSignal, after?: string): Promise<CaseList>;
   get(
     id: string,
@@ -279,6 +295,7 @@ export function createCaseClient(options: {
     return `?capture_id=${encodeURIComponent(captureId)}`;
   };
   return {
+    capabilities: (signal) => read("/capabilities", capabilities, signal),
     list: (signal, after) =>
       read(
         `/cases${after ? `?after=${encodeURIComponent(after)}` : ""}`,

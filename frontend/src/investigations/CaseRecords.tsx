@@ -8,6 +8,7 @@ import {
 import {
   CaseError,
   type CaseClient,
+  type CaseCapabilities,
   type CaseEntry,
   type CaseReceipt,
   type CaseMutation,
@@ -57,6 +58,9 @@ function CaseRecordsContents({
   comparisonReference?: string;
 }) {
   const field = useId();
+  const [capabilities, setCapabilities] = useState<CaseCapabilities>();
+  const [capabilityFailed, setCapabilityFailed] = useState(false);
+  const [capabilityAttempt, setCapabilityAttempt] = useState(0);
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [next, setNext] = useState<string | null>(null);
   const [selected, setSelected] = useState<CaseRecord>();
@@ -82,6 +86,19 @@ function CaseRecordsContents({
   }>();
   const active = useRef<AbortController>();
   const serial = useRef(0);
+  useEffect(() => {
+    if (!client) return;
+    const controller = new AbortController();
+    client
+      .capabilities(controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setCapabilities(result);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setCapabilityFailed(true);
+      });
+    return () => controller.abort();
+  }, [client, capabilityAttempt]);
   useEffect(() => {
     if (pending && !busy) retryButton.current?.focus();
   }, [pending, busy]);
@@ -184,6 +201,7 @@ function CaseRecordsContents({
     operation: CaseMutation<CaseRecord | CaseReceipt>,
     submittedNote?: string,
   ) {
+    if (!capabilities?.available && !pending) return;
     const current = ++serial.current;
     setBusy(true);
     setError("");
@@ -244,7 +262,18 @@ function CaseRecordsContents({
       if (current !== serial.current) return;
       if (reason instanceof CaseError && reason.uncertain)
         setPending({ operation, submittedNote });
-      else setPending(undefined);
+      else if (
+        pending &&
+        reason instanceof CaseError &&
+        [401, 403, 404].includes(reason.status ?? 0)
+      ) {
+        setPending(pending);
+        reportError(reason, "Unable to save case.");
+        setError(
+          "The previous write outcome remains unconfirmed. Retry the same request when access is restored.",
+        );
+        return;
+      } else setPending(undefined);
       reportError(reason, "Unable to save case.");
     } finally {
       if (current === serial.current) setBusy(false);
@@ -307,12 +336,75 @@ function CaseRecordsContents({
         </p>
       </section>
     );
+  if (!capabilities?.available)
+    return (
+      <section
+        className="atlas-shared-cases"
+        aria-label="Shared investigation cases"
+      >
+        <h3>Shared cases</h3>
+        <p role="status">
+          {!capabilities && !capabilityFailed
+            ? "Checking shared case availability…"
+            : "Shared case storage is unavailable. Use the portable handoff to keep this investigation."}
+        </p>
+        {(capabilityFailed || capabilities) && (
+          <button
+            type="button"
+            disabled={busy || !!pending}
+            onClick={() => {
+              setCapabilities(undefined);
+              setCapabilityFailed(false);
+              setCapabilityAttempt((n) => n + 1);
+            }}
+          >
+            Retry availability check
+          </button>
+        )}
+        {pending && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void save(pending.operation, pending.submittedNote)}
+          >
+            Retry same request
+          </button>
+        )}
+      </section>
+    );
   return (
     <section
       className="atlas-shared-cases"
       aria-label="Shared investigation cases"
     >
       <h3>Shared cases</h3>
+      {!capabilities.qualified && (
+        <p>
+          The case service reports that this runtime has not been independently
+          qualified.
+        </p>
+      )}
+      {!capabilities.evidenceWrites && (
+        <p>
+          Comparison evidence saving is unavailable. Shared notes remain
+          available.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={busy || !!pending}
+        onClick={() => {
+          setCapabilities(undefined);
+          setCapabilityFailed(false);
+          setSelected(undefined);
+          setSelectedCaptureId(undefined);
+          setCaptureConsent(false);
+          setExportConsent(false);
+          setCapabilityAttempt((n) => n + 1);
+        }}
+      >
+        Refresh availability
+      </button>
       <p>
         Shared cases store notes and the selected time window. You can
         explicitly save a source-rechecked comparison to an open case. Portable
@@ -446,7 +538,10 @@ function CaseRecordsContents({
               style={{ width: "auto", display: "inline-block" }}
               checked={captureConsent}
               disabled={
-                busy || !!pending || !isComparisonReference(comparisonReference)
+                busy ||
+                !!pending ||
+                !capabilities.evidenceWrites ||
+                !isComparisonReference(comparisonReference)
               }
               onChange={(event) => setCaptureConsent(event.target.checked)}
             />{" "}
@@ -458,10 +553,15 @@ function CaseRecordsContents({
               busy ||
               !!pending ||
               !captureConsent ||
+              !capabilities.evidenceWrites ||
               !isComparisonReference(comparisonReference)
             }
             onClick={() => {
-              if (!isComparisonReference(comparisonReference)) return;
+              if (
+                !capabilities.evidenceWrites ||
+                !isComparisonReference(comparisonReference)
+              )
+                return;
               void save(
                 client.capture(
                   selected.id,
