@@ -152,13 +152,9 @@ class BaselineAPI:
                 allowed = {"GET", "DELETE"}
             elif resource in ("versions", "watches"):
                 allowed = {"GET", "POST"}
-            elif (
-                resource in ("export",)
-                or version is not None
-                or watch_resource == "evaluate"
-            ):
+            elif resource in ("export",) or version is not None:
                 allowed = {"GET"}
-            elif watch_resource == "occurrences":
+            elif watch_resource in ("occurrences", "evaluate"):
                 allowed = {"GET", "POST"}
             else:
                 allowed = {"POST"}
@@ -285,6 +281,17 @@ class BaselineAPI:
                 raise Invalid("invalid watch id")
             result = self.store.set_watch(
                 principal, request_id, ident, revision, definition
+            )
+        elif watch_resource == "evaluate":
+            _exact(data, {"expected_revision", "baseline_version", "reference"})
+            result = self.store.evaluate_window(
+                principal,
+                request_id,
+                ident,
+                revision,
+                watch,
+                data["baseline_version"],
+                data["reference"],
             )
         elif watch_resource == "occurrences":
             _exact(data, {"expected_revision", "signature", "reference"})

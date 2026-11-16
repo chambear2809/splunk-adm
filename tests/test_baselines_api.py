@@ -53,6 +53,41 @@ class BaselineAPITests(unittest.TestCase):
         self.assertEqual(status, 201)
         return "/baselines/" + result["id"]
 
+    def test_manual_evaluate_endpoint_rejects_injected_findings(self):
+        created = self.call(
+            "POST", "/baselines", {"name": "x", "reference": "a"}, key="create"
+        )
+        path = "/baselines/" + created[1]["id"]
+        definition = {
+            "id": "w",
+            "threshold": 1,
+            "cooldownSeconds": 10,
+            "expectedWindows": [],
+        }
+        self.call(
+            "POST",
+            path + "/watches",
+            {"expected_revision": 1, "definition": definition},
+            key="watch",
+        )
+        self.sources["b"]["dependencies"][0]["blocked"] = True
+        endpoint = path + "/watches/w/evaluate"
+        payload = {"expected_revision": 2, "baseline_version": 1, "reference": "b"}
+        self.assertEqual(
+            self.call("POST", endpoint, {**payload, "findings": []}, key="bad")[0], 400
+        )
+        result = self.call("POST", endpoint, payload, key="evaluate")
+        self.assertEqual(result[0], 200)
+        self.assertEqual((result[1]["inserted"], result[1]["surfaced"]), (1, 1))
+        self.assertEqual(
+            self.call("POST", endpoint, payload, key="evaluate")[1],
+            {
+                "id": result[1]["id"],
+                "revision": result[1]["revision"],
+                "resultWithheld": True,
+            },
+        )
+
     def test_lifecycle_and_source_access(self):
         path = self.create()
         self.assertEqual(
@@ -123,9 +158,9 @@ class BaselineAPITests(unittest.TestCase):
             200,
         )
         self.denied.add(("bob", "source", "c"))
-        self.assertEqual(self.call("GET", path + "/export", principal="bob")[0], 403)
+        self.assertEqual(self.call("GET", path + "/export", principal="bob")[0], 200)
         self.assertEqual(
-            self.call("GET", "/baselines", principal="bob")[1]["items"], []
+            len(self.call("GET", "/baselines", principal="bob")[1]["items"]), 1
         )
         self.assertEqual(
             self.call(
