@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 from tools.check_release import (
     BUNDLED_RUNTIME_FILES,
+    CASE_CONFIG_FILES,
+    CASE_RUNTIME_FILES,
     QUALIFIED_CONFIG_FILES,
     QUALIFIED_RUNTIME_FILES,
     MAX_ATLAS_GZIP_BYTES,
@@ -124,7 +126,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             **{
                 name: (
                     (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
-                    if name in QUALIFIED_RUNTIME_FILES
+                    if name in QUALIFIED_RUNTIME_FILES | CASE_RUNTIME_FILES
                     else b"#!/usr/bin/env python3\n"
                     if name.endswith("adm_recovery.py")
                     else b"runtime\n"
@@ -133,7 +135,9 @@ class ReleaseArchiveTests(unittest.TestCase):
             },
             **{
                 name: (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
-                for name in SETTINGS_RUNTIME_FILES | SETTINGS_CONFIG_FILES
+                for name in SETTINGS_RUNTIME_FILES
+                | SETTINGS_CONFIG_FILES
+                | CASE_CONFIG_FILES
             },
             SETTINGS_REGISTRY_PATH: (
                 self.root / "config/deployment-health.json"
@@ -210,6 +214,94 @@ class ReleaseArchiveTests(unittest.TestCase):
     def test_accepts_valid_pair(self):
         self._write_pair()
         check_release(self.root / "dist", self.root / "package.json")
+
+    def test_accepts_legacy_package_without_case_registration(self):
+        install = self._files()
+        for name in CASE_RUNTIME_FILES | CASE_CONFIG_FILES:
+            del install[name]
+        for name, marker in (
+            ("splunk_adm/default/restmap.conf", b"\n[script:adm_investigations]"),
+            ("splunk_adm/default/web.conf", b"\n[expose:adm_case_capabilities]"),
+        ):
+            install[name] = install[name].split(marker)[0] + b"\n"
+        self._write_pair(install)
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_unsafe_case_release_contract(self):
+        variants = (
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"mode = disabled",
+                b"mode = single_search_head",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"platform = unqualified",
+                b"platform = enterprise",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"capability = adm_investigate",
+                b"capability = search",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"passHttpHeaders = true",
+                b"passHttpHeaders = false",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"handler = adm_cases.CasesHandler",
+                b"handler = other.Handler",
+            ),
+            (
+                "splunk_adm/default/web.conf",
+                b"adm/investigations/cases/*/entries",
+                b"adm/investigations/**",
+            ),
+            (
+                "splunk_adm/default/web.conf",
+                b"pattern = adm/investigations/cases/*/share",
+                b"skipCSRFProtection = true\npattern = adm/investigations/cases/*/share",
+            ),
+        )
+        for name, before, after in variants:
+            with self.subTest(name=name, after=after):
+                install = self._files()
+                self.assertIn(before, install[name])
+                install[name] = install[name].replace(before, after)
+                self._write_pair(install)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+        for name, extra in (
+            (
+                "splunk_adm/default/web.conf",
+                b"\n[expose:extra]\npattern = adm/**\nmethods = GET\n",
+            ),
+            (
+                "splunk_adm/default/restmap.conf",
+                b"\n[script:extra]\nmatch = /adm/investigations/*\n",
+            ),
+            (
+                "splunk_adm/default/authorize.conf",
+                b"\n[role_admin]\nadm_investigate = enabled\n",
+            ),
+        ):
+            with self.subTest(name=name):
+                install = self._files()
+                install[name] += extra
+                self._write_pair(install)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+        for name in CASE_RUNTIME_FILES | CASE_CONFIG_FILES:
+            with self.subTest(missing=name):
+                install = self._files()
+                del install[name]
+                self._write_pair(install)
+                with self.assertRaisesRegex(
+                    ValueError, "case registration missing required files"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
 
     def test_runtime_inventory_matches_source_files(self):
         source_root = Path(__file__).parents[1] / "splunk_app/splunk_adm/bin"
@@ -532,10 +624,10 @@ class ReleaseArchiveTests(unittest.TestCase):
             with self.subTest(after=after):
                 install = self._files()
                 install[name] = (
-                    install[name].replace(before, after)
+                    install[name].replace(before, after, 1)
                     if before
                     else install[name].replace(
-                        b"methods = GET,POST", b"methods = GET,POST\n" + after
+                        b"methods = GET,POST", b"methods = GET,POST\n" + after, 1
                     )
                 )
                 self._write_pair(install)
@@ -552,7 +644,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             with self.subTest(after=after):
                 install = self._files()
-                install[name] = install[name].replace(before, after)
+                install[name] = install[name].replace(before, after, 1)
                 self._write_pair(install)
                 with self.assertRaisesRegex(ValueError, "metadata browser exposure"):
                     check_release(self.root / "dist", self.root / "package.json")
@@ -582,7 +674,12 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             with self.subTest(name=name):
                 install = self._files()
-                install[name] += suffix
+                if suffix:
+                    install[name] = install[name].replace(
+                        b"\n[script:adm_investigations]",
+                        b"\n" + suffix + b"\n[script:adm_investigations]",
+                        1,
+                    )
                 if not suffix:
                     install[name] = install[name].replace(
                         b"write : [ admin, sc_admin ]", b"write : [ * ]"
@@ -629,7 +726,14 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             with self.subTest(suffix=suffix):
                 install = self._files()
-                install[name] += suffix
+                if suffix == b"\nrestReplay = true\n":
+                    install[name] = install[name].replace(
+                        b"\n[script:adm_investigations]",
+                        suffix + b"\n[script:adm_investigations]",
+                        1,
+                    )
+                else:
+                    install[name] += suffix
                 self._write_pair(install)
                 with self.assertRaisesRegex(ValueError, error):
                     check_release(self.root / "dist", self.root / "package.json")

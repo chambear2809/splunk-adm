@@ -10,6 +10,9 @@ source data and are separate from generic map export.
 
 The open record lives in component memory. Closing the investigation discards it;
 the UI says so and offers a download. Downloading does not save a shared case or
-grant any recipient permission. The SQLite case engine is independent and still
-needs an authenticated, entitlement-aware application adapter and browser client.
-No browser storage, background upload, or privileged persistence is invoked here.
+grant any recipient permission. Shared-case controls now use an authenticated notes-only endpoint backed by the
+SQLite case engine. This is separate from the portable editor: notes are not
+automatically copied. The endpoint ships disabled and cannot store graph captures
+or attachments without a source validator. Retry IDs and submitted payloads stay
+in memory while a write outcome is unknown; leaving the workspace loses that
+retry state. No case text is persisted in browser storage.

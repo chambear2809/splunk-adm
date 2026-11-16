@@ -33,6 +33,7 @@ import { useHealthStatus } from "../data/healthStatus";
 import { PathStrip } from "../PathStrip";
 import { TraceView } from "../trace/TraceView";
 import { usePathTrace } from "../trace/usePathTrace";
+import { splunkCaseClient } from "../investigations/caseClient";
 import { traceHighlight } from "../trace/traceModel";
 import { deviceURL, TracePathForm } from "./ExploreTools";
 import { DevicesView } from "../DevicesView";
@@ -161,6 +162,10 @@ function StandardMapPage({
 }) {
   const detectedTheme = useTheme(inSplunk, themeOverride());
   const theme = toolkitTheme ?? detectedTheme;
+  const caseClient = useMemo(
+    () => (inSplunk ? splunkCaseClient() : undefined),
+    [inSplunk],
+  );
   const {
     graph,
     topology,
@@ -1075,6 +1080,7 @@ function StandardMapPage({
           <Suspense fallback={<p role="status">Opening investigation…</p>}>
             <IncidentWorkspace
               incident={graph}
+              caseClient={caseClient}
               timezone={timezone}
               onBack={() => {
                 setIncidentOpen(false);

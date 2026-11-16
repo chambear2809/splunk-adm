@@ -13,6 +13,8 @@ import {
 } from "./model";
 import "./incident.css";
 import { InvestigationHandoff } from "../investigations/InvestigationHandoff";
+import { CaseRecords } from "../investigations/CaseRecords";
+import type { CaseClient } from "../investigations/caseClient";
 
 export type IncidentWorkspaceProps = {
   /** The selected, fully returned incident map. Change the map selection in the parent to change this window. */
@@ -20,6 +22,7 @@ export type IncidentWorkspaceProps = {
   /** Load a graph in the same scope for the exact absolute half-open window. Honor cancellation. */
   loadWindow: (window: Window, signal: AbortSignal) => Promise<Graph>;
   timezone?: string;
+  caseClient?: CaseClient;
   onBack?: () => void;
   /** Parent may highlight paths; it retains control of map selection. */
   onHighlight?: (edgeIds: string[]) => void;
@@ -48,6 +51,7 @@ export function IncidentWorkspace({
   incident,
   loadWindow,
   timezone,
+  caseClient,
   onBack,
   onHighlight,
 }: IncidentWorkspaceProps) {
@@ -416,6 +420,7 @@ export function IncidentWorkspace({
               key={incident.snapshot_id}
               comparison={result}
             />
+            <CaseRecords client={caseClient} window={incident.window} />
           </div>
           {result.recovery && (
             <details>

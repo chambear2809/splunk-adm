@@ -35,6 +35,37 @@ RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
 SETTINGS_ENTRYPOINT = "splunk_adm/bin/adm_settings.py"
 SETTINGS_REGISTRY_PATH = "splunk_adm/bin/adm_settings_registry.json"
+CASE_RUNTIME_FILES = frozenset(
+    {
+        "splunk_adm/bin/adm_cases.py",
+        *{
+            f"splunk_adm/bin/adm_cases_lib/{name}"
+            for name in (
+                "__init__.py",
+                "api.py",
+                "store.py",
+                "splunk_host.py",
+                "README.md",
+            )
+        },
+    }
+)
+CASE_CONFIG_FILES = frozenset(
+    {
+        "splunk_adm/default/adm_investigations.conf",
+        "splunk_adm/default/authorize.conf",
+        "splunk_adm/README/adm_investigations.conf.spec",
+    }
+)
+CASE_EXPOSURES = {
+    "expose:adm_case_capabilities": ("adm/investigations/capabilities", "GET"),
+    "expose:adm_cases": ("adm/investigations/cases", "GET,POST"),
+    "expose:adm_case_resources": ("adm/investigations/cases/*", "GET,DELETE"),
+    "expose:adm_case_entries": ("adm/investigations/cases/*/entries", "POST"),
+    "expose:adm_case_sharing": ("adm/investigations/cases/*/share", "POST"),
+    "expose:adm_case_export": ("adm/investigations/cases/*/export", "GET"),
+    "expose:adm_case_audit": ("adm/investigations/cases/*/audit", "GET"),
+}
 SETTINGS_RUNTIME_FILES = frozenset(
     {
         SETTINGS_ENTRYPOINT,
@@ -83,6 +114,7 @@ QUALIFIED_RUNTIME_FILES = frozenset(
 )
 BUNDLED_RUNTIME_FILES = frozenset(
     {
+        *CASE_RUNTIME_FILES,
         *SETTINGS_RUNTIME_FILES,
         *QUALIFIED_RUNTIME_FILES,
         "splunk_adm/bin/adm_recovery.py",
@@ -324,6 +356,79 @@ def _packaged_config(
     return config
 
 
+def _check_cases_contract(files, rest, web):
+    stanza = "script:adm_investigations"
+    present = (
+        bool((CASE_RUNTIME_FILES | CASE_CONFIG_FILES) & files.keys())
+        or rest.has_section(stanza)
+        or bool(set(CASE_EXPOSURES) & set(web.sections()))
+    )
+    if not present:
+        return set()
+    missing = sorted((CASE_RUNTIME_FILES | CASE_CONFIG_FILES) - files.keys())
+    if missing:
+        raise ValueError(
+            f"case registration missing required files: {', '.join(missing)}"
+        )
+    expected = {
+        "match": "/adm/investigations",
+        "script": "adm_cases.py",
+        "scripttype": "persist",
+        "handler": "adm_cases.CasesHandler",
+        "python.version": "python3",
+        "python.required": "3.13",
+        "requireauthentication": "true",
+        "capability": "adm_investigate",
+        "output_modes": "json",
+        "passpayload": "true",
+        "passsession": "true",
+        "passsystemauth": "false",
+        "passhttpheaders": "true",
+    }
+    if (
+        not rest.has_section(stanza)
+        or dict(rest[stanza]) != expected
+        or set(rest.sections()) != {"script:adm_deployment_settings", stanza}
+    ):
+        raise ValueError(
+            "case registration must use the exact authenticated capability and handler"
+        )
+    for section, (pattern, methods) in CASE_EXPOSURES.items():
+        if not web.has_section(section) or dict(web[section]) != {
+            "pattern": pattern,
+            "methods": methods,
+        }:
+            raise ValueError(
+                "case browser exposure must use exact routes, methods, and native CSRF"
+            )
+    config = _packaged_config(files, "default/adm_investigations.conf")
+    if (
+        not config.has_section("persistence")
+        or dict(config["persistence"])
+        != {"mode": "disabled", "platform": "unqualified"}
+        or set(config.sections()) != {"persistence"}
+    ):
+        raise ValueError("case defaults must remain disabled and unqualified")
+    authorize = _packaged_config(files, "default/authorize.conf")
+    if set(authorize.sections()) != {"capability::adm_investigate"} or dict(
+        authorize["capability::adm_investigate"]
+    ):
+        raise ValueError("case capability must have no default role grants")
+    for name in CASE_RUNTIME_FILES:
+        if not name.endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(files[name], filename=name)
+        except (SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(f"invalid case Python runtime: {name}") from exc
+        if name.endswith("/adm_cases.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "CasesHandler"
+            for node in tree.body
+        ):
+            raise ValueError("case entrypoint must define CasesHandler")
+    return set(CASE_EXPOSURES)
+
+
 def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
     for name in SETTINGS_RUNTIME_FILES:
         try:
@@ -389,6 +494,7 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
     ] != [stanza]:
         raise ValueError("settings endpoint must have one unambiguous registration")
     web = _packaged_config(files, "default/web.conf")
+    case_exposures = _check_cases_contract(files, rest, web)
     exposure = "expose:adm_deployment_settings"
     if (
         not web.has_section(exposure)
@@ -411,7 +517,7 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         or web.get(macro_read, "pattern", fallback="")
         != "configs/v1/conftypes/macros/stanzas:get"
         or web.get(macro_read, "methods", fallback="") != "POST"
-        or set(web.sections()) != {exposure, macro_read}
+        or set(web.sections()) != {exposure, macro_read} | case_exposures
     ):
         raise ValueError(
             "metadata browser exposure must use the exact read-only macro getter, POST only, and native CSRF protection"
@@ -576,7 +682,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/default/data/ui/nav/default.xml",
         "splunk_adm/default/data/ui/views/dependency_map.xml",
         "splunk_adm/metadata/default.meta",
-        *BUNDLED_RUNTIME_FILES,
+        *(BUNDLED_RUNTIME_FILES - CASE_RUNTIME_FILES),
         *SETTINGS_CONFIG_FILES,
         *QUALIFIED_CONFIG_FILES,
         SETTINGS_REGISTRY_PATH,

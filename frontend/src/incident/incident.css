@@ -69,6 +69,35 @@
   min-height: 5rem;
   box-sizing: border-box;
 }
+.adm .atlas-shared-cases {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--adm-line);
+  overflow-wrap: anywhere;
+}
+.adm .atlas-shared-cases label {
+  display: block;
+  margin-top: 0.8rem;
+}
+.adm .atlas-shared-cases :is(input, textarea, select) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  font: inherit;
+  padding: 0.5rem;
+}
+.adm .atlas-shared-cases textarea {
+  min-height: 5rem;
+}
+.adm .atlas-shared-cases select {
+  max-width: 20rem;
+}
+.adm .atlas-shared-cases button {
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}
 @media (max-width: 700px) {
   .adm .atlas-incident-overlay {
     inset: 0;
