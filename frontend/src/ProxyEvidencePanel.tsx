@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { JourneyLazyEvidence } from "./JourneyLazyEvidence";
 import {
   evidenceConfigClient,
   type EvidenceConfigClient,
@@ -17,30 +18,11 @@ import {
 import type { EvidenceSelection } from "./data/evidence";
 import type { SearchClient } from "./data/searchClient";
 
-function addressText(address?: { ip: string; port?: number }): string {
-  if (!address) return "Not supplied";
-  const ip = address.ip.includes(":") ? `[${address.ip}]` : address.ip;
-  return address.port === undefined ? ip : `${ip}:${address.port}`;
-}
-
-function safeTime(value: number): string {
-  try {
-    return new Date(value * 1000).toISOString();
-  } catch {
-    return "Invalid source time";
-  }
-}
-
 export function ProxyEvidencePanel({
   result,
 }: {
   result: SupplementalResult<ProxyObservation>;
 }) {
-  const qualified =
-    result.state === "complete" &&
-    result.schemaQualified &&
-    !result.configurationChanged &&
-    !result.inputCapped;
   const status =
     result.state === "complete"
       ? `${result.records.length} Envoy request observations returned${result.outputCapped ? "; output capped" : ""}${result.inputCapped ? "; input capped, any association is suppressed" : ""}${result.configurationChanged ? "; configuration changed, any association is suppressed" : ""}${!result.schemaQualified ? "; source schema is not qualified" : ""}.`
@@ -59,58 +41,12 @@ export function ProxyEvidencePanel({
     >
       <h3>Proxy evidence</h3>
       <p>
-        One source-qualified Envoy HTTP request event per DownstreamEnd log. The
-        direct peer and selected upstream are separate transport legs; this view
-        does not identify an original client through X-Forwarded-For.
+        One Envoy DownstreamEnd request record per card. Direct peer is the
+        adjacent transport peer.
       </p>
       <p role="status">{status}</p>
-      {result.state === "complete" && result.records.length > 0 && (
-        <>
-          {!qualified && (
-            <p>
-              These rows are source context only. A verified observer mapping,
-              qualified schema and complete bounded input are required before
-              using any row to support an association.
-            </p>
-          )}
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Request start</th>
-                  <th scope="col">Downstream direct peer</th>
-                  <th scope="col">Envoy listener</th>
-                  <th scope="col">Selected upstream</th>
-                  <th scope="col">Cluster</th>
-                  <th scope="col">Duration (ms)</th>
-                  <th scope="col">HTTP status</th>
-                  <th scope="col">Observer</th>
-                  <th scope="col">Stream ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.records.map((record) => (
-                  <tr key={`${record.index}:${record.eventFingerprint}`}>
-                    <td>{safeTime(record.eventTime)}</td>
-                    <td>{addressText(record.downstream.directPeer)}</td>
-                    <td>{addressText(record.downstream.listener)}</td>
-                    <td>{addressText(record.selectedBackend)}</td>
-                    <td>{record.upstream?.cluster ?? "Not supplied"}</td>
-                    <td>{record.durationMilliseconds ?? "Not supplied"}</td>
-                    <td>{record.responseCode ?? "Not supplied"}</td>
-                    <td>{record.observer}</td>
-                    <td>{record.streamId ?? "Not supplied"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p>
-            The selected upstream address is Envoy's reported remote endpoint. A
-            cluster name describes configured routing, not backend membership;
-            retries do not expose every attempted endpoint here.
-          </p>
-        </>
+      {result.state === "complete" && (
+        <JourneyLazyEvidence kind="proxy" result={result} />
       )}
       <details>
         <summary>Coverage and limits</summary>

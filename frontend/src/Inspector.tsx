@@ -1,3 +1,5 @@
+import { JourneyLazyEvidence } from "./JourneyLazyEvidence";
+import type { EvidenceWindow } from "./data/evidence";
 import { ImpactButton } from "./impact/ImpactButton";
 import { InfoTip } from "./InfoTip";
 import { InspectorTitle } from "./InspectorTitle";
@@ -445,57 +447,20 @@ function TrafficEvidence({
 function NatEvidence({
   observations,
   truncated,
+  window,
 }: {
   observations: NatObservation[];
   truncated?: boolean;
+  window?: EvidenceWindow;
 }) {
   if (!observations.length && !truncated) return null;
-  const endpoint = (ip: string, port: number) =>
-    `${ip.includes(":") ? `[${ip}]` : ip}:${port}`;
   return (
-    <section aria-label="Firewall translation evidence">
-      <h3>
-        Firewall translation evidence{" "}
-        <span className="count">{observations.length}</span>
-      </h3>
-      <p className="muted small">
-        Each item is one Cisco FTD ConnectionEvent reporting both tuples. The
-        reported connection tuple is not labeled as original; a reported
-        OriginalInitiatorIP is shown separately. This evidence stays attached to
-        the conversation and does not establish a load-balancer backend or
-        correlate events across observers.
-      </p>
-      <ul className="seen-list">
-        {observations.map((o) => (
-          <li key={o.event_fingerprint}>
-            <b>{o.protocol.toUpperCase()} · Initiator → Responder</b>
-            <small>
-              {`Reported tuple ${endpoint(o.reported_initiator_ip, o.reported_initiator_port)} → ${endpoint(o.reported_responder_ip, o.reported_responder_port)}`}
-              <br />
-              {`NAT translated tuple ${endpoint(o.translated_initiator_ip, o.translated_initiator_port)} → ${endpoint(o.translated_responder_ip, o.translated_responder_port)}`}
-              {o.reported_original_initiator_ip && (
-                <>
-                  <br />
-                  {`Cisco reported OriginalInitiatorIP ${o.reported_original_initiator_ip} (separate field)`}
-                </>
-              )}
-              <br />
-              {`Authority ${o.source_authority} · Scope ${o.scope} · Device ${o.device_ip}`}
-              <br />
-              {`Event ${evidenceTime(o.event_time) ?? "unavailable"} · Received ${evidenceTime(o.received_time) ?? "unavailable"}`}
-              <br />
-              {`Event fingerprint ${o.event_fingerprint}`}
-            </small>
-          </li>
-        ))}
-      </ul>
-      {truncated && (
-        <p className="muted small">
-          The source summary or selected graph reached its 32-observation cap;
-          additional evidence for this window may have been omitted.
-        </p>
-      )}
-    </section>
+    <JourneyLazyEvidence
+      kind="nat"
+      observations={observations}
+      truncated={truncated}
+      window={window}
+    />
   );
 }
 
@@ -687,6 +652,7 @@ export function Inspector({
   summary,
   pathOpen = false,
   bundle,
+  evidenceWindow,
 }: {
   selection: Selection | null;
   index: GraphIndex;
@@ -696,6 +662,7 @@ export function Inspector({
   onShowPath: (edgeId: string) => void;
   summary: React.ReactNode;
   pathOpen?: boolean;
+  evidenceWindow?: EvidenceWindow;
   /** The card-pair line the selected edge is drawn in, when it groups several. */
   bundle?: { title: string; edgeIds: string[] };
 }) {
@@ -1004,6 +971,15 @@ export function Inspector({
                 <NatEvidence
                   observations={edge.nat_observations ?? []}
                   truncated={edge.nat_observations_truncated}
+                  window={evidenceWindow}
+                />
+              )}
+              {conv && to?.endpoint_kind === "k8s_service" && (
+                <JourneyLazyEvidence
+                  kind="hubble"
+                  edgeId={edge.id}
+                  index={index}
+                  window={evidenceWindow}
                 />
               )}
               {(conv || trafficObservation) && edge.traffic_observations && (

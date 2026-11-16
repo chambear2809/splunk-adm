@@ -1477,6 +1477,12 @@ function StandardMapPage({
                   </label>
                 )}
               <Inspector
+                evidenceWindow={
+                  graph.nat_event_window ?? {
+                    start: Date.parse(graph.window.start) / 1000,
+                    end: Date.parse(graph.window.end) / 1000,
+                  }
+                }
                 selection={selection}
                 index={index}
                 topo={topo}

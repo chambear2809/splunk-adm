@@ -102,6 +102,10 @@ await copyFile(
   `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
 );
 await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
+await copyFile(
+  "docs/CONNECTED_JOURNEYS.md",
+  `${stage}/docs/CONNECTED_JOURNEYS.md`,
+);
 for (const file of ["THOUSANDEYES_DESIGN.md", "THOUSANDEYES_OPERATIONS.md"])
   await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
 await copyFile(

@@ -9,7 +9,10 @@ const captures = new Set([
 ]);
 export default defineConfig({
   root: "frontend",
-  define: { __ADM_SPLUNK_BUILD__: "false" },
+  define: {
+    __ADM_SPLUNK_BUILD__: "false",
+    __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify("development"),
+  },
   base: "./",
   plugins: [
     {

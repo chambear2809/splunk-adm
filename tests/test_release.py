@@ -16,6 +16,11 @@ from tools.check_release import (
     QUALIFIED_CONFIG_FILES,
     QUALIFIED_RUNTIME_FILES,
     MAX_ATLAS_GZIP_BYTES,
+    MAX_JOURNEYS_GZIP_BYTES,
+    JOURNEYS_BUNDLE_PATH,
+    JOURNEYS_MANIFEST_PATH,
+    JOURNEYS_CSS_PATH,
+    JOURNEYS_DOC_PATH,
     MAX_THOUSANDEYES_GZIP_BYTES,
     THOUSANDEYES_BUNDLE_PATH,
     THOUSANDEYES_MANIFEST_PATH,
@@ -38,6 +43,78 @@ def _incompressible(size: int) -> bytes:
 
 
 class ReleaseArchiveTests(unittest.TestCase):
+    def _journey_files(self):
+        files = self._files()
+        version = "b" * 24
+        files["splunk_adm/appserver/static/pages/atlas.js"] += (
+            b" ApplicationAtlasJourneys " + version.encode()
+        )
+        files[JOURNEYS_BUNDLE_PATH] = b"journey bundle " + version.encode()
+        files[JOURNEYS_CSS_PATH] = b"journey styles"
+        files[JOURNEYS_DOC_PATH] = b"journey guide"
+        files[JOURNEYS_MANIFEST_PATH] = json.dumps(
+            {
+                "schemaVersion": 1,
+                "assetVersion": version,
+                "javascriptSha256": hashlib.sha256(
+                    files[JOURNEYS_BUNDLE_PATH]
+                ).hexdigest(),
+                "cssSha256": hashlib.sha256(files[JOURNEYS_CSS_PATH]).hexdigest(),
+            }
+        ).encode()
+        return files
+
+    def test_accepts_complete_journey_bundle(self):
+        self._write_pair(self._journey_files())
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_journey_registration_and_partial_assets_require_complete_set(self):
+        for missing in (
+            JOURNEYS_BUNDLE_PATH,
+            JOURNEYS_MANIFEST_PATH,
+            JOURNEYS_CSS_PATH,
+            JOURNEYS_DOC_PATH,
+        ):
+            with self.subTest(missing=missing):
+                files = self._journey_files()
+                del files[missing]
+                self._write_pair(files)
+                with self.assertRaisesRegex(
+                    ValueError, "missing required Journey files"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files[JOURNEYS_CSS_PATH] = b"orphan"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required Journey files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_journey_tampering_and_mixed_versions(self):
+        for path in (
+            JOURNEYS_BUNDLE_PATH,
+            JOURNEYS_CSS_PATH,
+            JOURNEYS_MANIFEST_PATH,
+            "splunk_adm/appserver/static/pages/atlas.js",
+        ):
+            with self.subTest(path=path):
+                files = self._journey_files()
+                if path == JOURNEYS_MANIFEST_PATH:
+                    files[path] = b"{}"
+                elif path.endswith("atlas.js"):
+                    files[path] = files[path].replace(b"b" * 24, b"c" * 24)
+                else:
+                    files[path] += b"tampered"
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "Journey asset version/hash"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_journey_bundle_has_independent_budget(self):
+        files = self._journey_files()
+        files[JOURNEYS_BUNDLE_PATH] = _incompressible(MAX_JOURNEYS_GZIP_BYTES + 1)
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "Journey optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
     def test_thousandeyes_optional_asset_has_an_independent_enforced_budget(self):
         files = self._files()
         files[THOUSANDEYES_BUNDLE_PATH] = _incompressible(

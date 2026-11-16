@@ -1,0 +1,53 @@
+.atlas .atlas-journeys {
+  margin: 1rem 0;
+  overflow-wrap: anywhere;
+}
+.atlas .atlas-journeys > p {
+  margin: 0.6rem 0;
+}
+.atlas .atlas-journey {
+  padding: 0.8rem;
+  margin: 0.8rem 0;
+  border: 1px solid var(--adm-line);
+  border-radius: 0.4rem;
+  background: var(--adm-surface);
+}
+.atlas .atlas-journey h4 {
+  margin: 0 0 0.4rem;
+}
+.atlas .atlas-journey p {
+  margin: 0.5rem 0;
+}
+.atlas .atlas-journey-legs {
+  padding-left: 1.3rem;
+  margin: 0.7rem 0;
+}
+.atlas .atlas-journey-legs li {
+  margin: 0.6rem 0;
+}
+.atlas .atlas-journey-legs li::marker {
+  color: var(--adm-muted);
+}
+.atlas .atlas-journey dt {
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+.atlas .atlas-journey dd {
+  margin-left: 0;
+}
+.atlas .atlas-journey pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.atlas .atlas-journey-download {
+  margin-top: 0.8rem;
+}
+.atlas .atlas-journey-download label {
+  display: block;
+  margin: 0.6rem 0;
+}
+.atlas .atlas-journey-download button {
+  white-space: normal;
+  max-width: 100%;
+}
