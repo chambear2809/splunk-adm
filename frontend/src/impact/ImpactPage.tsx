@@ -813,6 +813,21 @@ export function ImpactPage({
         )}
         {elements.length > 0 && (
           <JourneyLazyEvidence
+            kind="ownership"
+            graph={data?.graph}
+            unavailableReason={
+              load.status === "loading"
+                ? "Impact evidence is loading."
+                : load.status === "error"
+                  ? "Impact source evidence is unavailable."
+                  : !data?.graph
+                    ? "Impact endpoints do not carry qualified service identities. Names and addresses cannot establish ownership."
+                    : undefined
+            }
+          />
+        )}
+        {elements.length > 0 && (
+          <JourneyLazyEvidence
             kind="maintenance"
             data={data}
             result={result?.mode === "fails" ? result : undefined}

@@ -1,6 +1,7 @@
 import { MAX_GRAPH_EDGES, MAX_GRAPH_NODES } from "./scale/limits";
 import { isoTime } from "./time";
 import { sameNatIp, usableNatIp } from "./ip";
+import { checkedIdentityContext } from "./data/identityContext";
 export type NodeKind = "service" | "workload" | "endpoint" | "client";
 export type Relationship =
   | "calls"
@@ -254,6 +255,8 @@ export interface Graph {
   window: { start: string; end: string };
   /** Numeric Splunk addinfo bounds, subject to platform precision; absent on older/no-NAT snapshots. */
   nat_event_window?: { start: number; end: number };
+  /** Qualified source provenance for finite identity observations, never a data-access grant. */
+  identityContext?: import("./data/identityContext").IdentityContext;
   boundary: {
     id: string;
     service: string;
@@ -752,6 +755,11 @@ export function parseGraph(value: unknown): Graph {
     Date.parse(w.start) >= Date.parse(w.end)
   )
     throw new Error("Snapshot boundary or time window is invalid.");
+  if (value.identityContext !== undefined)
+    checkedIdentityContext(value.identityContext, {
+      start: Date.parse(w.start as string) / 1000,
+      end: Date.parse(w.end as string) / 1000,
+    });
   if (
     !object(c) ||
     !COVERAGE_COUNTS.every((k) => number(c[k])) ||

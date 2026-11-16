@@ -1,0 +1,18 @@
+.atlas-business-ownership-context {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.atlas-business-ownership-context section,
+.atlas-business-ownership-context details,
+.atlas-business-ownership-context li {
+  min-width: 0;
+}
+
+.atlas-business-ownership-context button {
+  min-height: 32px;
+}
+.atlas-business-ownership-context label + button {
+  display: block;
+  margin-top: 8px;
+}

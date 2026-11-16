@@ -181,3 +181,37 @@ describe("incident interpretation", () => {
     expect(loader).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("source identity comparison boundary", () => {
+  it("rejects mixed provenance and changed authority, scope or configuration", () => {
+    const reference = before(),
+      result = before();
+    reference.identityContext = {
+      schemaVersion: 1,
+      contract: "qualified_v2",
+      authority: "producer",
+      scope: "scope",
+      configRevision: "a".repeat(64),
+      observedWindow: {
+        start: Date.parse(reference.window.start) / 1000,
+        end: Date.parse(reference.window.end) / 1000,
+      },
+    };
+    expect(() => assertComparison(reference, result, result.window)).toThrow(
+      "source identity",
+    );
+    result.identityContext = { ...reference.identityContext };
+    expect(() =>
+      assertComparison(reference, result, result.window),
+    ).not.toThrow();
+    for (const key of ["authority", "scope", "configRevision"] as const) {
+      result.identityContext = {
+        ...reference.identityContext,
+        [key]: "different",
+      };
+      expect(() => assertComparison(reference, result, result.window)).toThrow(
+        "source identity",
+      );
+    }
+  });
+});

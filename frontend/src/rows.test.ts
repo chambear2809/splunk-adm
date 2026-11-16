@@ -655,3 +655,29 @@ describe("long-window read coverage", () => {
     ).toThrow();
   });
 });
+
+it("retains exact native identity provenance through row parsing and rejects malformed context", () => {
+  const input = rows();
+  const meta = input.find((row) => row.row_type === "meta")!;
+  const parsed = graph();
+  const context = {
+    schemaVersion: 1,
+    contract: "qualified_v2",
+    authority: "producer",
+    scope: "scope",
+    configRevision: "a".repeat(64),
+    observedWindow: {
+      start: Date.parse(parsed.window.start) / 1000,
+      end: Date.parse(parsed.window.end) / 1000,
+    },
+  };
+  meta.identity_context = JSON.stringify(context);
+  expect(rowsToGraph(input, args).identityContext).toEqual(context);
+  meta.identity_context = 0;
+  expect(() => rowsToGraph(input, args)).toThrow("malformed");
+  meta.identity_context = JSON.stringify({
+    ...context,
+    observedWindow: { ...context.observedWindow, start: 0 },
+  });
+  expect(() => rowsToGraph(input, args)).toThrow("another window");
+});

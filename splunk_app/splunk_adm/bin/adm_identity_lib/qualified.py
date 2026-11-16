@@ -486,6 +486,37 @@ def _qualify(rows, profile, window_start, as_of, horizon=None, max_input=MAX_INP
                 "scope": p["scope"],
             }
         )
+    context = {
+        "schemaVersion": 1,
+        "contract": "qualified_v2",
+        "authority": p["producer_id"],
+        "scope": p["scope"],
+        "configRevision": hashlib.sha256(
+            canonical(
+                {
+                    key: p[key]
+                    for key in (
+                        "cluster",
+                        "environment",
+                        "scope",
+                        "producer_id",
+                        "interval_index",
+                        "interval_source",
+                        "interval_sourcetype",
+                        "span_index",
+                        "span_source",
+                        "span_sourcetype",
+                        "namespaces",
+                    )
+                }
+            ).encode()
+        ).hexdigest(),
+        "observedWindow": {"start": int(start), "end": int(cutoff)},
+    }
+    # The public provenance contract uses exact safe integer epoch bounds.
+    # Rounding fractional inputs would overstate the observation window.
+    if start != int(start) or cutoff != int(cutoff) or cutoff > 9007199254740991:
+        context = None
     catalog = []
     services = defaultdict(list)
     for b in bindings:
@@ -500,6 +531,11 @@ def _qualify(rows, profile, window_start, as_of, horizon=None, max_input=MAX_INP
                     zip(("service", "environment", "cluster", "namespace"), identity)
                 ),
                 "identity_contract": "qualified_v2",
+                **(
+                    {"identity_context": canonical(context)}
+                    if context is not None
+                    else {}
+                ),
                 "pods": len({b["pod_uid"] for b in values}),
                 "first_seen": int(min(b["observed_at"] for b in values)),
                 "last_seen": int(max(b["observed_at"] for b in values)),
@@ -518,6 +554,7 @@ def _qualify(rows, profile, window_start, as_of, horizon=None, max_input=MAX_INP
         )
     return {
         "complete": True,
+        **({"identity_context": context} if context is not None else {}),
         "catalog_rows": catalog,
         "bindings": bindings,
         "warnings": warnings,
@@ -562,6 +599,7 @@ def graph_rows(result, selection=None):
             "cluster": binding["cluster"],
             "namespace": binding["namespace"],
             "attr_environment": binding["environment"],
+            "attr_service": binding["service"],
             "attr_identity_basis": "complete finite pod-IP snapshot and explicit OTel span",
         }
     for b in bindings:
@@ -615,4 +653,6 @@ def graph_rows(result, selection=None):
         "spans": len(bindings),
         "warnings": result["warnings"],
     }
+    if result.get("identity_context") is not None:
+        meta["identity_context"] = canonical(result["identity_context"])
     return [*nodes.values(), *edges.values(), meta]

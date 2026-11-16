@@ -246,3 +246,41 @@ describe("catalog parsing", () => {
     expect(catalogLimitMessage()).toMatch(/narrow the service scope/i);
   });
 });
+
+it("preserves source-qualified catalog provenance and rejects legacy or mismatched metadata", () => {
+  const context = {
+    schemaVersion: 1,
+    contract: "qualified_v2",
+    authority: "producer",
+    scope: "scope",
+    configRevision: "a".repeat(64),
+    observedWindow: { start: 0, end: 60 },
+  };
+  const qualified = {
+    _key: key,
+    service: "frontend",
+    environment: "prod",
+    cluster: "c1",
+    namespace: "shop",
+    identity_contract: "qualified_v2",
+    window_start: 0,
+    window_end: 60,
+    identity_context: JSON.stringify(context),
+  };
+  expect(parseCatalogRows([qualified])[0].identityContext).toEqual(context);
+  expect(() =>
+    parseCatalogRows([{ ...qualified, identity_contract: undefined }]),
+  ).toThrow();
+  expect(() => parseCatalogRows([{ ...qualified, window_end: 61 }])).toThrow();
+  expect(() =>
+    parseCatalogRows([
+      {
+        ...qualified,
+        identity_context: JSON.stringify(context).replace(
+          '"scope":"scope"',
+          '"scope":"wrong","scope":"scope"',
+        ),
+      },
+    ]),
+  ).toThrow("Duplicate");
+});

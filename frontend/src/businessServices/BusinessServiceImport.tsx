@@ -34,8 +34,8 @@ export function BusinessServiceImport({
     >
       <h2 id="business-service-import-title">Import business services</h2>
       <p>
-        Paste a version 1 JSON export to review its claims. This does not save
-        or verify them.
+        Paste a version 1 or 2 JSON export to review its claims and bindings.
+        This does not save or verify them.
       </p>
       <label htmlFor="business-service-import-json">JSON import</label>
       <textarea
@@ -104,6 +104,59 @@ export function BusinessServiceImport({
                 {preview.claims.length} claims ready for review. These are
                 imported assertions.
               </p>
+              {preview.bindings.length > 0 && (
+                <details>
+                  <summary>
+                    {preview.bindings.length} asserted technical bindings
+                  </summary>
+                  <p>
+                    Bindings are imported assertions; they do not verify
+                    business ownership or grant source access.
+                  </p>
+                  {preview.bindingConflictCount > 0 && (
+                    <p>
+                      {preview.bindingConflictCount} conflicting bindings
+                      require review.
+                    </p>
+                  )}
+                  <ul>
+                    {preview.bindings.slice(0, 50).map((binding, i) => (
+                      <li key={i}>
+                        Claim {binding.claim.authority} /{" "}
+                        {binding.claim.recordId} / revision{" "}
+                        {binding.claim.revision} · {binding.claim.memberKind}:{" "}
+                        {binding.claim.memberId} · claim scope:{" "}
+                        {binding.claim.scope}
+                        <div>
+                          Technical service: {binding.target.key.service} ·{" "}
+                          {binding.target.key.environment} ·{" "}
+                          {binding.target.key.cluster} ·{" "}
+                          {binding.target.key.namespace}
+                        </div>
+                        <div>
+                          Native authority: {binding.target.authority} · scope:{" "}
+                          {binding.target.scope} · configuration:{" "}
+                          {binding.target.configRevision}
+                        </div>
+                        <div>
+                          Binding source: {binding.authority} ·{" "}
+                          {binding.recordId} / revision {binding.revision} ·
+                          snapshot: {binding.snapshotId} · proof reference:{" "}
+                          {binding.proofReference}
+                        </div>
+                        <div>
+                          {binding.validity.basis === "snapshot_current"
+                            ? `Binding reported only at ${new Date(binding.validity.at * 1000).toISOString()}`
+                            : `Binding interval from ${new Date(binding.validity.from * 1000).toISOString()}${binding.validity.to === undefined ? "; no recorded end" : ` to ${new Date(binding.validity.to * 1000).toISOString()} (exclusive)`}; observed through ${new Date(binding.snapshotAt * 1000).toISOString()}`}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {preview.bindings.length > 50 && (
+                    <p>Showing the first 50 bindings.</p>
+                  )}
+                </details>
+              )}
               {preview.conflictCount > 0 && (
                 <>
                   <p>

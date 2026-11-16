@@ -2325,6 +2325,12 @@
   }
 }
 @media (max-width: 700px) {
+  .adm .atlas-map-header .kpis {
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .atlas-tool.compact[aria-label="Trace path"] {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr) auto;
