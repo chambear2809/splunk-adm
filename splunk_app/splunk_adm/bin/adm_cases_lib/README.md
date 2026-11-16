@@ -1,7 +1,8 @@
 # Local investigation record engine
 
-`CaseStore(database_path, entitlement_callback)` is a SQLite domain engine. It is
-not registered as a Splunk REST handler, and the browser handoff does not call it.
+`CaseStore(database_path, entitlement_callback)` is a SQLite domain engine. The
+`adm/investigations` persistent handler connects it to shared notes controls in the
+incident workspace. The handler ships disabled in `adm_investigations.conf`.
 The caller supplies a protected database directory, an authenticated principal
 from server context, and a callback `(principal, action, case_id) -> bool` which
 checks current source entitlements. Never accept these values from request JSON.
@@ -25,6 +26,6 @@ metadata. Choose quotas and retention for the deployment; no scheduler is enable
 
 Back up the entire database consistently before upgrade. Schema initialization
 is additive; exported documents carry schema version 1. This increment does not
-establish multi-host storage, Splunk Cloud support, HTTP authorization, an install
-migration, or an operational backup/restore procedure. Rollback must retain this
+establish multi-host storage, Splunk Cloud support, a protected source capture
+adapter, an install migration, or an operational backup/restore procedure. Rollback must retain this
 database; never replace it with settings storage or delete it as code cleanup.
