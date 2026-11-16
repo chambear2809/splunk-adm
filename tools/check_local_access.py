@@ -28,6 +28,7 @@ FIELDS = {
     "SPLUNK_MGMT_PORT",
     "SPLUNK_USER",
     "SPLUNK_PASS",
+    "SPLUNK_HOME",
     "SPLUNK_VERIFY_SSL",
     "SPLUNK_CLOUD_STACK",
     "SPLUNK_SSH_HOST",
@@ -83,7 +84,9 @@ def _value(raw: str) -> str:
     return value
 
 
-def parse_credentials(path: Path) -> tuple[dict[str, dict[str, str]], list[str]]:
+def parse_credentials(
+    path: Path, diagnostics: list[dict[str, Any]] | None = None
+) -> tuple[dict[str, dict[str, str]], list[str]]:
     """Parse PROFILE_* static assignments, returning only non-secret errors."""
     ok, error = _regular_owner_file(path)
     if not ok:
@@ -98,11 +101,28 @@ def parse_credentials(path: Path) -> tuple[dict[str, dict[str, str]], list[str]]
     errors: list[str] = []
     seen: set[str] = set()
     default_seen = False
+
+    def diagnostic(line: int, reason: str, key: str = "") -> None:
+        if diagnostics is None:
+            return
+        entry: dict[str, Any] = {"line": line, "reason": reason}
+        profile_key = re.fullmatch(
+            r"PROFILE_([a-z][a-z0-9_]{0,63})__([A-Z][A-Z0-9_]{0,127})", key
+        )
+        if profile_key:
+            profile, field = profile_key.groups()
+            entry["profile"] = profile if profile in PROFILES else "other"
+            entry["field"] = field
+        elif re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", key):
+            entry["field"] = key
+        diagnostics.append(entry)
+
     for lineno, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         if "=" not in line:
             errors.append("invalid_line")
+            diagnostic(lineno, "invalid_line")
             continue
         key, raw = line.split("=", 1)
         key = key.strip()
@@ -117,15 +137,27 @@ def parse_credentials(path: Path) -> tuple[dict[str, dict[str, str]], list[str]]
             except ValueError as exc:
                 errors.append(str(exc))
             continue
+        if key in {"SB_USER", "SB_PASS"}:
+            if key in seen:
+                errors.append("duplicate_key")
+                continue
+            seen.add(key)
+            try:
+                _value(raw)
+            except ValueError as exc:
+                errors.append(str(exc))
+            continue
         match = PROFILE_KEY.fullmatch(key)
         if not match or not (
             match.group(2).startswith("SPLUNK_")
             or match.group(2) in {"ACS_SERVER", "STACK_TOKEN", "STACK_TOKEN_USER"}
         ):
             errors.append("invalid_key")
+            diagnostic(lineno, "invalid_key", key)
             continue
         if match.group(2) not in FIELDS:
             errors.append("unknown_field")
+            diagnostic(lineno, "unknown_field", key)
             continue
         if key in seen:
             errors.append("duplicate_key")
@@ -192,6 +224,12 @@ def _profile_errors(
         if cfg.get("SPLUNK_SSH_ALLOW_TOFU", "").lower() != "false":
             errors.append("tofu_forbidden")
     if name == "cloud":
+        if any(
+            re.search(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", value) for value in cfg.values()
+        ):
+            errors.append("cloud_variable_reference_forbidden")
+        if "SPLUNK_HOME" in cfg:
+            errors.append("cloud_home_forbidden")
         stack = cfg.get("SPLUNK_CLOUD_STACK", "")
         if (
             not stack
@@ -220,6 +258,9 @@ def _profile_errors(
         if cfg.get("SPLUNK_HEC_URL"):
             errors.append("cloud_hec_forbidden")
     else:
+        home = cfg.get("SPLUNK_HOME", "")
+        if home and not home.startswith("/"):
+            errors.append("splunk_home_not_absolute")
         ca = cfg.get("SPLUNK_CA_CERT", "")
         if ca and not ca.startswith("/"):
             errors.append("ca_path_not_remote")
@@ -255,9 +296,11 @@ def _profile_errors(
 
 
 def validate_credentials(
-    path: Path, expectations: dict[str, dict[str, str]] | None = None
+    path: Path,
+    expectations: dict[str, dict[str, str]] | None = None,
+    diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    profiles, parse_errors = parse_credentials(path)
+    profiles, parse_errors = parse_credentials(path, diagnostics)
     result = {}
     for name in PROFILES:
         cfg = profiles.get(name, {})
@@ -395,7 +438,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--credentials",
         type=Path,
-        default=Path.home() / ".splunk/splunk-adm/credentials",
+        default=Path(
+            os.environ.get("SPLUNK_CREDENTIALS_FILE")
+            or Path.home() / ".splunk/splunk-adm/credentials"
+        ),
     )
     parser.add_argument(
         "--kubeconfig", type=Path, default=Path.home() / ".kube/splunk-adm/config"
@@ -406,14 +452,20 @@ def main(argv: list[str] | None = None) -> int:
         help="owner-only nonsecret JSON target assertions; omitted for portable generic checks",
     )
     parser.add_argument("--skip-kubeconfig", action="store_true")
+    parser.add_argument(
+        "--diagnostics", action="store_true", help="report rejected key metadata only"
+    )
     args = parser.parse_args(argv)
     expectations: dict[str, dict[str, str]] | None = None
     expectation_errors: list[str] = []
     if args.expectations:
         expectations, expectation_errors = parse_expectations(args.expectations)
+    diagnostics: list[dict[str, Any]] | None = [] if args.diagnostics else None
     output: dict[str, Any] = {
-        "credentials": validate_credentials(args.credentials, expectations)
+        "credentials": validate_credentials(args.credentials, expectations, diagnostics)
     }
+    if diagnostics is not None:
+        output["credentials"]["diagnostics"] = diagnostics
     output["credentials"]["target_expectations"].update(
         {
             "valid": not expectation_errors,
