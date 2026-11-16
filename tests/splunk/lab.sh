@@ -4,7 +4,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
-IMAGE="splunk/splunk:10.6.0.5"
+IMAGE="splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
 NAME="${ADM_LAB_NAME:-adm-splunk-lab}"
 WEB_PORT="${ADM_LAB_WEB_PORT:-8000}"
 MGMT_PORT="${ADM_LAB_MGMT_PORT:-8089}"
@@ -58,19 +58,6 @@ if [[ -n "$TASK" ]]; then
   unset DOCKER_CONTEXT
 fi
 
-wait_healthy() {
-  local deadline=$((SECONDS + 1200)) status
-  while ((SECONDS < deadline)); do
-    status="$(docker inspect -f '{{.State.Health.Status}}' "$NAME" 2>/dev/null || echo missing)"
-    case "$status" in
-      healthy) py wait; echo "Splunk is ready."; return 0 ;;
-      missing) echo "container $NAME is not running" >&2; return 1 ;;
-    esac
-    sleep 10
-  done
-  echo "timed out waiting for $NAME to become healthy" >&2
-  return 1
-}
 
 verify_owned() {
   [[ -z "$TASK" ]] || py verify-target
@@ -80,8 +67,10 @@ cmd_up() {
   py init-secrets
   if docker inspect "$NAME" >/dev/null 2>&1; then
     verify_owned
-    docker start "$NAME" >/dev/null
+    py start-container
   else
+    [[ -n "$TASK" ]] || { echo "new disposable labs require ADM_LAB_TASK and ADM_LAB_NAME" >&2; return 1; }
+    py init-tls
     # --env-file keeps the generated password out of the process list and stdout.
     local labels=()
     if [[ -n "$TASK" ]]; then
@@ -89,14 +78,19 @@ cmd_up() {
       labels=(--label "org.splunk-adm.task=$TASK" --label "org.splunk-adm.lab=$NAME"
         --network "$NAME-net" -v "$NAME-etc:/opt/splunk/etc" -v "$NAME-var:/opt/splunk/var")
     fi
-    docker run -d --name "$NAME" --platform linux/amd64 ${labels[@]+"${labels[@]}"} \
+    local created_id
+    created_id="$(docker create --no-healthcheck --name "$NAME" --platform linux/amd64 ${labels[@]+"${labels[@]}"} \
       -p "127.0.0.1:$WEB_PORT:8000" -p "127.0.0.1:$MGMT_PORT:8089" -p "127.0.0.1:$HEC_PORT:8088" \
       -e SPLUNK_START_ARGS=--accept-license \
       -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
       --env-file "$SECRETS" \
-      "$IMAGE" >/dev/null
+      "$IMAGE")"
+    py remember-container "$created_id"
+    py start-container
   fi
-  wait_healthy
+  py wait-bootstrap
+  py wait
+  echo "Splunk is ready over verified TLS."
 }
 
 copy_ta() {
@@ -235,6 +229,7 @@ cmd_purge() {
     docker rmi "$IMAGE" >/dev/null 2>&1 || true
     echo "Removed lab image $IMAGE."
   fi
+  [[ -z "$TASK" ]] || py purge-tls
   rm -f "$SECRETS"
   echo "Removed lab secrets $SECRETS."
 }

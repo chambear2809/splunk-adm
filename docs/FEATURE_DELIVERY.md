@@ -13,7 +13,7 @@ and deployment gaps. Passing local checks does not close those gaps.
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Incident timeline and explanations          | `Investigate` opens a windowed comparison from a live map with findings and coverage notes.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Current source receipt does not qualify rendered live comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
-| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; installed host/Web, real-source baseline, backup/restore and operational scheduling remain unqualified.                                                                                                                                                           |
+| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF, backup/restore and operational scheduling remain unqualified.                                                                             |
 | Investigation records and evidence packages | Private shared cases now support notes, immutable server-rechecked comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. Direct REST qualification passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Installed Web proxy, real-source collection, hard transport bounds, attachment uploads, cleanup scheduling and backup/restore remain unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | No installed candidate qualification or current journey capture. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
@@ -57,6 +57,43 @@ added a close action that restores workspace space. This is engineering design
 acceptance, not a usability study or real-source/installed qualification.
 
 The preceding installed case qualification remains scoped to its archive.
+
+## Installed qualification with verified TLS
+
+The current backend passed three installed checks across two sequential fresh,
+task-owned Enterprise 10.6.0.5 single-head labs against archive
+`21245b2804474d654d504b05a4f98c4db0f1fb3f6a167aec68ce6d8d416302a9`:
+
+- Baseline endpoint: disabled defaults, capability access, source-unavailable
+  behavior, empty metadata list, private owner-only SQLite storage, duplicate
+  headers/query rejection, media validation and public purge denial.
+- Shared notes: creation, idempotent retries, explicit sharing and
+  revocation through the installed management endpoint.
+- Protected evidence: two non-admin callers with identical index grants and
+  different search filters, independent captures, selected read/export,
+  revocation, old retries, changed source configuration and retained notes.
+  Native output includes the new `attr_service` and `identity_context` fields.
+
+Management and HEC verified their private CA and hostname with TLS 1.3 before
+and after installation; wrong-CA and wrong-hostname handshakes were rejected.
+The lab tooling now stages private certificates before first startup, pins the
+exact container ID/image, disables the image's insecure health command, waits
+for bootstrap completion and uses verified, proxy-free, redirect-free clients.
+37 focused tooling tests, Ruff, shell syntax and independent review pass.
+
+The initial run exposed premature readiness before bootstrap completion; a
+later staging check correctly refused an archive whose companion checksum had
+not been copied. The evidence fixture also refused the general host-test task
+identity before setup, then passed in its required isolated task. These were
+qualification setup failures, not successful feature checks. All attempts were
+purged. The two successful endpoint runs' containers, networks, volumes, ports,
+credentials and temporary TLS material were independently confirmed absent.
+
+The baseline checks qualify the disabled/unavailable contract, not a complete
+source adapter or working source-backed baseline. They do not qualify Splunk
+Web/CSRF, Cloud/SHC, backup/restore, hard SDK transport bounds or current real
+collection. The full six-feature request remains incomplete. Exact test and
+packaged Python hashes are in [qualification evidence](FEATURE_QUALIFICATION.json).
 
 ## Earlier verification performed
 

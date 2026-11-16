@@ -125,3 +125,16 @@ forged identity fields and evidence rejection. Browser replay covers draft
 preservation, lost-response retries, sharing, revocation, export and access-denied
 refresh. It is synthetic UI evidence. Installed lab results and remaining
 qualification are recorded separately in `FEATURE_DELIVERY.md`.
+
+## Current installed evidence
+
+The current shared backend passed the notes and caller-filter evidence checks
+on a fresh Enterprise 10.6.0.5 single-head lab against archive
+`21245b2804474d654d504b05a4f98c4db0f1fb3f6a167aec68ce6d8d416302a9`.
+Management and HEC qualification traffic verified the task CA and hostname;
+wrong-CA and wrong-hostname connections failed. Native output includes typed
+service identity provenance. The evidence fixtures were synthetic, and the lab
+was purged with independent resource and credential cleanup checks. See
+[exact qualification scope and hashes](FEATURE_QUALIFICATION.json). This does
+not resolve the SDK response-buffering/deadline caveat or qualify Web/CSRF,
+backup/restore, Cloud/SHC or real-source coverage. Persistence remains disabled.
