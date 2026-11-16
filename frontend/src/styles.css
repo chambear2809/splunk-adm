@@ -1,4 +1,23 @@
 /* Application Atlas. Every rule is scoped to .adm so the bundle never styles Splunk chrome. */
+.atlas .atlas-business-import {
+  overflow-wrap: anywhere;
+}
+.atlas .atlas-business-import label,
+.atlas .atlas-business-import textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+.atlas .atlas-business-import textarea {
+  min-height: 10rem;
+  font: inherit;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+}
+.atlas .atlas-business-import button {
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}
 .adm {
   color-scheme: light;
   --adm-select-bg: #e8f0fb;

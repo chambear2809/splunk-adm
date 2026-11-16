@@ -58,6 +58,17 @@
 .adm .atlas-incident-timeline span {
   display: block;
 }
+.adm [aria-label="Investigation handoff"] label {
+  display: block;
+  margin: 0.8rem 0;
+  overflow-wrap: anywhere;
+}
+.adm [aria-label="Investigation handoff"] textarea {
+  display: block;
+  width: 100%;
+  min-height: 5rem;
+  box-sizing: border-box;
+}
 @media (max-width: 700px) {
   .adm .atlas-incident-overlay {
     inset: 0;

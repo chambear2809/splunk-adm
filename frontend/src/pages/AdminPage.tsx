@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { pageURL } from "../app/urlState";
+import { BusinessServiceImport } from "../businessServices/BusinessServiceImport";
 
 const TABS = [
   ["setup", "Setup"],
@@ -30,6 +31,12 @@ export function AdminPage({
         ))}
       </nav>
       {children}
+      {tab === "setup" && (
+        <details>
+          <summary>Business-service ownership</summary>
+          <BusinessServiceImport />
+        </details>
+      )}
     </main>
   );
 }

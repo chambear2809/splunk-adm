@@ -47,9 +47,19 @@ Reference URLs require HTTPS and cannot contain credentials, query, or fragment.
 The preview displays them as text; a downstream interface must separately apply
 its approved navigation policy before making links.
 
-`BusinessServiceImport` renders the local preview. `onPreview` receives the
-result after validation and `undefined` after edits so a consumer cannot apply
-an old preview. No save or apply control is exposed until an independently
-validated, authorized server endpoint exists. This module does not supply
-persistence, source entitlement checks, cross-import conflict resolution,
-service annotations, or a vendor adapter.
+`BusinessServiceImport` previews and optionally saves one complete validated batch
+in browser-local storage after an explicit user action. This storage is not shared,
+durable collaboration; the entire supplied JSON is stored and users must choose
+only data appropriate for their browser. The save replaces the previous batch.
+`onLocalChange` reports save and clear outcomes. `readLocalImport` validates
+again on read and distinguishes empty, unavailable, uncertain, and ready; callers
+must not interpret unavailable or uncertain as absence. Browser storage does not
+provide source entitlement or server-side authorization.
+
+`OwnershipAnnotations` accepts validated claims, explicitly source-qualified
+resolved graph members, and a point or half-open interval in epoch seconds.
+Consumers must only provide members after a qualified identity resolution, not
+match names or IPs. The annotation preserves uncertainty, source provenance,
+conflicts, and current-only limits; business criticality does not alter technical
+priority. It creates no graph edges. Imported assertions are not verified facts.
+This module has no vendor adapter or shared persistence.

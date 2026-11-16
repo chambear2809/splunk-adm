@@ -12,6 +12,7 @@ import {
   type Window,
 } from "./model";
 import "./incident.css";
+import { InvestigationHandoff } from "../investigations/InvestigationHandoff";
 
 export type IncidentWorkspaceProps = {
   /** The selected, fully returned incident map. Change the map selection in the parent to change this window. */
@@ -410,15 +411,12 @@ export function IncidentWorkspace({
               </p>
             </div>
           )}
-          {tab === "Notes" && (
-            <div>
-              <h3>Notes</h3>
-              <p>
-                Notes require an investigation record. This comparison has not
-                been saved.
-              </p>
-            </div>
-          )}
+          <div hidden={tab !== "Notes"}>
+            <InvestigationHandoff
+              key={incident.snapshot_id}
+              comparison={result}
+            />
+          </div>
           {result.recovery && (
             <details>
               <summary>Recovery comparison</summary>

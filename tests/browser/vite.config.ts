@@ -17,6 +17,7 @@ export default defineConfig({
       "tests/browser/map-dns-inspection-harness.tsx",
       "tests/browser/inspector-interfaces-harness.tsx",
       "tests/browser/trace-gaps-harness.tsx",
+      "tests/browser/investigation-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
     ],
   },

@@ -1,21 +1,37 @@
 import { useState } from "react";
 import { previewBusinessServiceImport, type ImportPreview } from "./import";
+import {
+  browserLocalStorage,
+  clearLocalImport,
+  saveLocalImport,
+  type LocalImportResult,
+} from "./localImport";
 
 /** Local validation only. Persistence must independently validate and authorize. */
 export function BusinessServiceImport({
   onPreview,
+  onLocalChange,
 }: {
   onPreview?: (preview: ImportPreview | undefined) => void;
+  onLocalChange?: (result: LocalImportResult) => void;
 }) {
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<ImportPreview>();
+  const [localResult, setLocalResult] = useState<LocalImportResult>();
+  const updateLocal = (result: LocalImportResult) => {
+    setLocalResult(result);
+    onLocalChange?.(result);
+  };
   const validate = () => {
     const next = previewBusinessServiceImport(input);
     setPreview(next);
     onPreview?.(next);
   };
   return (
-    <section aria-labelledby="business-service-import-title">
+    <section
+      className="atlas-business-import"
+      aria-labelledby="business-service-import-title"
+    >
       <h2 id="business-service-import-title">Import business services</h2>
       <p>
         Paste a version 1 JSON export to review its claims. This does not save
@@ -37,6 +53,37 @@ export function BusinessServiceImport({
           Preview import
         </button>
       </div>
+      <p>
+        Optional browser-local storage is limited to this browser and is not
+        shared or durable collaboration. Save only data appropriate for this
+        browser; the full import is stored.
+      </p>
+      <button
+        type="button"
+        disabled={!preview || preview.errors.length > 0}
+        onClick={() =>
+          updateLocal(saveLocalImport(browserLocalStorage(), input))
+        }
+      >
+        Save locally
+      </button>{" "}
+      <button
+        type="button"
+        onClick={() => updateLocal(clearLocalImport(browserLocalStorage()))}
+      >
+        Clear local import
+      </button>
+      {localResult && (
+        <p role="status">
+          {localResult.status === "ready"
+            ? "Import saved in this browser only."
+            : localResult.status === "empty"
+              ? "Local import cleared."
+              : localResult.status === "uncertain"
+                ? "Local import could not be validated; ownership is uncertain."
+                : "Browser-local storage is unavailable."}
+        </p>
+      )}
       {preview && (
         <div aria-live="polite">
           {preview.errors.length ? (
