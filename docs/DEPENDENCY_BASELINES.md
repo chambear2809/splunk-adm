@@ -106,11 +106,22 @@ They do not establish historical pod-to-controller identity, complete
 dependencies, readiness intervals or measured failover headroom. See
 [source observations](FEATURE_SOURCE_OBSERVATIONS.md).
 
-The baseline host, its Splunk Web integration and backup/restore have not been
-qualified in an installed deployment. Older installed investigation/case
-qualification cannot be assumed to remain valid after changes to the shared
-qualified search backend; repeat the applicable installed checks against the
-current package before relying on it.
+The installed disabled/source-unavailable host contract passed on Enterprise
+10.6.0.5 in a fresh task-owned single-head lab against archive
+`21245b2804474d654d504b05a4f98c4db0f1fb3f6a167aec68ce6d8d416302a9`.
+The test verified dedicated capability denial, disabled defaults, metadata
+listing after explicit runtime opt-in, private storage ownership/modes, 422
+responses for unavailable capture/evidence writes, duplicate headers/query
+rejection, media validation and public purge denial. It did not install a fake
+source provider. The current shared case backend also passed its independent
+installed caller-filter revalidation test against this archive.
+
+Positive baseline capture/version/watch evaluation, Splunk Web/CSRF and
+backup/restore remain unqualified. Both task labs were purged, with container,
+network, volume, port, credential and TLS cleanup independently checked. See
+[qualification evidence](FEATURE_QUALIFICATION.json) for exact test and backend
+hashes and remaining limits. This is synthetic local qualification, not Cloud or
+real-source qualification.
 
 ## Upgrade and rollback
 

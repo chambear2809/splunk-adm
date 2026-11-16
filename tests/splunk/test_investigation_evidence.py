@@ -182,9 +182,7 @@ class InstalledInvestigationEvidenceTest(unittest.TestCase):
                 lab.MGMT + "/services/authentication/current-context?output_mode=json",
                 headers={"Authorization": "Basic " + authorization},
             )
-            with urllib.request.urlopen(
-                request, context=lab._CTX, timeout=30
-            ) as response:
+            with lab.urlopen(request, timeout=30) as response:
                 context = json.loads(response.read())["entry"][0]["content"]
             if "admin" in context.get(
                 "roles", []
@@ -241,7 +239,7 @@ class InstalledInvestigationEvidenceTest(unittest.TestCase):
             data=body,
         )
         try:
-            response = urllib.request.urlopen(request, context=lab._CTX, timeout=120)
+            response = lab.urlopen(request, timeout=120)
         except urllib.error.HTTPError as response:
             with response:
                 return response.code, json.loads(response.read())

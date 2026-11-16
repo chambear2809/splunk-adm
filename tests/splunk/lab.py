@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 import base64
+import functools
+import io
 import json
 import os
 import re
 import secrets
 import ssl
+import stat
 import subprocess
 import sys
+import tarfile
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+
+import lab_tls
 
 HERE = Path(__file__).resolve().parent
 SECRETS = Path(
@@ -36,13 +42,9 @@ SECRETS = Path(
 )
 MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
 HEC = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_HEC_PORT', '8088'))}"
+IMAGE = "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
 APP = "splunk_adm"
 MAX_BATCH_BYTES = 5 * 1024 * 1024
-
-# The lab container uses a self-signed certificate and is bound to 127.0.0.1.
-_CTX = ssl.create_default_context()
-_CTX.check_hostname = False
-_CTX.verify_mode = ssl.CERT_NONE
 
 
 class LabError(RuntimeError):
@@ -80,7 +82,7 @@ def local_docker_endpoint() -> str:
     return endpoint
 
 
-def verify_target() -> None:
+def verify_target(*, expected_id: str | None = None, registering=False) -> None:
     """Task labs refuse operations against an unowned or misrouted container."""
     identity = task_identity()
     if identity is None:
@@ -95,6 +97,23 @@ def verify_target() -> None:
         check=True,
     )
     target = json.loads(result.stdout)[0]
+    if registering:
+        if expected_id is None or not re.fullmatch(r"[a-f0-9]{64}", expected_id):
+            raise LabError("a newly created container ID is required")
+    else:
+        recorded = lab_tls.read_container(SECRETS, identity)
+        if expected_id is not None and expected_id != recorded:
+            raise LabError("task container identity differs from the recorded ID")
+        expected_id = recorded
+    if target.get("Id") != expected_id:
+        raise LabError("refusing a replaced task container")
+    config = target.get("Config", {})
+    if config.get("Image") != IMAGE or (config.get("Healthcheck") or {}).get(
+        "Test"
+    ) != ["NONE"]:
+        raise LabError(
+            "task lab requires the pinned image and disabled image healthcheck"
+        )
     labels = target.get("Config", {}).get("Labels") or {}
     if (
         labels.get("org.splunk-adm.task") != task
@@ -183,7 +202,9 @@ def task_resources(remove: bool = False) -> None:
 
 
 def init_secrets() -> None:
-    if SECRETS.exists():
+    lab_tls.tls_directory(SECRETS)
+    if os.path.lexists(SECRETS):
+        read_secrets()
         return
     password = "Adm-" + secrets.token_urlsafe(18)
     descriptor = os.open(
@@ -196,19 +217,187 @@ def init_secrets() -> None:
 
 
 def read_secrets() -> dict[str, str]:
-    if not SECRETS.exists():
-        raise LabError(f"missing {SECRETS}; run lab.sh up first")
-    pairs = (
-        line.split("=", 1)
-        for line in SECRETS.read_text(encoding="utf-8").splitlines()
-        if "=" in line
+    lab_tls.tls_directory(SECRETS)
+    try:
+        descriptor = os.open(SECRETS, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or info.st_uid != os.getuid()
+                or stat.S_IMODE(info.st_mode) != 0o600
+                or info.st_nlink != 1
+            ):
+                raise LabError("unsafe lab credential file")
+            raw = stream.read(65537)
+        if len(raw) > 65536:
+            raise LabError("invalid lab credential file")
+        data = raw.decode("utf-8")
+        pairs = [line.split("=", 1) for line in data.splitlines()]
+        if (
+            len(data) > 65536
+            or len(pairs) != 2
+            or any(len(pair) != 2 or not pair[1] for pair in pairs)
+            or {pair[0] for pair in pairs} != {"SPLUNK_PASSWORD", "HEC_TOKEN"}
+        ):
+            raise LabError("invalid lab credential file")
+        return dict(pairs)
+    except (OSError, UnicodeDecodeError) as exc:
+        raise LabError("lab credentials are missing or unsafe") from exc
+
+
+@functools.lru_cache(maxsize=1)
+def _context():
+    return lab_tls.tls_context(SECRETS, identity=task_identity())
+
+
+def __getattr__(name):
+    # Preserve endpoint test compatibility without constructing trust during
+    # pre-container initialization or reading private keys into diagnostics.
+    if name == "_CTX":
+        return _context()
+    raise AttributeError(name)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise LabError("lab HTTP redirects are prohibited")
+
+
+def urlopen(req: urllib.request.Request, timeout: float = 120):
+    try:
+        target = urllib.parse.urlsplit(req.full_url)
+        port = target.port
+    except ValueError as exc:
+        raise LabError("lab requests require an exact loopback HTTPS target") from exc
+    if (
+        target.scheme != "https"
+        or target.hostname != "127.0.0.1"
+        or target.username is not None
+        or target.password is not None
+        or target.fragment
+        or port
+        not in {urllib.parse.urlsplit(MGMT).port, urllib.parse.urlsplit(HEC).port}
+    ):
+        raise LabError("lab requests require an exact loopback HTTPS target")
+    verify_target()
+    opener = urllib.request.build_opener(
+        urllib.request.ProxyHandler({}),
+        _NoRedirect(),
+        urllib.request.HTTPSHandler(context=_context()),
     )
-    return {k: v for k, v in pairs}
+    return opener.open(req, timeout=timeout)
+
+
+def init_tls():
+    identity = task_identity()
+    if identity is None:
+        raise LabError("new disposable labs require an explicit task identity")
+    return lab_tls.prepare_tls(SECRETS, *identity)
+
+
+def remember_container(container_id):
+    identity = task_identity()
+    if identity is None:
+        raise LabError("new disposable labs require an explicit task identity")
+    verify_target(expected_id=container_id, registering=True)
+    lab_tls.remember_container(SECRETS, identity, container_id)
+
+
+def start_container():
+    identity = task_identity()
+    if identity is None:
+        raise LabError("startup requires an explicit task identity")
+    verify_target()
+    container_id = lab_tls.read_container(SECRETS, identity)
+    target = json.loads(
+        subprocess.check_output(
+            ["docker", "inspect", container_id], text=True, timeout=30
+        )
+    )[0]
+    status = target.get("State", {}).get("Status")
+    if status == "created":
+        # A previous copy may have failed after the ID was recorded. Never
+        # start that peer until the complete fixed TLS set has been restaged.
+        stage_tls()
+    elif status not in ("running", "exited"):
+        raise LabError("task container is not in a startable state")
+    verify_target(expected_id=container_id)
+    subprocess.run(
+        ["docker", "start", container_id],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
+        check=True,
+    )
+
+
+def stage_tls():
+    """Stage fixed TLS files before starting the recorded disposable peer."""
+    verify_target()
+    identity = task_identity()
+    if identity is None:
+        raise LabError("TLS staging requires an explicit task identity")
+    container_id = lab_tls.read_container(SECRETS, identity)
+    target = json.loads(
+        subprocess.check_output(
+            ["docker", "inspect", container_id], text=True, timeout=30
+        )
+    )[0]
+    if target.get("State", {}).get("Status") != "created":
+        raise LabError("TLS staging is permitted only before initial startup")
+    directory = Path(str(SECRETS) + ".tls")
+    # Context construction validates the public CA and protected task directory.
+    lab_tls.tls_context(SECRETS, identity=identity)
+    prefix = "/opt/splunk/etc/auth/adm_lab_tls/"
+    files = {
+        "etc/auth/adm_lab_tls/server.pem": lab_tls.server_bundle(SECRETS, identity),
+        "etc/auth/adm_lab_tls/ca.pem": (directory / "ca.pem").read_bytes(),
+        "etc/system/local/server.conf": (
+            f"[general]\nserverName = {identity[1]}\n\n[sslConfig]\n"
+            f"serverCert = {prefix}server.pem\nsslRootCAPath = {prefix}ca.pem\n"
+            "sslPassword =\ncliVerifyServerName = true\n"
+        ).encode(),
+        "etc/system/local/inputs.conf": (
+            f"[http]\nenableSSL = 1\nserverCert = {prefix}server.pem\nsslPassword =\n"
+        ).encode(),
+    }
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as output:
+        parents = sorted(
+            {
+                str(parent)
+                for name in files
+                for parent in Path(name).parents
+                if str(parent) != "."
+            },
+            key=lambda name: (len(Path(name).parts), name),
+        )
+        for name in parents:
+            member = tarfile.TarInfo(name)
+            member.type, member.mode = tarfile.DIRTYPE, 0o755
+            member.uid = member.gid = 41812
+            output.addfile(member)
+        for name, data in files.items():
+            member = tarfile.TarInfo(name)
+            member.uid = member.gid = 41812
+            member.uname = member.gname = "splunk"
+            member.mode, member.size = 0o600, len(data)
+            output.addfile(member, io.BytesIO(data))
+    verify_target(expected_id=container_id)
+    subprocess.run(
+        ["docker", "cp", "-", container_id + ":/opt/splunk"],
+        input=archive.getvalue(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=30,
+        check=True,
+    )
 
 
 def _open(req: urllib.request.Request, timeout: float = 120):
     try:
-        return urllib.request.urlopen(req, context=_CTX, timeout=timeout)
+        return urlopen(req, timeout=timeout)
     except urllib.error.HTTPError as e:
         with e:
             body = e.read().decode("utf-8", "replace")[:2000]
@@ -235,6 +424,41 @@ def _json(method: str, path: str, data: dict | None = None) -> dict:
         return json.loads(r.read())
 
 
+def wait_bootstrap(timeout: float = 900) -> None:
+    """Wait for the pinned image's state marker without invoking its curl check."""
+    identity = task_identity()
+    if identity is None:
+        raise LabError("bootstrap readiness requires an explicit task identity")
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        verify_target()
+        container_id = lab_tls.read_container(SECRETS, identity)
+        target = json.loads(
+            subprocess.check_output(
+                ["docker", "inspect", container_id], text=True, timeout=30
+            )
+        )[0]
+        if target.get("State", {}).get("Status") != "running":
+            raise LabError("task container stopped during bootstrap")
+        state = subprocess.run(
+            [
+                "docker",
+                "exec",
+                container_id,
+                "cat",
+                "/opt/container_artifact/splunk-container.state",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
+        )
+        if state.returncode == 0 and state.stdout.strip() in (b"running", b"started"):
+            return
+        time.sleep(5)
+    raise LabError("task container bootstrap did not complete")
+
+
 def wait_ready(timeout: float = 900) -> None:
     deadline = time.time() + timeout
     last = None
@@ -243,6 +467,8 @@ def wait_ready(timeout: float = 900) -> None:
             _json("GET", "/services/server/info")
             return
         except (LabError, OSError) as e:
+            if isinstance(getattr(e, "reason", e), ssl.SSLCertVerificationError):
+                raise LabError("task TLS certificate verification failed") from None
             last = e
             time.sleep(5)
     raise LabError(f"splunkd not ready after {timeout}s: {last}")
@@ -389,8 +615,25 @@ def main(argv: list[str]) -> int:
             task_resources()
         elif cmd == "remove-resources":
             task_resources(remove=True)
+        elif cmd == "init-tls":
+            init_tls()
+        elif cmd == "remember-container":
+            if len(rest) != 1:
+                raise LabError("a newly created container ID is required")
+            remember_container(rest[0])
+        elif cmd == "start-container":
+            start_container()
+        elif cmd == "stage-tls":
+            stage_tls()
+        elif cmd == "purge-tls":
+            identity = task_identity()
+            if identity is None:
+                raise LabError("TLS purge requires an explicit task identity")
+            lab_tls.cleanup_tls(SECRETS, *identity)
         elif cmd == "init-secrets":
             init_secrets()
+        elif cmd == "wait-bootstrap":
+            wait_bootstrap()
         elif cmd == "wait":
             wait_ready()
         elif cmd == "restart":
@@ -408,7 +651,7 @@ def main(argv: list[str]) -> int:
         else:
             print(f"unknown command {cmd}", file=sys.stderr)
             return 2
-    except LabError as e:
+    except (LabError, lab_tls.LabTLSError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     return 0

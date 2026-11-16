@@ -112,6 +112,7 @@ for (const file of [
   "FEATURE_SOURCE_OBSERVATIONS.md",
   "FEATURE_FOUNDATIONS.md",
   "FEATURE_DELIVERY.md",
+  "FEATURE_QUALIFICATION.json",
 ])
   await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
 for (const file of ["THOUSANDEYES_DESIGN.md", "THOUSANDEYES_OPERATIONS.md"])

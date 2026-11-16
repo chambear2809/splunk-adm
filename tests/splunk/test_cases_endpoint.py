@@ -64,7 +64,7 @@ class InstalledCasesTest(unittest.TestCase):
             data=data,
         )
         try:
-            response = urllib.request.urlopen(request, context=lab._CTX, timeout=30)
+            response = lab.urlopen(request, timeout=30)
         except urllib.error.HTTPError as response:
             with response:
                 return response.code, json.loads(response.read())
