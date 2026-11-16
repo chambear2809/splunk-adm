@@ -112,3 +112,31 @@ for (const failure of ["js", "css", "version"] as const) {
     ).toBeVisible();
   });
 }
+
+for (const [kind, label, heading] of [
+  ["ownershipImport", "business-service import", "Import business services"],
+  ["maintenance", "maintenance planning", "Maintenance planning"],
+  ["baseline", "dependency baseline", "Dependency baselines"],
+] as const) {
+  test(`production optional ${kind} opens without an eager request`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    const { requests } = await setupAssets(page);
+    await page.goto(`/tests/browser/journey-assets.html?kind=${kind}`);
+    expect(requests).toEqual([]);
+    await page.getByRole("button", { name: `Open ${label} evidence` }).click();
+    await expect(
+      page.getByRole("heading", { name: heading, exact: true }),
+    ).toBeVisible();
+    if (kind === "ownershipImport") {
+      await page.getByLabel("JSON import").fill("{}");
+      await page.getByRole("button", { name: "Preview import" }).click();
+      await expect(
+        page.getByText("Import has errors. No rows are ready to apply."),
+      ).toBeVisible();
+    }
+    expect(errors).toEqual([]);
+  });
+}

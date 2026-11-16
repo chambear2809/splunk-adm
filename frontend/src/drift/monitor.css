@@ -1,0 +1,29 @@
+.adm .atlas-dependency-monitor {
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+.adm .atlas-dependency-monitor p {
+  margin: 0.6rem 0;
+}
+.adm .atlas-dependency-monitor label {
+  display: block;
+  margin-top: 0.8rem;
+}
+.adm .atlas-dependency-monitor input {
+  max-width: 100%;
+  width: 100%;
+  padding: 0.5rem;
+  font: inherit;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+}
+.adm .atlas-dependency-monitor button {
+  min-height: 32px;
+  margin: 0.5rem 0.5rem 0.5rem 0;
+}
+
+.adm .atlas-dependency-monitor button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

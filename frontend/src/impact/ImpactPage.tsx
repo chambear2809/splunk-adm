@@ -1,6 +1,9 @@
 import { Fragment, useEffect, useId, useMemo, useState } from "react";
 import { Download, Map as MapIcon, RefreshCw, X, Zap } from "lucide-react";
-import type { SearchClient } from "../data/searchClient";
+import {
+  SearchAccessDeniedError,
+  type SearchClient,
+} from "../data/searchClient";
 import { downloadBlob } from "../download";
 import { plural, prettyBytes } from "../glossary";
 import { TimePicker } from "../map/TimePicker";
@@ -30,11 +33,12 @@ import {
 } from "./model";
 import { impactURL, isImpactScope, parseImpactParams } from "./url";
 import "./impact.css";
+import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 
 type Load =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "error"; error: string }
+  | { status: "error"; error: string; denied?: boolean }
   | { status: "done"; data: ImpactData };
 
 const SEV_LABEL = {
@@ -460,6 +464,7 @@ export function ImpactPage({
           !controller.signal.aborted &&
           setLoad({
             status: "error",
+            denied: e instanceof SearchAccessDeniedError,
             error: e instanceof Error ? e.message : "Impact failed",
           }),
       );
@@ -564,6 +569,18 @@ export function ImpactPage({
           }}
         />
         {demo && <span className="chip demo">Demo data</span>}
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={
+            load.status === "loading" ||
+            !elements.length ||
+            (!demo && !isImpactScope(scope))
+          }
+          onClick={() => setNonce((value) => value + 1)}
+        >
+          Refresh impact
+        </button>
       </div>
       <div className="adm atlas-impact" data-adm-theme={theme}>
         {!demo && elements.length > 0 && !isImpactScope(scope) && (
@@ -793,6 +810,16 @@ export function ImpactPage({
               </p>
             ))}
           </>
+        )}
+        {elements.length > 0 && (
+          <JourneyLazyEvidence
+            kind="maintenance"
+            data={data}
+            result={result?.mode === "fails" ? result : undefined}
+            selection={{ elements, earliest, latest, scope, demo }}
+            loading={load.status === "loading"}
+            denied={load.status === "error" && load.denied}
+          />
         )}
       </div>
     </main>

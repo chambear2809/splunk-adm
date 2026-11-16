@@ -36,17 +36,20 @@ const input = (): AssessmentInput => ({
           ready: evidence(true),
           substitutable: evidence(true),
           independentFailureDomain: evidence(true),
-          capacity: evidence({
-            sufficientPeakHeadroom: true,
-            value: 100,
-            unit: "requests/s",
-            interval: { start: 100, end: 200 },
-            direction: "inbound",
-            sampling: "unsampled",
-            deduplication: "request ID",
-            capacitySource: "load test",
-            assumptions: ["peak during window is representative"],
-          }),
+          capacity: {
+            ...evidence({
+              sufficientPeakHeadroom: true,
+              value: 100,
+              unit: "requests/s",
+              interval: { start: 100, end: 200 },
+              direction: "inbound",
+              sampling: "unsampled",
+              deduplication: "request ID",
+              capacitySource: "load test",
+              assumptions: ["peak during window is representative"],
+            }),
+            observedAt: 200,
+          },
         },
       ],
     },
@@ -115,5 +118,96 @@ describe("maintenance assessment", () => {
     expect(
       compareAssessments(before, assessMaintenance(source)).comparable,
     ).toBe(false);
+  });
+});
+
+describe("comparison boundaries", () => {
+  it("rejects duplicate service identities and invalid windows", () => {
+    const source = input();
+    const before = assessMaintenance(source);
+    source.id = "later";
+    source.capturedAt = 400;
+    source.services.push({ ...source.services[0] });
+    expect(
+      compareAssessments(before, assessMaintenance(source)).comparable,
+    ).toBe(false);
+    source.services.pop();
+    source.window = { start: 200, end: 100 };
+    expect(
+      compareAssessments(before, assessMaintenance(source)).comparable,
+    ).toBe(false);
+  });
+});
+
+describe("measurement timing", () => {
+  it("accepts a peak observed after the measured interval ends", () => {
+    const source = input();
+    source.services[0].alternatives[0].capacity!.observedAt = 200;
+    expect(assessMaintenance(source).services[0].alternatives[0].capacity).toBe(
+      "confirmed",
+    );
+  });
+  it("rejects stale, future, invalid, premature, or incomplete peak measurements", () => {
+    for (const mutate of [
+      (
+        e: NonNullable<
+          AssessmentInput["services"][number]["alternatives"][number]["capacity"]
+        >,
+      ) => {
+        e.validUntil = 300;
+      },
+      (
+        e: NonNullable<
+          AssessmentInput["services"][number]["alternatives"][number]["capacity"]
+        >,
+      ) => {
+        e.observedAt = 301;
+      },
+      (
+        e: NonNullable<
+          AssessmentInput["services"][number]["alternatives"][number]["capacity"]
+        >,
+      ) => {
+        e.observedAt = NaN;
+      },
+      (
+        e: NonNullable<
+          AssessmentInput["services"][number]["alternatives"][number]["capacity"]
+        >,
+      ) => {
+        e.observedAt = 199;
+      },
+      (
+        e: NonNullable<
+          AssessmentInput["services"][number]["alternatives"][number]["capacity"]
+        >,
+      ) => {
+        e.value.interval.start = 101;
+      },
+    ]) {
+      const source = input();
+      const capacity = source.services[0].alternatives[0].capacity!;
+      capacity.observedAt = 200;
+      mutate(capacity);
+      expect(
+        assessMaintenance(source).services[0].alternatives[0].capacity,
+      ).toBe("unknown");
+    }
+  });
+  it("allows a source-established effective start for operational state", () => {
+    const source = input();
+    const health = source.services[0].alternatives[0].healthy!;
+    health.observedAt = 200;
+    expect(assessMaintenance(source).services[0].alternatives[0].health).toBe(
+      "unknown",
+    );
+    health.validFrom = 100;
+    expect(assessMaintenance(source).services[0].alternatives[0].health).toBe(
+      "confirmed",
+    );
+    health.validFrom = 201;
+    expect(assessMaintenance(source).services[0].alternatives[0].health).toBe(
+      "unknown",
+    );
   });
 });

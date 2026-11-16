@@ -210,6 +210,85 @@ class LocalAccessTests(unittest.TestCase):
         result = validate_credentials(self.cred)
         self.assertIn("unknown_field", result["profiles"]["enterprise"]["errors"])
 
+    def test_diagnostics_expose_only_assignment_metadata(self):
+        self.cred.write_text(
+            credentials()
+            + 'PROFILE_cloud__SPLUNK_UNSUPPORTED="private-value"\n'
+            + 'PROFILE_other__SPLUNK_X="another-private-value"\n'
+            + 'bad key private-snippet="third-private-value"\n'
+            + "malformed-private-line\n"
+        )
+        captured = StringIO()
+        with mock.patch("sys.stdout", captured):
+            code = main(
+                ["--credentials", str(self.cred), "--skip-kubeconfig", "--diagnostics"]
+            )
+        self.assertEqual(code, 2)
+        output = captured.getvalue()
+        for secret in ("private-value", "private-snippet", "malformed-private-line"):
+            self.assertNotIn(secret, output)
+        result = json.loads(output)["credentials"]
+        self.assertTrue(all(not p["valid"] for p in result["profiles"].values()))
+        diagnostics = result["diagnostics"]
+        self.assertEqual(diagnostics[0]["profile"], "cloud")
+        self.assertEqual(diagnostics[0]["field"], "SPLUNK_UNSUPPORTED")
+        self.assertEqual(diagnostics[1]["profile"], "other")
+        self.assertEqual(set(diagnostics[2]), {"line", "reason"})
+        self.assertEqual(set(diagnostics[3]), {"line", "reason"})
+
+    def test_credentials_environment_and_cli_override(self):
+        missing = self.root / "missing"
+        with mock.patch.dict("os.environ", {"SPLUNK_CREDENTIALS_FILE": str(missing)}):
+            with mock.patch("sys.stdout", StringIO()):
+                self.assertEqual(main(["--skip-kubeconfig"]), 2)
+                self.assertEqual(
+                    main(["--credentials", str(self.cred), "--skip-kubeconfig"]), 0
+                )
+
+    def test_auxiliary_credentials_and_home_are_narrowly_scoped(self):
+        self.cred.write_text(
+            credentials(
+                hf={"SPLUNK_HOME": "/opt/splunk"},
+                enterprise={"SPLUNK_HOME": "/opt/splunk"},
+            )
+            + 'SB_USER="private-user"\nSB_PASS="private-password"\n'
+        )
+        result = validate_credentials(self.cred)
+        self.assertTrue(all(p["valid"] for p in result["profiles"].values()))
+        self.assertNotIn("private-", json.dumps(result))
+        self.cred.write_text(self.cred.read_text() + 'SB_PASS="another-secret"\n')
+        self.assertIn(
+            "duplicate_key",
+            validate_credentials(self.cred)["profiles"]["cloud"]["errors"],
+        )
+        self.cred.write_text(credentials(hf={"SPLUNK_HOME": "relative"}))
+        self.assertIn(
+            "splunk_home_not_absolute",
+            validate_credentials(self.cred)["profiles"]["hf"]["errors"],
+        )
+        self.cred.write_text(credentials(cloud={"SPLUNK_HOME": ""}))
+        self.assertIn(
+            "cloud_home_forbidden",
+            validate_credentials(self.cred)["profiles"]["cloud"]["errors"],
+        )
+
+    def test_cloud_variable_references_are_rejected_without_disclosure(self):
+        for field in (
+            "SPLUNK_USER",
+            "SPLUNK_PASS",
+            "SPLUNK_URI",
+            "SPLUNK_TARGET_ROLE",
+            "SPLUNK_VERIFY_SSL",
+        ):
+            with self.subTest(field=field):
+                self.cred.write_text(credentials(cloud={field: "${PRIVATE_SECRET}"}))
+                result = validate_credentials(self.cred)
+                self.assertIn(
+                    "cloud_variable_reference_forbidden",
+                    result["profiles"]["cloud"]["errors"],
+                )
+                self.assertNotIn("PRIVATE_SECRET", json.dumps(result))
+
     def test_expectations_file_is_owner_only_nonsecret_json(self):
         path = self.root / "expectations.json"
         path.write_text(json.dumps({"profiles": target_expectations()}))

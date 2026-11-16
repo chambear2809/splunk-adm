@@ -60,6 +60,18 @@ const result = {
   records: normalized.records,
   coverage: [],
 };
+const kind = new URLSearchParams(location.search).get("kind");
 createRoot(document.getElementById("root")!).render(
-  <JourneyLazyEvidence kind="proxy" result={result} />,
+  kind === "ownershipImport" ? (
+    <JourneyLazyEvidence kind="ownershipImport" />
+  ) : kind === "maintenance" ? (
+    <JourneyLazyEvidence
+      kind="maintenance"
+      selection={{ elements: [], earliest: "0", scope: "", demo: false }}
+    />
+  ) : kind === "baseline" ? (
+    <JourneyLazyEvidence kind="baseline" window={selection.window} />
+  ) : (
+    <JourneyLazyEvidence kind="proxy" result={result} />
+  ),
 );

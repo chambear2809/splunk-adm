@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { pageURL } from "../app/urlState";
-import { BusinessServiceImport } from "../businessServices/BusinessServiceImport";
+import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 
 const TABS = [
   ["setup", "Setup"],
@@ -32,10 +32,9 @@ export function AdminPage({
       </nav>
       {children}
       {tab === "setup" && (
-        <details>
-          <summary>Business-service ownership</summary>
-          <BusinessServiceImport />
-        </details>
+        <section aria-label="Business-service ownership">
+          <JourneyLazyEvidence kind="ownershipImport" />
+        </section>
       )}
     </main>
   );

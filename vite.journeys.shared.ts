@@ -21,6 +21,21 @@ export function journeysAssetVersion(): string {
     "frontend/src/data/proxyEvidence.ts",
     "frontend/src/topology.ts",
     "frontend/src/glossary.ts",
+    "frontend/src/impact/model.ts",
+    "frontend/src/maintenance/model.ts",
+    "frontend/src/maintenance/adapter.ts",
+    "frontend/src/maintenance/MaintenancePlanner.tsx",
+    "frontend/src/maintenance/ImpactMaintenancePlanner.tsx",
+    "frontend/src/maintenance/MaintenanceAssessment.tsx",
+    "frontend/src/maintenance/maintenance.css",
+    "frontend/src/drift/model.ts",
+    "frontend/src/drift/client.ts",
+    "frontend/src/drift/DependencyMonitor.tsx",
+    "frontend/src/drift/BaselineReview.tsx",
+    "frontend/src/drift/monitor.css",
+    "frontend/src/businessServices/BusinessServiceImport.tsx",
+    "frontend/src/businessServices/import.ts",
+    "frontend/src/businessServices/localImport.ts",
   ]) {
     hash.update(file);
     hash.update(readFileSync(resolve(file)));
@@ -35,6 +50,7 @@ export const JOURNEYS_HOST_MODULES = new Map([
   [resolve("frontend/src/data/proxyEvidence"), "proxyEvidence"],
   [resolve("frontend/src/topology"), "topology"],
   [resolve("frontend/src/glossary"), "glossary"],
+  [resolve("frontend/src/impact/model"), "impact"],
 ]);
 export function journeysHostModule(id: string): string | undefined {
   return JOURNEYS_HOST_MODULES.get(id.replace(/\.tsx?$/, ""));

@@ -18,8 +18,8 @@ export function BaselineReview({
 }) {
   const reasons = eligibility(current);
   return (
-    <section aria-label="Dependency baselines">
-      <h2>Dependency baselines</h2>
+    <section aria-label="Evidence review">
+      <h3>Evidence review</h3>
       {reasons.length ? (
         <>
           <p>Current evidence is not eligible for a baseline.</p>
@@ -37,7 +37,7 @@ export function BaselineReview({
         deployment.
       </p>
       {!baselines.length ? (
-        <p>No baselines available.</p>
+        <p>No baseline selected for comparison.</p>
       ) : (
         baselines.map((baseline) => {
           const result = compare(baseline.capture, current);
@@ -70,7 +70,7 @@ export function BaselineReview({
           );
         })
       )}
-      <h3>Watchlist</h3>
+      <h4>Watchlist</h4>
       {watches.length ? (
         <ul>
           {watches.map((watch) => (
