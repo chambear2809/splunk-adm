@@ -104,7 +104,7 @@
     "source_configuration_sha256": {
       "splunk_adm/default/app.conf": "dc2cde1e054beaacf7d10d7b2cd4faff8e994d130b73d7454a9bd4742afa26e7"
     },
-    "status": "Cloud vetting rejected 0.9.0; installed version remains 0.8.6; fixing missing reload declarations for 0.9.1",
+    "status": "Cloud vetting rejected 0.9.0; superseded by the separately qualified 0.9.1 revision",
     "ui_changes": [
       "Device lookup uses current picker bounds while retaining navigation context",
       "Atlas-owned narrow time dialog contains presets and all custom panels with vertical scrolling",
@@ -114,6 +114,20 @@
     "version": "0.9.0"
   },
   "cloud_development_revision": {
+    "appinspect": {
+      "errors": 0,
+      "failures": 0,
+      "html_report_sha256": "f79438a4c03d9910f632ae4ab4078dd67192ce77b93f799ca5be1e14f199417b",
+      "not_applicable": 100,
+      "raw_report_private_outside_git": true,
+      "report_response_package_identity_matches_sha256": true,
+      "skipped": 1,
+      "status": "Approved in Cloud Web",
+      "successes": 140,
+      "tag": "private_victoria",
+      "version": "4.4.0",
+      "warnings": 6
+    },
     "archive_comparison_to_0_9_0": {
       "added_files": 0,
       "changed_files": [
@@ -130,7 +144,7 @@
     ],
     "checks": {
       "build_report_tests": 10,
-      "cloud_vetting": "pending",
+      "cloud_vetting": "approved",
       "frontend_assets_byte_identical_to_0_9_0": true,
       "package": "passed",
       "release_archive": "passed",
@@ -160,11 +174,97 @@
       "splunk_adm/appserver/static/pages/journeys.js": "8e0e3cdcc34a6b023a3be925519452c56add4888f8a15cd01611cfd4b4b77694"
     },
     "inspection_bypass": false,
+    "installation": {
+      "api_observed_version": "0.9.1",
+      "manual_restart_requested": false,
+      "method": "Approved private-app update through authenticated Cloud Web",
+      "package_sha256": "81b00cb5b02fe52594aee49a45d29517ae967c26138d260bd4ba4b457dc5b2d6",
+      "platform_restart_behavior": "Not independently observed",
+      "reported_success": true,
+      "scope": "Logged-in search-head target only; no whole-stack propagation claim"
+    },
+    "installed_browser_check": {
+      "absolute_device_window_preserved": true,
+      "catalog": "Unavailable: qualified identity evidence is incomplete",
+      "current_picker_preset_overrides_stale_url_on_device_open": true,
+      "current_picker_to_impact_bounds_exact": true,
+      "loaded_fixed_window_metrics": {
+        "conversation_rows": 154,
+        "flows": 1160,
+        "peers": 39,
+        "traffic_label": "42.8 MB"
+      },
+      "new_defects": [
+        "Advanced valid previews leave Apply disabled because toolkit requires explicit error:null; local fix pending deployment",
+        "Splunk body min-width:960px clips the 850px Cloud viewport; app-owned override pending deployment",
+        "Selected absolute window/timezone is not visible beside Custom time; concise label pending"
+      ],
+      "new_source_or_persistence_features_qualified": false,
+      "platform_console_observation": "Cloud Control unified-header module reports missing @emotion/is-prop-valid and a Studio-navigation 403; not attributed to Atlas source",
+      "preset_window_seconds": 900,
+      "raw_screenshots_outside_git": true
+    },
     "package_sha256": "81b00cb5b02fe52594aee49a45d29517ae967c26138d260bd4ba4b457dc5b2d6",
+    "postflight_capture": {
+      "batches": 2,
+      "bytes": 7705302,
+      "collections_reached_end": 15,
+      "manifest_sha256": "30638b924f1b1955fa59f472ced63b3be24bcf74eede1b3b4b85288bf21353ee",
+      "metadata_sections": 19,
+      "pages": 99,
+      "rows": 5038,
+      "scope": "Live paginated observation; not atomic, quiescent, a raw override backup or verified restore",
+      "total_budgeted_calls": 204
+    },
+    "postflight_comparison": {
+      "affected_macro_definitions_match_frozen_archive_after_continuation_and_whitespace_normalization": true,
+      "collection_schema_and_acl_same": 15,
+      "kv_added": 8,
+      "kv_change_collections": {
+        "adm_ip_identity": {
+          "added": 0,
+          "changed": 17,
+          "missing": 0
+        },
+        "adm_service_backends": {
+          "added": 8,
+          "changed": 2,
+          "missing": 0
+        }
+      },
+      "kv_changed": 19,
+      "kv_limit": "Captures were taken at different times; no cause, continuous-consistency or restoration claim",
+      "kv_missing": 0,
+      "kv_rows_after": 4662,
+      "kv_rows_before": 4654,
+      "kv_same": 4635,
+      "macro_added": 2,
+      "macro_changed": 3,
+      "macro_limit": "Pre-upgrade effective definition provenance is not established; cannot determine whether the three differences were customized overrides or different shipped defaults",
+      "macro_missing": 0,
+      "new_feature_configuration_remains_disabled_and_unqualified": true,
+      "savedsearches_full_content_and_acl_same": 24
+    },
+    "runtime_access_check": {
+      "baseline_capabilities_http_status": 403,
+      "case_capabilities_http_status": 403,
+      "limit": "REST authorization denies the API identity before handler qualification; Cloud persistence remains unsupported by implementation",
+      "role_grants_changed": false
+    },
+    "served_frontend": {
+      "asset_cache_build": "1794886759",
+      "javascript_payload_matches_archive_exactly": true,
+      "javascript_payload_sha256": "56399fda63980974fc08e09fbaff6ff37a00f16745f27d419c272d9418954b58",
+      "javascript_response_sha256": "e88464413befe54ec0bac6a0791da22c0777e3d4c348290f3b2e78ba8ab8c7ec",
+      "optional_journey_asset_exercised": false,
+      "server_added_localization_prefix_bytes": 111,
+      "stylesheet_matches_archive": true,
+      "stylesheet_sha256": "cccee7ac9aa60690675b680f1c6d280ae0fcc88a78f0a384b859c446f7a3879e"
+    },
     "source_configuration_sha256": {
       "splunk_adm/default/app.conf": "d4e3a6a9507654b805ac4d600f0c23ac973601ee8dc2a71347819d4e8429a8be"
     },
-    "status": "Locally verified 0.9.1; Cloud validation pending",
+    "status": "Cloud Web reports 0.9.1 installed on the selected search head; bounded preservation and navigation verified; additional UI defects found",
     "unchanged_frontend": "Frontend source unchanged from the 0.9.0 candidate with 1,331 Vitest and 202 browser tests passed (one skipped); those are prior checks, not repeated for 0.9.1",
     "version": "0.9.1"
   },
