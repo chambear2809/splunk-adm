@@ -1755,9 +1755,9 @@
     "installed_case_capture_qualified": false,
     "real_source_qualified": false,
     "remaining": [
-      "Dedicated investigation test permissions not authorized or provisioned",
-      "Management certificate still unsuitable for the production capture loopback peer",
-      "Positive current installed capture, Web/CSRF/ACLs, whole-endpoint bounds, revocation and restore remain open"
+      "Positive native notes/case-membership REST smoke now recorded in enterprise_native_notes_20261117; temporary permissions were removed",
+      "Management certificate still unsuitable for production capture loopback peer",
+      "Positive supervised capture, Web/CSRF, source ACL/revocation, whole-endpoint bounds and restore remain open"
     ],
     "private_receipt_directory": "outputs/enterprise-0.9.4-update (private task workspace; outside Git)",
     "preceding_increment": {
@@ -1769,5 +1769,147 @@
       "browser_passed": 214,
       "browser_skipped": 1
     }
+  },
+  "enterprise_native_notes_20261117": {
+    "status": "native_notes_rest_smoke_passed",
+    "date_utc": "2026-11-17",
+    "user_authorization": "two restricted temporary accounts and brief notes storage test, then remove accounts and disable storage",
+    "target_profile": "enterprise",
+    "target_guid_sha256": "8c003a4afae8d1197dd165a6ed76e66090d73f1ea9ddcd1723991a5143de6ca3",
+    "splunk": "10.6.0.5",
+    "active_license_group": "Enterprise",
+    "atlas": "0.9.4",
+    "archive_sha256": "dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4",
+    "procedure_sha256": "4124b03052723af173faf30d9202452382b9a2502edfe4da186f8d73c59e5cf0",
+    "wrapper_sha256": "8451bd733a9c7525535fa9367205d73a3a576c9fc7bc562bbaa2363fdc01fb02",
+    "source_files_fingerprint": "e189764725cadb62bb36cff40b9fc9edcf23c7e43fe7e6fc2562b415bdc57320",
+    "source_files_verified": 13,
+    "checks_passed": [
+      "disabled_default",
+      "notes_only",
+      "create_retry",
+      "private_acl",
+      "immutable_revision",
+      "stale_cas",
+      "share_export",
+      "revoke_export",
+      "capture_disabled",
+      "owner_delete"
+    ],
+    "permissions": "two temporary non-admin accounts; only adm_investigate; no imported roles/index grants; removed",
+    "residuals": "private SQLite audit/retry/history may remain; database retained; sanitized private receipt retained; generated password state removed",
+    "capture_qualified": false,
+    "web_csrf_qualified": false,
+    "source_acl_qualified": false,
+    "whole_endpoint_bounds_qualified": false,
+    "restore_qualified": false,
+    "production_readiness": false,
+    "first_attempt": "provisioning stopped before users/config/cases; known temporary role removed; storage disabled",
+    "role_creation_protocol": [
+      {
+        "stage": "after_create",
+        "capabilities_match": false,
+        "capability_count": 6,
+        "allowed_field_present": true,
+        "allowed_empty": true,
+        "default_field_present": true,
+        "default_empty": true,
+        "inheritance_empty": true
+      },
+      {
+        "stage": "after_explicit_update",
+        "capabilities_match": true,
+        "capability_count": 1,
+        "allowed_field_present": true,
+        "allowed_empty": true,
+        "default_field_present": true,
+        "default_empty": true,
+        "inheritance_empty": true
+      }
+    ],
+    "effective_permissions_verified": true,
+    "cleanup": {
+      "case": true,
+      "configuration": true,
+      "atlas_native_notes_20261117_b": true,
+      "atlas_native_notes_20261117_a": true,
+      "role": true
+    },
+    "independent_cleanup_postcheck": {
+      "identities_absent": true,
+      "identity_absence_checks": 3,
+      "persistence": {
+        "mode": "disabled",
+        "platform": "unqualified",
+        "capture_mode": "disabled"
+      },
+      "database_retained": true,
+      "database_directory_metadata": {
+        "mode": "0o700",
+        "owned_by_service_user": true,
+        "symlink": false
+      },
+      "database_metadata": {
+        "mode": "0o600",
+        "owned_by_service_user": true,
+        "symlink": false
+      },
+      "source_job_ledger_present": false,
+      "private_task_directory_metadata": {
+        "mode": "0o700",
+        "owned_by_service_user": true,
+        "symlink": false
+      },
+      "private_recovery_secret_state_present": false,
+      "remaining_task_files": ["receipt.json"],
+      "active_license_group": "Enterprise",
+      "tls_verified": true,
+      "mutations": false
+    },
+    "review_findings_resolved": [
+      "uncertain primary request retained through cleanup",
+      "response and ownership checkpoint before pending retirement",
+      "immediate pre-enable configuration recheck",
+      "ownership checks separate from permission assertions",
+      "directory fsync after atomic checkpoints and cleanup"
+    ],
+    "local_procedure_safety_checks": 6,
+    "procedure_only_not_shipped_provisioning": true,
+    "docker_guards_bypassed": false,
+    "app_runtime_changed": false,
+    "new_archive_deployed": false,
+    "previous_license_record_ci": {
+      "pr": "https://github.com/chambear2809/splunk-adm/pull/27",
+      "main_commit": "8042b127be8e4c4406e17b3ba38476b7196f0a1b",
+      "pr_ci": "https://github.com/chambear2809/splunk-adm/actions/runs/44163315644",
+      "main_ci": "https://github.com/chambear2809/splunk-adm/actions/runs/44164936635",
+      "status": "success; installed Splunk suite skipped"
+    },
+    "commands": [
+      {
+        "argv": [
+          "/tmp/atlas-ci-python/bin/python",
+          "work/native-notes-qualification/verify_local.py"
+        ],
+        "cwd": "{private_task_workspace}",
+        "result": "six local safety checks passed; no target access"
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "{private_task_workspace}/work/native-notes-qualification/run_native.sh"
+        ],
+        "cwd": "{repository}/vendor/splunk-cisco-skills",
+        "result": "exit0; ten native notes checks passed, cleanup confirmed"
+      },
+      {
+        "argv": [
+          "/bin/bash",
+          "{private_task_workspace}/work/native-notes-qualification/postcheck.sh"
+        ],
+        "cwd": "{repository}/vendor/splunk-cisco-skills",
+        "result": "exit0; identities absent, flags disabled, private DB retained, secret state absent"
+      }
+    ]
   }
 }
