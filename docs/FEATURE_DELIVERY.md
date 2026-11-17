@@ -997,3 +997,75 @@ merged in [PR #26](https://github.com/chambear2809/splunk-adm/pull/26). Its
 [main CI](https://github.com/chambear2809/splunk-adm/actions/runs/44146711977) passed
 frontend, browser and Python checks; the installed Splunk suite was skipped.
 Browser regression results were 214 passed and one skipped.
+
+
+## Native installed notes and membership-ACL qualification
+
+The user explicitly approved two restricted temporary accounts and a brief
+notes-only persistence test on the selected Enterprise lab. A reviewed one-off
+native REST procedure used the approved credential helper, pinned SSH, and the
+existing CA/hostname-verified management connection. It bound the exact server
+GUID hash, Enterprise 10.6.0.5 and active license, disabled SHC, Atlas 0.9.4 and
+13 frozen archive source/default files before and after the exercise. No Docker
+task-ownership guard was bypassed or repointed.
+
+The first attempt stopped at role verification, before creating any test account,
+case or local persistence configuration. It removed the temporary role and
+confirmed disabled storage. A subsequent controlled create/update/read observed
+that role creation initially retained six capabilities despite the requested
+capability list. Explicitly updating the role reduced this to exactly
+`adm_investigate`, matching the existing installed evidence fixture's setup
+pattern. Both index lists and imported permissions remained empty. The strict
+permission assertions were preserved; both users' effective contexts were
+verified before enabling notes. The first attempt's known sanitized receipt was
+archived, then only its verified empty task directory was removed under the
+same private lock. No application data/storage was removed.
+
+The corrected native exercise passed ten checks: disabled default; notes-only
+availability; identical create retry; private-case denial; immutable note
+revision; stale-revision rejection; sharing/export; revoked export denial;
+capture-disabled rejection; and owner deletion. This is positive current-build
+**native management-REST notes and case-membership ACL evidence**. It is not a
+Web-proxy/CSRF test, protected-source authorization test, positive supervised
+capture, whole-endpoint deadline test, or backup/restore qualification.
+
+Cleanup was part of the acceptance result. The owned synthetic case was deleted
+through its normal API, the original disabled/unqualified persistence flags
+were restored, and both accounts and their role were deleted. A separate
+read-only postcheck confirmed all three identities absent and persistence
+`mode=disabled`, `platform=unqualified`, `capture_mode=disabled`. The generated
+password recovery state was absent; only a sanitized receipt remained in the
+private mode-0700 task directory. The case database remains service-owned,
+mode 0600 under a mode-0700 directory. Normal deletion may retain private audit,
+retry or history records; this is not an erasure claim. The newly written local
+persistence configuration retains disabled flags. No source-job ledger was
+created, TLS settings changed, source/index access granted, or watch/schedule
+enabled.
+
+Before execution, independent review identified uncertainty being overwritten by
+cleanup, ownership-checkpoint ordering, a stale pre-enable configuration check,
+cleanup depending on the assertion under test, and missing directory fsync. All
+five findings were resolved. Six local safety checks passed for preserved
+uncertainty, response/adoption failure recovery, separate ownership checks,
+refusing changed-identity deletion, private atomic checkpoints and exact shell
+payload fidelity. The operation/checkpoint/cleanup receipt stayed under one
+private flock; unknown mutations would retain private recovery state and could
+not report a pass. These safeguards belong to the one-off validation procedure,
+not a new shipped operator-provisioning feature.
+
+Private sanitized receipts and procedure/wrapper hashes are retained in the task
+workspace at `outputs/native-notes-validation/`. The frozen installed archive is
+still `dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4`. No app
+runtime bytes/version changed and no newly generated archive was deployed. This
+increment leaves the feature disabled and preserves the private database; there
+is no software rollout or database rollback. Current supervised source capture
+still needs a qualified local TLS peer and separately scoped source validation.
+Web/CSRF, source revocation, whole-endpoint bounds, restore and real-source
+comparisons remain open.
+
+The preceding license record was merged in
+[PR #27](https://github.com/chambear2809/splunk-adm/pull/27); its
+[PR CI](https://github.com/chambear2809/splunk-adm/actions/runs/44163315644) and
+[main CI](https://github.com/chambear2809/splunk-adm/actions/runs/44164936635)
+passed, with the installed Splunk suite skipped. The native exercise above was
+separate from that skipped suite.

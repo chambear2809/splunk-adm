@@ -53,6 +53,15 @@ head. It does not accept peer or CA settings from the browser. A missing,
 changed or untrusted peer disables source capture and rechecks; notes remain
 available. This configuration does not by itself qualify a deployment.
 
+A bounded native Enterprise 10.6.0.5/Atlas 0.9.4 management-REST exercise now
+passes notes, revision/CAS, case privacy, sharing/export and revocation checks
+with two non-admin identities having only `adm_investigate` and no index grants.
+The test identities were removed and persistence/capture were disabled again.
+Private audit/retry/history may remain in the owner-only database. This qualifies
+the exercised notes/membership path, not Web/CSRF, protected-source access, current
+supervised capture, whole-endpoint bounds or restore. See the latest delivery and
+qualification records for the exact frozen archive and cleanup evidence.
+
 ## Rechecked comparison evidence
 
 After separate target qualification, an operator may set
