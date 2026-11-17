@@ -1217,7 +1217,8 @@
       "guid_sha256": "8c003a4afae8d1197dd165a6ed76e66090d73f1ea9ddcd1723991a5143de6ca3",
       "active_license_group": "",
       "all_returned_license_groups_inactive": true,
-      "supported_license_qualified": false
+      "supported_license_qualified": false,
+      "license_observation_superseded_by": "enterprise_license_activation_20261117"
     },
     "endpoint_checks": {
       "cases_baselines_watch_get_403": true,
@@ -1721,5 +1722,52 @@
       "three nonterminal and 128 retained identities; no automatic deletion",
       "compact withheld receipts only"
     ]
+  },
+  "enterprise_license_activation_20261117": {
+    "status": "installed_VALID_and_active_Enterprise",
+    "target_profile": "enterprise",
+    "target_guid_sha256": "8c003a4afae8d1197dd165a6ed76e66090d73f1ea9ddcd1723991a5143de6ca3",
+    "authorized_by_user": true,
+    "archive_unchanged": "dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4",
+    "license_install_http": 201,
+    "group_activation_http": 200,
+    "first_live_request": "400: omitted required name parameter; corrected before successful installation",
+    "pending_activation_inventory": "API list empty; exact saved license and pending local Enterprise configuration verified before restart",
+    "restarts": 1,
+    "restart_path": "matched Splunkd.service; sudo -n /opt/splunk/bin/splunk restart",
+    "restart_exit_code": 0,
+    "forced_kill_or_restart_retry": false,
+    "tls_ca_and_hostname_verified": true,
+    "post_restart_group": "Enterprise",
+    "post_restart_license_entries": 3,
+    "post_restart_VALID_Enterprise": 1,
+    "web_additional_readiness_wait_seconds": 9.006,
+    "atlas_version": "0.9.4",
+    "served_css_exact": 3,
+    "served_js_exact_payload_with_translation_preamble": 3,
+    "persistence_capture_watch_schedules_enabled": false,
+    "adm_investigate_present": false,
+    "roles_users_created": false,
+    "source_jobs_created": false,
+    "tls_settings_changed": false,
+    "cloud_hf_changed": false,
+    "license_material_in_git_or_logs": false,
+    "installed_case_capture_qualified": false,
+    "real_source_qualified": false,
+    "remaining": [
+      "Dedicated investigation test permissions not authorized or provisioned",
+      "Management certificate still unsuitable for the production capture loopback peer",
+      "Positive current installed capture, Web/CSRF/ACLs, whole-endpoint bounds, revocation and restore remain open"
+    ],
+    "private_receipt_directory": "outputs/enterprise-0.9.4-update (private task workspace; outside Git)",
+    "preceding_increment": {
+      "pr": "https://github.com/chambear2809/splunk-adm/pull/26",
+      "main_commit": "b3313122e83b6a6ed00864aa5a7b816c7c4163cb",
+      "pr_ci": "https://github.com/chambear2809/splunk-adm/actions/runs/44145304574",
+      "main_ci": "https://github.com/chambear2809/splunk-adm/actions/runs/44146711977",
+      "conclusion": "success; installed Splunk suite skipped",
+      "browser_passed": 214,
+      "browser_skipped": 1
+    }
   }
 }
