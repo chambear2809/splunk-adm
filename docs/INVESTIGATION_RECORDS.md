@@ -100,9 +100,11 @@ source reader targets a 25-second elapsed budget and a shared three-second
 cleanup budget; successful known jobs are deleted before their results are
 accepted. Ordinary process scheduling and operating-system behavior are not
 hard real-time guarantees. Case authentication, configuration and other
-ordinary Splunk SDK calls remain outside the source deadline. Linux-specific
-resource-limit behavior and the end-to-end transport lifecycle remain unqualified
-on a supported native Linux/amd64 host. The local Rosetta runtime failed the
+ordinary Splunk SDK calls remain outside the source deadline. Staged native
+Linux/x86_64 tests now pass token-free preflight and 12 transport component checks on Enterprise 10.6.0.5/Python 3.13.11 with real resource limits;
+see the latest delivery/qualification record. These staged synthetic checks do
+not qualify current installed endpoints or the end-to-end Splunk capture
+lifecycle. The local Rosetta runtime failed the
 unchanged 256 MiB address-space contract; its token-free preflight keeps capture
 unavailable before any job intent. This is a failed source qualification, not a
 successful capture check. The mode ships disabled. No Cloud or SHC write

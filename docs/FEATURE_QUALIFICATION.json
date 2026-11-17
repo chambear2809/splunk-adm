@@ -1065,6 +1065,206 @@
     "schema_migration": false,
     "scope": "Local synthetic store/API and browser read-derived classification; not positive installed complete-source qualification"
   },
+  "enterprise_native_staged_transport": {
+    "access": {
+      "credential_transport": "Approved helper; no real session token supplied to probes",
+      "earlier_network_timeouts": "Superseded after user reported restored VPN/instance access",
+      "host_key": "Existing pinned known-host trust via approved helper; TOFU disabled",
+      "profile": "enterprise",
+      "ssh_authenticated": true
+    },
+    "archive_sha256": "dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4",
+    "base_main_commit": "fe05ed253c2a25cd43e985758ffbacd2420c1945",
+    "date_utc": "2026-11-17",
+    "fixture_corrections": [
+      "Second valid localhost certificate: matching trust succeeds, unrelated valid CA fails; wrong-hostname and missing-CA checks retained",
+      "Only external OpenSSL certificate generation drops inherited LD_LIBRARY_PATH; helper production loader unchanged",
+      "Generated certificates and keys explicitly0600; cleanup registered before generation"
+    ],
+    "local_checks": {
+      "focused_transport": "12 tests passed on local Python3.13; Mac resource fallback is separate from the native run",
+      "final_receipt": {
+        "path": "work/native-tls/result.json",
+        "comment_only_source_reruns": 1,
+        "passed": 12,
+        "receipt_sequence_seconds": 2.987447,
+        "test_source_sha256": "c6b17fa9882bd9762617f22d367b7d54d54d36493803149cd3fa0fe091af25f1",
+        "suite_seconds": 2.596
+      },
+      "full_python": "1320 tests run in100.095s; OK with2 skipped under the unbuilt-frontend convention",
+      "production_code_changed": false,
+      "ruff_check": "passed;238 files",
+      "ruff_format": "passed;238 files",
+      "ui_changed": false,
+      "focused_transport_umask_0002": "12 passed; python -m unittest discover -s tests -p test_cases_transport.py"
+    },
+    "observed_target": {
+      "architecture": "x86_64",
+      "atlas_installed": "0.6.0",
+      "observation_phase": "staged observation before the authorized 0.9.4 update",
+      "atlas_scheduled_enabled_btool": 0,
+      "docker_cli_or_socket": false,
+      "limit": "Runtime version from installed files; SHC/schedule state from read-only btool. Splunk API authentication, license group and live source entitlement not queried.",
+      "management_certificate_has_san": false,
+      "new_case_baseline_storage_directories_present": false,
+      "openssl_runtime": "OpenSSL3.5.8",
+      "python": "3.13.11",
+      "shc_disabled_btool": "true",
+      "splunk_build_file": "86587d4e3b27",
+      "splunk_version_file": "10.6.0.5",
+      "system": "Linux"
+    },
+    "preflight": {
+      "architecture": "x86_64",
+      "elapsed_seconds": 0.119291,
+      "installed_capture_qualified": false,
+      "probe_sha256": "3c4c12feda9d8cc6781c1a1316a27134ea7572f5441733824a30ad3ecee8d04c",
+      "python_version": "3.13.11",
+      "ready": true,
+      "session_token_used": false,
+      "source_jobs_created": false,
+      "source_sha256": {
+        "transport.py": "c79c586fb164a5c304d32915496fe5e79d3d1a53566c2797bf83105e1534e5b3",
+        "transport_worker.py": "dc39ece34ffc349e43c0667722c62ef3edc7893c36c7a3cd36182357f7b71e57"
+      },
+      "splunk_configuration_changed": false,
+      "staged_files_removed": true,
+      "system": "Linux"
+    },
+    "probe_review": "Independent read-only gpt-6.1-sol high review of stage/SSH/deadline/cleanup and test-only changes; final review recorded separately before integration",
+    "qualification": {
+      "app_upgraded": false,
+      "installed_current_app_capture": false,
+      "installed_web_csrf_acl": false,
+      "memory_limit_bytes": 268435456,
+      "native_staged_component_tests": true,
+      "private_native_lab_draft_executed": false,
+      "production_readiness": false,
+      "real_memory_limit_applied": true,
+      "real_source_comparison": false,
+      "resource_limit_mock_used_for_native_tls": false,
+      "roles_or_users_created": false,
+      "source_jobs_created": false,
+      "splunk_configuration_changed": false
+    },
+    "remaining": [
+      "Current management certificate has no SAN; intended verified loopback TLS peer remains unqualified",
+      "Positive installed current capture, Web/CSRF/effective ACLs, whole-endpoint bounds, revocation and recovery remain open",
+      "Verified loopback TLS and scoped temporary test identities remain required; no role grants were authorized"
+    ],
+    "staged_tls_suite": {
+      "architecture": "x86_64",
+      "child_processes_absent": true,
+      "elapsed_seconds": 2.987447,
+      "errors": 0,
+      "failures": 0,
+      "installed_capture_qualified": false,
+      "live_test_threads": 0,
+      "memory_limit_fallback_used": false,
+      "memory_limit_supported": true,
+      "openssl_runtime": "OpenSSL 3.5.8 25 Aug 2026",
+      "probe_sha256": "e7bca9e8ad70f5ca9b81fe218d93de8a0cc95ff0105841b53816c1011db309d0",
+      "python_version": "3.13.11",
+      "ready": true,
+      "real_session_token_used": false,
+      "skipped": 0,
+      "source_sha256": {
+        "splunk_app/splunk_adm/bin/adm_cases_lib/__init__.py": "3a1ea2a2638f2aa062ed85a08e2894be6a959355ca4d11d77d4c8c22bfbe10ef",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/store.py": "2df933c96d42bf87925a32fd1444191a556a21293a006ee7a7bba1099c878616",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/transport.py": "c79c586fb164a5c304d32915496fe5e79d3d1a53566c2797bf83105e1534e5b3",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/transport_worker.py": "dc39ece34ffc349e43c0667722c62ef3edc7893c36c7a3cd36182357f7b71e57",
+        "tests/test_cases_transport.py": "c6b17fa9882bd9762617f22d367b7d54d54d36493803149cd3fa0fe091af25f1"
+      },
+      "splunk_configuration_changed": false,
+      "staged_files_removed": true,
+      "system": "Linux",
+      "tests": 12,
+      "final_receipt": "work/native-tls/result.json",
+      "test_source_sha256": "c6b17fa9882bd9762617f22d367b7d54d54d36493803149cd3fa0fe091af25f1",
+      "tls_fixture_initialized": true,
+      "suite_seconds": 2.596
+    },
+    "verified_initial_failures": {
+      "ca_permissions": "SSH umask0002 produced CA cert0664, correctly rejected by production private-trust guard; subsequent native run12 tests/7 errors until fixtures set0600.",
+      "diagnostic_harness": "First setup failure exposed missing tls_worker attribute in probe reporting; fixed diagnostic handling, no product change. Core dumps disabled for later diagnostic/final probes.",
+      "openssl_fixture": "System OpenSSL3.0.13 loaded Splunklib3.5.8 under inherited LD path; controlled req generation failed SIGSEGV(-11) only with that path. Clean environment succeeded. Native suite initially ran0 tests."
+    }
+  },
+  "enterprise_lab_update_0_6_0_to_0_9_4": {
+    "authorized": true,
+    "preservation_required": false,
+    "archive_sha256": "dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4",
+    "archive_bytes": 1392502,
+    "build": "1794932218",
+    "install": {
+      "api_post_status": 200,
+      "pinned_ssh": true,
+      "tls_ca_and_hostname_verified": true,
+      "successful_post_retries": 0,
+      "initial_refusal": "Multiline PID file was rejected before staging; readback remained Atlas 0.6.0 with no stage.",
+      "corrected_preflight": "Positive first PID, exact splunkd executable and current UID independently reviewed before POST"
+    },
+    "final_readback": {
+      "path": "work/enterprise-update/verify-result.json",
+      "atlas_version": "0.9.4",
+      "expected_files_exact": "156/157",
+      "app_conf": "Only install_source_checksum plus blank lines differ; all other nonblank bytes and semantic configuration match",
+      "checksum_equals_archive_sha": false
+    },
+    "server": {
+      "version": "10.6.0.5",
+      "product": "enterprise",
+      "guid_sha256": "8c003a4afae8d1197dd165a6ed76e66090d73f1ea9ddcd1723991a5143de6ca3",
+      "active_license_group": "",
+      "all_returned_license_groups_inactive": true,
+      "supported_license_qualified": false
+    },
+    "endpoint_checks": {
+      "cases_baselines_watch_get_403": true,
+      "adm_investigate_routes_status": 403,
+      "capability_present": false,
+      "role_grants": false,
+      "positive_endpoint_web_csrf_source_capture_qualified": false
+    },
+    "mutations": {
+      "tls_changed": false,
+      "configuration_changed": false,
+      "roles_changed": false,
+      "schedules_changed": false,
+      "restart": false,
+      "cloud_version": "0.9.3",
+      "heavy_forwarder_changed": false,
+      "configuration_scope": "No additional local operating configuration edits; packaged defaults updated as part of app installation"
+    },
+    "final_guards": {
+      "persistence": {
+        "capture_mode": "disabled",
+        "mode": "disabled",
+        "platform": "unqualified"
+      },
+      "watch_execution_enabled": false,
+      "schedules_enabled": 0,
+      "retained_local_files": [
+        "adm_identity.conf",
+        "transforms.conf",
+        "savedsearches.conf",
+        "macros.conf"
+      ],
+      "additional_operating_configuration_edits": false
+    },
+    "web_payload": {
+      "receipt": "work/enterprise-update/web-payload-result.json",
+      "css_exact": "3/3",
+      "javascript_complete_exact": "3/3",
+      "wrapper_difference": "Identical 111-byte Splunk en_US translation preamble calling i18n_register with an empty catalog; empty suffix",
+      "original_raw_hashes_failed_because": "wrapper, not stale asset",
+      "focused_tests_under_umask_0002": 12,
+      "ruff_files": 238,
+      "ruff": "passed"
+    },
+    "qualification_scope": "Authorized disposable Enterprise app update and readback only; no positive endpoint, Web/CSRF, source capture or protected-case qualification",
+    "date_utc": "2026-11-17"
+  },
   "hf_audit_input_static_check": {
     "actual_collection_or_arrival_observed": false,
     "application_audit_association_qualified": false,
