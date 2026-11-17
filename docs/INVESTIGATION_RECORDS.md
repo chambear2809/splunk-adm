@@ -144,6 +144,17 @@ No source rows are duplicated, and a link grants no new access. The browser
 requires a chosen entry, a visible comparison and explicit consent. Files,
 URLs and browser-supplied evidence payloads remain unsupported.
 
+## Request admission
+
+The host rejects payloads above **128,000 UTF-8 bytes** after authenticating the
+caller and before opening case storage, reading persistence configuration or
+probing capture readiness. A character-length check first avoids encoding an
+arbitrarily large string; the byte check also covers multibyte input. The
+framework-neutral API enforces the same limit. Rejection returns HTTP 413 with
+`body_too_large`, including when persistence is disabled. This bounds work after
+Splunk hands the handler a payload; it does not bound Splunk's initial buffering,
+authentication, all SDK calls or the whole endpoint's deadline.
+
 ## Writes, retries and retention
 
 Mutations carry an `Idempotency-Key`, and updates require the expected revision.

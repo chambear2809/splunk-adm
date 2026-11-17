@@ -48,6 +48,15 @@ bash tests/splunk/lab.sh install
 ADM_LAB=1 python3 -m unittest discover -s tests/splunk -p test_baselines_endpoint.py
 ```
 
+This shell example covers normal exit only. The lock wrapper terminates a
+cancelled child process group after five seconds, which can interrupt its EXIT
+trap before purge finishes. It does not establish cleanup-before-unlock on
+cancellation. For cancellation/deadline exercises, the lifecycle driver must own
+a direct `with lab_lock.LabLock(root)` block, retire its child process groups,
+and complete cleanup plus durable final receipts before leaving that block.
+`run_main` also supervises a child; calling it alone does not remove this caveat.
+A crash or forced termination can still require explicit owned-resource recovery.
+
 Select tests whose data, configuration and identity prerequisites have been
 prepared. The example checks the baseline host's disabled/source-unavailable
 contract. Other suites require different fixtures; the protected evidence suite
@@ -63,6 +72,22 @@ Do not use Docker prune, broad name matches, or another lab's environment.
 Retain qualification reports and exact package checksums outside disposable
 volumes before cleanup. Record container/image IDs and resource labels in the
 task manifest, and verify them before removal.
+
+New task containers enforce fixed limits: **4 CPUs, 8 GiB memory, 8 GiB
+memory plus swap (no additional swap), 1,024 processes**, and Docker `json-file`
+logs capped at 10 MiB per file with two files. Creation and subsequent operations
+check the exact effective Docker limits. Existing containers missing those limits
+cannot resume installation or testing. `down`/`purge` waive only the resource-limit
+check so a legacy lab can still be cleaned up; exact image, recorded ID, labels,
+network, mounts, TLS identity and loopback-port guards remain required.
+
+These caps do not impose a named-volume disk quota or a container lifetime.
+Declare a task disk budget and lifetime separately, record how each is enforced,
+and retain cleanup under the same lock. Cooperative phase checks are not a hard
+filesystem quota. A Mac ARM64 Docker engine can support emulated development and
+installed functionality checks; it does not establish native AMD64 resource-limit
+qualification. Native resource qualification is deferred by the user's current
+scope decision (2026-11-17); no remote engine installation is required.
 
 Resource limits and timing conditions belong in each measurement record. Separate
 namespaces still share the Docker daemon, CPU, memory and disk. Queue labs on a

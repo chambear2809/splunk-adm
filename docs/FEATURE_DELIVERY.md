@@ -1069,3 +1069,91 @@ The preceding license record was merged in
 [main CI](https://github.com/chambear2809/splunk-adm/actions/runs/44164936635)
 passed, with the installed Splunk suite skipped. The native exercise above was
 separate from that skipped suite.
+
+
+## 0.9.5 request admission and bounded local task labs
+
+Oversized investigation requests previously constructed the case store before
+the API checked the body limit. With source capture configured, even an invalid
+oversized request could read configuration and probe the source helper. The host
+now authenticates and rejects more than 128,000 UTF-8 bytes before those steps,
+with the same limit enforced inside the API. Exact-boundary, multibyte and
+unauthenticated requests have focused regression coverage. This fixes admission
+work; whole-endpoint supervision remains incomplete.
+
+Disposable task containers now enforce 4 CPUs, 8 GiB RAM with no additional swap,
+1,024 processes and bounded json-file logs. Resuming work verifies the effective
+limits. Legacy cleanup waives only these new limits, preserving every existing
+image/ID/label/mount/network/TLS/port ownership guard. Disk and lifetime remain
+explicit task-level budgets, not newly claimed Docker volume quotas. The installed
+notes fixture now uses an explicitly updated, verified least-authority role,
+checks each effective identity, and restores configuration/removes acknowledged
+owned identities even after setup/test failure. Uncertain identity creation is
+not treated as proof of ownership.
+
+The user clarified that development Docker belongs on the Mac, while
+10.237.100.70 remains the existing Splunk host. Native Linux resource qualification
+is deferred. No Docker packages, host services, networking or storage were changed
+on Enterprise, the shared HF or AWS. The speculative native-host provisioning
+proposal was retired outside Git. All permanent persistence/capture/watch/schedule
+settings remain as previously observed; no permanent app update occurred.
+
+Local checks pass: `npm run lint`; `npm test` (1,334 tests); `npm run package`
+(includes build); `ruff check tools tests`; `ruff format --check tools tests`;
+full Python discovery (1,327 tests), distributed discovery (126 tests), and
+upgrade discovery (15 passed, 3 installed checks skipped). Browser checks cover
+214 passes and one skip: the first invocation omitted the generated asset fixture
+and failed eight asset tests, then the required fixture was built and those eight
+passed. The other 206 successful checks were not rerun. Archive integrity,
+release security/bundle checks, three build tests and AppInspect pass. AppInspect
+has zero errors/failures/manual checks and six reviewed existing warnings
+(Python compatibility, custom-conf replication, collections, bundled SDK version,
+supervised subprocess use and hostname/IP heuristics).
+
+The frozen local 0.9.5 candidate has SHA-256
+`b54ea91c3c6a4eb2e0345b17dd7eec6100868cc7d19feed38ef15d12c5c198c4`,
+1,401,545 bytes, build 1794956430. It is separate from the frozen installed
+Enterprise 0.9.4 archive. Later documentation/CI packaging can produce different
+archive bytes; retain this exact candidate for the installed test receipt and
+compare runtime-file fingerprints before relating subsequent packages to it.
+
+Independent review cleared the source, fixture and resource-guard changes after
+correcting transitive lockfile metadata, optional current-context response fields
+and ineffective negative-test setup. A private local lab driver also passed
+review and a cancellation probe after fixing descendant process-group retirement.
+The first local run was cancelled at the user's stop request, before installation
+or tests; its primary cancellation receipt was preserved and container, network,
+volumes, credential/TLS files and ports were verified cleaned up under the same
+lock. Fresh identities/output directories are used for resumed attempts. One setup
+attempt then stopped on a disk measurement performed as the image's unprivileged
+account; the measurement now uses container root for sizes only. The next stopped
+because the copied archive lacked its required checksum sidecar; the sidecar is
+now retained and verified before container creation. Both attempts were fully
+purged without installing the candidate. No ownership, TLS or integrity guard was
+relaxed.
+
+The exact frozen candidate passed two installed management-REST checks on the
+Mac's ARM64-host emulated container: oversized requests return HTTP 413 while
+persistence is disabled; and private notes/revisions/retries/CAS/sharing/export/
+revocation/disabled capture/owner deletion work with two strictly scoped fixture
+identities. The unsupported-runtime preflight test was deliberately skipped
+because it requires its separate opt-in. This was `ADM_LAB=1 python -m unittest
+discover -s tests/splunk -p test_cases_endpoint.py -v`, run through the reviewed
+private lifecycle driver. The installed suite took 24.097 seconds; the lifecycle
+took 164.59 seconds. Management and HEC each passed the task-CA/hostname handshake
+and rejected the wrong CA and hostname both before and after installation.
+
+The successful task `notes-bounds-v4-20261117` retained its exact container/image,
+labels, mounts, loopback bindings and configured resource limits outside Git.
+Its largest measured named-volume usage was 2,546,466,816 bytes, under a 10 GiB
+cooperative phase-check budget; this excludes cached image/writable-layer/log
+space and is not a filesystem quota. The lifecycle allowance was 45 minutes.
+All configuration/identity cleanup ran before lab purge; the container, network,
+volumes, credential/TLS files and loopback ports were independently confirmed
+absent/free afterward. Receipts for each attempt remain separate; a later pass
+does not rewrite the earlier cancellation/failure results. No current source
+capture was performed. Detailed metadata is in `FEATURE_QUALIFICATION.json`;
+private reports are under `local-notes-run-4/outputs/` in the external task
+workspace. No native capture, real-source, Web/CSRF, operational restore
+or production-readiness qualification is implied by the checks above. Source
+capture remains disabled by default; the six-feature request remains incomplete.

@@ -45,6 +45,10 @@ HEC = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_HEC_PORT', '8088'))}"
 IMAGE = "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
 APP = "splunk_adm"
 MAX_BATCH_BYTES = 5 * 1024 * 1024
+TASK_CPU_NANOS = 4_000_000_000
+TASK_MEMORY_BYTES = 8 * 1024**3
+TASK_PIDS_LIMIT = 1024
+TASK_LOG_CONFIG = {"Type": "json-file", "Config": {"max-size": "10m", "max-file": "2"}}
 
 
 class LabError(RuntimeError):
@@ -82,7 +86,20 @@ def local_docker_endpoint() -> str:
     return endpoint
 
 
-def verify_target(*, expected_id: str | None = None, registering=False) -> None:
+def _verify_resource_limits(host: dict) -> None:
+    if (
+        host.get("NanoCpus") != TASK_CPU_NANOS
+        or host.get("Memory") != TASK_MEMORY_BYTES
+        or host.get("MemorySwap") != TASK_MEMORY_BYTES
+        or host.get("PidsLimit") != TASK_PIDS_LIMIT
+        or host.get("LogConfig") != TASK_LOG_CONFIG
+    ):
+        raise LabError("refusing task lab with mismatched resource limits")
+
+
+def verify_target(
+    *, expected_id: str | None = None, registering=False, require_limits: bool = True
+) -> None:
     """Task labs refuse operations against an unowned or misrouted container."""
     identity = task_identity()
     if identity is None:
@@ -121,6 +138,8 @@ def verify_target(*, expected_id: str | None = None, registering=False) -> None:
     ):
         raise LabError("refusing unowned task lab")
     host = target.get("HostConfig", {})
+    if require_limits:
+        _verify_resource_limits(host)
     if host.get("NetworkMode") != name + "-net":
         raise LabError("refusing task lab with mismatched network")
     expected_mounts = {
@@ -144,6 +163,11 @@ def verify_target(*, expected_id: str | None = None, registering=False) -> None:
             {"HostIp": "127.0.0.1", "HostPort": os.environ.get(variable, default)}
         ]:
             raise LabError("refusing task lab with mismatched loopback ports")
+
+
+def verify_cleanup_target() -> None:
+    """Verify every normal guard while allowing legacy missing resource caps."""
+    verify_target(require_limits=False)
 
 
 def task_resources(remove: bool = False) -> None:
@@ -611,6 +635,8 @@ def main(argv: list[str]) -> int:
             print(local_docker_endpoint())
         elif cmd == "verify-target":
             verify_target()
+        elif cmd == "verify-cleanup-target":
+            verify_cleanup_target()
         elif cmd == "init-resources":
             task_resources()
         elif cmd == "remove-resources":
