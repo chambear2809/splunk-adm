@@ -309,7 +309,82 @@
       "vitest_files": 126,
       "vitest_tests": 1334
     },
-    "cloud_validation": "Not performed for 0.9.2",
+    "cloud_validation": {
+      "app_version": "0.9.2",
+      "appinspect": {
+        "error": 0,
+        "failure": 0,
+        "mode": "private_victoria",
+        "not_applicable": 100,
+        "report_html_sha256": "06a461a6dd1ac7360740344f92839480f046ed475e71dc5dcc1a1a50af5692d2",
+        "report_identifies_archive_sha256": true,
+        "skipped": 1,
+        "success": 140,
+        "version": "4.4.0",
+        "warning": 6
+      },
+      "browser": {
+        "advanced_valid_preview_and_apply": true,
+        "catalog": "Unavailable: qualified identity evidence is incomplete",
+        "device_navigation_uses_applied_bounds": true,
+        "device_shows_absolute_utc_window": true,
+        "new_source_or_persistence_qualification": false,
+        "raw_screenshots_outside_git": true,
+        "selected_window_end": 1794882120,
+        "selected_window_start": 1794881820,
+        "viewport_320_limit": "Native Cloud sidebar and gutters leave Atlas only 124px; Filter overflows. Whole Cloud page is unsupported at this width; follow-up app-mount guard pending.",
+        "viewport_850": {
+          "atlas_width": 654,
+          "document_width": 850,
+          "filter_right": 796,
+          "table_client_width": 588,
+          "table_scroll_width": 640
+        }
+      },
+      "comparison_to_091": {
+        "app_conf_stanzas_changed": 3,
+        "collection_schema_and_acl_same": 15,
+        "kv_added": 15,
+        "kv_changed": 17,
+        "kv_missing": 0,
+        "kv_rows_after": 4677,
+        "kv_rows_before": 4662,
+        "kv_same": 4645,
+        "limit": "Captures were taken at different times; no cause, continuous-consistency or restoration claim",
+        "macros_full_content_and_acl_same": 263,
+        "new_feature_configuration_remains_disabled_and_unqualified": true,
+        "other_captured_configuration_same": true,
+        "rest_handlers_same": 3,
+        "savedsearches_full_content_and_acl_same": 24
+      },
+      "date_utc": "2026-11-17",
+      "postflight_capture": {
+        "batches": 2,
+        "bytes": 7724772,
+        "collections_reached_end": 15,
+        "manifest_sha256": "08bf542d4c7e45a3926b7e8f7f1bffc7e4a4208735e155328a8daf3a2272e492",
+        "metadata_sections": 19,
+        "pages": 99,
+        "rows": 5053,
+        "scope": "Live paginated observation; not atomic, quiescent, a raw override backup or verified restore",
+        "total_budgeted_calls": 204
+      },
+      "runtime_access_check": {
+        "baseline_capabilities_http_status": 403,
+        "case_capabilities_http_status": 403,
+        "limit": "API identity denied before handler qualification; Cloud persistence remains unsupported by implementation",
+        "role_grants_changed": false
+      },
+      "served_frontend": {
+        "asset_cache_build": "1794890079",
+        "javascript_payload_matches_archive_exactly": true,
+        "javascript_response_sha256": "0acdd6ac9b34639fd7a85fedcffb18a65e4e8889f27b4f334202908f23d3040a",
+        "optional_journey_asset_exercised": false,
+        "server_added_localization_prefix_bytes": 111,
+        "stylesheet_matches_archive": true
+      },
+      "target_scope": "Logged-in search head only; no whole-stack propagation claim"
+    },
     "complete_source_provider_added": false,
     "frontend_runtime_sha256": {
       "splunk_adm/appserver/static/adm.css": "4b5240c67f9e1ddd480b1c5dfffefefb58d1e6cc85b201665fb1c449144aebe2",
@@ -330,7 +405,7 @@
       "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py": "2f5bcdcdec5f25853f22f5cbffc76837e48267798f8348fa49a672582aba7c4f",
       "splunk_app/splunk_adm/default/app.conf": "5b9eefc95da81ab1c62921eb66603bb54aaabd15f8d8b4d7a8241cf746d7215e"
     },
-    "status": "Locally verified and packaged; Cloud still runs 0.9.1",
+    "status": "Cloud Web reports 0.9.2 installed on the selected search head; Advanced picker, visible UTC bounds and 850px Cloud layout verified; sub-320px Atlas mount needs a separate guard",
     "version": "0.9.2",
     "watch_management_http_or_ui_added": false
   },
@@ -654,7 +729,10 @@
     "proofs": "Pinned baseline and page/lookahead occurrence evidence reauthorized; compatibility and stored window checked; final ACL/revision recheck",
     "provider_added": false,
     "rendered_review": "Four corrected 1440/320 light/dark views accepted; dual-kind and not-observed examples use distinct windows",
-    "response_fields": ["changeKinds", "baselineVersion"],
+    "response_fields": [
+      "changeKinds",
+      "baselineVersion"
+    ],
     "runtime_path": "splunk_adm/bin/adm_baselines_lib/store.py",
     "runtime_sha256": "8f6b21243e011a0177cb031cb19c2d04113e229e2fa4fb467380f0b0902b21ac",
     "schedules_enabled": false,

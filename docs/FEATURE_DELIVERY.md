@@ -593,7 +593,7 @@ module/navigation errors; those are recorded separately from Atlas's source
 identity failure.
 
 
-## 0.9.2 follow-up candidate
+## Installed 0.9.2 Cloud validation
 
 The Advanced time picker now accepts validated preview success using the null
 value required by the pinned Toolkit. Live previews must contain the exact
@@ -619,9 +619,33 @@ note's text and a pointer click racing an accordion transition. The final full
 run passed after semantic targeting and a transition-readiness assertion.
 Independent review has no remaining findings; Astra accepted the six corrected
 synthetic layouts. Main and optional journey assets retain their unchanged gzip
-limits. Cloud 0.9.1 remains installed. The frozen 0.9.2 archive passed packaging and
-release validation with SHA-256
-`820dd27c93d687493b002c21fed4bf395b458dfed7234678cc1142cab52a94d7`;
-it still requires its own Cloud inspection/runtime result. Package identity and
-completed packaging evidence were recorded after the archive was frozen; these
-later documentation updates do not change its bytes.
+limits. The frozen 0.9.2 archive passed packaging and release validation with
+SHA-256 `820dd27c93d687493b002c21fed4bf395b458dfed7234678cc1142cab52a94d7`.
+Package identity and subsequent installed evidence were recorded after the
+archive was frozen; these documentation updates do not change its bytes.
+
+Cloud AppInspect 4.4.0 private_victoria approved that exact archive: 140 successes,
+zero failures/errors, six warnings, 100 not-applicable and one skipped check.
+The Web installer succeeded on the logged-in search head and the API reports
+0.9.2. No whole-stack propagation, manual restart or role change is claimed.
+The served JavaScript has a 111-byte Splunk localization prefix followed by the
+exact packaged payload; served CSS matches the archive exactly.
+
+The installed Advanced picker accepted and applied the absolute window
+2026-11-17 02:17:00–02:22:00 UTC. Opening Device preserved those exact bounds and
+showed the UTC window. At an actual 850px Cloud viewport, Atlas has 654px available;
+the Filter fits and the table scrolls within its own container. At 320px, native
+Cloud navigation and gutters leave Atlas only 124px, and the page content
+overflows. That host-width boundary remains unsupported in this build and needs
+a separate app-owned minimum-width guard; no native Cloud navigation is hidden.
+Catalog identity remains incomplete. Case and baseline capability routes still
+return 403 to the API identity, and Cloud persistence remains unsupported.
+
+The bounded post-update capture completed 99 pages, all 19 metadata sections and
+15 collections. Compared with the 0.9.1 capture, all 24 saved searches, 15 collection
+schemas, 263 macros and three REST handler configurations retain their semantic
+content and ACLs. Three app.conf stanzas changed; other captured configuration
+matches. Captured KV rows increased from 4,662 to 4,677: 15 added, 17 changed and
+none missing. Cases, baselines and watch execution remain disabled/unqualified.
+These paginated observations are not an atomic backup or restore test and do not
+establish the cause of intervening row changes.
