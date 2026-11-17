@@ -474,6 +474,56 @@
       "vitest_files": 126,
       "vitest_tests": 1334
     },
+    "cloud_validation": {
+      "appinspect": {
+        "decoded_html_sha256": "4d1f24984626a9f8c20f77246108b78da4667f22ebc0c692e46cc769a451f562",
+        "error": 0,
+        "failure": 0,
+        "not_applicable": 100,
+        "raw_report_response_sha256": "8b4d97b6c9094c6dc2534ff33fddca0441b153762cc1d75679ccff996562ccc5",
+        "response_identifies_archive_sha256": true,
+        "skipped": 1,
+        "success": 140,
+        "version": "4.4.0",
+        "warning": 6
+      },
+      "browser": {
+        "limit": "Phone-width Cloud does not support the full investigation view; app shows a contained widen-window notice instead of clipping content or leaving popup actions visible",
+        "native_cloud_header_responsiveness_fixed": false,
+        "raw_screenshots_outside_git": true,
+        "scope_and_case_draft_retention": "Automated local browser regressions, not exercised against Cloud persistence",
+        "viewport_320": {
+          "atlas_navigation_retained": true,
+          "atlas_scroll_width": 124,
+          "atlas_width": 124,
+          "notice_focused_after_open_picker_shrink": true,
+          "owned_time_popup_count": 0,
+          "page_content_hidden": true,
+          "width_notice_visible": true
+        },
+        "viewport_850": {
+          "atlas_scroll_width": 654,
+          "atlas_width": 654,
+          "filter_right": 796,
+          "table_client_width": 588,
+          "table_scroll_width": 640,
+          "width_notice_visible": false
+        },
+        "widen_restores_page_with_same_absolute_bounds": true
+      },
+      "date_utc": "2026-11-17",
+      "full_paginated_preservation_capture_repeated": false,
+      "preservation_limit": "The bounded complete preservation comparison applies to 0.9.1\u21920.9.2. This frontend-only 0.9.3 check verifies installed archive assets and UI; no new 0.9.3 KV consistency or restore claim.",
+      "served_frontend": {
+        "asset_cache_build": "1794893171",
+        "javascript_payload_matches_archive_exactly": true,
+        "javascript_response_sha256": "e8c3289a7764f05174b5e18d3f2cde063256c9e77abd46eb645d0598bec6bdc5",
+        "server_added_localization_prefix_bytes": 111,
+        "stylesheet_matches_archive": true,
+        "stylesheet_sha256": "b1eb4b69ccd51533f3b259ab9f73bd3bb0ed35a4dfb595a638ced1d62520573c"
+      },
+      "target_scope": "Logged-in search head only; no whole-stack propagation claim"
+    },
     "frontend_runtime_sha256": {
       "splunk_app/splunk_adm/appserver/static/adm.css": "b1eb4b69ccd51533f3b259ab9f73bd3bb0ed35a4dfb595a638ced1d62520573c",
       "splunk_app/splunk_adm/appserver/static/pages/atlas.js": "baa25bae032b8f149b965031310430ba14071b25339f88edaa3e61eac1df6326",
@@ -501,7 +551,7 @@
       "frontend/src/styles.css": "d7f28b3e2d0f5503ce2a633fe33faed9353dc4fe4536948166cbe4de35f72c43",
       "splunk_app/splunk_adm/default/app.conf": "325eda6b1594ff54f810197bebb86f33876491957cecc4c80c6ead0a5945ce9d"
     },
-    "status": "Locally verified and packaged; Cloud still runs 0.9.2",
+    "status": "Cloud Web reports 0.9.3 installed; exact served assets and narrow-mount behavior verified",
     "test_harness_fix": "Qualification evidence test explicitly imports the lab client with its sibling path and patches the imported object; standalone Python3.15 run previously failed import resolution. Final71 composed checks passed.",
     "version": "0.9.3"
   },

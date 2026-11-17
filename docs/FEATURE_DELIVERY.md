@@ -679,3 +679,21 @@ Packaging and archive validation passed. The frozen candidate is 1,379,984 bytes
 SHA-256 `cb6252423147875dd6384af1df48505e480105819fa3e3095ca35ee75fcb3440`
 (build 1794893171). These final results and package identity were added after
 archive freeze and do not alter its bytes.
+
+
+Cloud approved and installed that exact 0.9.3 archive on the logged-in search
+head. AppInspect 4.4.0 reports 140 successes, zero failures/errors, six warnings,
+100 not-applicable and one skipped check. The report response is bound to the
+archive hash; served CSS matches exactly, and served JavaScript is the exact
+packaged payload after the 111-byte localization prefix.
+
+Installed checks at 850px show a 654px Atlas mount, contained Filter and table
+scrolling. Shrinking an open time picker to a 320px Cloud viewport leaves a 124px
+Atlas mount: the popup disappears, focus moves to the visible width notice and
+Atlas navigation remains present. Atlas scroll width equals its 124px mount;
+widening restores the Device view with the same UTC bounds. This handles the
+unsupported width gracefully; it does not make the full Cloud investigation UI
+phone-sized or fix native Cloud header overflow. Draft and scope-popup regressions
+are local browser evidence, not Cloud persistence qualification. The complete
+preservation capture was not repeated for this frontend-only revision; the
+preceding 0.9.1→0.9.2 comparison retains its stated limits.
