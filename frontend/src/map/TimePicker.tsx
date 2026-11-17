@@ -124,6 +124,7 @@ export function TimePicker({
     >
       <span>Time range</span>
       <Dropdown
+        data-atlas-time-range="true"
         earliest={earliest}
         latest={latest}
         disabled={disabled}

@@ -174,6 +174,9 @@ export function VirtualTable<T>({
       <div
         ref={scroller}
         className="atlas-vtable-scroll"
+        role="region"
+        aria-label={`${caption} table, scroll for more columns`}
+        tabIndex={0}
         data-scroll-region
         style={{ height }}
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}

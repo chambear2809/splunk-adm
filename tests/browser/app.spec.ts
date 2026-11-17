@@ -981,6 +981,195 @@ test("catalog uses its captured metric window when the Find/map picker changes",
   expect(await catalogRequests()).toHaveLength(before.length);
 });
 
+test("device lookup uses the current Explore time after the picker changes", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&earliest=1791370800&latest=1791374400",
+  );
+  await page
+    .getByLabel("Time range", { exact: true })
+    .getByRole("button")
+    .click();
+  await page.getByRole("button", { name: "Presets", exact: true }).click();
+  await page.getByText("Last 24 hours", { exact: true }).click();
+  await expect(
+    page.getByLabel("Time range", { exact: true }).getByRole("button"),
+  ).toContainText("Last 24 hours");
+  expect(new URL(page.url()).searchParams.get("earliest")).toBe("1791370800");
+  const lookup = page.getByRole("form", { name: "Device lookup" });
+  await lookup.getByLabel("Device name or ID").fill("192.0.2.73");
+  await lookup.getByRole("button", { name: "Open" }).click();
+  await expect(
+    page.getByRole("heading", { name: /192\.0\.2\.73|esx-03/ }),
+  ).toBeVisible();
+  const url = new URL(page.url());
+  const start = Number(url.searchParams.get("earliest"));
+  const end = Number(url.searchParams.get("latest"));
+  expect(url.searchParams.get("service")).toBe("frontend");
+  expect(start).not.toBe(1791370800);
+  expect(end - start).toBeGreaterThanOrEqual(24 * 60 * 60);
+  expect(end - start).toBeLessThan(25 * 60 * 60);
+  const impact = new URL(
+    (await page.getByRole("link", { name: /Impact if/ }).getAttribute("href"))!,
+    page.url(),
+  );
+  expect(impact.searchParams.get("window")).toBe(String(start));
+  expect(impact.searchParams.get("latest")).toBe(String(end));
+  await expect(
+    page.getByLabel("Time range", { exact: true }).getByRole("button"),
+  ).toHaveText("Custom time");
+});
+
+for (const theme of ["light", "dark"] as const) {
+  test(`mobile time picker and device navigation remain usable in ${theme}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 650 });
+    await page.goto(
+      `/tests/browser/browser.html?page=applications&mode=live&theme=${theme}&earliest=1791370800&latest=1791374400`,
+    );
+    const trigger = page
+      .getByLabel("Time range", { exact: true })
+      .getByRole("button");
+    await trigger.click();
+    const dialog = page.locator('[data-test="time-range-dialog"]');
+    await expect(dialog).toHaveAttribute("data-atlas-time-range", "true");
+    expect(
+      await page.evaluate(() => {
+        const other = document.createElement("div");
+        other.setAttribute("data-test", "time-range-dialog");
+        other.style.minWidth = "820px";
+        other.style.width = "640px";
+        document.body.append(other);
+        const width = getComputedStyle(other).minWidth;
+        other.remove();
+        return width;
+      }),
+    ).toBe("820px");
+    const customInputs = page.locator('[data-test-panel-id="dateTime"] input');
+    await expect(customInputs).toHaveCount(4);
+    for (const input of await customInputs.all()) {
+      const box = await input.boundingBox();
+      expect(box && box.width >= 100 && box.x + box.width <= 320).toBe(true);
+    }
+    await page.getByRole("button", { name: "Presets", exact: true }).click();
+    await page.getByText("Last 24 hours", { exact: true }).click();
+    await expect(trigger).toContainText("Last 24 hours");
+    await page.reload();
+    await trigger.click();
+    await expect
+      .poll(() =>
+        page
+          .locator('[data-test="time-range-dialog"]')
+          .evaluate((el) => el.contains(document.activeElement)),
+      )
+      .toBe(true);
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await page.reload();
+    for (
+      let i = 0;
+      i < 40 &&
+      !(await trigger.evaluate((el) => el === document.activeElement));
+      i++
+    )
+      await page.keyboard.press("Tab");
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(() =>
+        page
+          .locator('[data-test="time-range-dialog"]')
+          .evaluate((el) => el.contains(document.activeElement)),
+      )
+      .toBe(true);
+    const presets = page.getByRole("button", { name: "Presets", exact: true });
+    for (
+      let i = 0;
+      i < 40 &&
+      !(await presets.evaluate((el) => el === document.activeElement));
+      i++
+    )
+      await page.keyboard.press("Tab");
+    await expect(presets).toBeFocused();
+    await page.keyboard.press("Enter");
+    const preset = page.getByText("Last 24 hours", { exact: true });
+    for (
+      let i = 0;
+      i < 40 && !(await preset.evaluate((el) => el === document.activeElement));
+      i++
+    )
+      await page.keyboard.press("Tab");
+    await expect(preset).toBeFocused();
+    await page.keyboard.press("Enter");
+    const lookup = page.getByRole("form", { name: "Device lookup" });
+    await lookup.getByLabel("Device name or ID").fill("192.0.2.73");
+    await lookup.getByRole("button", { name: "Open" }).click();
+    await expect(page.getByRole("heading", { name: /esx-03/ })).toBeVisible();
+    const url = new URL(page.url());
+    const start = Number(url.searchParams.get("earliest"));
+    const end = Number(url.searchParams.get("latest"));
+    expect(end - start).toBeGreaterThanOrEqual(86400);
+    expect(end - start).toBeLessThan(90000);
+    const impact = new URL(
+      (await page
+        .getByRole("link", { name: /Impact if/ })
+        .getAttribute("href"))!,
+      page.url(),
+    );
+    expect(impact.searchParams.get("window")).toBe(String(start));
+    expect(impact.searchParams.get("latest")).toBe(String(end));
+    const scroller = page.getByRole("region", {
+      name: "Conversations table, scroll for more columns",
+    });
+    await expect(scroller).toBeVisible();
+    await expect(scroller).toHaveAttribute("tabindex", "0");
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  });
+}
+
+test("mobile time picker keeps every input panel usable in a short viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  for (const [title, panel, minimum] of [
+    ["Relative", "relative", 48],
+    ["Date Range", "date", 100],
+    ["Date & Time Range", "dateTime", 100],
+    ["Advanced", "advanced", 100],
+  ] as const) {
+    await page.goto("/tests/browser/browser.html?page=applications&mode=live");
+    await page
+      .getByLabel("Time range", { exact: true })
+      .getByRole("button")
+      .click();
+    if (
+      (await page
+        .getByRole("button", { name: title, exact: true })
+        .getAttribute("aria-expanded")) !== "true"
+    )
+      await page.getByRole("button", { name: title, exact: true }).click();
+    const active = page.locator(`[data-test-panel-id="${panel}"]`);
+    const inputs = active.locator('input[type="text"]');
+    await expect(inputs.first()).toBeVisible();
+    for (const input of await inputs.all()) {
+      const box = await input.boundingBox();
+      expect(box && box.width >= minimum && box.x + box.width <= 320).toBe(
+        true,
+      );
+    }
+    const dialog = page.locator('[data-test="time-range-dialog"]');
+    expect(
+      await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth),
+    ).toBe(true);
+  }
+});
+
 test("captured demo applications explain unavailable Find evidence", async ({
   page,
 }) => {
@@ -2317,7 +2506,7 @@ test("device page lists conversations and a row traces the pair", async ({
   await expect(kpis).toContainText("60 B");
   await expect(kpis).toContainText("0 blocked");
   await expect(kpis).toContainText("Stream NetFlow · 192.0.2.73");
-  const table = page.getByRole("region", { name: "Conversations" });
+  const table = page.getByRole("region", { name: "Conversations", exact: true });
   await expect(table).toContainText("win-client-01");
   await expect(table).toContainText("tcp/5432");
   // Separate In and Out columns.

@@ -4,6 +4,111 @@
     "All three loopback ports free",
     "Task credential files and TLS directories absent"
   ],
+  "cloud_development_candidate": {
+    "appinspect": {
+      "cloud_validation": "Pending before installation; do not bypass inspection",
+      "local_tool": "Installation blocked by verified TLS certificate rejection; no insecure fallback used"
+    },
+    "authorization": "User explicitly authorized Cloud app upload/changes for development and validation; vCenter/APIC available for read-only validation",
+    "browser_first_run": {
+      "failed": 1,
+      "passed": 201,
+      "resolution": "Focusable table region made a substring locator ambiguous; exact outer Conversations locator fixed and full suite reran cleanly",
+      "skipped": 1
+    },
+    "checks": {
+      "browser_passed": 202,
+      "browser_skipped": 1,
+      "journeys_gzip_bytes": 31922,
+      "journeys_limit_bytes": 32768,
+      "lint": "passed",
+      "main_bundle_gzip_bytes": 685433,
+      "main_bundle_limit_bytes": 686080,
+      "package": "passed",
+      "release_archive": "passed",
+      "release_build_report_tests": 69,
+      "ruff": "passed",
+      "vitest_files": 125,
+      "vitest_tests": 1331
+    },
+    "cloud_persistence_qualified": false,
+    "date_utc": "2026-11-17",
+    "frontend_runtime_sha256": {
+      "splunk_adm/appserver/static/adm.css": "cccee7ac9aa60690675b680f1c6d280ae0fcc88a78f0a384b859c446f7a3879e",
+      "splunk_adm/appserver/static/pages/atlas.js": "56399fda63980974fc08e09fbaff6ff37a00f16745f27d419c272d9418954b58",
+      "splunk_adm/appserver/static/pages/journeys.js": "8e0e3cdcc34a6b023a3be925519452c56add4888f8a15cd01611cfd4b4b77694"
+    },
+    "independent_review": "No remaining findings in navigation, mobile controls/table focus and version bump",
+    "new_collector_or_schedule_activation_authorized": false,
+    "preservation_snapshot": {
+      "bytes": 7649281,
+      "collections_reached_end": 15,
+      "manifest_sha256": "9b617aa683b32a46083462fa93fea34c8b201ee645ba1914a11c5bb4b52d3294",
+      "metadata_sections": 19,
+      "pages": 99,
+      "private_outside_git": true,
+      "rows": 5000,
+      "scope": "Live paginated configuration/KV capture only; no quiescence, atomicity, raw local file backup or verified restore claim"
+    },
+    "rendered_review": "Astra accepted 14 synthetic light/dark views at 1440/320; all panels readable; normal keyboard, short viewport and unmarked-dialog isolation verified by automated regressions",
+    "scope_limits": [
+      "This development upload does not qualify source completeness, readiness/capacity or connected journey correlations",
+      "Enterprise-only private persistence and unavailable complete provider stay gated",
+      "Cloud app inspection/install/runtime results must be recorded separately against the exact uploaded archive"
+    ],
+    "source_configuration_sha256": {
+      "splunk_adm/default/app.conf": "dc2cde1e054beaacf7d10d7b2cd4faff8e994d130b73d7454a9bd4742afa26e7"
+    },
+    "status": "Locally verified; Cloud upload/vetting not yet performed",
+    "ui_changes": [
+      "Device lookup uses current picker bounds while retaining navigation context",
+      "Atlas-owned narrow time dialog contains presets and all custom panels with vertical scrolling",
+      "Device grid/metadata/filter stay within viewport; summary remains above table",
+      "Evidence table scroller has descriptive region name, keyboard focus and visible outline"
+    ],
+    "version": "0.9.0"
+  },
+  "cloud_installed_readonly_check": {
+    "app_version": "0.8.6",
+    "baseline_capabilities_http_status": 404,
+    "browser_check": {
+      "additional_state": [
+        "Map scope options unavailable with the same identity error",
+        "Recent selected window showed incomplete-window warning"
+      ],
+      "authenticated_by_user": true,
+      "catalog": "Unavailable: qualified identity evidence is incomplete",
+      "conversation_to_trace_bounds_preserved": true,
+      "device": "Selected device traffic loaded after explicit absolute bounds were restored",
+      "displayed_device_metrics": {
+        "conversation_rows": 154,
+        "flows": 1160,
+        "peers": 39,
+        "traffic_label": "42.8 MB"
+      },
+      "displayed_trace_records": 1889,
+      "fabric_interconnects_labeled_inferred": true,
+      "navigation_issue": "Installed Explore device form dropped explicit bounds; local URL case already preserves them. Local picker-state navigation gap found and fixed separately.",
+      "new_candidate_workflows_qualified": false,
+      "notes": "Displayed counts are source/UI observations, not unique connection, completeness, capacity, readiness or end-to-end journey proof",
+      "raw_screenshots_outside_git": true,
+      "window": {
+        "end": 1794882180,
+        "start": 1794881880
+      }
+    },
+    "candidate_file_identity_established": false,
+    "candidate_handler_config_http_status": 404,
+    "canonical_profile_host_matches_requested_host": true,
+    "case_capabilities_http_status": 404,
+    "date_utc": "2026-11-17",
+    "mutations": false,
+    "redirects_followed": false,
+    "scope": "Installed metadata and unavailable candidate routes in current API session; equal app version does not establish candidate code or Cloud persistence support",
+    "server_version": "10.6.0.5",
+    "source_jobs_dispatched_by_metadata_check": 0,
+    "verified_https": true
+  },
   "current_increment": {
     "cleanup_verified": true,
     "container_id": "c06294ce635241abe9e2515e1f1812dba21c47a3c92b6400634a42755a9cbc79",
@@ -290,7 +395,74 @@
     "schema_migration": false,
     "scope": "Local synthetic store/API and browser read-derived classification; not positive installed complete-source qualification"
   },
+  "hf_audit_input_static_check": {
+    "actual_collection_or_arrival_observed": false,
+    "application_audit_association_qualified": false,
+    "comparison": {
+      "collector_script": "matches reviewed vendor and r2 overlay",
+      "default_app": "differs from both reviewed snapshots; version field only matches",
+      "default_inputs": "matches reviewed r2 overlay; differs from vendor defaults"
+    },
+    "complete_installed_package_identity_established": false,
+    "date_utc": "2026-11-17",
+    "disabled_or_unknown_matching_stanzas": 0,
+    "enabled_matching_classinfo_stanzas": {
+      "aaaModLR": 1,
+      "eventRecord": 1,
+      "faultRecord": 1
+    },
+    "installed_default_version": "1.2.2",
+    "installed_file_sha256": {
+      "bin/cisco_nexus_aci.py": "173d0be95a5f40c1fc5c9ce85ff618e8898187b71de041dffd7b68b7a63b0e95",
+      "default/app.conf": "73f895e9211a9b003a77c44381bb8560ff36fd13ab3f444c09fa6b30f02dd0d5",
+      "default/inputs.conf": "ddc75e08ebf36d974d67964c4f86deb7d74195b60cffb56457d9dd4d3159eaf8"
+    },
+    "mutations": false,
+    "profile": "hf",
+    "scope": "Installed declarations and three file fingerprints only; no collector/API execution, source events, index arrival, coverage or historical application relation proof",
+    "transport": "pinned SSH; read-only local file hashes and allowlisted effective input metadata"
+  },
   "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+  "native_worker_preflight": {
+    "access_observations": {
+      "enterprise_ssh_tcp_reachable": false,
+      "hf_atlas_installed": false,
+      "hf_pinned_ssh_succeeded": true,
+      "hf_verified_localhost_tls_established": false
+    },
+    "app_installed": false,
+    "date_utc": "2026-11-17",
+    "elapsed_ms": 81,
+    "environment_verified": true,
+    "execution_identity": "Pinned SSH operator; not the Splunk daemon user",
+    "installed_candidate_qualification": false,
+    "no_worker_session_or_network": true,
+    "not_qualified": [
+      "Production parent supervision",
+      "Verified management TLS/API requests",
+      "Search lifecycle and cleanup uncertainty",
+      "Protected case capture/read/export/revocation",
+      "Complete baseline provider or scheduling"
+    ],
+    "python_version": "3.13.11",
+    "ready_frame_verified": true,
+    "remote_temporary_cleanup_verified": true,
+    "resource_limit_scope": "Worker child only; existing Splunk process limits unchanged",
+    "resource_limits": {
+      "address_space_bytes": 268435456,
+      "core_bytes": 0,
+      "cpu_seconds": 10
+    },
+    "scope": "Exact packaged worker startup, unchanged limits, SSL initialization and representative allocation under native Splunk Python as SSH operator; token-free isolated preflight only, not Splunk-daemon execution",
+    "splunk_version": "10.6.0.5",
+    "supervisor": "Separate temporary three-second Python driver; not production SupervisedTransport._exchange",
+    "target_platform": "Linux x86_64",
+    "target_role": "heavy-forwarder; not a standalone search-head workflow",
+    "tested_archive_sha256": "f22c2f1dcdb463c950d24821aaf27eda329a4d0dbc9a0eef7e0d112407af553c",
+    "timed_out": false,
+    "worker_path": "splunk_adm/bin/adm_cases_lib/transport_worker.py",
+    "worker_sha256": "dc39ece34ffc349e43c0667722c62ef3edc7893c36c7a3cd36182357f7b71e57"
+  },
   "not_qualified": [
     "Complete baseline source provider",
     "Positive installed baseline capture/version/watch evaluation",
