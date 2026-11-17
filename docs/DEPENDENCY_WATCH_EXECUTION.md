@@ -122,10 +122,11 @@ create or enable a binding, execute a run, bootstrap an empty journal or recreat
 a missing database. It returns only binding ID, revision and `enabled: false`.
 Stopping preserves all uncertain run states, retained references and quota
 accounting. Existing journal schema and canonical binding records are validated
-before their ownership data is used. No management HTTP route or UI is exposed.
+before their ownership data is used. A narrow authenticated HTTP stop route is
+described below. No management UI, provisioning or enable route is exposed.
 Bindings can currently be provisioned only through the trusted host/executor
-interface; there is no administrator UI or public binding endpoint. This is a
-local execution-mechanics increment, not an operator-ready watch workflow.
+interface. This is a local execution-mechanics increment, not an operator-ready
+watch workflow.
 
 Local tests use an explicitly injected synthetic provider. They verify journal
 admission, crash boundaries, leases, source/owner revocation, capture digests,
@@ -140,3 +141,37 @@ uncertain runs to regain quota, rewrite binding revisions, or run an older write
 against this journal. Schema 1 is the first local contract; unsupported or earlier
 unreleased layouts fail closed. Offline backup/restore of this new journal has
 not been operationally qualified.
+
+
+## Operator stop command
+
+`POST adm/dependency-monitoring/watch-management/disable` accepts JSON containing
+exactly `binding_id` and integer `expected_revision`. The binding ID and current
+revision must come from the trusted provisioning/management record. There is no
+HTTP binding enumeration or provisioning workflow. Requests require the current
+investigator capability and administrator role; the immutable binding principal
+must match that authenticated administrator. Splunk Web exposes only this exact
+POST route with its native session/CSRF protections. No CSRF override is shipped.
+Direct API clients need authenticated verified HTTPS. Installed Web/CSRF and
+effective-ACL qualification of this new route remains outstanding.
+
+The stop command deliberately runs before execution/persistence/source readiness
+checks. It opens only an existing private validated journal, never a new one.
+It cannot enable a binding, create work, dispatch a search, delete uncertain runs
+or recover quota. It returns only `id`, the new `revision` and `enabled: false`.
+A concurrent revision change returns 409. This command does not add idempotency
+receipts: a lost successful response followed by the original CAS can also return
+409. Treat that result as unresolved and reconcile through the trusted journal
+management path; do not assume a conflict proves either enabled or disabled.
+Keep execution disabled during operational reconciliation. Already admitted work
+may still finish, as described above.
+
+The JSON body is limited to 4 KiB. Extra fields, duplicate JSON/query/header keys,
+malformed revisions and extra query arguments are rejected. The route supplies
+no source captures, run references, credentials or binding definitions. Local
+host tests use synthetic state and verify authorization, revision conflicts,
+source-independent stop, missing/corrupt journal refusal, and preservation of
+uncertain run records. They are implementation checks, not installed or
+real-source qualification. Removing the route on code rollback preserves the
+journal; the trusted disable-only manager remains the fallback. Do not downgrade
+or reset journal data to regain capacity.

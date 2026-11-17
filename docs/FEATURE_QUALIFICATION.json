@@ -1,4 +1,165 @@
 {
+  "ci_repair_watch_stop_candidate": {
+    "base_remote_main": "577250bf35409ef703e6d0b3c30bd1272c8576ea",
+    "browser_cause": {
+      "after": {
+        "document_width": 320,
+        "impact_content_width": 272,
+        "maintenance_trigger_width": 272,
+        "trigger_right": 296
+      },
+      "assertion_relaxed": false,
+      "before": {
+        "document_width": 327,
+        "impact_content_width": 272,
+        "maintenance_trigger_width": 302.59375,
+        "trigger_x": 24,
+        "viewport": 320
+      },
+      "environment": "Local Docker Linux/amd64 Ubuntu24.04 Playwright1.64.0 Chromium156.0.8078.4 with DejaVu Sans; focused tests run with Node22.13.0",
+      "fix": "Shared lazy evidence trigger wraps and max-width100% before optional styles load",
+      "global_overflow_mask": false,
+      "image_digest": "sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f"
+    },
+    "bundle_compression": {
+      "explanation": "Node and Python runtime compression implementations differ for identical final bytes; report now records compressor/runtime and diagnostic-only role. Negative Node headroom retained; archive gate remains Python gzip9.",
+      "node_diagnostic_gzip9_bytes": 686533,
+      "node_diagnostic_headroom_bytes": -453,
+      "python_release_gate_gzip9_bytes": 683034,
+      "python_release_headroom_bytes": 3046,
+      "same_uncompressed_payload_bytes": 2672251,
+      "unchanged_limit_bytes": 686080
+    },
+    "checks": {
+      "archive_integrity": "passed: python tools/check_release.py --dist dist",
+      "atlas_bundle_security": "passed: python -m unittest tests.test_atlas_build;3 tests",
+      "browser": "passed: ADM_BROWSER_PORT=4175 npm run test:browser;214 passed,1 skipped",
+      "distributed_python": "passed: Python3.13.14 -m unittest discover -s tests/distributed -p test_*.py;126 tests",
+      "full_python": "passed: Python3.13.14 -m unittest discover -s tests -p test_*.py;1319 tests after final principal binding and regression fixes",
+      "lint": "passed: npm run lint",
+      "linux_focused_browser": "passed: Node22.13.0 Playwright1.64.0 ownership-integration.spec.ts;11 tests",
+      "local_appinspect": {
+        "command": "splunk-appinspect inspect dist/splunk_adm-0.9.4.tar.gz --mode precert --included-tags cloud; check_appinspect.py",
+        "installed_cloud_approval": false,
+        "summary": {
+          "error": 0,
+          "failure": 0,
+          "future_failure": 0,
+          "not_applicable": 100,
+          "skipped": 1,
+          "success": 139,
+          "warning": 6
+        },
+        "version": "4.3.1"
+      },
+      "package": "passed: npm run package; Node22.16.0",
+      "ruff": "passed: ruff check tools tests; ruff format --check tools tests",
+      "task_lab": "passed: Python3.13.14 -m unittest tests.test_task_lab;11 tests",
+      "upgrade_python": "passed: Python3.13.14 -m unittest discover -s tests/splunk -p test_upgrade.py;18 tests,3 skipped",
+      "vitest": "passed: npm test;126 files,1334 tests",
+      "watch_focused": "passed: Python3.13.14 -m unittest tests.test_dependency_watch_host tests.test_baseline_executor tests.test_baseline_run_store;53 tests"
+    },
+    "date_utc": "2026-11-17",
+    "failed_ci_run": {
+      "browser": {
+        "failed": 2,
+        "passed": 210,
+        "skipped": 1
+      },
+      "frontend": "passed",
+      "installed_splunk": "skipped",
+      "python": {
+        "errors": 7,
+        "failures": 7,
+        "skipped": 2,
+        "tests": 1311
+      },
+      "url": "https://github.com/chambear2809/splunk-adm/actions/runs/44024751893"
+    },
+    "frozen_archive": {
+      "build": "1794930346",
+      "bytes": 1387764,
+      "documentation_limit": "Package identity and final checks recorded after archive freeze; these later documentation edits do not change frozen bytes. CI builds a separate timestamped archive.",
+      "name": "splunk_adm-0.9.4.tar.gz",
+      "packaged_runtime_sha256": {
+        "splunk_adm/appserver/static/adm.css": "2a6cab9d66980fbfcd4c9645038a5e1b6360001aa89a5207528bc35cd6465d52",
+        "splunk_adm/appserver/static/pages/atlas.js": "baa25bae032b8f149b965031310430ba14071b25339f88edaa3e61eac1df6326",
+        "splunk_adm/bin/adm_baselines_lib/splunk_host.py": "e0526e448e609ccda32a4bb313d140596bf6735e955cbd5ecf022bd203805288",
+        "splunk_adm/bin/adm_baselines_lib/watch_management.py": "8e408421960d6aba0375246e9e085e4eb1fbac4a5920e6a4d2ec5692c2038a96",
+        "splunk_adm/default/web.conf": "3eadfb5af9c168db87de697fbb4010bb87eacfa1ed6da3570b5a5de29a299197"
+      },
+      "sha256": "3c32906f5442e50acabe9b7135d9a475a66fca8475e84dd564961ccd2ad663b1"
+    },
+    "independent_review": {
+      "checks": "Independent reviewer ran19 final watch-host tests successfully; prior89 task-lab/watch-host/release tests passed before final added test",
+      "coordinator_correction": "Bind stop manager and every stopper recheck to original authenticated principal, including HTTP request principal.",
+      "diagnostic_report_followup": "No findings; compressor/runtime metadata only, unchanged hook/compression/gates/runtime output",
+      "finding_resolved": "Initial identity regression omitted required capability and rejected before reaching the change. It now carries capability, proves multiple context reads and verifies no mutation; a second regression covers later manager rebind.",
+      "model": "gpt-6.1-sol high, explicit supported override; read-only assignment",
+      "mutation_verification": "Both corrected identity regressions fail against previous unbound manager (2 expected failures, no errors)",
+      "result": "No outstanding findings",
+      "workers": "Pinned Luna role for fixture repair and bounded stop-route implementation; one owner per file set"
+    },
+    "open_qualification": [
+      "Native Linux/amd64 supervised capture",
+      "Installed stop route Web proxy/CSRF/effective ACLs",
+      "Whole-endpoint bounds and source revocation",
+      "Supported-target recovery/restore",
+      "Real incident, maintenance and connected-journey source contracts"
+    ],
+    "open_software": [
+      "Production complete-source provider",
+      "Operator watch provisioning and enable management",
+      "Verified business feed adapter and shared source-authorized persistence where required"
+    ],
+    "python_cause": "Copied shell workspace omitted lab_tls.py and old ownership fixtures lacked private TLS/exact recorded container identity; only fixtures changed",
+    "qualification": {
+      "deployed": false,
+      "installed_validation_added": false,
+      "last_recorded_cloud_install": "0.9.3 (not rechecked this increment)",
+      "local_implementation": true,
+      "private_native_lab_draft_executed": false,
+      "production_readiness_added": false,
+      "real_source_qualification_added": false,
+      "self_hosted_runner_count": 0
+    },
+    "rollback": "Restore prior assets/HTTP exposure together; preserve case/baseline/watch-run databases and all uncertain states",
+    "rollout": "No deployment; persistence/execution/collectors/schedules/notifications remain unchanged and disabled where shipped disabled",
+    "source_sha256": {
+      "frontend/src/styles.css": "746a03ba12c4856f7df3a216587a1c7443ecccb53b0dc5e76c14f21130e01eb8",
+      "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py": "e0526e448e609ccda32a4bb313d140596bf6735e955cbd5ecf022bd203805288",
+      "splunk_app/splunk_adm/bin/adm_baselines_lib/watch_management.py": "8e408421960d6aba0375246e9e085e4eb1fbac4a5920e6a4d2ec5692c2038a96",
+      "splunk_app/splunk_adm/default/web.conf": "3eadfb5af9c168db87de697fbb4010bb87eacfa1ed6da3570b5a5de29a299197",
+      "tests/browser/ownership-integration.spec.ts": "2f28305cecf4104480fac7eb5cd72f365051ce45f84c4d15cd933413e3ab3af9",
+      "tests/test_dependency_watch_host.py": "9c8a5f8ef56d55840ed7493353b9aa142c84c24e8617b5708875b9400ecd940f",
+      "tests/test_task_lab.py": "0be73663f84c9a9f1773e6e1a35270dcaf931a8c200c2fb2354ea0e9165a0c30",
+      "tools/check_release.py": "028b79ea3e5c38aaf80e3e5cfd7e4426d4b182363e8f2e6a3bc2995fc433dc39",
+      "vite.splunk.config.ts": "0b87434de04411652cd785933f08e418bdb56aab6d02aba25ec667eb32049182"
+    },
+    "ui_review": "Coordinator inspected synthetic Linux light/dark Impact ownership at320/1440; button wraps without clipping; keyboard opening/focus regression passed. No customer usability or installed evidence claim.",
+    "validation_limitations": [
+      "One earlier full run under simultaneous browser load hit existing100ms SQLite busy timeout in journal race test. Isolated race test and unloaded full discovery passed; locking/limits unchanged.",
+      "A worker full run during active release-guard edits used inconsistent inputs and failed release mutation tests; superseded by stable full1317-test run.",
+      "Existing SQLite ResourceWarning messages remain."
+    ],
+    "version": "0.9.4",
+    "watch_stop": {
+      "authentication": "Current adm_investigate capability plus administrator role matching immutable binding principal; rechecked by existing stopper",
+      "body_bytes_max": 4096,
+      "cas_lost_response_retry": "May return409; no idempotent receipt/reconciliation endpoint added",
+      "enable_route_added": false,
+      "enumeration_added": false,
+      "existing_journal_only": true,
+      "implemented": true,
+      "installed_web_csrf_acl_qualified": false,
+      "provisioning_added": false,
+      "request_fields": ["binding_id", "expected_revision"],
+      "response_fields": ["id", "revision", "enabled"],
+      "route": "POST adm/dependency-monitoring/watch-management/disable",
+      "source_independent": true,
+      "uncertain_run_state_and_quota_preserved": true
+    }
+  },
   "cleanup": [
     "Both named containers, networks and volumes absent",
     "All three loopback ports free",
@@ -834,10 +995,7 @@
     "proofs": "Pinned baseline and page/lookahead occurrence evidence reauthorized; compatibility and stored window checked; final ACL/revision recheck",
     "provider_added": false,
     "rendered_review": "Four corrected 1440/320 light/dark views accepted; dual-kind and not-observed examples use distinct windows",
-    "response_fields": [
-      "changeKinds",
-      "baselineVersion"
-    ],
+    "response_fields": ["changeKinds", "baselineVersion"],
     "runtime_path": "splunk_adm/bin/adm_baselines_lib/store.py",
     "runtime_sha256": "8f6b21243e011a0177cb031cb19c2d04113e229e2fa4fb467380f0b0902b21ac",
     "schedules_enabled": false,

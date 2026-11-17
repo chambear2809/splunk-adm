@@ -179,6 +179,48 @@ for (const theme of ["light", "dark"])
     });
   }
 
+for (const theme of ["light", "dark"])
+  test(`impact evidence trigger wraps enlarged text before optional styles load ${theme}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto(
+      `${base}?view=impact&element=checkout&scope=synthetic&theme=${theme}`,
+    );
+    const trigger = page.getByRole("button", {
+      name: "Open maintenance planning evidence",
+    });
+    // Exercise larger font metrics on every platform, including before the
+    // optional stylesheet is fetched. Linux DejaVu Sans exposed the original
+    // nowrap trigger expanding Impact's implicit grid column to 303px.
+    await trigger.evaluate((element) => {
+      element.style.fontSize = "20px";
+    });
+    const content = (await page.locator(".adm.atlas-impact").boundingBox())!;
+    const button = (await trigger.boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(content.x);
+    expect(button.x + button.width).toBeLessThanOrEqual(
+      content.x + content.width,
+    );
+    expect(
+      await trigger.evaluate((element) => element.scrollWidth),
+    ).toBeLessThanOrEqual(Math.ceil(button.width));
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("region", { name: "Journey investigation", exact: true }),
+    ).toBeFocused();
+    await expect(
+      page.getByRole("region", { name: "Maintenance planning", exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320);
+  });
+
 test("ownership closes back to the map action without displacing the compact map", async ({
   page,
 }) => {

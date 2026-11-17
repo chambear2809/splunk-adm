@@ -162,7 +162,9 @@ real-source qualification.
 
 The separate [watch execution contract](DEPENDENCY_WATCH_EXECUTION.md) adds a
 disabled administrator/owner-only explicit-window action, immutable bindings
-and durable uncertainty tracking. No complete source provider, automatic schedule
+and durable uncertainty tracking. A narrow authenticated disable-only operator
+route now stops an existing owned binding without source access; it adds no
+provisioning or enable workflow. No complete source provider, automatic schedule
 or administrator provisioning UI is shipped. Synthetic local execution tests do
 not qualify installed scheduling. Its private `watch_runs.sqlite` must be retained
 with the baseline database; disabling and re-enabling never clears unknown work.

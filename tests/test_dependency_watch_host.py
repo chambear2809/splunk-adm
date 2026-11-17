@@ -8,6 +8,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest import mock
 
@@ -16,7 +17,11 @@ sys.path.insert(
 )
 from adm_baselines_lib.executor import RunBudget, Unavailable  # noqa: E402
 from adm_baselines_lib.store import Conflict, Forbidden, Invalid  # noqa: E402
-from adm_baselines_lib.splunk_host import HostUnavailable, SplunkHost  # noqa: E402
+from adm_baselines_lib.splunk_host import (  # noqa: E402
+    HostUnavailable,
+    SplunkHost,
+    handle as baseline_handle,
+)
 from adm_dependency_watch import main  # noqa: E402
 from tests.test_baseline_executor import Provider  # noqa: E402
 
@@ -119,6 +124,189 @@ class WatchHostIntegrationTests(unittest.TestCase):
             host_factory=lambda _token: self.host,
         )
         return code, json.loads(output.getvalue()), output.getvalue()
+
+    def management(
+        self, method="POST", payload=None, query=None, headers=None, raw_body=None
+    ):
+        request = {
+            "method": method,
+            "path_info": "/watch-management/disable",
+            "query": query or [],
+            "headers": headers or [["Content-Type", "application/json"]],
+            "payload": (
+                raw_body
+                if raw_body is not None
+                else json.dumps(
+                    payload
+                    if payload is not None
+                    else {
+                        "binding_id": self.binding["id"],
+                        "expected_revision": 2,
+                    }
+                )
+            ),
+        }
+        return baseline_handle(request, self.host)
+
+    def test_disable_route_returns_minimal_receipt_and_conflicts_on_stale_retry(self):
+        status, body, headers = self.management()
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            body, {"id": self.binding["id"], "revision": 3, "enabled": False}
+        )
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(
+            self.host.watch_manager().journal.binding(self.binding["id"])["revision"],
+            3,
+        )
+        self.assertEqual(
+            self.management(
+                payload={
+                    "binding_id": self.binding["id"],
+                    "expected_revision": 2,
+                }
+            )[0],
+            409,
+        )
+
+    def test_disable_route_rejects_extra_query_and_duplicate_json(self):
+        self.assertEqual(self.management(query=[["unexpected", "1"]])[0], 400)
+        self.assertEqual(
+            self.management(
+                headers=[
+                    ["Content-Type", "application/json"],
+                    ["content-type", "application/json"],
+                ]
+            )[0],
+            400,
+        )
+        request = {
+            "method": "POST",
+            "path_info": "/watch-management/disable",
+            "query": [],
+            "headers": [["Content-Type", "application/json"]],
+            "payload": '{"binding_id":"%s","binding_id":"x","expected_revision":2}'
+            % self.binding["id"],
+        }
+        self.assertEqual(baseline_handle(request, self.host)[0], 400)
+        self.assertEqual(
+            self.management(
+                payload={"binding_id": str(uuid.uuid4()), "expected_revision": 1}
+            )[0],
+            404,
+        )
+
+    def test_disable_route_maps_method_media_size_and_revision_errors(self):
+        cases = (
+            ("GET", None, None, 405),
+            ("POST", [["Content-Type", "text/plain"]], None, 415),
+            ("POST", [["Content-Type", "application/json"]], "x" * 4097, 413),
+        )
+        for method, headers, body, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(
+                    self.management(method, headers=headers, raw_body=body)[0],
+                    expected,
+                )
+        for payload in (
+            {"binding_id": self.binding["id"], "expected_revision": True},
+            {"binding_id": self.binding["id"], "expected_revision": 0},
+            {"binding_id": self.binding["id"], "expected_revision": 2, "x": 1},
+        ):
+            with self.subTest(payload=payload):
+                self.assertEqual(self.management(payload=payload)[0], 400)
+
+    def test_disable_route_rechecks_admin_owner_and_current_identity(self):
+        self.context["username"] = "bob"
+        self.assertEqual(self.management()[0], 403)
+        self.context["username"] = "alice"
+        self.context["roles"] = ["user"]
+        self.assertEqual(self.management()[0], 403)
+        self.context["roles"] = ["admin"]
+
+        def changing_context(path):
+            self.context["username"] = "bob"
+            return self.context if path.endswith("current-context") else self.server
+
+        self.host.runtime.request = changing_context
+        self.assertEqual(self.management()[0], 403)
+
+    def test_disable_route_binds_manager_to_outer_authenticated_principal(self):
+        calls = 0
+
+        def swapped_context(path):
+            nonlocal calls
+            if path.endswith("current-context"):
+                calls += 1
+                name = "bob" if calls == 1 else "alice"
+                return {**self.context, "username": name, "roles": ["admin"]}
+            return self.server
+
+        self.host.runtime.request = swapped_context
+        self.assertEqual(self.management()[0], 403)
+        self.assertGreaterEqual(calls, 2)
+        self.assertTrue(self.executor.journal.binding(self.binding["id"])["enabled"])
+
+    def test_stop_manager_cannot_rebind_to_a_later_authenticated_owner(self):
+        journal = self.executor.journal
+        other = journal.create_binding(
+            {**self.binding["definition"], "principal": "bob"}
+        )
+        other = journal.set_enabled(other["id"], other["revision"], True)
+        manager = self.host.watch_manager()
+        self.context["username"] = "bob"
+        with self.assertRaises(Forbidden):
+            manager.set_enabled(other["id"], other["revision"], False)
+        self.assertTrue(journal.binding(other["id"])["enabled"])
+
+    def test_disable_route_preserves_capture_unknown_and_uses_no_source_or_execution(
+        self,
+    ):
+        journal = self.executor.journal
+        pending = journal.begin(
+            "alice",
+            "uncertain",
+            self.binding["id"],
+            {"start": 30, "end": 40},
+            "a" * 32,
+            expected_binding_revision=self.binding["revision"],
+        )
+        journal.transition(
+            pending["id"],
+            "alice",
+            "a" * 32,
+            pending["revision"],
+            "capture_unknown",
+        )
+        with sqlite3.connect(journal.path) as db:
+            run_count_before = db.execute("SELECT count(*) FROM runs").fetchone()[0]
+        self.host.source_provider = None
+        self.host.configuration = lambda: (_ for _ in ()).throw(AssertionError())
+        self.host.execution_configuration = lambda: (_ for _ in ()).throw(
+            AssertionError()
+        )
+        status, body, _ = self.management()
+        self.assertEqual((status, body["enabled"]), (200, False))
+        with sqlite3.connect(journal.path) as db:
+            self.assertEqual(
+                db.execute("SELECT count(*) FROM runs").fetchone()[0], run_count_before
+            )
+            self.assertEqual(
+                db.execute(
+                    "SELECT state FROM runs WHERE id=?", (pending["id"],)
+                ).fetchone()[0],
+                "capture_unknown",
+            )
+
+    def test_disable_route_does_not_recreate_missing_or_corrupt_journal(self):
+        journal_path = self.executor.journal.path
+        journal_path.unlink()
+        missing = self.management()
+        self.assertEqual(missing[0], 503)
+        self.assertFalse(journal_path.exists())
+        journal_path.write_bytes(b"not sqlite")
+        self.assertEqual(self.management()[0], 400)
+        self.assertEqual(journal_path.read_bytes(), b"not sqlite")
 
     def test_real_host_execution_and_action_retry_use_shared_budget_and_no_writer_io(
         self,

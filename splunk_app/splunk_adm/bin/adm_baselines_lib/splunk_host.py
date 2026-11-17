@@ -12,7 +12,14 @@ from adm_cases_lib.splunk_host import HostUnavailable, SplunkHost as CaseRuntime
 from adm_cases_lib.store import Forbidden as RuntimeForbidden
 
 from .api import BaselineAPI
-from .store import BaselineStore, Forbidden, Invalid, validate_capture
+from .store import (
+    BaselineStore,
+    Conflict,
+    Forbidden,
+    Invalid,
+    NotFound,
+    validate_capture,
+)
 
 
 class SplunkHost:
@@ -122,12 +129,14 @@ class SplunkHost:
             and bool({"admin", "sc_admin"}.intersection(context["roles"]))
         )
 
-    def watch_manager(self):
+    def watch_manager(self, *, expected_principal=None):
         """Disable-only management, independent of execution and source availability."""
         from .executor import WatchStopper
         from .run_store import ExecutionStore
 
         principal = self.principal()
+        if expected_principal is not None and principal != expected_principal:
+            raise Forbidden("administrator identity changed")
         if not self._watch_administrator(principal):
             raise Forbidden("administrator authority required")
         root = self.database_root or os.environ.get("SPLUNK_DB")
@@ -150,10 +159,20 @@ class SplunkHost:
         journal = directory / "watch_runs.sqlite"
         if not os.path.lexists(journal):
             raise HostUnavailable()
+
+        def current_principal():
+            current = self.principal()
+            if current != principal:
+                raise Forbidden("administrator identity changed")
+            return current
+
+        def current_admin(current):
+            return current == principal and self._watch_administrator(current)
+
         return WatchStopper(
             ExecutionStore(journal, clock=self.clock, existing_only=True),
-            self.principal,
-            self._watch_administrator,
+            current_principal,
+            current_admin,
         )
 
     def watch_executor(self):
@@ -375,7 +394,11 @@ def _capture(host, principal, query):
 
 
 def handle(request, host):
-    headers = {"Cache-Control": "no-store"}
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+    }
     try:
         principal = host.principal()
         method = request.get("method", "").upper()
@@ -404,6 +427,22 @@ def handle(request, host):
                     + (["source_unavailable"] if host.source_provider is None else []),
                 },
                 headers,
+            )
+        if path == "/watch-management/disable":
+            from .watch_management import handle as handle_watch_management
+
+            return handle_watch_management(
+                method,
+                path,
+                query=query,
+                headers=request_headers,
+                body=(
+                    request.get("payload", "").encode("utf-8")
+                    if isinstance(request.get("payload", ""), str)
+                    else request.get("payload")
+                ),
+                host=host,
+                expected_principal=principal,
             )
         host.qualify()
         if method == "GET" and path == "/capture":
@@ -438,6 +477,10 @@ def handle(request, host):
         return response
     except (Forbidden, RuntimeForbidden):
         return 403, {"error": "forbidden"}, headers
+    except NotFound:
+        return 404, {"error": "not_found"}, headers
+    except Conflict:
+        return 409, {"error": "conflict"}, headers
     except (ValueError, Invalid, UnicodeEncodeError):
         return 400, {"error": "invalid_request"}, headers
     except Exception:
