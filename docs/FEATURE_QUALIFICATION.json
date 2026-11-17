@@ -114,6 +114,16 @@
     "version": "0.9.0"
   },
   "cloud_development_revision": {
+    "archive_comparison_to_0_9_0": {
+      "added_files": 0,
+      "changed_files": [
+        "splunk_adm/default/app.conf",
+        "splunk_adm/docs/FEATURE_DELIVERY.md",
+        "splunk_adm/docs/FEATURE_QUALIFICATION.json"
+      ],
+      "removed_files": 0,
+      "unchanged_files": 153
+    },
     "changes": [
       "Declare simple reload for request-read investigation and baseline configuration",
       "Require reload coverage in the release validator"
@@ -128,6 +138,22 @@
       "ruff": "passed"
     },
     "cloud_persistence_qualified": false,
+    "deployment_attempts": [
+      {
+        "acs_observed_app_status": "installed",
+        "acs_observed_http_status": 200,
+        "automatic_restart": false,
+        "date_utc": "2026-11-17",
+        "diagnostic_limit": "Only fixed private-install failure category retained; remote acceptance and underlying reason unestablished",
+        "helper_exit_code": 1,
+        "inspection_bypass": false,
+        "local_acs_context_restored": true,
+        "method": "Reviewed vendored ACS private-app installer",
+        "observed_version": "0.8.6",
+        "receipt_private_outside_git": true,
+        "state": "Refused or uncertain; no automatic retry"
+      }
+    ],
     "frontend_runtime_sha256": {
       "splunk_adm/appserver/static/adm.css": "cccee7ac9aa60690675b680f1c6d280ae0fcc88a78f0a384b859c446f7a3879e",
       "splunk_adm/appserver/static/pages/atlas.js": "56399fda63980974fc08e09fbaff6ff37a00f16745f27d419c272d9418954b58",
