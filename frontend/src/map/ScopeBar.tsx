@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef } from "react";
+import { useContext, useEffect, useId, useRef } from "react";
 import ComboBoxExport from "@splunk/react-ui/ComboBox";
 import ButtonExport from "@splunk/react-ui/Button";
 import { toolkitDefault } from "../app/interop";
+import { NarrowAtlas } from "../app/mountWidth";
 import { argError } from "../provider";
 import { SCOPE_FIELDS, scopeValues, cascadeScope } from "../data/scopes";
 import { useScopeOptions } from "../data/useScopeOptions";
@@ -27,6 +28,7 @@ export function ScopeBar({
   scenario?: DemoScenario;
   autoSelectSingle?: boolean;
 }) {
+  const narrow = useContext(NarrowAtlas);
   const id = useId();
   const options = useScopeOptions(live, client, scenario);
   const selectedSingle = useRef(false);
@@ -64,41 +66,43 @@ export function ScopeBar({
             <label id={`${id}-${key}-label`} htmlFor={`${id}-${key}`}>
               {key[0].toUpperCase() + key.slice(1)}
             </label>
-            <ComboBox
-              inputId={`${id}-${key}`}
-              labelledBy={`${id}-${key}-label`}
-              describedBy={`${id}-${key}-help`}
-              value={demoArgs?.[key] ?? args[key]}
-              controlledFilter={!!demoArgs}
-              disabled={disabled}
-              isLoadingOptions={options.loading}
-              error={!!error}
-              placeholder={`Choose ${key}`}
-              noOptionsMessage="No matching scope options"
-              onChange={(_e, { value }) =>
-                demoArgs
-                  ? value === demoArgs[key] && onChange(demoArgs)
-                  : onChange(cascadeScope(args, key, value))
-              }
-            >
-              {scopeValues(options.rows, args, key).map((value) => {
-                const reason =
-                  argError(key, value) ??
-                  (demoArgs && demoArgs[key] !== value
-                    ? "This scope has no captured demo map."
-                    : undefined);
-                return (
-                  <ComboBox.Option
-                    key={value}
-                    value={value}
-                    label={value || "(empty — unavailable)"}
-                    disabled={!!reason}
-                    description={reason}
-                    descriptionPosition="bottom"
-                  />
-                );
-              })}
-            </ComboBox>
+            {!narrow && (
+              <ComboBox
+                inputId={`${id}-${key}`}
+                labelledBy={`${id}-${key}-label`}
+                describedBy={`${id}-${key}-help`}
+                value={demoArgs?.[key] ?? args[key]}
+                controlledFilter={!!demoArgs}
+                disabled={disabled}
+                isLoadingOptions={options.loading}
+                error={!!error}
+                placeholder={`Choose ${key}`}
+                noOptionsMessage="No matching scope options"
+                onChange={(_e, { value }) =>
+                  demoArgs
+                    ? value === demoArgs[key] && onChange(demoArgs)
+                    : onChange(cascadeScope(args, key, value))
+                }
+              >
+                {scopeValues(options.rows, args, key).map((value) => {
+                  const reason =
+                    argError(key, value) ??
+                    (demoArgs && demoArgs[key] !== value
+                      ? "This scope has no captured demo map."
+                      : undefined);
+                  return (
+                    <ComboBox.Option
+                      key={value}
+                      value={value}
+                      label={value || "(empty — unavailable)"}
+                      disabled={!!reason}
+                      description={reason}
+                      descriptionPosition="bottom"
+                    />
+                  );
+                })}
+              </ComboBox>
+            )}
             <small id={`${id}-${key}-help`}>
               {error ??
                 (disabled && !options.loading

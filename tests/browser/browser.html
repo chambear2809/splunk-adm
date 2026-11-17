@@ -4,6 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Application Atlas browser test harness</title>
+    <style>
+      body {
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <div id="adm-root"></div>
@@ -14,13 +19,13 @@
         style.textContent = `body.locale-en { min-width: 960px; margin: 0; }
           .mock-host { display: flex; min-width: 0; }
           .mock-sidebar { flex: 0 0 136px; }
-          .mock-dashboard { flex: 1; min-width: 0; }
+          .mock-dashboard { flex: 1; min-width: 0; padding-right: 60px; box-sizing: border-box; }
           #atlas-root { min-width: 0; }`;
         document.head.append(style);
         const host = document.createElement("div");
         host.className = "mock-host";
         host.innerHTML =
-          '<aside class="mock-sidebar"></aside><div class="mock-dashboard"><div id="atlas-root"></div></div>';
+          '<aside class="mock-sidebar" aria-label="Cloud navigation">Cloud navigation</aside><div class="mock-dashboard"><div id="atlas-root"></div></div>';
         document.body.append(host);
         host
           .querySelector("#atlas-root")

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import DropdownExport from "@splunk/react-time-range/Dropdown";
 import PresetsExport from "@splunk/react-time-range/presets";
 import { AdvancedInputType } from "@splunk/react-time-range/Dialog";
@@ -10,6 +10,7 @@ import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
 import { toolkitDefault } from "../app/interop";
 import { resolveTime, timeError } from "../data/timeBounds";
 import { createTimePreview } from "../data/timePreview";
+import { NarrowAtlas } from "../app/mountWidth";
 const Dropdown = toolkitDefault(DropdownExport);
 const presets = toolkitDefault(PresetsExport);
 const convert = toolkitDefault(convertExport);
@@ -118,6 +119,7 @@ export function TimePicker({
   live: boolean;
   disabled?: boolean;
 }) {
+  const narrow = useContext(NarrowAtlas);
   const [parseEarliest, setParseEarliest] = useState<ParseTimeResult>();
   const [parseLatest, setParseLatest] = useState<ParseTimeResult>();
   const [error, setError] = useState<string>();
@@ -136,6 +138,9 @@ export function TimePicker({
   );
   const preview = useMemo(() => createTimePreview(parse), [parse]);
   useEffect(() => () => preview.cancel(), [preview]);
+  useEffect(() => {
+    if (narrow) preview.cancel();
+  }, [narrow, preview]);
   const zoneIndex = zone?.untils.findIndex((until) => until > Date.now()) ?? -1;
   const timezoneOffset =
     zone?.offsets[zoneIndex < 0 ? zone.offsets.length - 1 : zoneIndex] ??
@@ -172,36 +177,40 @@ export function TimePicker({
       data-atlas-timezone-name={timezoneName}
     >
       <span>Time range</span>
-      <Dropdown
-        data-atlas-time-range="true"
-        earliest={earliest}
-        latest={latest}
-        disabled={disabled}
-        presets={presets.filter((preset) => !preset.earliest.startsWith("rt"))}
-        realTimeDisabled
-        advancedInputTypes={[
-          AdvancedInputType.relative,
-          AdvancedInputType.allTime,
-          AdvancedInputType.dateTime,
-        ]}
-        momentTimeZone={zone}
-        parseEarliest={parseEarliest}
-        parseLatest={parseLatest}
-        onRequestParseEarliest={requestEarliest}
-        onRequestParseLatest={requestLatest}
-        onChange={(_e, data) => {
-          if (
-            typeof data?.earliest !== "string" ||
-            typeof data?.latest !== "string"
-          )
-            return;
-          const start = pickerBound(data.earliest),
-            end = pickerBound(data.latest);
-          const invalid = timeError(start, end, timezone);
-          setError(invalid);
-          if (!invalid) onChange(start, end);
-        }}
-      />
+      {!narrow && (
+        <Dropdown
+          data-atlas-time-range="true"
+          earliest={earliest}
+          latest={latest}
+          disabled={disabled}
+          presets={presets.filter(
+            (preset) => !preset.earliest.startsWith("rt"),
+          )}
+          realTimeDisabled
+          advancedInputTypes={[
+            AdvancedInputType.relative,
+            AdvancedInputType.allTime,
+            AdvancedInputType.dateTime,
+          ]}
+          momentTimeZone={zone}
+          parseEarliest={parseEarliest}
+          parseLatest={parseLatest}
+          onRequestParseEarliest={requestEarliest}
+          onRequestParseLatest={requestLatest}
+          onChange={(_e, data) => {
+            if (
+              typeof data?.earliest !== "string" ||
+              typeof data?.latest !== "string"
+            )
+              return;
+            const start = pickerBound(data.earliest),
+              end = pickerBound(data.latest);
+            const invalid = timeError(start, end, timezone);
+            setError(invalid);
+            if (!invalid) onChange(start, end);
+          }}
+        />
+      )}
       <small>
         {timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
       </small>

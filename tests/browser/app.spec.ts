@@ -1124,6 +1124,168 @@ test("host sidebar keeps device content and the exact UTC window visible", async
   ).toBe("960px");
 });
 
+test("narrow host mount shows an accessible notice without clearing a draft or dispatching searches", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 850, height: 900 });
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&host_simulator=1&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
+  await expect(page.locator("table").last()).toBeVisible();
+  const service = (await scope(page)).getByRole("combobox", {
+    name: "Service",
+    exact: true,
+  });
+  await service.click();
+  await expect(service).toHaveAttribute("aria-expanded", "true");
+  const menuId = await service.getAttribute("aria-controls");
+  expect(menuId).toBeTruthy();
+  const find = page.getByRole("textbox", {
+    name: "Find an address, EPG, or device",
+  });
+  await find.fill("preserved draft");
+  const requests = await page.evaluate(
+    () => (window.__ADM_REQUESTS__ ?? []).length,
+  );
+  const mount = page.locator("#atlas-root");
+  const timeTrigger = page
+    .getByLabel("Time range", { exact: true })
+    .getByRole("button");
+  await timeTrigger.click();
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
+  const dialog = page.locator(
+    '[data-test="time-range-dialog"][data-atlas-time-range="true"]',
+  );
+  const pending = dialog.locator(
+    '[data-test-panel-id="advanced"] [data-test="earliest"] input',
+  );
+  await pending.fill("-1h");
+  await expect(pending).toBeFocused();
+  await mount.evaluate((el) => {
+    el.style.width = "319.5px";
+  });
+  await expect(dialog).toHaveCount(0);
+  await expect(page.locator(".atlas-width-notice")).toBeFocused();
+  await expect(find).toBeHidden();
+  await mount.evaluate((el) => {
+    el.style.width = "";
+  });
+  await expect(find).toBeVisible();
+  await expect(find).toHaveValue("preserved draft");
+  await expect(timeTrigger).toContainText("Last 15 minutes");
+  await page.setViewportSize({ width: 320, height: 900 });
+  expect((await mount.boundingBox())?.width).toBe(124);
+  await expect(
+    page.getByRole("complementary", { name: "Cloud navigation" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Application Atlas" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({
+      hasText:
+        "This view needs more room. Widen the browser window to use Application Atlas.",
+    }),
+  ).toBeVisible();
+  await expect(find).toBeHidden();
+  expect(await mount.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(
+    true,
+  );
+  await page.setViewportSize({ width: 850, height: 900 });
+  await mount.evaluate((el) => {
+    el.style.width = "319.5px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeVisible();
+  await expect(page.locator(`[id="${menuId}"]`)).toHaveCount(0);
+  await mount.evaluate((el) => {
+    el.style.width = "320px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeHidden();
+  await mount.evaluate((el) => {
+    el.style.width = "";
+  });
+  await expect(find).toBeVisible();
+  await expect(find).toHaveValue("preserved draft");
+  expect(
+    await page.evaluate(() => (window.__ADM_REQUESTS__ ?? []).length),
+  ).toBe(requests);
+});
+
+test("narrowing an Atlas mount closes its scope menu while retaining the typed value", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 850, height: 900 });
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&host_simulator=1&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop",
+  );
+  await expect(page.locator("table").last()).toBeVisible();
+  const service = (await scope(page)).getByRole("combobox", {
+    name: "Service",
+    exact: true,
+  });
+  await service.fill("frontend-x");
+  await service.click();
+  await expect(service).toHaveAttribute("aria-expanded", "true");
+  const menuId = await service.getAttribute("aria-controls");
+  expect(menuId).toBeTruthy();
+  const before = await page.evaluate(
+    () => (window.__ADM_REQUESTS__ ?? []).length,
+  );
+  const mount = page.locator("#atlas-root");
+  await mount.evaluate((el) => {
+    el.style.width = "319.5px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeFocused();
+  await expect(page.locator(`[id="${menuId}"]`)).toHaveCount(0);
+  await mount.evaluate((el) => {
+    el.style.width = "";
+  });
+  await expect(service).toHaveValue("frontend-x");
+  expect(
+    await page.evaluate(() => (window.__ADM_REQUESTS__ ?? []).length),
+  ).toBe(before);
+});
+
+test("narrowing Atlas does not close or steal focus from a foreign portal", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 850, height: 900 });
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&host_simulator=1",
+  );
+  await expect(page.locator("table").last()).toBeVisible();
+  await page.evaluate(() => {
+    const foreign = document.createElement("button");
+    foreign.id = "foreign-cloud-popup";
+    foreign.textContent = "Foreign Cloud control";
+    document.body.append(foreign);
+    foreign.focus();
+  });
+  const foreign = page.getByRole("button", { name: "Foreign Cloud control" });
+  await expect(foreign).toBeFocused();
+  const mount = page.locator("#atlas-root");
+  await mount.evaluate((el) => {
+    el.style.width = "319.5px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeVisible();
+  await expect(page.locator('[data-test="time-range-dropdown"]')).toHaveCount(
+    0,
+  );
+  await expect(foreign).toBeFocused();
+  await expect(foreign).toBeVisible();
+  await mount.evaluate((el) => {
+    el.style.width = "";
+  });
+  const navLink = page
+    .getByRole("navigation", { name: "Application Atlas" })
+    .getByRole("link", { name: "Map", exact: true });
+  await navLink.focus();
+  await mount.evaluate((el) => {
+    el.style.width = "319.5px";
+  });
+  await expect(navLink).toBeFocused();
+});
+
 for (const width of [320, 1440]) {
   for (const theme of ["light", "dark"]) {
     test(`device UTC window fits at ${width} in ${theme}`, async ({ page }) => {
@@ -1131,6 +1293,7 @@ for (const width of [320, 1440]) {
       await page.goto(
         `/tests/browser/browser.html?page=device&mode=demo&theme=${theme}&id=192.0.2.73&earliest=1794787140&latest=1794787440`,
       );
+      await page.addStyleTag({ content: "body { margin: 0 }" });
       const label = page.locator(".atlas-device-window");
       await expect(label).toContainText("2026-11-15 23:59:00.000 UTC");
       await expect(label).toContainText("2026-11-16 00:04:00.000 UTC");
@@ -1947,6 +2110,16 @@ test("glossary explanations are available from the keyboard", async ({
     "linked the frontend to a backend pod",
   );
   await expect(info).toBeFocused();
+  await page.locator(".atlas").evaluate((el) => {
+    (el as HTMLElement).style.width = "319.5px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeFocused();
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await page.locator(".atlas").evaluate((el) => {
+    (el as HTMLElement).style.width = "";
+  });
+  await expect(info).toBeVisible();
+  await info.focus();
   await info.press("Tab");
   await expect(page.getByRole("tooltip")).toHaveCount(0);
 });

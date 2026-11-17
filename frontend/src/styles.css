@@ -1592,6 +1592,29 @@
 /* Shared page chrome; inherited Toolkit variables keep the SVG in the same theme. */
 .atlas {
   box-sizing: border-box;
+  container-type: inline-size;
+  min-width: 0;
+}
+.atlas-width-notice {
+  display: none;
+}
+.atlas-page-content {
+  min-width: 0;
+}
+@container (width < 320px) {
+  .atlas-width-notice {
+    display: block;
+    margin: 16px;
+    overflow-wrap: anywhere;
+  }
+  .atlas-page-content {
+    display: none;
+  }
+  .atlas-nav {
+    gap: 8px;
+    padding: 6px 12px;
+    overflow-wrap: anywhere;
+  }
 }
 .atlas-nav {
   display: flex;
@@ -2586,6 +2609,13 @@
 }
 .adm .atlas-device-kpis {
   margin-left: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.adm .atlas-device-kpis .kpi {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 .adm .kpi.blocked b {
   color: var(--adm-error-ink);
