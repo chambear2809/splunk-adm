@@ -9,12 +9,16 @@ production data.
 The table records implemented increments and their remaining source, integration
 and deployment gaps. Passing local checks does not close those gaps.
 
+The user subsequently authorized Cloud app updates for development/validation
+(2026-11-17 UTC). This extends the initial local-only deployment scope; it does
+not authorize collector/schedule activation or infrastructure changes.
+
 | Feature                                     | Local workflow                                                                                                                                                                                                                                       | Evidence and verification                                                                                                                                                                                                                         | Remaining qualification                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
 | Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified.                                                                             |
-| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 qualification, Web proxy, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, Web proxy, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -449,3 +453,74 @@ source watermark/lateness closure, global transport enforcement and operational
 journal recovery remain unqualified. No schedule was created or enabled, no
 notification was sent, and no Cloud or infrastructure operation occurred. This
 increment does not complete the six-feature request.
+
+
+## VPN lab native worker check
+
+The newly reachable heavy forwarder runs Linux x86_64 and Splunk Enterprise
+10.6.0.5. The exact packaged capture worker passed its token-free preflight under
+embedded Python 3.13.11 in 81 ms with the unchanged 256 MiB address-space limit,
+10-second CPU limit and disabled core dumps. The expected framed ready response
+was verified; its task-owned temporary file and directory were removed. This
+supports native interpreter compatibility as the SSH operator, including SSL
+initialization and representative bounded allocation, without installing Atlas
+or using a Splunk session/token. It did not execute as the Splunk daemon user;
+the external three-second driver was separate from the production parent.
+
+The separate standalone Enterprise lab remained unreachable in a bounded SSH/TCP
+check. Atlas is absent from the reachable forwarder, and the bounded verified
+localhost TLS check did not establish a valid connection. The worker result is
+not an installed capture qualification, a production-parent deadline measurement
+or evidence of complete source coverage. No existing service, certificate,
+collection, Docker resource or source configuration was changed.
+
+
+## Installed Cloud read-only walkthrough
+
+The user-selected Cloud host matched the canonical Cloud profile and passed
+verified HTTPS metadata requests. It reports Splunk 10.6.0.5 and Atlas 0.8.6,
+but this does not establish equality with the local candidate. Candidate case
+and baseline capability routes and handler-configuration lookups returned 404
+in the current API session. No candidate installation or Cloud configuration
+change was performed; Cloud persistence remains outside the qualified contract.
+
+In the user-authenticated browser, a fixed five-minute window exercised Explore,
+Device and a conversation-to-Map trace. Application discovery and scope options
+reported incomplete qualified identity evidence. A device page loaded traffic;
+the selected conversation trace displayed 1,889 records with fabric interconnects
+explicitly inferred. The recent window retained its incomplete-window warning.
+Those observations do not establish complete application identity, readiness,
+capacity, NAT/proxy correlation or acceptance of the six new features. Screenshots
+remain private outside Git; Astra reviewed the discovery/trace state and noted
+the limited 850-pixel viewport.
+
+The installed Explore device form dropped its URL time bounds. The current local
+URL-preservation case already has a regression, while this walkthrough exposed
+a related local gap after changing the picker: current React bounds were not
+used for Device Lookup. That local fix preserves the picker selection and other
+navigation context, with a browser regression checking exact destination and
+Impact bounds. It does not change the Cloud installation.
+
+
+## 0.9.0 development candidate
+
+The current picker selection now follows Device Lookup even when the URL contains
+an earlier window, and the same absolute bounds reach Impact. Mobile controls
+and the table remain within the page; all time-picker panels fit narrow and short
+viewports, and their styles apply only to Atlas-owned dialogs. The evidence table
+retains its own horizontal scrolling with a descriptive keyboard-focusable region.
+
+Validation passed: 1,331 Vitest tests, 202 browser tests (one skipped), full lint,
+69 release/build/report tests, Ruff and package/release checks. One broad browser
+run found a test locator ambiguity after the accessible scroll region was added;
+an exact outer-region locator fixed it and the whole suite reran cleanly. Astra
+accepted 14 synthetic light/dark renders; independent source review found no
+remaining issue in this navigation/layout increment. Bundle gzip remains below
+the unchanged main and optional asset limits.
+
+Before Cloud installation, a private paginated snapshot reached all 19 requested
+metadata sections and all 15 discovered KV collections (99 pages, 5,000 rows).
+This live capture is not quiescent, atomic, a raw local-file backup or a verified
+restore. No customer rows or credentials are committed. Cloud vetting and install
+results remain separate pending evidence; the Enterprise-only persistence and
+complete-source gates have not been relaxed to fit the Cloud environment.

@@ -132,3 +132,22 @@ A future audit adapter needs native action time/zone, stable audit identity,
 exact affected object, authority/scope, indexed receipt, coverage/gap proof and
 a separately qualified application binding. No aggregate search was dispatched
 to infer this missing relation, and no input or collector was enabled.
+
+
+### Reachable forwarder static audit check
+
+After VPN connection, pinned SSH reached the separate `hf` target. Read-only
+effective-input inspection found exactly one enabled matching classInfo stanza
+for each of `aaaModLR`, `faultRecord` and `eventRecord`; their declared argument
+list and classInfo type matched the reviewed input. The installed collector
+script hash matches the reviewed vendor and r2 overlay snapshots, and installed
+default inputs match the reviewed r2 overlay. Installed default app metadata
+reports version 1.2.2 but its file hash differs from both snapshots. Three file
+fingerprints are not a complete installed package identity. Exact hashes are in
+[qualification evidence](FEATURE_QUALIFICATION.json).
+
+This upgrades the audit-input evidence from a package declaration to an
+installed, enabled declaration. It does not show successful API collection,
+indexed events, complete coverage or the missing time-valid application/object
+association. No collector was executed, no raw event or credential was returned,
+and no collection or forwarding configuration was changed.

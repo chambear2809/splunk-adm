@@ -30,6 +30,20 @@
   border-radius: 6px;
   contain: strict;
 }
+.adm .atlas-vtable-scroll:focus-visible {
+  outline: 2px solid var(--adm-link);
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .adm .atlas-vtable-bar {
+    flex-wrap: wrap;
+  }
+  .adm .atlas-vtable-bar input {
+    flex-basis: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+}
 /* Header and rows share one grid template, so cells always line up. */
 .adm .atlas-vtable-scroll table {
   display: block;

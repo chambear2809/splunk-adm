@@ -2512,9 +2512,66 @@
 .atlas-device-page .adm.atlas-device {
   min-height: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 12px;
   background: transparent;
+}
+.atlas-device-page .adm.atlas-device > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1100px) {
+  .adm .atlas-device-kpis {
+    order: initial;
+  }
+}
+@media (max-width: 600px) {
+  .atlas-tool[aria-label="Device lookup"] {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .atlas-tool[aria-label="Device lookup"] .atlas-input {
+    min-width: 0;
+    flex: 1 1 120px;
+  }
+  [data-test="time-range-dialog"][data-atlas-time-range="true"] {
+    min-width: 0 !important;
+    width: calc(100vw - 32px) !important;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+  [data-test="time-range-dialog"][data-atlas-time-range="true"]
+    [data-test-panel-id="presets"]
+    [data-test="body"]
+    > div
+    > div {
+    display: flex;
+    flex-direction: column;
+  }
+  [data-test="time-range-dialog"][data-atlas-time-range="true"]
+    [data-test-panel-id="presets"]
+    h5 {
+    align-self: flex-start;
+  }
+  [data-test="time-range-dialog"][data-atlas-time-range="true"]
+    [data-test="panel"]:not([data-test-panel-id="presets"])
+    [data-test="body"]
+    > div
+    > div:first-child {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  [data-test="time-range-dialog"][data-atlas-time-range="true"]
+    [data-test="panel"]:not([data-test-panel-id="presets"])
+    [data-test="body"]
+    > div
+    > div:first-child
+    > * {
+    flex: 0 0 auto;
+    width: 100%;
+  }
 }
 .atlas-device-head h1 {
   margin: 0 !important;

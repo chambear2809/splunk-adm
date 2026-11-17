@@ -39,7 +39,12 @@ import { argError } from "../provider";
 import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 import { applicationMapTarget } from "./applicationMapTarget";
-import { DeviceLookup, ExploreTabs, TracePathForm } from "./ExploreTools";
+import {
+  DeviceLookup,
+  deviceURL,
+  ExploreTabs,
+  TracePathForm,
+} from "./ExploreTools";
 import { TraceView } from "../trace/TraceView";
 import { usePathTrace } from "../trace/usePathTrace";
 
@@ -727,7 +732,14 @@ export function ApplicationsPage({
             changeTrace({ src, dst, ...(scope ? { scope } : {}) })
           }
         />
-        <DeviceLookup />
+        <DeviceLookup
+          onSelect={(id) => {
+            const params = new URLSearchParams(location.search);
+            params.set("earliest", earliest);
+            params.set("latest", latest);
+            location.assign(deviceURL(id, params));
+          }}
+        />
       </div>
       {traceRequest && (
         <TraceView
