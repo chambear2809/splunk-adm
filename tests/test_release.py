@@ -200,6 +200,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
             b"[triggers]\nreload.adm_recovery = simple\nreload.adm_settings = simple\n"
             b"reload.adm_dependency_watch = simple\n"
+            b"reload.adm_investigations = simple\nreload.adm_baselines = simple\n"
             b"reload.adm_identity = simple\nreload.adm_aci_poll = simple\nreload.adm_aci_bindings = simple\n"
         )
         return {
@@ -1017,7 +1018,7 @@ class ReleaseArchiveTests(unittest.TestCase):
         install = self._files()
         install["splunk_adm/default/app.conf"] = install[
             "splunk_adm/default/app.conf"
-        ].replace(b"[triggers]\nreload.adm_recovery = simple\n", b"")
+        ].replace(b"reload.adm_recovery = simple\n", b"")
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "reload.adm_recovery must be simple"):
             check_release(self.root / "dist", self.root / "package.json")
@@ -1037,7 +1038,14 @@ class ReleaseArchiveTests(unittest.TestCase):
                     check_release(self.root / "dist", self.root / "package.json")
 
     def test_qualified_configuration_reload_does_not_require_restart(self):
-        for config in ("adm_identity", "adm_aci_poll", "adm_aci_bindings"):
+        for config in (
+            "adm_identity",
+            "adm_aci_poll",
+            "adm_aci_bindings",
+            "adm_investigations",
+            "adm_baselines",
+            "adm_dependency_watch",
+        ):
             for replacement in (b"", f"reload.{config} = never\n".encode()):
                 with self.subTest(config=config, replacement=replacement):
                     install = self._files()
@@ -1050,6 +1058,26 @@ class ReleaseArchiveTests(unittest.TestCase):
                         ValueError, rf"reload\.{config} must be simple"
                     ):
                         check_release(self.root / "dist", self.root / "package.json")
+
+    def test_new_custom_configuration_requires_reload(self):
+        for path in (
+            "splunk_adm/default/adm_future.conf",
+            "splunk_adm/README/future.conf.spec",
+        ):
+            with self.subTest(path=path):
+                install = self._files()
+                install[path] = b"[example]\nenabled = false\n"
+                self._write_pair(install)
+                name = "adm_future" if "/default/" in path else "future"
+                with self.assertRaisesRegex(
+                    ValueError, rf"reload\.{name} must be declared"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+                install["splunk_adm/default/app.conf"] += (
+                    f"reload.{name} = never\n".encode()
+                )
+                self._write_pair(install)
+                check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_installed_local_csv_scope_override(self):
         self._write_pair()
