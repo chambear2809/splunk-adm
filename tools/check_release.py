@@ -954,13 +954,30 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             raise ValueError(f"app.conf [{stanza}] version does not match {version}")
     if config.get("package", "id", fallback=None) != "splunk_adm":
         raise ValueError("app.conf [package] id does not match splunk_adm")
-    if config.get("triggers", "reload.adm_recovery", fallback=None) != "simple":
-        raise ValueError("app.conf [triggers] reload.adm_recovery must be simple")
-    if config.get("triggers", "reload.adm_settings", fallback=None) != "simple":
-        raise ValueError("app.conf [triggers] reload.adm_settings must be simple")
-    for name in ("adm_identity", "adm_aci_poll", "adm_aci_bindings"):
-        if config.get("triggers", f"reload.{name}", fallback=None) != "simple":
+    simple_reload = {
+        "adm_recovery",
+        "adm_settings",
+        "adm_dependency_watch",
+        "adm_identity",
+        "adm_aci_poll",
+        "adm_aci_bindings",
+        "adm_investigations",
+        "adm_baselines",
+    }
+    custom = set(simple_reload)
+    for path in files:
+        match = re.fullmatch(
+            r"splunk_adm/(?:default/(adm_[a-z0-9_]+)\.conf|README/([a-zA-Z][a-zA-Z0-9_.-]*)\.conf\.spec)",
+            path,
+        )
+        if match:
+            custom.add(match.group(1) or match.group(2))
+    for name in sorted(custom):
+        value = config.get("triggers", f"reload.{name}", fallback="").strip()
+        if name in simple_reload and value != "simple":
             raise ValueError(f"app.conf [triggers] reload.{name} must be simple")
+        if not value:
+            raise ValueError(f"app.conf [triggers] reload.{name} must be declared")
     actions = configparser.RawConfigParser(strict=True)
     try:
         actions.read_string(files[ALERT_ACTIONS_PATH].decode("utf-8"))

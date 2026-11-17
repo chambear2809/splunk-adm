@@ -6,8 +6,23 @@
   ],
   "cloud_development_candidate": {
     "appinspect": {
-      "cloud_validation": "Pending before installation; do not bypass inspection",
-      "local_tool": "Installation blocked by verified TLS certificate rejection; no insecure fallback used"
+      "cloud_validation": "Rejected by Cloud private_victoria AppInspect 4.4.0; one blocking check with two missing reload declarations",
+      "local_tool": "Installation blocked by verified TLS certificate rejection; no insecure fallback used",
+      "report": {
+        "blocking_check": "check_reload_trigger_for_all_custom_confs",
+        "errors": 0,
+        "failures": 1,
+        "html_report_sha256": "2215afff5e8a7151463c4300f95a2659263f42d0d8ae2437511428a10a18fa64",
+        "missing_triggers": [
+          "reload.adm_investigations",
+          "reload.adm_baselines"
+        ],
+        "not_applicable": 100,
+        "raw_report_private_outside_git": true,
+        "skipped": 1,
+        "successes": 139,
+        "warnings": 6
+      }
     },
     "authorization": "User explicitly authorized Cloud app upload/changes for development and validation; vCenter/APIC available for read-only validation",
     "browser_first_run": {
@@ -33,6 +48,35 @@
     },
     "cloud_persistence_qualified": false,
     "date_utc": "2026-11-17",
+    "deployment_attempts": [
+      {
+        "acs_observation": {
+          "app_status": "installed",
+          "http_status": 200,
+          "version": "0.8.6"
+        },
+        "api_observed_version": "0.8.6",
+        "automatic_restart": false,
+        "date_utc": "2026-11-17",
+        "diagnostic_limit": "Only a fixed private-install failure category was retained; underlying reason and remote acceptance are not established",
+        "helper_exit_code": 1,
+        "inspection_bypass": false,
+        "local_acs_context_restored": true,
+        "method": "Reviewed vendored ACS private-app installer",
+        "receipt_private_outside_git": true,
+        "scope": "Exact search-head target identified by authenticated Cloud Web banner; not a whole-stack convergence claim",
+        "state": "Refused or uncertain; no automatic retry",
+        "web_observation": "Installed 0.8.6; no 0.9.0 submission visible after reload"
+      },
+      {
+        "date_utc": "2026-11-17",
+        "method": "Authenticated Cloud Web upload with user-selected package",
+        "package_sha256": "b1f8accf9ea53d78fb73fdfd56eca48d833eefef8bb9112dc546160f5bb90ab7",
+        "report_response_package_identity_matches_sha256": true,
+        "state": "Rejected during app vetting; installation not performed",
+        "user_authorized_agree_and_upload": true
+      }
+    ],
     "frontend_runtime_sha256": {
       "splunk_adm/appserver/static/adm.css": "cccee7ac9aa60690675b680f1c6d280ae0fcc88a78f0a384b859c446f7a3879e",
       "splunk_adm/appserver/static/pages/atlas.js": "56399fda63980974fc08e09fbaff6ff37a00f16745f27d419c272d9418954b58",
@@ -40,6 +84,7 @@
     },
     "independent_review": "No remaining findings in navigation, mobile controls/table focus and version bump",
     "new_collector_or_schedule_activation_authorized": false,
+    "package_sha256": "b1f8accf9ea53d78fb73fdfd56eca48d833eefef8bb9112dc546160f5bb90ab7",
     "preservation_snapshot": {
       "bytes": 7649281,
       "collections_reached_end": 15,
@@ -59,7 +104,7 @@
     "source_configuration_sha256": {
       "splunk_adm/default/app.conf": "dc2cde1e054beaacf7d10d7b2cd4faff8e994d130b73d7454a9bd4742afa26e7"
     },
-    "status": "Locally verified; Cloud upload/vetting not yet performed",
+    "status": "Cloud vetting rejected 0.9.0; installed version remains 0.8.6; fixing missing reload declarations for 0.9.1",
     "ui_changes": [
       "Device lookup uses current picker bounds while retaining navigation context",
       "Atlas-owned narrow time dialog contains presets and all custom panels with vertical scrolling",
@@ -67,6 +112,35 @@
       "Evidence table scroller has descriptive region name, keyboard focus and visible outline"
     ],
     "version": "0.9.0"
+  },
+  "cloud_development_revision": {
+    "changes": [
+      "Declare simple reload for request-read investigation and baseline configuration",
+      "Require reload coverage in the release validator"
+    ],
+    "checks": {
+      "build_report_tests": 10,
+      "cloud_vetting": "pending",
+      "frontend_assets_byte_identical_to_0_9_0": true,
+      "package": "passed",
+      "release_archive": "passed",
+      "release_tests": 60,
+      "ruff": "passed"
+    },
+    "cloud_persistence_qualified": false,
+    "frontend_runtime_sha256": {
+      "splunk_adm/appserver/static/adm.css": "cccee7ac9aa60690675b680f1c6d280ae0fcc88a78f0a384b859c446f7a3879e",
+      "splunk_adm/appserver/static/pages/atlas.js": "56399fda63980974fc08e09fbaff6ff37a00f16745f27d419c272d9418954b58",
+      "splunk_adm/appserver/static/pages/journeys.js": "8e0e3cdcc34a6b023a3be925519452c56add4888f8a15cd01611cfd4b4b77694"
+    },
+    "inspection_bypass": false,
+    "package_sha256": "81b00cb5b02fe52594aee49a45d29517ae967c26138d260bd4ba4b457dc5b2d6",
+    "source_configuration_sha256": {
+      "splunk_adm/default/app.conf": "d4e3a6a9507654b805ac4d600f0c23ac973601ee8dc2a71347819d4e8429a8be"
+    },
+    "status": "Locally verified 0.9.1; Cloud validation pending",
+    "unchanged_frontend": "Frontend source unchanged from the 0.9.0 candidate with 1,331 Vitest and 202 browser tests passed (one skipped); those are prior checks, not repeated for 0.9.1",
+    "version": "0.9.1"
   },
   "cloud_installed_readonly_check": {
     "app_version": "0.8.6",
@@ -735,6 +809,25 @@
     }
   ],
   "schema_version": 1,
+  "source_console_readonly_check": {
+    "apic": {
+      "authenticated": false,
+      "authenticated_validation_performed": false,
+      "observation": "Session expired from inactivity; unauthenticated login banner only"
+    },
+    "date_utc": "2026-11-17",
+    "mutations": false,
+    "raw_identifiers_and_screenshots_outside_git": true,
+    "vcenter": {
+      "authenticated": true,
+      "observations": [
+        "Native VM object identifier and current network membership visible",
+        "VM summary showed powered-on state and running guest tools",
+        "Networks view exposed a native distributed-portgroup object identifier"
+      ],
+      "qualification": "Current controller UI relations only; no historical Cloud trace association, application ownership, capacity or readiness established"
+    }
+  },
   "source_data": "synthetic protocol, OTel span and Hubble fixtures; not Cloud-source qualification",
   "sqlite_copy_rehearsal": {
     "data": "synthetic offline quiescent same-build copies",

@@ -524,3 +524,31 @@ This live capture is not quiescent, atomic, a raw local-file backup or a verifie
 restore. No customer rows or credentials are committed. Cloud vetting and install
 results remain separate pending evidence; the Enterprise-only persistence and
 complete-source gates have not been relaxed to fit the Cloud environment.
+
+
+The frozen 0.9.0 upload archive SHA-256 is
+`b1f8accf9ea53d78fb73fdfd56eca48d833eefef8bb9112dc546160f5bb90ab7`.
+A reviewed, target-bound ACS private-app installation attempt returned exit 1;
+the prior local ACS context was restored. Subsequent API/ACS reads reported
+installed 0.8.6. The user then uploaded the exact package through Cloud Web.
+Its private_victoria AppInspect 4.4.0 report returned 139 successes, one failure,
+zero errors, six warnings, 100 not-applicable and one skipped check. The blocking
+check requires reload declarations for `adm_investigations.conf` and
+`adm_baselines.conf`; no install occurred. The report response was bound to the
+archive SHA-256. Raw HTML and screenshots remain private outside Git.
+
+The 0.9.1 revision adds the missing reload declarations and release validation;
+it does not relax persistence/source gates or bypass inspection. The existing
+0.9.0 artifact is preserved separately. The revised archive SHA-256 is
+`81b00cb5b02fe52594aee49a45d29517ae967c26138d260bd4ba4b457dc5b2d6`.
+All 60 release tests, 10 build/report tests, Ruff, packaging and archive checks
+passed. The three frontend assets are byte-identical to the tested 0.9.0
+candidate. Cloud validation is pending; this later evidence documentation does
+not change the frozen archive.
+
+Read-only vCenter navigation exposed a native VM identifier and its current
+relationship to a native distributed-portgroup identifier. This is current
+controller evidence only: it does not associate the historical Cloud trace with
+that object or prove application ownership, capacity or readiness. The APIC
+session expired from inactivity, so no authenticated APIC validation is claimed.
+Private identifiers remain outside Git.
