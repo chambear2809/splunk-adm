@@ -8,7 +8,9 @@ test("shared notes preserve a draft across case creation and retry lost response
   const keys: string[] = [];
   let lost = false;
   let revoked = false;
+  let requestCount = 0;
   await page.route("**/test-cases/**", async (route) => {
+    requestCount++;
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path.endsWith("/capabilities")) {
@@ -83,6 +85,17 @@ test("shared notes preserve a draft across case creation and retry lost response
   await page.getByLabel("New case title").fill("First investigation");
   await page.getByRole("button", { name: "Create shared case" }).click();
   await page.getByLabel("Add note").fill("Preserve this draft");
+  const beforeResize = requestCount;
+  await page.locator(".atlas").evaluate((el) => {
+    (el as HTMLElement).style.width = "319.5px";
+  });
+  await expect(page.locator(".atlas-width-notice")).toBeVisible();
+  await expect(page.locator(".atlas-width-notice")).toBeFocused();
+  await page.locator(".atlas").evaluate((el) => {
+    (el as HTMLElement).style.width = "";
+  });
+  await expect(page.getByLabel("Add note")).toHaveValue("Preserve this draft");
+  expect(requestCount).toBe(beforeResize);
   await page.getByLabel("New case title").fill("Second investigation");
   await page.getByRole("button", { name: "Create shared case" }).click();
   await expect(page.getByLabel("Add note")).toHaveValue("Preserve this draft");

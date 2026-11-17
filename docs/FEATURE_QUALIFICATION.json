@@ -450,6 +450,61 @@
     "source_jobs_dispatched_by_metadata_check": 0,
     "verified_https": true
   },
+  "cloud_mount_width_candidate": {
+    "archive_documentation_limit": "Final test and immutable package identity recorded after archive freeze; these later documentation edits do not change its bytes",
+    "build": "1794893171",
+    "changes": [
+      "Available Atlas mount width below 320px shows a concise notice while preserving page and case state and all navigation",
+      "Mount-only narrowing suspends Atlas-owned time picker, scope menu and tooltip portals; cancels pending previews without applying edits",
+      "Page-owned focus moves to the notice; foreign controls and Atlas navigation retain focus",
+      "Device summary and virtual-table toolbar/scroller remain contained"
+    ],
+    "checks": {
+      "browser_passed": 212,
+      "browser_skipped": 1,
+      "frontend_build": "passed",
+      "journey_gzip9_bytes": 31852,
+      "journey_limit_bytes": 32768,
+      "lint": "passed",
+      "main_gzip9_bytes": 683034,
+      "main_limit_bytes": 686080,
+      "package": "passed",
+      "release_archive": "passed",
+      "release_build_report_python": 71,
+      "vitest_files": 126,
+      "vitest_tests": 1334
+    },
+    "frontend_runtime_sha256": {
+      "splunk_app/splunk_adm/appserver/static/adm.css": "b1eb4b69ccd51533f3b259ab9f73bd3bb0ed35a4dfb595a638ced1d62520573c",
+      "splunk_app/splunk_adm/appserver/static/pages/atlas.js": "baa25bae032b8f149b965031310430ba14071b25339f88edaa3e61eac1df6326",
+      "splunk_app/splunk_adm/appserver/static/pages/journeys.js": "8e0e3cdcc34a6b023a3be925519452c56add4888f8a15cd01611cfd4b4b77694"
+    },
+    "independent_review": "No actionable product findings after owned-portal suspension and focus/draft/request-count checks; harness correction matches production body margin",
+    "initial_browser_run": {
+      "failed": 7,
+      "passed": 205,
+      "reason": "Standalone feature harnesses retained default 8px body margins, leaving 304px mounts. Reset only harness margins to match production frontend/index.html; all 27 affected-suite tests and final full suite passed.",
+      "skipped": 1
+    },
+    "package_bytes": 1379984,
+    "package_sha256": "cb6252423147875dd6384af1df48505e480105819fa3e3095ca35ee75fcb3440",
+    "qualification_limit": "320px available app content is supported; a 320px Cloud browser leaves only 124px and receives the notice. This does not fix independent native Cloud header overflow.",
+    "rendered_review": "Astra accepted eight synthetic light/dark mount-width layouts and final source/regression behavior; no installed 0.9.3 Cloud qualification yet",
+    "source_or_cloud_persistence_qualification_added": false,
+    "source_sha256": {
+      "frontend/src/InfoTip.tsx": "fddadc0fcb5b7080c3e930aa67ec34ee17661959330e355d7d8fcfa2f4ed11aa",
+      "frontend/src/app/Shell.tsx": "5bfde9b7ae645e0e0597353748a41fa4352d21e6c25fea0f68c4d588c824638c",
+      "frontend/src/app/mountWidth.ts": "d4806f64b8036a3ee873f34d6325ebd54d3e860c1bfc0059174ffb9a1a3fcf3f",
+      "frontend/src/map/ScopeBar.tsx": "407b03b421a95b026c4bf561e78d1df54feb5b0ff327b8ecc6c91f297697961a",
+      "frontend/src/map/TimePicker.tsx": "124caa05f5d780ba04d195b6def3575c75a606bb1ae80e73221a09711901fbb6",
+      "frontend/src/scale/scale.css": "ec4f10ee4f1d7917fa86b6208cae284803dc93fa060699bdbed893814bbd915d",
+      "frontend/src/styles.css": "d7f28b3e2d0f5503ce2a633fe33faed9353dc4fe4536948166cbe4de35f72c43",
+      "splunk_app/splunk_adm/default/app.conf": "325eda6b1594ff54f810197bebb86f33876491957cecc4c80c6ead0a5945ce9d"
+    },
+    "status": "Locally verified and packaged; Cloud still runs 0.9.2",
+    "test_harness_fix": "Qualification evidence test explicitly imports the lab client with its sibling path and patches the imported object; standalone Python3.15 run previously failed import resolution. Final71 composed checks passed.",
+    "version": "0.9.3"
+  },
   "current_increment": {
     "cleanup_verified": true,
     "container_id": "c06294ce635241abe9e2515e1f1812dba21c47a3c92b6400634a42755a9cbc79",

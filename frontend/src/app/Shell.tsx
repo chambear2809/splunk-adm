@@ -1,4 +1,10 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import styled from "styled-components";
 import useSplunkThemeExport from "@splunk/themes/useSplunkTheme";
 import { toolkitDefault } from "./interop";
@@ -11,6 +17,7 @@ import {
 } from "./urlState";
 import type { SearchClient } from "../data/searchClient";
 import { healthIndicator, useHealthStatus } from "../data/healthStatus";
+import { NarrowAtlas } from "./mountWidth";
 
 const useSplunkTheme = toolkitDefault(useSplunkThemeExport);
 const Root = styled.div`
@@ -43,6 +50,37 @@ export function Shell({
   client?: SearchClient;
   live?: boolean;
 }) {
+  const shell = useRef<HTMLDivElement>(null);
+  const notice = useRef<HTMLParagraphElement>(null);
+  const pageFocus = useRef(false);
+  const focusBeforePointer = useRef(false);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const root = shell.current;
+    if (!root) return;
+    // Document capture clears foreign/nav focus; React capture below marks
+    // page-owned portals too, even when their DOM is mounted under body.
+    const clearFocus = () => {
+      pageFocus.current = false;
+    };
+    const pointerDown = () => {
+      focusBeforePointer.current = pageFocus.current;
+      pageFocus.current = false;
+    };
+    document.addEventListener("focusin", clearFocus, true);
+    document.addEventListener("pointerdown", pointerDown, true);
+    const observer = new ResizeObserver(([entry]) => {
+      const next = entry.contentRect.width < 320;
+      if (next && pageFocus.current) notice.current?.focus();
+      setNarrow(next);
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("focusin", clearFocus, true);
+      document.removeEventListener("pointerdown", pointerDown, true);
+    };
+  }, []);
   const [search, setSearch] = useState(() =>
     typeof location === "undefined" ? "" : location.search,
   );
@@ -89,7 +127,12 @@ export function Shell({
     attention: "Pipeline health needs review",
   }[indicator];
   return (
-    <Root className="atlas" data-atlas-theme={t.colorScheme} style={tokens}>
+    <Root
+      ref={shell}
+      className="atlas"
+      data-atlas-theme={t.colorScheme}
+      style={tokens}
+    >
       <nav className="atlas-nav" aria-label="Application Atlas">
         <strong>Application Atlas</strong>
         {NAV.map(([section, target, label]) => (
@@ -120,7 +163,28 @@ export function Shell({
           ?
         </a>
       </nav>
-      {children}
+      <p
+        ref={notice}
+        className="atlas-width-notice"
+        role="status"
+        tabIndex={-1}
+      >
+        This view needs more room. Widen the browser window to use Application
+        Atlas.
+      </p>
+      <NarrowAtlas.Provider value={narrow}>
+        <div
+          className="atlas-page-content"
+          onFocusCapture={() => {
+            pageFocus.current = true;
+          }}
+          onPointerDownCapture={() => {
+            pageFocus.current = focusBeforePointer.current;
+          }}
+        >
+          {children}
+        </div>
+      </NarrowAtlas.Provider>
     </Root>
   );
 }

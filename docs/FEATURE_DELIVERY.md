@@ -649,3 +649,33 @@ matches. Captured KV rows increased from 4,662 to 4,677: 15 added, 17 changed an
 none missing. Cases, baselines and watch execution remain disabled/unqualified.
 These paginated observations are not an atomic backup or restore test and do not
 establish the cause of intervening row changes.
+
+
+## 0.9.3 mount-width follow-up
+
+Atlas now measures its own available width. Below 320px it shows a short request
+to widen the window while retaining Atlas navigation and leaving native Cloud
+navigation untouched. Page components remain mounted, preserving case and page
+drafts. Open Atlas time, scope and glossary popups close; pending time previews
+cancel without committing edits. Focus moves from page-owned controls to the
+notice, while external controls and Atlas navigation retain focus. Resizing does
+not dispatch new source or case requests. At 320px of available app width, normal
+content remains supported; a 320px Cloud browser leaves only 124px and receives
+the notice. Independent Cloud header overflow remains outside this app guard.
+
+All 1,334 unit tests and 212 browser tests pass (one skipped), as do lint and the
+production build. The first full browser run found seven standalone test pages
+with default body margins that reduced their app mounts to 304px; their margins
+now match the production preview. All 27 affected-suite checks and the final
+full run pass. Independent review found no remaining product issues. Astra
+accepted the eight rendered layouts and reviewed popup, focus and draft behavior
+from source and regression evidence. This is local acceptance; Cloud 0.9.2 remains
+the installed, qualified archive until this revision is inspected and installed.
+
+Release/build/report checks passed 71 Python tests. Their runtime-allowlist test
+now imports its lab client with the sibling module path and patches that object,
+so it runs independently under Python 3.15. Ruff passes for this test-only fix.
+Packaging and archive validation passed. The frozen candidate is 1,379,984 bytes,
+SHA-256 `cb6252423147875dd6384af1df48505e480105819fa3e3095ca35ee75fcb3440`
+(build 1794893171). These final results and package identity were added after
+archive freeze and do not alter its bytes.

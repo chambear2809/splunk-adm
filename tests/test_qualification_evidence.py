@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -145,6 +146,11 @@ class QualificationEvidenceTests(unittest.TestCase):
         self.assertNotIn("message", summary)
 
     def test_runtime_allowlist_does_not_copy_server_payload(self):
+        with mock.patch.object(
+            sys, "path", [str(Path(__file__).parent / "splunk"), *sys.path]
+        ):
+            from tests.splunk import lab
+
         directory = self.manifest("offline")
         fake = {
             "entry": [
@@ -160,7 +166,7 @@ class QualificationEvidenceTests(unittest.TestCase):
         }
         response = mock.MagicMock()
         response.__enter__.return_value = io.BytesIO(json.dumps(fake).encode())
-        with mock.patch("tests.splunk.lab._mgmt", return_value=response):
+        with mock.patch.object(lab, "_mgmt", return_value=response):
             self.assertEqual(
                 qe.lab_runtime(type("Args", (), {"directory": directory})()), 0
             )
