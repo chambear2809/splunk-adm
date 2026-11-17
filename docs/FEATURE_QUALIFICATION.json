@@ -645,11 +645,14 @@
       "splunk_adm/bin/adm_dependency_watch.py": "7521159298defd2677a5cedbbb0d1e95f250f5d0d800264216929b1163898ed4",
       "splunk_adm/default/adm_dependency_watch.conf": "2e00406ebfc78cf455a2ca0d1dd33520305211254008554e7e7f1fd04630dd94",
       "splunk_adm/default/alert_actions.conf": "e85ad62e1ae1d53bd9404916b8c81cf6e12c3ac6782477aadf464fa7fba5ef26",
-      "splunk_adm/default/app.conf": "da53941cc9556c3656f61f4bba2765bbe6bb2998b85f1c886dd802284024d456",
       "splunk_adm/metadata/default.meta": "222a604c8043aa9f6ba8a7b50f960d819296e0efb758e87b5f057908a1614132"
     },
     "schedules_created": false,
     "scope": "Local explicit-window execution mechanics with synthetic injected provider; no installed action or complete-source qualification",
+    "source_configuration_note": "Packaging adds a fresh install/build stanza to app.conf; its source hash is not a packaged-runtime hash. Release validation checks the generated build and action reload trigger.",
+    "source_configuration_sha256": {
+      "splunk_adm/default/app.conf": "da53941cc9556c3656f61f4bba2765bbe6bb2998b85f1c886dd802284024d456"
+    },
     "uncertainty": [
       "durable intent before capture",
       "crash-left intent never recaptures",
