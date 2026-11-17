@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/bin")
@@ -528,6 +529,34 @@ class ExecutionStoreTest(unittest.TestCase):
         with self.assertRaises(Invalid):
             ExecutionStore(path)
         self.assertEqual(hashlib.sha256(path.read_bytes()).digest(), before)
+
+    def test_existing_only_rejects_missing_empty_and_disappearing_files(self):
+        directory = self.path.parent / "missing"
+        directory.mkdir(mode=0o700)
+        path = directory / "watch_runs.sqlite"
+        with self.assertRaises(Invalid):
+            ExecutionStore(path, existing_only=True)
+        self.assertFalse(path.exists())
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(fd)
+        before = path.read_bytes()
+        with self.assertRaises(Invalid):
+            ExecutionStore(path, existing_only=True)
+        self.assertEqual(path.read_bytes(), before)
+        path.unlink()
+        ExecutionStore(path)
+        connect = sqlite3.connect
+
+        def gone(*args, **kwargs):
+            path.unlink()
+            return connect(*args, **kwargs)
+
+        with mock.patch(
+            "adm_baselines_lib.run_store.sqlite3.connect", side_effect=gone
+        ):
+            with self.assertRaises(sqlite3.OperationalError):
+                ExecutionStore(path, existing_only=True)
+        self.assertFalse(path.exists())
 
     def test_future_schema_and_unsafe_files_rejected(self):
         with closing(sqlite3.connect(self.path)) as db, db:

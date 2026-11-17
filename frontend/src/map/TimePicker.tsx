@@ -25,6 +25,84 @@ export function pickerBound(value: string): string {
   }
   return value;
 }
+// The toolkit runtime requires an explicit null; its TypeScript type omits it.
+const parsedTime = (time: string, iso: string): ParseTimeResult =>
+  ({ time, iso, error: null }) as unknown as ParseTimeResult;
+
+const validPreviewIso = (value: unknown): value is string => {
+  if (typeof value !== "string") return false;
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(
+      value,
+    );
+  if (!match) return false;
+  const [
+    ,
+    year,
+    month,
+    day,
+    hour,
+    minute,
+    second,
+    ,
+    ,
+    offsetHour,
+    offsetMinute,
+  ] = match;
+  const y = Number(year),
+    m = Number(month),
+    d = Number(day);
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return (
+    m >= 1 &&
+    m <= 12 &&
+    d >= 1 &&
+    d <= days[m - 1] &&
+    Number(hour) <= 23 &&
+    Number(minute) <= 59 &&
+    Number(second) <= 59 &&
+    Number(offsetHour ?? 0) <= 23 &&
+    Number(offsetMinute ?? 0) <= 59 &&
+    Number.isFinite(Date.parse(value))
+  );
+};
+
+export async function parseTimePreview(
+  raw: string,
+  timezone: string | undefined,
+  live: boolean,
+  signal: AbortSignal,
+): Promise<ParseTimeResult> {
+  const value = pickerBound(raw);
+  const epoch = resolveTime(value, timezone);
+  if (epoch === undefined)
+    return { time: raw, error: { message: "Unsupported time." } };
+  if (!live) return parsedTime(raw, new Date(epoch * 1000).toISOString());
+  try {
+    const response = await fetch(
+      createRESTURL("search/timeparser") +
+        "?" +
+        new URLSearchParams({ output_mode: "json", time: value }),
+      { ...getDefaultFetchInit(), signal },
+    );
+    if (!response.ok) throw new Error("Unable to preview this time.");
+    const data: unknown = await response.json();
+    if (
+      !data ||
+      typeof data !== "object" ||
+      Array.isArray(data) ||
+      !Object.prototype.hasOwnProperty.call(data, value)
+    )
+      throw new Error("Missing parsed time.");
+    const iso = (data as Record<string, unknown>)[value];
+    if (!validPreviewIso(iso)) throw new Error("Invalid parsed time.");
+    return parsedTime(raw, iso);
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return { time: raw, error: { message: "Unable to preview this time." } };
+  }
+}
 export function TimePicker({
   earliest,
   latest,
@@ -52,37 +130,8 @@ export function TimePicker({
     }
   }, [live, timezone]);
   const parse = useCallback(
-    async (raw: string, signal: AbortSignal): Promise<ParseTimeResult> => {
-      const value = pickerBound(raw);
-      const epoch = resolveTime(value, timezone);
-      if (epoch === undefined) {
-        return { time: raw, error: { message: "Unsupported time." } };
-      }
-      if (!live) {
-        return { time: raw, iso: new Date(epoch * 1000).toISOString() };
-      }
-      try {
-        const response = await fetch(
-          createRESTURL("search/timeparser") +
-            "?" +
-            new URLSearchParams({ output_mode: "json", time: value }),
-          { ...getDefaultFetchInit(), signal },
-        );
-        if (!response.ok) throw new Error("Unable to preview this time.");
-        const data = await response.json();
-        const iso = Object.values(data).find(
-          (value) => typeof value === "string",
-        );
-        if (typeof iso !== "string") throw new Error("Missing parsed time.");
-        return { time: raw, iso };
-      } catch (error) {
-        if (signal.aborted) throw error;
-        return {
-          time: raw,
-          error: { message: "Unable to preview this time." },
-        };
-      }
-    },
+    (raw: string, signal: AbortSignal): Promise<ParseTimeResult> =>
+      parseTimePreview(raw, timezone, live, signal),
     [live, timezone],
   );
   const preview = useMemo(() => createTimePreview(parse), [parse]);

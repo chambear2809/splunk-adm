@@ -268,6 +268,72 @@
     "unchanged_frontend": "Frontend source unchanged from the 0.9.0 candidate with 1,331 Vitest and 202 browser tests passed (one skipped); those are prior checks, not repeated for 0.9.1",
     "version": "0.9.1"
   },
+  "cloud_followup_candidate": {
+    "archive_documentation_limit": "Package identity and completed packaging evidence were recorded after freezing the archive; these later documentation updates do not alter its bytes",
+    "browser_initial_runs": [
+      {
+        "failed": 1,
+        "passed": 208,
+        "reason": "Saved-note assertion selected hidden attachment option; scoped to visible note list item",
+        "skipped": 1
+      },
+      {
+        "failed": 1,
+        "passed": 208,
+        "reason": "Preset pointer click raced accordion transition; waits for prior panel to finish collapsing",
+        "skipped": 1
+      }
+    ],
+    "changes": [
+      "Advanced picker supplies toolkit-required explicit null success only for validated exact-request parser results",
+      "Device shows resolved selected absolute UTC window with semantic time elements",
+      "Atlas-owned body override removes Cloud 960px minimum-width clipping without affecting unrelated pages",
+      "Source-independent disable-only watch manager preserves current administrator/binding ownership and CAS while withholding retained definitions",
+      "Existing-journal-only open mode prevents management bootstrap or recreation; canonical binding integrity checked before ownership"
+    ],
+    "checks": {
+      "browser_passed": 209,
+      "browser_skipped": 1,
+      "frontend_build": "passed",
+      "journey_gzip9_bytes": 31852,
+      "journey_limit_bytes": 32768,
+      "lint": "passed",
+      "main_gzip9_bytes": 682697,
+      "main_limit_bytes": 686080,
+      "package": "passed",
+      "python_baseline_release_build_report_tests": 161,
+      "python_test_warning": "Existing baseline test helpers emit ResourceWarning under Python 3.15; run exits OK",
+      "release_archive": "passed",
+      "ruff": "passed",
+      "ruff_format_files": 244,
+      "vitest_files": 126,
+      "vitest_tests": 1334
+    },
+    "cloud_validation": "Not performed for 0.9.2",
+    "complete_source_provider_added": false,
+    "frontend_runtime_sha256": {
+      "splunk_adm/appserver/static/adm.css": "4b5240c67f9e1ddd480b1c5dfffefefb58d1e6cc85b201665fb1c449144aebe2",
+      "splunk_adm/appserver/static/pages/atlas.js": "6901c906778a98befa08e79da152425e151a23561265f8456db1defe6565b80d",
+      "splunk_adm/appserver/static/pages/journeys.js": "8e0e3cdcc34a6b023a3be925519452c56add4888f8a15cd01611cfd4b4b77694"
+    },
+    "independent_review": "No remaining actionable frontend or stop-lifecycle findings after exact parser schema validation, source-independent authority, minimal receipt and existing-journal-only fixes",
+    "package_bytes": 1376461,
+    "package_sha256": "820dd27c93d687493b002c21fed4bf395b458dfed7234678cc1142cab52a94d7",
+    "rendered_review": "Astra accepted six corrected synthetic 320/850/1440 light/dark renders; selected interval contains fixture flow; 850 includes host sidebar simulation",
+    "source_or_cloud_persistence_qualification_added": false,
+    "source_sha256": {
+      "frontend/src/map/TimePicker.tsx": "60f352034dcdf0d1799c7ab556155f23f918dc710ac9e7cf06334df3059d7eb9",
+      "frontend/src/pages/DevicePage.tsx": "1128884535245fcfd582ea7f76210a8f3b9c16008acb66857f68225533d45c09",
+      "frontend/src/styles.css": "9879bd967cec1520ea9924a3876e5c4e9b6c63cbb5857d373240cb16fd02ca16",
+      "splunk_app/splunk_adm/bin/adm_baselines_lib/executor.py": "ef5604bdbc2fa6ddce4f5b676d7be052493c46a4d4fc1b223e3d0691a0d30bfe",
+      "splunk_app/splunk_adm/bin/adm_baselines_lib/run_store.py": "279c6f85158bd0a57f45f0d0e57eb0d1de7c54aff3294080462336f5b3bb1732",
+      "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py": "2f5bcdcdec5f25853f22f5cbffc76837e48267798f8348fa49a672582aba7c4f",
+      "splunk_app/splunk_adm/default/app.conf": "5b9eefc95da81ab1c62921eb66603bb54aaabd15f8d8b4d7a8241cf746d7215e"
+    },
+    "status": "Locally verified and packaged; Cloud still runs 0.9.1",
+    "version": "0.9.2",
+    "watch_management_http_or_ui_added": false
+  },
   "cloud_installed_readonly_check": {
     "app_version": "0.8.6",
     "baseline_capabilities_http_status": 404,

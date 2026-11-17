@@ -227,6 +227,9 @@ test.describe("Application Atlas browser regressions", () => {
       .getByRole("button")
       .click();
     await page.getByRole("button", { name: "Presets", exact: true }).click();
+    await expect(
+      page.locator('[data-test-panel-id="dateTime"] [data-test="body"]'),
+    ).toBeHidden();
     await page.getByText("Last 24 hours", { exact: true }).click();
     await page.getByRole("button", { name: "Build map" }).click();
     await expect(page.getByText("Demo data", { exact: true })).toBeHidden();
@@ -967,6 +970,9 @@ test("catalog uses its captured metric window when the Find/map picker changes",
     .getByRole("button")
     .click();
   await page.getByRole("button", { name: "Presets", exact: true }).click();
+  await expect(
+    page.locator('[data-test-panel-id="dateTime"] [data-test="body"]'),
+  ).toBeHidden();
   await page.getByText("Last 24 hours", { exact: true }).click();
   await expect(
     page.getByLabel("Time range", { exact: true }).getByRole("button"),
@@ -992,6 +998,9 @@ test("device lookup uses the current Explore time after the picker changes", asy
     .getByRole("button")
     .click();
   await page.getByRole("button", { name: "Presets", exact: true }).click();
+  await expect(
+    page.locator('[data-test-panel-id="dateTime"] [data-test="body"]'),
+  ).toBeHidden();
   await page.getByText("Last 24 hours", { exact: true }).click();
   await expect(
     page.getByLabel("Time range", { exact: true }).getByRole("button"),
@@ -1019,6 +1028,133 @@ test("device lookup uses the current Explore time after the picker changes", asy
   await expect(
     page.getByLabel("Time range", { exact: true }).getByRole("button"),
   ).toHaveText("Custom time");
+});
+
+test("advanced time picker applies valid absolute bounds and rejects invalid input", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&earliest=1794881880&latest=1794882180",
+  );
+  const trigger = page
+    .getByLabel("Time range", { exact: true })
+    .getByRole("button");
+  await trigger.click();
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
+  const panel = page.locator('[data-test-panel-id="advanced"]');
+  const earliest = panel.locator('[data-test="earliest"] input');
+  const latest = panel.locator('[data-test="latest"] input');
+  const apply = panel.getByRole("button", { name: "Apply", exact: true });
+  await earliest.fill("bad time");
+  await expect(apply).toBeDisabled();
+  await earliest.fill("1794881820");
+  await latest.fill("1794881800");
+  await expect(apply).toBeEnabled();
+  await apply.click();
+  await expect(panel).toContainText("Earliest must be before latest.");
+  await latest.fill("1794882120");
+  await expect(apply).toBeEnabled();
+  await apply.click();
+  const lookup = page.getByRole("form", { name: "Device lookup" });
+  await lookup.getByLabel("Device name or ID").fill("192.0.2.73");
+  await lookup.getByRole("button", { name: "Open" }).click();
+  await expect(page.getByRole("heading", { name: /esx-03/ })).toBeVisible();
+  const url = new URL(page.url());
+  expect(url.searchParams.get("earliest")).toBe("1794881820");
+  expect(url.searchParams.get("latest")).toBe("1794882120");
+});
+
+test("host sidebar keeps device content and the exact UTC window visible", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 850, height: 900 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setTimezoneOverride", {
+    timezoneId: "America/Los_Angeles",
+  });
+  await page.goto(
+    "/tests/browser/browser.html?page=device&host_simulator=1&mode=demo&id=192.0.2.73&earliest=1794787140&latest=1794787440",
+  );
+  await expect(page.getByRole("heading", { name: /esx-03/ })).toBeVisible();
+  const window = page.locator(".atlas-device-window");
+  await expect(window).toContainText("2026-11-15 23:59:00.000 UTC");
+  await expect(window).toContainText("2026-11-16 00:04:00.000 UTC");
+  await expect(window.locator("time").nth(0)).toHaveAttribute(
+    "datetime",
+    "2026-11-15T23:59:00.000Z",
+  );
+  await expect(window.locator("time").nth(1)).toHaveAttribute(
+    "datetime",
+    "2026-11-16T00:04:00.000Z",
+  );
+  const impact = new URL(
+    (await page.getByRole("link", { name: /Impact if/ }).getAttribute("href"))!,
+    page.url(),
+  );
+  expect(impact.searchParams.get("window")).toBe("1794787140");
+  expect(impact.searchParams.get("latest")).toBe("1794787440");
+  const boxes = await Promise.all([
+    page.locator("body").boundingBox(),
+    page.locator(".mock-dashboard").boundingBox(),
+    page.locator("#atlas-root").boundingBox(),
+    page.getByRole("searchbox", { name: "Filter Conversations" }).boundingBox(),
+  ]);
+  for (const box of boxes) expect(box && box.x + box.width <= 850).toBe(true);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  const scroll = page.getByRole("region", {
+    name: "Conversations table, scroll for more columns",
+  });
+  await page.setViewportSize({ width: 600, height: 900 });
+  expect(await scroll.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(
+    true,
+  );
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 850, height: 900 });
+  await page.locator("#atlas-root").evaluate((el) => el.remove());
+  expect(
+    await page.locator("body").evaluate((el) => getComputedStyle(el).minWidth),
+  ).toBe("960px");
+});
+
+for (const width of [320, 1440]) {
+  for (const theme of ["light", "dark"]) {
+    test(`device UTC window fits at ${width} in ${theme}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(
+        `/tests/browser/browser.html?page=device&mode=demo&theme=${theme}&id=192.0.2.73&earliest=1794787140&latest=1794787440`,
+      );
+      const label = page.locator(".atlas-device-window");
+      await expect(label).toContainText("2026-11-15 23:59:00.000 UTC");
+      await expect(label).toContainText("2026-11-16 00:04:00.000 UTC");
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      const box = await label.boundingBox();
+      expect(box && box.x + box.width <= width).toBe(true);
+    });
+  }
+}
+
+test("invalid device window displays an error instead of a selected window", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=device&mode=live&id=192.0.2.73&earliest=1794787140",
+  );
+  await expect(page.getByRole("alert")).toContainText(
+    "Both time window bounds are required",
+  );
+  await expect(page.locator(".atlas-device-window")).toHaveCount(0);
 });
 
 for (const theme of ["light", "dark"] as const) {
@@ -1054,6 +1190,9 @@ for (const theme of ["light", "dark"] as const) {
       expect(box && box.width >= 100 && box.x + box.width <= 320).toBe(true);
     }
     await page.getByRole("button", { name: "Presets", exact: true }).click();
+    await expect(
+      page.locator('[data-test-panel-id="dateTime"] [data-test="body"]'),
+    ).toBeHidden();
     await page.getByText("Last 24 hours", { exact: true }).click();
     await expect(trigger).toContainText("Last 24 hours");
     await page.reload();
@@ -1094,6 +1233,9 @@ for (const theme of ["light", "dark"] as const) {
       await page.keyboard.press("Tab");
     await expect(presets).toBeFocused();
     await page.keyboard.press("Enter");
+    await expect(
+      page.locator('[data-test-panel-id="dateTime"] [data-test="body"]'),
+    ).toBeHidden();
     const preset = page.getByText("Last 24 hours", { exact: true });
     for (
       let i = 0;
@@ -2506,7 +2648,10 @@ test("device page lists conversations and a row traces the pair", async ({
   await expect(kpis).toContainText("60 B");
   await expect(kpis).toContainText("0 blocked");
   await expect(kpis).toContainText("Stream NetFlow · 192.0.2.73");
-  const table = page.getByRole("region", { name: "Conversations", exact: true });
+  const table = page.getByRole("region", {
+    name: "Conversations",
+    exact: true,
+  });
   await expect(table).toContainText("win-client-01");
   await expect(table).toContainText("tcp/5432");
   // Separate In and Out columns.

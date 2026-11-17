@@ -548,6 +548,24 @@ export function DevicePage({
         />
         {demo && <span className="chip demo">Demo data</span>}
       </div>
+      {navigation.value && (
+        <p className="atlas-device-window">
+          Selected window:{" "}
+          <time dateTime={new Date(Number(earliest) * 1000).toISOString()}>
+            {new Date(Number(earliest) * 1000)
+              .toISOString()
+              .replace("T", " ")
+              .replace("Z", " UTC")}
+          </time>{" "}
+          –{" "}
+          <time dateTime={new Date(Number(latest) * 1000).toISOString()}>
+            {new Date(Number(latest) * 1000)
+              .toISOString()
+              .replace("T", " ")
+              .replace("Z", " UTC")}
+          </time>
+        </p>
+      )}
       <div className="adm atlas-device" data-adm-theme={theme}>
         <header className="atlas-device-head">
           <h1 id="device-title">{title}</h1>

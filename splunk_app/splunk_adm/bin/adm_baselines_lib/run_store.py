@@ -130,15 +130,18 @@ def _safe_path(path):
         raise Invalid("invalid journal location") from exc
 
 
-def _secure_file(path):
+def _secure_file(path, *, existing_only=False):
     fd = None
     try:
         flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
-        try:
-            fd = os.open(path, flags | os.O_CREAT | os.O_EXCL, 0o600)
-            os.fchmod(fd, 0o600)
-        except FileExistsError:
+        if existing_only:
             fd = os.open(path, flags)
+        else:
+            try:
+                fd = os.open(path, flags | os.O_CREAT | os.O_EXCL, 0o600)
+                os.fchmod(fd, 0o600)
+            except FileExistsError:
+                fd = os.open(path, flags)
         current, entry = os.fstat(fd), path.lstat()
         if (
             not stat.S_ISREG(current.st_mode)
@@ -190,6 +193,10 @@ def _check_sidecars(path):
                 os.close(fd)
 
 
+_BINDINGS_DDL = "CREATE TABLE IF NOT EXISTS bindings (id TEXT PRIMARY KEY, definition TEXT NOT NULL, fingerprint TEXT NOT NULL, revision INTEGER NOT NULL, enabled INTEGER NOT NULL)"
+_RUNS_DDL = "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, principal TEXT NOT NULL, request_id TEXT NOT NULL, binding_id TEXT NOT NULL REFERENCES bindings(id), fingerprint TEXT NOT NULL, binding_revision INTEGER NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, reference TEXT, baseline_revision INTEGER, evaluation_key TEXT, capture_digest TEXT, receipt TEXT, UNIQUE(principal,request_id), UNIQUE(binding_id,window_start,window_end))"
+
+
 class ExecutionStore:
     def __init__(
         self,
@@ -199,18 +206,25 @@ class ExecutionStore:
         max_runs=128,
         max_bindings=100,
         lease_seconds=60,
+        *,
+        existing_only=False,
     ):
-        if not callable(clock) or any(
-            type(value) is not int or not 1 <= value <= maximum
-            for value, maximum in (
-                (max_open, 3),
-                (max_runs, 128),
-                (max_bindings, 100),
-                (lease_seconds, 60),
+        if (
+            type(existing_only) is not bool
+            or not callable(clock)
+            or any(
+                type(value) is not int or not 1 <= value <= maximum
+                for value, maximum in (
+                    (max_open, 3),
+                    (max_runs, 128),
+                    (max_bindings, 100),
+                    (lease_seconds, 60),
+                )
             )
         ):
             raise ValueError("invalid journal configuration")
         self.path = _safe_path(path)
+        self.existing_only = existing_only
         self.clock = clock
         self.max_open, self.max_runs, self.max_bindings, self.lease_seconds = (
             max_open,
@@ -218,6 +232,10 @@ class ExecutionStore:
             max_bindings,
             lease_seconds,
         )
+        if self.existing_only:
+            with closing(self._connect()):
+                pass
+            return
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
             try:
@@ -231,12 +249,8 @@ class ExecutionStore:
                     ).fetchone()
                 ):
                     raise Invalid("unversioned journal schema")
-                db.execute(
-                    "CREATE TABLE IF NOT EXISTS bindings (id TEXT PRIMARY KEY, definition TEXT NOT NULL, fingerprint TEXT NOT NULL, revision INTEGER NOT NULL, enabled INTEGER NOT NULL)"
-                )
-                db.execute(
-                    "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, principal TEXT NOT NULL, request_id TEXT NOT NULL, binding_id TEXT NOT NULL REFERENCES bindings(id), fingerprint TEXT NOT NULL, binding_revision INTEGER NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, reference TEXT, baseline_revision INTEGER, evaluation_key TEXT, capture_digest TEXT, receipt TEXT, UNIQUE(principal,request_id), UNIQUE(binding_id,window_start,window_end))"
-                )
+                db.execute(_BINDINGS_DDL)
+                db.execute(_RUNS_DDL)
                 if not {"capture_digest", "binding_revision"} <= {
                     column[1] for column in db.execute("PRAGMA table_info(runs)")
                 }:
@@ -249,18 +263,43 @@ class ExecutionStore:
 
     def _connect(self):
         _safe_path(self.path)
-        _secure_file(self.path)
+        _secure_file(self.path, existing_only=self.existing_only)
         _check_sidecars(self.path)
-        db = sqlite3.connect(self.path, timeout=0.1, isolation_level=None)
+        if self.existing_only:
+            db = sqlite3.connect(
+                self.path.as_uri() + "?mode=rw",
+                uri=True,
+                timeout=0.1,
+                isolation_level=None,
+            )
+        else:
+            db = sqlite3.connect(self.path, timeout=0.1, isolation_level=None)
         try:
             if db.execute("PRAGMA journal_mode").fetchone()[0].lower() != "delete":
                 raise Invalid("unsupported journal mode")
+            if self.existing_only:
+                self._validate_existing_schema(db)
         except Exception:
             db.close()
             raise
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         return db
+
+    @staticmethod
+    def _validate_existing_schema(db):
+        if db.execute("PRAGMA user_version").fetchone()[0] != 1:
+            raise Invalid("unsupported journal schema")
+        expected = {
+            "bindings": _BINDINGS_DDL.replace("IF NOT EXISTS ", ""),
+            "runs": _RUNS_DDL.replace("IF NOT EXISTS ", ""),
+        }
+        for table, ddl in expected.items():
+            row = db.execute(
+                "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone()
+            if row is None or row[0] != ddl:
+                raise Invalid("unsupported journal schema")
 
     def _now(self):
         try:
@@ -280,6 +319,21 @@ class ExecutionStore:
         row = db.execute("SELECT * FROM bindings WHERE id=?", (ident,)).fetchone()
         if not row:
             raise NotFound("binding not found")
+        try:
+            definition = json.loads(row["definition"])
+            encoded = _definition(definition)
+            if (
+                encoded != row["definition"]
+                or hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+                != row["fingerprint"]
+            ):
+                raise Invalid("invalid binding record")
+            _id(row["id"])
+            _revision(row["revision"])
+            if type(row["enabled"]) is not int or row["enabled"] not in (0, 1):
+                raise Invalid("invalid binding record")
+        except (ValueError, TypeError, KeyError, UnicodeEncodeError) as exc:
+            raise Invalid("invalid binding record") from exc
         return row
 
     @staticmethod

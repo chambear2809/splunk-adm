@@ -93,7 +93,10 @@ test("shared notes preserve a draft across case creation and retry lost response
   await expect(page.getByLabel("Add note")).toBeDisabled();
   await page.getByRole("button", { name: "Retry same request" }).click();
   await expect(
-    page.getByText("Preserve this draft", { exact: false }).last(),
+    page
+      .getByRole("region", { name: "Shared investigation cases", exact: true })
+      .getByRole("listitem")
+      .filter({ hasText: "Preserve this draft" }),
   ).toBeVisible();
   await expect(page.getByLabel("Add note")).toHaveValue("");
   expect(keys).toHaveLength(2);

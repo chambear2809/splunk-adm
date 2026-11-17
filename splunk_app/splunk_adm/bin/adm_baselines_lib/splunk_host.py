@@ -113,6 +113,49 @@ class SplunkHost:
             raise HostUnavailable()
         return {"enabled": parsed.getboolean("execution", "enabled")}
 
+    def _watch_administrator(self, principal):
+        context = self.runtime.request("/services/authentication/current-context")
+        return (
+            self.principal() == principal
+            and context.get("username") == principal
+            and isinstance(context.get("roles"), list)
+            and bool({"admin", "sc_admin"}.intersection(context["roles"]))
+        )
+
+    def watch_manager(self):
+        """Disable-only management, independent of execution and source availability."""
+        from .executor import WatchStopper
+        from .run_store import ExecutionStore
+
+        principal = self.principal()
+        if not self._watch_administrator(principal):
+            raise Forbidden("administrator authority required")
+        root = self.database_root or os.environ.get("SPLUNK_DB")
+        if not root or not Path(root).is_absolute():
+            raise HostUnavailable()
+        base = Path(root)
+        if base.is_symlink() or not base.is_dir():
+            raise HostUnavailable()
+        directory = base / "splunk_adm_baselines"
+        try:
+            info = directory.lstat()
+        except OSError as exc:
+            raise HostUnavailable() from exc
+        if (
+            not stat.S_ISDIR(info.st_mode)
+            or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o700
+        ):
+            raise HostUnavailable()
+        journal = directory / "watch_runs.sqlite"
+        if not os.path.lexists(journal):
+            raise HostUnavailable()
+        return WatchStopper(
+            ExecutionStore(journal, clock=self.clock, existing_only=True),
+            self.principal,
+            self._watch_administrator,
+        )
+
     def watch_executor(self):
         """Trusted action integration; no provider can be selected by HTTP/config."""
         if self.execution_configuration() != {"enabled": True}:
@@ -121,19 +164,13 @@ class SplunkHost:
         if provider is None:
             raise HostUnavailable()
         self.qualify()
-        from .executor import WatchExecutor
+        from .executor import WatchExecutor, WatchStopper
         from .run_store import ExecutionStore
 
         def administrator(principal):
             if self.execution_configuration() != {"enabled": True}:
                 return False
-            context = self.runtime.request("/services/authentication/current-context")
-            return (
-                self.principal() == principal
-                and context.get("username") == principal
-                and isinstance(context.get("roles"), list)
-                and bool({"admin", "sc_admin"}.intersection(context["roles"]))
-            )
+            return self._watch_administrator(principal)
 
         principal = self.principal()
         if not administrator(principal):
@@ -189,13 +226,17 @@ class SplunkHost:
                 clock=self.clock,
             )
 
+        journal = ExecutionStore(
+            database.parent / "watch_runs.sqlite", clock=self.clock
+        )
         return WatchExecutor(
-            ExecutionStore(database.parent / "watch_runs.sqlite", clock=self.clock),
+            journal,
             store_factory,
             self.principal,
             administrator,
             source_provider=provider,
             clock=self.clock,
+            stopper=WatchStopper(journal, self.principal, self._watch_administrator),
         )
 
     def principal(self):
