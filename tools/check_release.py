@@ -53,6 +53,9 @@ CASE_RUNTIME_FILES = frozenset(
                 "splunk_host.py",
                 "source.py",
                 "native.py",
+                "transport.py",
+                "transport_worker.py",
+                "job_ledger.py",
                 "README.md",
             )
         },
@@ -71,6 +74,7 @@ CASE_EXPOSURES = {
     "expose:adm_case_resources": ("adm/investigations/cases/*", "GET,DELETE"),
     "expose:adm_case_entries": ("adm/investigations/cases/*/entries", "POST"),
     "expose:adm_case_captures": ("adm/investigations/cases/*/captures", "POST"),
+    "expose:adm_case_attachments": ("adm/investigations/cases/*/attachments", "POST"),
     "expose:adm_case_sharing": ("adm/investigations/cases/*/share", "POST"),
     "expose:adm_case_export": ("adm/investigations/cases/*/export", "GET"),
     "expose:adm_case_audit": ("adm/investigations/cases/*/audit", "GET"),
@@ -476,9 +480,14 @@ def _check_cases_contract(files, rest, web):
         not config.has_section("persistence")
         or dict(config["persistence"])
         != {"mode": "disabled", "platform": "unqualified", "capture_mode": "disabled"}
-        or set(config.sections()) != {"persistence"}
+        or not config.has_section("capture_transport")
+        or dict(config["capture_transport"])
+        != {"management_uri": "unconfigured", "ca_file": "unconfigured"}
+        or set(config.sections()) != {"persistence", "capture_transport"}
     ):
-        raise ValueError("case defaults must remain disabled and unqualified")
+        raise ValueError(
+            "case defaults must remain disabled and unqualified with transport trust unconfigured"
+        )
     authorize = _packaged_config(files, "default/authorize.conf")
     if set(authorize.sections()) != {"capability::adm_investigate"} or dict(
         authorize["capability::adm_investigate"]

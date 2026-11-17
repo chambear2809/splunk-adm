@@ -223,6 +223,26 @@ class CaseStore:
         for field, kind in (("captures", "capture"), ("attachments", "attachment")):
             visible = []
             for item in result[field]:
+                if (
+                    field == "attachments"
+                    and isinstance(item, dict)
+                    and item.get("kind") == "capture_reference"
+                ):
+                    # A reference is visible only with this response's independently
+                    # authorized capture; it never supplies its own source grant.
+                    if (
+                        authorize_sources
+                        and any(
+                            capture["id"] == item.get("capture_id")
+                            for capture in result["captures"]
+                        )
+                        and any(
+                            entry["id"] == item.get("entry_id")
+                            for entry in result["entries"]
+                        )
+                    ):
+                        visible.append(item)
+                    continue
                 allowed = False
                 if (
                     isinstance(item, dict)
@@ -478,7 +498,20 @@ class CaseStore:
 
     def append(self, principal, request_id, case_id, expected_revision, kind, item):
         if kind == "entry":
-            _object(item, ("type", "text"))
+            if not isinstance(item, dict) or set(item) not in (
+                {"type", "text"},
+                {"type", "text", "supersedes_entry_id"},
+            ):
+                raise Invalid("unexpected or missing fields")
+            if "supersedes_entry_id" in item:
+                target_id = item["supersedes_entry_id"]
+                if not isinstance(target_id, str):
+                    raise Invalid("invalid prior entry")
+                try:
+                    if str(uuid.UUID(target_id)) != target_id:
+                        raise ValueError()
+                except ValueError:
+                    raise Invalid("invalid prior entry") from None
             if item["type"] not in ("note", "hypothesis", "question"):
                 raise Invalid("invalid entry type")
             _text(item["text"], "entry", 10000)
@@ -494,6 +527,19 @@ class CaseStore:
             if row[1] != expected_revision:
                 raise Conflict("revision changed")
             doc = json.loads(row[2])
+            if "supersedes_entry_id" in item:
+                target_id = item["supersedes_entry_id"]
+                prior = next(
+                    (entry for entry in doc["entries"] if entry["id"] == target_id),
+                    None,
+                )
+                if prior is None or prior["type"] != item["type"]:
+                    raise Invalid("prior entry must have the same type in this case")
+                if any(
+                    entry.get("supersedes_entry_id") == target_id
+                    for entry in doc["entries"]
+                ):
+                    raise Conflict("entry already revised; reload and review")
             if (
                 sum(len(doc[key]) for key in ("captures", "entries", "attachments"))
                 >= self.max_items
@@ -525,6 +571,101 @@ class CaseStore:
             "write",
             case_id,
             {"kind": kind, "item": item},
+            expected_revision,
+            apply,
+        )
+
+    def attach_capture_reference(
+        self, principal, request_id, case_id, expected_revision, entry_id, capture_id
+    ):
+        _text(entry_id, "entry id", 64)
+        _text(capture_id, "capture id", 64)
+        source_proven = False
+        # Authorize against the immutable same-case source outside the writer.
+        with closing(self._connect()) as db:
+            previous = db.execute(
+                "SELECT case_id FROM requests WHERE principal=? AND request_id=?",
+                (principal, request_id),
+            ).fetchone()
+            if previous and previous[0] != case_id:
+                raise Conflict("request id already used")
+            if not previous:
+                row = self._row(db, principal, "write", case_id)
+                if row[1] != expected_revision:
+                    raise Conflict("revision changed")
+                document = json.loads(row[2])
+                if not any(entry["id"] == entry_id for entry in document["entries"]):
+                    raise Invalid("entry not in this case")
+                _check_capture_selector(document, capture_id)
+        if not previous:
+            projected = self._project_checked(
+                principal, document, capture_id=capture_id
+            )
+            if not any(
+                capture["id"] == capture_id for capture in projected["captures"]
+            ):
+                raise SourceUnavailable("capture source unavailable")
+            source_proven = True
+
+        def apply(db):
+            if not source_proven:
+                # A retry receipt may disappear during expiry/cleanup. Never
+                # turn that race into an unproved new attachment write.
+                raise Conflict("attachment request changed; retry after review")
+            row = self._row(db, principal, "write", case_id)
+            if row[1] != expected_revision:
+                raise Conflict("revision changed")
+            document = json.loads(row[2])
+            _check_capture_selector(document, capture_id)
+            if not any(entry["id"] == entry_id for entry in document["entries"]):
+                raise Invalid("entry not in this case")
+            if any(
+                item.get("entry_id") == entry_id
+                and item.get("capture_id") == capture_id
+                for item in document["attachments"]
+            ):
+                raise Conflict("evidence already attached")
+            if (
+                sum(
+                    len(document[key]) for key in ("captures", "entries", "attachments")
+                )
+                >= self.max_items
+            ):
+                raise QuotaExceeded("item quota exceeded")
+            document["revision"] += 1
+            document["attachments"].append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "revision": document["revision"],
+                    "author": principal,
+                    "created_at": _now(),
+                    "kind": "capture_reference",
+                    "entry_id": entry_id,
+                    "capture_id": capture_id,
+                }
+            )
+            encoded = _json(document)
+            if len(encoded.encode()) > self.max_case_bytes:
+                raise QuotaExceeded("case size exceeded")
+            db.execute(
+                "UPDATE cases SET revision=?, document=? WHERE id=?",
+                (document["revision"], encoded, case_id),
+            )
+            self._audit(
+                db, case_id, principal, "attach_capture_reference", document["revision"]
+            )
+            return document
+
+        return self._mutation(
+            principal,
+            request_id,
+            "write",
+            case_id,
+            {
+                "kind": "capture_reference",
+                "entry_id": entry_id,
+                "capture_id": capture_id,
+            },
             expected_revision,
             apply,
         )

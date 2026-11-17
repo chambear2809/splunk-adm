@@ -74,3 +74,86 @@ it("includes authorized context and redaction gaps without source rows", () => {
   expect(text).toContain("Unreported coverage details are unknown");
   expect(text).not.toContain("SECRET_ROW");
 });
+
+it("includes the latest entry and its readable immutable revision lineage", () => {
+  const record: CaseRecord = {
+    schema_version: 1,
+    id: "case",
+    revision: 3,
+    title: "Incident",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [
+      {
+        id: "a",
+        revision: 1,
+        author: "alice",
+        created_at: "2026-01-01T00:00:00Z",
+        type: "note",
+        text: "Old",
+      },
+      {
+        id: "b",
+        revision: 3,
+        author: "bob",
+        created_at: "2026-01-01T01:00:00Z",
+        type: "note",
+        text: "New",
+        supersedes_entry_id: "a",
+      },
+    ],
+    captures: [],
+    attachments: [],
+  };
+  const text = caseHandoff(record);
+  expect(text).toContain("Edited · version 2");
+  expect(text).toContain("Version 1 · alice · revision 1");
+  expect(text).toContain("Version 2 · bob · revision 3");
+  expect(text).toContain("> Old");
+  expect(text).toContain("> New");
+});
+
+it("includes only visible source-authorized attachment labels", () => {
+  const record: CaseRecord = {
+    schema_version: 1,
+    id: "case",
+    revision: 3,
+    title: "Incident",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [
+      {
+        id: "entry",
+        revision: 1,
+        author: "alice",
+        created_at: "2026-01-01T00:00:00Z",
+        type: "note",
+        text: "Evidence",
+      },
+    ],
+    captures: [
+      {
+        id: "capture",
+        revision: 2,
+        author: "alice",
+        created_at: "2026-01-01T00:00:00Z",
+        captured_at: "2026-01-01T00:00:00Z",
+        label: "Permitted",
+        data: {},
+      },
+    ],
+    attachments: [
+      {
+        id: "attachment",
+        revision: 3,
+        author: "alice",
+        created_at: "2026-01-01T00:00:00Z",
+        kind: "capture_reference",
+        entry_id: "entry",
+        capture_id: "capture",
+      },
+    ],
+  };
+  expect(caseHandoff(record)).toContain("Attached comparison: Permitted");
+  expect(caseHandoff({ ...record, captures: [] })).not.toContain(
+    "Attached comparison:",
+  );
+});

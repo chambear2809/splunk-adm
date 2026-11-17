@@ -6,6 +6,7 @@ export type Finding = {
   id: string;
   title: string;
   status: "Supported" | "Needs evidence";
+  rankReason: string;
   supports: string[];
   contradicts: string[];
   missing: string[];
@@ -147,96 +148,196 @@ const label = (edge: GraphEdge, graph: Graph): string => {
 const dependency = (edge: GraphEdge) =>
   edge.relationship === "calls" || edge.relationship === "communicates_with";
 
-/** Graph snapshots describe observations, not complete coverage or causation. */
+/** Leads are ordered by observed contrasts, not likelihood or cause. */
 export function buildFindings(
   baseline: Graph,
   incident: Graph,
   diff: GraphDiff = diffGraphs(baseline, incident),
 ): Finding[] {
-  const findings: Finding[] = [];
-  const reasons = [
-    ...new Set([...coverageReasons(baseline), ...coverageReasons(incident)]),
-  ];
-  if (reasons.length)
+  type Ranked = Finding & { band: number; affected: number };
+  const findings: Ranked[] = [];
+  const ordered = (values: string[]) => [...new Set(values)].sort();
+  const edgesById = new Map(baseline.edges.map((edge) => [edge.id, edge]));
+  const blocked = (edge: GraphEdge) =>
+    edge.acl_action === "drop" || (edge.acl_drops ?? 0) > 0;
+  const permitted = (edge: GraphEdge) =>
+    !blocked(edge) &&
+    (edge.acl_action === "permit" || (edge.acl_permits ?? 0) > 0);
+  const drops = incident.edges
+    .filter(blocked)
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const changed = drops.filter((edge) => {
+    const prior = edgesById.get(edge.id);
+    return prior !== undefined && permitted(prior);
+  });
+  const previous = drops.filter((edge) => {
+    const prior = edgesById.get(edge.id);
+    return prior !== undefined && blocked(prior);
+  });
+  const unknown = drops.filter((edge) => {
+    const prior = edgesById.get(edge.id);
+    return !prior || (!blocked(prior) && !permitted(prior));
+  });
+  const dropLabels = (items: GraphEdge[]) =>
+    ordered(items.map((edge) => label(edge, incident))).slice(0, 10);
+  const ids = (items: GraphEdge[]) => ordered(items.map((edge) => edge.id));
+  if (changed.length)
     findings.push({
-      id: "coverage",
-      title: "Collection coverage needs review",
-      status: "Needs evidence",
-      supports: reasons,
-      contradicts: [],
-      missing: [
-        "Complete, comparable collection for both windows has not been established.",
-      ],
-      next: "Inspect data health and the affected source for this window.",
-      edgeIds: [],
-    });
-  const drops = incident.edges.filter(
-    (edge) => edge.acl_action === "drop" || (edge.acl_drops ?? 0) > 0,
-  );
-  if (drops.length)
-    findings.push({
-      id: "drops",
-      title: `Policy drops observed on ${drops.length} connection${drops.length === 1 ? "" : "s"}`,
+      id: "drops_changed",
+      band: 1,
+      affected: ids(changed).length,
+      title: "Policy blocking may have changed",
       status: "Supported",
-      supports: drops
-        .slice(0, 10)
-        .map(
-          (edge) =>
-            `${label(edge, incident)}: ${edge.acl_drops !== undefined ? `${edge.acl_drops} reported drops` : "drop reported"}.`,
-        ),
+      rankReason:
+        "Prioritized because the same connection was reported permitted before and blocked during the incident.",
+      supports: dropLabels(changed).map(
+        (name) => `${name}: baseline permit and incident drop reported.`,
+      ),
       contradicts: [],
       missing: [
         "An authoritative policy change or deployment record is not included in this comparison.",
       ],
-      next: "Inspect the ACL evidence and policy audit for the affected connection.",
-      edgeIds: drops.map((edge) => edge.id),
+      next: "Inspect ACL evidence and the policy audit for these connections.",
+      edgeIds: ids(changed),
+    });
+  if (unknown.length)
+    findings.push({
+      id: "drops_unknown",
+      band: 2,
+      affected: ids(unknown).length,
+      title: "Policy blocking may be relevant",
+      status: "Needs evidence",
+      rankReason:
+        "Prioritized as an incident observation without a comparable baseline policy state.",
+      supports: ordered(
+        unknown.map((edge) => {
+          const prior = edgesById.get(edge.id);
+          const baseline =
+            prior?.acl_drops === 0
+              ? "baseline reports zero drops; a permit is not established"
+              : "baseline policy state is unknown";
+          return `${label(edge, incident)}: incident drop reported; ${baseline}.`;
+        }),
+      ).slice(0, 10),
+      contradicts: [],
+      missing: [
+        "A baseline permit or drop is not established for these connections.",
+        "An authoritative policy change or deployment record is not included.",
+      ],
+      next: "Inspect ACL evidence and the policy audit for these connections.",
+      edgeIds: ids(unknown),
+    });
+  if (previous.length)
+    findings.push({
+      id: "drops_previous",
+      band: 3,
+      affected: ids(previous).length,
+      title: "Policy blocking was also observed before",
+      status: "Needs evidence",
+      rankReason:
+        "Listed after observed changes because blocking was already reported in the baseline.",
+      supports: dropLabels(previous).map(
+        (name) => `${name}: incident drop reported.`,
+      ),
+      contradicts: dropLabels(previous).map(
+        (name) => `${name}: already reported blocked in the baseline.`,
+      ),
+      missing: [
+        "The snapshots do not establish whether blocking caused the incident or whether a policy changed.",
+      ],
+      next: "Inspect ACL evidence and the policy audit for these connections.",
+      edgeIds: ids(previous),
     });
   const newEdges = diff.addedEdges.filter(dependency);
   if (newEdges.length)
     findings.push({
       id: "new",
-      title: `${newEdges.length} connection${newEdges.length === 1 ? "" : "s"} newly observed`,
-      status: "Supported",
-      supports: newEdges.slice(0, 10).map((edge) => label(edge, incident)),
+      band: 2,
+      affected: ids(newEdges).length,
+      title: "Newly observed connections may need review",
+      status: "Needs evidence",
+      rankReason:
+        "Prioritized as a dependency difference between the snapshots that needs corroboration.",
+      supports: ordered(newEdges.map((edge) => label(edge, incident))).slice(
+        0,
+        10,
+      ),
       contradicts: [],
       missing: [
         "A newly observed connection may have existed outside the baseline evidence.",
+        "Complete comparable collection is not established by these snapshots.",
       ],
-      next: "Inspect the connection evidence and source coverage.",
-      edgeIds: newEdges.map((edge) => edge.id),
+      next: "Inspect connection evidence and source coverage.",
+      edgeIds: ids(newEdges),
     });
   const moved = diff.changedNodes.filter(({ previous, current }) => {
-    const before = new Set(
-      previous.map((node) => node.attributes?.node).filter(Boolean),
+    const before = ordered(
+      previous
+        .map((node) => node.attributes?.node)
+        .filter((value): value is string => !!value),
     );
-    const after = new Set(
-      current.map((node) => node.attributes?.node).filter(Boolean),
+    const after = ordered(
+      current
+        .map((node) => node.attributes?.node)
+        .filter((value): value is string => !!value),
     );
     return (
-      before.size > 0 &&
-      after.size > 0 &&
-      [...before].sort().join("|") !== [...after].sort().join("|")
+      before.length > 0 &&
+      after.length > 0 &&
+      before.join("|") !== after.join("|")
     );
   });
   if (moved.length)
     findings.push({
       id: "placement",
-      title: `${moved.length} workload group${moved.length === 1 ? "" : "s"} observed on different nodes`,
-      status: "Supported",
-      supports: moved
-        .slice(0, 10)
-        .map(
-          ({ previous, current }) =>
-            `${previous[0].label}: ${[...new Set(previous.map((node) => node.attributes?.node).filter(Boolean))].join(", ")} → ${[...new Set(current.map((node) => node.attributes?.node).filter(Boolean))].join(", ")}`,
-        ),
+      band: 2,
+      affected: new Set(moved.map((change) => change.key)).size,
+      title: "Workload placement may need review",
+      status: "Needs evidence",
+      rankReason:
+        "Prioritized as a placement difference between snapshots that needs corroboration.",
+      supports: ordered(
+        moved.map(({ previous, current }) => {
+          const labels = ordered(previous.map((node) => node.label));
+          const before = ordered(
+            previous
+              .map((node) => node.attributes?.node)
+              .filter((value): value is string => !!value),
+          );
+          const after = ordered(
+            current
+              .map((node) => node.attributes?.node)
+              .filter((value): value is string => !!value),
+          );
+          return `${labels[0]}: ${before.join(", ")} → ${after.join(", ")}`;
+        }),
+      ).slice(0, 10),
       contradicts: [],
       missing: [
         "The snapshots do not establish an exact movement time or cause.",
+        "Complete comparable collection is not established by these snapshots.",
       ],
       next: "Inspect workload and node history for the interval.",
       edgeIds: [],
     });
-  return findings;
+  findings.sort(
+    (a, b) =>
+      a.band - b.band ||
+      a.contradicts.length - b.contradicts.length ||
+      b.affected - a.affected ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  return findings.map((finding) => ({
+    id: finding.id,
+    title: finding.title,
+    status: finding.status,
+    rankReason: finding.rankReason,
+    supports: finding.supports,
+    contradicts: finding.contradicts,
+    missing: finding.missing,
+    next: finding.next,
+    edgeIds: finding.edgeIds,
+  }));
 }
 
 export function buildTimeline(

@@ -1,3 +1,4 @@
+import { entryHistories } from "./entryHistory";
 import { createFetchInit } from "@splunk/splunk-utils/fetch";
 import { createRESTURL } from "@splunk/splunk-utils/url";
 
@@ -15,6 +16,7 @@ export type CaseEntry = {
   created_at: string;
   type: "note" | "hypothesis" | "question";
   text: string;
+  supersedes_entry_id?: string;
 };
 export type CaseCapture = {
   id: string;
@@ -25,6 +27,25 @@ export type CaseCapture = {
   captured_at: string;
   data: Record<string, unknown>;
 };
+export type CaseAttachment =
+  | {
+      id: string;
+      revision: number;
+      author: string;
+      created_at: string;
+      kind: "capture_reference";
+      entry_id: string;
+      capture_id: string;
+    }
+  | (Record<string, unknown> & {
+      id: string;
+      revision: number;
+      author: string;
+      created_at: string;
+      label: string;
+      media_type: string;
+      content: string;
+    });
 export type CaseRecord = {
   schema_version: 1;
   id: string;
@@ -35,7 +56,7 @@ export type CaseRecord = {
   captures: CaseCapture[];
   capture_ids?: string[];
   redactions?: { captures: number; attachments: number };
-  attachments: Record<string, unknown>[];
+  attachments: CaseAttachment[];
 };
 export type CaseList = { items: CaseRecord[]; next: string | null };
 export type CaseReceipt =
@@ -94,8 +115,10 @@ function record(v: unknown): v is CaseRecord {
         (e.type === "note" ||
           e.type === "hypothesis" ||
           e.type === "question") &&
-        typeof e.text === "string",
+        typeof e.text === "string" &&
+        (e.supersedes_entry_id === undefined || str(e.supersedes_entry_id)),
     ) &&
+    entryHistories(v.entries as CaseEntry[]) !== undefined &&
     Array.isArray(v.captures) &&
     v.captures.every(
       (e: unknown) =>
@@ -115,9 +138,16 @@ function record(v: unknown): v is CaseRecord {
     v.attachments.every(
       (e: unknown) =>
         metadata(e) &&
-        str(e.label) &&
-        str(e.media_type) &&
-        typeof e.content === "string",
+        (e.kind === "capture_reference"
+          ? str(e.entry_id) &&
+            str(e.capture_id) &&
+            (v.entries as CaseEntry[]).some(
+              (entry) => entry.id === e.entry_id,
+            ) &&
+            (v.captures as CaseCapture[]).some(
+              (capture: CaseCapture) => capture.id === e.capture_id,
+            )
+          : str(e.label) && str(e.media_type) && typeof e.content === "string"),
     )
   );
 }
@@ -160,6 +190,13 @@ export interface CaseClient {
     expectedRevision: number,
     type: CaseEntry["type"],
     text: string,
+    supersedesEntryId?: string,
+  ): CaseMutation<CaseRecord>;
+  attach(
+    id: string,
+    expectedRevision: number,
+    entryId: string,
+    captureId: string,
   ): CaseMutation<CaseRecord>;
   capture(
     id: string,
@@ -308,12 +345,32 @@ export function createCaseClient(options: {
       read(`${itemPath(id)}/export${captureQuery(captureId)}`, record, signal),
     create: (title, window) =>
       mutate("/cases", "POST", { schema_version: 1, title, window }, record),
-    append: (id, expectedRevision, type, text) =>
+    append: (id, expectedRevision, type, text, supersedesEntryId) =>
       mutate(
         `${itemPath(id)}/entries`,
         "POST",
-        { expected_revision: expectedRevision, item: { type, text } },
-        record,
+        {
+          expected_revision: expectedRevision,
+          item: {
+            type,
+            text,
+            ...(supersedesEntryId === undefined
+              ? {}
+              : { supersedes_entry_id: supersedesEntryId }),
+          },
+        },
+        (v): v is CaseRecord => record(v) && v.id === id,
+      ),
+    attach: (id, expectedRevision, entryId, captureId) =>
+      mutate(
+        `${itemPath(id)}/attachments`,
+        "POST",
+        {
+          expected_revision: expectedRevision,
+          entry_id: entryId,
+          capture_id: captureId,
+        },
+        (v): v is CaseRecord => record(v) && v.id === id,
       ),
     capture: (id, expectedRevision, reference, label) =>
       mutate(

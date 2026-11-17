@@ -137,10 +137,12 @@ export function IncidentWorkspace({
       if (!controller.signal.aborted && token === generation.current)
         setResult({ incident, baseline, recovery });
     } catch (reason) {
-      if (!controller.signal.aborted && token === generation.current)
+      if (!controller.signal.aborted && token === generation.current) {
+        setResult(undefined);
         setError(
           reason instanceof Error ? reason.message : "Comparison failed.",
         );
+      }
     } finally {
       if (!controller.signal.aborted && token === generation.current)
         setBusy(false);
@@ -270,7 +272,7 @@ export function IncidentWorkspace({
       </button>
       {busy && (
         <p role="status">
-          Updating comparison… Previous results remain visible.
+          Updating comparison… Previous comparison remains visible.
         </p>
       )}
       {error && <p role="alert">{error}</p>}
@@ -309,11 +311,15 @@ export function IncidentWorkspace({
           </nav>
           {tab === "Overview" && (
             <div>
-              <h3>Relevant findings</h3>
+              <h3>Prioritized investigation leads</h3>
+              <p>
+                Ordered by evidence of change in these snapshots, not likelihood
+                or cause.
+              </p>
               {findings.length === 0 ? (
                 <p>
-                  No matching changes were found in these snapshots. Review
-                  source coverage before interpreting an absence.
+                  No supported investigation leads in these snapshots; absence
+                  does not establish normal operation.
                 </p>
               ) : (
                 findings.map((finding) => (
@@ -321,29 +327,57 @@ export function IncidentWorkspace({
                     <summary>
                       <strong>{finding.title}</strong> · {finding.status}
                     </summary>
-                    <p>{finding.supports[0]}</p>
+                    <p>{finding.rankReason}</p>
                     {(
                       [
                         ["Supports", finding.supports],
-                        ["Contradicts", finding.contradicts],
-                        ["Missing", finding.missing],
+                        ["Counterevidence", finding.contradicts],
+                        ["Missing evidence", finding.missing],
                       ] as const
                     ).map(([title, list]) => (
                       <div key={title}>
                         <h4>{title}</h4>
                         {list.length ? (
-                          <ul>
-                            {list.map((item) => (
-                              <li key={item}>{item}</li>
-                            ))}
-                          </ul>
+                          <>
+                            {title === "Supports" && list.length > 3 && (
+                              <p>
+                                Showing 3 of {list.length} listed observations;
+                                the list is limited to 10.
+                              </p>
+                            )}
+                            <ul>
+                              {(title === "Supports"
+                                ? list.slice(0, 3)
+                                : list
+                              ).map((item) => (
+                                <li key={item}>{item}</li>
+                              ))}
+                            </ul>
+                            {title === "Supports" && list.length > 3 && (
+                              <details>
+                                <summary>
+                                  Show remaining {list.length - 3} supporting
+                                  observations
+                                </summary>
+                                <ul>
+                                  {list.slice(3).map((item) => (
+                                    <li key={item}>{item}</li>
+                                  ))}
+                                </ul>
+                              </details>
+                            )}
+                          </>
                         ) : (
-                          <p>None reported.</p>
+                          <p>
+                            {title === "Counterevidence"
+                              ? "No direct counterevidence available in these snapshots."
+                              : "None reported."}
+                          </p>
                         )}
                       </div>
                     ))}
                     <p>
-                      <strong>Next check:</strong> {finding.next}
+                      <strong>Next read-only check:</strong> {finding.next}
                     </p>
                     {onHighlight && finding.edgeIds.length > 0 && (
                       <button

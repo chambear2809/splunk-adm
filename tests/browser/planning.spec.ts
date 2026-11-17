@@ -269,13 +269,23 @@ test("network baseline versions and watch evaluation use authorized references a
         json: {
           items: [
             {
-              seq: 1,
-              signature: "synthetic-signature",
+              seq: url.searchParams.has("after") ? 2 : 1,
+              signature: JSON.stringify([
+                1,
+                "synthetic",
+                "synthetic",
+                "service:a",
+                "service:b",
+                "tcp",
+                443,
+                "calls",
+                "forward",
+              ]),
               window: { start: start - 300, end: start },
               observedAt: start + 10,
             },
           ],
-          next: null,
+          next: url.searchParams.has("after") ? null : 1,
         },
       });
     if (path.endsWith("/evaluate") && request.method() === "GET")
@@ -310,7 +320,13 @@ test("network baseline versions and watch evaluation use authorized references a
       },
     });
   });
-  await page.goto("/tests/browser/planning.html?mode=network");
+  const reviewWidth = Number(process.env.ADM_REVIEW_WIDTH || 1440);
+  const reviewTheme = process.env.ADM_REVIEW_THEME || "light";
+  if (process.env.ADM_FINAL_REVIEW_SCREENSHOTS)
+    await page.setViewportSize({ width: reviewWidth, height: 900 });
+  await page.goto(
+    `/tests/browser/planning.html?mode=network&theme=${reviewTheme}`,
+  );
   await page
     .getByRole("button", { name: "Read complete dependency evidence" })
     .click();
@@ -325,23 +341,49 @@ test("network baseline versions and watch evaluation use authorized references a
     page.getByText(/baseline version 1 · threshold 2/),
   ).toBeVisible();
   await page.getByRole("button", { name: "Read watch occurrences" }).click();
-  await expect(page.getByText(/synthetic-signature/)).toBeVisible();
-  await page.getByRole("button", { name: "Read status", exact: true }).click();
-  await expect(page.getByText(/Authorized status for/)).toContainText(
-    "3 observations",
+  const observations = page.getByRole("region", { name: "Watch occurrences" });
+  await expect(observations).toContainText(
+    "1 loaded observations; more are available.",
   );
+  await expect(observations).toContainText(
+    "Dependency change recorded: service:a → service:b · tcp/443",
+  );
+  await observations.getByText("Source and relationship details").click();
+  await expect(observations).toContainText("Authority: synthetic");
+  await expect(observations).not.toContainText("[1,");
+  await page.getByRole("button", { name: "Read status", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Authorized watch status" }),
+  ).toContainText("3 distinct observation windows; threshold met");
+  await expect(
+    page.getByRole("region", { name: "Authorized watch status" }),
+  ).toContainText("expected window inactive; cooldown active");
+  await page.getByRole("button", { name: "Load more occurrences" }).click();
+  await expect(observations).toContainText("2 loaded observations.");
+  await expect(
+    page.getByRole("button", { name: "Load more occurrences" }),
+  ).toHaveCount(0);
+  if (process.env.ADM_FINAL_REVIEW_SCREENSHOTS) {
+    await observations.screenshot({
+      path: `/tmp/atlas-feature-final-review/watch-${reviewWidth}-${reviewTheme}.png`,
+    });
+  }
   await page
     .getByRole("button", { name: "Open version 2", exact: true })
     .click();
   await expect(
     page.getByRole("region", { name: "Watch occurrences", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByText(/Authorized status for/)).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Authorized watch status" }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Read watch occurrences", exact: true })
     .click();
   await page.getByRole("button", { name: "Read status", exact: true }).click();
-  await expect(page.getByText(/Authorized status for/)).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Authorized watch status" }),
+  ).toBeVisible();
   await page
     .getByRole("button", {
       name: "Synthetic baseline · version 2",
@@ -351,7 +393,9 @@ test("network baseline versions and watch evaluation use authorized references a
   await expect(
     page.getByRole("region", { name: "Watch occurrences", exact: true }),
   ).toHaveCount(0);
-  await expect(page.getByText(/Authorized status for/)).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Authorized watch status" }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Open version 1", exact: true })
     .click();

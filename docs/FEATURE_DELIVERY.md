@@ -11,10 +11,10 @@ and deployment gaps. Passing local checks does not close those gaps.
 
 | Feature                                     | Local workflow                                                                                                                                                                                                                                       | Evidence and verification                                                                                                                                                                                                                         | Remaining qualification                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Incident timeline and explanations          | `Investigate` opens a windowed comparison from a live map with findings and coverage notes.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Current source receipt does not qualify rendered live comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
+| Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Current source receipt does not qualify rendered live comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
-| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF, backup/restore and operational scheduling remain unqualified.                                                                             |
-| Investigation records and evidence packages | Private shared cases now support notes, immutable server-rechecked comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. Direct REST qualification passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Installed Web proxy, real-source collection, hard transport bounds, attachment uploads, cleanup scheduling and backup/restore remain unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. Privileged schedule/action execution is not implemented; manual evaluation is the current workflow.                                                                             |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 qualification, Web proxy, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | No installed candidate qualification or current journey capture. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -58,9 +58,85 @@ acceptance, not a usability study or real-source/installed qualification.
 
 The preceding installed case qualification remains scoped to its archive.
 
-## Installed qualification with verified TLS
+## Final acceptance corrections
 
-The current backend passed three installed checks across two sequential fresh,
+Incident leads now use stable, deterministic evidence ordering. An explicit
+same-connection permit-to-drop observation ranks ahead of differences needing
+corroboration; pre-existing drops supply counterevidence to a new-blocking
+explanation. Unknown baseline state is not treated as a permit. Coverage remains
+separate, and failed comparisons clear prior results. Supporting observations
+are capped and progressively disclosed. These remain investigation leads, not
+causal or probability claims.
+
+Manual watches decode only the exact versioned dependency identity tuple and
+show authorized recurrence status. Their stored occurrence contract does not
+contain a change kind: the UI says “Dependency change recorded” rather than
+inventing a new/blocked/removed classification. Page counts describe loaded
+observations, not totals; no evaluation, schedule or notification is enabled
+automatically.
+
+Case entries can supersede the latest same-type entry in the same case. Old
+text, author and time remain immutable; case revision and idempotency checks
+reject stale branches. Explicit saved-comparison attachments contain only an
+entry/capture association, with source proof before admission and again on
+read/export. Unavailable source evidence withholds the association. Arbitrary
+files, URLs and browser-supplied source rows are unsupported. Independent review
+found and resolved a receipt-cleanup race that could otherwise skip attachment
+admission proof.
+
+The source transport now supervises a short-lived helper with bounded input,
+response bytes, deadlines, CPU and address space. Explicit loopback TLS trust
+and the hosting instance GUID bind requests and durable cleanup state. Local
+intent IDs are distinct from server-assigned job IDs. Unknown creation responses
+are never guessed or retried, and remain charged to the three-job global quota.
+The helper receives no token in arguments, environment or files. A token-free
+runtime preflight runs before capture availability or job-intent allocation.
+
+Two installed attempts against archive
+`0b751a5eb9a8bf53297292fb9529cf50d8d18d8d8b55e49c2e4fc23c41e9e92c`
+failed qualification: protected capture remained unavailable, and the reordered
+runtime check showed that the emulated Linux/amd64 runtime could not apply the
+256 MiB address-space contract. Inspection also found the embedded Python needs
+its own trusted library directory; the loader-path correction derives that path
+from the running installation rather than inheriting loader settings. The
+memory limit was preserved. These failed attempts do not qualify the new source
+path, and the earlier successful SDK-based capture run below does not qualify
+its replacement.
+
+## Current installed notes and runtime boundary
+
+Archive `432647436a63cf598699e4f8a2c4e5be35870b8ed31419b6b3f777c4f4538d57`
+passed two installed tests on the task-owned Enterprise 10.6.0.5 lab: notes,
+immutable entry revisions, stable retries, stale-branch rejection, sharing,
+revocation and deletion; and unsupported-helper preflight with notes still
+available and no search-job ledger created. This qualifies the negative runtime
+boundary, not successful source capture or installed attachment admission.
+The exact container ID, 67 Python-file hashes, three runtime configuration
+hashes, test hashes and TLS checks are recorded in
+[qualification evidence](FEATURE_QUALIFICATION.json). The final delivery archive
+contains those same runtime/configuration bytes; later changes add UI and
+qualification documentation. The disposable resources and ports were checked
+absent after purge, along with generated credentials and TLS material.
+
+Local checks cover entry revision chains, source-authorized reference admission,
+revocation and retries, receipt disappearance, cross-case draft recovery,
+malformed watch signatures, evidence ranking and cancellation. Independent
+review findings were resolved and rechecked. Astra accepted the reviewed
+synthetic incident, watch and case states at 1440/320 pixels in light/dark;
+screenshots are engineering evidence, not customer research or real-data replay.
+
+Final consolidated checks passed: frontend lint, 125 Vitest files / 1,329 tests,
+194 browser tests with one skipped, 93 case Python tests, 58 release tests, Ruff
+and packaging. An earlier browser run found an ambiguous text locator introduced
+by the attachment entry selector plus two navigation interruptions while source
+edits were still occurring; the locator was scoped to the entry list and the
+whole suite passed with application files stable. Main bundle gzip is 685,331
+of 686,080 bytes; the optional journeys bundle is 31,667 of 32,768 bytes. Neither
+limit was raised.
+
+## Earlier installed qualification with verified TLS
+
+The earlier backend passed three installed checks across two sequential fresh,
 task-owned Enterprise 10.6.0.5 single-head labs against archive
 `21245b2804474d654d504b05a4f98c4db0f1fb3f6a167aec68ce6d8d416302a9`:
 

@@ -267,7 +267,19 @@ class CaseAPI:
                 ),
             )
         if resource == "attachments":
-            raise Forbidden("attachment source unavailable")
+            if set(data) != {"expected_revision", "entry_id", "capture_id"}:
+                raise Forbidden("only saved comparison references are supported")
+            return self._response(
+                200,
+                self.store.attach_capture_reference(
+                    principal,
+                    request_id,
+                    case_id,
+                    data["expected_revision"],
+                    data["entry_id"],
+                    data["capture_id"],
+                ),
+            )
         if set(data) != {"expected_revision", "item"}:
             raise Invalid("invalid data")
         kind = {"entries": "entry", "captures": "capture", "attachments": "attachment"}[

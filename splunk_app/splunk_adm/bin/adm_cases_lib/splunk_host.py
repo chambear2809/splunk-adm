@@ -51,14 +51,19 @@ class SplunkHost:
         native_request=None,
         source_fingerprint=None,
         configuration=None,
+        transport_configuration=None,
     ):
         self.token = token
+        self.hosting_guid = None
         self.request = request or self._request
         self.database_root = database_root
         self.topology = topology or self._topology
         self.native_request = native_request
         self.source_fingerprint = source_fingerprint or self._source_fingerprint
         self.configuration = configuration or self._configuration
+        self.transport_configuration = (
+            transport_configuration or self._transport_configuration
+        )
 
     @staticmethod
     def _configuration():
@@ -94,6 +99,86 @@ class SplunkHost:
             )
             for key in ("mode", "platform", "capture_mode")
         }
+
+    @staticmethod
+    def _transport_configuration():
+        home = Path(os.environ.get("SPLUNK_HOME", ""))
+        if not home.is_absolute():
+            raise HostUnavailable()
+        result = subprocess.run(
+            [
+                str(home / "bin/splunk"),
+                "btool",
+                "--app=splunk_adm",
+                "--user=nobody",
+                "adm_investigations",
+                "list",
+                "capture_transport",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=True,
+        )
+        if len(result.stdout) > 16384:
+            raise HostUnavailable()
+        parsed = configparser.ConfigParser(interpolation=None)
+        parsed.read_string(result.stdout.decode("utf-8"))
+        if set(parsed.sections()) != {"capture_transport"} or set(
+            parsed["capture_transport"]
+        ) != {"management_uri", "ca_file"}:
+            raise HostUnavailable()
+        return dict(parsed["capture_transport"])
+
+    def capture_request(self):
+        # Tests may inject a trusted in-process transport. HTTP requests cannot.
+        if self.native_request is not None:
+            return self.native_request
+        from .transport import SupervisedTransport
+
+        settings = self.transport_configuration()
+        return SupervisedTransport(
+            self.token, settings.get("management_uri"), settings.get("ca_file")
+        )
+
+    def capture_ready(self, config):
+        if config.get("capture_mode") != "reproducible_qualified_v1":
+            return False
+        try:
+            if self.native_request is not None:
+                return True
+            if self.hosting_guid is None:
+                return False
+            request = self.capture_request()
+            if not request.preflight():
+                return False
+            return self.same_instance(request("GET", "/services/server/info", None, 3))
+        except Exception:
+            return False
+
+    def same_instance(self, payload):
+        entries = payload.get("entry") if isinstance(payload, dict) else None
+        content = (
+            entries[0].get("content")
+            if isinstance(entries, list)
+            and len(entries) == 1
+            and isinstance(entries[0], dict)
+            else None
+        )
+        return (
+            self.hosting_guid is not None
+            and isinstance(content, dict)
+            and content.get("guid") == self.hosting_guid
+        )
+
+    def transport_hash(self, requester):
+        if self.native_request is not None:
+            return hashlib.sha256(b"trusted injected test transport").hexdigest()
+        if self.hosting_guid is None:
+            raise HostUnavailable()
+        return hashlib.sha256(
+            (requester.trust_digest + "\0" + self.hosting_guid).encode()
+        ).hexdigest()
 
     @staticmethod
     def _topology():
@@ -162,6 +247,15 @@ class SplunkHost:
             or server.get("activeLicenseGroup") not in ("Trial", "Enterprise")
         ):
             raise HostUnavailable()
+        guid = server.get("guid")
+        self.hosting_guid = (
+            guid
+            if isinstance(guid, str)
+            and 0 < len(guid) <= 128
+            and guid == guid.strip()
+            and all(32 < ord(c) < 127 for c in guid)
+            else None
+        )
         cluster = self.topology()
         if cluster.get("disabled") not in (True, 1, "1", "true"):
             raise HostUnavailable()
@@ -185,7 +279,11 @@ class SplunkHost:
             digest.update(str(path.relative_to(app)).encode())
             digest.update(path.read_bytes())
         for directory in ("default", "local"):
-            for name in ("adm_identity.conf", "commands.conf"):
+            for name in (
+                "adm_identity.conf",
+                "commands.conf",
+                "adm_investigations.conf",
+            ):
                 path = app / directory / name
                 digest.update(f"{directory}/{name}".encode())
                 if path.is_symlink():
@@ -238,21 +336,62 @@ class SplunkHost:
                 return False
             return True
 
-        if config.get("capture_mode", "disabled") == "disabled":
+        if not self.capture_ready(config):
             # Legacy protected items are redacted by the store; notes and owner
             # revocation/deletion remain usable without source permission.
             return CaseStore(database, entitled)
         from .native import NativeComparisonSearch
+        from .job_ledger import JobLedger
         from .source import ComparisonSource
 
-        runner = NativeComparisonSearch(self.token, request=self.native_request)
+        try:
+            requester = self.capture_request()
+            runner = NativeComparisonSearch(
+                self.token,
+                request=requester,
+                ledger=JobLedger(database.with_name("capture_jobs.sqlite")),
+                transport_hash=self.transport_hash(requester),
+            )
+        except Exception:
+            # A source-only failure must not strand otherwise permitted notes.
+            return CaseStore(database, entitled)
 
         def run(caller, query, start, end):
-            if caller != principal or self.principal() != principal:
+            if self.native_request is not None:
+                current = self.principal()
+            else:
+                if not self.same_instance(runner._call("GET", "/services/server/info")):
+                    raise HostUnavailable()
+                proof = runner._call("GET", "/services/authentication/current-context")
+                entries = proof.get("entry")
+                context = (
+                    entries[0].get("content", {})
+                    if isinstance(entries, list)
+                    and len(entries) == 1
+                    and isinstance(entries[0], dict)
+                    else {}
+                )
+                current = (
+                    context.get("username")
+                    if CAPABILITY in context.get("capabilities", [])
+                    else None
+                )
+            if caller != principal or current != principal:
                 raise Forbidden("Investigation access denied")
             return runner.run(caller, query, start, end)
 
-        source = ComparisonSource(run, self.source_fingerprint)
+        def fingerprint():
+            base = self.source_fingerprint()
+            if self.native_request is not None:
+                return base
+            current = self.capture_request()
+            if current.trust_digest != requester.trust_digest:
+                raise HostUnavailable()
+            return hashlib.sha256(
+                (base + ":" + self.transport_hash(current)).encode()
+            ).hexdigest()
+
+        source = ComparisonSource(run, fingerprint)
         return CaseStore(
             database,
             entitled,
@@ -281,16 +420,14 @@ def handle(request, host):
             except HostUnavailable:
                 config = {}
                 available = False
+            evidence = available and host.capture_ready(config)
             return (
                 200,
                 {
                     "available": available,
-                    "evidenceWrites": available
-                    and config.get("capture_mode") == "reproducible_qualified_v1",
+                    "evidenceWrites": evidence,
                     "mode": (
-                        "notes_and_reproducible_evidence"
-                        if config.get("capture_mode") == "reproducible_qualified_v1"
-                        else "notes_only"
+                        "notes_and_reproducible_evidence" if evidence else "notes_only"
                     ),
                     "qualified": False,
                 },

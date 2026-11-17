@@ -7,10 +7,12 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
+from adm_cases_lib.store import SourceUnavailable
 from adm_cases_lib import (
     CaseStore,
     Conflict,
@@ -47,6 +49,168 @@ class CasesTest(unittest.TestCase):
             "entry",
             {"type": "note", "text": "Evidence"},
         )
+
+    def test_same_case_evidence_references_require_source_and_recheck_all_responses(
+        self,
+    ):
+        denied = set()
+        self.store.capture_resolver = lambda principal, ref: {
+            "captured_at": "2026-01-01T03:00:00Z",
+            "data": {"value": ref},
+            "source": {"dataset": ref},
+        }
+
+        def source(principal, kind, item):
+            # Source work must never hold a SQLite writer lock.
+            with closing(self.store._connect()) as db:
+                db.execute("BEGIN IMMEDIATE")
+                db.rollback()
+            return principal not in denied
+
+        self.store.source_entitlement = source
+        note = self.append()["entries"][0]
+        captured = self.store.append_capture("alice", "capture-ref", self.id, 2, "one")
+        capture_id = captured["capture_ids"][0]
+        result = self.store.attach_capture_reference(
+            "alice", "attach", self.id, 3, note["id"], capture_id
+        )
+        self.assertEqual(result["attachments"][0]["capture_id"], capture_id)
+        self.assertNotIn("source", result["attachments"][0])
+        self.assertEqual(
+            result,
+            self.store.attach_capture_reference(
+                "alice", "attach", self.id, 3, note["id"], capture_id
+            ),
+        )
+        with self.assertRaises(Conflict):
+            self.store.attach_capture_reference(
+                "alice", "duplicate", self.id, 4, note["id"], capture_id
+            )
+        self.assertEqual(self.store.list_cases("alice")["items"][0]["attachments"], [])
+        self.store.share("alice", "share-ref", self.id, 4, "bob", True)
+        denied.add("bob")
+        with self.assertRaises(SourceUnavailable):
+            self.store.attach_capture_reference(
+                "bob", "denied-attach", self.id, 5, note["id"], capture_id
+            )
+        self.assertEqual(self.store.export("bob", self.id)["attachments"], [])
+        denied.add("alice")
+        for document in (
+            self.store.get("alice", self.id),
+            self.store.export("alice", self.id),
+            self.store.attach_capture_reference(
+                "alice", "attach", self.id, 3, note["id"], capture_id
+            ),
+        ):
+            self.assertEqual(document["attachments"], [])
+            self.assertEqual(document["redactions"]["attachments"], 1)
+        self.assertEqual(
+            self.store.get("alice", self.id)["entries"][0]["text"], "Evidence"
+        )
+        denied.clear()
+        with self.assertRaises(Invalid):
+            self.store.attach_capture_reference(
+                "alice", "missing-entry", self.id, 5, "another-case-entry", capture_id
+            )
+        other = self.store.create("alice", "other-case", self.input)
+        with self.assertRaises(Invalid):
+            self.store.attach_capture_reference(
+                "alice", "foreign-case", other["id"], 1, note["id"], capture_id
+            )
+        self.assertEqual(self.store.get("alice", self.id)["revision"], 5)
+
+    def test_attachment_retry_receipt_disappearance_never_bypasses_source_proof(self):
+        self.store.capture_resolver = lambda _p, ref: {
+            "captured_at": "2026-01-01T03:00:00Z",
+            "data": {"value": ref},
+            "source": {"dataset": ref},
+        }
+        self.store.source_entitlement = lambda *_: True
+        noted = self.append()
+        captured = self.store.append_capture("alice", "saved", self.id, 2, "one")
+        entry_id, capture_id = noted["entries"][0]["id"], captured["capture_ids"][0]
+        # An existing same-case key skips source work only to replay its receipt.
+        self.store.source_entitlement = lambda *_: False
+        original = self.store._mutation
+
+        def vanished(*args, **kwargs):
+            with closing(self.store._connect()) as db:
+                db.execute(
+                    "DELETE FROM requests WHERE principal=? AND request_id=?",
+                    ("alice", "saved"),
+                )
+            return original(*args, **kwargs)
+
+        with mock.patch.object(self.store, "_mutation", side_effect=vanished):
+            with self.assertRaises(Conflict):
+                self.store.attach_capture_reference(
+                    "alice", "saved", self.id, 3, entry_id, capture_id
+                )
+        document = self.store.get("alice", self.id)
+        self.assertEqual(document["revision"], 3)
+        self.assertEqual(document["attachments"], [])
+        # Keys from other cases cannot opt out of source proof either.
+        self.store.create("alice", "other-key", self.input)
+        with self.assertRaises(Conflict):
+            self.store.attach_capture_reference(
+                "alice", "other-key", self.id, 3, entry_id, capture_id
+            )
+
+    def test_entry_revisions_preserve_history_and_reject_branching(self):
+        original = self.append()["entries"][0]
+        revised = {
+            "type": "note",
+            "text": "Revised evidence",
+            "supersedes_entry_id": original["id"],
+        }
+        result = self.store.append("alice", "revise", self.id, 2, "entry", revised)
+        self.assertEqual(result["entries"][0], original)
+        self.assertEqual(result["entries"][1]["supersedes_entry_id"], original["id"])
+        self.assertEqual(result["entries"][1]["revision"], 3)
+        self.assertEqual(
+            self.store.append("alice", "revise", self.id, 2, "entry", revised), result
+        )
+        with self.assertRaises(Conflict):
+            self.store.append("alice", "branch", self.id, 3, "entry", revised)
+        for target, entry_type in (
+            (original["id"], "question"),
+            ("00000000-0000-4000-8000-000000000000", "note"),
+            ([], "note"),
+        ):
+            with self.subTest(target=target), self.assertRaises(Invalid):
+                self.store.append(
+                    "alice",
+                    "invalid",
+                    self.id,
+                    3,
+                    "entry",
+                    {
+                        "type": entry_type,
+                        "text": "other",
+                        "supersedes_entry_id": target,
+                    },
+                )
+        self.store.share("alice", "grant-reviser", self.id, 3, "bob", True)
+        updated = self.store.append(
+            "bob",
+            "bob-revision",
+            self.id,
+            4,
+            "entry",
+            {**revised, "supersedes_entry_id": result["entries"][1]["id"]},
+        )
+        self.assertEqual(updated["entries"][-1]["author"], "bob")
+        self.store.share("alice", "revoke-reviser", self.id, 5, "bob", False)
+        with self.assertRaises(Forbidden):
+            self.store.append(
+                "bob",
+                "bob-retry-denied",
+                self.id,
+                6,
+                "entry",
+                {**revised, "supersedes_entry_id": updated["entries"][-1]["id"]},
+            )
+        self.assertEqual(len(self.store.get("alice", self.id)["entries"]), 3)
 
     def test_private_share_revoke_and_current_entitlement(self):
         with self.assertRaises(Forbidden):
