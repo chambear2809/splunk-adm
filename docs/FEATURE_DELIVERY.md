@@ -552,3 +552,42 @@ controller evidence only: it does not associate the historical Cloud trace with
 that object or prove application ownership, capacity or readiness. The APIC
 session expired from inactivity, so no authenticated APIC validation is claimed.
 Private identifiers remain outside Git.
+
+
+## Installed 0.9.1 Cloud validation
+
+Cloud Web approved the exact 0.9.1 archive with AppInspect 4.4.0 private_victoria:
+140 successes, zero failures/errors, six warnings, 100 not-applicable and one
+skipped check. The report response identifies the frozen archive SHA-256.
+Installation succeeded on the logged-in search-head target; the API subsequently
+reported version 0.9.1. No whole-stack propagation or platform restart behavior
+is claimed. No manual restart or role grant was requested.
+
+The post-update paginated capture reached all 19 metadata sections and 15
+collections. All 24 saved searches retain their full semantic configuration and
+ACLs; all 15 collection schemas and ACLs match. Two macros were added and three
+changed. The affected definitions match the frozen candidate after continuation
+and whitespace normalization, but historical layered provenance is unavailable:
+the prior definitions cannot be identified as customized overrides or older
+shipped defaults. The protected pre-update values remain available outside Git.
+There were no missing captured KV keys, eight added rows and 19 changed rows.
+These live, paginated observations do not prove atomicity, cause, continuous
+consistency or successful restore. New persistence/execution gates remain off.
+
+The serving page's CSS matches the package exactly. Its JavaScript contains a
+111-byte Splunk localization preamble followed by the exact packaged payload.
+Explore-to-Device navigation preserves the explicit window; changing the picker
+preset uses the new absolute bounds despite an older URL and passes those same
+bounds to Impact. The known five-minute Device view again displayed 1,160 flows,
+39 peers, 154 rows and 42.8 MB. These displayed metrics do not establish source
+completeness or capacity. Catalog identity remains incomplete. Case and baseline
+capability routes return 403 to the API identity; grants were not expanded, and
+Cloud persistence is still unsupported.
+
+Installed testing also found additional UI work: valid Advanced previews cannot
+be applied without the toolkit's explicit null success value, the Cloud body's
+960px minimum width clips an 850px viewport, and the selected absolute window
+needs a visible timezone label. These are follow-up fixes, not behaviors
+qualified by the 0.9.1 installation. The Cloud Control header also logs its own
+module/navigation errors; those are recorded separately from Atlas's source
+identity failure.
