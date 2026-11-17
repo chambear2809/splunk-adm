@@ -1,4 +1,9 @@
-import { eligibility, type Capture, type WatchDefinition } from "./model";
+import {
+  eligibility,
+  type Capture,
+  type Finding,
+  type WatchDefinition,
+} from "./model";
 
 export type CaptureReference = { reference: string; capture: Capture };
 export interface DependencySource {
@@ -33,7 +38,10 @@ export type Occurrence = {
   signature: string;
   window: { start: number; end: number };
   observedAt: number;
-};
+} & (
+  | { changeKinds: Finding["kind"][]; baselineVersion: number }
+  | { changeKinds?: never; baselineVersion?: never }
+);
 export type BaselineRecord = BaselineMetadata & { capture: Capture };
 export interface BaselineRepository {
   list(

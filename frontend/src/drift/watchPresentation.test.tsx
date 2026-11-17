@@ -120,3 +120,31 @@ describe("watch occurrence presentation", () => {
     expect(singular).toContain("met");
   });
 });
+
+it("shows server-provided change types and the pinned baseline without inferring kinds", () => {
+  const dual = renderToStaticMarkup(
+    <WatchDependency
+      signature={JSON.stringify(tuple())}
+      changeKinds={["newly_blocked", "lost_redundancy"]}
+      baselineVersion={2}
+    />,
+  );
+  expect(dual).toContain("Newly reported blocked");
+  expect(dual).toContain("Fewer observed failure domains");
+  expect(dual).toContain("Compared with baseline version 2");
+  expect(dual).toContain("Source and relationship details");
+  const missing = renderToStaticMarkup(
+    <WatchDependency
+      signature={JSON.stringify(tuple())}
+      changeKinds={["not_observed"]}
+      baselineVersion={1}
+    />,
+  );
+  expect(missing).toContain("Not observed in this window");
+  expect(missing).not.toContain("removed");
+  const legacy = renderToStaticMarkup(
+    <WatchDependency signature={JSON.stringify(tuple())} />,
+  );
+  expect(legacy).toContain("Dependency change recorded:");
+  expect(legacy).not.toContain("Compared with baseline version");
+});

@@ -235,6 +235,67 @@ def compatible(a, b):
     )
 
 
+def _dependency_prefix(dep):
+    return tuple(
+        dep[key] for key in ("source", "authority", "scope", "relation", "direction")
+    )
+
+
+def _prepare_baseline(baseline):
+    before = {signature(dep): dep for dep in baseline["dependencies"]}
+    destinations = {
+        (_dependency_prefix(dep), dep["destination"]) for dep in before.values()
+    }
+    ports = {
+        (_dependency_prefix(dep), dep["protocol"], dep["port"])
+        for dep in before.values()
+    }
+    return before, destinations, ports
+
+
+def compare_findings(baseline, current, *, prepared=None, selected=None):
+    """Return TS-compatible findings; optionally restrict output to selected signatures."""
+    if not compatible(baseline, current):
+        raise Invalid("incompatible evidence")
+    before, destinations, ports = (
+        prepared if prepared is not None else _prepare_baseline(baseline)
+    )
+    after = {}
+    for dep in current["dependencies"]:
+        key = signature(dep)
+        if selected is None or key in selected:
+            after[key] = dep
+    findings = {}
+    for key, dep in after.items():
+        old = before.get(key)
+        if old is None:
+            related = (_dependency_prefix(dep), dep["destination"]) in destinations or (
+                _dependency_prefix(dep),
+                dep["protocol"],
+                dep["port"],
+            ) in ports
+            findings[key] = [
+                "changed_dependency" if related else "new_destination_port"
+            ]
+        else:
+            kinds = []
+            if old["blocked"] is False and dep["blocked"] is True:
+                kinds.append("newly_blocked")
+            if (
+                "redundancyDomains" in old
+                and "redundancyDomains" in dep
+                and len(old["redundancyDomains"]) > len(dep["redundancyDomains"])
+            ):
+                kinds.append("lost_redundancy")
+            if kinds:
+                findings[key] = kinds
+    candidate_keys = before.keys() if selected is None else selected
+    for key in candidate_keys:
+        if key in before and key not in after:
+            findings[key] = ["not_observed"]
+    return findings
+
+
 class BaselineStore:
     """Transactional ACL-protected versioned captures and passive watch records.
 
@@ -934,19 +995,7 @@ class BaselineStore:
                     (baseline_id, watch[0]),
                 ).fetchone()[0]
             )
-            if not compatible(baseline, capture):
-                raise Invalid("incompatible evidence")
-            before = {signature(d): d for d in baseline["dependencies"]}
-            after = {signature(d): d for d in capture["dependencies"]}
-            old, new = before.get(signature_value), after.get(signature_value)
-            changed = (old is None) != (new is None)
-            if old is not None and new is not None:
-                changed = (old["blocked"] is False and new["blocked"] is True) or (
-                    "redundancyDomains" in old
-                    and "redundancyDomains" in new
-                    and len(old["redundancyDomains"]) > len(new["redundancyDomains"])
-                )
-            if not changed:
+            if signature_value not in compare_findings(baseline, capture):
                 raise Invalid("signature does not identify a finding")
             window = capture["coverage"]["returned"]
             if observed_at < window["end"]:
@@ -1086,32 +1135,12 @@ class BaselineStore:
         baseline = self.get(principal, baseline_id, baseline_version)["capture"]
         self._authorize_proofs(principal, proofs)
         capture = self._prepare_capture(principal, reference)
-        if not compatible(baseline, capture):
-            raise Invalid("incompatible evidence")
+        findings = sorted(compare_findings(baseline, capture))
         now = self.clock()
         if not _number(now) or now < 0:
             raise RuntimeError("trusted clock unavailable")
         if now < capture["coverage"]["knowledgeHorizon"]:
             raise Invalid("evidence horizon is in the future")
-        before = {signature(d): d for d in baseline["dependencies"]}
-        after = {signature(d): d for d in capture["dependencies"]}
-        findings = []
-        for sig in sorted(before.keys() | after.keys()):
-            old, new = before.get(sig), after.get(sig)
-            if (old is None) != (new is None) or (
-                old is not None
-                and new is not None
-                and (
-                    (old["blocked"] is False and new["blocked"] is True)
-                    or (
-                        "redundancyDomains" in old
-                        and "redundancyDomains" in new
-                        and len(old["redundancyDomains"])
-                        > len(new["redundancyDomains"])
-                    )
-                )
-            ):
-                findings.append(sig)
         window = capture["coverage"]["returned"]
 
         def apply(db, row):
@@ -1241,6 +1270,21 @@ class BaselineStore:
                 "next": items[-1]["id"] if len(rows) > limit else None,
             }
 
+    def _page_evidence(self, db, baseline_id, keys):
+        """Load each page evidence payload once, irrespective of occurrence count."""
+        result = {}
+        for key in keys:
+            if key is None:
+                raise Forbidden("history proof unavailable")
+            proof = db.execute(
+                "SELECT reference,capture FROM evidence WHERE baseline_id=? AND evidence_key=?",
+                (baseline_id, key),
+            ).fetchone()
+            if not proof or any(value is None for value in proof):
+                raise Forbidden("history proof unavailable")
+            result[key] = proof
+        return result
+
     def occurrences(self, principal, baseline_id, watch_id, *, after=0, limit=50):
         _text(watch_id, "watch id", 128)
         if (
@@ -1259,26 +1303,53 @@ class BaselineStore:
             if not watch:
                 raise NotFound("watch not found")
             rows = db.execute(
-                "SELECT o.seq,o.signature,o.start,o.end,o.observed,e.reference,e.capture FROM occurrences o LEFT JOIN evidence e ON e.baseline_id=o.baseline_id AND e.evidence_key=o.evidence_key WHERE o.baseline_id=? AND o.watch_id=? AND o.seq>? ORDER BY o.seq LIMIT ?",
+                "SELECT seq,signature,start,end,observed,evidence_key FROM occurrences WHERE baseline_id=? AND watch_id=? AND seq>? ORDER BY seq LIMIT ?",
                 (baseline_id, watch_id, after, min(limit + 1, self.MAX_HISTORY_PROOFS)),
             ).fetchall()
-        self.get(principal, baseline_id, watch[0])
-        if any(r[5] is None or r[6] is None for r in rows):
-            raise Forbidden("history proof unavailable")
-        self._authorize_proofs(principal, {(r[5], r[6]) for r in rows})
-        self._recheck_revision(principal, baseline_id, row[2])
+            proofs = self._page_evidence(db, baseline_id, {r[5] for r in rows})
+        baseline = self.get(principal, baseline_id, watch[0])["capture"]
+        self._authorize_proofs(principal, proofs.values())
+        # Classify only retained proof, including lookahead. A legacy or corrupt
+        # occurrence that no longer represents a finding must fail closed.
+        classifications = {}
+        try:
+            validate_capture(baseline, self.max_dependencies, self.max_capture_bytes)
+            prepared = _prepare_baseline(baseline)
+            requested = {}
+            for r in rows:
+                requested.setdefault(r[5], set()).add(r[1])
+            for evidence_key, selected in requested.items():
+                evidence = json.loads(proofs[evidence_key][1])
+                validate_capture(
+                    evidence, self.max_dependencies, self.max_capture_bytes
+                )
+                classifications[evidence_key] = (
+                    evidence["coverage"]["returned"],
+                    compare_findings(
+                        baseline, evidence, prepared=prepared, selected=selected
+                    ),
+                )
+        except (Invalid, QuotaExceeded, KeyError, TypeError, ValueError) as exc:
+            raise Forbidden("history proof unavailable") from exc
+        for r in rows:
+            window, findings = classifications[r[5]]
+            if window != {"start": r[2], "end": r[3]} or r[1] not in findings:
+                raise Forbidden("history proof unavailable")
         items = [
             {
                 "seq": r[0],
                 "signature": r[1],
                 "window": {"start": r[2], "end": r[3]},
                 "observedAt": r[4],
+                "baselineVersion": watch[0],
+                "changeKinds": classifications[r[5]][1][r[1]],
             }
             for r in rows[:limit]
         ]
         has_more = len(rows) > limit or (
             limit == self.MAX_HISTORY_PROOFS and len(rows) == limit
         )
+        self._recheck_revision(principal, baseline_id, row[2])
         return {"items": items, "next": items[-1]["seq"] if has_more else None}
 
     def evaluate(self, principal, baseline_id, watch_id, signature_value, now):

@@ -138,9 +138,10 @@ class BaselineAPITests(unittest.TestCase):
         self.assertEqual(
             self.call("POST", path + "/watches/w/occurrences", data, key="occ")[0], 200
         )
-        self.assertEqual(
-            len(self.call("GET", path + "/watches/w/occurrences")[1]["items"]), 1
-        )
+        occurrences = self.call("GET", path + "/watches/w/occurrences")[1]["items"]
+        self.assertEqual(len(occurrences), 1)
+        self.assertEqual(occurrences[0]["baselineVersion"], 2)
+        self.assertEqual(occurrences[0]["changeKinds"], ["newly_blocked"])
         self.assertTrue(
             self.call(
                 "GET",

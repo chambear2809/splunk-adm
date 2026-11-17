@@ -68,12 +68,12 @@ separate, and failed comparisons clear prior results. Supporting observations
 are capped and progressively disclosed. These remain investigation leads, not
 causal or probability claims.
 
-Manual watches decode only the exact versioned dependency identity tuple and
-show authorized recurrence status. Their stored occurrence contract does not
-contain a change kind: the UI says “Dependency change recorded” rather than
-inventing a new/blocked/removed classification. Page counts describe loaded
-observations, not totals; no evaluation, schedule or notification is enabled
-automatically.
+Manual watches decode the exact versioned dependency identity tuple and show
+authorized recurrence status. The later read-derived classification increment
+below adds server-derived change kinds from retained captures. Older responses
+remain generic; the browser never invents a new/blocked/removed classification
+from the current graph. Page counts describe loaded observations, not totals;
+no evaluation, schedule or notification is enabled automatically.
 
 Case entries can supersede the latest same-type entry in the same case. Old
 text, author and time remain immutable; case revision and idempotency checks
@@ -113,9 +113,9 @@ available and no search-job ledger created. This qualifies the negative runtime
 boundary, not successful source capture or installed attachment admission.
 The exact container ID, 67 Python-file hashes, three runtime configuration
 hashes, test hashes and TLS checks are recorded in
-[qualification evidence](FEATURE_QUALIFICATION.json). The final delivery archive
-contains those same runtime/configuration bytes; later changes add UI and
-qualification documentation. The disposable resources and ports were checked
+[qualification evidence](FEATURE_QUALIFICATION.json). Those hashes pin that earlier archive's runtime/configuration bytes. The
+later baseline read-classification change is separately recorded; that
+installed run does not qualify every byte of the current package. The disposable resources and ports were checked
 absent after purge, along with generated credentials and TLS material.
 
 Local checks cover entry revision chains, source-authorized reference admission,
@@ -170,6 +170,37 @@ themes; independent review found no remaining issues. Gzip bytes are 685,364 for
 the main bundle (limit 686,080) and 31,667 for the optional journeys bundle
 (limit 32,768). The qualified scope remains bounded source normalization and
 rendering plus synthetic offline SQLite-copy behavior.
+
+## Classified watch observations
+
+Occurrence pages now show server-derived change kinds and the watch's pinned
+baseline version. The server compares authorized retained snapshots and applies
+the same rules as the existing comparison model; it does not infer a change
+from the current graph. Newly observed/related dependencies, explicitly newly
+blocked dependencies, fewer observed failure domains and “not observed” remain
+distinct. A dependency can have two labels in one window, but recurrence still
+counts that window once. The status explains that counts span all qualifying
+change types. Missing/incompatible evidence or an impossible classification
+fails closed; legacy responses without classification remain generic.
+
+Independent review found and resolved a page-by-baseline memory expansion:
+reads now load each distinct capture once, prepare baseline indexes once and
+derive only requested signature labels per comparison, including lookahead. Tests exercise a 10,000-dependency
+baseline and 100 distinct captures, pinned versions, source denial, concurrent
+access/revision changes, classification boundaries and unchanged retry receipts.
+No schema, provider, collection, schedule, notification or eligibility gate was
+changed. The source-unavailable default and positive installed baseline gaps
+remain in force. These labels have local synthetic store/API and browser
+qualification; the modified baseline runtime has not received positive
+installed source qualification.
+
+This increment passed 32 focused store/API tests, 42 combined baseline/host/
+SQLite-restore tests, full frontend lint, 1,331 Vitest tests and the full browser
+suite (198 passed, one skipped). Ruff and package/release checks passed. Main
+bundle gzip is 685,367 / 686,080 bytes; optional journeys is 31,922 / 32,768.
+The earlier installed archive's baseline store fingerprint is superseded by
+this locally verified implementation; its installed results are not extended
+to these new source-derived labels.
 
 ## Earlier installed qualification with verified TLS
 

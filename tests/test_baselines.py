@@ -6,12 +6,15 @@ import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from unittest import mock
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
+import adm_baselines_lib.store as baseline_module  # noqa: E402
 from adm_baselines_lib.store import (  # noqa: E402
     BaselineStore,
+    compare_findings,
     Conflict,
     Forbidden,
     Invalid,
@@ -623,6 +626,242 @@ class BaselineTests(unittest.TestCase):
         with self.assertRaises(Forbidden):
             self.store.evaluate_window("alice", "e3", ident, 5, "w", 1, "h1")
         self.assertEqual(self.store.get("alice", ident)["revision"], 5)
+
+    def test_derived_finding_kinds_match_comparison_semantics(self):
+        before = capture()
+        base = before["dependencies"][0]
+        base["redundancyDomains"] = ["a", "b"]
+        after = capture(10)
+        same = after["dependencies"][0]
+        same.update(blocked=True, redundancyDomains=["a"])
+        same_sig = signature(same)
+        changed = {**same, "port": 8443}
+        related_destination = {**same, "destination": "different"}
+        new = {**same, "source": "other", "destination": "different"}
+        after["dependencies"] += [changed, related_destination, new]
+        findings = compare_findings(before, after)
+        self.assertEqual(findings[same_sig], ["newly_blocked", "lost_redundancy"])
+        self.assertEqual(findings[signature(changed)], ["changed_dependency"])
+        self.assertEqual(
+            findings[signature(related_destination)], ["changed_dependency"]
+        )
+        self.assertEqual(findings[signature(new)], ["new_destination_port"])
+        after["dependencies"] = []
+        self.assertEqual(compare_findings(before, after)[same_sig], ["not_observed"])
+        after["dependencies"] = [
+            {**same, "blocked": None, "redundancyDomains": ["a", "b"]}
+        ]
+        self.assertEqual(compare_findings(before, after), {})
+        after["dependencies"][0]["redundancyDomains"] = ["a", "different"]
+        self.assertEqual(compare_findings(before, after), {})
+        after["coverage"]["configRevision"] = "other"
+        with self.assertRaises(Invalid):
+            compare_findings(before, after)
+
+    def test_occurrences_classify_pinned_version_and_recheck_acl(self):
+        self.sources["a"]["dependencies"][0]["redundancyDomains"] = ["a", "b"]
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
+        )
+        self.sources["b"]["dependencies"][0].update(
+            blocked=True, redundancyDomains=["a"]
+        )
+        sig = signature(self.sources["b"]["dependencies"][0])
+        self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b")
+        self.store.version("alice", "new-version", ident, 3, "b")
+        item = self.store.occurrences("alice", ident, "w")["items"][0]
+        self.assertEqual(item["baselineVersion"], 1)
+        self.assertEqual(item["changeKinds"], ["newly_blocked", "lost_redundancy"])
+        self.source_denied.add(("alice", "a"))
+        with self.assertRaises(Forbidden):
+            self.store.occurrences("alice", ident, "w")
+        self.source_denied.clear()
+        old_source = self.store.source_entitlement
+
+        def concurrent(principal, ref, evidence):
+            if ref == "b":
+                self.store.share("alice", "concurrent", ident, 4, "bob", True)
+            return old_source(principal, ref, evidence)
+
+        self.store.source_entitlement = concurrent
+        with self.assertRaises(Conflict):
+            self.store.occurrences("alice", ident, "w")
+
+    def test_occurrence_classification_rejects_incompatible_and_nonfinding_history(
+        self,
+    ):
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
+        )
+        self.sources["b"]["dependencies"][0]["blocked"] = True
+        sig = signature(self.sources["b"]["dependencies"][0])
+        self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b")
+        for alter in ("scope", "missing-finding"):
+            evidence = copy.deepcopy(self.sources["b"])
+            if alter == "scope":
+                evidence["coverage"]["configRevision"] = "other"
+            else:
+                evidence["dependencies"][0]["blocked"] = False
+            with sqlite3.connect(self.store.path) as db:
+                db.execute(
+                    "UPDATE evidence SET capture=? WHERE baseline_id=? AND reference=?",
+                    (json.dumps(evidence), ident, json.dumps("b")),
+                )
+            with self.subTest(alter=alter), self.assertRaises(Forbidden):
+                self.store.occurrences("alice", ident, "w")
+        self.assertEqual(
+            self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b"),
+            {"id": ident, "revision": 3, "resultWithheld": True},
+        )
+
+    def test_large_baseline_page_classifies_only_requested_signatures(self):
+        base = capture()
+        template = base["dependencies"][0]
+        base["dependencies"] = [
+            {**template, "destination": f"endpoint-{i}"} for i in range(10000)
+        ]
+        self.sources["a"] = base
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "expectedWindows": [], "cooldownSeconds": 0},
+        )
+        with sqlite3.connect(self.store.path) as db:
+            for i in range(100):
+                evidence = capture(10 * (i + 1))
+                evidence["dependencies"] = []
+                reference = json.dumps("history-" + str(i))
+                evidence_json = json.dumps(
+                    evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                )
+                key = self.store._store_evidence(db, ident, reference, evidence_json)
+                dep_sig = signature(base["dependencies"][i])
+                db.execute(
+                    "INSERT INTO occurrences(baseline_id,watch_id,signature,start,end,observed,evidence_key) VALUES (?,?,?,?,?,?,?)",
+                    (
+                        ident,
+                        "w",
+                        dep_sig,
+                        evidence["coverage"]["returned"]["start"],
+                        evidence["coverage"]["returned"]["end"],
+                        evidence["coverage"]["knowledgeHorizon"],
+                        key,
+                    ),
+                )
+        original = baseline_module.compare_findings
+        result_sizes = []
+
+        def checked(*args, **kwargs):
+            result = original(*args, **kwargs)
+            result_sizes.append((len(result), len(kwargs["selected"])))
+            return result
+
+        with (
+            mock.patch.object(
+                baseline_module,
+                "_prepare_baseline",
+                wraps=baseline_module._prepare_baseline,
+            ) as prepare,
+            mock.patch.object(baseline_module, "compare_findings", side_effect=checked),
+        ):
+            page = self.store.occurrences("alice", ident, "w", limit=99)
+        self.assertEqual(prepare.call_count, 1)
+        self.assertEqual(result_sizes, [(1, 1)] * 100)
+        self.assertEqual(len(page["items"]), 99)
+        self.assertIsNotNone(page["next"])
+        self.assertTrue(
+            all(item["changeKinds"] == ["not_observed"] for item in page["items"])
+        )
+
+    def test_shared_large_page_capture_loaded_once_for_lookahead(self):
+        base = capture()
+        template = base["dependencies"][0]
+        base["dependencies"] = [
+            {**template, "destination": f"endpoint-{i}"} for i in range(100)
+        ]
+        self.sources["a"] = base
+        evidence = capture(10)
+        evidence["dependencies"] = [
+            {**template, "destination": f"endpoint-{i}", "blocked": True}
+            for i in range(5000)
+        ]
+        self.sources["b"] = evidence
+        ident = self.create()["id"]
+        self.store.set_watch(
+            "alice",
+            "watch",
+            ident,
+            1,
+            {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
+        )
+        with sqlite3.connect(self.store.path) as db:
+            key = self.store._store_evidence(
+                db,
+                ident,
+                json.dumps("b"),
+                json.dumps(
+                    evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+                ),
+            )
+            for dependency in base["dependencies"]:
+                db.execute(
+                    "INSERT INTO occurrences(baseline_id,watch_id,signature,start,end,observed,evidence_key) VALUES (?,?,?,?,?,?,?)",
+                    (ident, "w", signature(dependency), 10, 20, 22, key),
+                )
+        queries = []
+        connect = self.store._connect
+
+        def traced_connection():
+            db = connect()
+            db.set_trace_callback(queries.append)
+            return db
+
+        with (
+            mock.patch.object(self.store, "_connect", side_effect=traced_connection),
+            mock.patch.object(
+                self.store, "_page_evidence", wraps=self.store._page_evidence
+            ) as load,
+        ):
+            page = self.store.occurrences("alice", ident, "w", limit=99)
+        self.assertEqual(len(page["items"]), 99)
+        self.assertIsNotNone(page["next"])
+        self.assertEqual(load.call_count, 1)
+        self.assertEqual(load.call_args.args[2], {key})
+        page_reads = [
+            query
+            for query in queries
+            if query.startswith(
+                "SELECT seq,signature,start,end,observed,evidence_key FROM occurrences"
+            )
+        ]
+        evidence_reads = [
+            query
+            for query in queries
+            if query.startswith(
+                "SELECT reference,capture FROM evidence WHERE baseline_id="
+            )
+        ]
+        self.assertEqual(len(page_reads), 1)
+        self.assertEqual(len(evidence_reads), 1)
+        self.assertTrue(
+            all(item["changeKinds"] == ["newly_blocked"] for item in page["items"])
+        )
+        self.source_denied.add(("alice", "b"))
+        with self.assertRaises(Forbidden):
+            self.store.occurrences("alice", ident, "w", limit=99)
 
     def test_inline_evidence_migration(self):
         ident = self.create()["id"]
