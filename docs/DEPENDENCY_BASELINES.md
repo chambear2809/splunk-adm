@@ -160,6 +160,13 @@ real-source qualification.
 
 ## Upgrade and rollback
 
+The separate [watch execution contract](DEPENDENCY_WATCH_EXECUTION.md) adds a
+disabled administrator/owner-only explicit-window action, immutable bindings
+and durable uncertainty tracking. No complete source provider, automatic schedule
+or administrator provisioning UI is shipped. Synthetic local execution tests do
+not qualify installed scheduling. Its private `watch_runs.sqlite` must be retained
+with the baseline database; disabling and re-enabling never clears unknown work.
+
 The engine migrates earlier local inline captures into a deduplicated evidence
 table transactionally. Missing legacy source references remain inaccessible;
 the migration does not infer authorization. Tests cover preservation and quota

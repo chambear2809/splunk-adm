@@ -82,9 +82,17 @@ CASE_EXPOSURES = {
 BASELINE_RUNTIME_FILES = frozenset(
     {
         "splunk_adm/bin/adm_baselines.py",
+        "splunk_adm/bin/adm_dependency_watch.py",
         *(
             f"splunk_adm/bin/adm_baselines_lib/{name}.py"
-            for name in ("__init__", "api", "store", "splunk_host")
+            for name in (
+                "__init__",
+                "api",
+                "store",
+                "splunk_host",
+                "executor",
+                "run_store",
+            )
         ),
     }
 )
@@ -92,6 +100,8 @@ BASELINE_CONFIG_FILES = frozenset(
     {
         "splunk_adm/default/adm_baselines.conf",
         "splunk_adm/README/adm_baselines.conf.spec",
+        "splunk_adm/default/adm_dependency_watch.conf",
+        "splunk_adm/README/adm_dependency_watch.conf.spec",
     }
 )
 BASELINE_EXPOSURES = {
@@ -803,6 +813,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/THIRD_PARTY_NOTICES.txt",
         "splunk_adm/docs/DATA_LAYER.md",
         "splunk_adm/docs/DEPENDENCY_BASELINES.md",
+        "splunk_adm/docs/DEPENDENCY_WATCH_EXECUTION.md",
         "splunk_adm/docs/INVESTIGATION_RECORDS.md",
         "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md",
         "splunk_adm/docs/FEATURE_FOUNDATIONS.md",
@@ -965,11 +976,62 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         )
     if not files[entrypoint].startswith(b"#!"):
         raise ValueError("shipped adm_recovery.py is not an executable script")
+    _check_watch_action(files, actions, config)
     if not config.has_section("install"):
         raise ValueError("packaged app.conf is missing [install]")
     build = config.get("install", "build", fallback=None)
     if build is None or not re.fullmatch(r"[1-9]\d*", build):
         raise ValueError("app.conf [install] build must be a positive integer")
+
+
+def _check_watch_action(files, actions, app):
+    config = _packaged_config(files, "default/adm_dependency_watch.conf")
+    if set(config.sections()) != {"execution"} or dict(config["execution"]) != {
+        "enabled": "false"
+    }:
+        raise ValueError("dependency watch execution must ship disabled")
+    expected = {
+        "is_custom": "1",
+        "payload_format": "json",
+        "python.version": "python3",
+        "python.required": "3.13",
+        "passsystemauth": "false",
+        "alert.execute.cmd": "adm_dependency_watch.py",
+        "maxtime": "1m",
+        "label": "Application Atlas dependency watch",
+        "description": "Disabled administrator-only explicit-window findings action; no production source provider is shipped.",
+    }
+    if (
+        not actions.has_section("adm_dependency_watch")
+        or dict(actions["adm_dependency_watch"]) != expected
+    ):
+        raise ValueError(
+            "dependency watch action must preserve disabled owner-session contract"
+        )
+    if not files["splunk_adm/bin/adm_dependency_watch.py"].startswith(b"#!"):
+        raise ValueError("dependency watch action must ship its executable entrypoint")
+    if app.get("triggers", "reload.adm_dependency_watch", fallback=None) != "simple":
+        raise ValueError("reload.adm_dependency_watch must be simple")
+    metadata = _packaged_config(files, "metadata/default.meta")
+    for stanza in (
+        "alert_actions/adm_dependency_watch",
+        "adm_dependency_watch",
+        "savedsearches",
+    ):
+        acl = re.sub(r"\s+", "", metadata.get(stanza, "access", fallback=""))
+        if acl != "read:[admin,sc_admin],write:[admin,sc_admin]":
+            raise ValueError(
+                "dependency watch action and owner searches must remain administrator-only"
+            )
+    searches = _packaged_config(files, "default/savedsearches.conf")
+    for stanza in searches.sections():
+        if searches.get(
+            stanza, "action.adm_dependency_watch", fallback="0"
+        ).lower() not in ("0", "false") or "adm_dependency_watch" in {
+            value.strip()
+            for value in searches.get(stanza, "actions", fallback="").split(",")
+        }:
+            raise ValueError("dependency watch schedules must not ship")
 
 
 def _check_qualified_contract(files: dict[str, bytes]) -> None:

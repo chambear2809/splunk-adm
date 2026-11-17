@@ -284,7 +284,9 @@ test("network baseline versions and watch evaluation use authorized references a
               window: url.searchParams.has("after")
                 ? { start, end: start + 300 }
                 : { start: start - 300, end: start },
-              observedAt: url.searchParams.has("after") ? start + 310 : start + 10,
+              observedAt: url.searchParams.has("after")
+                ? start + 310
+                : start + 10,
               baselineVersion: 1,
               changeKinds: url.searchParams.has("after")
                 ? ["not_observed"]

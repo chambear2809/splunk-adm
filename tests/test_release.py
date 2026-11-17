@@ -199,6 +199,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"[install]\nbuild = 123\n[id]\nversion = 1.2.3\n"
             b"[launcher]\nversion = 1.2.3\n[package]\nid = splunk_adm\n"
             b"[triggers]\nreload.adm_recovery = simple\nreload.adm_settings = simple\n"
+            b"reload.adm_dependency_watch = simple\n"
             b"reload.adm_identity = simple\nreload.adm_aci_poll = simple\nreload.adm_aci_bindings = simple\n"
         )
         return {
@@ -252,12 +253,16 @@ class ReleaseArchiveTests(unittest.TestCase):
             },
             "splunk_adm/appserver/static/adm.css": b"css",
             "splunk_adm/default/app.conf": config,
-            "splunk_adm/default/alert_actions.conf": b"[adm_recovery]\nalert.execute.cmd = adm_recovery.py\n",
+            "splunk_adm/default/alert_actions.conf": (
+                Path(__file__).parents[1]
+                / "splunk_app/splunk_adm/default/alert_actions.conf"
+            ).read_bytes(),
             "splunk_adm/LICENSE": b"license",
             "splunk_adm/NOTICE": b"notice",
             "splunk_adm/THIRD_PARTY_NOTICES.txt": b"third party",
             "splunk_adm/docs/DATA_LAYER.md": b"docs",
             "splunk_adm/docs/DEPENDENCY_BASELINES.md": b"baseline operator docs",
+            "splunk_adm/docs/DEPENDENCY_WATCH_EXECUTION.md": b"disabled execution contract",
             "splunk_adm/docs/INVESTIGATION_RECORDS.md": b"case source authorization docs",
             "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md": b"source observations",
             "splunk_adm/docs/FEATURE_FOUNDATIONS.md": b"evidence contracts",
@@ -292,7 +297,13 @@ class ReleaseArchiveTests(unittest.TestCase):
             ),
             "splunk_adm/default/data/ui/nav/default.xml": b"<nav />\n",
             "splunk_adm/default/data/ui/views/dependency_map.xml": b"<view />\n",
-            "splunk_adm/metadata/default.meta": b"[]\naccess = read : [ * ], write : [ admin, sc_admin ]\n[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]\n",
+            "splunk_adm/metadata/default.meta": (
+                b"[]\naccess = read : [ * ], write : [ admin, sc_admin ]\n"
+                b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]\n"
+                b"[savedsearches]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
+                b"[alert_actions/adm_dependency_watch]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
+                b"[adm_dependency_watch]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
+            ),
         }
 
     def _write_pair(self, install=None, upgrade=None):
@@ -425,6 +436,54 @@ class ReleaseArchiveTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     ValueError, "case registration missing required files"
                 ):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_dependency_watch_defaults_acl_session_and_schedule_guards(self):
+        changes = (
+            (
+                "splunk_adm/default/adm_dependency_watch.conf",
+                b"enabled = false",
+                b"enabled = true",
+                "must ship disabled",
+            ),
+            (
+                "splunk_adm/default/alert_actions.conf",
+                b"[adm_dependency_watch]\n",
+                b"[adm_dependency_watch]\npassSystemAuth = true\n",
+                "alert_actions.conf",
+            ),
+            (
+                "splunk_adm/metadata/default.meta",
+                b"[alert_actions/adm_dependency_watch]\naccess = read : [ admin, sc_admin ]",
+                b"[alert_actions/adm_dependency_watch]\naccess = read : [ * ]",
+                "administrator-only",
+            ),
+            (
+                "splunk_adm/metadata/default.meta",
+                b"[savedsearches]\naccess = read : [ admin, sc_admin ]",
+                b"[savedsearches]\naccess = read : [ * ]",
+                "administrator-only",
+            ),
+            (
+                "splunk_adm/default/savedsearches.conf",
+                b"[x]\n",
+                b"[x]\nactions = email, adm_dependency_watch \n",
+                "schedules must not ship",
+            ),
+            (
+                "splunk_adm/default/savedsearches.conf",
+                b"[x]\n",
+                b"[x]\naction.adm_dependency_watch = 1\n",
+                "schedules must not ship",
+            ),
+        )
+        for name, old, new, message in changes:
+            with self.subTest(path=name, change=new):
+                files = self._files()
+                self.assertIn(old, files[name])
+                files[name] = files[name].replace(old, new)
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, message):
                     check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_unsafe_baseline_release_contract(self):

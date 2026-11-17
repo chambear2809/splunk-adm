@@ -108,3 +108,27 @@ source normalization and evidence rendering only. It does not fabricate a
 graph, physical route, translation, backend handoff or correlation with the pod
 sample. It does not qualify the new protected case transport, complete
 baselines, maintenance capacity or the end-to-end six-feature workflow.
+
+
+## ACI audit input trace (static package inspection)
+
+The reviewed Cisco DC Networking 1.2.2 archive has SHA-256
+`9e2b8534b4c0ddfd5750d3d5924e07ba6d4cf689300164bed041f5cfadb08497`
+([package provenance](../research/package-manifest.json)). Its disabled
+`cisco_nexus_aci://classInfo_aaaModLR` stanza requests `aaaModLR`, `faultRecord`
+and `eventRecord` every 300 seconds. The collector's class API path emits native
+attributes with APIC/host context and a collector-local prefix; native `created`
+and indexed receipt time cannot be treated interchangeably. Partial page errors
+and initial/checkpoint paths do not establish complete historical audit coverage.
+Fault lifecycle records and generic events are not automatically configuration
+changes. These are declared collector capabilities, not new Cloud observations.
+
+The app's existing ACI policy normalization retains full APIC/object-DN context
+internally but collapses it before the application graph contract. No qualified,
+time-valid association from an exact affected APIC object to the selected
+application is present. Joining by contract basename, IP, DN substring,
+parent/child resemblance or temporal proximity would invent that association.
+A future audit adapter needs native action time/zone, stable audit identity,
+exact affected object, authority/scope, indexed receipt, coverage/gap proof and
+a separately qualified application binding. No aggregate search was dispatched
+to infer this missing relation, and no input or collector was enabled.
