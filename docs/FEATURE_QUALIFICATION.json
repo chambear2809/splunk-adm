@@ -1,4 +1,265 @@
 {
+  "local_request_admission_095": {
+    "date_local": "2026-11-17",
+    "base_remote_main": "7a783929898d5a8857f76b884c6fd680cd611037",
+    "version": "0.9.5",
+    "customer_outcome": "Oversized investigation requests reject before storage/configuration/capture probing; isolated installed notes fixtures have explicit effective least authority and cleanup.",
+    "implemented_software": [
+      "Authenticated host admission cap of 128000 UTF-8 bytes before store/configuration/capture readiness, shared with CaseAPI",
+      "Fixed task-container CPU/memory/swap/process/log limits verified through Docker HostConfig",
+      "Cleanup of legacy task containers waives only new resource limits; all previous exact target guards retained",
+      "Installed notes fixture explicitly updates and verifies role capabilities, empty grants/imports/filter, current username/roles/capabilities, and restores configuration/removes acknowledged identities after failures"
+    ],
+    "synthetic_unit_evidence": {
+      "npm_run_lint": "passed",
+      "npm_test": {
+        "passed": 1334
+      },
+      "npm_run_package": "passed; includes build",
+      "ruff_check_tools_tests": "passed",
+      "ruff_format_check_tools_tests": "passed; 239 files",
+      "python_discovery": {
+        "tests": 1327,
+        "result": "passed",
+        "runtime": "CPython 3.13.14 macOS ARM64; CI Python minor matches 3.13"
+      },
+      "distributed_discovery": {
+        "tests": 126,
+        "result": "passed"
+      },
+      "upgrade_discovery": {
+        "tests": 18,
+        "passed": 15,
+        "skipped_installed": 3
+      },
+      "browser": {
+        "passed": 214,
+        "skipped": 1,
+        "initial_failure": "Eight asset tests failed because generated journey fixture was omitted from direct playwright invocation; 206 others passed. Built required fixture and all eight asset tests passed.",
+        "node": "22.16.0 on macOS ARM64; CI uses 22.13.0 on Ubuntu24.04"
+      },
+      "archive_release_security_budgets": "passed; tools/check_release.py --dist dist",
+      "atlas_build_tests": {
+        "passed": 3
+      },
+      "appinspect": {
+        "version": "4.3.1",
+        "mode": "precert cloud",
+        "errors": 0,
+        "failures": 0,
+        "manual_checks": 0,
+        "warnings": 6,
+        "gate": "tools/check_appinspect.py passed",
+        "warning_categories": [
+          "legacy Python compatibility advisory",
+          "custom-conf replication",
+          "collections",
+          "bundled Splunk SDK 2.1.1",
+          "supervised subprocess use",
+          "hostname/IP heuristic"
+        ]
+      }
+    },
+    "frozen_local_test_candidate": {
+      "sha256": "b54ea91c3c6a4eb2e0345b17dd7eec6100868cc7d19feed38ef15d12c5c198c4",
+      "bytes": 1401545,
+      "build": 1794956430,
+      "runtime_files": 121,
+      "runtime_manifest_sha256": "9b7f78a81ac63ea6fa5823161c2faf8fa697741406731e9ebcec28ecdec2c001",
+      "runtime_manifest_scope": "Sorted canonical JSON mapping SHA-256 for regular archive files under bin/appserver/default/metadata/README; includes packaged app build",
+      "subsequent_archive_limit": "Later docs/CI packaging can change archive/build bytes. Do not treat those as this frozen candidate; compare runtime hashes with explicit app build differences."
+    },
+    "scope_decision": {
+      "user": "Use existing local Mac Docker; native Linux resource qualification deferred",
+      "permanent_hosts_changed": false,
+      "new_engine_installed": false,
+      "cloud_updated": false,
+      "native_provisioning_proposal": "retired outside Git; no execution"
+    },
+    "installed_container_evidence": {
+      "status": "passed",
+      "task": "notes-bounds-v4-20261117",
+      "name": "adm-notes-bounds-v4-20261117",
+      "command": "ADM_LAB=1 python -m unittest discover -s tests/splunk -p test_cases_endpoint.py -v",
+      "suite": {
+        "tests": 3,
+        "passed": 2,
+        "skipped": 1,
+        "skip": "Unsupported-runtime preflight check requires separate explicit opt-in; not run"
+      },
+      "outcomes": [
+        "HTTP413 body_too_large while persistence is disabled",
+        "Private notes, immutable revisions, retry, stale CAS, sharing/export, revocation, disabled capture and owner deletion"
+      ],
+      "source_data": "Synthetic notes only; two temporary fixture identities with exact adm_investigate capability and empty imports/index grants/defaults/filter, verified before use",
+      "engine": {
+        "Name": "docker-desktop",
+        "Architecture": "aarch64",
+        "OSType": "linux",
+        "NCPU": 12,
+        "MemTotal": 15527374848,
+        "ServerVersion": "29.9.3"
+      },
+      "container": {
+        "id": "039fe841ebc1fe42ae65ff364d19f7b9084b63055795a15fedc1c1f9405b6ae8",
+        "image": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "configured_image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "labels": {
+          "org.splunk-adm.lab": "adm-notes-bounds-v4-20261117",
+          "org.splunk-adm.task": "notes-bounds-v4-20261117"
+        },
+        "limits": {
+          "NanoCpus": 4000000000,
+          "Memory": 8589934592,
+          "MemorySwap": 8589934592,
+          "PidsLimit": 1024,
+          "LogConfig": {
+            "Type": "json-file",
+            "Config": {
+              "max-file": "2",
+              "max-size": "10m"
+            }
+          }
+        },
+        "ports": {
+          "8000/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "27800"
+            }
+          ],
+          "8088/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "27888"
+            }
+          ],
+          "8089/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "27889"
+            }
+          ]
+        },
+        "mounts": [
+          {
+            "Name": "adm-notes-bounds-v4-20261117-etc",
+            "Destination": "/opt/splunk/etc",
+            "Type": "volume"
+          },
+          {
+            "Name": "adm-notes-bounds-v4-20261117-var",
+            "Destination": "/opt/splunk/var",
+            "Type": "volume"
+          }
+        ]
+      },
+      "tls_before_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      },
+      "tls_after_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      },
+      "resource_scope": "Configured Docker limits verified, not native Linux limit qualification",
+      "disk_budget_bytes": 10737418240,
+      "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
+      "disk_samples_bytes": [
+        2508402688,
+        1447993344,
+        2546466816
+      ],
+      "lifetime_seconds": 2700,
+      "elapsed_seconds": 164.59,
+      "cleanup": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      },
+      "evidence_receipt": "local-notes-run-4/outputs/lab-receipt.json under private task directory",
+      "earlier_attempts": [
+        {
+          "directory": "outputs",
+          "result": "user-cancelled bootstrap; primary uncertainty preserved, all owned resources removed"
+        },
+        {
+          "directory": "local-notes-run-2/outputs",
+          "result": "bootstrap and both TLS checks passed; unprivileged du failed; all owned resources removed"
+        },
+        {
+          "directory": "local-notes-run-3/outputs",
+          "result": "bootstrap/TLS/disk measurement passed; installation refused missing checksum sidecar before app copy; all owned resources removed"
+        }
+      ]
+    },
+    "native_platform_qualification": false,
+    "real_source_qualification": false,
+    "production_readiness": false,
+    "remaining_software": [
+      "Whole-endpoint deadline/resource supervision",
+      "Production complete-source provider and provisioning/enable integration",
+      "Verified ownership/business feed adapter and source-authorized shared persistence where required"
+    ],
+    "remaining_qualification": [
+      "Current supervised protected capture and source authorization/revocation",
+      "Web proxy/CSRF/effective ACLs",
+      "Operational restore and lifecycle",
+      "Real-source comparison/readiness/capacity/audit/connected journeys"
+    ],
+    "review": {
+      "reviewer": "exposed reviewer role GPT-6.1 Sol/high; read-only",
+      "workers": "exposed Luna role GPT-5.6 Luna/medium; repository requested GPT-6 Luna unavailable in named role",
+      "coordinator_model": "Not independently exposed; repository default GPT-6.1 Sol/high was read, not assumed effective",
+      "resolved": [
+        "transitive optionator lock metadata retained",
+        "strict role wire fields and effective-context schema",
+        "negative security tests isolate one field",
+        "legacy cleanup preserves exact original guards",
+        "cancellation retires whole child process group",
+        "task-lab documentation labels child EXIT example normal-exit only"
+      ],
+      "private_driver_cancellation_probe": "passed; descendant retired and primary uncertainty retained"
+    },
+    "workspace_preservation": "Original branch unchanged; .gitignore and both untracked user documents preserved. Known accidental worker lab edits in original checkout were transferred to owned worktree and only that exact task patch reversed.",
+    "rollout_rollback": "Only task-owned disposable installation. Keep shipped persistence/capture/watch/schedules disabled. Rollback code without deleting retained case/job data. No permanent target update or release.",
+    "private_evidence_root": "outputs/ under the external atlas-capture-continuation task directory; raw credentials/private TLS never committed",
+    "commands": [
+      "npm run lint",
+      "npm test",
+      "npm run package",
+      "ruff check tools tests",
+      "ruff format --check tools tests",
+      "python -m unittest discover -s tests",
+      "python -m unittest discover -s tests/distributed",
+      "python -m unittest discover -s tests/splunk -p test_upgrade.py",
+      "npm exec -- playwright test; node tools/build_journey_asset_fixture.mjs; npm exec -- playwright test tests/browser/journey-assets.spec.ts",
+      "python tools/check_release.py --dist dist",
+      "python -m unittest tests.test_atlas_build",
+      "splunk-appinspect inspect dist/splunk_adm-0.9.5.tar.gz --mode precert --included-tags cloud --output-file {private}/outputs/appinspect.json",
+      "python tools/check_appinspect.py {private}/outputs/appinspect.json",
+      "python {private}/local-notes-run-4/runtime/run_lab.py"
+    ]
+  },
   "ci_repair_watch_stop_candidate": {
     "base_remote_main": "577250bf35409ef703e6d0b3c30bd1272c8576ea",
     "blocker_classification": {

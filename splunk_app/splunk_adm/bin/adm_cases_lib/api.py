@@ -20,6 +20,8 @@ from .store import (
     SourceUnavailable,
 )
 
+DEFAULT_MAX_BODY_BYTES = 128_000
+
 _CASE_PATH = re.compile(
     r"^/cases/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:/(entries|captures|attachments|share|export|audit))?$"
 )
@@ -86,7 +88,9 @@ class CaseAPI:
     The legacy source_validator argument grants no authority to admit captures.
     """
 
-    def __init__(self, store, *, source_validator=None, max_body_bytes=128_000):
+    def __init__(
+        self, store, *, source_validator=None, max_body_bytes=DEFAULT_MAX_BODY_BYTES
+    ):
         if source_validator is not None and not callable(source_validator):
             raise ValueError("invalid source validator")
         if type(max_body_bytes) is not int or max_body_bytes < 1:

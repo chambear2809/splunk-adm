@@ -133,6 +133,62 @@ class HostTest(unittest.TestCase):
             self.host,
         )
 
+    def test_oversized_payload_rejected_before_storage_or_capture_readiness(self):
+        # The limit is bytes, including multibyte UTF-8, and applies even while
+        # persistence is unavailable or capture probing would fail.
+        for path in ("/cases", "/capabilities"):
+            for payload in ("x" * 128_001, "é" * 64_001, "😀" * 32_001):
+                with (
+                    self.subTest(path=path, characters=len(payload)),
+                    mock.patch.object(self.host, "store") as store,
+                    mock.patch.object(self.host, "qualify") as qualify,
+                    mock.patch.object(self.host, "capture_ready") as capture,
+                ):
+                    status, body, headers = handle(
+                        {
+                            "method": "GET" if path == "/capabilities" else "POST",
+                            "path_info": path,
+                            "payload": payload,
+                        },
+                        self.host,
+                    )
+                    self.assertEqual((status, body), (413, {"error": "body_too_large"}))
+                    self.assertEqual(headers["Cache-Control"], "no-store")
+                    self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+                    store.assert_not_called()
+                    qualify.assert_not_called()
+                    capture.assert_not_called()
+        self.assertEqual([], os.listdir(self.directory.name))
+
+    def test_exact_body_byte_limit_reaches_api_and_authentication_still_precedes_rejection(
+        self,
+    ):
+        for payload in (" " * 128_000, "é" * 64_000):
+            with mock.patch.object(self.host, "store") as store:
+                # Valid size still follows normal API validation (invalid JSON).
+                status, _, _ = handle(
+                    {
+                        "method": "POST",
+                        "path_info": "/cases",
+                        "payload": payload,
+                        "headers": [
+                            ["Content-Type", "application/json"],
+                            ["Idempotency-Key", "limit"],
+                        ],
+                    },
+                    self.host,
+                )
+                self.assertEqual(status, 400)
+                store.assert_called_once_with("alice")
+        with mock.patch.object(self.host, "principal", side_effect=Forbidden()):
+            self.assertEqual(
+                handle(
+                    {"method": "POST", "path_info": "/cases", "payload": "x" * 128_001},
+                    self.host,
+                )[0],
+                403,
+            )
+
     def test_disabled_and_cloud_fail_without_creating_storage(self):
         self.assertFalse(
             handle({"method": "GET", "path_info": "capabilities"}, self.host)[1][

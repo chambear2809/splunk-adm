@@ -11,6 +11,7 @@ from pathlib import Path
 import stat
 import subprocess
 
+from .api import CaseAPI, DEFAULT_MAX_BODY_BYTES
 from .store import CaseStore, Forbidden
 
 APP = "/servicesNS/nobody/splunk_adm"
@@ -413,6 +414,17 @@ def handle(request, host):
         request_headers = pairs(request.get("headers"), lower=True)
         if query.pop("output_mode", "json") != "json":
             raise ValueError("Only JSON is supported")
+        payload = request.get("payload", "")
+        if not isinstance(payload, str):
+            raise ValueError("Invalid payload")
+        # Reject before opening SQLite, reading configuration or probing capture.
+        # Character length first avoids encoding an arbitrarily large string;
+        # UTF-8 byte length then applies the same limit as the framework-neutral API.
+        if len(payload) > DEFAULT_MAX_BODY_BYTES:
+            return CaseAPI._response(413, {"error": "body_too_large"})
+        encoded_payload = payload.encode("utf-8")
+        if len(encoded_payload) > DEFAULT_MAX_BODY_BYTES:
+            return CaseAPI._response(413, {"error": "body_too_large"})
         if method == "GET" and path == "/capabilities":
             try:
                 config = host.qualify()
@@ -433,11 +445,6 @@ def handle(request, host):
                 },
                 headers,
             )
-        payload = request.get("payload", "")
-        if not isinstance(payload, str):
-            raise ValueError("Invalid payload")
-        from .api import CaseAPI
-
         api = CaseAPI(host.store(principal))
         return api.handle(
             method,
@@ -445,7 +452,7 @@ def handle(request, host):
             principal=principal,
             query=query,
             headers=request_headers,
-            body=payload.encode(),
+            body=encoded_payload,
         )
     except Forbidden:
         return (

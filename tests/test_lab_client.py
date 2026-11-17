@@ -41,6 +41,11 @@ def target():
         },
         "HostConfig": {
             "NetworkMode": NAME + "-net",
+            "NanoCpus": lab.TASK_CPU_NANOS,
+            "Memory": lab.TASK_MEMORY_BYTES,
+            "MemorySwap": lab.TASK_MEMORY_BYTES,
+            "PidsLimit": lab.TASK_PIDS_LIMIT,
+            "LogConfig": lab.TASK_LOG_CONFIG.copy(),
             "PortBindings": {
                 "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18100"}],
                 "8089/tcp": [{"HostIp": "127.0.0.1", "HostPort": "18189"}],
@@ -346,6 +351,10 @@ class LabClientTests(unittest.TestCase):
                     {"org.splunk-adm.lab": "adm-other"}
                 ),
                 lambda t: t["HostConfig"].update(NetworkMode="other"),
+                lambda t: t["HostConfig"].update(Memory=1),
+                lambda t: t["HostConfig"].update(MemorySwap=1),
+                lambda t: t["HostConfig"].update(PidsLimit=1),
+                lambda t: t["HostConfig"].update(LogConfig={}),
                 lambda t: t["HostConfig"]["PortBindings"]["8089/tcp"][0].update(
                     HostIp="0.0.0.0"
                 ),

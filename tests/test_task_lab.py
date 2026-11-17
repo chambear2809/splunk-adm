@@ -69,6 +69,11 @@ class TaskLabTest(unittest.TestCase):
             ],
             "HostConfig": {
                 "NetworkMode": "adm-test-task-one-net",
+                "NanoCpus": lab.TASK_CPU_NANOS,
+                "Memory": lab.TASK_MEMORY_BYTES,
+                "MemorySwap": lab.TASK_MEMORY_BYTES,
+                "PidsLimit": lab.TASK_PIDS_LIMIT,
+                "LogConfig": lab.TASK_LOG_CONFIG.copy(),
                 "PortBindings": {
                     key: [{"HostIp": "127.0.0.1", "HostPort": value}]
                     for key, value in (
@@ -79,6 +84,29 @@ class TaskLabTest(unittest.TestCase):
                 },
             },
         }
+
+    def test_legacy_target_rejects_normal_operations_but_cleanup_preserves_guards(self):
+        legacy = json.loads(json.dumps(self.target))
+        for key in ("NanoCpus", "Memory", "MemorySwap", "PidsLimit", "LogConfig"):
+            legacy["HostConfig"].pop(key)
+        with patch.object(
+            lab.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 0, json.dumps([legacy])),
+        ):
+            with self.assertRaisesRegex(lab.LabError, "resource limits"):
+                lab.verify_target()
+            lab.verify_cleanup_target()
+            legacy["HostConfig"]["NetworkMode"] = "bridge"
+            with self.assertRaisesRegex(lab.LabError, "network"):
+                with patch.object(
+                    lab.subprocess,
+                    "run",
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps([legacy])
+                    ),
+                ):
+                    lab.verify_cleanup_target()
 
     def verify(self):
         with patch.object(

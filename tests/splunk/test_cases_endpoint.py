@@ -16,6 +16,32 @@ import lab  # noqa: E402
 
 ENDPOINT = "/servicesNS/nobody/splunk_adm/adm/investigations"
 CONFIG = "/servicesNS/nobody/splunk_adm/configs/conf-adm_investigations/persistence"
+TRANSPORT_CONFIG = (
+    "/servicesNS/nobody/splunk_adm/configs/conf-adm_investigations/capture_transport"
+)
+
+
+def role_authority_payload():
+    """Return the complete least-authority role update used by the fixture."""
+    return {
+        # Splunk's form adapter drops empty lists; an explicit empty string
+        # preserves the no-import declaration on the wire.
+        "imported_roles": "",
+        "capabilities": ["adm_investigate"],
+        "srchIndexesAllowed": "",
+        "srchIndexesDefault": "",
+        "srchFilter": "",
+    }
+
+
+def assert_exact_context(testcase, context, username, role):
+    """Reject inherited admin or index authority before endpoint requests."""
+    testcase.assertEqual(context.get("username"), username)
+    testcase.assertEqual(context.get("roles"), [role])
+    testcase.assertEqual(set(context.get("capabilities", [])), {"adm_investigate"})
+    for key in ("srchIndexesAllowed", "srchIndexesDefault"):
+        if key in context:
+            testcase.assertEqual(set(context[key]), set())
 
 
 @unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires task-owned lab")
@@ -24,6 +50,32 @@ class InstalledCasesTest(unittest.TestCase):
         if lab.task_identity() is None:
             self.skipTest("requires distinct task-owned lab")
         lab.verify_target()
+        # Snapshot before any mutation and register restoration immediately so
+        # a later setup assertion cannot strand a task-owned lab in test mode.
+        self._config_snapshot = self._config_content(
+            CONFIG, ("mode", "platform", "capture_mode")
+        )
+        self._transport_snapshot = self._config_content(
+            TRANSPORT_CONFIG, ("management_uri", "ca_file")
+        )
+        self.addCleanup(
+            lab._json,
+            "POST",
+            CONFIG,
+            {
+                key: self._config_snapshot[key]
+                for key in ("mode", "platform", "capture_mode")
+            },
+        )
+        self.addCleanup(
+            lab._json,
+            "POST",
+            TRANSPORT_CONFIG,
+            {
+                key: self._transport_snapshot[key]
+                for key in ("management_uri", "ca_file")
+            },
+        )
         suffix = secrets.token_hex(5)
         self.role = "atlas_cases_" + suffix
         self.users = [
@@ -35,21 +87,69 @@ class InstalledCasesTest(unittest.TestCase):
             "/services/authorization/roles",
             {
                 "name": self.role,
-                "imported_roles": "user",
-                "capabilities": "adm_investigate",
+                **role_authority_payload(),
             },
         )
+        self.addCleanup(
+            lab._json, "DELETE", "/services/authorization/roles/" + self.role
+        )
+        # Splunk may add implicit defaults during role creation; overwrite all
+        # authority-bearing fields before creating users.
+        lab._json(
+            "POST",
+            "/services/authorization/roles/" + self.role,
+            role_authority_payload(),
+        )
+        role = lab._json("GET", "/services/authorization/roles/" + self.role)["entry"][
+            0
+        ]["content"]
+        for key in (
+            "imported_roles",
+            "srchIndexesAllowed",
+            "srchIndexesDefault",
+            "srchFilter",
+        ):
+            self.assertIn(key, role)
+        self.assertIn(role["imported_roles"], ("", []))
+        self.assertIn(role["srchIndexesAllowed"], ("", []))
+        self.assertIn(role["srchIndexesDefault"], ("", []))
+        self.assertEqual(role["srchFilter"], "")
+        self.assertEqual(set(role.get("capabilities", [])), {"adm_investigate"})
         for user, password in self.users:
             lab._json(
                 "POST",
                 "/services/authentication/users",
                 {"name": user, "password": password, "roles": self.role},
             )
+            self.addCleanup(
+                lab._json, "DELETE", "/services/authentication/users/" + user
+            )
+        for user, password in self.users:
+            authorization = base64.b64encode((user + ":" + password).encode()).decode()
+            request = urllib.request.Request(
+                lab.MGMT + "/services/authentication/current-context?output_mode=json",
+                headers={"Authorization": "Basic " + authorization},
+            )
+            with lab.urlopen(request, timeout=30) as response:
+                context = json.loads(response.read())["entry"][0]["content"]
+            assert_exact_context(self, context, user, self.role)
         lab._json(
             "POST",
             CONFIG,
             {"mode": "disabled", "platform": "unqualified", "capture_mode": "disabled"},
         )
+
+    @staticmethod
+    def _config_content(path, required):
+        try:
+            content = lab._json("GET", path)["entry"][0]["content"]
+            if not isinstance(content, dict) or not set(required) <= set(content):
+                raise RuntimeError("incomplete configuration snapshot: " + path)
+            return content
+        except (KeyError, IndexError, TypeError, lab.LabError) as exc:
+            raise RuntimeError(
+                "cannot snapshot required configuration: " + path
+            ) from exc
 
     def request(self, method, path, body=None, key=None, user=0):
         name, password = self.users[user]
@@ -75,6 +175,36 @@ class InstalledCasesTest(unittest.TestCase):
                 return response.code, json.loads(response.read())
         with response:
             return response.status, json.loads(response.read())
+
+    def raw_request(self, method, path, body, *, user=0):
+        """Send an already-encoded body to exercise the host's early bound."""
+        name, password = self.users[user]
+        request = urllib.request.Request(
+            lab.MGMT + ENDPOINT + path + "?output_mode=json",
+            method=method,
+            headers={
+                "Authorization": "Basic "
+                + base64.b64encode((name + ":" + password).encode()).decode(),
+                "Content-Type": "application/json",
+            },
+            data=body,
+        )
+        try:
+            response = lab.urlopen(request, timeout=30)
+        except urllib.error.HTTPError as response:
+            with response:
+                return response.code, json.loads(response.read())
+        with response:
+            return response.status, json.loads(response.read())
+
+    def test_oversized_raw_body_rejected_before_disabled_storage(self):
+        status, payload = self.raw_request(
+            "POST", "/cases", b"{" + b"x" * 128001 + b"}"
+        )
+        self.assertEqual((413, {"error": "body_too_large"}), (status, payload))
+        status, capability = self.request("GET", "/capabilities")
+        self.assertEqual(status, 200)
+        self.assertFalse(capability["available"])
 
     def test_private_notes_retry_sharing_revocation_and_disabled_default(self):
         status, info = self.request("GET", "/capabilities")

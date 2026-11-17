@@ -63,6 +63,10 @@ verify_owned() {
   [[ -z "$TASK" ]] || py verify-target
 }
 
+verify_cleanup_owned() {
+  [[ -z "$TASK" ]] || py verify-cleanup-target
+}
+
 cmd_up() {
   py init-secrets
   if docker inspect "$NAME" >/dev/null 2>&1; then
@@ -80,6 +84,8 @@ cmd_up() {
     fi
     local created_id
     created_id="$(docker create --no-healthcheck --name "$NAME" --platform linux/amd64 ${labels[@]+"${labels[@]}"} \
+      --cpus 4 --memory 8g --memory-swap 8g --pids-limit 1024 \
+      --log-driver json-file --log-opt max-size=10m --log-opt max-file=2 \
       -p "127.0.0.1:$WEB_PORT:8000" -p "127.0.0.1:$MGMT_PORT:8089" -p "127.0.0.1:$HEC_PORT:8088" \
       -e SPLUNK_START_ARGS=--accept-license \
       -e SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com \
@@ -216,7 +222,7 @@ cmd_reset() {
 
 cmd_down() {
   if docker inspect "$NAME" >/dev/null 2>&1; then
-    verify_owned
+    verify_cleanup_owned
     docker rm -f -v "$NAME" >/dev/null
   fi
   [[ -z "$TASK" ]] || py remove-resources
