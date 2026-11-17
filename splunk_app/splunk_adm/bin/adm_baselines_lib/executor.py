@@ -58,6 +58,27 @@ class RunBudget:
         self.cleanup_remaining = max(0.0, self.cleanup_remaining - seconds)
 
 
+class WatchStopper:
+    """Source-independent, disable-only management of an owned binding."""
+
+    def __init__(self, journal, principal, is_admin):
+        self.journal, self.principal, self.is_admin = journal, principal, is_admin
+
+    def set_enabled(self, binding_id, expected_revision, enabled):
+        if enabled is not False:
+            raise Invalid("only disabling is permitted")
+        principal = _text(self.principal(), "principal")
+        if self.is_admin(principal) is not True:
+            raise Forbidden("administrator required")
+        binding = self.journal.binding(binding_id)
+        if binding["definition"]["principal"] != principal:
+            raise Forbidden("binding owner required")
+        if self.principal() != principal or self.is_admin(principal) is not True:
+            raise Forbidden("administrator identity changed")
+        result = self.journal.set_enabled(binding_id, expected_revision, False)
+        return {"id": result["id"], "revision": result["revision"], "enabled": False}
+
+
 class WatchExecutor:
     def __init__(
         self,
@@ -68,6 +89,7 @@ class WatchExecutor:
         source_provider=None,
         clock=time.time,
         monotonic=time.monotonic,
+        stopper=None,
     ):
         self.journal = journal
         self.store_factory = store_factory
@@ -76,6 +98,7 @@ class WatchExecutor:
         self.source_provider = source_provider
         self.clock = clock
         self.monotonic = monotonic
+        self.stopper = stopper
 
     def _start(self):
         if self.source_provider is None:
@@ -243,6 +266,10 @@ class WatchExecutor:
         return binding
 
     def set_enabled(self, binding_id, expected_revision, enabled):
+        if enabled is False:
+            if self.stopper is None:
+                raise Forbidden("disable management unavailable")
+            return self.stopper.set_enabled(binding_id, expected_revision, False)
         principal, revision, budget, store = self._start()
         binding = self._binding(binding_id, principal, revision)
         context = self._context(
@@ -254,6 +281,25 @@ class WatchExecutor:
         )
         if context["baselineVersion"] != binding["definition"]["baselineVersion"]:
             raise Conflict("watch version changed")
+        self._proof(
+            principal,
+            binding["definition"]["selection"],
+            context["reference"],
+            context["capture"],
+            revision,
+            budget,
+        )
+        if (
+            self._context(
+                store,
+                principal,
+                binding["definition"]["baselineId"],
+                binding["definition"]["watchId"],
+                budget,
+            )
+            != context
+        ):
+            raise Conflict("baseline changed")
         self._current(principal, budget)
         return self.journal.set_enabled(binding_id, expected_revision, enabled)
 

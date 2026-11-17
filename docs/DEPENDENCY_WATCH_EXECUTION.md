@@ -8,9 +8,11 @@ operation is enabled, and these mechanics do not qualify source-backed schedulin
 
 One immutable binding identifies one baseline, watch, pinned baseline version,
 execution principal, exact service/environment/cluster/namespace selection and
-provider contract revision. Bindings start disabled. Creating or changing their
-enabled state requires a currently authenticated administrator who also owns
-the baseline. Administration does not grant access to another owner's baseline.
+provider contract revision. Bindings start disabled. Creating or enabling them
+requires a currently authenticated administrator who also owns the baseline.
+Stopping an existing binding requires the current administrator to match its
+immutable execution principal; it does not require current source or baseline
+access. Administration does not grant access to another owner's baseline.
 Execution requires the same current administrator/owner, an enabled unchanged
 binding and current source access. A definition change creates a new binding ID.
 
@@ -71,7 +73,9 @@ Concurrent owners use revisioned leases; a lease timeout is not evidence that a
 remote operation did not occur. A fresh request key cannot bypass an unresolved
 run for the same binding/window. Reusing a key with different input conflicts.
 No retry adopts a new baseline CAS revision automatically. Binding disablement
-stops prepared work but cannot retroactively cancel a committed evaluation.
+prevents subsequent admission and prepared work that reaches a binding recheck.
+Capture or evaluation already in flight may still finish; stopping cannot
+retroactively cancel a committed evaluation.
 Disabling and re-enabling advances the binding revision; an older unresolved
 run cannot resume under that new revision. Candidate evidence must match its
 retained digest both during retry proof and when the baseline store actually
@@ -109,7 +113,16 @@ envelope. Actual installed invocation remains untested.
 
 The shipped action's `passSystemAuth` is false. `adm_dependency_watch.conf`
 defaults to `enabled = false`; this is separate from each binding's opt-in.
-The host refuses an absent provider before opening its database or journal.
+The execution host refuses an absent provider before opening its database or
+journal. Its separate trusted `watch_manager()` opens only an existing valid
+private journal and returns a disable-only `WatchStopper`; it requires current
+authentication and administrator authority without checking execution readiness,
+source availability or baseline persistence configuration. The manager cannot
+create or enable a binding, execute a run, bootstrap an empty journal or recreate
+a missing database. It returns only binding ID, revision and `enabled: false`.
+Stopping preserves all uncertain run states, retained references and quota
+accounting. Existing journal schema and canonical binding records are validated
+before their ownership data is used. No management HTTP route or UI is exposed.
 Bindings can currently be provisioned only through the trusted host/executor
 interface; there is no administrator UI or public binding endpoint. This is a
 local execution-mechanics increment, not an operator-ready watch workflow.

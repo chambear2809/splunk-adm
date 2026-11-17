@@ -8,7 +8,13 @@ import unittest
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
-from adm_baselines_lib.executor import RunBudget, Unavailable, Uncertain, WatchExecutor  # noqa: E402
+from adm_baselines_lib.executor import (
+    RunBudget,
+    Unavailable,
+    Uncertain,
+    WatchExecutor,
+    WatchStopper,
+)  # noqa: E402
 from adm_baselines_lib.run_store import ExecutionStore  # noqa: E402
 from adm_baselines_lib.store import (
     BaselineStore,
@@ -122,6 +128,7 @@ class ExecutorTests(unittest.TestCase):
             lambda _: self.admin,
             self.provider,
             clock=lambda: self.now,
+            stopper=WatchStopper(self.journal, lambda: self.user, lambda _: self.admin),
         )
         self.selection = {
             "service": "s",
@@ -176,6 +183,17 @@ class ExecutorTests(unittest.TestCase):
         with self.assertRaises(Uncertain):
             self.executor.execute(b["id"], self.window, "r")
         self.assertEqual(self.provider.calls, 1)
+
+    def test_enable_rechecks_selection_attestation_and_source(self):
+        item = self.executor.create_binding(self.id, "w", self.selection)
+        self.provider.tamper = True
+        with self.assertRaises(Unavailable):
+            self.executor.set_enabled(item["id"], item["revision"], True)
+        self.provider.tamper = False
+        self.provider.denied = True
+        with self.assertRaises(Forbidden):
+            self.executor.set_enabled(item["id"], item["revision"], True)
+        self.assertFalse(self.journal.binding(item["id"])["enabled"])
 
     def test_invalid_window_and_disabled(self):
         b = self.binding()

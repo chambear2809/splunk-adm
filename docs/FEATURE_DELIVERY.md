@@ -591,3 +591,37 @@ needs a visible timezone label. These are follow-up fixes, not behaviors
 qualified by the 0.9.1 installation. The Cloud Control header also logs its own
 module/navigation errors; those are recorded separately from Atlas's source
 identity failure.
+
+
+## 0.9.2 follow-up candidate
+
+The Advanced time picker now accepts validated preview success using the null
+value required by the pinned Toolkit. Live previews must contain the exact
+requested key and a valid timezone-qualified ISO timestamp; unrelated or malformed
+200 responses remain errors. Device shows its resolved selected window in UTC,
+including during loading. The app-owned body rule removes Splunk's 960px minimum
+only while the Atlas mount exists, keeping the Filter and table shell visible
+beside the simulated Cloud sidebar. The table retains horizontal scrolling.
+
+The trusted watch manager can stop an owned binding after source access,
+provider or execution configuration becomes unavailable. It authenticates the
+current administrator and immutable binding principal, applies revision CAS,
+returns no retained definition and never bootstraps/recreates a journal. It
+preserves unknown runs and quotas. Existing work in flight may still finish.
+Creation, enabling and execution retain full source/owner checks. This exposes no
+management HTTP/UI and does not add the missing complete source provider.
+
+Local validation passed 1,334 unit tests, 209 browser tests (one skipped), 161
+baseline/release/build/report Python tests, Ruff and the frontend build. Existing
+baseline test helpers still emit ResourceWarning under Python 3.15. Two earlier
+browser runs each found one assertion issue: a hidden option with the saved
+note's text and a pointer click racing an accordion transition. The final full
+run passed after semantic targeting and a transition-readiness assertion.
+Independent review has no remaining findings; Astra accepted the six corrected
+synthetic layouts. Main and optional journey assets retain their unchanged gzip
+limits. Cloud 0.9.1 remains installed. The frozen 0.9.2 archive passed packaging and
+release validation with SHA-256
+`820dd27c93d687493b002c21fed4bf395b458dfed7234678cc1142cab52a94d7`;
+it still requires its own Cloud inspection/runtime result. Package identity and
+completed packaging evidence were recorded after the archive was frozen; these
+later documentation updates do not change its bytes.

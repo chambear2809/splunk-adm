@@ -2509,6 +2509,11 @@
 .atlas-device-page .atlas-time-picker > small {
   display: none;
 }
+.atlas-page .atlas-device-window {
+  margin: 4px 0 0;
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+}
 .atlas-device-page .adm.atlas-device {
   min-height: 0;
   display: grid;
@@ -2729,4 +2734,9 @@
 }
 .adm .atlas-bundle-members button[aria-current] {
   background: var(--adm-select-bg);
+}
+@media (max-width: 960px) {
+  body:has(#atlas-root) {
+    min-width: 0;
+  }
 }
