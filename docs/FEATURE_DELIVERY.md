@@ -17,7 +17,7 @@ not authorize collector/schedule activation or infrastructure changes.
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
-| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified.                                                                             |
+| Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified. A later disable-only HTTP stop command now manages an existing owned binding; it does not provision or enable one.                                                                             |
 | Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, Web proxy, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
@@ -697,3 +697,140 @@ phone-sized or fix native Cloud header overflow. Draft and scope-popup regressio
 are local browser evidence, not Cloud persistence qualification. The complete
 preservation capture was not repeated for this frontend-only revision; the
 preceding 0.9.1→0.9.2 comparison retains its stated limits.
+
+
+## Main CI repair and operator stop increment (0.9.4)
+
+Remote main was re-fetched at `577250bf35409ef703e6d0b3c30bd1272c8576ea`.
+GitHub run `44024751893` authoritatively failed two 320px ownership browser
+checks and Python task-lab fixtures; frontend checks passed and installed Splunk
+integration was skipped. The original checkout and its protected `.gitignore`
+addition and presentation remain outside this clean continuation worktree.
+
+The retained Linux Chromium trace reports 327px at a 320px viewport. A disposable
+local Linux/amd64 Ubuntu 24.04 Playwright 1.64.0 reproduction with DejaVu Sans
+returned exactly the same width. The unopened maintenance evidence button was
+302.59375px wide at x=24 inside Impact's 272px content area. Its `nowrap` label
+expanded the implicit grid column and the ownership content. The shared optional
+evidence trigger now wraps and stays within its container before optional CSS
+loads. No document overflow mask, width-assertion relaxation or platform-specific
+font substitution ships. The reproduction now measures 320px, with the button
+272px wide and right edge 296px. All four light/dark 320/1440 layouts were
+rendered and inspected. The two new regressions exercise enlarged font metrics,
+actual button/text geometry, keyboard opening and focus in the loaded region.
+This is synthetic local browser evidence, not installed Cloud validation.
+
+Python ownership fixtures now create private temporary task TLS and exact recorded
+container/image/healthcheck identity. The copied shell workspace includes
+`lab_tls.py`; valid synthetic credentials let it reach foreign-label refusal.
+Every lifecycle action still refuses before mutation, leaving credentials intact.
+The test imports its sibling dependency explicitly even when run alone. No
+production TLS, ownership, daemon or mutation guard changed.
+
+A narrow authenticated POST stop command now exposes the previously trusted-only
+watch stop manager. It checks the current administrator and immutable binding
+principal, uses revision CAS, opens only an existing valid private journal and
+returns only binding ID/revision/disabled state. It runs independently of source,
+execution and persistence readiness. Local tests retain an uncertain run and
+its quota record while stopping. It adds no provisioning, enable, list, search,
+notification or schedule operation. A lost successful response can make a retry
+conflict; operator reconciliation remains necessary. See
+[the exact stop contract](DEPENDENCY_WATCH_EXECUTION.md#operator-stop-command).
+This is implemented management software; installed Web/CSRF/effective-ACL
+validation remains unperformed. The production complete-source provider and
+operator provisioning workflow are still missing software.
+
+Versions are consistently 0.9.4 for the changed candidate bytes. Cloud 0.9.3 is
+the last installed qualification from the earlier record; this increment has
+not been deployed. GitHub again reports zero self-hosted runners. No native
+Linux/amd64 Splunk target, source contract, credential/VPN access or current
+Cloud state is newly qualified by the disposable Linux browser run. No shared
+forwarder workload or private native-lab draft was executed.
+
+Rollback removes the stop HTTP exposure and restores the prior application
+assets together while preserving all case, baseline and watch-run databases.
+Disabling a binding never clears uncertainty or retroactively cancels admitted
+work. Keep execution and persistence defaults disabled. The six-feature request
+remains incomplete: audit/application binding, measured maintenance inputs,
+complete-source provider, provisioning, native supervised capture and recovery,
+business feed/persistence, and connected real-source journeys remain open.
+
+
+Local checks passed with Node 22.16.0 and Python 3.13.14: `npm run lint`,
+`npm test` (126 files, 1,334 tests), `ADM_BROWSER_PORT=4175 npm run test:browser`
+(214 passed, one skipped), and 11 focused ownership browser tests under Linux
+Node 22.13.0/Chromium 156 with DejaVu Sans. Python full discovery passed 1,319
+tests after final principal-binding corrections; distributed discovery passed 126; upgrade discovery passed 18 with three
+skipped. Standalone task-lab tests passed 11. Ruff check/format passed (238 files).
+One earlier full Python run during simultaneous browser load hit an existing
+100ms SQLite busy timeout in the journal race test; that test passed in isolation
+and unloaded full discovery passed. A worker discovery during active release
+edits used inconsistent inputs and was superseded. No lock timeout, assertion or
+security gate was weakened. Existing SQLite ResourceWarning messages remain.
+
+
+Independent read-only GPT-6.1 Sol review has no outstanding findings. The
+coordinator bound stop management to the original authenticated principal rather
+than accepting a newly returned identity. Review then found that its first
+regression lacked the investigator capability and rejected before exercising that
+change. The corrected test proves multiple context reads and no mutation; a
+second test prevents a retained manager from switching to another owner. Both
+regressions detect the previous unbound manager in a temporary mutation check.
+The final 53 focused host/executor/journal tests passed, including 19 watch-host
+tests independently rerun by the reviewer. Pinned Luna workers owned the fixture
+repair and bounded stop-route files; integration and final verification remained
+with the coordinator. Installed Web/CSRF and source qualification were not tested.
+
+
+The contribution report uses Node zlib gzip level 9, while the unchanged archive
+release gate independently uses Python gzip level 9. For this local final-script
+payload, Node 22.16.0 measures 686,533 bytes and Python 3.13.14 measures 683,034
+bytes against the gate's 686,080-byte limit. The file is the same 2,672,251 bytes;
+the discrepancy is compressor/runtime behavior, not an intermediate build or
+changed threshold. The contribution report now identifies its compressor/runtime
+and diagnostic-only role explicitly. Its negative Node headroom is retained;
+release acceptance remains the separate Python archive check. Neither limit nor
+compression level changed.
+
+
+Final packaging, archive integrity and three packaged-bootstrap/security checks
+passed. The frozen local 0.9.4 candidate is 1,387,764 bytes, build `1794930346`,
+SHA-256 `3c32906f5442e50acabe9b7135d9a475a66fca8475e84dd564961ccd2ad663b1`.
+Local AppInspect 4.3.1 precert Cloud checks passed: 139 successes, no failures or
+errors, six warnings, 100 not-applicable and one skipped. This is offline
+inspection, not Cloud approval/installation. The final runtime files match the
+archive. Package identity and these results were recorded after freeze; the
+later record edits do not change its bytes. CI will build a separate timestamped
+archive, which must not be confused with this frozen local artifact.
+
+
+The remaining blockers have different kinds. The complete provider, operator
+provisioning, and whole-endpoint supervision covering ordinary authentication
+and configuration SDK work are missing software, not merely unrun tests. Exact
+historical audit/application bindings, maintenance measurement semantics,
+business-feed authority and connected-source mappings need verified source
+contracts. Positive supervised capture, installed Web/CSRF/ACL, revocation and
+recovery need a supported task-owned native target; none was established here.
+A later bounded native-access probe validated the canonical Enterprise profile
+locally but its SSH TCP port timed out after five seconds. Authentication was not
+attempted, VPN state was not established, and prior image observations remain
+historical. No remote command or mutation ran. Cloud/SHC persistence is unsupported by design;
+no guard or role boundary was removed to bypass that limitation.
+
+
+PR [#25](https://github.com/chambear2809/splunk-adm/pull/25) first ran CI against
+`cbde1847f8ae9191491d2e71276dccd8efcaed8f` in run `44118432669`. Frontend checks,
+packaging/release/AppInspect, Ruff and Python passed (1,319 discovery tests with
+two skipped, 126 distributed, and 18 upgrade with three skipped). The original
+two ownership width failures passed. Browser results were 213 passed, one failed
+and one skipped: another existing strict text assertion matched the revised note
+both in its entry and in an attachment option. The follow-up test waits for the
+option projection, then targets the visible entry by its exact Edit note action
+and checks revised text/author. Draft, history and identical retry assertions
+remain. Product runtime bytes did not change. All four affected tests passed on Mac and Linux Node22.13/Chromium, and lint
+passed. The Linux harness uses a loopback origin to retain the same secure-context
+browser APIs as CI; an initial non-loopback proxy attempt timed out three tests
+before that environmental difference was corrected.
+Independent review found no issues in this test-only correction. Follow the
+[final checked-head status](https://github.com/chambear2809/splunk-adm/pull/25/checks)
+for the subsequent complete run; the earlier failed run is not reported as green.

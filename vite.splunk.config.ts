@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { thousandEyesAssetVersion } from "./vite.thousandeyes.shared";
 import { journeysAssetVersion } from "./vite.journeys.shared";
 
-// Mirrors tools/check_release.py's 670 KiB release gate.
+// Uses the same numerical 670 KiB budget as tools/check_release.py's release gate.
 const SPLUNK_BUNDLE_CEILING_GZIP = 670 * 1024;
 type AtlasBundleAsset = {
   type: string;
@@ -79,6 +79,16 @@ function atlasBundleContributionReport(): Plugin {
         );
       const report = {
         generatedBy: "atlas-bundle-contribution-report",
+        measurementRole: "diagnostic_only",
+        compression: {
+          algorithm: "gzip",
+          level: 9,
+          runtime: "node",
+          runtimeVersion: process.version,
+          zlibVersion: process.versions.zlib,
+        },
+        releaseGate:
+          "tools/check_release.py recomputes final packaged bytes with Python gzip level 9; runtime compressors can differ",
         ceilingGzipBytes: SPLUNK_BUNDLE_CEILING_GZIP,
         gzipBytes,
         headroomGzipBytes: SPLUNK_BUNDLE_CEILING_GZIP - gzipBytes,

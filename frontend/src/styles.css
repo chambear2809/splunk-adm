@@ -1206,6 +1206,11 @@
   font-weight: 600;
   white-space: nowrap;
 }
+/* Optional evidence triggers must fit before their stylesheet has loaded. */
+.adm .atlas-journeys > .secondary-button {
+  max-width: 100%;
+  white-space: normal;
+}
 .adm .banner-text {
   flex: 1;
   min-width: 0;

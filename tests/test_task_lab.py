@@ -16,11 +16,16 @@ SPEC = importlib.util.spec_from_file_location(
     "task_lab_client", Path(__file__).parent / "splunk/lab.py"
 )
 lab = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(lab)
+with patch.object(sys, "path", [str(Path(__file__).parent / "splunk"), *sys.path]):
+    SPEC.loader.exec_module(lab)
 
 
 class TaskLabTest(unittest.TestCase):
     def setUp(self):
+        self.runtime = tempfile.TemporaryDirectory()
+        self.addCleanup(self.runtime.cleanup)
+        self.secrets = Path(self.runtime.name) / "credentials"
+        self.container_id = "a" * 64
         self.environment = patch.dict(
             os.environ,
             DOCKER_HOST="unix:///synthetic-task-docker.sock",
@@ -30,15 +35,26 @@ class TaskLabTest(unittest.TestCase):
             ADM_LAB_WEB_PORT="28000",
             ADM_LAB_MGMT_PORT="28089",
             ADM_LAB_HEC_PORT="28088",
+            ADM_LAB_SECRETS=str(self.secrets),
         )
         self.environment.start()
         self.addCleanup(self.environment.stop)
+        lab.lab_tls.prepare_tls(self.secrets, "test-task", "adm-test-task-one")
+        lab.lab_tls.remember_container(
+            self.secrets, ("test-task", "adm-test-task-one"), self.container_id
+        )
+        secrets_patch = patch.object(lab, "SECRETS", self.secrets)
+        secrets_patch.start()
+        self.addCleanup(secrets_patch.stop)
         self.target = {
+            "Id": self.container_id,
             "Config": {
+                "Image": lab.IMAGE,
+                "Healthcheck": {"Test": ["NONE"]},
                 "Labels": {
                     "org.splunk-adm.task": "test-task",
                     "org.splunk-adm.lab": "adm-test-task-one",
-                }
+                },
             },
             "Mounts": [
                 {
@@ -181,7 +197,7 @@ class TaskLabShellTest(unittest.TestCase):
             here = workspace / "tests/splunk"
             here.mkdir(parents=True)
             (workspace / "tools").mkdir()
-            for filename in ("lab.sh", "lab.py"):
+            for filename in ("lab.sh", "lab.py", "lab_tls.py"):
                 shutil.copy2(root / "tests/splunk" / filename, here / filename)
             shutil.copy2(root / "tools/lab_lock.py", workspace / "tools/lab_lock.py")
             fake_bin = workspace / "bin"
@@ -195,16 +211,29 @@ class TaskLabShellTest(unittest.TestCase):
                 " out.write(json.dumps(sys.argv[1:])+'\\n')\n"
                 "if sys.argv[1:] != ['inspect',os.environ['ADM_LAB_NAME']]:\n"
                 " raise SystemExit('Docker mutation must never be reached')\n"
-                "print(json.dumps([{'Config':{'Labels':{'org.splunk-adm.task':'actual-owner','org.splunk-adm.lab':os.environ['ADM_LAB_NAME']}}}]))\n"
+                "print(json.dumps([{'Id':'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',"
+                f"'Config':{{'Image':'{lab.IMAGE}','Healthcheck':{{'Test':['NONE']}},"
+                "'Labels':{'org.splunk-adm.task':'actual-owner','org.splunk-adm.lab':os.environ['ADM_LAB_NAME']}}}]))\n"
             )
             docker.chmod(0o755)
             secret = workspace / "credentials"
-            secret.write_text("synthetic-placeholder")
+            secret.write_text(
+                "SPLUNK_PASSWORD=synthetic-password\nHEC_TOKEN=synthetic-token\n"
+            )
             secret.chmod(0o600)
+            # The copied shell client must pass its normal private TLS and
+            # container-identity checks before it can report the foreign label.
+            environment_name = "adm-shell-refusal-" + uuid.uuid4().hex
+            lab.lab_tls.prepare_tls(secret, "foreign-task", environment_name)
+            lab.lab_tls.remember_container(
+                secret,
+                ("foreign-task", environment_name),
+                "a" * 64,
+            )
             environment = dict(
                 os.environ,
                 PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
-                ADM_LAB_NAME="adm-shell-refusal-" + uuid.uuid4().hex,
+                ADM_LAB_NAME=environment_name,
                 DOCKER_HOST="unix:///synthetic-task-docker.sock",
                 DOCKER_CONTEXT="",
                 ADM_LAB_TASK="foreign-task",
@@ -240,7 +269,10 @@ class TaskLabShellTest(unittest.TestCase):
                         )
                         self.assertNotEqual(result.returncode, 0)
                         self.assertIn("refusing unowned task lab", result.stderr)
-                        self.assertEqual(secret.read_text(), "synthetic-placeholder")
+                        self.assertEqual(
+                            secret.read_text(),
+                            "SPLUNK_PASSWORD=synthetic-password\nHEC_TOKEN=synthetic-token\n",
+                        )
                 operations = [
                     json.loads(line)
                     for line in (workspace / "docker.jsonl").read_text().splitlines()

@@ -92,6 +92,7 @@ BASELINE_RUNTIME_FILES = frozenset(
                 "splunk_host",
                 "executor",
                 "run_store",
+                "watch_management",
             )
         ),
     }
@@ -141,6 +142,10 @@ BASELINE_EXPOSURES = {
     ),
     "expose:adm_baseline_share": (
         "adm/dependency-monitoring/baselines/*/share",
+        "POST",
+    ),
+    "expose:adm_watch_management_disable": (
+        "adm/dependency-monitoring/watch-management/disable",
         "POST",
     ),
 }

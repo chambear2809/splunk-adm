@@ -128,7 +128,18 @@ test("shared entry revisions preserve a draft across a lost response and show hi
   await page.getByRole("button", { name: "Save revision" }).click();
   await expect(page.getByLabel("Edit note")).toHaveValue("Revised note");
   await page.getByRole("button", { name: "Retry same request" }).click();
-  await expect(page.getByText("Revised note", { exact: false })).toBeVisible();
+  // Attachment options repeat the entry text. Wait for that projection too,
+  // then assert the visible entry rather than racing an ambiguous text query.
+  await expect(
+    page
+      .getByRole("combobox", { name: "Entry", exact: true })
+      .getByRole("option", { name: "note: Revised note", exact: true }),
+  ).toHaveCount(1);
+  const entry = page.getByRole("listitem").filter({
+    has: page.getByRole("button", { name: "Edit note", exact: true }),
+  });
+  await expect(entry).toBeVisible();
+  await expect(entry).toContainText("note: Revised note (bob,");
   await expect(page.getByText(/Edited · version 2/)).toBeVisible();
   await expect(page.getByLabel("Add note")).toHaveValue("Unsent new note");
   await page.getByText("History (2 versions)").click();
