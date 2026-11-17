@@ -88,7 +88,7 @@
       "Positive protected capture using supervised helper on native Linux/amd64",
       "Installed source-backed attachment reference admission/replay",
       "Whole endpoint/initial SDK hard wall-clock bounds",
-      "Real-data replay, complete baseline provider, readiness/peak capacity and connected journey source coverage",
+      "End-to-end real-source workflows, complete baseline provider, readiness/peak capacity and connected journey source coverage",
       "Splunk Web/CSRF, Cloud/SHC, backup/restore and operational scheduling"
     ],
     "packaged_runtime_sha256": {
@@ -266,6 +266,66 @@
     "Backup/restore and automatic retention cleanup",
     "Current real-source completeness, maintenance readiness/capacity or connected journey coverage"
   ],
+  "observed_source_replay": {
+    "automated_original_literal_overlap_check": 0,
+    "configuration_stable_before_after": true,
+    "date_utc": "2026-11-17",
+    "independent_private_original_replay": false,
+    "independent_public_review": "No remaining findings; noncanonical IP and invalid identity-token semantic-repair findings corrected",
+    "known_job_cleanup": {
+      "acknowledged_deletions": 2,
+      "creation_attempts": 2,
+      "post_delete_404_checks": 2,
+      "uncertain_outcomes": 0
+    },
+    "local_checks": {
+      "full_browser": {
+        "passed": 198,
+        "skipped": 1
+      },
+      "full_vitest_files": 125,
+      "full_vitest_tests": 1329,
+      "lint": "passed",
+      "main_bundle_gzip_bytes": 685364,
+      "main_bundle_limit_bytes": 686080,
+      "optional_journeys_gzip_bytes": 31667,
+      "optional_journeys_limit_bytes": 32768,
+      "package": "passed",
+      "python_tests": 27,
+      "ruff": "passed",
+      "source_browser_tests": 4,
+      "targeted_inspector_path_vitest_tests": 21
+    },
+    "manifest_path": "fixtures/feature-replay/manifest.json",
+    "native_original_accepted": 4,
+    "native_sanitized_accepted": 4,
+    "not_qualified": [
+      "Representative or complete dependency coverage, collection loss or sampling closure",
+      "Complete identity intervals, source-history continuity or membership",
+      "Maintenance readiness, capacity, source health or application health",
+      "Physical route, NAT association, cross-source correlation or selected-client handoff",
+      "Installed protected case capture via supervised helper",
+      "Upstream collector/emitter version and production-versus-generated traffic origin",
+      "Permission-revocation behavior beyond the existing source session and local separate case tests"
+    ],
+    "original_window": {
+      "end": 1794876435,
+      "start": 1794876315
+    },
+    "pod_shapes_checked": 4,
+    "raw_and_key_outside_git": true,
+    "rendered_review": "Astra inspected all four real Shell/theme screenshots at 1440/320 light/dark; explicit UTC and long-ID wrapping accepted",
+    "replay_window": {
+      "end": 1767225720,
+      "start": 1767225600
+    },
+    "sample_sha256": "f86d14daed3cf68e7972a4f2fe233b0bdef266070a90925f6cf166d818a562f9",
+    "scope": "Bounded source-record parsing and production evidence rendering; not full identity/path/source completeness or installed protected capture",
+    "source_counts": {
+      "hubble": 4,
+      "pods": 4
+    }
+  },
   "packaged_python_sha256": {
     "splunk_adm/bin/adm_aci_lib/__init__.py": "8b4693607a37189ec9e309c93677012e09664a84daf4349a677341a9fec8639f",
     "splunk_adm/bin/adm_aci_lib/config.py": "22a92dc8ee981ed5ba8478b559e2a8d5bc5119cb4474e47da1ef3cd1fa3ad90e",
@@ -333,7 +393,7 @@
     "splunk_adm/bin/lib/splunklib/utils.py": "3cbb6f60c98491aa79862af7e53f60d0d5e9aef4ad72d3bd3263d49ed21d50da"
   },
   "product": "Splunk Enterprise",
-  "qualification_scope": "Earlier SDK-based source capture run; current supervised transport qualification is recorded separately in current_increment.",
+  "qualification_scope": "Earlier SDK-based installed source capture, current supervised-transport negative qualification, and later bounded observed-source replay are separate scopes.",
   "qualified_behavior": [
     "Baseline disabled defaults and capability access",
     "Baseline metadata list and owner-private storage",
@@ -470,6 +530,23 @@
   ],
   "schema_version": 1,
   "source_data": "synthetic protocol, OTel span and Hubble fixtures; not Cloud-source qualification",
+  "sqlite_copy_rehearsal": {
+    "data": "synthetic offline quiescent same-build copies",
+    "not_qualified": [
+      "Cross-database atomicity",
+      "Live or installed backup/restore",
+      "Downgrade and operational recovery",
+      "Native remote job reconciliation"
+    ],
+    "tests": 3,
+    "verified": [
+      "Private new-file backup API copies, integrity/foreign-key/schema checks",
+      "Case revision/ACL/audit/retry/capture-reference preservation and source redaction",
+      "Baseline versions/watches/occurrences/deduplication and retry/access preservation",
+      "Unknown creation, known cleanup-unknown and occupied global quota survive copied ledger",
+      "Legacy ledger migration on a copy; unsupported future schema rejected"
+    ]
+  },
   "test_source_sha256": {
     "tests/splunk/lab.py": "7ac1d9a25e66294eddb292964f22f333ae4278cb55f13da2be173c493c7f9a48",
     "tests/splunk/lab.sh": "3aea32aac70a0fee6e4e7ef4009f7bfac5e12c42123cf088228d4c4485221d97",

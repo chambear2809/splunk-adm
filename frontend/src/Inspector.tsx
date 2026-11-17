@@ -215,9 +215,11 @@ const evidenceTime = (raw?: string | number) => {
   if (raw === undefined || raw === "" || !/^\d+(?:\.\d+)?$/.test(String(raw)))
     return undefined;
   const date = new Date(Number(raw) * 1000);
-  return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : date.toISOString().replace("T", " ").replace("Z", " UTC");
 };
-function TrafficEvidence({
+export function TrafficEvidence({
   observations,
 }: {
   observations: TrafficObservation[];
@@ -341,7 +343,8 @@ function TrafficEvidence({
               {o.records !== undefined && (
                 <>
                   <br />
-                  {o.records.toLocaleString()} flow records
+                  {o.records.toLocaleString()} flow{" "}
+                  {o.records === 1 ? "record" : "records"}
                   {o.metrics_authoritative === false
                     ? " · counters are not authoritative"
                     : o.metrics_authoritative === true

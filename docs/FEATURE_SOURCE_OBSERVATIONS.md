@@ -1,6 +1,6 @@
 # Bounded source observations
 
-These observations were made on 2026-11-16 using the explicitly selected local
+The aggregate observations below were made on 2026-11-16 using the explicitly selected local
 Cloud profile and the existing search-tier REST endpoint. The selected profile
 passed static validation, its HTTPS endpoint matched its configured Cloud stack,
 and certificate verification was enabled. The server reported version
@@ -63,3 +63,48 @@ readiness. A 16-event sample does not establish representative coverage,
 ownership, historical validity, source entitlement, end-to-end paths, or an
 eligible baseline. No raw capture was retained, and no collector, schedule,
 notification, application installation, or source configuration was changed.
+
+## Bounded observed-source replay (2026-11-17 UTC)
+
+A later, explicitly selected Cloud-profile session retained four Hubble records
+and four pod records over **2026-11-17T00:45:15+00:00 to 2026-11-17T00:47:15+00:00**.
+Two fixed searches used `head 4` within that absolute window, an exclusive
+receipt horizon, five-second server search limits, a 25-second collection
+budget and shared three-second cleanup allowance. Each event was limited to
+32 KiB; the existing client capped response bytes. Both known server-assigned
+jobs were deleted with acknowledgements and subsequent 404 checks. No collector,
+configuration, schedule, deployment or source application was changed.
+
+The selected endpoint again reported server version `10.6.0.5` and app
+`0.8.6`; its metadata still did not affirm a Cloud identity marker. The selected
+profile and verified HTTPS identify the intended access path. Existing identity
+and network configuration was enabled and unchanged before/after this sample.
+That does not establish collection loss, coverage, upstream emitter version or
+whether the observed traffic was production or generated lab traffic.
+
+Raw files, exact source configuration and the pseudonymization key remain in
+owner-private storage outside Git. The committed
+repository-only sample (`fixtures/feature-replay/README.md`) and its manifest
+are fresh allowlisted projections: identifiers use domain-separated keyed aliases, addresses use
+documentation ranges of the same family, and timestamps share an integer-second
+shift. Missing/null values, array order, paired conditions and contradictory
+clocks or observers are preserved. Unsupported, noncanonical or malformed
+values fail closed. Free text, labels, annotations and other unreviewed fields
+are omitted. This is transformed observed-source data, not untouched production
+events or a claim of anonymization against every possible external dataset.
+
+All four original Hubble records passed the current native normalizer against
+the observed configured profile. All four sanitized records pass again with
+the consistently transformed profile; tuple, protocol, ports, verdict,
+direction/reply, observation point, timestamps/receipt lag and equality
+relationships were checked against the private originals. Four pod objects
+pass the pod-shape parser and retain paired conditions. They do not provide a
+complete inventory snapshot, historical ownership interval or qualified
+readiness assessment.
+
+The production observation projection is rendered by the existing traffic
+evidence component using actual Shell themes. The bounded sample demonstrates
+source normalization and evidence rendering only. It does not fabricate a
+graph, physical route, translation, backend handoff or correlation with the pod
+sample. It does not qualify the new protected case transport, complete
+baselines, maintenance capacity or the end-to-end six-feature workflow.

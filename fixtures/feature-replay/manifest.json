@@ -1,0 +1,86 @@
+{
+  "candidate_installed_on_source": false,
+  "capture_selection": {
+    "complete": false,
+    "families": ["hubble", "pods"],
+    "max_records_per_family": 4,
+    "raw_event_limit_bytes": 32768,
+    "response_limit_bytes": 262144,
+    "row_selection": "head sample within an absolute closed source window; event interval and receipt horizon are half-open"
+  },
+  "classification": "sanitized_observed_source_sample",
+  "cloud_identity_marker_observed": false,
+  "code_sha256": {
+    "splunk_app/splunk_adm/bin/adm_identity_lib/native_network.py": "c969de2c196c196f3907113406856e355e52f03d9a0228d595624a4d42379484",
+    "splunk_app/splunk_adm/bin/adm_identity_lib/network_graph.py": "de0f7c6f76887d559203ec112280466e5b7f388602ccc9558f5cc73109301fd0",
+    "splunk_app/splunk_adm/bin/adm_identity_lib/protocol.py": "dd5936181a64cc305a7c35c2bbab26067f1bce05f78ee34f75f8ec50de2dac4d",
+    "tools/capture_feature_replay.py": "d38e56b34eabda4b9b048fbb26c4cfaa6160bebfdd9061433c98c3602d946d65",
+    "tools/sanitize_feature_replay.py": "ac711f7e18e708035ddba7af4138e908c632c56fc786547cc33fe02d6d59e7c9"
+  },
+  "configuration_sha256": {
+    "identity_profile": "d6f282d713ebf1a0514cc02890bbe8ed19e30dc66caa7d36b76e1b062fabf6f5",
+    "network": "8f8125028f07e6598ca92878fdda0773f7ef2ccaabea55e0fe8f0a8166ff4d72"
+  },
+  "configuration_stable_before_after": true,
+  "equivalence": {
+    "condition_pairs_preserved": true,
+    "delta_seconds": -27650715,
+    "no_identity_intervals_or_path_inferred": true,
+    "normalized_original": 4,
+    "normalized_sanitized": 4,
+    "pods_shape_checked": 4,
+    "source_tuple_equality_preserved": true,
+    "timestamps_and_receipt_lag_preserved": true
+  },
+  "installed_app_version": "0.8.6",
+  "known_job_cleanup": {
+    "acknowledged_deletions": 2,
+    "creation_attempts": 2,
+    "post_delete_404_checks": 2,
+    "uncertain_outcomes": 0
+  },
+  "not_qualified": [
+    "Representative or complete dependency coverage, collection loss or sampling closure",
+    "Complete identity intervals, source-history continuity or membership",
+    "Maintenance readiness, capacity, source health or application health",
+    "Physical route, NAT association, cross-source correlation or selected-client handoff",
+    "Installed protected case capture via supervised helper",
+    "Upstream collector/emitter version and production-versus-generated traffic origin",
+    "Permission-revocation behavior beyond the existing source session and local separate case tests"
+  ],
+  "original_window": {
+    "end": 1794876435,
+    "start": 1794876315
+  },
+  "private_raw_sha256": {
+    "hubble": "40c3accaa0f71cca0713ea21a6fc94c437be0de106eb48ebc1274a7474763bde",
+    "pods": "0a1768e372329e45a48d46b714301acbadd154f3cd231e84223207f40031f0cf"
+  },
+  "reference": {
+    "hubble_protobuf": "https://raw.githubusercontent.com/cilium/cilium/main/api/v1/flow/flow.proto",
+    "reviewed_on_utc": "2026-11-17",
+    "scope": "Documented enum allowlist; not proof of deployed emitter version"
+  },
+  "replay_window": {
+    "end": 1767225720,
+    "start": 1767225600
+  },
+  "run_completed_at_utc": "2026-11-17T00:47:51.503422+00:00",
+  "sample_file": "sanitized-source-sample.json",
+  "sample_sha256": "f86d14daed3cf68e7972a4f2fe233b0bdef266070a90925f6cf166d818a562f9",
+  "sanitizer_review": {
+    "independent_findings_resolved": [
+      "Noncanonical IPs must not become accepted after aliasing",
+      "Invalid pod identity tokens must not become valid after aliasing"
+    ],
+    "original_literal_overlap": 0
+  },
+  "schema_version": 1,
+  "selected_profile": "cloud",
+  "server_version": "10.6.0.5",
+  "source_counts": {
+    "hubble": 4,
+    "pods": 4
+  },
+  "timestamp_shift_seconds": -27650715
+}
