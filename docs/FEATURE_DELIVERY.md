@@ -943,3 +943,57 @@ Splunk `en_US` translation preamble calling `i18n_register` with an empty
 catalog and empty suffix. Original raw hashes failed because of that wrapper, not because an asset was stale.
 The focused 12-test local run under umask 0002 passed, and Ruff passed for 238
 files.
+
+
+## Enterprise license activation and post-restart checks
+
+After VPN access returned, pinned SSH and the existing CA/hostname-verified API
+connection succeeded. The supplied license stayed outside Git and logs. The
+first live request returned HTTP 400 because it omitted the documented required
+`name` parameter. The corrected request returned HTTP 201 and `VALID` for the
+Enterprise group; activating that group returned HTTP 200. No second license
+installation followed the successful response.
+
+This first Enterprise activation required a restart. The initial restart
+preflight refused before starting a command because the pending-activation API
+license list was empty. Read-only disk checks then established exactly one saved
+file matching the supplied license, secure ownership/permissions, configured
+`active_group=Enterprise`, and a local (`self`) license manager. No existing
+license files were deleted. The vendored restart planner selected the matched
+`Splunkd.service` and `systemd-cli` path. Independently reviewed guards checked
+the instance GUID, version, administrator, Atlas 0.9.4, disabled SHC, exact service
+executable, primary daemon ownership, and noninteractive restart permission.
+
+Exactly one `sudo -n /opt/splunk/bin/splunk restart` completed with exit 0. The
+service was active, the daemon PID changed, and verified TLS API checks reported
+Enterprise active. Port 8000 was not ready at the first check; a separate
+read-only wait succeeded after 9.006 seconds. No second restart, forced kill, or
+REST restart fallback occurred. The subsequent license API listed three entries,
+including one valid Enterprise license.
+
+Post-restart Atlas still reports 0.9.4. All three CSS assets match the installed
+archive; each JavaScript response contains the exact archive payload following
+only the previously recorded 111-byte empty translation preamble. Persistence
+and capture remain disabled/unqualified, watch execution is false, and no ADM
+schedule is enabled. The administrator still lacks `adm_investigate`; no roles,
+users, source jobs, collectors, notifications or TLS settings were changed. The
+public management certificate still lacks a matching local capture name. Cloud
+and the shared HF were not modified. These checks qualify the license activation
+and app/service recovery after this restart, not installed case/capture, Web/CSRF,
+source revocation, restore, or real-source behavior.
+
+Private sanitized receipts are retained in the task workspace under
+`outputs/enterprise-0.9.4-update/`, including `license-summary.json`,
+`license-install-response.json`, `license-restart-response.json`,
+`license-final-status.json`, and the post-restart asset/guard receipts. No license
+identifiers, contents or private keys are committed. This increment changes no
+app runtime bytes or version and deploys no newly generated archive. Removing
+this documentation does not undo the installed license; license removal/group
+changes are separate operations and were not performed.
+
+The preceding native test/documentation increment was independently reviewed and
+merged in [PR #26](https://github.com/chambear2809/splunk-adm/pull/26). Its
+[PR CI](https://github.com/chambear2809/splunk-adm/actions/runs/44145304574) and
+[main CI](https://github.com/chambear2809/splunk-adm/actions/runs/44146711977) passed
+frontend, browser and Python checks; the installed Splunk suite was skipped.
+Browser regression results were 214 passed and one skipped.
