@@ -802,3 +802,35 @@ inspection, not Cloud approval/installation. The final runtime files match the
 archive. Package identity and these results were recorded after freeze; the
 later record edits do not change its bytes. CI will build a separate timestamped
 archive, which must not be confused with this frozen local artifact.
+
+
+The remaining blockers have different kinds. The complete provider, operator
+provisioning, and whole-endpoint supervision covering ordinary authentication
+and configuration SDK work are missing software, not merely unrun tests. Exact
+historical audit/application bindings, maintenance measurement semantics,
+business-feed authority and connected-source mappings need verified source
+contracts. Positive supervised capture, installed Web/CSRF/ACL, revocation and
+recovery need a supported task-owned native target; none was established here.
+A later bounded native-access probe validated the canonical Enterprise profile
+locally but its SSH TCP port timed out after five seconds. Authentication was not
+attempted, VPN state was not established, and prior image observations remain
+historical. No remote command or mutation ran. Cloud/SHC persistence is unsupported by design;
+no guard or role boundary was removed to bypass that limitation.
+
+
+PR [#25](https://github.com/chambear2809/splunk-adm/pull/25) first ran CI against
+`cbde1847f8ae9191491d2e71276dccd8efcaed8f` in run `44118432669`. Frontend checks,
+packaging/release/AppInspect, Ruff and Python passed (1,319 discovery tests with
+two skipped, 126 distributed, and 18 upgrade with three skipped). The original
+two ownership width failures passed. Browser results were 213 passed, one failed
+and one skipped: another existing strict text assertion matched the revised note
+both in its entry and in an attachment option. The follow-up test waits for the
+option projection, then targets the visible entry by its exact Edit note action
+and checks revised text/author. Draft, history and identical retry assertions
+remain. Product runtime bytes did not change. All four affected tests passed on Mac and Linux Node22.13/Chromium, and lint
+passed. The Linux harness uses a loopback origin to retain the same secure-context
+browser APIs as CI; an initial non-loopback proxy attempt timed out three tests
+before that environmental difference was corrected.
+Independent review found no issues in this test-only correction. Follow the
+[final checked-head status](https://github.com/chambear2809/splunk-adm/pull/25/checks)
+for the subsequent complete run; the earlier failed run is not reported as green.

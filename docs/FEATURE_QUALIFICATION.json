@@ -1,6 +1,28 @@
 {
   "ci_repair_watch_stop_candidate": {
     "base_remote_main": "577250bf35409ef703e6d0b3c30bd1272c8576ea",
+    "blocker_classification": {
+      "missing_software": [
+        "Production complete-source provider and operator provisioning/enable management",
+        "Whole-endpoint deadline/resource supervision covering authentication/configuration SDK work outside the current source-helper deadline",
+        "Verified business feed/vendor adapter and shared source-authorized persistence where required"
+      ],
+      "missing_source_contracts": [
+        "Historically valid exact APIC-object/application binding and authoritative audit association",
+        "Operational readiness, measured peak capacity and shared failure domains with required evidence semantics",
+        "Business-feed authority/provenance/temporal binding",
+        "Real FTD emission/V2 NAT, deployed Envoy logging, Hubble SNAT/XFF and historically valid observer scopes"
+      ],
+      "unperformed_installed_checks": [
+        "Positive current supervised capture transport",
+        "Stop-route and case Web proxy/CSRF/effective ACLs",
+        "End-to-end source revocation, lifecycle and supported-target recovery/restore"
+      ],
+      "unsupported_by_design": [
+        "Cloud/SHC local SQLite persistence and execution remain guarded; capability denial is not fixed by granting roles"
+      ],
+      "validation_environment": "No task-owned native Linux/amd64 Splunk target established. GitHub runner inventory is zero. Canonical Enterprise profile passed local structure validation; one 5-second SSH TCP probe timed out. Authentication was not attempted, VPN state was not established, and prior image observations remain historical only."
+    },
     "browser_cause": {
       "after": {
         "document_width": 320,
@@ -36,6 +58,7 @@
       "browser": "passed: ADM_BROWSER_PORT=4175 npm run test:browser;214 passed,1 skipped",
       "distributed_python": "passed: Python3.13.14 -m unittest discover -s tests/distributed -p test_*.py;126 tests",
       "full_python": "passed: Python3.13.14 -m unittest discover -s tests -p test_*.py;1319 tests after final principal binding and regression fixes",
+      "investigation_followup": "passed: npm exec -- playwright test tests/browser/investigation.spec.ts;4 Mac tests and4 Linux Node22.13/Chromium tests using loopback origin, then npm run lint",
       "lint": "passed: npm run lint",
       "linux_focused_browser": "passed: Node22.13.0 Playwright1.64.0 ownership-integration.spec.ts;11 tests",
       "local_appinspect": {
@@ -76,6 +99,31 @@
       },
       "url": "https://github.com/chambear2809/splunk-adm/actions/runs/44024751893"
     },
+    "first_pr_ci": {
+      "blind_rerun": false,
+      "browser": {
+        "correction": "Wait for repeated attachment option; target visible list item with exact Edit note action; verify revised text/author, drafts, history and identical retries",
+        "failed": 1,
+        "new_failure": "Existing investigation.spec.ts131 strict text locator matched both visible entry and attachment option",
+        "original_ownership_overflow_failures": "repaired; both320pxchecks passed",
+        "passed": 213,
+        "product_code_changed": false,
+        "skipped": 1
+      },
+      "final_followup_checks": "https://github.com/chambear2809/splunk-adm/pull/25/checks",
+      "frontend": "passed including package, archive security and AppInspect",
+      "head": "cbde1847f8ae9191491d2e71276dccd8efcaed8f",
+      "installed_splunk": "skipped",
+      "python": {
+        "discovery_skipped": 2,
+        "discovery_tests": 1319,
+        "distributed_tests": 126,
+        "ruff": "passed",
+        "upgrade_skipped": 3,
+        "upgrade_tests": 18
+      },
+      "url": "https://github.com/chambear2809/splunk-adm/actions/runs/44118432669"
+    },
     "frozen_archive": {
       "build": "1794930346",
       "bytes": 1387764,
@@ -92,6 +140,7 @@
     },
     "independent_review": {
       "checks": "Independent reviewer ran19 final watch-host tests successfully; prior89 task-lab/watch-host/release tests passed before final added test",
+      "ci_locator_followup": "No findings: visible entry scoped by Edit note action, text/author assertion retains history/draft/identical retries; product code unchanged.",
       "coordinator_correction": "Bind stop manager and every stopper recheck to original authenticated principal, including HTTP request principal.",
       "diagnostic_report_followup": "No findings; compressor/runtime metadata only, unchanged hook/compression/gates/runtime output",
       "finding_resolved": "Initial identity regression omitted required capability and rejected before reaching the change. It now carries capability, proves multiple context reads and verifies no mutation; a second regression covers later manager rebind.",
@@ -123,6 +172,18 @@
       "real_source_qualification_added": false,
       "self_hosted_runner_count": 0
     },
+    "read_only_native_access_probe": {
+      "authentication_attempted": false,
+      "credential_handling": "Existing owner-only canonical profile parsed as data by reviewed helper; values never printed, stored in repo or passed in arguments/environment",
+      "date_utc": "2026-11-17T15:54:51Z",
+      "limit": "Network access path unavailable from this session; does not establish host outage or target suitability. No HF workload/image action.",
+      "mutation": false,
+      "profile": "enterprise",
+      "profile_configuration_valid": true,
+      "remote_command_executed": false,
+      "ssh_tcp_22": "Timed out after 5 seconds; one connection attempt",
+      "vpn_state_verified": false
+    },
     "rollback": "Restore prior assets/HTTP exposure together; preserve case/baseline/watch-run databases and all uncertain states",
     "rollout": "No deployment; persistence/execution/collectors/schedules/notifications remain unchanged and disabled where shipped disabled",
     "source_sha256": {
@@ -130,6 +191,7 @@
       "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py": "e0526e448e609ccda32a4bb313d140596bf6735e955cbd5ecf022bd203805288",
       "splunk_app/splunk_adm/bin/adm_baselines_lib/watch_management.py": "8e408421960d6aba0375246e9e085e4eb1fbac4a5920e6a4d2ec5692c2038a96",
       "splunk_app/splunk_adm/default/web.conf": "3eadfb5af9c168db87de697fbb4010bb87eacfa1ed6da3570b5a5de29a299197",
+      "tests/browser/investigation.spec.ts": "813d3d5d4d0c30a61a4c81d3510a0069e804b022d7e74cee8ac351e44f0e050e",
       "tests/browser/ownership-integration.spec.ts": "2f28305cecf4104480fac7eb5cd72f365051ce45f84c4d15cd933413e3ab3af9",
       "tests/test_dependency_watch_host.py": "9c8a5f8ef56d55840ed7493353b9aa142c84c24e8617b5708875b9400ecd940f",
       "tests/test_task_lab.py": "0be73663f84c9a9f1773e6e1a35270dcaf931a8c200c2fb2354ea0e9165a0c30",
@@ -140,7 +202,8 @@
     "validation_limitations": [
       "One earlier full run under simultaneous browser load hit existing100ms SQLite busy timeout in journal race test. Isolated race test and unloaded full discovery passed; locking/limits unchanged.",
       "A worker full run during active release-guard edits used inconsistent inputs and failed release mutation tests; superseded by stable full1317-test run.",
-      "Existing SQLite ResourceWarning messages remain."
+      "Existing SQLite ResourceWarning messages remain.",
+      "Initial Linux investigation harness used a non-loopback HTTP origin, disabling secure-context browser APIs and timing out3 tests. Corrected local loopback proxy restored the same browser security context as CI; all4 passed. No shipped security change."
     ],
     "version": "0.9.4",
     "watch_stop": {
