@@ -256,6 +256,40 @@
     ]
   },
   "date": "2026-11-16",
+  "drift_read_classification": {
+    "checks": {
+      "baseline_host_restore_combined_tests": 42,
+      "focused_store_api_tests": 32,
+      "full_browser": {
+        "passed": 198,
+        "skipped": 1
+      },
+      "lint": "passed",
+      "main_bundle_gzip_bytes": 685367,
+      "main_bundle_limit_bytes": 686080,
+      "optional_journeys_gzip_bytes": 31922,
+      "optional_journeys_limit_bytes": 32768,
+      "package": "passed",
+      "planning_browser_tests": 7,
+      "ruff": "passed",
+      "vitest_files": 125,
+      "vitest_tests": 1331
+    },
+    "count_semantics": "Distinct recorded windows with any qualifying change for the dependency, across change types",
+    "differs_from_earlier_installed_runtime": [
+      "splunk_adm/bin/adm_baselines_lib/store.py"
+    ],
+    "independent_review": "Page-by-baseline classification maps and repeated full-capture JOIN payloads fixed; distinct evidence fetched once, baseline prepared once, only selected labels retained; no remaining findings",
+    "proofs": "Pinned baseline and page/lookahead occurrence evidence reauthorized; compatibility and stored window checked; final ACL/revision recheck",
+    "provider_added": false,
+    "rendered_review": "Four corrected 1440/320 light/dark views accepted; dual-kind and not-observed examples use distinct windows",
+    "response_fields": ["changeKinds", "baselineVersion"],
+    "runtime_path": "splunk_adm/bin/adm_baselines_lib/store.py",
+    "runtime_sha256": "8f6b21243e011a0177cb031cb19c2d04113e229e2fa4fb467380f0b0902b21ac",
+    "schedules_enabled": false,
+    "schema_migration": false,
+    "scope": "Local synthetic store/API and browser read-derived classification; not positive installed complete-source qualification"
+  },
   "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
   "not_qualified": [
     "Complete baseline source provider",

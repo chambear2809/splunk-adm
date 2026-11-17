@@ -1,4 +1,13 @@
 import type { WatchStatus } from "./client";
+import type { Finding } from "./model";
+
+const kindLabels: Record<Finding["kind"], string> = {
+  new_destination_port: "Newly observed destination or port",
+  changed_dependency: "Changed dependency observed",
+  newly_blocked: "Newly reported blocked",
+  lost_redundancy: "Fewer observed failure domains",
+  not_observed: "Not observed in this window",
+};
 
 interface WatchIdentity {
   authority: string;
@@ -75,22 +84,34 @@ export function watchIdentity(signature: string): WatchIdentity | undefined {
 export function WatchDependency({
   signature,
   details = true,
+  changeKinds,
+  baselineVersion,
 }: {
   signature: string;
   details?: boolean;
+  changeKinds?: Finding["kind"][];
+  baselineVersion?: number;
 }) {
   const value = watchIdentity(signature);
-  if (!value)
-    return (
-      <span>Dependency change recorded; identity details unavailable.</span>
-    );
   return (
     <>
       <span>
-        Dependency change recorded: {value.source} → {value.destination} ·{" "}
-        {value.protocol}/{value.port}
+        {value ? (
+          <>
+            {!changeKinds && "Dependency change recorded: "}
+            {value.source} → {value.destination} · {value.protocol}/{value.port}
+          </>
+        ) : (
+          "Dependency change recorded; identity details unavailable."
+        )}
       </span>
-      {details && (
+      {changeKinds && (
+        <>
+          <p>{changeKinds.map((kind) => kindLabels[kind]).join(" · ")}</p>
+          <p>Compared with baseline version {baselineVersion}</p>
+        </>
+      )}
+      {details && value && (
         <details>
           <summary>Source and relationship details</summary>
           <p>
@@ -115,6 +136,10 @@ export function WatchStatusSummary({
   return (
     <section aria-label="Authorized watch status">
       <WatchDependency signature={signature} details={false} />
+      <p>
+        Counts distinct recorded windows with any qualifying change for this
+        dependency, across change types.
+      </p>
       <p>
         Checked at {new Date(at * 1000).toISOString()}: {value.count} distinct
         observation {value.count === 1 ? "window" : "windows"}; threshold{" "}

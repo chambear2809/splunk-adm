@@ -68,6 +68,37 @@ before the latest surfaced finding when the earlier cooldown state cannot be
 reconstructed. Evaluations do not schedule searches, deliver notifications or
 perform actions.
 
+Authorized occurrence reads also return `changeKinds` and the watch's pinned
+`baselineVersion`. The server derives these fields from the retained baseline
+and that occurrence's retained comparison, after reauthorizing both; the
+browser does not classify the current graph or trust submitted labels. Reads
+validate compatibility and the stored window, then recheck current access and
+revision after deriving the page, including its pagination lookahead.
+
+The labels distinguish newly observed destinations/ports, related dependency
+changes, explicitly unblocked-to-blocked observations, fewer observed failure
+domains, and dependencies not observed in the comparison window. Unknown
+blocking does not establish a new block. Domain counts must be present on both
+sides and decrease; changed members with equal counts do not establish a loss.
+Newly observed blocked dependencies are labeled new/changed, not newly blocked.
+“Not observed” is not removal or an outage. These are read-time comparisons
+under the current app rules, not new immutable source records or proof of cause.
+
+A single occurrence may show both newly blocked and fewer-domain labels.
+Recurrence counts distinct recorded windows with any qualifying change for the
+dependency, across change types; multiple labels do not add windows. Existing
+threshold, expected-window and cooldown rules remain unchanged. The UI shows
+the pinned version and absolute UTC window. Older responses without both new
+fields retain the generic dependency-change presentation; partial, duplicate,
+unknown or impossible kind combinations are rejected. No storage migration or
+new source mode is introduced.
+
+Projection loads each distinct retained capture once, prepares the baseline
+comparison indexes once per page and retains only requested signature
+classifications, including lookahead. It does not
+retain every baseline finding for every comparison capture. The bounded-work
+regression covers a 10,000-dependency baseline and 100 distinct comparisons.
+
 A successful initial manual evaluation returns inserted and surfaced counts.
 A retry using the same request key acknowledges the committed revision with
 `resultWithheld: true`, without replaying source-derived counts. Legacy
@@ -113,11 +144,15 @@ The test verified dedicated capability denial, disabled defaults, metadata
 listing after explicit runtime opt-in, private storage ownership/modes, 422
 responses for unavailable capture/evidence writes, duplicate headers/query
 rejection, media validation and public purge denial. It did not install a fake
-source provider. The current shared case backend also passed its independent
-installed caller-filter revalidation test against this archive.
+source provider. The earlier SDK-based shared case capture path also passed its independent
+installed caller-filter revalidation test against this archive. That does not
+qualify its later supervised transport replacement.
 
-Positive baseline capture/version/watch evaluation, Splunk Web/CSRF and
-backup/restore remain unqualified. Both task labs were purged, with container,
+Positive installed baseline capture/version/watch evaluation, Splunk Web/CSRF
+and operational backup/restore remain unqualified. A separate same-build
+synthetic offline SQLite copy rehearsal passes; it does not qualify installed
+recovery. Read-derived change labels have local store/API and browser checks,
+not positive installed-source qualification. Both task labs were purged, with container,
 network, volume, port, credential and TLS cleanup independently checked. See
 [qualification evidence](FEATURE_QUALIFICATION.json) for exact test and backend
 hashes and remaining limits. This is synthetic local qualification, not Cloud or

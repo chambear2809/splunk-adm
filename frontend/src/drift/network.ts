@@ -62,6 +62,13 @@ const watch = (v: unknown): v is WatchWithVersion =>
     (w: unknown) =>
       object(w) && finite(w.start) && finite(w.end) && w.start < w.end,
   );
+const findingKinds = new Set([
+  "new_destination_port",
+  "changed_dependency",
+  "newly_blocked",
+  "lost_redundancy",
+  "not_observed",
+]);
 const occurrence = (v: unknown): v is Occurrence =>
   object(v) &&
   integer(v.seq) &&
@@ -70,7 +77,19 @@ const occurrence = (v: unknown): v is Occurrence =>
   finite(v.window.start) &&
   finite(v.window.end) &&
   v.window.start < v.window.end &&
-  finite(v.observedAt);
+  finite(v.observedAt) &&
+  ((!("changeKinds" in v) && !("baselineVersion" in v)) ||
+    (Array.isArray(v.changeKinds) &&
+      v.changeKinds.length > 0 &&
+      v.changeKinds.every(
+        (kind: unknown) => typeof kind === "string" && findingKinds.has(kind),
+      ) &&
+      new Set(v.changeKinds).size === v.changeKinds.length &&
+      (v.changeKinds.length === 1 ||
+        (v.changeKinds.length === 2 &&
+          v.changeKinds.includes("newly_blocked") &&
+          v.changeKinds.includes("lost_redundancy"))) &&
+      integer(v.baselineVersion)));
 const page = <T>(
   v: unknown,
   guard: (item: unknown) => item is T,

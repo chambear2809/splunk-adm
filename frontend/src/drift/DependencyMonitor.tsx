@@ -528,7 +528,11 @@ function DependencyMonitorContents({
                     <ul>
                       {occurrences.map((item) => (
                         <li key={item.seq}>
-                          <WatchDependency signature={item.signature} />
+                          <WatchDependency
+                            signature={item.signature}
+                            changeKinds={item.changeKinds}
+                            baselineVersion={item.baselineVersion}
+                          />
                           <p>
                             Observation window:{" "}
                             {new Date(item.window.start * 1000).toISOString()} –{" "}

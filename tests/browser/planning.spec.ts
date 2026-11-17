@@ -281,8 +281,14 @@ test("network baseline versions and watch evaluation use authorized references a
                 "calls",
                 "forward",
               ]),
-              window: { start: start - 300, end: start },
-              observedAt: start + 10,
+              window: url.searchParams.has("after")
+                ? { start, end: start + 300 }
+                : { start: start - 300, end: start },
+              observedAt: url.searchParams.has("after") ? start + 310 : start + 10,
+              baselineVersion: 1,
+              changeKinds: url.searchParams.has("after")
+                ? ["not_observed"]
+                : ["newly_blocked", "lost_redundancy"],
             },
           ],
           next: url.searchParams.has("after") ? null : 1,
@@ -291,7 +297,7 @@ test("network baseline versions and watch evaluation use authorized references a
     if (path.endsWith("/evaluate") && request.method() === "GET")
       return route.fulfill({
         json: {
-          count: 3,
+          count: 2,
           thresholdMet: true,
           expected: false,
           coolingDown: true,
@@ -345,27 +351,39 @@ test("network baseline versions and watch evaluation use authorized references a
   await expect(observations).toContainText(
     "1 loaded observations; more are available.",
   );
-  await expect(observations).toContainText(
-    "Dependency change recorded: service:a → service:b · tcp/443",
-  );
-  await observations.getByText("Source and relationship details").click();
+  await expect(observations).toContainText("service:a → service:b · tcp/443");
+  await expect(observations).toContainText("Newly reported blocked");
+  await expect(observations).toContainText("Fewer observed failure domains");
+  await expect(observations).toContainText("Compared with baseline version 1");
+  const details = observations.getByText("Source and relationship details");
+  await details.focus();
+  await page.keyboard.press("Enter");
   await expect(observations).toContainText("Authority: synthetic");
   await expect(observations).not.toContainText("[1,");
   await page.getByRole("button", { name: "Read status", exact: true }).click();
   await expect(
     page.getByRole("region", { name: "Authorized watch status" }),
-  ).toContainText("3 distinct observation windows; threshold met");
+  ).toContainText("2 distinct observation windows; threshold met");
   await expect(
     page.getByRole("region", { name: "Authorized watch status" }),
   ).toContainText("expected window inactive; cooldown active");
+  await expect(observations).toContainText(
+    "Counts distinct recorded windows with any qualifying change for this dependency, across change types.",
+  );
   await page.getByRole("button", { name: "Load more occurrences" }).click();
   await expect(observations).toContainText("2 loaded observations.");
+  await expect(observations).toContainText("Not observed in this window");
+  await expect(observations).not.toContainText("removed");
   await expect(
     page.getByRole("button", { name: "Load more occurrences" }),
   ).toHaveCount(0);
   if (process.env.ADM_FINAL_REVIEW_SCREENSHOTS) {
+    await observations
+      .getByRole("button", { name: "Read status", exact: true })
+      .first()
+      .click();
     await observations.screenshot({
-      path: `/tmp/atlas-feature-final-review/watch-${reviewWidth}-${reviewTheme}.png`,
+      path: `${process.env.ADM_REVIEW_SCREENSHOT_DIR || "/tmp/atlas-feature-final-review"}/watch-${reviewWidth}-${reviewTheme}.png`,
     });
   }
   await page

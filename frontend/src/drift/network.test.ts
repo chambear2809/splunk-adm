@@ -95,3 +95,72 @@ describe("authenticated dependency client", () => {
     );
   });
 });
+
+it("validates server-derived kinds and pinned version without guessing", async () => {
+  const base = {
+    seq: 1,
+    signature: "opaque",
+    window: { start: 100, end: 200 },
+    observedAt: 210,
+  };
+  const signal = new AbortController().signal;
+  for (const kinds of [
+    ["new_destination_port"],
+    ["changed_dependency"],
+    ["newly_blocked"],
+    ["lost_redundancy"],
+    ["not_observed"],
+    ["newly_blocked", "lost_redundancy"],
+    ["lost_redundancy", "newly_blocked"],
+  ]) {
+    const client = createDependencyClient({
+      selection,
+      baseUrl: "/test",
+      transport: async () =>
+        json({
+          items: [{ ...base, changeKinds: kinds, baselineVersion: 1 }],
+          next: null,
+        }),
+    });
+    await expect(
+      client.repository.occurrences!("id", "w", signal),
+    ).resolves.toMatchObject({
+      items: [{ changeKinds: kinds, baselineVersion: 1 }],
+    });
+  }
+  const legacy = createDependencyClient({
+    selection,
+    baseUrl: "/test",
+    transport: async () => json({ items: [base], next: null }),
+  });
+  await expect(
+    legacy.repository.occurrences!("id", "w", signal),
+  ).resolves.toMatchObject({ items: [base] });
+  const invalid = [
+    { changeKinds: ["newly_blocked"] },
+    { baselineVersion: 1 },
+    { changeKinds: [], baselineVersion: 1 },
+    { changeKinds: ["future_kind"], baselineVersion: 1 },
+    { changeKinds: ["newly_blocked", "newly_blocked"], baselineVersion: 1 },
+    { changeKinds: ["newly_blocked", "not_observed"], baselineVersion: 1 },
+    {
+      changeKinds: ["new_destination_port", "changed_dependency"],
+      baselineVersion: 1,
+    },
+    { changeKinds: ["not_observed"], baselineVersion: 0 },
+    { changeKinds: ["not_observed"], baselineVersion: 1.5 },
+    { changeKinds: ["not_observed"], baselineVersion: "1" },
+    { changeKinds: null, baselineVersion: 1 },
+  ];
+  for (const extra of invalid) {
+    const client = createDependencyClient({
+      selection,
+      baseUrl: "/test",
+      transport: async () =>
+        json({ items: [{ ...base, ...extra }], next: null }),
+    });
+    await expect(
+      client.repository.occurrences!("id", "w", signal),
+    ).rejects.toThrow("Watch history is invalid");
+  }
+});
