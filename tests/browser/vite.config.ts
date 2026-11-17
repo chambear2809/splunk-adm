@@ -23,6 +23,7 @@ export default defineConfig({
       "tests/browser/planning-harness.tsx",
       "tests/browser/ownership-integration-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
+      "tests/browser/source-replay-harness.tsx",
     ],
   },
   plugins: [

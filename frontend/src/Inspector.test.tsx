@@ -333,7 +333,9 @@ describe("network evidence inspectors", () => {
     const html = inspector(graph, { kind: "edge", id: edge.id });
     expect(html).toContain("Not aggregated from flow records");
     expect(html).toContain("Not aggregated; see per-observation counters");
-    expect(html).toContain("1 flow records");
+    expect(html).toContain("1 flow record");
+    expect(html).toContain("1970-01-01 00:01:40.000 UTC");
+    expect(html).toContain("1970-01-01 00:01:50.000 UTC");
     expect(html).toContain("counters are not authoritative");
     expect(html).toContain("Routing domain and source scope unavailable");
     expect(html).toContain("Raw exporter values (non-authoritative)");

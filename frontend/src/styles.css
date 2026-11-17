@@ -1346,6 +1346,7 @@
 .adm .seen-list small {
   color: var(--adm-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .adm .seen-list li {
   padding: 6px 9px;
