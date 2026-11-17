@@ -5,6 +5,7 @@ import json
 import os
 import secrets
 import sys
+import subprocess
 import unittest
 import urllib.error
 import urllib.request
@@ -44,7 +45,11 @@ class InstalledCasesTest(unittest.TestCase):
                 "/services/authentication/users",
                 {"name": user, "password": password, "roles": self.role},
             )
-        lab._json("POST", CONFIG, {"mode": "disabled", "platform": "unqualified"})
+        lab._json(
+            "POST",
+            CONFIG,
+            {"mode": "disabled", "platform": "unqualified", "capture_mode": "disabled"},
+        )
 
     def request(self, method, path, body=None, key=None, user=0):
         name, password = self.users[user]
@@ -102,10 +107,35 @@ class InstalledCasesTest(unittest.TestCase):
         )
         self.assertEqual(200, status)
         self.assertEqual(1, len(case["entries"]))
+        original = case["entries"][0]
+        revision = {
+            "expected_revision": 2,
+            "item": {
+                "type": "note",
+                "text": "Revised investigator note",
+                "supersedes_entry_id": original["id"],
+            },
+        }
+        status, case = self.request("POST", path + "/entries", revision, "revise")
+        self.assertEqual(status, 200)
+        self.assertEqual(case["entries"][0], original)
+        self.assertEqual(case["entries"][1]["supersedes_entry_id"], original["id"])
+        self.assertEqual(
+            case, self.request("POST", path + "/entries", revision, "revise")[1]
+        )
+        self.assertEqual(
+            self.request(
+                "POST",
+                path + "/entries",
+                {**revision, "expected_revision": 3},
+                "branch",
+            )[0],
+            409,
+        )
         status, case = self.request(
             "POST",
             path + "/share",
-            {"expected_revision": 2, "member": self.users[1][0], "grant": True},
+            {"expected_revision": 3, "member": self.users[1][0], "grant": True},
             "share",
         )
         self.assertEqual(200, status)
@@ -115,7 +145,7 @@ class InstalledCasesTest(unittest.TestCase):
             self.request(
                 "POST",
                 path + "/share",
-                {"expected_revision": 3, "member": self.users[1][0], "grant": False},
+                {"expected_revision": 4, "member": self.users[1][0], "grant": False},
                 "revoke",
             )[0],
         )
@@ -126,7 +156,7 @@ class InstalledCasesTest(unittest.TestCase):
                 "POST",
                 path + "/captures",
                 {
-                    "expected_revision": 4,
+                    "expected_revision": 5,
                     "item": {
                         "label": "source",
                         "captured_at": "2026-01-01T02:00:00Z",
@@ -137,5 +167,83 @@ class InstalledCasesTest(unittest.TestCase):
             )[0],
         )
         self.assertEqual(
-            200, self.request("DELETE", path, {"expected_revision": 4}, "delete")[0]
+            200, self.request("DELETE", path, {"expected_revision": 5}, "delete")[0]
+        )
+
+    @unittest.skipUnless(
+        os.environ.get("ADM_LAB_EXPECT_UNSUPPORTED_CAPTURE") == "1",
+        "explicit unsupported-runtime qualification only",
+    )
+    def test_unsupported_runtime_preflight_keeps_notes_without_job_intents(self):
+        lab._json(
+            "POST",
+            "/servicesNS/nobody/splunk_adm/configs/conf-adm_investigations/capture_transport",
+            {
+                "management_uri": "https://127.0.0.1:8089",
+                "ca_file": "/opt/splunk/etc/auth/adm_lab_tls/ca.pem",
+            },
+        )
+        lab._json(
+            "POST",
+            CONFIG,
+            {
+                "mode": "single_search_head",
+                "platform": "enterprise",
+                "capture_mode": "reproducible_qualified_v1",
+            },
+        )
+        status, capability = self.request("GET", "/capabilities")
+        self.assertEqual(status, 200)
+        self.assertTrue(capability["available"])
+        self.assertFalse(capability["evidenceWrites"])
+        self.assertEqual(capability["mode"], "notes_only")
+        status, case = self.request(
+            "POST",
+            "/cases",
+            {
+                "schema_version": 1,
+                "title": "Unsupported helper notes",
+                "window": {
+                    "start": "2026-01-01T00:00:00Z",
+                    "end": "2026-01-01T01:00:00Z",
+                },
+            },
+            "runtime-case",
+        )
+        self.assertEqual(status, 201)
+        status, case = self.request(
+            "POST",
+            "/cases/" + case["id"] + "/entries",
+            {
+                "expected_revision": 1,
+                "item": {"type": "note", "text": "Notes remain available"},
+            },
+            "runtime-note",
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(case["entries"][0]["text"], "Notes remain available")
+        lab.verify_target()
+        container = lab.lab_tls.read_container(lab.SECRETS, lab.task_identity())
+        code = "import json,os,sys; sys.path.insert(0,'/opt/splunk/etc/apps/splunk_adm/bin'); from adm_cases_lib.transport import SupervisedTransport,TransportError; t=SupervisedTransport('synthetic-token','https://127.0.0.1:8089','/opt/splunk/etc/auth/adm_lab_tls/ca.pem'); ready=False\ntry: ready=t.preflight()\nexcept TransportError: pass\nassert not ready; assert not os.path.exists('/opt/splunk/var/lib/splunk/splunk_adm_investigations/capture_jobs.sqlite'); print(json.dumps({'preflight_ready':ready,'job_ledger_absent':True}))"
+        done = subprocess.run(
+            [
+                "docker",
+                "exec",
+                "--user",
+                "41812:41812",
+                container,
+                "/opt/splunk/bin/splunk",
+                "cmd",
+                "python3",
+                "-c",
+                code,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=20,
+        )
+        self.assertEqual(
+            json.loads(done.stdout),
+            {"preflight_ready": False, "job_ledger_absent": True},
         )

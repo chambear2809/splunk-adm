@@ -99,7 +99,9 @@ test("an uncertain write survives denied retry until the same request can be con
   await retry.click();
   await expect(retry).toHaveCount(0);
   await expect(page.getByLabel("Add note")).toHaveValue("");
-  await expect(page.getByText("Keep one note", { exact: false })).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Keep one note" }),
+  ).toBeVisible();
   expect(attempts).toHaveLength(3);
   expect(attempts[0]).toEqual(attempts[1]);
   expect(attempts[1]).toEqual(attempts[2]);

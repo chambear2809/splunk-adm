@@ -1,3 +1,4 @@
+import { entryHistories } from "./entryHistory";
 import type { CaseRecord } from "./caseClient";
 
 const line = (value: string) =>
@@ -27,12 +28,49 @@ export function caseHandoff(record: CaseRecord): string {
     "## Investigation entries",
   ];
   if (!record.entries.length) output.push("No visible entries.");
-  for (const entry of record.entries) {
+  for (const history of entryHistories(record.entries) ?? []) {
+    const head = history[history.length - 1];
     output.push(
-      `- ${line(entry.type)} · ${line(entry.author)} · revision ${entry.revision} · ${line(entry.created_at)}`,
+      `- ${line(head.type)} · ${line(head.author)} · revision ${head.revision} · ${line(head.created_at)}${history.length > 1 ? ` · Edited · version ${history.length}` : ""}`,
     );
-    for (const textLine of entry.text.split(/\r?\n/))
+    for (const textLine of head.text.split(/\r?\n/))
       output.push(`  > ${line(textLine)}`);
+    for (const attachment of record.attachments) {
+      if (
+        attachment.kind === "capture_reference" &&
+        attachment.entry_id === head.id
+      ) {
+        const capture = record.captures.find(
+          (item) => item.id === attachment.capture_id,
+        );
+        if (capture)
+          output.push(`  - Attached comparison: ${line(capture.label)}`);
+      }
+    }
+    if (history.length > 1) {
+      output.push("  - History:");
+      history.forEach((entry, index) => {
+        output.push(
+          `    - Version ${index + 1} · ${line(entry.author)} · revision ${entry.revision} · ${line(entry.created_at)}`,
+        );
+        for (const textLine of entry.text.split(/\r?\n/))
+          output.push(`      > ${line(textLine)}`);
+        for (const attachment of record.attachments) {
+          if (
+            attachment.kind === "capture_reference" &&
+            attachment.entry_id === entry.id
+          ) {
+            const capture = record.captures.find(
+              (item) => item.id === attachment.capture_id,
+            );
+            if (capture)
+              output.push(
+                `      - Attached comparison: ${line(capture.label)}`,
+              );
+          }
+        }
+      });
+    }
   }
   output.push("", "## Permitted comparison captures");
   if (!record.captures.length) output.push("No visible captures.");

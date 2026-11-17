@@ -105,6 +105,14 @@ class InstalledInvestigationEvidenceTest(unittest.TestCase):
                 lab._json("POST", f"{IDENTITY_CONFIG}/{name}", values)
         lab._json(
             "POST",
+            "/servicesNS/nobody/splunk_adm/configs/conf-adm_investigations/capture_transport",
+            {
+                "management_uri": "https://127.0.0.1:8089",
+                "ca_file": "/opt/splunk/etc/auth/adm_lab_tls/ca.pem",
+            },
+        )
+        lab._json(
+            "POST",
             CASES_CONFIG,
             {
                 "mode": "single_search_head",

@@ -4,6 +4,257 @@
     "All three loopback ports free",
     "Task credential files and TLS directories absent"
   ],
+  "current_increment": {
+    "cleanup_verified": true,
+    "container_id": "c06294ce635241abe9e2515e1f1812dba21c47a3c92b6400634a42755a9cbc79",
+    "date": "2026-11-16",
+    "failed_attempts": [
+      {
+        "archive_sha256": "0b751a5eb9a8bf53297292fb9529cf50d8d18d8d8b55e49c2e4fc23c41e9e92c",
+        "container_id": "b88b78f1e94e1101ad072ff214ff91e4e26ec507c3e031a7000ec57d924514a3",
+        "failure_message": "test_investigation_evidence failed; inspect protected log",
+        "phases": [
+          {
+            "exit_code": 0,
+            "name": "up"
+          },
+          {
+            "exit_code": 0,
+            "name": "install"
+          },
+          {
+            "exit_code": 0,
+            "name": "test_cases_endpoint"
+          },
+          {
+            "exit_code": 1,
+            "name": "test_investigation_evidence"
+          },
+          {
+            "exit_code": 0,
+            "name": "purge"
+          }
+        ],
+        "purged": true
+      },
+      {
+        "archive_sha256": "0b751a5eb9a8bf53297292fb9529cf50d8d18d8d8b55e49c2e4fc23c41e9e92c",
+        "container_id": "1518a3653dd3e499baeb52f8448d4b19636ddfdb3280aacb04d6c1fea12a2449",
+        "failure_message": "installed transport failed; inspect protected log",
+        "phases": [
+          {
+            "exit_code": 0,
+            "name": "up"
+          },
+          {
+            "exit_code": 0,
+            "name": "install"
+          },
+          {
+            "exit_code": 1,
+            "name": "installed_transport"
+          },
+          {
+            "exit_code": 0,
+            "name": "purge"
+          }
+        ],
+        "purged": true
+      }
+    ],
+    "local_checks": {
+      "browser": {
+        "initial_run": {
+          "failed": 3,
+          "passed": 190,
+          "resolution": "One ambiguous text locator narrowed to the entry list; two navigation interruptions did not repeat after app edits finished and the whole suite reran.",
+          "skipped": 1
+        },
+        "passed": 194,
+        "skipped": 1
+      },
+      "case_python_tests": 93,
+      "frontend_lint": "passed",
+      "main_bundle_gzip_bytes": 685331,
+      "main_bundle_limit_bytes": 686080,
+      "optional_journeys_gzip_bytes": 31667,
+      "optional_journeys_limit_bytes": 32768,
+      "release_tests": 58,
+      "ruff": "passed",
+      "vitest_files": 125,
+      "vitest_tests": 1329
+    },
+    "not_qualified": [
+      "Positive protected capture using supervised helper on native Linux/amd64",
+      "Installed source-backed attachment reference admission/replay",
+      "Whole endpoint/initial SDK hard wall-clock bounds",
+      "Real-data replay, complete baseline provider, readiness/peak capacity and connected journey source coverage",
+      "Splunk Web/CSRF, Cloud/SHC, backup/restore and operational scheduling"
+    ],
+    "packaged_runtime_sha256": {
+      "splunk_adm/README/adm_investigations.conf.spec": "1a3fa6703c1a7a15763d72ed8ea0d21d2d164f678781edc9300111a9a04199fc",
+      "splunk_adm/bin/adm_aci_lib/__init__.py": "8b4693607a37189ec9e309c93677012e09664a84daf4349a677341a9fec8639f",
+      "splunk_adm/bin/adm_aci_lib/config.py": "22a92dc8ee981ed5ba8478b559e2a8d5bc5119cb4474e47da1ef3cd1fa3ad90e",
+      "splunk_adm/bin/adm_aci_lib/context.py": "071820c4702ba98b0bcbf9562239ce166ea759b652c57a22282be49b6e52ddb1",
+      "splunk_adm/bin/adm_aci_lib/fabric.py": "a8ffde10bf03b81f0dd740c0f735063f18a2cd79bff3ca91b40bf7d8a687854e",
+      "splunk_adm/bin/adm_aci_lib/reader.py": "7ca34e5a7a4b5a6a4802103acf5d614cf79947a101a28a8a39af51c1bad8bf7f",
+      "splunk_adm/bin/adm_aci_lib/schema.py": "09fb5ecda7aeed8546fe2659e182c7e7c18897205531aa37571ef3dbec650b83",
+      "splunk_adm/bin/adm_aci_lib/validation.py": "fc489dfcb164808ec9ea9d5c38c1e3d92492507e718ab4200de44177e4cb4597",
+      "splunk_adm/bin/adm_baselines.py": "7d038acef4a5d2823c1bbe2b9444e5220bb94207d971f711be550cd7e10fbe73",
+      "splunk_adm/bin/adm_baselines_lib/__init__.py": "91ebe9233b8c7b1e0ee683dd08ae553d6e5ce07d0ff4e0a0c4f44e792e38bf7a",
+      "splunk_adm/bin/adm_baselines_lib/api.py": "ea4310b24cc249b19915d1a30fe24a7fe259b094eb21c57961b389239803f888",
+      "splunk_adm/bin/adm_baselines_lib/splunk_host.py": "6222c071d901c106213f74cec6f4df18caaff9b8fd621aaf48bc573305e89feb",
+      "splunk_adm/bin/adm_baselines_lib/store.py": "f6613a796845983f53354a8db321d2cafa8d272ecc41ecbb0a36f8f6b038a449",
+      "splunk_adm/bin/adm_cases.py": "ce2a4537aa5ad911c9286d9176a06169865b1e5037f15d8a6415611a9ada80fd",
+      "splunk_adm/bin/adm_cases_lib/__init__.py": "3a1ea2a2638f2aa062ed85a08e2894be6a959355ca4d11d77d4c8c22bfbe10ef",
+      "splunk_adm/bin/adm_cases_lib/api.py": "307c0765df54d7bdd17edadfb271924e2519b7bcb0d0e799bcbdaa288b4c19dd",
+      "splunk_adm/bin/adm_cases_lib/job_ledger.py": "9c5af172c7d3ae0e934fceeb009f79b450f3f9eef462cd1195481c3053859889",
+      "splunk_adm/bin/adm_cases_lib/native.py": "c82df58761b7803d6b3a99eee48074f91993a1156a04574827f75e550a01dd90",
+      "splunk_adm/bin/adm_cases_lib/source.py": "ddabce63224635dff742a898b5f62738c09d8b9c73e24de3f992ba5c53fb6087",
+      "splunk_adm/bin/adm_cases_lib/splunk_host.py": "3ac825323b0ea47eceacb661c0afb0e6db9aa5dd94c660505c258d4c36bd7fbd",
+      "splunk_adm/bin/adm_cases_lib/store.py": "2df933c96d42bf87925a32fd1444191a556a21293a006ee7a7bba1099c878616",
+      "splunk_adm/bin/adm_cases_lib/transport.py": "c79c586fb164a5c304d32915496fe5e79d3d1a53566c2797bf83105e1534e5b3",
+      "splunk_adm/bin/adm_cases_lib/transport_worker.py": "dc39ece34ffc349e43c0667722c62ef3edc7893c36c7a3cd36182357f7b71e57",
+      "splunk_adm/bin/adm_identity_lib/__init__.py": "56fa2d7d54ed4fd75c3b68c3ce410ee9416ba27087308774535b520f2ec66575",
+      "splunk_adm/bin/adm_identity_lib/native_network.py": "c969de2c196c196f3907113406856e355e52f03d9a0228d595624a4d42379484",
+      "splunk_adm/bin/adm_identity_lib/network_graph.py": "de0f7c6f76887d559203ec112280466e5b7f388602ccc9558f5cc73109301fd0",
+      "splunk_adm/bin/adm_identity_lib/protocol.py": "dd5936181a64cc305a7c35c2bbab26067f1bce05f78ee34f75f8ec50de2dac4d",
+      "splunk_adm/bin/adm_identity_lib/qualified.py": "19d64482aa90f6a09702f661e747644a1e902ab0d8d4ae5b354925f79998f6e7",
+      "splunk_adm/bin/adm_identity_lib/rollup.py": "6f89b0951637ee15f51a98c7951550955ebe59332760a291dc6c34ba839382c9",
+      "splunk_adm/bin/adm_identity_lib/search.py": "a44afac8365a822a9d9046aec65a10ce3739516b8994eef778048325e59d0f52",
+      "splunk_adm/bin/adm_identity_lib/slices.py": "33ce0aabc5a835a0ad8fb3490cf40d4f82fafd136b685dbdb19c774a540a3b59",
+      "splunk_adm/bin/adm_recovery.py": "1fdb3c21a11b6bac4012eaf5cae75d8bd79cd82f3ffa5b5adf857d8d30b892d8",
+      "splunk_adm/bin/adm_recovery_lib/__init__.py": "0e2a63272842ebd2166ed0a7cc3f8d692fe46610a08c20f7937895b422d92adb",
+      "splunk_adm/bin/adm_recovery_lib/core.py": "d0829aea24082cdbaea92d93f8f52ce366d11f0f279cd77927cc16c69a209867",
+      "splunk_adm/bin/adm_recovery_lib/planner.py": "c5266cfc163cd4ee5812eed7cf305ad9b601735092b04a2b3eb0e8634fd41ab8",
+      "splunk_adm/bin/adm_recovery_lib/rest.py": "c7b4967c133ae13ec3a8128e841d5d673747623469708b99341899bbcfd1453e",
+      "splunk_adm/bin/adm_settings.py": "3d9461b03de109eef16ac738cfb129b24cc3673d6208ae72db9b097d43548b39",
+      "splunk_adm/bin/adm_settings_lib/__init__.py": "4c98ac36dc1701bd46cbb43025f96568748c8f0bd2dfb9c69e10565735af47af",
+      "splunk_adm/bin/adm_settings_lib/rest.py": "ade0e1099f8f831cffd2578fed69ecd0d41210b59c9a6a590f0b917bf9d2ee60",
+      "splunk_adm/bin/admacipoll.py": "0fdc64570a8cc1a198a7016ee5e2fae22618e922ab07179640eb412356f97d50",
+      "splunk_adm/bin/admqualified.py": "e3068994e8c5fa3b181d14a077df6fb74c63a82c7732df5b63dc0e1a864fbff6",
+      "splunk_adm/bin/lib/splunklib/__init__.py": "a6388aece2f64c8d7d055cc15aeda133ae751b7256d490d4358134c3fc2eec2c",
+      "splunk_adm/bin/lib/splunklib/binding.py": "2b2c7071174c87745b1707f4ab3e50ab151aeb62c009efb3edbbec4dc933ee45",
+      "splunk_adm/bin/lib/splunklib/client.py": "175fafc00182f2194f194d53cac5c40b0922ddb3dfa85a24d3608f51c26c70f0",
+      "splunk_adm/bin/lib/splunklib/data.py": "3a54bf7bbc3106dd24e4468fd642d2c9b7f2acd4c2066dd8d2b63c4ab4e559b6",
+      "splunk_adm/bin/lib/splunklib/modularinput/__init__.py": "c1afea72de4974d706f1500e9d514f0c88ef7d2ba484c9fd7340299304fa9fc7",
+      "splunk_adm/bin/lib/splunklib/modularinput/argument.py": "2840307b258e7ed7972dcc4f6667aca0d0df11e4f97d6e12044216369f9c17c5",
+      "splunk_adm/bin/lib/splunklib/modularinput/event.py": "5c9fcfeb00f6a0fd346babb2bc6136424b4870bbca320146378490d3bd3f6304",
+      "splunk_adm/bin/lib/splunklib/modularinput/event_writer.py": "036b7e1307af464e78af61d62a1d8283784683ecca5def04ac3612b9d9b8dd71",
+      "splunk_adm/bin/lib/splunklib/modularinput/input_definition.py": "f2227a37b05b3bdde41ee382e70546248653fce06e240b7d1bf1a8522a836fd2",
+      "splunk_adm/bin/lib/splunklib/modularinput/scheme.py": "c59bfb6be549ecdadc2dc413ed887c2c3e0c99459f70b55eaf9d942276bfe1a4",
+      "splunk_adm/bin/lib/splunklib/modularinput/script.py": "471c3b20bbc0aa84317c6583f4c2b2ce6e881ce5714ad455aa821c41f024f710",
+      "splunk_adm/bin/lib/splunklib/modularinput/utils.py": "454eb25cb708088e8ef6344218ab41c2d049444763214013c8f927f93b5fff37",
+      "splunk_adm/bin/lib/splunklib/modularinput/validation_definition.py": "c6d73eaf292882d17aa72451c1a23e3e96aad4e4e4c8923724c7bc6c61e2f126",
+      "splunk_adm/bin/lib/splunklib/results.py": "708ddcab93ea773fef76218ce01a65f76adea8999abfbc34a853b2fe5818333b",
+      "splunk_adm/bin/lib/splunklib/searchcommands/__init__.py": "b2020bedbf38cb0803bb23bfc58a036361ec4859e2531b11ecb5934ecf65a574",
+      "splunk_adm/bin/lib/splunklib/searchcommands/decorators.py": "68a1b4a08a0d9cac341c8ae199e9ea5b0c3e0d8a7a37536dccfdacdb7a675bf1",
+      "splunk_adm/bin/lib/splunklib/searchcommands/environment.py": "4a4d01abed3d96a5aa19cf3b05885c60113717e926a6bef3c983ccd4f28a8431",
+      "splunk_adm/bin/lib/splunklib/searchcommands/eventing_command.py": "8537d631d3adaf4544cea28915d27bfde174fffac0c5f24a2e368d25d3ff69df",
+      "splunk_adm/bin/lib/splunklib/searchcommands/external_search_command.py": "3b0a4eee4f0e96b1c71e2770c22b2711f2a9149a5368ba22e32f0f5021cc8aae",
+      "splunk_adm/bin/lib/splunklib/searchcommands/generating_command.py": "5b115f82be1f94997623054bf63dbff035480244833f69fa8ff43d20244f613f",
+      "splunk_adm/bin/lib/splunklib/searchcommands/internals.py": "a38f7f308d7828482dc31ece27e29f3dcd3d88f8256d19a9afe492fac8c5c9fb",
+      "splunk_adm/bin/lib/splunklib/searchcommands/reporting_command.py": "68f080052cf436f471217d94746019bc4186455d668ad2d07f6c657a39ef7809",
+      "splunk_adm/bin/lib/splunklib/searchcommands/search_command.py": "07826d0c5df95a564b5a412e14f4164cc5da11c3c21fbdaf7403aee732409316",
+      "splunk_adm/bin/lib/splunklib/searchcommands/streaming_command.py": "449265a1a64677cad061451604b7d5d79ebbf3b133adbaea80fb002e3abf2a30",
+      "splunk_adm/bin/lib/splunklib/searchcommands/validators.py": "af58cc00d3e1d480cd6b1dc29526956b4487ac69c61eb7ca921a3519a3343239",
+      "splunk_adm/bin/lib/splunklib/six.py": "011f0298116f7f4ba19cdbdedd95b90075672f6a29f0cac21436fe20d28e0713",
+      "splunk_adm/bin/lib/splunklib/utils.py": "3cbb6f60c98491aa79862af7e53f60d0d5e9aef4ad72d3bd3263d49ed21d50da",
+      "splunk_adm/default/adm_investigations.conf": "52341da3117337b02b0f376432c3bd67fdd0c61a4b07380ae2174b98760aa8dd",
+      "splunk_adm/default/web.conf": "ceaa15ace43f250f9be7f8943ce241beb6177c25583b3c708583b176257f540c"
+    },
+    "phases": [
+      {
+        "exit_code": 0,
+        "name": "up"
+      },
+      {
+        "exit_code": 0,
+        "name": "install"
+      },
+      {
+        "exit_code": 0,
+        "name": "test_cases_endpoint"
+      },
+      {
+        "exit_code": 0,
+        "name": "purge"
+      }
+    ],
+    "qualified_behavior": [
+      "Private notes, immutable superseding revisions, exact retry and stale-branch rejection",
+      "Existing sharing/revocation and deletion with notes preserved",
+      "Token-free helper preflight fails closed before job-intent creation in incompatible runtime",
+      "Verified management/HEC TLS and wrong-CA/wrong-hostname rejection"
+    ],
+    "review": [
+      "Independent receipt-disappearance admission race fixed and regression tested",
+      "Independent revoked-case hidden-draft recovery fixed and regression tested",
+      "Astra accepted reviewed incident/watch/case synthetic rendered states at 1440/320 in light/dark"
+    ],
+    "scope": "Installed notes/revisions and unsupported-runtime fail-closed behavior only; no positive supervised source-capture qualification",
+    "task": "capture-runtime-20261116",
+    "test_source_sha256": {
+      "tests/splunk/lab.py": "7ac1d9a25e66294eddb292964f22f333ae4278cb55f13da2be173c493c7f9a48",
+      "tests/splunk/lab.sh": "3aea32aac70a0fee6e4e7ef4009f7bfac5e12c42123cf088228d4c4485221d97",
+      "tests/splunk/lab_tls.py": "9044415b6da60e31c5ca6bfa6be1e89b61f8bcdeddf284ac993feb407d6ba750",
+      "tests/splunk/test_baselines_endpoint.py": "57cf80f1ec4707ab744c88f78d904563e3af1f7e8453b2e16c0bc323d3fd8170",
+      "tests/splunk/test_cases_endpoint.py": "ed591e5036e72dbfab93b1a49cd3e773af2e8dcc2ada840f414de087e8a50cc3",
+      "tests/splunk/test_investigation_evidence.py": "48040eac0c8a268721e12e329de44b4d393b2e9c9054959a5993683a6e9507db",
+      "tests/test_cases_transport.py": "600a793dec6b528a10b19edb8fce569f24cd3cd0ae34834cec2874038458e34e"
+    },
+    "tested_archive_sha256": "432647436a63cf598699e4f8a2c4e5be35870b8ed31419b6b3f777c4f4538d57",
+    "tls_checks": [
+      {
+        "attempts": 1,
+        "phase": "before_install",
+        "port": 18389,
+        "protocol": "TLSv1.3",
+        "trusted_chain_and_hostname": true
+      },
+      {
+        "attempts": 1,
+        "phase": "before_install",
+        "port": 18388,
+        "protocol": "TLSv1.3",
+        "trusted_chain_and_hostname": true
+      },
+      {
+        "negative_check": "untrusted_ca",
+        "phase": "before_install",
+        "rejected": true
+      },
+      {
+        "negative_check": "wrong_hostname",
+        "phase": "before_install",
+        "rejected": true
+      },
+      {
+        "attempts": 1,
+        "phase": "after_install",
+        "port": 18389,
+        "protocol": "TLSv1.3",
+        "trusted_chain_and_hostname": true
+      },
+      {
+        "attempts": 1,
+        "phase": "after_install",
+        "port": 18388,
+        "protocol": "TLSv1.3",
+        "trusted_chain_and_hostname": true
+      },
+      {
+        "negative_check": "untrusted_ca",
+        "phase": "after_install",
+        "rejected": true
+      },
+      {
+        "negative_check": "wrong_hostname",
+        "phase": "after_install",
+        "rejected": true
+      }
+    ]
+  },
   "date": "2026-11-16",
   "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
   "not_qualified": [
@@ -82,6 +333,7 @@
     "splunk_adm/bin/lib/splunklib/utils.py": "3cbb6f60c98491aa79862af7e53f60d0d5e9aef4ad72d3bd3263d49ed21d50da"
   },
   "product": "Splunk Enterprise",
+  "qualification_scope": "Earlier SDK-based source capture run; current supervised transport qualification is recorded separately in current_increment.",
   "qualified_behavior": [
     "Baseline disabled defaults and capability access",
     "Baseline metadata list and owner-private storage",

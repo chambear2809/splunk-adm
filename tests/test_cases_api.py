@@ -58,6 +58,52 @@ class CaseAPITest(unittest.TestCase):
         self.assertEqual(status, 201)
         return result
 
+    def test_saved_comparison_reference_attachment_uses_current_source_access(self):
+        case = self.create()
+        path = "/cases/" + case["id"]
+        self.store.capture_resolver = lambda _p, ref: {
+            "captured_at": "2026-01-01T03:00:00Z",
+            "data": {"value": ref},
+            "source": {"dataset": ref},
+        }
+        allowed = True
+        self.store.source_entitlement = lambda *_: allowed
+        _, noted = self.call(
+            "POST",
+            path + "/entries",
+            {"expected_revision": 1, "item": {"type": "question", "text": "Why?"}},
+            key="entry",
+        )
+        _, captured = self.call(
+            "POST",
+            path + "/captures",
+            {"expected_revision": 2, "reference": "one"},
+            key="capture",
+        )
+        payload = {
+            "expected_revision": 3,
+            "entry_id": noted["entries"][0]["id"],
+            "capture_id": captured["capture_ids"][0],
+        }
+        status, result = self.call(
+            "POST", path + "/attachments", payload, key="attachment"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(result["attachments"][0]["kind"], "capture_reference")
+        allowed = False
+        status, redacted = self.call(
+            "POST", path + "/attachments", payload, key="attachment"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(redacted["attachments"], [])
+        self.assertEqual(redacted["redactions"]["attachments"], 1)
+        self.assertEqual(
+            self.call(
+                "POST", path + "/attachments", payload, key="forged", principal="bob"
+            )[0],
+            403,
+        )
+
     def test_denial_after_commit_does_not_prove_the_write_failed(self):
         case = self.create()
         path = "/cases/" + case["id"]

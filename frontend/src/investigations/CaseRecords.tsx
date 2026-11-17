@@ -1,3 +1,4 @@
+import { entryHistories } from "./entryHistory";
 import { useEffect, useId, useRef, useState } from "react";
 import { caseHandoff } from "./caseHandoff";
 import {
@@ -68,8 +69,25 @@ function CaseRecordsContents({
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [entryType, setEntryType] = useState<CaseEntry["type"]>("note");
+  const [editing, setEditing] = useState<{
+    caseId: string;
+    entry: CaseEntry;
+    text: string;
+  }>();
+  const activeEdit = editing?.caseId === selected?.id ? editing : undefined;
+  const editHistory =
+    activeEdit && selected
+      ? entryHistories(selected.entries)?.find((history) =>
+          history.some((entry) => entry.id === activeEdit.entry.id),
+        )
+      : undefined;
+  const latestEditHead = editHistory?.[editHistory.length - 1];
+  const editNeedsRebase =
+    !!activeEdit && latestEditHead?.id !== activeEdit.entry.id;
   const [member, setMember] = useState("");
   const [captureConsent, setCaptureConsent] = useState(false);
+  const [attachmentConsent, setAttachmentConsent] = useState(false);
+  const [attachmentEntryId, setAttachmentEntryId] = useState("");
   const [exportConsent, setExportConsent] = useState(false);
   const [captureLabel, setCaptureLabel] = useState("");
   const [error, setError] = useState("");
@@ -83,6 +101,7 @@ function CaseRecordsContents({
   const [pending, setPending] = useState<{
     operation: CaseMutation<CaseRecord | CaseReceipt>;
     submittedNote?: string;
+    submittedEditId?: string;
   }>();
   const active = useRef<AbortController>();
   const serial = useRef(0);
@@ -112,6 +131,7 @@ function CaseRecordsContents({
 
   useEffect(() => {
     setCaptureConsent(false);
+    setAttachmentConsent(false);
     setExportConsent(false);
   }, [
     selected?.id,
@@ -200,6 +220,7 @@ function CaseRecordsContents({
   async function save(
     operation: CaseMutation<CaseRecord | CaseReceipt>,
     submittedNote?: string,
+    submittedEditId?: string,
   ) {
     if (!capabilities?.available && !pending) return;
     const current = ++serial.current;
@@ -250,8 +271,18 @@ function CaseRecordsContents({
           ...previous.filter((item) => item.id !== value.id),
         ]);
       }
-      if (submittedNote !== undefined)
-        setNote((previous) => (previous === submittedNote ? "" : previous));
+      if (submittedNote !== undefined) {
+        if (submittedEditId) {
+          setEditing((previous) =>
+            previous?.entry.id === submittedEditId &&
+            previous.text === submittedNote
+              ? undefined
+              : previous,
+          );
+        } else {
+          setNote((previous) => (previous === submittedNote ? "" : previous));
+        }
+      }
       setStatus("Shared case saved.");
       requestAnimationFrame(() =>
         submittedNote === undefined
@@ -261,7 +292,7 @@ function CaseRecordsContents({
     } catch (reason) {
       if (current !== serial.current) return;
       if (reason instanceof CaseError && reason.uncertain)
-        setPending({ operation, submittedNote });
+        setPending({ operation, submittedNote, submittedEditId });
       else if (
         pending &&
         reason instanceof CaseError &&
@@ -365,7 +396,13 @@ function CaseRecordsContents({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void save(pending.operation, pending.submittedNote)}
+            onClick={() =>
+              void save(
+                pending.operation,
+                pending.submittedNote,
+                pending.submittedEditId,
+              )
+            }
           >
             Retry same request
           </button>
@@ -466,6 +503,21 @@ function CaseRecordsContents({
       >
         Create shared case
       </button>
+      {editing && editing.caseId !== selected?.id && (
+        <div role="status">
+          <p>
+            An unsaved edit from another case is retained. Return to that case
+            to continue, or discard the edit to work on another entry.
+          </p>
+          <button
+            type="button"
+            disabled={busy || !!pending}
+            onClick={() => setEditing(undefined)}
+          >
+            Discard retained edit
+          </button>
+        </div>
+      )}
       {selected && (
         <div>
           <h4 ref={caseHeading} tabIndex={-1}>
@@ -477,14 +529,92 @@ function CaseRecordsContents({
           </p>
           {selected.entries.length > 0 && (
             <ul>
-              {selected.entries.map((entry) => (
-                <li key={entry.id}>
-                  <strong>{entry.type}</strong>: {entry.text}{" "}
-                  <small>
-                    ({entry.author}, {entry.created_at})
-                  </small>
-                </li>
-              ))}
+              {(entryHistories(selected.entries) ?? []).map((history) => {
+                const entry = history[history.length - 1];
+                return (
+                  <li key={history[0].id}>
+                    <strong>{entry.type}</strong>: {entry.text}{" "}
+                    <small>
+                      ({entry.author}, {entry.created_at}
+                      {history.length > 1
+                        ? ` · Edited · version ${history.length}`
+                        : ""}
+                      )
+                    </small>{" "}
+                    <button
+                      type="button"
+                      disabled={busy || !!pending || !!editing}
+                      onClick={() => {
+                        setEditing({
+                          caseId: selected.id,
+                          entry,
+                          text: entry.text,
+                        });
+                        requestAnimationFrame(() => noteInput.current?.focus());
+                      }}
+                    >
+                      Edit {entry.type}
+                    </button>
+                    {selected.attachments
+                      .filter(
+                        (attachment) =>
+                          attachment.kind === "capture_reference" &&
+                          attachment.entry_id === entry.id,
+                      )
+                      .map((attachment) => (
+                        <p key={attachment.id}>
+                          <button
+                            type="button"
+                            disabled={busy || !!pending}
+                            onClick={() =>
+                              void open(
+                                selected.id,
+                                String(attachment.capture_id),
+                              )
+                            }
+                          >
+                            View attached evidence
+                          </button>
+                        </p>
+                      ))}
+                    {history.length > 1 && (
+                      <details>
+                        <summary>History ({history.length} versions)</summary>
+                        <ol>
+                          {history.map((version, index) => (
+                            <li key={version.id}>
+                              Version {index + 1} · {version.author} ·{" "}
+                              {version.created_at}: {version.text}
+                              {version.id !== entry.id &&
+                                selected.attachments
+                                  .filter(
+                                    (attachment) =>
+                                      attachment.kind === "capture_reference" &&
+                                      attachment.entry_id === version.id,
+                                  )
+                                  .map((attachment) => (
+                                    <button
+                                      key={attachment.id}
+                                      type="button"
+                                      disabled={busy || !!pending}
+                                      onClick={() =>
+                                        void open(
+                                          selected.id,
+                                          String(attachment.capture_id),
+                                        )
+                                      }
+                                    >
+                                      View attached evidence
+                                    </button>
+                                  ))}
+                            </li>
+                          ))}
+                        </ol>
+                      </details>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           {selected.capture_ids && selected.capture_ids.length > 0 && (
@@ -514,6 +644,85 @@ function CaseRecordsContents({
             </section>
           )}
           <CaseEvidence record={selected} />
+          {selected.entries.length > 0 && (
+            <section aria-label="Attach saved comparison evidence">
+              <h5 style={{ fontSize: "1rem" }}>
+                Attach saved comparison evidence
+              </h5>
+              <p>
+                Choose an entry and an authorized saved capture. Attachments do
+                not grant source access.
+              </p>
+              <label htmlFor={`${field}-attachment-entry`}>Entry</label>
+              <select
+                id={`${field}-attachment-entry`}
+                value={attachmentEntryId}
+                disabled={busy || !!pending}
+                onChange={(event) => {
+                  setAttachmentEntryId(event.target.value);
+                  setAttachmentConsent(false);
+                }}
+              >
+                <option value="">Choose an entry</option>
+                {(entryHistories(selected.entries) ?? []).map((history) => {
+                  const entry = history[history.length - 1];
+                  return (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.type}: {entry.text.slice(0, 80)}
+                    </option>
+                  );
+                })}
+              </select>
+              <label>
+                <input
+                  type="checkbox"
+                  style={{ width: "auto", display: "inline-block" }}
+                  checked={attachmentConsent}
+                  disabled={busy || !!pending}
+                  onChange={(event) =>
+                    setAttachmentConsent(event.target.checked)
+                  }
+                />{" "}
+                I understand this links the selected saved capture to the entry.
+              </label>
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  !!pending ||
+                  !attachmentConsent ||
+                  !attachmentEntryId ||
+                  !(entryHistories(selected.entries) ?? []).some(
+                    (history) =>
+                      history[history.length - 1].id === attachmentEntryId,
+                  ) ||
+                  !selectedCaptureId ||
+                  !selected.captures.some(
+                    (capture) => capture.id === selectedCaptureId,
+                  )
+                }
+                onClick={() => {
+                  if (!selectedCaptureId) return;
+                  void save(
+                    client.attach(
+                      selected.id,
+                      selected.revision,
+                      attachmentEntryId,
+                      selectedCaptureId,
+                    ),
+                  );
+                }}
+              >
+                Attach saved comparison evidence
+              </button>
+              {!selectedCaptureId ||
+              !selected.captures.some(
+                (capture) => capture.id === selectedCaptureId,
+              ) ? (
+                <p>Recheck a saved capture before attaching it.</p>
+              ) : null}
+            </section>
+          )}
           <p>
             Saving a comparison asks the server to recheck the source and fetch
             its evidence; it does not copy the displayed graph. Shared case
@@ -583,8 +792,8 @@ function CaseRecordsContents({
           <label htmlFor={`${field}-type`}>Entry type</label>
           <select
             id={`${field}-type`}
-            value={entryType}
-            disabled={busy || !!pending}
+            value={activeEdit?.entry.type ?? entryType}
+            disabled={busy || !!pending || !!activeEdit}
             onChange={(event) =>
               setEntryType(event.target.value as CaseEntry["type"])
             }
@@ -593,27 +802,74 @@ function CaseRecordsContents({
             <option value="hypothesis">Hypothesis</option>
             <option value="question">Question</option>
           </select>
-          <label htmlFor={`${field}-note`}>Add {entryType}</label>
+          <label htmlFor={`${field}-note`}>
+            {activeEdit ? `Edit ${activeEdit.entry.type}` : `Add ${entryType}`}
+          </label>
           <textarea
             ref={noteInput}
             id={`${field}-note`}
             maxLength={10000}
             disabled={busy || !!pending}
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
+            value={activeEdit ? activeEdit.text : note}
+            onChange={(event) =>
+              activeEdit
+                ? setEditing({ ...activeEdit, text: event.target.value })
+                : setNote(event.target.value)
+            }
           />
           <button
             type="button"
-            disabled={busy || !!pending || !note.trim()}
-            onClick={() =>
-              void save(
-                client.append(selected.id, selected.revision, entryType, note),
-                note,
-              )
+            disabled={
+              busy ||
+              !!pending ||
+              editNeedsRebase ||
+              !(activeEdit ? activeEdit.text : note).trim()
             }
+            onClick={() => {
+              const text = activeEdit ? activeEdit.text : note;
+              void save(
+                client.append(
+                  selected.id,
+                  selected.revision,
+                  activeEdit?.entry.type ?? entryType,
+                  text,
+                  activeEdit?.entry.id,
+                ),
+                text,
+                activeEdit?.entry.id,
+              );
+            }}
           >
-            Save {entryType}
+            {activeEdit ? "Save revision" : `Save ${entryType}`}
           </button>
+          {activeEdit && editNeedsRebase && (
+            <p role="status">
+              This entry changed. Your draft is preserved.
+              {latestEditHead && (
+                <button
+                  type="button"
+                  disabled={busy || !!pending}
+                  onClick={() =>
+                    setEditing({ ...activeEdit, entry: latestEditHead })
+                  }
+                >
+                  Apply draft to latest version
+                </button>
+              )}
+            </p>
+          )}
+          {activeEdit && (
+            <button
+              type="button"
+              disabled={busy || !!pending}
+              onClick={() => {
+                setEditing(undefined);
+                requestAnimationFrame(() => noteInput.current?.focus());
+              }}
+            >
+              Cancel editing
+            </button>
+          )}
           <div>
             <p>
               Only the case owner can change access. Shared case exports can
@@ -708,7 +964,13 @@ function CaseRecordsContents({
           type="button"
           disabled={busy}
           ref={retryButton}
-          onClick={() => void save(pending.operation, pending.submittedNote)}
+          onClick={() =>
+            void save(
+              pending.operation,
+              pending.submittedNote,
+              pending.submittedEditId,
+            )
+          }
         >
           Retry same request
         </button>

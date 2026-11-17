@@ -254,19 +254,24 @@ class HostTest(unittest.TestCase):
         from tests.test_cases_source import graph, reference
 
         jobs = {}
+        job_requests = {}
+        job_owners = {}
         issued = []
         restricted = set()
 
         def native(method, path, data, timeout):
             self.assertGreater(timeout, 0)
             if method == "POST":
-                sid = "capture_" + str(len(issued) + 1)
+                self.assertNotIn("id", data)
+                sid = "native_auto_" + str(len(issued) + 1)
                 issued.append((self.host.principal(), data.copy()))
+                job_requests[sid] = data.copy()
+                job_owners[sid] = self.host.principal()
                 jobs[sid] = graph(int(data["earliest_time"]), int(data["latest_time"]))
                 if self.host.principal() in restricted:
                     jobs[sid] = jobs[sid][1:]  # Same index grant, fewer visible rows.
                 return {"sid": sid}
-            sid = path.split("/")[5].split("?")[0]
+            sid = path.split("/jobs/", 1)[1].split("/", 1)[0].split("?", 1)[0]
             if method == "DELETE":
                 del jobs[sid]
                 return {}
@@ -275,14 +280,19 @@ class HostTest(unittest.TestCase):
             return {
                 "entry": [
                     {
+                        "name": "A native display title",
+                        "acl": {"owner": job_owners[sid], "app": "splunk_adm"},
                         "content": {
+                            "sid": sid,
+                            "request": job_requests[sid],
+                            "search": job_requests[sid]["search"],
                             "dispatchState": "DONE",
                             "isDone": True,
                             "isFinalized": False,
                             "eventIsTruncated": False,
                             "dropCount": 0,
                             "resultCount": len(jobs[sid]),
-                        }
+                        },
                     }
                 ]
             }
@@ -339,6 +349,104 @@ class HostTest(unittest.TestCase):
                 [["Content-Type", "application/json"], ["Idempotency-Key", "disabled"]],
             )[0],
         )
+
+    def test_unconfigured_capture_transport_preserves_notes(self):
+        self.responses[APP + "/configs/conf-adm_investigations/persistence"][
+            "capture_mode"
+        ] = "reproducible_qualified_v1"
+        self.host.transport_configuration = lambda: {
+            "management_uri": "unconfigured",
+            "ca_file": "unconfigured",
+        }
+        status, caps, _ = self.call("GET", "/capabilities")
+        self.assertEqual(status, 200)
+        self.assertTrue(caps["available"])
+        self.assertFalse(caps["evidenceWrites"])
+        self.assertEqual(caps["mode"], "notes_only")
+        self.assertEqual(self.call("GET", "/cases")[0], 200)
+
+    def test_capture_trust_reader_has_fixed_scope_and_strict_fields(self):
+        with (
+            mock.patch.dict(os.environ, {"SPLUNK_HOME": "/opt/splunk"}),
+            mock.patch(
+                "adm_cases_lib.splunk_host.subprocess.run",
+                return_value=SimpleNamespace(
+                    stdout=b"[capture_transport]\nmanagement_uri = unconfigured\nca_file = unconfigured\n"
+                ),
+            ) as command,
+        ):
+            self.assertEqual(
+                SplunkHost._transport_configuration(),
+                {"management_uri": "unconfigured", "ca_file": "unconfigured"},
+            )
+            self.assertEqual(
+                command.call_args.args[0][-3:],
+                ["adm_investigations", "list", "capture_transport"],
+            )
+            command.return_value = SimpleNamespace(
+                stdout=b"[capture_transport]\nmanagement_uri = x\nca_file = y\nextra = z\n"
+            )
+            with self.assertRaises(HostUnavailable):
+                SplunkHost._transport_configuration()
+
+    def test_protected_transport_must_match_host_instance_guid(self):
+        self.responses["/services/server/info"]["guid"] = "host-a"
+        self.responses[APP + "/configs/conf-adm_investigations/persistence"][
+            "capture_mode"
+        ] = "reproducible_qualified_v1"
+        peer = {"guid": "host-b"}
+        calls = []
+
+        class Requester:
+            trust_digest = "a" * 64
+
+            ready = True
+
+            def preflight(self):
+                return self.ready
+
+            def __call__(self, method, path, data, timeout):
+                calls.append((method, path))
+                return {"entry": [{"content": peer.copy()}]}
+
+        requester = Requester()
+        self.host.capture_request = lambda: requester
+        requester.ready = False
+        self.assertFalse(self.call("GET", "/capabilities")[1]["evidenceWrites"])
+        self.assertEqual(calls, [])
+        requester.ready = True
+        status, caps, _ = self.call("GET", "/capabilities")
+        self.assertEqual(status, 200)
+        self.assertTrue(caps["available"])
+        self.assertFalse(caps["evidenceWrites"])
+        self.assertEqual(self.call("GET", "/cases")[0], 200)
+        self.assertTrue(
+            all(m == "GET" and p == "/services/server/info" for m, p in calls)
+        )
+        peer["guid"] = "host-a"
+        self.assertTrue(self.call("GET", "/capabilities")[1]["evidenceWrites"])
+        first = self.host.transport_hash(requester)
+        self.host.hosting_guid = "host-b"
+        self.assertNotEqual(first, self.host.transport_hash(requester))
+
+    def test_missing_host_guid_does_not_contact_configured_peer(self):
+        self.responses[APP + "/configs/conf-adm_investigations/persistence"][
+            "capture_mode"
+        ] = "reproducible_qualified_v1"
+        with mock.patch.object(self.host, "capture_request") as requester:
+            self.assertFalse(self.call("GET", "/capabilities")[1]["evidenceWrites"])
+            requester.assert_not_called()
+        self.assertEqual(self.call("GET", "/cases")[0], 200)
+
+    def test_unsafe_source_ledger_does_not_strand_notes(self):
+        self.responses[APP + "/configs/conf-adm_investigations/persistence"][
+            "capture_mode"
+        ] = "reproducible_qualified_v1"
+        self.host.native_request = lambda *args: {}
+        file = self.host.database().with_name("capture_jobs.sqlite")
+        file.write_text("not sqlite")
+        file.chmod(0o600)
+        self.assertEqual(self.call("GET", "/cases")[0], 200)
 
     def test_capture_config_and_fingerprint_fail_closed(self):
         self.assertRegex(self.host.source_fingerprint(), r"^[0-9a-f]{64}$")

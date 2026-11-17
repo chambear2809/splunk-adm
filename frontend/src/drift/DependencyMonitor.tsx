@@ -14,6 +14,7 @@ import {
   type Occurrence,
   type WatchStatus,
 } from "./client";
+import { WatchDependency, WatchStatusSummary } from "./watchPresentation";
 import "./monitor.css";
 
 type Mutation = { requestId: string; run: () => Promise<BaselineReceipt> };
@@ -163,7 +164,7 @@ function DependencyMonitorContents({
         metadata.resultWithheld
           ? "Evaluation was committed; its earlier result is withheld. Reopen authorized history for current details."
           : metadata.inserted !== undefined && metadata.surfaced !== undefined
-            ? `Evaluation saved: ${metadata.inserted} observations recorded, ${metadata.surfaced} surfaced.`
+            ? `Evaluation saved: ${metadata.inserted} new observations recorded; ${metadata.surfaced} surfaced for review. Reopen the watch to inspect authorized occurrences.`
             : "Baseline change saved. List baselines and open the record to read its current revision.",
       );
     } catch (reason) {
@@ -518,16 +519,23 @@ function DependencyMonitorContents({
               )}
               {occurrenceWatch && (
                 <section aria-label="Watch occurrences">
-                  <h4>Authorized occurrences for {occurrenceWatch}</h4>
+                  <h4>Loaded observations for {occurrenceWatch}</h4>
+                  <p>
+                    {occurrences.length} loaded observations
+                    {occurrenceNext ? "; more are available." : "."}
+                  </p>
                   {occurrences.length ? (
                     <ul>
                       {occurrences.map((item) => (
                         <li key={item.seq}>
-                          {item.signature} ·{" "}
-                          {new Date(item.window.start * 1000).toISOString()} –{" "}
-                          {new Date(item.window.end * 1000).toISOString()} UTC ·
-                          observed{" "}
-                          {new Date(item.observedAt * 1000).toISOString()}
+                          <WatchDependency signature={item.signature} />
+                          <p>
+                            Observation window:{" "}
+                            {new Date(item.window.start * 1000).toISOString()} –{" "}
+                            {new Date(item.window.end * 1000).toISOString()} ·
+                            recorded at{" "}
+                            {new Date(item.observedAt * 1000).toISOString()}
+                          </p>
                           {repository.watchStatus && (
                             <button
                               type="button"
@@ -561,16 +569,11 @@ function DependencyMonitorContents({
                     <p>No occurrences in this page.</p>
                   )}
                   {watchStatus && (
-                    <p>
-                      Authorized status for {watchStatus.signature} at{" "}
-                      {new Date(watchStatus.at * 1000).toISOString()}:{" "}
-                      {watchStatus.value.count} observations; threshold{" "}
-                      {watchStatus.value.thresholdMet ? "met" : "not met"};
-                      expected window{" "}
-                      {watchStatus.value.expected ? "active" : "inactive"};
-                      cooldown{" "}
-                      {watchStatus.value.coolingDown ? "active" : "inactive"}.
-                    </p>
+                    <WatchStatusSummary
+                      signature={watchStatus.signature}
+                      at={watchStatus.at}
+                      value={watchStatus.value}
+                    />
                   )}
                   {occurrenceNext && repository.occurrences && (
                     <button

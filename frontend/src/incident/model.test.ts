@@ -79,25 +79,22 @@ describe("incident interpretation", () => {
   it("finds reported drops, node placement changes and newly observed dependencies without asserting cause", () => {
     const findings = buildFindings(before(), during());
     expect(findings.map((item) => item.id)).toEqual([
-      "drops",
+      "drops_unknown",
       "new",
       "placement",
     ]);
-    expect(findings[0].supports[0]).toContain("2 reported drops");
+    expect(findings[0].supports[0]).toContain("incident drop reported");
     expect(findings[0].missing.join(" ")).toContain("policy change");
     expect(findings[2].supports[0]).toContain("node-a → node-b");
     expect(findings[2].missing.join(" ")).toContain("exact movement time");
   });
-  it("makes a collector gap and incomplete results visible before other findings", () => {
+  it("reports collection gaps separately from ranked leads", () => {
     const graph = during();
     graph.coverage.warnings.push("ACI collector is stale");
     graph.read = { coverage: 50, windowSeconds: 3600, pendingSeconds: 1800 };
     const findings = buildFindings(before(), graph);
-    expect(findings[0]).toMatchObject({
-      id: "coverage",
-      status: "Needs evidence",
-    });
-    expect(findings[0].supports).toEqual(
+    expect(findings.every((item) => item.id !== "coverage")).toBe(true);
+    expect(coverageReasons(graph)).toEqual(
       expect.arrayContaining([
         "ACI collector is stale",
         "The map read is incomplete.",
@@ -115,6 +112,79 @@ describe("incident interpretation", () => {
       }),
     ).toContain("The map shows a ranked subset of the result.");
   });
+  it("ranks direct permit-to-drop above previously blocked observations without inferring a cause", () => {
+    const prior = before();
+    prior.edges = [
+      edge("already", { acl_action: "drop", acl_drops: 2 }),
+      edge("changed", { acl_action: "permit" }),
+    ];
+    const current = during();
+    current.edges = [
+      edge("already", { acl_action: "drop", acl_drops: 2 }),
+      edge("changed", { acl_action: "drop", acl_drops: 1 }),
+    ];
+    const findings = buildFindings(prior, current);
+    expect(findings[0]).toMatchObject({
+      id: "drops_changed",
+      status: "Supported",
+    });
+    expect(findings[0].rankReason).toContain("same connection");
+    const priorBlocked = findings.find((item) => item.id === "drops_previous")!;
+    expect(findings.indexOf(priorBlocked)).toBeGreaterThan(0);
+    expect(priorBlocked.contradicts.join(" ")).toContain(
+      "already reported blocked",
+    );
+    expect(priorBlocked.missing.join(" ")).toContain("do not establish");
+  });
+  it("distinguishes an explicit zero from unknown baseline state without inventing a permit", () => {
+    const prior = before();
+    prior.edges = [edge("zero", { acl_drops: 0 }), edge("unknown")];
+    const current = during();
+    current.edges = [
+      edge("zero", { acl_action: "drop" }),
+      edge("unknown", { acl_action: "drop" }),
+    ];
+    const finding = buildFindings(prior, current).find(
+      (item) => item.id === "drops_unknown",
+    )!;
+    expect(finding.supports.join(" ")).toContain(
+      "baseline reports zero drops; a permit is not established",
+    );
+    expect(finding.supports.join(" ")).toContain(
+      "baseline policy state is unknown",
+    );
+    expect(
+      buildFindings(prior, current).some((item) => item.id === "drops_changed"),
+    ).toBe(false);
+  });
+  it("orders ranks and capped evidence deterministically when graph records are reordered", () => {
+    const prior = before();
+    prior.edges = Array.from({ length: 12 }, (_, i) =>
+      edge(`item-${i}`, { acl_action: "permit", target: `destination-${i}` }),
+    );
+    const current = during();
+    current.edges = prior.edges.map((item) => ({
+      ...item,
+      acl_action: "drop",
+    }));
+    const normal = buildFindings(prior, current);
+    const reversed = buildFindings(
+      {
+        ...prior,
+        nodes: [...prior.nodes].reverse(),
+        edges: [...prior.edges].reverse(),
+      },
+      {
+        ...current,
+        nodes: [...current.nodes].reverse(),
+        edges: [...current.edges].reverse(),
+      },
+    );
+    expect(normal).toEqual(reversed);
+    expect(normal[0].supports).toHaveLength(10);
+    expect(normal[0].edgeIds).toEqual([...normal[0].edgeIds].sort());
+  });
+
   it("labels snapshot differences as intervals and missing connections as not observed", () => {
     const items = buildTimeline(before(), during());
     expect(items.some((item) => item.title.includes("not observed"))).toBe(

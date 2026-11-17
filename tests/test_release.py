@@ -329,6 +329,41 @@ class ReleaseArchiveTests(unittest.TestCase):
                 b"platform = enterprise",
             ),
             (
+                "splunk_adm/default/adm_investigations.conf",
+                b"capture_mode = disabled",
+                b"capture_mode = reproducible_qualified_v1",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"management_uri = unconfigured",
+                b"management_uri = http://localhost:8089",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"management_uri = unconfigured",
+                b"management_uri = https://remote.example:8089",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"management_uri = unconfigured",
+                b"management_uri = https://localhost:8089",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"ca_file = unconfigured",
+                b"ca_file = /opt/splunk/etc/auth/cacert.pem",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"ca_file = unconfigured",
+                b"ca_file = unconfigured\nenabled = true",
+            ),
+            (
+                "splunk_adm/default/adm_investigations.conf",
+                b"[capture_transport]",
+                b"[unexpected_transport]",
+            ),
+            (
                 "splunk_adm/default/restmap.conf",
                 b"capability = adm_investigate",
                 b"capability = search",

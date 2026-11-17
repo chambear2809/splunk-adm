@@ -271,3 +271,116 @@ it("validates capabilities and refuses contradictory or malformed responses", as
   await expect(client.capabilities()).rejects.toBeInstanceOf(CaseError);
   await expect(client.capabilities()).rejects.toBeInstanceOf(CaseError);
 });
+
+it("validates revision lineage and retries edits with the same predecessor", async () => {
+  const first = {
+    id: "entry-1",
+    revision: 1,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    type: "note",
+    text: "Original",
+  };
+  const second = {
+    ...first,
+    id: "entry-2",
+    revision: 2,
+    text: "Updated",
+    supersedes_entry_id: "entry-1",
+  };
+  const transport = vi
+    .fn<CaseTransport>()
+    .mockRejectedValueOnce(new Error("lost"))
+    .mockResolvedValueOnce(
+      json({ ...sample, revision: 2, entries: [first, second] }),
+    );
+  const client = createCaseClient({
+    transport,
+    baseUrl: "/api",
+    requestId: () => "edit-key",
+  });
+  const operation = client.append("case-1", 1, "note", "Updated", "entry-1");
+  await expect(operation.execute()).rejects.toMatchObject({ uncertain: true });
+  await expect(operation.execute()).resolves.toMatchObject({
+    entries: [first, second],
+  });
+  expect(transport.mock.calls[0]).toEqual(transport.mock.calls[1]);
+  expect(JSON.parse(transport.mock.calls[0][1].body as string)).toEqual({
+    expected_revision: 1,
+    item: { type: "note", text: "Updated", supersedes_entry_id: "entry-1" },
+  });
+  const invalid = [
+    [first, { ...second, supersedes_entry_id: "missing" }],
+    [first, { ...second, type: "question" }],
+    [first, second, { ...second, id: "fork", revision: 3 }],
+    [first, { ...second, revision: 1 }],
+  ];
+  for (const entries of invalid) {
+    const untrusted = createCaseClient({
+      baseUrl: "/api",
+      transport: async () => json({ ...sample, revision: 3, entries }),
+    });
+    await expect(untrusted.get("case-1")).rejects.toBeInstanceOf(CaseError);
+  }
+});
+
+it("attaches only a source-authorized capture reference and preserves the retry payload", async () => {
+  const entry = {
+    id: "entry-1",
+    revision: 1,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    type: "note",
+    text: "Context",
+  };
+  const capture = {
+    id: "capture-1",
+    revision: 2,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    captured_at: "2026-01-01T00:00:00Z",
+    label: "Comparison",
+    data: {},
+  };
+  const attachment = {
+    id: "attachment-1",
+    revision: 3,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    kind: "capture_reference",
+    entry_id: "entry-1",
+    capture_id: "capture-1",
+  };
+  const response = {
+    ...sample,
+    revision: 3,
+    entries: [entry],
+    captures: [capture],
+    attachments: [attachment],
+  };
+  const transport = vi
+    .fn<CaseTransport>()
+    .mockRejectedValueOnce(new Error("lost"))
+    .mockResolvedValueOnce(json(response));
+  const client = createCaseClient({
+    baseUrl: "/api",
+    transport,
+    requestId: () => "attach-key",
+  });
+  const action = client.attach("case-1", 2, "entry-1", "capture-1");
+  await expect(action.execute()).rejects.toMatchObject({ uncertain: true });
+  await expect(action.execute()).resolves.toMatchObject({
+    attachments: [attachment],
+  });
+  expect(transport.mock.calls[0]).toEqual(transport.mock.calls[1]);
+  expect(JSON.parse(transport.mock.calls[0][1].body as string)).toEqual({
+    expected_revision: 2,
+    entry_id: "entry-1",
+    capture_id: "capture-1",
+  });
+  const invalid = createCaseClient({
+    baseUrl: "/api",
+    transport: async () => json({ ...response, captures: [] }),
+  });
+  await expect(invalid.get("case-1")).rejects.toBeInstanceOf(CaseError);
+});

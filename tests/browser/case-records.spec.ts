@@ -118,3 +118,205 @@ test("shared notes preserve a draft across case creation and retry lost response
   ).toHaveCount(0);
   await expect(page.getByLabel("Add note")).toHaveCount(0);
 });
+
+test("attaches an authorized saved comparison only after explicit consent", async ({
+  page,
+}) => {
+  const captureId = "00000000-0000-4000-8000-000000000001";
+  const entry = {
+    id: "entry-1",
+    revision: 1,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    type: "note",
+    text: "Review this evidence",
+  };
+  const capture = {
+    id: captureId,
+    revision: 2,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    captured_at: "2026-01-01T00:00:00Z",
+    label: "Baseline comparison",
+    data: {},
+  };
+  const attachment = {
+    id: "attachment-1",
+    revision: 3,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    kind: "capture_reference",
+    entry_id: entry.id,
+    capture_id: captureId,
+  };
+  const record = {
+    schema_version: 1,
+    id: "case-1",
+    revision: 2,
+    title: "Evidence case",
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [entry],
+    captures: [capture],
+    capture_ids: [captureId],
+    attachments: [] as (typeof attachment)[],
+    redactions: { captures: 0, attachments: 0 },
+  };
+  let denied = false;
+  let attachBody: unknown;
+  await page.route("**/test-cases/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: true,
+          mode: "notes_and_reproducible_evidence",
+          qualified: false,
+        },
+      });
+    if (path.endsWith("/attachments")) {
+      attachBody = request.postDataJSON();
+      expect(attachBody).toEqual({
+        expected_revision: 2,
+        entry_id: entry.id,
+        capture_id: captureId,
+      });
+      record.revision = 3;
+      record.attachments = [attachment];
+      return route.fulfill({ json: record });
+    }
+    if (path.endsWith("/cases"))
+      return route.fulfill({ json: { items: [record], next: null } });
+    return route.fulfill({
+      json: denied
+        ? {
+            ...record,
+            captures: [],
+            attachments: [],
+            redactions: { captures: 1, attachments: 1 },
+          }
+        : record,
+    });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?attachmentReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?attachmentReplay");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page
+    .getByRole("button", { name: "Evidence case", exact: true })
+    .click();
+  const attach = page.getByRole("button", {
+    name: "Attach saved comparison evidence",
+  });
+  const consent = page.getByRole("checkbox", {
+    name: /links the selected saved capture/,
+  });
+  await expect(consent).not.toBeChecked();
+  await expect(attach).toBeDisabled();
+  await page.getByLabel("Entry", { exact: true }).selectOption(entry.id);
+  await expect(attach).toBeDisabled();
+  await consent.check();
+  await attach.click();
+  await expect(
+    page.getByRole("button", { name: "View attached evidence" }),
+  ).toBeVisible();
+  expect(attachBody).toBeDefined();
+  denied = true;
+  await page.getByRole("button", { name: "Recheck capture 1 of 1" }).click();
+  await expect(
+    page.getByRole("button", { name: "View attached evidence" }),
+  ).toHaveCount(0);
+  await expect(page.getByText(/1 attachments withheld/)).toBeVisible();
+});
+
+test("a retained edit from a revoked case can be discarded before editing another case", async ({
+  page,
+}) => {
+  const window = { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" };
+  const entry = (id: string, text: string) => ({
+    id,
+    revision: 1,
+    author: "alice",
+    created_at: "2026-01-01T00:00:00Z",
+    type: "note",
+    text,
+  });
+  const base = {
+    schema_version: 1,
+    revision: 1,
+    window,
+    captures: [],
+    attachments: [],
+  };
+  const a = {
+    ...base,
+    id: "case-a",
+    title: "Case A",
+    entries: [entry("entry-a", "A original")],
+  };
+  const b = {
+    ...base,
+    id: "case-b",
+    title: "Case B",
+    entries: [entry("entry-b", "B original")],
+  };
+  let revoked = false;
+  await page.route("**/test-cases/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: false,
+          mode: "notes_only",
+          qualified: false,
+        },
+      });
+    if (path.endsWith("/cases"))
+      return route.fulfill({
+        json: { items: revoked ? [b] : [a, b], next: null },
+      });
+    if (path.endsWith("/case-a"))
+      return revoked
+        ? route.fulfill({ status: 403, json: { error: "forbidden" } })
+        : route.fulfill({ json: a });
+    return route.fulfill({ json: b });
+  });
+  await page.route(
+    "**/tests/browser/investigation.html?revokedEditReplay",
+    (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module" src="/@vite/client"></script><div id="root"></div><script type="module" src="/tests/browser/cases-harness.tsx"></script>',
+      }),
+  );
+  await page.goto("/tests/browser/investigation.html?revokedEditReplay");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Case A", exact: true }).click();
+  await page.getByRole("button", { name: "Edit note", exact: true }).click();
+  await page.getByLabel("Edit note").fill("A unsaved edit");
+  revoked = true;
+  await page.getByRole("button", { name: "Case A", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("permission");
+  await expect(
+    page.getByRole("button", { name: "Discard retained edit" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page.getByRole("button", { name: "Case B", exact: true }).click();
+  await expect(page.getByText("A unsaved edit", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Edit note", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Discard retained edit" }).click();
+  await page.getByRole("button", { name: "Edit note", exact: true }).click();
+  await expect(page.getByLabel("Edit note")).toHaveValue("B original");
+});
