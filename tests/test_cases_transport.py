@@ -1,5 +1,6 @@
 """Offline tests for supervised transport and local TLS limits."""
 
+import os
 from pathlib import Path
 import socket
 import ssl
@@ -62,8 +63,17 @@ class TransportTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.directory.cleanup)
         cls.cert = str(Path(cls.directory.name) / "cert.pem")
         cls.key = str(Path(cls.directory.name) / "key.pem")
+        cls.other_cert = str(Path(cls.directory.name) / "other-cert.pem")
+        cls.other_key = str(Path(cls.directory.name) / "other-key.pem")
+        # Embedded Splunk Python can inherit a loader path that makes the
+        # external OpenSSL binary load incompatible vendor libraries. Keep
+        # certificate generation on the host loader environment; the worker's
+        # production environment remains unchanged and is tested below.
+        openssl_env = dict(os.environ)
+        openssl_env.pop("LD_LIBRARY_PATH", None)
         subprocess.run(
             [
                 "openssl",
@@ -86,8 +96,38 @@ class TransportTests(unittest.TestCase):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=True,
+            env=openssl_env,
         )
-        cls.addClassCleanup(cls.directory.cleanup)
+        # Keep a second valid localhost certificate so trust failure is tested
+        # against a server that succeeds when its own CA is trusted.
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-keyout",
+                cls.other_key,
+                "-out",
+                cls.other_cert,
+                "-days",
+                "1",
+                "-subj",
+                "/CN=localhost",
+                "-addext",
+                "subjectAltName=DNS:localhost",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            env=openssl_env,
+        )
+        # Do not let a caller umask (for example 0002) make the trust files
+        # group-writable; keep generated fixture material owner-only.
+        for path in (cls.cert, cls.key, cls.other_cert, cls.other_key):
+            os.chmod(path, 0o600)
         cls.tls_worker = None
         if not memory_limit_supported():
             # The desktop OS cannot apply RLIMIT_AS; exercise the real TLS code
@@ -196,6 +236,31 @@ class TransportTests(unittest.TestCase):
             transport("GET", "/services/server/info", None, 3)
         with self.assertRaises(TransportError):
             SupervisedTransport("token", "https://localhost:8089", "/missing/ca.pem")
+
+    def test_matching_hostname_with_unrelated_ca_fails_closed(self):
+        responder = self.response(200, b'{"ok":true}')
+        trusted_server = LocalTLS(self.other_cert, self.other_key, responder)
+        trusted_transport = SupervisedTransport(
+            "token",
+            f"https://localhost:{trusted_server.port}",
+            self.other_cert,
+            _worker_path=self.tls_worker,
+        )
+        self.assertEqual(
+            trusted_transport("GET", "/services/server/info", None, 3), {"ok": True}
+        )
+        trusted_server.thread.join(1)
+
+        server = LocalTLS(self.other_cert, self.other_key, responder)
+        untrusted_transport = SupervisedTransport(
+            "token",
+            f"https://localhost:{server.port}",
+            self.cert,
+            _worker_path=self.tls_worker,
+        )
+        with self.assertRaises(TransportError):
+            untrusted_transport("GET", "/services/server/info", None, 3)
+        server.thread.join(1)
 
     def test_body_limit_and_deadlines(self):
         for status in (200, 403):

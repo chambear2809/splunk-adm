@@ -834,3 +834,112 @@ before that environmental difference was corrected.
 Independent review found no issues in this test-only correction. Follow the
 [final checked-head status](https://github.com/chambear2809/splunk-adm/pull/25/checks)
 for the subsequent complete run; the earlier failed run is not reported as green.
+
+## Enterprise native staged transport follow-up
+
+After the user reported restored VPN/instance access and selected the configured
+Enterprise lab, pinned SSH authentication succeeded. Read-only inspection found
+Linux/x86_64, installed Splunk files version 10.6.0.5/build 86587d4e3b27, embedded
+Python 3.13.11 with OpenSSL 3.5.8, and SHC disabled in btool. Atlas was 0.6.0
+at that staged observation; there was no Docker CLI/socket. No ADM saved search was scheduled/enabled in the
+app-merged btool view, and the new case/baseline storage directories are absent.
+The management certificate has no SAN. These are bounded host observations, not
+authenticated Splunk API/license/source qualification or proof of a disposable
+lab. The shared HF and Cloud were not modified.
+
+The exact `transport.py` and `transport_worker.py` from CI main archive
+`dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4` were staged in a
+private temporary directory. The actual token-free supervisor preflight passed
+in 0.119291 seconds under the embedded native interpreter. It used the unchanged
+256 MiB address-space contract. Its constructor was bypassed for this token-free
+probe; no trust file, real session token, peer or search was used. This establishes
+native helper startup/resource compatibility, not installed capture.
+
+A subsequent staged suite used that archive's real package initialization,
+store and two transport files, plus the current test fixture. All 12 transport
+regressions passed with the native memory limit and no platform-limit fallback:
+valid local TLS, wrong hostname, unrelated valid CA, large CA snapshots, bounded
+bodies/deadlines/IPC, token argument/environment isolation, and child reaping.
+The new CA regression first proves the alternate matching-host certificate works
+when trusted, then rejects it under unrelated trust. Some unit branches use
+explicit mocks as before; actual native TLS workers did not mock resource limits.
+No real Splunk session credential or source job was involved. The suite took
+2.770 seconds (3.167608 including post-run checks), with zero remaining test
+threads/child processes and private staged material removed. Exact source/test
+hashes and probe hashes are recorded in the qualification JSON.
+
+Initial native attempts found fixture portability issues rather than a transport
+failure. The system OpenSSL 3.0.13 CLI loaded Splunk's 3.5.8 libraries under the
+inherited loader path and crashed during certificate generation; a controlled
+comparison passed with that path removed. Only the fixture's external OpenSSL
+commands now omit it. The SSH process umask 0002 also created mode-0664 CA files,
+which the unchanged production guard correctly rejected. Fixture certificates
+and keys now use explicit 0600 modes, and cleanup is registered before generation.
+The final native run passed without weakening TLS, memory limits or file guards.
+A diagnostic probe reporting bug during setup failure was also corrected outside
+Git. Later/final probes disabled core dumps; no real credentials were supplied.
+
+The final staged suite took 2.596 seconds. Its receipt is `work/native-tls/result.json` in the private task workspace outside Git:
+the comment-only source change was rerun once natively and passed all 12 tests;
+the final receipt sequence elapsed 2.987447 seconds. The exact test-source hash
+is `c6b17fa9882bd9762617f22d367b7d54d54d36493803149cd3fa0fe091af25f1`.
+This final receipt supersedes the earlier staged timing observation.
+
+This advances **staged native transport component qualification**. It does not
+qualify installed endpoints, establish current capture through Splunk, or qualify
+Web/CSRF, ACLs, source revocation, whole-endpoint bounds, restore or real-source
+comparisons. Installed Docker-only test guards remain intact. Full installed
+tests require a verified loopback-TLS plan and separately authorized temporary
+test identities; no role grants, schedules, jobs or notifications were performed
+in this staged observation.
+
+Local follow-up checks passed 12 focused transport tests and full Python discovery
+(1,320 tests run, OK with two skipped under the unbuilt-frontend convention), plus Ruff
+check/format for 238 files. The desktop's platform fallback remains separate from
+the native run, which used no memory-limit bypass. No UI or production runtime
+source changed; the tested archive remains frozen. Rollback of this test-only
+increment requires no data/configuration change. Full installed qualification
+still needs verified TLS and a separately reviewed test-identity plan; do not
+remove Docker task-ownership guards or grant roles to make a test run.
+
+## Authorized Enterprise lab update to Atlas 0.9.4
+
+The user explicitly authorized updating the selected Enterprise lab from Atlas
+0.6.0 to 0.9.4; no preservation step was required for this disposable lab.
+The frozen CI archive was `dc9f501c4cb600f65db79ac6f13ea68b0fb10ed5dee97a22511d6512af53e2e4`,
+1,392,502 bytes, build `1794932218`. One API install POST returned HTTP 200 over
+pinned SSH with CA- and hostname-verified TLS. An initial attempt was refused
+before staging because the multiline PID file could not be parsed as an integer;
+readback confirmed Atlas 0.6.0 and no staging. The corrected attempt independently
+reviewed the positive first PID, exact `splunkd` executable and current UID before
+the successful POST. No retry followed the successful install.
+
+Final readback is `work/enterprise-update/verify-result.json`: Atlas 0.9.4 and
+156/157 expected files matched exactly. `app.conf` differs only by the
+`install_source_checksum` key plus blank lines; all other nonblank bytes and
+semantic configuration matched. This does not claim 157/157 exact or that the
+checksum equals the archive SHA. The server is Enterprise 10.6.0.5 with GUID
+whose SHA-256 is `8c003a4afae8d1197dd165a6ed76e66090d73f1ea9ddcd1723991a5143de6ca3`; its active
+license group was empty and all six returned license groups were inactive, so no
+active supported license group was observed and license qualification remains open.
+
+The dedicated `adm_investigate` endpoint routes returned 403 because the
+capability is absent; no role grants were made. Therefore positive endpoint,
+Web/CSRF, source-capture and protected-case qualification remain unqualified.
+No additional local operating configuration, TLS, roles or schedules were changed,
+and no restart was performed. This work did not modify Cloud or the heavy
+forwarder; Cloud’s last recorded version is 0.9.3.
+
+Final guard observations found persistence `capture_mode=disabled`,
+`mode=disabled`, `platform=unqualified`; watch execution was disabled and no
+schedules were enabled. Existing local `adm_identity.conf`, `transforms.conf`,
+`savedsearches.conf` and `macros.conf` were retained; no additional operating
+configuration edits were made beyond the packaged app update.
+
+The final web-payload receipt is `work/enterprise-update/web-payload-result.json`.
+All three CSS files matched exactly. All three JavaScript files matched the
+complete archive payload after accounting only for the identical 111-byte
+Splunk `en_US` translation preamble calling `i18n_register` with an empty
+catalog and empty suffix. Original raw hashes failed because of that wrapper, not because an asset was stale.
+The focused 12-test local run under umask 0002 passed, and Ruff passed for 238
+files.
