@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from unittest import mock
 
 sys.path.insert(
@@ -136,6 +137,55 @@ class BaselineTests(unittest.TestCase):
         self.denied.add(("alice", "read", ident))
         with self.assertRaises(Forbidden):
             self.store.create("alice", "create", "Production", "a")
+
+    def test_execution_context_is_private_owner_pinned_and_current(self):
+        item = self.create()
+        ident = item["id"]
+        definition = {
+            "id": "watch",
+            "threshold": 2,
+            "cooldownSeconds": 30,
+            "expectedWindows": [],
+        }
+        self.store.set_watch("alice", "watch", ident, 1, definition)
+        self.store.version("alice", "version", ident, 2, "b")
+        context = self.store._execution_context("alice", ident, "watch")
+        self.assertEqual(
+            context,
+            {
+                "baselineId": ident,
+                "owner": "alice",
+                "revision": 3,
+                "watchId": "watch",
+                "baselineVersion": 1,
+                "reference": "a",
+                "capture": capture(),
+            },
+        )
+        self.assertNotIn("reference", self.store.get("alice", ident))
+        self.store.share("alice", "share", ident, 3, "bob", True)
+        with self.assertRaises(Forbidden):
+            self.store._execution_context("bob", ident, "watch")
+        self.denied.add(("alice", "write", ident))
+        with self.assertRaises(Forbidden):
+            self.store._execution_context("alice", ident, "watch")
+        self.denied.clear()
+        self.source_denied.add(("alice", "a"))
+        with self.assertRaises(Forbidden):
+            self.store._execution_context("alice", ident, "watch")
+        self.source_denied.clear()
+
+        def revoke_during_proof(principal, reference, evidence):
+            # A separate writer succeeds while source authorization is in flight.
+            with closing(sqlite3.connect(self.store.path)) as db, db:
+                db.execute(
+                    "UPDATE baselines SET revision=revision+1 WHERE id=?", (ident,)
+                )
+            return True
+
+        self.store.source_entitlement = revoke_during_proof
+        with self.assertRaises(Conflict):
+            self.store._execution_context("alice", ident, "watch")
 
     def test_concurrent_retry_and_conflict(self):
         with ThreadPoolExecutor(max_workers=4) as pool:

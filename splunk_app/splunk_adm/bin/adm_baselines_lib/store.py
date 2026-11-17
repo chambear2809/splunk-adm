@@ -804,6 +804,44 @@ class BaselineStore:
     def export(self, principal, baseline_id, version=None):
         return self.get(principal, baseline_id, version, action="export")
 
+    def _execution_context(self, principal, baseline_id, watch_id):
+        """Private owner-only watch context for a trusted executor, never an API DTO."""
+        _text(watch_id, "watch id", 128)
+        with closing(self._connect()) as db:
+            row = self._row(db, principal, "write", baseline_id)
+            if row[0] != principal:
+                raise Forbidden("baseline ownership required")
+            watch = db.execute(
+                "SELECT baseline_version FROM watches WHERE baseline_id=? AND id=?",
+                (baseline_id, watch_id),
+            ).fetchone()
+            if watch is None:
+                raise NotFound("watch not found")
+            evidence = db.execute(
+                "SELECT e.reference,e.capture FROM versions v JOIN evidence e ON e.baseline_id=v.baseline_id AND e.evidence_key=v.evidence_key WHERE v.baseline_id=? AND v.version=?",
+                (baseline_id, watch[0]),
+            ).fetchone()
+            if evidence is None:
+                raise Forbidden("baseline proof unavailable")
+            reference, capture = map(json.loads, evidence)
+        # Source checks may perform I/O; never hold a database writer while waiting.
+        self._check_source(principal, reference, capture)
+        with closing(self._connect()) as db:
+            current = self._row(db, principal, "write", baseline_id)
+            if current[0] != principal:
+                raise Forbidden("baseline ownership required")
+            if current[2] != row[2]:
+                raise Conflict("revision changed")
+        return {
+            "baselineId": baseline_id,
+            "owner": row[0],
+            "revision": row[2],
+            "watchId": watch_id,
+            "baselineVersion": watch[0],
+            "reference": reference,
+            "capture": capture,
+        }
+
     def list(self, principal, *, after="", limit=50):
         if (
             not isinstance(after, str)
@@ -1101,6 +1139,8 @@ class BaselineStore:
         watch_id,
         baseline_version,
         reference,
+        *,
+        expected_capture_digest=None,
     ):
         """Evaluate a trusted complete capture against the watch's pinned version."""
         _text(watch_id, "watch id", 128)
@@ -1108,6 +1148,14 @@ class BaselineStore:
         if type(baseline_version) is not int or baseline_version < 1:
             raise Invalid("invalid baseline version")
         payload = [watch_id, baseline_version, reference]
+        if expected_capture_digest is not None:
+            if (
+                not isinstance(expected_capture_digest, str)
+                or len(expected_capture_digest) != 64
+                or any(c not in "0123456789abcdef" for c in expected_capture_digest)
+            ):
+                raise Invalid("invalid expected capture digest")
+            payload.append(expected_capture_digest)
         found, retry = self._retry(
             principal,
             request_id,
@@ -1135,6 +1183,12 @@ class BaselineStore:
         baseline = self.get(principal, baseline_id, baseline_version)["capture"]
         self._authorize_proofs(principal, proofs)
         capture = self._prepare_capture(principal, reference)
+        if (
+            expected_capture_digest is not None
+            and hashlib.sha256(_json(capture).encode("utf-8")).hexdigest()
+            != expected_capture_digest
+        ):
+            raise Conflict("prepared evidence changed")
         findings = sorted(compare_findings(baseline, capture))
         now = self.clock()
         if not _number(now) or now < 0:

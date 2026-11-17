@@ -40,6 +40,12 @@ access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
 [adm_recovery]
 access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
 
+[alert_actions/adm_dependency_watch]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
+[adm_dependency_watch]
+access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
+
 [collections/adm_recovery_state]
 access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
 

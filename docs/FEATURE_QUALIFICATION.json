@@ -597,5 +597,65 @@
     "unit_tests": 37
   },
   "topology": "single_search_head",
-  "version": "10.6.0.5"
+  "version": "10.6.0.5",
+  "watch_execution": {
+    "architecture_review": "Astra accepted disabled explicit-window entrypoint and canonical timestamp wire parsing; no operator-ready scheduling or new UI claim",
+    "checks": {
+      "combined_python_tests": 142,
+      "frontend_lint": "passed after formatting one unchanged browser-test expression",
+      "main_bundle_gzip_bytes": 685367,
+      "main_bundle_limit_bytes": 686080,
+      "optional_journeys_gzip_bytes": 31922,
+      "optional_journeys_limit_bytes": 32768,
+      "package": "passed",
+      "release_archive": "passed",
+      "release_tests": 59,
+      "ruff": "passed",
+      "test_warnings": "Existing baseline test helpers emitted ResourceWarning for SQLite connections on Python 3.15; tests passed; new journal helpers were explicitly closed"
+    },
+    "date_utc": "2026-11-17",
+    "execution_enabled": false,
+    "frontend_changed": false,
+    "identity": [
+      "authenticated current administrator and baseline owner",
+      "immutable four-field selection and pinned version",
+      "original binding revision and run fingerprint",
+      "canonical prepared capture digest, also checked in actual store resolution",
+      "fixed original CAS and evaluation idempotency key"
+    ],
+    "independent_review": "No remaining actionable findings after actual-source recheck; mutable-reference retries, original binding revision and authorization I/O under writer findings corrected; reviewer 77 focused tests passed",
+    "not_qualified": [
+      "Production complete provider and source selection provenance",
+      "Source watermark/lateness closure and automatic slot selection",
+      "Installed custom-action JSON/session/effective ACL behavior",
+      "Administrator provisioning interface",
+      "Provider transport/global job enforcement and whole-action hard deadline",
+      "Operational watch journal backup/restore and reconciliation",
+      "Cloud/SHC execution"
+    ],
+    "notifications_sent": false,
+    "prior_installed_qualification_extended": false,
+    "provider_added": false,
+    "runtime_sha256": {
+      "splunk_adm/README/adm_dependency_watch.conf.spec": "989412d9b5d089aedcaa04aebc45bd424f8546b8bdd48d7eb6fe8f345c3f6158",
+      "splunk_adm/bin/adm_baselines_lib/executor.py": "3e7a8d6b3bd750e905bdd12fc05ac2c9827de260de8c6b92bd2bc84a901057b6",
+      "splunk_adm/bin/adm_baselines_lib/run_store.py": "367b482b061233e3a172a9c46f5749f71cb9c8d73669ba4b0f744c1525c56497",
+      "splunk_adm/bin/adm_baselines_lib/splunk_host.py": "5a512f67897c06ce2228ba4c6ae39d5167b8b54a8f1c33f6c6f2098607782124",
+      "splunk_adm/bin/adm_baselines_lib/store.py": "63ebd3aec58af49dbab9dff5d7848531f51aad4e43b378e2d4df8f3447c14378",
+      "splunk_adm/bin/adm_dependency_watch.py": "7521159298defd2677a5cedbbb0d1e95f250f5d0d800264216929b1163898ed4",
+      "splunk_adm/default/adm_dependency_watch.conf": "2e00406ebfc78cf455a2ca0d1dd33520305211254008554e7e7f1fd04630dd94",
+      "splunk_adm/default/alert_actions.conf": "e85ad62e1ae1d53bd9404916b8c81cf6e12c3ac6782477aadf464fa7fba5ef26",
+      "splunk_adm/default/app.conf": "da53941cc9556c3656f61f4bba2765bbe6bb2998b85f1c886dd802284024d456",
+      "splunk_adm/metadata/default.meta": "222a604c8043aa9f6ba8a7b50f960d819296e0efb758e87b5f057908a1614132"
+    },
+    "schedules_created": false,
+    "scope": "Local explicit-window execution mechanics with synthetic injected provider; no installed action or complete-source qualification",
+    "uncertainty": [
+      "durable intent before capture",
+      "crash-left intent never recaptures",
+      "prepared/evaluation_unknown retain exact evidence and retry identity",
+      "three nonterminal and 128 retained identities; no automatic deletion",
+      "compact withheld receipts only"
+    ]
+  }
 }

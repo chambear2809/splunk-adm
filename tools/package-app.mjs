@@ -108,6 +108,7 @@ await copyFile(
 );
 for (const file of [
   "DEPENDENCY_BASELINES.md",
+  "DEPENDENCY_WATCH_EXECUTION.md",
   "BACKUP_RESTORE.md",
   "TASK_LABS.md",
   "INVESTIGATION_RECORDS.md",

@@ -26,11 +26,15 @@ class SplunkHost:
         configuration=None,
         source_provider=None,
         clock=time.time,
+        execution_configuration=None,
     ):
         self.database_root = database_root
         self.configuration = configuration or self._configuration
         self.source_provider = source_provider
         self.clock = clock
+        self.execution_configuration = (
+            execution_configuration or self._execution_configuration
+        )
         self.runtime = CaseRuntime(
             token,
             request=request,
@@ -78,6 +82,121 @@ class SplunkHost:
             "platform": config.get("platform"),
             "capture_mode": "disabled",
         }
+
+    @staticmethod
+    def _execution_configuration():
+        home = Path(os.environ.get("SPLUNK_HOME", ""))
+        if not home.is_absolute():
+            raise HostUnavailable()
+        result = subprocess.run(
+            [
+                str(home / "bin/splunk"),
+                "btool",
+                "--app=splunk_adm",
+                "--user=nobody",
+                "adm_dependency_watch",
+                "list",
+                "execution",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+            check=True,
+        )
+        if len(result.stdout) > 16384:
+            raise HostUnavailable()
+        parsed = configparser.ConfigParser(interpolation=None)
+        parsed.read_string(result.stdout.decode("utf-8"))
+        if set(parsed.sections()) != {"execution"} or set(parsed["execution"]) != {
+            "enabled"
+        }:
+            raise HostUnavailable()
+        return {"enabled": parsed.getboolean("execution", "enabled")}
+
+    def watch_executor(self):
+        """Trusted action integration; no provider can be selected by HTTP/config."""
+        if self.execution_configuration() != {"enabled": True}:
+            raise HostUnavailable()
+        provider = self.source_provider
+        if provider is None:
+            raise HostUnavailable()
+        self.qualify()
+        from .executor import WatchExecutor
+        from .run_store import ExecutionStore
+
+        def administrator(principal):
+            if self.execution_configuration() != {"enabled": True}:
+                return False
+            context = self.runtime.request("/services/authentication/current-context")
+            return (
+                self.principal() == principal
+                and context.get("username") == principal
+                and isinstance(context.get("roles"), list)
+                and bool({"admin", "sc_admin"}.intersection(context["roles"]))
+            )
+
+        principal = self.principal()
+        if not administrator(principal):
+            raise Forbidden("administrator authority required")
+        database = self.database()
+
+        def store_factory(caller, current_provider, budget):
+            if current_provider is not provider or caller != principal:
+                raise Forbidden("execution principal changed")
+            provider_revision = provider.contract_revision
+
+            def entitled(current, action, _baseline):
+                # _row also invokes this inside SQLite writers. Remote authority
+                # is checked by the executor and source phase, never in a writer.
+                budget.check()
+                return action != "purge" and current == caller
+
+            def current_authority(current):
+                budget.check()
+                allowed = current == caller and administrator(caller)
+                budget.check()
+                return allowed
+
+            def resolve(current, reference):
+                if not current_authority(current):
+                    raise Forbidden("execution authority changed")
+                if provider.contract_revision != provider_revision:
+                    raise HostUnavailable()
+                budget.check()
+                result = provider.resolve(current, reference, budget=budget)
+                budget.check()
+                if provider.contract_revision != provider_revision:
+                    raise HostUnavailable()
+                return result
+
+            def source_entitled(current, reference, capture):
+                if not current_authority(current):
+                    return False
+                if provider.contract_revision != provider_revision:
+                    raise HostUnavailable()
+                budget.check()
+                result = provider.entitled(current, reference, capture, budget=budget)
+                budget.check()
+                if provider.contract_revision != provider_revision:
+                    raise HostUnavailable()
+                return result is True
+
+            return BaselineStore(
+                database,
+                entitled,
+                resolve,
+                source_entitlement=source_entitled,
+                clock=self.clock,
+            )
+
+        return WatchExecutor(
+            ExecutionStore(database.parent / "watch_runs.sqlite", clock=self.clock),
+            store_factory,
+            self.principal,
+            administrator,
+            source_provider=provider,
+            clock=self.clock,
+        )
 
     def principal(self):
         return self.runtime.principal()
