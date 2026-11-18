@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+import shutil
 import socket
 import ssl
 import subprocess
@@ -72,11 +73,19 @@ class TransportTests(unittest.TestCase):
         # external OpenSSL binary load incompatible vendor libraries. Keep
         # certificate generation on the host loader environment; the worker's
         # production environment remains unchanged and is tested below.
+        # Embedded Splunk prepends its own executable to PATH as well as setting
+        # its loader path. Select the host OpenSSL on Linux so removing the
+        # vendor loader path cannot pair the vendor binary with system libraries.
+        openssl_binary = shutil.which(
+            "openssl", path=os.defpath if sys.platform == "linux" else None
+        )
+        if openssl_binary is None:
+            raise FileNotFoundError("Host OpenSSL is required for TLS test fixtures")
         openssl_env = dict(os.environ)
         openssl_env.pop("LD_LIBRARY_PATH", None)
         subprocess.run(
             [
-                "openssl",
+                openssl_binary,
                 "req",
                 "-x509",
                 "-newkey",
@@ -102,7 +111,7 @@ class TransportTests(unittest.TestCase):
         # against a server that succeeds when its own CA is trusted.
         subprocess.run(
             [
-                "openssl",
+                openssl_binary,
                 "req",
                 "-x509",
                 "-newkey",
