@@ -3715,5 +3715,553 @@
       "tests/test_native_real_source_qualification.py": "4505a786f8e32a88bf0f02b86e3ff3e243d695129c66dc83984c599e74c49165",
       "tests/test_native_recovery_qualification.py": "359b208fd87b72cc1c69ae9118d96eb2b6ccd942b7cf36c7f6a8cf386e0123c8"
     }
+  },
+  "native_uncertainty_qualification_20261118": {
+    "date": "2026-11-18",
+    "status": "bounded_native_increments_recorded_with_preserved_failures",
+    "implementation_scope": "Test tools, regression tests and qualification documentation only; no application runtime bytes changed.",
+    "architecture": {
+      "coordinator": "GPT-6.1 Sol / high",
+      "workers": "Two GPT-6.1 Terra / high workers; reliability worker rotated into durability/recovery role",
+      "independent_reviewer": "GPT-6 Astra / high, read-only",
+      "effective_concurrency": "Four threads including coordinator; same worker/reviewer slots reused",
+      "availability": "Requested models verified from effective session metadata; task-specific reviewer/worker overrides preserve project coordinator settings"
+    },
+    "installed_target": {
+      "platform": "native Linux x86_64 standalone Splunk Enterprise 10.6.0.5; active Enterprise license",
+      "application_version": "0.9.11",
+      "build": "1795023134",
+      "archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "archive_bytes": 1459090,
+      "runtime_files_verified": 88,
+      "transport": "Pinned SSH, authenticated supervised native transport and verified loopback TLS; existing CA retained"
+    },
+    "service_restart": {
+      "primary": "passed_attempt3",
+      "independent_checks": 29,
+      "native_source_jobs_terminal_and_bound_sids_absent": 34,
+      "exact_original_write_tombstones_and_delete_receipts": 3,
+      "commit_boundaries": {
+        "precommit": "0 receipts/0 captures at held checkpoint; exact retry converged to1/1",
+        "postcommit": "1/1 at durable checkpoint; exact retry preserved capture ID and receipt digest"
+      },
+      "process_evidence": "Two new systemd MainPID/start/Invocation identities, old handler/worker/group/descendant retirement, new authenticated handlers, trusted readiness and uninjected capture after exact startup restoration",
+      "limit": "Workers were live at CLI launch; subsequent retirement does not prove restart rather than native request deadline caused death. No host failure or unknown remote-job outcome at this checkpoint.",
+      "preserved_failures": [
+        "Attempt1 stopped before setup on raw/display fingerprint mismatch; independent no-side-effect check",
+        "Attempt2 completed one precommit restart but failed final process scan atPID1; independent24-check cleanup verified; primary remains failed_or_uncertain"
+      ]
+    },
+    "native_job_uncertainty": {
+      "primary": "failed_or_uncertain_retained",
+      "scenario_checks": "passed_create_and_delete_acknowledgement_loss",
+      "separate_reconciliation": "passed",
+      "independent_checks": 21,
+      "fault_and_convergence_sids_verified": 3,
+      "setup_count_chains_separately_verified": 4,
+      "create_mode": "Original unbound creation_unknown remains charged;0 capture receipts; exact retry made no replacementPOST; hidden nativeSID used only for separate exact physical cleanup",
+      "delete_mode": "Bound cleanup_unknown retained until task-only independently attested administrator proof/CAS/lease transition in isolated ledger; exact original body/key/principal then converged to1 capture/1receipt and stable replay with distinct local/native job identity",
+      "retained_private_rows": {
+        "create": 3,
+        "delete": 4,
+        "artificial_quota_rows_per_pair": 2
+      },
+      "cleanup_repair": "Original cleanup retained access after one initialPARSING response lacked top-level search. Test-only retained-observation verifier preserves that record, validates all other identity fields, requires later full unmodified metadata and rejects contradictions. Separate reviewed reconciliation removed only exact owned resources without repeating fault/capture or changing ledger rows.",
+      "boundaries": "Synthetic native jobs plus isolated CaseStore/JobLedger only; no live global quota modification, no shipped automatic unknown-job reconciliation, no endpoint authorization claim from local entitlement fixtures"
+    },
+    "injected_endpoint_restore": {
+      "primary": "passed",
+      "independent_checks": 29,
+      "native_source_job_rows_terminal_and_bound_sids_absent": 35,
+      "recovery": "Quiesced owned fixture writers; sealed paired snapshot restored to a fresh isolated native endpoint route under exact task principals/generation; unchanged authentication, supervision, API/store and supervised synthetic source transport",
+      "verified": [
+        "Notes and immutable revisions",
+        "capture/entry links",
+        "current private/shared/revoked ACLs",
+        "source-redacted stored reads, selected export and exact old retry",
+        "audit and receipt identity/digest",
+        "one archived synthetic unknown ledger row unchanged",
+        "occupied/corrupt target refusal and partial second-copy cleanup",
+        "both principals and both routes attested before writes through private fallback canaries",
+        "live main databases/SQLite sidecars and startup/configuration byte+metadata integrity"
+      ],
+      "limit": "Injected isolated installed endpoint restore only; no live DB replacement, fresh native instance, operational/cold platform restore, live-writer atomicity or host-failure recovery",
+      "checker_failure": "First read-only checker failed on TLS-context variable shadowing; preserved output and separately reviewed/tested checker-only repair; fault not repeated"
+    },
+    "approved_host_hardening": {
+      "status": "applied_and_independently_verified",
+      "user_authorization": "Explicit approval for permanent two-folder fix after reviewable exact-inode proposal",
+      "changes": [
+        {
+          "path": "/opt/splunk/etc/apps/cisco_dc_networking_app_for_splunk/local",
+          "before": "0775",
+          "after": "0755"
+        },
+        {
+          "path": "/opt/splunk/etc/apps/splunk_gdi/default",
+          "before": "0777",
+          "after": "0755"
+        }
+      ],
+      "independent_checks": 9,
+      "scope": "Exact pinned directory identities only; owner/read/traverse retained, shared write removed; no recursive/content/ownership/reload/restart change. Directory ctime changes retained; no automatic permission broadening.",
+      "attribution": "Fresh independent config/authority baseline after job reconciliation; original failed-A4 snapshots retained separately.",
+      "baseline_sha256": "1e22016e709a7d557653d645ab93353b323b66429d40230f0beffd8225a9a79c"
+    },
+    "nonadmin_real_source": {
+      "status": "passed_case_only_attempt2_with_independent_clearance",
+      "authorization": "User-authorized temporary nonadmin account; exactly search and adm_investigate; no imported roles or default indexes; exact two source/index/type families and historical 120-second time filter.",
+      "selection": {
+        "application": "coreapi",
+        "environment": "lab",
+        "cluster": "k8s-01.uktme.cisco.com",
+        "namespace": "tenant-jobs",
+        "windows": [
+          [
+            1794844500,
+            1794844560
+          ],
+          [
+            1794844560,
+            1794844620
+          ]
+        ],
+        "source_contracts": [
+          "index=atlas_identity source=atlas:identity:uktme sourcetype=adm:pod_ip_interval:v2",
+          "index=otel_traces source=atlas:k8s:uktme:tenant-jobs sourcetype=otel:traces"
+        ]
+      },
+      "source_configuration_fingerprint": "23337b1eb5770878cf5098f123ca7db4d3af4bebb6b213470e43a1ca91db4341",
+      "observations": "Selected graph evidence for two adjacent windows; retained warnings exclude 87/90 spans. This is captured real-source evidence for the selected scope, not completeness or loss/lateness qualification.",
+      "phase_operations": {
+        "phases": [
+          "allowed",
+          "revoked",
+          "restored"
+        ],
+        "operations_each": [
+          "stored selected read",
+          "selected export",
+          "exact original request body/key/principal retry"
+        ],
+        "total": 9,
+        "result": "HTTP200 throughout; same capture ID visible, then redacted, then visible with matching retained digest/fingerprint/scope/windows; note digest unchanged"
+      },
+      "independent_checks": 28,
+      "bound_source_jobs_terminal_and_exact_native_sids_absent": 17,
+      "context_comparison": "Six raw context comparisons retained and replayed. Only required validated nonnegative exact-int last_successful_login is excluded from equality because native Basic authentication changes it; every other key/value, principal, roles and capabilities remain exact.",
+      "cleanup": "Owned case/user/role/generated secret absent; receipts and tombstones retained; original authorization layers, existing role definitions/memberships and app configuration restored exactly at documented byte/UID/GID/mode/mtime boundaries; source profile unchanged; gates disabled; all88 installed runtime hashes matched. API absence is not physical erasure.",
+      "count_and_negative_controls": {
+        "status": "not_run_in_passing_case_scope",
+        "control_jobs": 0,
+        "coverage": "No claim for broader index/source/time denial; separate raw-count compatibility diagnostic remains unqualified. No alternate span-source denominator was available."
+      },
+      "preserved_failures": [
+        "Initial unsafe-directory guard before role/user/grant; separate no-effects verification; later explicit user-approved permanent two-directory hardening recorded separately.",
+        "Native role creation auto-added five capabilities; refused before user creation; exact unassigned-role recovery and17-check verification passed; original failed primary/checker retained.",
+        "Strict raw-count attempts and diagnostics rejected native INFO responses; observed counts/effective windows do not establish all validator predicates or count-control compatibility. All separate cleanup checks retained.",
+        "First case-only capture/read/export/retry succeeded but context fixture compared changing last_successful_login; primary remains failed. Exact recovery retained original identity, removed owned access and passed18 independent cleanup checks before fresh attempt2."
+      ],
+      "retained_journals": [
+        {
+          "path": "/opt/splunk/var/atlas-real-revocation-20261118-case-only-attempt2/operations.jsonl",
+          "sha256": "2a9f9ce6213ed7df79aa521cd30db60bf460d638bc47fefea78a014f196442fa"
+        },
+        {
+          "path": "/opt/splunk/var/atlas-real-revocation-20261118-case-only-attempt2/exercise/requests/operations.jsonl",
+          "sha256": "3a31b5731baad74f2fff35d34e43464375efe61787dc2d06ccd2ef83d6cbeca4"
+        },
+        {
+          "path": "/opt/splunk/var/atlas-real-revocation-20261118-case-only-attempt2/exercise/operations.jsonl",
+          "sha256": "49044e1f950aa0a8897f2f219c2b5d0b80adda862ec62e51c67fd34e44ac5634"
+        }
+      ],
+      "limits": [
+        "No completeness, loss/lateness, network/ACI or historical audit-producer qualification.",
+        "No broader grants, application runtime modifications, count-policy relaxation or production-readiness claim."
+      ],
+      "capture_evidence_sha256": {
+        "value": "3f749c656afab7c0a56369437226c88e4e2cc397c9b1b49a7050685d73bf31e8",
+        "verification": "Passing case-only postcheck verifies retained digest/fingerprint/scope/windows; independent row digest recomputation was established in the earlier first-case diagnostic and prior source evidence."
+      },
+      "separate_optional_count_diagnostic": {
+        "completion": "passed_diagnostic_only",
+        "count_validation": "failed",
+        "reason": "native count incomplete: earlier job-content empty-message guard rejects the exact observed INFO; later message/window acceptance checks were not reached. No policy relaxation or full source-control rerun.",
+        "observed_count": 336,
+        "observation_boundary": "HTTP200 non-preview one-row count/DONE; exact task principal/app/SID/query and requested/effective120-second windows retained. result_truncated projection does not conclusively establish another failing predicate.",
+        "independent_cleanup_checks": 18,
+        "jobs_terminal_and_exact_sid_absent": 1,
+        "cleanup": "Authorization layers/existing authority and application configuration restored; temporary role/user/credential absent;88 runtime hashes verified.",
+        "coverage": "This is a separate one-count diagnostic, not a passing count-control qualification or original scenario rerun."
+      }
+    },
+    "validation": {
+      "full_python": "1575 tests; suite passed;9 skipped",
+      "distributed": "126passed",
+      "upgrade_gate": "18checks,3skipped",
+      "python_lint_and_format": "passed",
+      "focused_current": "48 core tests passed; source22 passed after timestamp-only fixture fix; endpoint8 rechecked with ResourceWarning treated as error",
+      "frontend_local": "not run for tool/test/docs-only change; normal PR CI required"
+    },
+    "remaining_limits": [
+      "Unbound native creation reconciliation without trustworthy exact identity",
+      "Production operator interface for bound unknown-job clearance",
+      "Host power/kernel failure and restart-causation timing",
+      "Operational native-instance/cold platform restore, live-writer atomic backup, baseline/watch/KV/platform/index recovery and cross-build migration",
+      "Real-source completeness, loss/lateness and full historical associations",
+      "Protected-capture Web/CSRF/rendered-client qualification",
+      "Strict whole-endpoint resource bounds",
+      "Cloud/SHC persistence and production readiness"
+    ],
+    "defaults": "Privileged execution, capture, persistence, watch, scheduling and notifications remain disabled as shipped. Temporary case gates and original source settings restored per scenario; approved directory permission changes remain permanent.",
+    "evidence_root": "{private_task_workspace}/atlas-uncertain-outcomes",
+    "integration": "Explicit owned paths only; independent final integrated review, normal PR and CI gates; final identifiers/status retained in private integration receipt and PR. No admin bypass, force push or protection changes.",
+    "evidence": {
+      "plan.json": {
+        "sha256": "c26c97f4ceae9bcec5543b10077e81ac715c17e08dc9ebd8fb0fd4bbb2a8a1ef"
+      },
+      "restart_attempt1.py": {
+        "sha256": "8284704487aef3ff0bf59cb17fc7a0685f522abec34d5daee56e8bb8800c0dd1"
+      },
+      "restart-installed-output.json": {
+        "sha256": "ec632d921a3e0a578d97fcb8665a9b4837c1fcbec997340494f6dfbfe3afde0c"
+      },
+      "restart-fingerprint-postcheck.json": {
+        "sha256": "ee478b6ce7ca34d316433f8eedce0393a7c34802214d23dd7958a0f2f70dbde3"
+      },
+      "restart_attempt2.py": {
+        "sha256": "59818dde892f12534b6fc911636d06bd751406cd6fa9cd15cc997ffd609a39c5"
+      },
+      "restart-attempt2-installed-output.json": {
+        "sha256": "fdeb2aed08da847e95a8928885dec64508c8ca7abe65dab63dbcc5bb209a8d05"
+      },
+      "restart-attempt2-postcheck.json": {
+        "sha256": "e9625048ace88e74f0486beef81b979df250853aa6cfc8f34261ec69d3a3d621"
+      },
+      "restart_attempt3.py": {
+        "sha256": "c0393b0b4631884648dd1baa61a43c8b0aaa88e173a9d9c7896e40f219290f77"
+      },
+      "restart-attempt3-installed-output.json": {
+        "sha256": "8c417d8909bd9cef715da8c053faf2b3d289d2fdee0f8202fe8703bcb34fe06b"
+      },
+      "restart_attempt3_postcheck_admin.py": {
+        "sha256": "11bebe759ae5f001f96696814c86d99b60e6d8e0adca9e84b904af5c8366f800"
+      },
+      "restart-attempt3-postcheck-admin.json": {
+        "sha256": "0d51dbc063b0abd6ed62a1bda1c8b0adca09e605126ad07f293f6d5e224bd564"
+      },
+      "restart-qualified-summary.json": {
+        "sha256": "c5e6be20d21cd526d6459983c0fcf0095429f4ed3e9288983814f32310a74a96"
+      },
+      "endpoint_native_runner.py": {
+        "sha256": "1cfa49d52b54c0460882517077a4c210a657e5cf4b4551c7d678030dfec73df6"
+      },
+      "endpoint-installed-output.json": {
+        "sha256": "64b19b8df9d0a62d5a519b79bd67f514fee5f503b0fe9278c0de20ab806661be"
+      },
+      "endpoint-independent-postcheck.json": {
+        "sha256": "983289435711acdcfca64c0e265f6983b94ca71524af911ab985a65299f5a2c6"
+      },
+      "endpoint_postcheck.py": {
+        "sha256": "4b62c632d8d548aafe1756ffbf0c851d097b4bb6d79c83c10774145e842f35be"
+      },
+      "endpoint-independent-postcheck-fixed.json": {
+        "sha256": "4057d4b1d07789505099a7b84adbec16cfa90f1ba6f4feeff54f3712f54c6616"
+      },
+      "endpoint-qualified-summary.json": {
+        "sha256": "e8340a2eeae43d4daa7bb6714aba9a4e2619df65f4e68d963224959175332b50"
+      },
+      "job_native_runner.py": {
+        "sha256": "b9e743530fbc48bc791440b59e403a6f06a9d5a0599b345a11ef41b910cde382"
+      },
+      "job-installed-output.json": {
+        "sha256": "4fc35afc73d3b3624e9e91045ba941d5e61dd36565feba812a239ea78fb7431a"
+      },
+      "job_metadata_probe.py": {
+        "sha256": "d6df0609fdde4838721f32718ea3634eb36d4243783d1aa688573c5f1617cad5"
+      },
+      "job-metadata-diagnostic.json": {
+        "sha256": "2d74bc01c529e2d7bb36db741bf62124ba9e929f83b62bf1f86af720f6bdb10e"
+      },
+      "job_reconcile.py": {
+        "sha256": "4ee6fbe4cf79ca7154ab0c242b224e1c5aed5ac9cac485a697200a63bf0a97c3"
+      },
+      "job-reconciliation-output.json": {
+        "sha256": "8b47d87d92457ecdc5bea3adbf69b04d637804458b9769131416e1380aaea34c"
+      },
+      "job_postcheck.py": {
+        "sha256": "7db512bc7439d72ca57ce3d94bb37762fc9a8da904328e81419231bd1639bdfb"
+      },
+      "job-independent-postcheck.json": {
+        "sha256": "cecdd3950e7aa919740a0fa5d7690075a18c5408f610392c4823970cf4a837b5"
+      },
+      "job-qualified-summary.json": {
+        "sha256": "d7cf1f74096a0af655d7b5b85de3a4a8bcfc91f0c4a63723394a993b20269003"
+      },
+      "revocation_outer.py": {
+        "sha256": "88504ff3e30091a7b5c6056a811130017694b13841c47bbdab606c5a040172bd"
+      },
+      "revocation-installed-output.json": {
+        "sha256": "fa9b1fe68595426fa1a086b1ba4e53db865e050cf8cb13a80bc3a6b3784693d3"
+      },
+      "revocation-failed-stage-postcheck.json": {
+        "sha256": "ad0404f44dd48afdc93a13bdd941ae141ead47168cd9d54adde80ac2edb6aeaf"
+      },
+      "revocation_preflight_native.py": {
+        "sha256": "caef578adef092ad0fbe44412ed17775bd5da8d2eea664b9c65fe8e8f205f118"
+      },
+      "revocation-preflight-output.json": {
+        "sha256": "24ada62836087fa75d756ccb7280bee0e9b95872871d45ca7eabd1051b62b1b5"
+      },
+      "revocation-authorize-mode-probe.json": {
+        "sha256": "885c51d7ba3794b144bc326ed6541310b6bc5e769cea878ff6032b7317ec8c38"
+      },
+      "revocation-authorize-mode-probe-fixed.json": {
+        "sha256": "b2269ed986c3af6d934a49ebd16db2b522995fa65af7bf03629127daaeccf5ad"
+      },
+      "hardening-authorization.json": {
+        "sha256": "6000ba3afb3bfeeda54f55de7136d2bd430cd135991d48af08f696c56d728f5c"
+      },
+      "revocation_hardening_wrapper.py": {
+        "sha256": "5a2bf8a0e8847ce57b19ab1081ed3e5b2743e42280578a8e279a97b20a36084e"
+      },
+      "hardening-baseline-output.json": {
+        "sha256": "f1221d935aa2436d27a547a97c0cb7854bc0533ab817dad6ce8081c80954df90"
+      },
+      "hardening-applied-output.json": {
+        "sha256": "1603635cfb3ec277d9c44dce6a29f4187afc75794f7eabdda21911947a4e20bd"
+      },
+      "revocation_hardening_postcheck.py": {
+        "sha256": "105929ebd129079a1e2be95f1f7d3dce801117cfb826e0b465f35415bdc48d5d"
+      },
+      "hardening-independent-postcheck.json": {
+        "sha256": "d5d09a76d158080acb359dfdd7796e95d45b0fb2e321ae6a7e0ae6fabe7907c7"
+      },
+      "revocation_outer_attempt2.py": {
+        "sha256": "5a9ff22af957785b47e319c699cf974ebbe100c8fe3cd5a06a0df1c4a979b36f"
+      },
+      "revocation-attempt2-installed-output.json": {
+        "sha256": "8460b15a4b98d130775c6683fe9cba222095d58e2e8cd8a4f472d8e80771ffd9"
+      },
+      "revocation_attempt2_diagnostic.py": {
+        "sha256": "897651eeecb0a467168ad83e00eff48dc292b9cc2e9f45698670ed6425492999"
+      },
+      "revocation-attempt2-diagnostic.json": {
+        "sha256": "0281ee074eff41d09517826968fb4ca900667e763cf6f0312bb628f399d2c23c"
+      },
+      "revocation_attempt2_cleanup_recovery.py": {
+        "sha256": "1d3ae08fa47de45ca29d68e07e46b7fd49e33d31146c39e372548f5b962f5df8"
+      },
+      "revocation-attempt2-recovery-output.json": {
+        "sha256": "02c4098064ba22cc1cd1411f56902420b39d9ec58307b9f0c75e641448d835f2"
+      },
+      "revocation-attempt2-recovery-postcheck.json": {
+        "sha256": "124a13a3bc685467a093140f1ae9fe390f3d6ed35fdc9fdeaef99689813a7479"
+      },
+      "revocation_attempt2_recovery_postcheck_fixed.py": {
+        "sha256": "d446c5502be434f7f40b99a179e81b1f8a0f5511206f69f0116fb5bd696d85e3"
+      },
+      "revocation-attempt2-recovery-postcheck-fixed.json": {
+        "sha256": "e8d0641f3ee6b6f4499f338850be1cfe988b878374c2d21fe9c774304c278bdf"
+      },
+      "revocation_outer_attempt3.py": {
+        "sha256": "8696e4bb787ff4b334c48068f123017ad693f24a227f3ee97ff58be855df2891"
+      },
+      "revocation-attempt3-installed-output.json": {
+        "sha256": "652e17e1cbb8b3b2f05ff50dabc01a42d8cb97bfc22921b3b3aa29630d2bc436"
+      },
+      "revocation-attempt3-diagnostic.json": {
+        "sha256": "56ae4e5e1c4e3afe804fcaf923416cd8d6e465af9d1478296ee56f6500c05b40"
+      },
+      "revocation_count_diagnostic_outer.py": {
+        "sha256": "63ec3f950b1dd2148c7686b091d5f631b525ed92b705b112fa5de00b3e4d22ad"
+      },
+      "revocation-count-diagnostic-output.json": {
+        "sha256": "acbd6f2356244a8aca67c2fcc7b1d03fdc253a7ad5804f30ef56819872a559e4"
+      },
+      "revocation-count-diagnostic-postcheck.json": {
+        "sha256": "f978f80889a0645d3e62d217c3ea4f4caf05457f17e6f153228ae7c5b25b2c2e"
+      },
+      "revocation_info_diagnostic_outer.py": {
+        "sha256": "cc6b56e9015b9e258a7e558f74339a703610b76cd0c4a3803945e41b51e7379a"
+      },
+      "revocation-info-diagnostic-output.json": {
+        "sha256": "83f63cc324aee5d80f8d68ee971b572ab926de66dc1550198c201e3cc5baad80"
+      },
+      "revocation-info-diagnostic-postcheck.json": {
+        "sha256": "cecbe6b0a4289d9d70700e3ff6c120dacbcb517282826a29f19ab455dbf8d1b1"
+      },
+      "revocation_window_diagnostic_outer.py": {
+        "sha256": "845366bdc3cdb1ed4fdca6a6ef233fd4d1237a5aa171d6e53a977df30a52cfbc"
+      },
+      "revocation-window-diagnostic-output.json": {
+        "sha256": "83f63cc324aee5d80f8d68ee971b572ab926de66dc1550198c201e3cc5baad80"
+      },
+      "revocation-window-diagnostic-postcheck.json": {
+        "sha256": "55ed79888d31c11caf2c104fb5c279e50641c31bf6c3e376f100954dfa7e704c"
+      },
+      "full-python-tests-final.log": {
+        "sha256": "458b8535c737fb4f7d9447c8ae066390327c6809f355e9a31bac96d63b8c3fc2"
+      },
+      "run_remote.sh": {
+        "sha256": "1f5d349343199fb2e8c17482cb88caacede6c968f648621f6331c3c8e44f74b9"
+      },
+      "run_remote_with_baseline.sh": {
+        "sha256": "4d5d30dcd119fa9b54c88b383e51add513af8193200eac6d5b2e741af74ba935"
+      },
+      "revocation-attempt4-installed-output.json": {
+        "sha256": "1c057904d2310f8f43807645215350a051d0e0fd593f34ff7a3a242fcd68a64e"
+      },
+      "counter_postcheck_tail.py": {
+        "sha256": "1fb38818c26a1b4e6368fe91b9401e41f813fc2f6e22cb5a4375e29e59b1b034"
+      },
+      "revocation-case-context-diff-fixed.json": {
+        "sha256": "87ac8815b12bab1d436d2d52c638ea224517599e18d03f54f66d4fd89b55b341"
+      },
+      "collect_retained_journal.py": {
+        "sha256": "7c2acb62189897c085f0ed6fd8340b058d268ce6d9630249c832099b77bfb305"
+      },
+      "revocation_outer_attempt4.py": {
+        "sha256": "200c560cea9083a041dbab3def8456ea54186cf9e1e9c45a80e4e69bb5e212ca"
+      },
+      "retained-journal-local-receipt.json": {
+        "sha256": "e823d1a924094f7245ae2e45377c742cb12eec9aad44f359bc15e0f277b91de6"
+      },
+      "revocation-attempt4-diagnostic.json": {
+        "sha256": "67c964c404a2283af5a75f8684b22ba422dc58f8477ea903a463e873c8e352d2"
+      },
+      "revocation-case-cleanup-postcheck.json": {
+        "sha256": "223d594912005f68efd5045aca9478db720893299dd055c3dce0246d13435750"
+      },
+      "revocation_case_cleanup_recovery_tail.py": {
+        "sha256": "8e9f692e0880d52548e4d982411b38b8e0f303c60f4ba0f99bb7cae2b24d129f"
+      },
+      "revocation_case_only_postcheck.py": {
+        "sha256": "5c7f9edac1b4d33c58b1eb4886cd9040b025c327eebc4e4f530b53b00a35e2df"
+      },
+      "revocation_case_failure_diagnostic_tail.py": {
+        "sha256": "ad325207ef936aafdc3fafa5af20eb74a4d60542a313517fdd05e01190604ba2"
+      },
+      "counter_native_runner.py": {
+        "sha256": "0e363d05b3386d0b5b6da3ea9cf0d9d4bb21447bc70c004be0a0df01fc7d00f4"
+      },
+      "revocation_case_context_diff_tail.py": {
+        "sha256": "adc15eb7a8fbe8cd7e5ef4f3a5fe55a41e1ef19a24a22f7a78f4bf700517f94d"
+      },
+      "revocation_case_only_postcheck_report.py": {
+        "sha256": "936882e6b750ef433186493143bd34187816b742ce1bf1f70fc30e2547ac0966"
+      },
+      "collect_retained_journal_test.py": {
+        "sha256": "9407eb61218bc2903858727c7e47badc9921ccf957729edb2c4e3ada33c5c747"
+      },
+      "counter_postcheck.py": {
+        "sha256": "9a50aaeb59b98dee32443aed32f755da403fefee351afc0609f15db300b3fdba"
+      },
+      "revocation_case_failure_diagnostic.py": {
+        "sha256": "b55a62c705d91f4232973d3d2be1a9cac9aae41f79e6d18051d6795830d1cc2a"
+      },
+      "counter_postcheck_assemble.py": {
+        "sha256": "b14bd946e3dd4b9dce5c3d8c7f6bffdafd272b9c6bfd9edf89ced04765aeb2e2"
+      },
+      "revocation-case-only-installed-output.json": {
+        "sha256": "930444cb46c902f222525f6c040a417505951a7fdab4f4d505bc5e6e03d2cda9"
+      },
+      "counter_test_probe.py": {
+        "sha256": "3e4d5818b3980ae0ee0ccdb32b14205f11ac7836c0a35fedb7d7b03ad90bd116"
+      },
+      "final-source-context-tests.log": {
+        "sha256": "f8fa99bee68d269e27ffe92271a0f2d0d335a868ffb10f805fa6b66f6987ddc7"
+      },
+      "revocation_case_context_diff.py": {
+        "sha256": "ef561217096f8d254d90bf6f9d36e5f7ad2dbb319de037ed53570978f3d289d3"
+      },
+      "revocation_case_context_diff_fixed.py": {
+        "sha256": "ec9e0a9bfd70a357f53c3164254269fb6615a3313761684d7670b475f3f89ae6"
+      },
+      "revocation-case-failure-diagnostic.json": {
+        "sha256": "791066177af8db56e6cbe9fea0197e639afa92bdda8b0474b4f87a30defe97ea"
+      },
+      "full-python-tests-current.log": {
+        "sha256": "6ed36270f89725b54202e203a4d5d66c213b027dc257cb94ef56b6d2724bda60"
+      },
+      "revocation-case-only-attempt2-installed-output.json": {
+        "sha256": "a415ff5e76cd71b3376c9ff46ea59f149667e7e0458984fa82b74109230a434b"
+      },
+      "revocation_case_only_attempt2_outer.py": {
+        "sha256": "0154a8e021567cba9ae224552f6e5e0e1ad0b0b8c8905c2d7198e3d9d829d865"
+      },
+      "revocation-case-cleanup-recovery-output.json": {
+        "sha256": "87de3178acab52ac57bbd438f3c15ebeb660d3873e9ac208b8b0f91e50a97621"
+      },
+      "revocation-case-only-attempt2-postcheck.json": {
+        "sha256": "dad0f350686b808d28881e520b7b56c45bb6d2940a221a1b60f4db19a78495ac"
+      },
+      "revocation-case-context-diff.json": {
+        "sha256": "3ae08e4e0c67d7fd689c1864dfb1e27b6f7fdd499fa464624b16e92c9920fba3"
+      },
+      "nonadmin-final-record.json": {
+        "sha256": "c4341285de50a595c27e62127e8f52371de08b29478ae76d29cca6cbe1e8189a"
+      },
+      "revocation_case_only_attempt2_postcheck.py": {
+        "sha256": "d7a913adca0610960329cadc35d6d945f15e5311cbbed77ffd84cf04cfdbd116"
+      },
+      "counter_test_postcheck.py": {
+        "sha256": "a9e51d186fb493f6f5892affd58aa746ab417db3f65767eb10dcebfa292c7252"
+      },
+      "revocation_case_only_outer.py": {
+        "sha256": "c6f76c8d0efdcaee116e11416bec8506e617ceb1ba5763397f777a09d30d7aef"
+      },
+      "counter_assemble.py": {
+        "sha256": "0179599863e9ccdaa2cbd5a4747fc9c15f57767d8053691026a9281fd3d52707"
+      },
+      "counter-independent-postcheck.json": {
+        "sha256": "1d0bf036d609c334b2c449a2fde2e7b7349b628199f7e9ec2469f5da90be513a"
+      },
+      "counter-installed-output.json": {
+        "sha256": "52868a30f64b56d299568fca09ef482a12cc25042ecbbce70a0819486dec2426"
+      },
+      "retained-journal-manifest.json": {
+        "sha256": "46cc062a278322fe1ed215e938bf1ef0e9137d7b2f35abe0fdc750813b64c1a1"
+      },
+      "retained-journal-collection.log": {
+        "sha256": "5f1b0a3feb0ff858f954b6fcdd49e126a55b7e59aa757f288c2611ad2cf09f66"
+      },
+      "revocation_case_cleanup_recovery.py": {
+        "sha256": "d453b038af8e59c63261c5c0fa58a4207165833e6adf9b0acd664f94a2c41a72"
+      },
+      "counter_probe_extension.py": {
+        "sha256": "bc860a279260371afe3a7d440a8bf7e58168432194e03b5876360c56b917dc2c"
+      },
+      "revocation_case_cleanup_postcheck_tail.py": {
+        "sha256": "1aeb9641c358f104e013c48eb7d103ef7a5fcf2de71570bf3cbc8b6d53c36396"
+      },
+      "revocation_case_cleanup_postcheck.py": {
+        "sha256": "a4e3579c67e41933ec6b17ebf24c190024e0121a7c6b2beef30d2f326c32686e"
+      }
+    },
+    "retained_journal_export": {
+      "manifest": "retained-journal-manifest.json",
+      "local_receipt": "retained-journal-local-receipt.json",
+      "copied": 11,
+      "absent": [
+        "a4_exercise",
+        "a4_requests"
+      ],
+      "refused": [
+        "case_only_attempt2_exercise"
+      ],
+      "boundary": "Collector safety screening refused the case-only phase journal; no bypass or local copy. Its native path/hash remains attested by the independent postcheck. Two earlier attempt3 exercise/request files were absent. Eleven other fixed journals copied privately with chunk/manifest/final SHA verification. No source rows or raw journals committed."
+    },
+    "implementation_sources": {
+      "tests/test_native_endpoint_restore.py": "575087cc8284e2468af3459253b7dd811b2a93ef0c9e1b6f62f15c9933eb274c",
+      "tests/test_native_job_outcomes.py": "c89376da36a7c47793f61b9f07c09e4d83695a05e841f03ed9ccceca1c39bfeb",
+      "tests/test_native_service_restart.py": "e5589a101eabccfcd73464b8279c2321f8e125c7be32cf4b00c6eb0c2bc359b0",
+      "tests/test_native_source_revocation.py": "ff17c977372711c43a1f8e54978be4cfb98b840cb2afefaf13d3039274c00788",
+      "tools/qualify_native_endpoint_restore.py": "f6e5d857350ffe4989a2a3adc4b41d3eb1d61ba8d86d8fff444febcadc7fe720",
+      "tools/qualify_native_job_outcomes.py": "d1a40ea3634a436304c52e26c186d70f994698c8fd35ebd1563feea8ac1324b2",
+      "tools/qualify_native_service_restart.py": "1a2e2f714a2267035888ef380cc7aeb4eb570c5dca8e59eb71275faac6694d98",
+      "tools/qualify_native_source_revocation.py": "2c85b740551d59cc2794c63a514e25d8f7b2e9ee92bf36f2b9d35037d3161b30"
+    }
   }
 }

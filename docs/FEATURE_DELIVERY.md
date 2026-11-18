@@ -18,7 +18,7 @@ not authorize collector/schedule activation or infrastructure changes.
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
 | Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified. A later disable-only HTTP stop command now manages an existing owned binding; it does not provision or enable one.                                                                             |
-| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; the 0.9.8 rendered Cases notes workflow also passed. Source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Native 0.9.11 synthetic management-REST capture and source-filter/index revocation checks passed with separately reconciled cleanup; Mac Rosetta helper execution remains unsupported. Native resource qualification, capture commit-stall/worker recovery, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and production restore remain unavailable or unqualified. The separate same-build cold notes/ledger recovery rehearsal passes locally. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; the 0.9.8 rendered Cases notes workflow also passed. Source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Native 0.9.11 synthetic management-REST capture and source-filter/index revocation checks passed with separately reconciled cleanup; Mac Rosetta helper execution remains unsupported. Later native qualification records below separately cover bounded synthetic worker interruption, service restart, selected real-source observations and injected isolated endpoint restore. Protected-capture Web/rendered-client behavior, source completeness, strict whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and operational production restore remain unavailable or unqualified. The separate same-build cold notes/ledger recovery rehearsal passes locally. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -1692,3 +1692,90 @@ and historical audit producers, service/host failure recovery, strict endpoint
 resource bounds and production readiness remain unqualified. Cloud/SHC
 persistence remains unsupported. This record does not revise any earlier failed
 primary outcome or turn cleanup into a successful functional result.
+
+
+## Native uncertainty and recovery continuation (2026-11-18)
+
+This continuation uses the unchanged, frozen 0.9.11 build `1795023134` archive
+(SHA-256 `0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e`;
+1,459,090 bytes and 88 runtime files). It adds test tooling, regression checks
+and qualification records. It does not update the installed application runtime.
+The coordinating GPT-6.1 Sol/high session used two GPT-6.1 Terra/high workers,
+rotated the durability role into available capacity, and kept a separate
+read-only GPT-6 Astra/high reviewer within four total threads.
+
+The [service-restart exercise](CASE_NATIVE_SERVICE_RESTART.md) passed held
+precommit and postcommit SQLite boundaries with exact original request retries,
+new systemd daemon/invocation identities, retired workers/descendants and new
+authenticated handlers. Its independent postcheck passed 29 checks, verified
+three exact write tombstones and owned deletion receipts, all 34 source jobs
+terminal with native SIDs absent, and all 88 runtime hashes. The workers were
+live when the supported restart CLI launched; this does not prove restart rather
+than the normal request deadline caused worker death. The initial fingerprint
+failure and the second run's post-restart PID-inventory failure remain separate
+failed primaries with reconciled cleanup. No host failure is claimed.
+
+The [native job-acknowledgement exercise](CASE_NATIVE_JOB_OUTCOMES.md) observed
+actual creation/deletion acknowledgements withheld from the unchanged runtime.
+Its original primary remains `failed_or_uncertain`: both scenario checks passed,
+but cleanup retained access after encountering an incomplete early `PARSING`
+response. A separately reviewed reconciliation passed without repeating the
+fault or changing private ledger rows; all 21 independent postchecks passed.
+Three exact fault/convergence SIDs and four separately identified setup count
+chains were verified. Unbound creation remains charged with no capture receipt;
+only the bound task-local deletion uncertainty was cleared by independently
+attested administrator proof, after which the exact original local case request
+converged to one capture/receipt and stable replay. No live global quota was
+stranded or reset, and no shipped automatic reconciliation interface is claimed.
+
+The [injected isolated endpoint restore](CASE_NATIVE_ENDPOINT_RESTORE.md)
+passed five installed checks and 29 independent postchecks, including current
+ACL/source projections, immutable notes and links, audit/exact receipt identity,
+one archived synthetic unknown row, sealed-pair negative cases, both-principal
+route/canary attestations and settled workers. All 35 source-job rows were
+terminal with bound native SIDs absent. Live main databases and SQLite sidecars,
+startup source/cache and app configuration were unchanged during this exercise;
+all 88 runtime hashes matched. The first read-only checker failed on a TLS-context
+variable collision; a separately reviewed/tested checker-only repair passed.
+The restore itself was not repeated. This is an injected private endpoint route,
+not an operational fresh-instance or cold-platform restore.
+
+The [non-admin real-source increment](CASE_NATIVE_SOURCE_REVOCATION.md) passed
+nine selected read/export/exact-retry operations across allowed, revoked and
+restored access. The same stored capture became redacted and then visible again,
+with unchanged note content. All 28 independent checks passed, including 17 bound
+source jobs terminal with exact native SIDs absent, original configuration and
+existing authority restored, and removal of the temporary user, role and secret.
+The fixture compares all current-context fields exactly except the validated
+login timestamp changed by native Basic authentication; raw contexts remain
+retained. The first case-only run remains failed with separately verified cleanup.
+The passing case scope omits count controls: raw-count compatibility, broader
+index/source/time denial, completeness and loss/lateness remain unqualified.
+
+Earlier pre-account attempts and exact cleanup requirements are retained
+separately. The first guard exposed shared write permissions on two unrelated installed app
+directories. After explicit user approval, only those exact pinned directories
+were permanently narrowed to `0755`. Nine independent checks verified unchanged
+configuration content, role membership and runtime hashes against a fresh
+pre-hardening baseline. Directory ctime changes are intentional and retained;
+shared write access was not automatically reopened. This approved host change
+is distinct from temporary fixture cleanup and is not a host-wide security
+attestation.
+
+Local validation passed the 1,575-test Python suite (9 skipped), 126 distributed
+tests and the 18-check upgrade gate (3 skipped), plus Python lint/format checks.
+The eight endpoint tests also passed with resource warnings treated as errors.
+No local frontend suite is claimed for this tool/test/docs change; normal PR CI
+remains required. Exact wrappers, failed primaries/checkers, separate recovery
+receipts, independent evidence and code hashes are recorded in
+`native_uncertainty_qualification_20261118` in `FEATURE_QUALIFICATION.json`, under
+the private `atlas-uncertain-outcomes` evidence root. Earlier records remain
+unchanged.
+
+Shipped privileged execution, capture, persistence, watch, scheduling and
+notification defaults remain disabled. Source completeness/loss/lateness,
+protected-capture Web/CSRF, strict whole-endpoint resource limits, host failure,
+live-writer atomic backup, full operational restore and production readiness
+remain unqualified. Cloud/SHC persistence remains unsupported. Each unchanged
+live-database result applies to its own exercise interval; later authorized
+case operations do not retroactively revise that observation.
