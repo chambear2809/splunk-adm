@@ -393,7 +393,16 @@
       "ui-receipt.json": "b2c326e614dfe02a33b2608833fb3bfe44916a50e678e19a9f3653eb0853f427",
       "browser-processes.json": "d640b951901eeb9f3f6a8f95ea788ea0c22b4ff26d040128c91784f48133c452"
     },
-    "ci": "Pending repository CI for this increment. Gated Splunk integration is separate and must not be reported passed when skipped."
+    "ci": {
+      "pull_request": "https://github.com/chambear2809/splunk-adm/pull/31",
+      "results": "Repository CI results are attached to the PR head and main merge, separately from the frozen local installed artifact.",
+      "required_jobs": [
+        "Frontend checks",
+        "Browser regression checks",
+        "Python checks"
+      ],
+      "gated_splunk_integration": "Workflow-gated; a skipped run is not a pass and does not replace the explicit installed UI evidence."
+    }
   },
   "cases_web_http_20261117": {
     "date_local": "2026-11-17",
