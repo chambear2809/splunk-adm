@@ -255,7 +255,7 @@ class SQLiteRestoreRehearsal(unittest.TestCase):
             fd = os.open(source, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             os.close(fd)
             intent = "adm-capture-" + "0" * 32
-            with sqlite3.connect(source) as db:
+            with closing(sqlite3.connect(source)) as db, db:
                 db.execute(
                     "CREATE TABLE jobs (seq INTEGER PRIMARY KEY AUTOINCREMENT, sid TEXT NOT NULL UNIQUE, principal TEXT NOT NULL, query_hash TEXT NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, terminal_seq INTEGER, transport_hash TEXT)"
                 )
@@ -288,7 +288,7 @@ class SQLiteRestoreRehearsal(unittest.TestCase):
             )
             JobLedger(source)
             backup(source, target)
-            with sqlite3.connect(target) as db:
+            with closing(sqlite3.connect(target)) as db, db:
                 db.execute("PRAGMA user_version=999")
             with self.assertRaises(LedgerInvalid):
                 JobLedger(target)

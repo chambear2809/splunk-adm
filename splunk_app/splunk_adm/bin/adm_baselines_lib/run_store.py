@@ -279,11 +279,11 @@ class ExecutionStore:
                 raise Invalid("unsupported journal mode")
             if self.existing_only:
                 self._validate_existing_schema(db)
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA foreign_keys=ON")
         except Exception:
             db.close()
             raise
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
         return db
 
     @staticmethod

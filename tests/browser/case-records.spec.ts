@@ -1,5 +1,73 @@
 import { expect, test } from "@playwright/test";
 
+test("case pages follow the server cursor when a byte bound returns a short page", async ({
+  page,
+}) => {
+  const record = (suffix: string, title: string) => ({
+    schema_version: 1,
+    id: `00000000-0000-4000-8000-${suffix}`,
+    revision: 1,
+    title,
+    window: { start: "2026-01-01T00:00:00Z", end: "2026-01-01T01:00:00Z" },
+    entries: [],
+    captures: [],
+    attachments: [],
+  });
+  const first = record("000000000001", "First bounded page");
+  const second = record("000000000002", "Second bounded page");
+  const cursors: (string | null)[] = [];
+  await page.route("**/test-cases/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          available: true,
+          evidenceWrites: false,
+          mode: "notes_only",
+          qualified: false,
+        },
+      });
+    expect(url.pathname.endsWith("/cases")).toBeTruthy();
+    const cursor = url.searchParams.get("after");
+    cursors.push(cursor);
+    return route.fulfill({
+      json:
+        cursor === null
+          ? { items: [first], next: first.id }
+          : { items: [second], next: null },
+    });
+  });
+  await page.goto("/tests/browser/investigation.html?cases");
+  await page
+    .getByRole("button", { name: "Compare windows", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByRole("button", { name: "Open shared cases" }).click();
+  const list = page.getByRole("button", {
+    name: "List shared cases",
+    exact: true,
+  });
+  await list.click();
+  await expect(
+    page.getByRole("button", { name: first.title, exact: true }),
+  ).toBeVisible();
+  const more = page.getByRole("button", {
+    name: "Load more cases",
+    exact: true,
+  });
+  await more.focus();
+  await more.press("Enter");
+  await expect(
+    page.getByRole("button", { name: first.title, exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: second.title, exact: true }),
+  ).toHaveCount(1);
+  await expect(more).toHaveCount(0);
+  await expect(list).toBeFocused();
+  expect(cursors).toEqual([null, first.id]);
+});
+
 test("shared notes preserve a draft across case creation and retry lost responses with one request identity", async ({
   page,
 }) => {

@@ -204,3 +204,12 @@ body/key and show one stored immutable note. No login body, cookie, CSRF value,
 authentication trace or HAR is retained. Screenshots and synthetic JSON/Markdown
 downloads stay outside Git. Viewport fit is recorded separately from app-internal
 containment; native Splunk chrome overflow must not be reported as mobile fit.
+
+The exact-task [case request rehearsal](CASE_REQUEST_SUPERVISION.md#disposable-installed-rehearsal)
+uses `tools/rehearse_case_requests.py` for installed notes, deadline and interrupted
+write tests. It owns one disposable container and retains the archive, runtime
+hashes, TLS checks, private outcome journals and verified cleanup under one parent
+lock. Its platform fault hook belongs only to that disposable container and is
+excluded from the app archive. Run it with a new empty private runtime directory;
+retain failed attempts as evidence. It does not establish native AMD64 resource
+enforcement or source-capture qualification.

@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
@@ -88,7 +89,7 @@ class SnapshotTests(unittest.TestCase):
         )
         self.assertEqual(summary["absent"], [])
         restored = self.root / "restore"
-        with sqlite3.connect(restored / "cases.sqlite") as db:
+        with closing(sqlite3.connect(restored / "cases.sqlite")) as db:
             self.assertEqual(
                 db.execute("SELECT principal FROM acl ORDER BY principal").fetchall(),
                 [("alice",), ("bob",)],
@@ -159,7 +160,7 @@ class SnapshotTests(unittest.TestCase):
 
     def test_future_case_schema_is_rejected_even_with_resealed_manifest(self):
         cases = self.bundle / "cases.sqlite"
-        with sqlite3.connect(cases) as db:
+        with closing(sqlite3.connect(cases)) as db, db:
             db.execute("CREATE TABLE future_table (value TEXT)")
             db.execute("INSERT INTO future_table VALUES ('unexpected')")
             db.execute("PRAGMA user_version=0")
@@ -184,7 +185,7 @@ class SnapshotTests(unittest.TestCase):
 
     def test_future_user_version_is_rejected_even_with_resealed_manifest(self):
         ledger = self.bundle / "capture_jobs.sqlite"
-        with sqlite3.connect(ledger) as db:
+        with closing(sqlite3.connect(ledger)) as db, db:
             db.execute("PRAGMA user_version=999")
         manifest_path = self.bundle / "manifest.json"
         manifest = __import__("json").loads(manifest_path.read_text())
@@ -264,7 +265,7 @@ class SnapshotTests(unittest.TestCase):
 
     def test_committed_wal_rows_are_included(self):
         dbpath = self.source / "cases.sqlite"
-        with sqlite3.connect(dbpath) as db:
+        with closing(sqlite3.connect(dbpath)) as db, db:
             db.execute("PRAGMA journal_mode=WAL")
             db.execute("CREATE TABLE wal_probe (value TEXT)")
             db.execute("INSERT INTO wal_probe VALUES ('committed')")
@@ -278,7 +279,7 @@ class SnapshotTests(unittest.TestCase):
         digest = create_snapshot(
             self.source, bundle, expected_schemas=schemas, provenance=PROVENANCE
         )
-        with sqlite3.connect(bundle / "cases.sqlite") as db:
+        with closing(sqlite3.connect(bundle / "cases.sqlite")) as db:
             self.assertEqual(
                 db.execute("SELECT value FROM wal_probe").fetchone(), ("committed",)
             )

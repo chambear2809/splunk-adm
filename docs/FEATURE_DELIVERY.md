@@ -1403,3 +1403,81 @@ Rollback removes test tooling/docs while preserving retained backups and ownersh
 receipts; no production data deletion or older database writer is authorized.
 Exact IDs, hashes, commands and limits are in the
 [qualification record](FEATURE_QUALIFICATION.json).
+
+## Case request supervision — 2026-11-18 (0.9.10 candidate)
+
+The customer outcome is a Cases workflow that becomes unavailable in bounded
+operational time when authentication, configuration or notes work stalls, while
+preserving an interrupted write's exact retry identity. This increment adds a
+fresh supervised Linux request worker around the existing host adapter, plus
+byte-based list pagination so valid large cases remain accessible through a
+bounded response frame. SQLite initialization failures close their connection;
+test fixture connections now close explicitly instead of relying on collection.
+Schemas, entitlement checks, Web CSRF registration and shipped disabled gates
+are preserved. See [the operational contract](CASE_REQUEST_SUPERVISION.md).
+
+The parent admits one worker per persistent-handler process without waiting,
+uses a 40-second operational budget and a separate one-second retirement
+allowance, and fails closed after uncertain retirement. The Linux child starts
+in its own session, receives credentials only on stdin, uses a restricted
+environment and keeps its leader/watchdog alive until retirement. TERM/KILL
+precede reaping; adopted descendants are reaped only from the owned group.
+Raw input is limited to 1 MiB, response frames to 2 MiB, and complete compact ASCII
+list pages to 1,500,000 bytes. Clients follow the cursor even after a short page;
+the existing Cases UI does so, with a new keyboard/focus regression check.
+Synchronous process creation, kernel/filesystem stalls and Splunk Web delivery
+are not hard real-time guarantees. This does not qualify complete endpoint
+CPU/memory bounds, current source capture or production operation.
+
+Local frontend, browser, Python, release/bundle and AppInspect checks passed.
+The final full Python discovery ran 1,396 tests with seven Linux-only skips
+and no ResourceWarnings. A loaded full run also reproduced the previously
+recorded 100ms SQLite writer-lock race; the timeout and assertions were not
+changed. The final request-focused local run ran 50 tests: 39 passed and 11 were skipped.
+
+The frozen 0.9.10 candidate is build `1795016813`, 1,438,212 bytes, SHA-256
+`61fe7a81687e6c9aef2a6f1d892e0848de4adcbfed8747a3fd22d6e75049e08d`. Installed
+functional qualification passed in attempt-13 on Docker Desktop 29.9.3
+(Linux/aarch64, 12 CPUs, 15,527,374,848 bytes RAM) using the cached pinned
+Linux/amd64 image under emulation. Web, management and HEC trusted TLS checks
+passed before and after install; wrong-CA and wrong-hostname handshakes were
+rejected. The installed build and runtime hashes matched the frozen candidate;
+all 11 Linux process tests passed. Uninjected positive Web checks passed before
+faults and after hook restoration, including pagination of three 762KB cases
+over three pages. Four injected stalls returned at about 40 seconds and retired
+their groups/descendants within 40.53 seconds. Exact retries produced one case
+and receipt for each operation, including a post-commit stall; a client
+disconnect after durable commit was likewise reconciled with the exact retry.
+The original startup source and cache were restored exactly. Attempt-13 took
+449.43 seconds and its receipt SHA-256 is
+`54701005db1417a42434c1e46212069719158bef659c54e09f5db859393874cd`.
+
+Independent prelaunch and final integrated-diff reviews found no remaining
+actionable findings. The normal repository and pull-request gates remain to run.
+
+Attempts 1–12 remain retained privately. They include the original fixture
+assumption that platform startup files were absent; repeated pre-positive 503s
+that diagnostics traced to a bare `splunk` lookup in the PATH-free worker; the
+fixture's later-discovered 0444 source and generated cache modes; and attempt-12
+test-only mismatch accepting only 403 where Splunk Web returned a CSRF-specific
+401. Those causes were repaired or aligned with the existing Web contract and
+independently reviewed before attempt-13. The first eleven attempts and
+attempt-12 did not pass installed positive/fault qualification; their exact
+primary outcomes remain marked failed/uncertain in their retained receipts.
+Attempt-12's six cleanup checks passed. Attempt-13's six cleanup checks were
+independently confirmed true, task resources and credentials/TLS were absent,
+and all three ports were released. Failed-attempt receipts and journals remain
+outside Git under `atlas-case-request-bounds`.
+
+This is functional evidence for the installed synthetic notes workflow on the
+emulated local lab. Synchronous process launch, kernel/filesystem stalls and
+Splunk Web delivery are not hard real-time guarantees. It does not establish
+strict whole-endpoint CPU/memory bounds, native Linux/amd64 resource
+qualification, current source capture, real-source behavior, Cloud/SHC support
+or production readiness. Native Linux/amd64 resource qualification is deferred
+by the user; Docker Desktop's emulated Linux/amd64 results are functional
+container evidence. The permanent Enterprise/Cloud targets, original checkout
+and old paused goal remain untouched. Rollback preserves databases,
+audit/history and unresolved retry/job state; no deletion or erasure is implied.
+Exact performed evidence and remaining gates are tracked in
+[the qualification record](FEATURE_QUALIFICATION.json).

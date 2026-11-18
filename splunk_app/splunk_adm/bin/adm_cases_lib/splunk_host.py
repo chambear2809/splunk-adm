@@ -183,13 +183,41 @@ class SplunkHost:
 
     @staticmethod
     def _topology():
-        # Read one fixed local runtime setting; do not grant users config-reader
-        # privileges or request system authentication. Nothing else from server
-        # configuration is returned or logged. Avoid the persistent CLI cache.
-        from splunk.clilib.cli_common import getMergedConf
-
-        disabled = getMergedConf("server").get("shclustering", {}).get("disabled")
-        return {"disabled": disabled}
+        # Read one fixed local runtime setting through the absolute CLI path.
+        # The supervised worker intentionally has no PATH; getMergedConf starts
+        # the CLI by name and therefore fails in that restricted environment.
+        home = Path(os.environ.get("SPLUNK_HOME", ""))
+        if not home.is_absolute():
+            raise HostUnavailable()
+        try:
+            result = subprocess.run(
+                [
+                    str(home / "bin/splunk"),
+                    "btool",
+                    "server",
+                    "list",
+                    "shclustering",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+                check=True,
+            )
+            if len(result.stdout) > 16384:
+                raise HostUnavailable()
+            parsed = configparser.ConfigParser(interpolation=None)
+            parsed.read_string(result.stdout.decode("utf-8"))
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            UnicodeError,
+            ValueError,
+            configparser.Error,
+        ):
+            raise HostUnavailable() from None
+        if set(parsed.sections()) != {"shclustering"}:
+            raise HostUnavailable()
+        return {"disabled": parsed["shclustering"].get("disabled")}
 
     def _request(self, path):
         import splunk.rest
