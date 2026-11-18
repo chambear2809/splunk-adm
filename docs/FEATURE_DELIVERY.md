@@ -1226,3 +1226,87 @@ gates. Independent review added destructive-method CSRF coverage, stronger
 revocation/logout proofs and the cleanup/key-residence clarifications. Final independent review found no actionable issues. Repository CI results are attached to the corresponding PR and main commit;
 those jobs do not replace the explicitly opted-in installed Web scenario. Private receipts are under `attempt-3/outputs/` in the external
 `atlas-cases-web-validation` task directory.
+
+## Direct Cases access and rendered Splunk Web qualification (0.9.8)
+
+Users with only `adm_investigate` can now open **Cases** directly, without first
+performing a graph comparison or receiving source-search access. The new view
+validates an absolute UTC calendar window for new cases, keeps its client/window
+stable while working, and loads the existing cases UI lazily. Pipeline-health
+searches do not run on this page. Existing Incident workflows remain available.
+Installed testing exposed a focus-before-React-commit race after case creation;
+focus now follows the committed heading/editor. Visual review also caught a stale
+export-success message after denied access; failures now clear that old message.
+
+The final installed Firefox scenario passes all 12 workflow checkpoints: exact
+restricted logins/direct entry; invalid-window keyboard handling; missing/invalid
+native CSRF-token denial with unchanged empty lists; case creation/draft retention;
+a real committed note response deliberately dropped before the UI receives it,
+followed by same-key/body retry with one immutable entry; note revision/history;
+private isolation and sharing/member append; consent-gated JSON and Markdown
+downloads; narrow-width draft/focus behavior; stale-revision rejection preserving
+the draft; revocation clearing visible case data/old success status; and anonymous
+navigation returning to login. After revocation, the member remains authenticated
+with the same exact role/capability while direct case read and export both return
+403. No source search jobs were dispatched. These are notes/membership checks,
+not protected-source authorization or capture qualification.
+
+The test uses real installed responses. Its private journal checkpoints exact
+synthetic requests/keys before sending, response outcomes and the deliberate
+post-commit drop. All 11 mutations have responses, including two native CSRF 401s
+and one stale-revision 409. It retains no login bodies, cookies, CSRF values,
+authentication traces or HAR. Each browser profile imports only the task's public
+CA; certificate/hostname checks stay enabled. Management, HEC and Web separately
+passed positive TLS and wrong-CA/wrong-hostname checks before and after install.
+A separate local browser trust fixture rejects unknown CA/wrong hostname; that
+negative fixture is not an installed-Splunk browser test.
+
+The final frozen installed artifact is **0.9.8**, build **1794966952**,
+**1,417,735 bytes**, SHA-256
+`8c2f61206fad88faa3a62d6689b826a4a34e2b42b3c3488ca05a8ccd4341802b`.
+It is retained under `atlas-cases-ui-validation/attempt-4/outputs/` outside Git,
+with its sidecar and receipts. Earlier failed/partial 0.9.6 and 0.9.7 attempts,
+and the passing 0.9.7 run that exposed the stale message in visual review, remain
+separate. Versions were advanced before deploying changed runtime bytes. Later
+CI archives containing updated records/build metadata are separate artifacts;
+they must not be silently substituted for this installed archive.
+
+The final scenario took **38.062 seconds**, with **193.61 seconds** for the full
+locked lifecycle. Both fixture users and their exact single-capability role were
+confirmed absent and persistence restored before purge. The parent retained the
+same direct lab lock through exact container/network/volume cleanup, detached
+Firefox group retirement, profile/credential/TLS removal, port release and durable
+final receipts. A no-authentication cancellation probe separately stopped an
+owned Firefox, killed its Node parent and proved exact group retirement before
+profile deletion. Incomplete browser ownership refuses a cleanup-success claim.
+All three unrelated collector containers stayed untouched. Shared image/browser
+caches and private synthetic evidence remain; the permanent SQLite database and
+its possible audit/retry/history records were not touched or erased.
+
+Screenshots and exports were inspected. App content fits at actual widths 572,
+364 and **320 pixels**, without internal horizontal overflow. At tested phone
+viewports the default Splunk shell leaves Atlas less than 320 pixels and its own
+header overflows; the app correctly focuses its width notice, hides the editor
+and preserves the draft without new investigation requests. **Phone viewport fit
+is not qualified.** Existing width assertions and the 320px app minimum remain
+unchanged.
+
+Local validation passes: lint/type/format, 1,337 frontend tests, 1,333 Python
+tests, Ruff (243 files), build/package, archive/security gates and AppInspect
+4.3.1 Cloud precert (zero errors/failures/future failures; six warnings and one
+skipped check). Python level-9 gzip measurements are 683,735/686,080 bytes for the
+main asset and 31,924/32,768 for optional journeys. The full browser run passed
+214 tests with one skip; an initial parallel time-picker timeout passed focused
+recheck and the full two-worker rerun. Case-focused checks were rerun after the
+focus/error fixes. Repository CI is recorded on the PR/main runs; its gated
+Splunk suite is separate from this explicitly opted-in installed scenario.
+
+Independent review covered source, test/fixture contracts, journal durability,
+browser cancellation ownership, width interpretation and final evidence. Source
+capture, whole-endpoint bounds/cancellation, source-backed stored reads/exports,
+backup/restore, native Linux resource limits, real sources and production
+readiness remain unqualified. Native resources remain deferred as requested.
+No permanent-host, Cloud, AWS, shared-HF, watch, schedule or failover operation
+occurred. Shipped persistence/capture/watch/schedule gates remain disabled, and
+the six-feature request remains incomplete. Rollback is a reviewed repository
+revert; no case schema migration or erasure is part of this increment.

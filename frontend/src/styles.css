@@ -18,6 +18,51 @@
 .atlas .atlas-business-import button {
   margin: 0.5rem 0.5rem 0.5rem 0;
 }
+.atlas .atlas-cases-window {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 42rem;
+  margin: 1rem 0;
+}
+.atlas .atlas-cases-window input {
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.45rem;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+}
+.atlas .atlas-cases-window button {
+  justify-self: start;
+  min-height: 2rem;
+  padding: 0.4rem 0.75rem;
+}
+.atlas .atlas-shared-cases {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--adm-line);
+  overflow-wrap: anywhere;
+}
+.atlas .atlas-shared-cases label {
+  display: block;
+  margin-top: 0.8rem;
+}
+.atlas .atlas-shared-cases :is(input, textarea, select) {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  font: inherit;
+  padding: 0.5rem;
+}
+.atlas .atlas-shared-cases textarea {
+  min-height: 5rem;
+}
+.atlas .atlas-shared-cases button {
+  margin: 0.5rem 0.5rem 0 0;
+}
 .adm {
   color-scheme: light;
   --adm-select-bg: #e8f0fb;

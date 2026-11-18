@@ -250,6 +250,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "help",
                     "device",
                     "impact",
+                    "cases",
                 )
             },
             "splunk_adm/appserver/static/adm.css": b"css",

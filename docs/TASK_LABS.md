@@ -164,3 +164,34 @@ before/after installation, including wrong-CA and wrong-hostname rejection.
 Retain exact package/container provenance, fixture cleanup and final resource
 absence under the same lock. A short bounded port-release wait after container
 removal can account for teardown, without treating an occupied port as free.
+
+## Rendered cases UI exercise
+
+`tests/splunk/test_cases_ui.py` is an explicitly opted-in installed Firefox
+scenario for the exact `cases-ui-20261117` / `adm-cases-ui-20261117` lab. It
+requires `ADM_LAB=1`, `ADM_LAB_WEB_TLS=1`, `ADM_LAB_CASES_UI=1`, the ordinary
+consistent task variables, and private external paths in `ADM_LAB_UI_RUNTIME`,
+`ADM_LAB_UI_OUTPUT`, and `ADM_LAB_WEB_RECEIPT`. Supply the pinned project Node and
+Playwright Firefox executables using `ADM_LAB_NODE`, `ADM_LAB_FIREFOX`, and
+`PLAYWRIGHT_BROWSERS_PATH`. `NODE_EXTRA_CA_CERTS` must name only the task's public
+CA for Node's forwarded-request transport. The browser uses a new private NSS
+profile importing that same public CA; certificate/hostname validation remains
+on and operating-system/browser-global trust is unchanged.
+
+The parent lifecycle must hold the direct lab lock throughout execution,
+evidence retention and cleanup. Firefox launches detached processes on macOS:
+killing only the Python/Node process group does not prove browser exit. The
+scenario checkpoints exact browser executable/profile, launch intent, PID,
+process group and start identity in a private `browser-processes.json`. The
+parent must validate and retire those exact owned groups, prove absence, and
+only then remove authenticated profiles. Incomplete or mismatched ownership
+must retain uncertainty and refuse a cleanup-success claim. The shell-wrapper
+example above alone does not meet this cancellation contract.
+
+The rendered scenario uses real case responses. Its one injected fault forwards
+a note write to the installed backend, durably records its successful response,
+then drops that response before the page receives it. The UI must retry the same
+body/key and show one stored immutable note. No login body, cookie, CSRF value,
+authentication trace or HAR is retained. Screenshots and synthetic JSON/Markdown
+downloads stay outside Git. Viewport fit is recorded separately from app-internal
+containment; native Splunk chrome overflow must not be reported as mobile fit.
