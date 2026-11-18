@@ -12,6 +12,8 @@ import {
   type Window,
 } from "./model";
 import "./incident.css";
+import { loadAudit, type AuditProducer } from "./audit";
+import { AuditEvidence, type AuditState } from "./AuditEvidence";
 import { InvestigationHandoff } from "../investigations/InvestigationHandoff";
 import { comparisonReference } from "../investigations/reference";
 import type { CaseClient } from "../investigations/caseClient";
@@ -22,6 +24,8 @@ export type IncidentWorkspaceProps = {
   incident: Graph;
   /** Load a graph in the same scope for the exact absolute half-open window. Honor cancellation. */
   loadWindow: (window: Window, signal: AbortSignal) => Promise<Graph>;
+  /** Optional trusted producer. It must authorize the selection and establish historical identity. */
+  auditProducer?: AuditProducer;
   timezone?: string;
   caseClient?: CaseClient;
   nativePersistence?: boolean;
@@ -30,7 +34,13 @@ export type IncidentWorkspaceProps = {
   /** Parent may highlight paths; it retains control of map selection. */
   onHighlight?: (edgeIds: string[]) => void;
 };
-type Result = { incident: Graph; baseline: Graph; recovery?: Graph };
+type Result = {
+  incident: Graph;
+  baseline: Graph;
+  recovery?: Graph;
+  audit: AuditState;
+  auditProducer?: AuditProducer;
+};
 type Tab = "Overview" | "Timeline" | "Connections" | "Notes";
 const tabs: Tab[] = ["Overview", "Timeline", "Connections", "Notes"];
 const displayedFields: Array<keyof GraphEdge> = [
@@ -53,6 +63,7 @@ const display = (value: unknown) =>
 export function IncidentWorkspace({
   incident,
   loadWindow,
+  auditProducer,
   timezone,
   caseClient,
   nativePersistence = false,
@@ -74,7 +85,11 @@ export function IncidentWorkspace({
     ).toISOString(),
   }));
   const [storedResult, setResult] = useState<Result>();
-  const result = storedResult?.incident === incident ? storedResult : undefined;
+  const result =
+    storedResult?.incident === incident &&
+    storedResult.auditProducer === auditProducer
+      ? storedResult
+      : undefined;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<Tab>("Overview");
@@ -105,9 +120,14 @@ export function IncidentWorkspace({
     return () => {
       active.current?.abort();
     };
-  }, [incident]);
+  }, [incident, auditProducer]);
   const compare = async () => {
     active.current?.abort();
+    setResult((current) =>
+      current?.audit.status === "loading"
+        ? { ...current, audit: { status: "cancelled" } }
+        : current,
+    );
     const controller = new AbortController();
     active.current = controller;
     const token = ++generation.current;
@@ -134,8 +154,44 @@ export function IncidentWorkspace({
         loadWindow,
         controller.signal,
       );
-      if (!controller.signal.aborted && token === generation.current)
-        setResult({ incident, baseline, recovery });
+      if (!controller.signal.aborted && token === generation.current) {
+        setResult({
+          incident,
+          baseline,
+          recovery,
+          audit: { status: auditProducer ? "loading" : "unavailable" },
+          auditProducer,
+        });
+        setBusy(false);
+        if (auditProducer) {
+          void loadAudit(
+            auditProducer,
+            { boundary: incident.boundary, window: incident.window },
+            controller.signal,
+          )
+            .then((loaded) => {
+              if (!controller.signal.aborted && token === generation.current)
+                setResult((current) =>
+                  current?.incident === incident &&
+                  current.auditProducer === auditProducer
+                    ? {
+                        ...current,
+                        audit: { status: "available", result: loaded },
+                      }
+                    : current,
+                );
+            })
+            .catch(() => {
+              if (!controller.signal.aborted && token === generation.current)
+                setResult((current) =>
+                  current?.incident === incident &&
+                  current.auditProducer === auditProducer
+                    ? { ...current, audit: { status: "failed" } }
+                    : current,
+                );
+            });
+        }
+      }
     } catch (reason) {
       if (!controller.signal.aborted && token === generation.current) {
         setResult(undefined);
@@ -153,11 +209,29 @@ export function IncidentWorkspace({
     active.current?.abort();
     setBusy(false);
   };
+  const cancelAudit = () => {
+    generation.current++;
+    active.current?.abort();
+    setResult((current) =>
+      current?.audit.status === "loading"
+        ? { ...current, audit: { status: "cancelled" } }
+        : current,
+    );
+  };
   const diff = result && diffGraphs(result.baseline, incident);
   const findings =
     result && diff ? buildFindings(result.baseline, incident, diff) : [];
   const timeline =
-    result && diff ? buildTimeline(result.baseline, incident, diff) : [];
+    result && diff
+      ? buildTimeline(
+          result.baseline,
+          incident,
+          diff,
+          result.audit.status === "available"
+            ? result.audit.result.projection
+            : undefined,
+        )
+      : [];
   const reasons = result
     ? [
         ...new Set([
@@ -407,6 +481,12 @@ export function IncidentWorkspace({
                 Snapshot differences indicate an interval; native records retain
                 their event time.
               </p>
+              <AuditEvidence
+                onCancel={cancelAudit}
+                state={result.audit}
+                window={incident.window}
+                timeline={timeline}
+              />
               {timeline.length ? (
                 <ol className="atlas-incident-timeline">
                   {timeline.map((item) => (

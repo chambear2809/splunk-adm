@@ -284,3 +284,14 @@ Persistence and capture remain disabled by default. The separate
 [cold recovery rehearsal](BACKUP_RESTORE.md#installed-cold-case-recovery-rehearsal)
 defines the narrower same-build case/ledger backup test; its performed evidence
 and remaining limits are recorded separately in the qualification record.
+
+
+## Current installed rehearsal tooling (0.9.11)
+
+The dedicated [source rehearsal](CASE_SOURCE_QUALIFICATION.md) retains exact
+requests and tests current caller filters, selected stored reads/exports/retries,
+configuration changes and interrupted capture commits. Its positive scenarios
+remain unqualified: two disposable attempts against 0.9.10 did not reach a
+successful capture. The explicit unsupported-helper mode separately checks
+fail-closed preflight and usable notes without dispatching source jobs. This
+does not replace positive qualification or relax the helper resource contract.

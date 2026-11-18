@@ -1481,3 +1481,61 @@ and old paused goal remain untouched. Rollback preserves databases,
 audit/history and unresolved retry/job state; no deletion or erasure is implied.
 Exact performed evidence and remaining gates are tracked in
 [the qualification record](FEATURE_QUALIFICATION.json).
+
+
+## Evidence integration and operator workflow — 2026-11-18 (0.9.11 candidate)
+
+This increment implements the incident audit producer consumer and baseline
+operator workflow alongside a runnable source-capture qualification driver.
+The incident Timeline consumes exact native authority/scope/object identities
+and historically valid application bindings, preserves native action and receipt
+times, and displays source coverage, gaps and withheld/ambiguous records. Its
+explicit JSON download retains allowlisted detached evidence. Graph comparison
+is available independently of optional audit loading; audit requests can be
+cancelled and time out after ten seconds. No production audit producer or
+authoritative historical binding feed is connected.
+
+The baseline retained-artifact adapter checks selection, immutable digests,
+provenance consistency, coverage, revisions, watermark and lateness, then
+requires independent producer verification and current source authorization.
+A JSON manifest is not completeness proof; a production complete-source provider
+is still missing. The bounded-stdin operator command implements create, enable,
+disable, inspect and exact-request reconciliation under current administrator
+and immutable owner checks. Creation and enablement remain unavailable in the
+shipped host without a verified provider. Journal schema 2 adds durable
+management receipts, preserving bindings and unresolved runs. Stop capacity is
+reserved per enabled binding; older full journals retain unkeyed emergency
+stopping. Rollback requires retained databases and a compatible schema-2 writer.
+
+The installed source driver runs exact owned disposable tasks under the shared
+lock with frozen archives, runtime hashes, trusted and negative TLS checks,
+private exact-operation journals, bounded resources and verified purge. It
+includes pre/post-commit capture interruption and current source-revocation
+checks, but those positive scenarios have not yet passed installed qualification.
+Two 0.9.10 attempts were retained as failed/uncertain: a restart-readiness TLS EOF
+and capture-unavailable response before the first capture. Both were purged
+with all six cleanup checks verified. Explicit unsupported-helper qualification
+is separate and cannot count as a positive capture result.
+
+Independent review found and cleared FIFO-open blocking, stop-receipt quota
+exhaustion, uncertain hook-restoration cleanup, optional audit loading blocking
+graph results, and mutable/nonallowlisted retained audit projections. Integrated
+local checks passed: 1,492 Python tests with seven skips, 1,345 Vitest tests,
+215 browser tests with one optional scale skip, distributed and upgrade checks,
+release/bundle gates and AppInspect (zero errors/failures, six warnings).
+The exact frozen 0.9.11 archive is build `1795023134`, 1,459,090 bytes,
+SHA-256 `0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e`.
+Its installed unsupported-helper test passed: notes remain usable, actual
+preflight fails closed and no source-job ledger exists. TLS and runtime hashes
+passed, six cleanup checks were independently confirmed, and the lifecycle took
+286.8 seconds. Receipt SHA-256 is
+`194151a368e16e0309c07032f92356e72c6cef8f6c61f2b2005e1912f26addb8`.
+This is negative-path qualification, not successful capture or recovery. A later
+host-only journal-directory sync repair has focused tests and review, separate
+from the retained installed fixture fingerprints. Native amd64 resources, real-source associations/completeness,
+Cloud/SHC and production readiness remain unqualified. Shipped capture,
+persistence, watch, schedule and notification defaults stay disabled.
+
+Final independent review found no remaining actionable blocker in the integrated
+code or retained evidence. Subsequent repository CI and merge outcomes are
+recorded with the corresponding pull request and main commit.

@@ -1,4 +1,120 @@
 {
+  "evidence_operator_integration_20261118": {
+    "date_local": "2026-11-18",
+    "base_main": "5249d78f624ade4c22c37f90ae4243434eb1a75e",
+    "status": "software_implemented_installed_negative_verified_positive_source_blocked",
+    "application_version": "0.9.11",
+    "application_runtime_changed": true,
+    "software": {
+      "incident": "Connected optional audit producer consumer, exact native tuple and historically valid binding projection, coverage/gap/withholding/provenance display and JSON export. Graph comparison is independent of audit loading; separate cancellation,10-second timeout and stale-result guards. Retained values use explicit copied allowlists.",
+      "baseline": "Concrete bounded-stdin operator create/enable/disable/inspect/find_created/receipt workflow with current admin/immutable owner checks, stable request identity, atomic CAS receipts, per-enabled-binding stop capacity and source-independent reconciliation. Retained-artifact adapter validates consistency and separately requires verified producer evidence/current source entitlement.",
+      "source_capture": "Runnable exact-task local driver, frozen archive/runtime verification, private exact-operation journals, current caller filter checks and pre/post-commit capture-interruption tests using unchanged startup preservation transaction. Positive qualification remains blocked at installed capture readiness."
+    },
+    "source_attempts": {
+      "frozen_0_9_10_archive_sha256": "61fe7a81687e6c9aef2a6f1d892e0848de4adcbfed8747a3fd22d6e75049e08d",
+      "attempt_1": {
+        "status": "failed_or_uncertain",
+        "receipt_sha256": "5343dcd4ee9fce7c9e29f038504b48c06e35a82e85ebf4d1d5eedb1982440d40",
+        "elapsed_seconds": 208.77,
+        "outcome": "Installed candidate; startup TLS EOF before source tests; no capture performed. Fixed bounded trusted readiness polling with certificate errors still fatal.",
+        "cleanup_six_checks": true
+      },
+      "attempt_2": {
+        "status": "failed_or_uncertain",
+        "receipt_sha256": "77a4f5d18b0da5d81e03b1aef3b5441c9661c76ed04e0236b92b77edf3f593c5",
+        "elapsed_seconds": 252.94,
+        "outcome": "Install, trusted/wrong-CA/wrong-host TLS and runtime hashes passed; native synthetic indexed graph rows returned. Actual handler available=true/evidenceWrites=false before first capture; no capture/fault pass. Readiness failure stage not measured. Prior Rosetta256MiB incompatibility is documented separately, not attributed from this response alone.",
+        "cleanup_six_checks": true
+      },
+      "independent_cleanup": "Coordinator verified exact task-labeled containers/networks/volumes absent, three ports released, private credentials and TLS absent after each attempt.",
+      "private_root": "/Users/alecchamberlain/Documents/Codex/2026-11-18/atlas-current-source-qualification"
+    },
+    "journal_migration": {
+      "from": 1,
+      "to": 2,
+      "method": "transactional; retains binding and unresolved run identities",
+      "rollback": "Older writers reject schema2. Preserve both databases and use validated compatible writer; installed migration/recovery unqualified. No permanent journal mutated."
+    },
+    "independent_review": {
+      "models": {
+        "workers": "gpt-6.1-terra",
+        "reviewer": "gpt-6-astra"
+      },
+      "resolved_findings": [
+        "retained artifact/index FIFO could block before type checks",
+        "no-op disables could consume receipts needed to stop enabled bindings",
+        "unknown hook install or fault-disable failure could skip restoration",
+        "hanging optional audit producer delayed completed graph comparison",
+        "producer mutation/extra fields could alter retained audit exports",
+        "source journal file fsync did not publish first directory entry durably",
+        "new runtime outputs directory entry needed parent sync before external operations"
+      ],
+      "state": "Astra6 final code/evidence review clear; archive, negative receipt,76 installed/current Python runtime hashes, repairs and qualification boundaries independently checked. Normal repository/PR gates pending."
+    },
+    "native_amd64_resource_qualification": false,
+    "real_source_qualification": false,
+    "production_readiness": false,
+    "remaining_software_and_qualification": [
+      "Production incident audit producer with actual caller authorization, native field semantics, source coverage and authoritative historical application bindings",
+      "Verified complete baseline source producer and current source entitlement integration; manifest self-consistency is insufficient",
+      "Positive installed current-transport source capture, source-filter/revocation, protected stored reads/exports/retries and capture commit-fault reconciliation on a compatible runtime",
+      "Unknown remote source-job creation/deletion recovery; commit fault fixtures currently require known jobs deleted before commit",
+      "Installed operator provisioning/migration and broader recovery, strict whole-endpoint resources, Cloud/SHC and production readiness"
+    ],
+    "default_gates": "Persistence/capture/watch/schedule/notifications disabled as shipped. No permanent Enterprise/Cloud/HF/AWS, source/role grants outside disposable fixture, TLS weakening or native helper resource limit changes.",
+    "frozen_archive": {
+      "version": "0.9.11",
+      "build": 1795023134,
+      "bytes": 1459090,
+      "sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "origin": "Locally built and frozen before final evidence-record updates. Later CI archives are separate.",
+      "path_private": "atlas-evidence-implementation/artifacts/splunk_adm-0.9.11.tar.gz"
+    },
+    "local_checks": {
+      "python_full": "Initial integrated1490/9skips passed; final1492/7skips passed after two journal-publication tests and standalone import correction",
+      "distributed": "126 passed",
+      "upgrade": "18 run,3 opt-in skips; passed",
+      "vitest": "1345 passed across129 files",
+      "incident_browser": "Coordinator ran isolated browser harness: graph remains available with noncooperative audit producer; cancelling suppresses late results",
+      "release": "Production build completed; archive and3 bundle tests passed. Initial package attempt refused symlinked dependencies; local cloned dependency tree passed inventory and packaging.",
+      "appinspect": "4.3.1 Cloud precert + saved report gate:0 errors,0 failures,0 future failures,6 warnings",
+      "browser_full": "215 passed,1 optional scale skip",
+      "lint": "Final frontend ESLint/type/Prettier, Ruff check/format and whitespace checks passed",
+      "appinspect_report_sha256": "56740ec0b531b37bd527030f7a5c70df4502766c5d2141decbdda2b5f52178c8",
+      "source_fixture_final": "17 focused source/journal/cleanup/readiness/directory-publication tests passed",
+      "python_final": "1492 tests ran,7 skipped, passed in104.338s after final host fixes; no ResourceWarnings in retained final log"
+    },
+    "installed_negative": {
+      "status": "unsupported_helper_verified",
+      "positive_source_qualification": false,
+      "archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "receipt_sha256": "194151a368e16e0309c07032f92356e72c6cef8f6c61f2b2005e1912f26addb8",
+      "installed_version": "0.9.11",
+      "installed_build": 1795023134,
+      "elapsed_seconds": 286.8,
+      "tests": "1 installed unsupported-helper test ran and passed in10.516s, zero skips",
+      "assertions": [
+        "handler available with evidenceWrites=false",
+        "notes create and append succeed",
+        "actual token-free SupervisedTransport.preflight fails closed",
+        "source-job ledger absent"
+      ],
+      "tls": "Web/management/HEC trusted CA+hostname pass before/after install; wrong CA and wrong hostname reject",
+      "runtime_hashes": "Every installed runtime Python file matches frozen archive",
+      "cleanup": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      },
+      "independent_cleanup": "Coordinator separately confirmed exact task-labeled resources absent, bound35000/35089/35088, and confirmed private credentials/TLS absent",
+      "fixture_followup": "After this run, host-only fsync of journal parent and runtime-directory entries and standalone driver module imports were fixed/tested/reviewed. No application bytes changed; these later host fixes are not part of the installed fixture fingerprint.",
+      "command": "python tools/rehearse_case_source_capture.py --run --expect-unsupported-helper --runtime {private}/installed-negative-1 --package {private}/artifacts/splunk_adm-0.9.11.tar.gz --package-sha256 0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e --extracted /Users/alecchamberlain/Documents/GitHub/splunk-adm/research/extracted --socket unix:///Users/alecchamberlain/.docker/run/docker.sock"
+    },
+    "integration": "Local gates complete and independent review clear. Subsequent PR/CI and merge outcomes are recorded in the associated GitHub PR and main commit; CI-generated archives remain separate from the frozen installed candidate."
+  },
   "cases_request_supervision_20261118": {
     "date_local": "2026-11-18",
     "base_main": "2cafb9b99e43e70a590a271c2cf04a71909154f5",
