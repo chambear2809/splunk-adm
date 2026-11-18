@@ -5,7 +5,7 @@ areas. “Local” means implementation and automated checks in this checkout. I
 does not imply a deployed Cloud write path or qualification against current
 production data.
 
-**Completion status (2026-11-16): the six-feature request is not complete.**
+**Completion status (2026-11-17): the six-feature request is not complete.**
 The table records implemented increments and their remaining source, integration
 and deployment gaps. Passing local checks does not close those gaps.
 
@@ -18,7 +18,7 @@ not authorize collector/schedule activation or infrastructure changes.
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
 | Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified. A later disable-only HTTP stop command now manages an existing owned binding; it does not provision or enable one.                                                                             |
-| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; rendered-client and source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; the 0.9.8 rendered Cases notes workflow also passed. Source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and production restore remain unavailable or unqualified. The separate same-build cold notes/ledger recovery rehearsal passes locally. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -1310,3 +1310,96 @@ No permanent-host, Cloud, AWS, shared-HF, watch, schedule or failover operation
 occurred. Shipped persistence/capture/watch/schedule gates remain disabled, and
 the six-feature request remains incomplete. Rollback is a reviewed repository
 revert; no case schema migration or erasure is part of this increment.
+
+
+## Installed cold notes and capture-ledger recovery (0.9.8, local Docker)
+
+The customer outcome is retaining private/shared notes, immutable revisions,
+access rules, exports, original retries and audit history through a restart and
+cold restore into a fresh Splunk container, without discarding unresolved job
+slots. This increment adds test tooling and qualification; application runtime
+bytes and shipped disabled defaults are unchanged. The six-feature request
+remains incomplete.
+
+The successful third rehearsal used the previously frozen **0.9.8** archive,
+build **1794966952**, **1,417,735 bytes**, SHA-256
+`8c2f61206fad88faa3a62d6689b826a4a34e2b42b3c3488ca05a8ccd4341802b`
+for every installation. Newly generated local/CI archives are separate artifacts
+and were not substituted for this installed package. No version bump or permanent
+Enterprise/Cloud deployment was needed for these test/tooling changes.
+
+`tools/rehearse_case_recovery.py` holds three direct parent locks through the
+source, occupied negative target and fresh positive target, running one heavy
+container at a time through the existing lab framework. Both case and capture-job
+databases come from the same fully stopped verified container. Independently
+created installed schemas, integrity/foreign keys, physical bounds, retained
+provenance, an external manifest digest and logical table digests gate restore.
+Only sealed validated files enter an absent directory on the stopped target;
+cold ownership, permissions and bytes are checked before startup. See the
+[rehearsal contract and command](BACKUP_RESTORE.md#installed-cold-case-recovery-rehearsal).
+
+The source and target installed fixtures each passed one scenario with zero
+skips. Source restart and fresh restore preserved three cases, four ACL rows,
+nine retry records, seventeen audit records, immutable note revisions, private
+and revoked-member denials, shared reads/exports, and exact old retry responses.
+A new shared question worked after restore and preserved prior entries. Every
+logical table and all three deliberately unresolved synthetic ledger records
+matched before target case API access. Advancing the fixture clock left slots
+charged and a fourth reservation was denied. No source search jobs were dispatched.
+The installed cold source had only the two main database files; retained-WAL
+inclusion is separate positive unit evidence, not an exercised installed sidecar.
+
+Live copy was refused. An occupied target was refused with its sentinel unchanged.
+Corrupt and future-schema backups were rejected before destination creation,
+with the installed target directory still absent. Two earlier attempts exposed
+verified tooling faults: native checksum staging used the image's default user,
+and `docker cp -a` replaced tar service ownership with that image user. Explicit
+service staging and a tar-stdin copy without that override fixed the causes.
+Ownership, mode and byte assertions stayed intact. All resources from both
+failed attempts were independently verified removed; their evidence is retained.
+
+The engine was Docker Desktop 29.9.3, Linux/aarch64, 12 CPUs and 15,527,374,848 bytes
+memory, using the reviewed pinned Linux/amd64 Splunk 10.6.0.5 image through
+emulation. Installed Python 3.13.11/SQLite 3.44.2 ran as UID/GID 41812. Containers had
+4 CPU/8 GiB/no-extra-swap/1,024-process limits and bounded logs. A 45-minute execution
+deadline, 12 GiB host reserve and cooperative 8 GiB aggregate named-volume budget
+were declared; the peak phase sample was 5,150,539,776 bytes. These are functional
+installed results, **not native Linux AMD64 resource qualification**.
+Management, HEC and Web each passed trusted TLS plus wrong-CA and wrong-hostname
+rejection before/after installation and again after target restore startup.
+
+Fixture users/role were absent and disabled flags restored on source and target
+before purge. All three task containers, networks, both volumes each, credentials
+and TLS material were removed and ports released under their original locks.
+The three unrelated collector container IDs and older unrelated labeled resources
+were preserved. Private raw/sealed backups, journals and receipts remain outside
+Git under `atlas-case-recovery/attempt-3`; this is not an erasure claim. The final
+receipt SHA-256 is
+`0b9e58a47d5406ab1878795f53fa28411d7698166088986ef23f4281064fbe92`;
+the external snapshot manifest SHA-256 is
+`88d486524422b676488e7a012f768ede3ec3d951da8136c7386f589f04b9cb4b`.
+
+Local verification passed: 25 focused recovery tests; 1,358 full Python tests;
+126 distributed tests; 15 upgrade tests with 3 installed opt-in skips; Ruff check
+and formatting; frontend lint; 1,337 Vitest tests; build/package; 214 browser tests
+with 1 optional scale skip; archive integrity; 3 bundle checks; AppInspect 4.3.1
+Cloud precert plus its report gate (zero errors/failures/future failures,
+six warnings). Local Node 22.16/Mac ARM64 and Python 3.13.14 differ from CI's
+Ubuntu 24.04/Node 22.13 and Python 3.13 unit/Python 3.11 package jobs. Existing SQLite
+ResourceWarnings remain outside this qualification of endpoint resource bounds.
+The CI-generated packages do not extend the installed artifact's scope; a skipped
+gated Splunk integration job is never counted as passed. Independent review
+resolved physical/manifest bounds, complete-mount checks, artifact drift and
+cleanup-on-evidence-failure findings, followed by both installed tooling fixes.
+Process tests include actual signal cancellation, descendant retirement and
+all-lock cleanup despite receipt/log write failures.
+
+This is same-build, synthetic, notes-only case/ledger cold recovery. It does not
+qualify current source capture or source-backed authorization, native resource or
+whole-endpoint bounds, job reconciliation, live writers, large-scale/RPO/RTO,
+upgrade/downgrade, baseline/watch/KV/platform/index recovery, Cloud/SHC or production
+readiness. No failover, source grants, watch, schedule or notification was enabled.
+Rollback removes test tooling/docs while preserving retained backups and ownership
+receipts; no production data deletion or older database writer is authorized.
+Exact IDs, hashes, commands and limits are in the
+[qualification record](FEATURE_QUALIFICATION.json).
