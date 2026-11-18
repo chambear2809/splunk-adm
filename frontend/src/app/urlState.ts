@@ -5,6 +5,7 @@ import type { DemoScenario } from "../data/demoClient";
 
 export const PAGES = [
   "applications",
+  "cases",
   "map",
   "endpoints",
   "data_health",
@@ -15,9 +16,10 @@ export const PAGES = [
 ] as const;
 export type Page = (typeof PAGES)[number];
 /** Top-level navigation sections; each owns one or more Splunk views. */
-export type Section = "explore" | "map" | "admin" | "help";
+export type Section = "explore" | "cases" | "map" | "admin" | "help";
 export const SECTION_OF: Record<Page, Section> = {
   applications: "explore",
+  cases: "cases",
   endpoints: "explore",
   device: "explore",
   impact: "explore",

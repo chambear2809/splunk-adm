@@ -1,5 +1,5 @@
 import { entryHistories } from "./entryHistory";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { caseHandoff } from "./caseHandoff";
 import {
   CaseEvidence,
@@ -93,6 +93,7 @@ function CaseRecordsContents({
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [focusIntent, setFocusIntent] = useState<"heading" | "note">();
   const [listed, setListed] = useState(false);
   const listButton = useRef<HTMLButtonElement>(null);
   const caseHeading = useRef<HTMLHeadingElement>(null);
@@ -118,6 +119,14 @@ function CaseRecordsContents({
       });
     return () => controller.abort();
   }, [client, capabilityAttempt]);
+  useLayoutEffect(() => {
+    if (!focusIntent || busy) return;
+    const target =
+      focusIntent === "heading" ? caseHeading.current : noteInput.current;
+    if (!target) return;
+    target.focus();
+    setFocusIntent(undefined);
+  }, [busy, focusIntent, selected, editing]);
   useEffect(() => {
     if (pending && !busy) retryButton.current?.focus();
   }, [pending, busy]);
@@ -141,6 +150,7 @@ function CaseRecordsContents({
   ]);
 
   function reportError(reason: unknown, fallback: string) {
+    setStatus("");
     if (
       reason instanceof CaseError &&
       [401, 403, 404].includes(reason.status ?? 0)
@@ -155,6 +165,7 @@ function CaseRecordsContents({
 
   async function load(after?: string) {
     if (!client) return;
+    setFocusIntent(undefined);
     if (!after) {
       setSelected(undefined);
       setSelectedCaptureId(undefined);
@@ -190,6 +201,7 @@ function CaseRecordsContents({
   }
   async function open(id: string, captureId?: string) {
     if (!client) return;
+    setFocusIntent(undefined);
     setSelected(undefined);
     setSelectedCaptureId(undefined);
     active.current?.abort();
@@ -208,7 +220,7 @@ function CaseRecordsContents({
               value.capture_ids?.includes(capture.id),
             )?.id,
         );
-        requestAnimationFrame(() => caseHeading.current?.focus());
+        setFocusIntent("heading");
       }
     } catch (reason) {
       if (current === serial.current && !controller.signal.aborted)
@@ -224,6 +236,7 @@ function CaseRecordsContents({
   ) {
     if (!capabilities?.available && !pending) return;
     const current = ++serial.current;
+    setFocusIntent(undefined);
     setBusy(true);
     setError("");
     setStatus("");
@@ -284,11 +297,7 @@ function CaseRecordsContents({
         }
       }
       setStatus("Shared case saved.");
-      requestAnimationFrame(() =>
-        submittedNote === undefined
-          ? caseHeading.current?.focus()
-          : noteInput.current?.focus(),
-      );
+      setFocusIntent(submittedNote === undefined ? "heading" : "note");
     } catch (reason) {
       if (current !== serial.current) return;
       if (reason instanceof CaseError && reason.uncertain)

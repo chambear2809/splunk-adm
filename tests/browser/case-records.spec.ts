@@ -8,6 +8,7 @@ test("shared notes preserve a draft across case creation and retry lost response
   const keys: string[] = [];
   let lost = false;
   let revoked = false;
+  let denyExport = false;
   let requestCount = 0;
   await page.route("**/test-cases/**", async (route) => {
     requestCount++;
@@ -68,7 +69,13 @@ test("shared notes preserve a draft across case creation and retry lost response
         });
       }
     } else if (path.endsWith("/export")) {
-      await route.fulfill({ json: records.get(path.split("/").at(-2)!) });
+      if (denyExport)
+        await route.fulfill({ status: 403, json: { error: "forbidden" } });
+      else await route.fulfill({ json: records.get(path.split("/").at(-2)!) });
+    } else if (request.method() === "GET" && path.includes("/cases/")) {
+      if (revoked)
+        await route.fulfill({ status: 403, json: { error: "forbidden" } });
+      else await route.fulfill({ json: records.get(path.split("/").at(-1)!) });
     } else if (revoked) {
       await route.fulfill({ status: 403, json: { error: "forbidden" } });
     } else
@@ -84,6 +91,9 @@ test("shared notes preserve a draft across case creation and retry lost response
   await page.getByRole("button", { name: "Open shared cases" }).click();
   await page.getByLabel("New case title").fill("First investigation");
   await page.getByRole("button", { name: "Create shared case" }).click();
+  await expect(
+    page.getByRole("heading", { name: "First investigation", level: 4 }),
+  ).toBeFocused();
   await page.getByLabel("Add note").fill("Preserve this draft");
   const beforeResize = requestCount;
   await page.locator(".atlas").evaluate((el) => {
@@ -111,6 +121,7 @@ test("shared notes preserve a draft across case creation and retry lost response
       .getByRole("listitem")
       .filter({ hasText: "Preserve this draft" }),
   ).toBeVisible();
+  await expect(page.getByLabel("Add note")).toBeFocused();
   await expect(page.getByLabel("Add note")).toHaveValue("");
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
@@ -125,10 +136,25 @@ test("shared notes preserve a draft across case creation and retry lost response
     .getByRole("button", { name: "Export shared case", exact: true })
     .click();
   expect((await exported).suggestedFilename()).toContain("atlas-case-");
+  denyExport = true;
+  await page
+    .getByRole("button", { name: "Export shared case", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("permission");
+  await expect(
+    page.getByText("Case export requested.", { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page
+    .getByRole("button", { name: "Second investigation", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Revoke access", exact: true })
     .click();
   await expect(page.getByRole("alert")).toContainText("permission");
+  await expect(
+    page.getByText("Case export requested.", { exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Retry same request" }),
   ).toHaveCount(0);
@@ -228,6 +254,9 @@ test("attaches an authorized saved comparison only after explicit consent", asyn
   await page
     .getByRole("button", { name: "Evidence case", exact: true })
     .click();
+  await expect(
+    page.getByRole("heading", { name: "Evidence case", level: 4 }),
+  ).toBeFocused();
   const attach = page.getByRole("button", {
     name: "Attach saved comparison evidence",
   });

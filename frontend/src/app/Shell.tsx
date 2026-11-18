@@ -35,6 +35,7 @@ const Root = styled.div`
 `;
 const NAV: [Section, Page, string][] = [
   ["explore", "applications", "Explore"],
+  ["cases", "cases", "Cases"],
   ["map", "map", "Map"],
   ["admin", "setup", "Admin"],
 ];

@@ -810,6 +810,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "help",
                 "device",
                 "impact",
+                "cases",
             )
         },
         "splunk_adm/default/app.conf",

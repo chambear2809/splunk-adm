@@ -34,6 +34,7 @@ export type JourneyEvidenceProps =
       client?: CaseClient;
       window: CaseWindow;
       comparisonReference?: string;
+      initiallyOpen?: boolean;
     }
   | { kind: "ownershipImport" }
   | {
@@ -219,7 +220,9 @@ export function JourneyLazyEvidence(props: JourneyEvidenceProps) {
       if (current === generation.current) setLoading(false);
     }
   }, []);
-  const initiallyOpen = props.kind === "ownership" && props.initiallyOpen;
+  const initiallyOpen =
+    (props.kind === "ownership" || props.kind === "cases") &&
+    props.initiallyOpen;
   React.useEffect(() => {
     if (initiallyOpen) void open();
   }, [initiallyOpen, open]);

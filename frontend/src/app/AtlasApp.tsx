@@ -18,6 +18,7 @@ import { AdminPage } from "../pages/AdminPage";
 import { DevicePage } from "../pages/DevicePage";
 import { ExploreTabs } from "../pages/ExploreTools";
 import { ImpactPage } from "../impact/ImpactPage";
+import { CasesPage } from "../pages/CasesPage";
 import type { SearchClient } from "../data/searchClient";
 import type { Page, UrlState } from "./urlState";
 import type { Theme } from "../theme";
@@ -46,7 +47,7 @@ export function AtlasApp({
 }) {
   const [mode, setMode] = useState(state.mode);
   const live = !!client && mode === "live";
-  const healthLive = live && page !== "help";
+  const healthLive = live && page !== "help" && page !== "cases";
   const deployment =
     deploymentClient ?? (inSplunk ? nativeDeploymentClient : undefined);
   return (
@@ -94,6 +95,8 @@ export function AtlasApp({
             timezone={timezone}
             inSplunk={inSplunk}
           />
+        ) : page === "cases" ? (
+          <CasesPage />
         ) : page === "data_health" ? (
           <AdminPage tab="data_health">
             <HealthPage client={client} live={live} timezone={timezone} />

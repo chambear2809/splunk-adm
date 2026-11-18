@@ -8,6 +8,11 @@ import {
   stateParams,
 } from "./urlState";
 describe("Atlas deep links", () => {
+  it("registers Cases as its own navigation section", () => {
+    expect(pageFromPath("/en-US/app/splunk_adm/cases")).toBe("cases");
+    expect(SECTION_OF.cases).toBe("cases");
+  });
+
   it("round trips the complete map state", () => {
     const state = parseUrlState(
       new URLSearchParams(

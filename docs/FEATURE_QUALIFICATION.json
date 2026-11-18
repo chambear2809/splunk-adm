@@ -1,4 +1,400 @@
 {
+  "cases_rendered_ui_20261117": {
+    "date_local": "2026-11-17",
+    "base_main": "0e63a2ee4881b679094d665a4591b54e9c252bac",
+    "status": "local_installed_rendered_notes_ui_passed",
+    "customer_outcome": "Open and use shared notes directly through Cases without first loading a graph or obtaining source-search access.",
+    "application_runtime_changed": true,
+    "application_version": "0.9.8",
+    "version_bump_required": true,
+    "implemented_software": [
+      "Standalone Cases page and Splunk view/navigation",
+      "Absolute UTC calendar validation and stable case client/window during edits and uncertain writes",
+      "Case-only entry excludes graph/pipeline-health searches; existing Incident workflow retained",
+      "Scoped case controls and lazy optional journey asset; bundle ceilings preserved",
+      "Commit-aware case/editor focus and removal of stale success status when a later operation fails"
+    ],
+    "not_qualified": [
+      "Current supervised source capture",
+      "Source authorization and source-backed stored reads/exports/retries",
+      "Whole-endpoint resource/deadline/cancellation bounds",
+      "Native Linux AMD64 resources",
+      "Real-source comparisons and connected journeys",
+      "Backup/restore",
+      "Cloud/SHC persistence",
+      "Production readiness"
+    ],
+    "private_evidence_root": "atlas-cases-ui-validation outside Git; synthetic evidence only",
+    "permanent_enterprise_changed": false,
+    "cloud_changed": false,
+    "capture_enabled": false,
+    "watch_or_schedules_enabled": false,
+    "installed_archive": {
+      "version": "0.9.8",
+      "sha256": "8c2f61206fad88faa3a62d6689b826a4a34e2b42b3c3488ca05a8ccd4341802b",
+      "bytes": 1417735,
+      "build": 1794966952,
+      "origin": "Local reviewed source candidate based on main0e63a2e; Node22.16.0/MacARM64",
+      "retention": "attempt-4/outputs/splunk_adm-0.9.8.tar.gz and SHA sidecar outside Git",
+      "later_ci_archives_are_separate": true
+    },
+    "earlier_attempts": [
+      {
+        "attempt": 1,
+        "version": "0.9.6",
+        "sha256": "91426d6c029cba4be210223e691dd358868485fbf9ea70ad87d8611990b39070",
+        "bytes": 1414782,
+        "build": 1794965578,
+        "result": "Failed post-create heading focus; fixed one-shot animation-frame/React-commit focus ordering with commit-aware focus intent. Later flows not exercised.",
+        "cleanup_verified": true,
+        "fixture_postcheck_before_purge_performed": false
+      },
+      {
+        "attempt": 2,
+        "version": "0.9.7",
+        "sha256": "405dadcabcec0dd259b4db42680eac3dff564babb83c9954f302088f0a0068b8",
+        "result": "Focus/CSRF/drafts/retry/revision/privacy/sharing/downloads passed. Stopped on incorrect harness assumption that390px viewport provides320px app width; actual app194px correctly showed/focused width notice.",
+        "cleanup_verified": true,
+        "fixture_postcheck_before_purge_performed": false
+      },
+      {
+        "attempt": 3,
+        "version": "0.9.7",
+        "sha256": "405dadcabcec0dd259b4db42680eac3dff564babb83c9954f302088f0a0068b8",
+        "result": "All12 installed UI checkpoints passed; final visual inspection identified stale export-success status after revocation denial, corrected for0.9.8.",
+        "cleanup_verified": true,
+        "fixture_postcheck_before_purge_performed": true
+      }
+    ],
+    "browser": {
+      "playwright": "1.64.0",
+      "firefox": "157.0",
+      "firefox_revision": 1555,
+      "host": "macOS ARM64",
+      "trust": "Isolated task-owned NSS profiles import public task CA only; enterprise root import disabled; ignoreHTTPSErrors=false. Node forwarded requests use same public CA through NODE_EXTRA_CA_CERTS.",
+      "negative_browser_trust_probe": "Separate owned HTTPS fixture rejected unknown CA and wrong.localhost certificate name; trusted CA succeeded. This was not an installed-Splunk browser-negative test.",
+      "secrets": "Generated fixture passwords cross anonymous stdin only; no cookies/CSRF/passwords in journals, traces or HAR; password forms excluded from screenshots.",
+      "process_cleanup": "Durable intent/PID/PGID/start/executable/profile checkpoint; direct parent lock covers exact group retirement before profile removal; incomplete/mismatched ownership refuses success.",
+      "actual_retirement_probe": "No-auth Firefox stopped after readiness, Node killed, exact Firefox group retired through TERM/KILL and disappearance proved; private process-probe-4 result. Prior failed timing probes retained and subsequently cleaned."
+    },
+    "local_validation": {
+      "frontend": "npm run lint; npm test:127 files/1337 tests passed; npm run package passed",
+      "browser": "Full suite214 passed/1 skipped with2 workers; initial parallel run213 passed/1failed/1skipped time-picker timeout, focused recheck passed. After focus fix7 case browser checks passed with new strict focus assertions.",
+      "python": "Full discovery1333 passed on Python3.13.14; release/atlas63 passed; Ruff check/format243 files passed. Explicit UI suite skips absent opt-in.",
+      "archive": "Frozen0.9.8 release/security/bundle gate passed: main683735/686080 gzip bytes; optional journeys31924/32768 using Python level9. AppInspect4.3.1 Cloud precert:0errors,0failures,0futurefailures,6warnings,1skipped,139success; check_appinspect passed.",
+      "platform_difference": "Local Node22.16.0/macOS ARM64/Python3.13.14; CI Node22.13.0/Ubuntu24.04, Python3.13 unit tests and Python3.11 packaging/AppInspect. SplunkLinuxAMD64 runs emulated. CI results recorded separately; gated installed suite must not be called passed when skipped."
+    },
+    "review": {
+      "reviewer_role": "Exposed independent reviewer GPT6.1Sol/high, read only",
+      "worker_roles": "Exposed Luna GPT5.6Luna/medium for bounded frontend implementation and private browser guard; project default requests GPT6Luna. Coordinator model not independently exposed.",
+      "findings_resolved": [
+        "Duplicate navigation key/current link",
+        "Year0000 and normalized calendar dates",
+        "Unstable client/window discarding drafts or pending identity",
+        "Double lazy-open interaction",
+        "Focus before React commit in installedFirefox",
+        "Detached browser lifecycle/uncertain ownership and durable directory checkpoints",
+        "Markdown artifact labeling",
+        "Viewport fit versus actual app width; no mobile-fit claim from internal containment",
+        "Stale export-success acknowledgement after a denied export; confirmed access-change receipts retain their explicit acknowledgement"
+      ]
+    },
+    "rollout": {
+      "repository_only": true,
+      "permanent_enterprise": "No operation; last verified frozen0.9.4",
+      "cloud": "No operation",
+      "defaults": "Persistence/capture/watch/schedules remain disabled; no role assignment shipped",
+      "rollback": "Revert the focused repository increment through normal review; existing Incident case workflow and database schema remain unchanged. No erasure claim."
+    },
+    "evidence_categories": {
+      "implemented_software": "Direct Cases access and focus/error fixes",
+      "synthetic_unit": "Frontend/Python/archive/security and mocked-browser results recorded separately",
+      "installed_container": "Frozen0.9.8: one installed Firefox scenario with12 passing workflow checkpoints",
+      "native_platform_qualification": false,
+      "real_source_qualification": false,
+      "production_ready": false
+    },
+    "remaining_work_by_kind": {
+      "missing_software": "Production complete-source provider/provisioning and verified ownership/business-feed adapter remain outside this increment",
+      "missing_contracts": "Source entitlement/completeness, capacity/readiness/failure-domain authority, historically valid event and observer association remain incomplete",
+      "unperformed_tests": "Current supervised source capture/auth revocation, source-backed stored reads/exports/retries, endpoint deadlines/limits, backup/restore, real sources and connected journeys",
+      "deferred_environment": "NativeLinuxAMD64 resource qualification deferred by user; no permanent-host Docker or permission changes needed for this increment"
+    },
+    "installed_container_evidence": {
+      "command": "ADM_LAB=1 ADM_LAB_WEB_TLS=1 ADM_LAB_CASES_UI=1 python -m unittest discover -s tests/splunk -p test_cases_ui.py -v (direct locked lifecycle; all task variables per TASK_LABS.md)",
+      "unittest_scenarios": 1,
+      "passed": 1,
+      "skipped": 0,
+      "suite_seconds": 38.062,
+      "lifecycle_seconds": 193.61,
+      "checkpoints": [
+        "restricted_login_and_direct_cases_entry",
+        "invalid_window_and_keyboard",
+        "native_csrf_rejection_without_case_mutation",
+        "create_and_draft_preservation",
+        "post_commit_response_loss_and_same_request_retry",
+        "immutable_note_revision",
+        "private_access_and_sharing",
+        "json_and_readable_downloads",
+        "narrow_layout_and_keyboard_draft",
+        "stale_revision_preserves_draft",
+        "revocation_rechecks_and_clears_ui",
+        "unauthenticated_cases_page_requires_login"
+      ],
+      "mutations": {
+        "requests": 11,
+        "all_responses_received": true,
+        "csrf_rejected_create_requests": 2,
+        "csrf_native_status": 401,
+        "same_key_body_retry_after_post_commit_drop": true,
+        "one_immutable_entry_after_retry": true,
+        "stale_revision_status": 409
+      },
+      "source_search_jobs": 0,
+      "fixture_authority": {
+        "capabilities": ["adm_investigate"],
+        "imported_roles": [],
+        "source_index_grants": [],
+        "source_index_defaults": [],
+        "source_filter": ""
+      },
+      "revocation": {
+        "authenticated_principal_unchanged": true,
+        "read_status": 403,
+        "export_status": 403
+      },
+      "exports": {
+        "json_sha256": "3282d5de946d4d46ab41603e3b5fc12104c5065a4095995251aec4a3baf90079",
+        "markdown_sha256": "1d3847bfa70551138042658d274ef287fa3f67c3c9c2e0492825e69b922020df"
+      },
+      "tls_before_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "web": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      },
+      "tls_after_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "web": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      }
+    },
+    "lab": {
+      "task": "cases-ui-20261117",
+      "name": "adm-cases-ui-20261117",
+      "socket": "unix:///Users/alecchamberlain/.docker/run/docker.sock",
+      "engine": {
+        "Name": "docker-desktop",
+        "Architecture": "aarch64",
+        "OSType": "linux",
+        "NCPU": 12,
+        "MemTotal": 15527374848,
+        "ServerVersion": "29.9.3"
+      },
+      "container": {
+        "id": "c1ba1f512babb31cd9663d7ee0cc64733352d2fcb52db884338c6e9fca4a74f9",
+        "image": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "configured_image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "labels": {
+          "org.splunk-adm.lab": "adm-cases-ui-20261117",
+          "org.splunk-adm.task": "cases-ui-20261117"
+        },
+        "limits": {
+          "NanoCpus": 4000000000,
+          "Memory": 8589934592,
+          "MemorySwap": 8589934592,
+          "PidsLimit": 1024,
+          "LogConfig": {
+            "Type": "json-file",
+            "Config": {
+              "max-file": "2",
+              "max-size": "10m"
+            }
+          }
+        },
+        "ports": {
+          "8000/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "29900"
+            }
+          ],
+          "8088/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "29988"
+            }
+          ],
+          "8089/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "29989"
+            }
+          ]
+        },
+        "mounts": [
+          {
+            "Name": "adm-cases-ui-20261117-etc",
+            "Destination": "/opt/splunk/etc",
+            "Type": "volume"
+          },
+          {
+            "Name": "adm-cases-ui-20261117-var",
+            "Destination": "/opt/splunk/var",
+            "Type": "volume"
+          }
+        ]
+      },
+      "disk_budget_bytes": 10737418240,
+      "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
+      "lifetime_seconds": 2700,
+      "disk_samples_bytes": [2508771328, 2161115136, 2600165376],
+      "test_source_sha256": {
+        "tests/splunk/lab.py": "f81b74aa579f9f6aafbf9f5d5b66e4873ce35dd08828ec38de42e1b465618ffa",
+        "tests/splunk/lab.sh": "bbc865ebaaf5a2226064d33a58c80d7d11619ddf0da1fe2bab24a28ffeb53878",
+        "tests/splunk/lab_tls.py": "9044415b6da60e31c5ca6bfa6be1e89b61f8bcdeddf284ac993feb407d6ba750",
+        "tests/splunk/web_session.py": "a2056175569548d510d1cc29ae8cac320fe6fe9d47476748e7ec9f6f6e94eb22",
+        "tests/splunk/test_cases_endpoint.py": "a72a1114b6faee93a376c351aa5a5b09be7d3be3e93d7536dc9313fffb715e0e",
+        "tests/splunk/test_cases_ui.py": "4bc528c95cc03fec990fd696c01e6356c8ac2a50965cc1cb34428020448577d6",
+        "tests/splunk/cases_ui.mjs": "aa5bc67a705c6d13ae8f1ec26494e8f1b380cb4567c519a4bb6a0abee6b27faf",
+        "tools/lab_lock.py": "845a237d7df69663c8d74e6488028cda847754ad5dc1ddfe16691e6ecb257b07"
+      },
+      "browser_guard_sha256": "d9ef9aeceb4beed9d8ff5e14b3e35c6ebaacf583233b14eb399ae676f0130c55",
+      "driver_sha256": "ca99ff72d3a255f6a6df85a5f0260dfee0f2c7ba1b3bb78ae593c4f559116e66",
+      "shared_activity": "Three pre-existing collector containers remained running and untouched; timings are not performance-isolated",
+      "native_amd64": false
+    },
+    "cleanup": {
+      "container_absent": true,
+      "network_absent": true,
+      "volume_absent": true,
+      "browser_groups_absent": true,
+      "browser_profiles_absent": true,
+      "credentials_absent": true,
+      "tls_absent": true,
+      "ports_released": true,
+      "fixture_users_absent_before_purge": true,
+      "fixture_role_absent_before_purge": true,
+      "persistence_restored_before_purge": true,
+      "detached_browser_groups_confirmed_absent": 2
+    },
+    "residuals": [
+      "Frozen archives, synthetic exports/screenshots and sanitized journals retained outside Git",
+      "Pinned Firefox download cache and shared pinned Docker image retained; no authenticated browser profiles remain",
+      "Three unrelated collectors preserved",
+      "Permanent Enterprise private SQLite/audit/retry/history state untouched; no erasure claim"
+    ],
+    "ui_evidence": {
+      "layout": [
+        {
+          "width": 572,
+          "scroll": 572,
+          "viewport": 768,
+          "document": 768,
+          "right": 738,
+          "mode": "supported_application_width"
+        },
+        {
+          "width": 364,
+          "scroll": 364,
+          "viewport": 560,
+          "document": 560,
+          "right": 530,
+          "mode": "supported_application_width"
+        },
+        {
+          "width": 320,
+          "scroll": 320,
+          "viewport": 516,
+          "document": 552,
+          "right": 486,
+          "mode": "supported_application_width"
+        },
+        {
+          "width": 194,
+          "scroll": 194,
+          "viewport": 390,
+          "document": 552,
+          "right": 360,
+          "mode": "below_minimum_guard_preserves_draft"
+        },
+        {
+          "width": 124,
+          "scroll": 124,
+          "viewport": 320,
+          "document": 552,
+          "right": 290,
+          "mode": "below_minimum_guard_preserves_draft"
+        }
+      ],
+      "whole_viewport_fit": false,
+      "limitation": "Default Splunk chrome overflows tested phone viewports; its sidebar leaves the app less than320px at390/320. Guard behavior is verified, phone viewport fit is not qualified. Actual app320px containment remains strict.",
+      "visual_review": "Coordinator inspected desktop/history,768px, actual320px app, belowminimum notice, uncertain-write and final revoked-member screens; final denial has no stale success message. JSON/Markdown contents inspected.",
+      "screenshots": [
+        {
+          "file": "uncertain-write.png",
+          "sha256": "779a6d7b31636b232998ad2d67822415485b00b607ed951a2c603890e03c23fb"
+        },
+        {
+          "file": "owner-revision-desktop.png",
+          "sha256": "32787407014267c9b182c01cb958af304232d06496e2a9f24c0c3c4aad25e9d4"
+        },
+        {
+          "file": "member-768.png",
+          "sha256": "dcfaeb1bb830557b8541602338da927e7e60e6b13ecf4196c6e26a2502f8e301"
+        },
+        {
+          "file": "member-560.png",
+          "sha256": "b8f478c80c8d808d6ac359b90ac081379ec5cc8b59b46ceba1267454cf689a26"
+        },
+        {
+          "file": "member-516.png",
+          "sha256": "9a8d683246f21254c3f7842502f261d72d9d8ed708b6dbd092841a87891cc8e0"
+        },
+        {
+          "file": "member-390.png",
+          "sha256": "0c7919e095e9cadb9b2db55523144c6946d804e3da09a70095baf28441144783"
+        },
+        {
+          "file": "member-320.png",
+          "sha256": "f60348ee249ed8338aff720d955384e109f8166077501f1416d02fd30c24294f"
+        },
+        {
+          "file": "revoked-member.png",
+          "sha256": "ef0aff32a98c3c31b895301a87c521171f3785308210a4a99b27519a30e3f764"
+        }
+      ]
+    },
+    "receipt_sha256": {
+      "lab-receipt.json": "1591f7e4267683de85da20a620313738ea90341bf0faa2ae224fc8f54506b4d0",
+      "ui-receipt.json": "b2c326e614dfe02a33b2608833fb3bfe44916a50e678e19a9f3653eb0853f427",
+      "browser-processes.json": "d640b951901eeb9f3f6a8f95ea788ea0c22b4ff26d040128c91784f48133c452"
+    },
+    "ci": "Pending repository CI for this increment. Gated Splunk integration is separate and must not be reported passed when skipped."
+  },
   "cases_web_http_20261117": {
     "date_local": "2026-11-17",
     "base_main": "df3d53fccaf1bef978858e1b3aae89ab6be1fe60",
@@ -41,20 +437,14 @@
       ],
       "csrf": {
         "rejections": 12,
-        "statuses": [
-          401
-        ],
+        "statuses": [401],
         "surfaces": [
           "POST create",
           "POST entries",
           "POST share",
           "DELETE case"
         ],
-        "token_cases": [
-          "missing",
-          "invalid",
-          "other session"
-        ],
+        "token_cases": ["missing", "invalid", "other session"],
         "native_error_identifies_csrf": true,
         "unchanged_case_or_membership_proved_after_each": true,
         "valid_actions_succeed": true,
@@ -62,9 +452,7 @@
       },
       "mutation_journal": {
         "requests": 22,
-        "states": [
-          "response_received"
-        ],
+        "states": ["response_received"],
         "sha256": "1fcbe4625446b90533d95150ff8fba46c9d499e41d06ff950c143e9eab5f658c",
         "scope": "Synthetic case requests only; raw journal outside Git"
       },
@@ -188,11 +576,7 @@
         "tls_absent": true,
         "ports_free": true
       },
-      "disk_samples_bytes": [
-        2509172736,
-        2415509504,
-        2547752960
-      ],
+      "disk_samples_bytes": [2509172736, 2415509504, 2547752960],
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
       "lifetime_seconds": 2700,
@@ -442,11 +826,7 @@
       "resource_scope": "Configured Docker limits verified, not native Linux limit qualification",
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
-      "disk_samples_bytes": [
-        2508402688,
-        1447993344,
-        2546466816
-      ],
+      "disk_samples_bytes": [2508402688, 1447993344, 2546466816],
       "lifetime_seconds": 2700,
       "elapsed_seconds": 164.59,
       "cleanup": {

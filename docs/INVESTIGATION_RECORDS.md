@@ -9,6 +9,20 @@ notes or graphs. New cases are private; an owner can grant a named member read,
 append and export access, revoke access, or delete the case through the API.
 Case membership does not grant access to captured sources.
 
+## Open shared cases without a graph
+
+The Cases navigation link opens `/app/splunk_adm/cases` directly. Enter an
+absolute UTC start and end, then open the shared cases panel. This path requires
+no graph comparison or source search. The selected window labels newly created
+cases; it does not establish source evidence or change an existing case's window.
+The window stays fixed while the page is open, preserving drafts and pending
+request identity. Finish and confirm pending writes before leaving or reloading;
+unsaved drafts and retry state are held in page memory.
+
+The deployment guards below still apply. The shipped service remains disabled,
+and opening this page does not provision storage, grant a capability, enable
+capture or make Cloud/SHC persistence supported.
+
 ## Deployment boundary
 
 `adm_investigations.conf` ships with persistence disabled and platform
