@@ -321,11 +321,11 @@ class BaselineTests(unittest.TestCase):
         with self.assertRaises(QuotaExceeded):
             self.store.create("alice", "new", "new", "a")
         self.assertEqual(self.store.purge_deleted_receipts("alice"), 0)
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute("UPDATE requests SET created_at=1")
         self.assertEqual(self.store.purge_deleted_receipts("alice"), 2)
         self.store.create("alice", "new", "new", "a")
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             db.execute("UPDATE requests SET created_at=1")
         self.assertEqual(self.store.purge_deleted_receipts("alice"), 0)
 
@@ -377,7 +377,7 @@ class BaselineTests(unittest.TestCase):
 
         def checking(principal, reference, evidence):
             if reference == "b":
-                with sqlite3.connect(self.store.path, timeout=0.1) as db:
+                with closing(sqlite3.connect(self.store.path, timeout=0.1)) as db:
                     db.execute("BEGIN IMMEDIATE")
                     db.rollback()
                 checked.append(reference)
@@ -478,7 +478,7 @@ class BaselineTests(unittest.TestCase):
             self.store.version("alice", "watch", ident, 1, watch)
         self.sources["b"]["dependencies"][0]["blocked"] = True
         sig = signature(self.sources["b"]["dependencies"][0])
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             size = db.execute(
                 "SELECT SUM(size) FROM evidence WHERE baseline_id=?", (ident,)
             ).fetchone()[0]
@@ -489,7 +489,7 @@ class BaselineTests(unittest.TestCase):
         self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b")
         self.store.set_watch("alice", "watch2", ident, 3, {**watch, "id": "w2"})
         self.store.append_occurrence("alice", "occ2", ident, 4, "w2", sig, "b")
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             count, total = db.execute(
                 "SELECT COUNT(*),SUM(size) FROM evidence WHERE baseline_id=?", (ident,)
             ).fetchone()
@@ -520,7 +520,7 @@ class BaselineTests(unittest.TestCase):
         original = self.store.source_validator
 
         def validator(principal, ref):
-            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+            with closing(sqlite3.connect(self.store.path, timeout=0.1)) as db:
                 db.execute("BEGIN IMMEDIATE")
                 db.rollback()
             self.store.share("alice", "grant-during-source", ident, 1, "bob", True)
@@ -533,7 +533,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_source_entitlement_runs_outside_writer(self):
         def check(principal, reference, evidence):
-            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+            with closing(sqlite3.connect(self.store.path, timeout=0.1)) as db:
                 db.execute("BEGIN IMMEDIATE")
                 db.rollback()
             return True
@@ -636,7 +636,7 @@ class BaselineTests(unittest.TestCase):
         fired = []
 
         def changing(principal, reference, evidence):
-            with sqlite3.connect(self.store.path, timeout=0.1) as db:
+            with closing(sqlite3.connect(self.store.path, timeout=0.1)) as db:
                 db.execute("BEGIN IMMEDIATE")
                 db.rollback()
             if reference == "h0" and not fired:
@@ -762,7 +762,7 @@ class BaselineTests(unittest.TestCase):
                 evidence["coverage"]["configRevision"] = "other"
             else:
                 evidence["dependencies"][0]["blocked"] = False
-            with sqlite3.connect(self.store.path) as db:
+            with closing(sqlite3.connect(self.store.path)) as db, db:
                 db.execute(
                     "UPDATE evidence SET capture=? WHERE baseline_id=? AND reference=?",
                     (json.dumps(evidence), ident, json.dumps("b")),
@@ -789,7 +789,7 @@ class BaselineTests(unittest.TestCase):
             1,
             {"id": "w", "threshold": 1, "expectedWindows": [], "cooldownSeconds": 0},
         )
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             for i in range(100):
                 evidence = capture(10 * (i + 1))
                 evidence["dependencies"] = []
@@ -857,7 +857,7 @@ class BaselineTests(unittest.TestCase):
             1,
             {"id": "w", "threshold": 1, "cooldownSeconds": 0, "expectedWindows": []},
         )
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             key = self.store._store_evidence(
                 db,
                 ident,
@@ -915,7 +915,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_inline_evidence_migration(self):
         ident = self.create()["id"]
-        with sqlite3.connect(self.store.path) as db:
+        with closing(sqlite3.connect(self.store.path)) as db, db:
             reference, evidence = db.execute(
                 "SELECT reference,capture FROM evidence WHERE baseline_id=?", (ident,)
             ).fetchone()

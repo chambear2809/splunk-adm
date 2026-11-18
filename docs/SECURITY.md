@@ -82,3 +82,13 @@ remote-proxy override is packaged. The release gate rejects those changes.
 [Splunk's web.conf specification](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/9.4/configuration-file-reference/9.4.16-configuration-file-reference/web.conf)
 describes the proxy allowlist and native CSRF defaults; Splunkd still enforces
 caller authorization independently of Web reachability.
+
+Case request supervision preserves the authenticated handler and Web CSRF
+registration. A fresh Linux worker rechecks the caller for each operation;
+credentials use stdin, fixed command arguments and a restricted environment.
+One nonwaiting slot per handler process bounds concurrent work. Failed process
+retirement closes admission until an operator investigates and restarts that
+handler. Unsupported process-lifetime primitives fail unavailable. The
+[supervision contract](CASE_REQUEST_SUPERVISION.md) distinguishes the operational
+deadline from unqualified strict operating-system and whole-endpoint resource
+bounds; source authorization and production qualification remain separate.

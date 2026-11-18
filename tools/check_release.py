@@ -55,6 +55,8 @@ CASE_RUNTIME_FILES = frozenset(
                 "native.py",
                 "transport.py",
                 "transport_worker.py",
+                "request_supervisor.py",
+                "request_worker.py",
                 "job_ledger.py",
                 "README.md",
             )

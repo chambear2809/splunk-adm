@@ -444,7 +444,11 @@ class BaselineStore:
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        db.execute("PRAGMA foreign_keys=ON")
+        try:
+            db.execute("PRAGMA foreign_keys=ON")
+        except Exception:
+            db.close()
+            raise
         return db
 
     def purge_deleted_receipts(self, principal):

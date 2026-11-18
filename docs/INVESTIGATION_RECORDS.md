@@ -252,6 +252,13 @@ and require separate qualification.
 
 ## Validation scope
 
+Notes and capture requests share a bounded Linux request worker. Its operational
+deadline also covers authentication, configuration and database work. Busy,
+malformed, timed-out or unretired work fails unavailable; an uncertain write must
+be retried with the same key and body. Lists can return short pages and clients
+must follow the continuation cursor. See [request supervision](CASE_REQUEST_SUPERVISION.md)
+for admission, retirement, response bounds and the limits of this guarantee.
+
 Domain, request-adapter and host tests cover private access, current entitlement,
 revocation, concurrency, uncertain retries, limits, expiry, invalid requests,
 forged identity fields and evidence rejection. Browser replay covers draft

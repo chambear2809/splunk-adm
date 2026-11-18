@@ -278,7 +278,7 @@ class WatchHostIntegrationTests(unittest.TestCase):
             pending["revision"],
             "capture_unknown",
         )
-        with sqlite3.connect(journal.path) as db:
+        with closing(sqlite3.connect(journal.path)) as db:
             run_count_before = db.execute("SELECT count(*) FROM runs").fetchone()[0]
         self.host.source_provider = None
         self.host.configuration = lambda: (_ for _ in ()).throw(AssertionError())
@@ -287,7 +287,7 @@ class WatchHostIntegrationTests(unittest.TestCase):
         )
         status, body, _ = self.management()
         self.assertEqual((status, body["enabled"]), (200, False))
-        with sqlite3.connect(journal.path) as db:
+        with closing(sqlite3.connect(journal.path)) as db:
             self.assertEqual(
                 db.execute("SELECT count(*) FROM runs").fetchone()[0], run_count_before
             )

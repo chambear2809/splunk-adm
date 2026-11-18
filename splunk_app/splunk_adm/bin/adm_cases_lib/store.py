@@ -13,6 +13,8 @@ import json
 import sqlite3
 import uuid
 
+MAX_LIST_PAGE_BYTES = 1_500_000
+
 
 class Invalid(ValueError):
     pass
@@ -198,7 +200,11 @@ class CaseStore:
 
     def _connect(self):
         db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
-        db.execute("PRAGMA foreign_keys = ON")
+        try:
+            db.execute("PRAGMA foreign_keys = ON")
+        except Exception:
+            db.close()
+            raise
         return db
 
     def _entitled(self, principal, action, case_id):
@@ -461,6 +467,11 @@ class CaseStore:
                 raise
 
     def list_cases(self, principal, *, after="", limit=50):
+        """List cases within a bounded compact JSON response.
+
+        One first item may exceed the response budget when trusted library
+        configuration allows a case larger than the default HTTP-facing limit.
+        """
         _text(principal, "principal", 256)
         if (
             not isinstance(after, str)
@@ -484,17 +495,24 @@ class CaseStore:
                     self._entitled(principal, "read", case_id)
                 except Forbidden:
                     continue
-                result.append(
-                    self._project(
-                        principal, json.loads(document), authorize_sources=False
-                    )
+                item = self._project(
+                    principal, json.loads(document), authorize_sources=False
                 )
-                if len(result) > limit:
-                    break
-            return {
-                "items": result[:limit],
-                "next": result[limit - 1]["id"] if len(result) > limit else None,
-            }
+                if len(result) >= limit:
+                    return {"items": result, "next": result[-1]["id"]}
+                candidate = result + [item]
+                # Reserve the full envelope with a non-null cursor. If this
+                # candidate is the last eligible item, the returned null cursor
+                # only makes the response smaller.
+                encoded = json.dumps(
+                    {"items": candidate, "next": case_id},
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                ).encode("ascii")
+                if result and len(encoded) > MAX_LIST_PAGE_BYTES:
+                    return {"items": result, "next": result[-1]["id"]}
+                result.append(item)
+            return {"items": result, "next": None}
 
     def append(self, principal, request_id, case_id, expected_revision, kind, item):
         if kind == "entry":

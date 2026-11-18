@@ -64,6 +64,35 @@ class HostTest(unittest.TestCase):
             with self.assertRaises(HostUnavailable):
                 SplunkHost._configuration()
 
+    def test_topology_reader_uses_absolute_cli_with_restricted_environment(self):
+        with (
+            mock.patch.dict(os.environ, {"SPLUNK_HOME": "/opt/splunk"}, clear=True),
+            mock.patch(
+                "adm_cases_lib.splunk_host.subprocess.run",
+                return_value=SimpleNamespace(
+                    stdout=b"[shclustering]\ndisabled = true\n"
+                ),
+            ) as command,
+        ):
+            self.assertEqual(SplunkHost._topology(), {"disabled": "true"})
+            self.assertEqual(
+                command.call_args.args[0],
+                [
+                    "/opt/splunk/bin/splunk",
+                    "btool",
+                    "server",
+                    "list",
+                    "shclustering",
+                ],
+            )
+            self.assertEqual(command.call_args.kwargs["timeout"], 3)
+            command.return_value = SimpleNamespace(stdout=b"[other]\ndisabled = true\n")
+            with self.assertRaises(HostUnavailable):
+                SplunkHost._topology()
+            command.return_value = SimpleNamespace(stdout=b"x" * 16385)
+            with self.assertRaises(HostUnavailable):
+                SplunkHost._topology()
+
     def test_registration_forwards_authentication_and_exposes_exact_client_routes(self):
         default = Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/default"
         rest = configparser.ConfigParser(interpolation=None)

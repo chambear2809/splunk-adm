@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(
@@ -139,7 +140,7 @@ class JobLedgerTest(unittest.TestCase):
         old_path = old_dir / "capture_jobs.sqlite"
         fd = os.open(old_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.close(fd)
-        with sqlite3.connect(old_path) as db:
+        with closing(sqlite3.connect(old_path)) as db, db:
             db.execute(
                 "CREATE TABLE jobs (seq INTEGER PRIMARY KEY AUTOINCREMENT, sid TEXT NOT NULL UNIQUE, principal TEXT NOT NULL, query_hash TEXT NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, terminal_seq INTEGER)"
             )
@@ -168,7 +169,7 @@ class JobLedgerTest(unittest.TestCase):
         with self.assertRaises(QuotaExceeded):
             migrated.reserve("dana", sid(102), HASH, 1, 2, OWNER, transport_hash=HASH)
         self.assertIsNone(migrated.outstanding("alice")[0]["transport_hash"])
-        with sqlite3.connect(old_path) as db:
+        with closing(sqlite3.connect(old_path)) as db, db:
             self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 3)
 
     def test_v2_created_job_migrates_to_unknown_without_inferred_server_id(self):
@@ -178,7 +179,7 @@ class JobLedgerTest(unittest.TestCase):
         fd = os.open(old_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.close(fd)
         legacy_sid = "adm-sid-" + f"{99:032x}"
-        with sqlite3.connect(old_path) as db:
+        with closing(sqlite3.connect(old_path)) as db, db:
             db.execute(
                 "CREATE TABLE jobs (seq INTEGER PRIMARY KEY AUTOINCREMENT, sid TEXT NOT NULL UNIQUE, principal TEXT NOT NULL, query_hash TEXT NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, terminal_seq INTEGER, transport_hash TEXT)"
             )
@@ -338,7 +339,7 @@ class JobLedgerTest(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             values = list(pool.map(apply, range(8)))
         self.assertEqual(sum(value is not None for value in values), 3)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             self.assertEqual(db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 3)
 
     def test_concurrent_reconciliation_has_one_lease_owner(self):
@@ -409,7 +410,7 @@ class JobLedgerTest(unittest.TestCase):
                 "deleted",
                 expected_revision=created["revision"],
             )
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             rows = db.execute(
                 "SELECT state,terminal_seq FROM jobs ORDER BY seq"
             ).fetchall()

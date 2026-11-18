@@ -1,4 +1,100 @@
 {
+  "cases_request_supervision_20261118": {
+    "date_local": "2026-11-18",
+    "base_main": "2cafb9b99e43e70a590a271c2cf04a71909154f5",
+    "status": "installed_emulated_functional_rehearsal_passed_native_and_source_qualification_pending",
+    "customer_outcome": "Keep Cases responsive when authentication, configuration or notes work stalls, and reconcile interrupted writes with the original operation identity.",
+    "application_runtime_changed": true,
+    "application_version": "0.9.10",
+    "implemented_software": [
+      "Fresh Linux request worker around caller authentication, configuration/topology reads, SQLite work and bounded response construction",
+      "One nonwaiting admission slot per persistent-handler process; failed retirement closes admission until handler restart",
+      "40-second operational budget and separate one-second retirement allowance, Linux subreaper, owned-group TERM/KILL before reaping, and worker watchdog",
+      "Credentials only on stdin, restricted environment, core dumps disabled, 1 MiB raw input and 2 MiB response frame",
+      "1,500,000-byte compact ASCII list-page budget with continuation cursors and unchanged HTTP case-size/count limits",
+      "Close SQLite connections on initialization failures and explicitly close test-fixture connections"
+    ],
+    "installed_archive": {
+      "version": "0.9.10",
+      "build": 1795016813,
+      "sha256": "61fe7a81687e6c9aef2a6f1d892e0848de4adcbfed8747a3fd22d6e75049e08d",
+      "bytes": 1438212,
+      "origin": "Frozen private local candidate; installed in exact owned disposable attempts 12 and 13; attempt-13 passed the installed functional scope",
+      "later_generated_archives_are_separate": true
+    },
+    "synthetic_unit_evidence": {
+      "python_full": "1396 tests ran, 7 Linux-only skips, passed on the available Python 3.13 runtime after installed lab cleanup; no ResourceWarnings reported",
+      "sqlite_contention": "A full run during simultaneous browser/Docker startup hit the pre-existing 100ms writer-lock race; focused baseline 17/17 and unloaded full discovery passed. Timeout and assertions unchanged.",
+      "frontend": "npm run lint passed; 1337 Vitest tests passed; npm package/build passed on Node 22.16.0/macOS ARM64",
+      "browser": "215 passed, one optional scale skip; npm run test:browser passed on Node 22.16.0/macOS ARM64",
+      "release": "Frozen archive integrity, security/default gates and 3 bundle checks passed",
+      "appinspect": "AppInspect 4.3.1 Cloud precert/report gate passed on frozen 0.9.10: 0 errors, 0 failures, 0 future failures, 6 warnings; report verified with tools/check_appinspect.py",
+      "request_focused_current": "50 tests ran: 39 passed and 11 platform/exact-lab skips; included request transaction recovery, supervisor, lab/tooling, host topology, list bounds and SQLite connection lifecycle tests",
+      "appinspect_report_sha256": "4545c7835ef0fc4f9c3e5f3e2a01866199a1ad6591a0fe47eb436812a4fabee8"
+    },
+    "installed_container_evidence": {
+      "status": "passed_emulated_functional_scope",
+      "attempts_1_to_11": "Unsuccessful/uncertain. Attempt-1 stopped at the fixture assumption that SDK startup files were absent. Attempts-2 through -6 installed 0.9.9 but stopped before positive Web checks on a capabilities 503. Attempts-7 through -8 exposed diagnostic-hook and original-source mode fixture issues. Attempts-9 through -11 diagnostics traced the 503 to getMergedConfRaw launching bare `splunk` without PATH in the restricted worker. All task-owned cleanup checks passed for each completed attempt; receipts remain private.",
+      "attempt_12": "Installed 0.9.10, passed trusted/wrong-CA/wrong-host TLS checks, installed runtime hash verification and 11 Linux process tests. Positive Web setup stopped at a fixture assertion expecting only 403 although Splunk Web returned 401 with a CSRF-specific response. Six cleanup checks passed. This did not qualify positive/fault behavior.",
+      "attempt_13": {
+        "status": "tests_passed",
+        "elapsed_seconds": 449.43,
+        "receipt_sha256": "54701005db1417a42434c1e46212069719158bef659c54e09f5db859393874cd",
+        "container_id": "f99edf14fcc1d6b077f51721f25752982af2285053a8bef55233cbbd6496cc6d",
+        "installed_version": "0.9.10",
+        "installed_build": 1795016813,
+        "runtime_hashes_match_frozen_archive": true,
+        "linux_process_tests": "11 passed",
+        "web_tls": "Trusted certificate/hostname passed before and after install; wrong CA and wrong hostname rejected",
+        "management_tls": "Trusted certificate/hostname passed before and after install; wrong CA and wrong hostname rejected",
+        "hec_tls": "Trusted certificate/hostname passed before and after install; wrong CA and wrong hostname rejected",
+        "positive_checks": "Uninjected before and after phases passed login, CSRF rejection, disabled defaults, private access, immutable revisions, stale-revision rejection, sharing, revocation, revoked-member read/export/audit and stored-retry denial, exports, deletion; after phase ran with original startup source/cache restored.",
+        "pagination": "Three synthetic 762722-byte cases were returned in three pages of 762780, 762780 and 762746 bytes; all case IDs were unique and complete.",
+        "fault_checks": "Authentication, configuration, precommit and postcommit stalls each returned at approximately 40 seconds; process groups and descendants retired in approximately 40.47-40.53 seconds. Exact retries reconciled each operation to one case and receipt. Postcommit state was durable before retry.",
+        "disconnect_check": "Client disconnected after durable commit; worker group retired within 40.47 seconds and exact retry reconciled the same single case.",
+        "hook_restoration": "Original platform startup source and cache restored exactly; pre/post uninjected checks passed.",
+        "journal_sha256": {
+          "before": "8fc5c3888c6deb4af9f36fdcc59cf6182d597e882137f517e0de2e0e8d26bad7",
+          "faults": "a1a920949c6d789b5d6edfbebf3be9a98a3543a08ea862a1a61013a55c7781c0",
+          "after": "0914584e1e993796fb212e3d7a2fa59e94f0e1fa0a28811a261dd84d17d5cd2b"
+        },
+        "cleanup": {
+          "container_absent": true,
+          "network_absent": true,
+          "volume_absent": true,
+          "credentials_absent": true,
+          "tls_absent": true,
+          "ports_released": true
+        },
+        "independent_cleanup_confirmation": "No exact task-labeled container, network or volumes remained; all three ports bound successfully after purge; private credential directory absent; receipt confirms TLS absence.",
+        "command": "/tmp/atlas-ci-python/bin/python tools/rehearse_case_requests.py --run --runtime /Users/alecchamberlain/Documents/Codex/2026-11-18/atlas-case-request-bounds/attempt-13 --package /Users/alecchamberlain/Documents/Codex/2026-11-18/atlas-case-request-bounds/artifacts/splunk_adm-0.9.10.tar.gz --package-sha256 61fe7a81687e6c9aef2a6f1d892e0848de4adcbfed8747a3fd22d6e75049e08d --extracted /Users/alecchamberlain/Documents/GitHub/splunk-adm/research/extracted --socket unix:///Users/alecchamberlain/.docker/run/docker.sock"
+      },
+      "fixture_correction": "Independent review cleared exact source/cache preservation of bytes, UID/GID, mode and mtime_ns; exact metadata checks before overwrite; transaction-derived pre-rename recovery; isolated hook namespace; and source/cache parent-directory fsync before transaction discard.",
+      "runtime_correction": "Independent review cleared using absolute global `SPLUNK_HOME/bin/splunk btool server list shclustering` under the PATH-free worker environment. Topology is global rather than app-scoped.",
+      "test_contract_correction": "Independent review cleared CSRF rejection accepting either HTTP 401 or 403 while requiring the response to mention CSRF and verifying no case was created."
+    },
+    "platform": {
+      "engine": "Docker Desktop 29.9.3, Linux/aarch64, 12 CPUs, 15527374848 bytes RAM",
+      "socket": "User-owned local Unix socket, desktop-linux context",
+      "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+      "execution": "Pinned Linux/amd64 image under emulation on Docker Desktop Linux/aarch64; installed functional evidence only, no native amd64 resource qualification",
+      "limits": "4 CPUs, 8 GiB, no extra swap, 1024 processes, bounded logs; 45-minute execution lifetime plus bounded cleanup; 12 GiB host reserve; cooperative 4 GiB named-volume budget excluding image cache/writable layers/logs",
+      "ci_runtime_difference": "Ubuntu 24.04, Node 22.13.0, Python 3.13 unit and Python 3.11 package/AppInspect jobs"
+    },
+    "native_platform_qualification": false,
+    "real_source_qualification": false,
+    "production_readiness": false,
+    "remaining_unqualified": [
+      "Strict OS/kernel/process-launch, whole-endpoint CPU/memory/deadline and surrounding Splunk Web delivery bounds",
+      "Current protected source capture, effective source-index authorization/revocation and real-source behavior",
+      "Native Linux/amd64 resource enforcement, deferred by user",
+      "Cloud/SHC, cross-build recovery, operational scale and production readiness"
+    ],
+    "operational_state": "Shipped persistence/capture/watch/schedule/notification gates remain disabled; no permanent Enterprise/Cloud, shared-HF, AWS or global trust mutation.",
+    "rollback": "Schema unchanged. Roll back the app through normal gates while preserving case databases, audit/history, exact retry identities and unresolved capture-job ledgers; no database reset or erasure claim.",
+    "private_evidence_root": "atlas-case-request-bounds outside Git, including all failed attempts and frozen artifacts",
+    "independent_review": "Prelaunch and final integrated-diff reviews found no remaining actionable findings. Normal repository and pull-request gates remain pending."
+  },
   "cases_cold_recovery_20261117": {
     "date_local": "2026-11-17",
     "base_main": "c5e070adb0546b4e8e1bf1a6574b8beee96b4011",
@@ -110,10 +206,7 @@
       ],
       "access_scope": "Two non-admin fixture users with exactly adm_investigate, no imported roles or searchable indexes; re-created on target with new in-memory passwords. Platform identities/authentication state are not backed up.",
       "web_scope": "Authenticated Splunk Web proxy HTTP sessions using native cookies/CSRF; no new rendered UI change or screenshot qualification",
-      "raw_cold_files": [
-        "capture_jobs.sqlite",
-        "cases.sqlite"
-      ],
+      "raw_cold_files": ["capture_jobs.sqlite", "cases.sqlite"],
       "wal_scope": "This stopped installed copy had no retained WAL/SHM sidecars. Retained-WAL inclusion and physical sidecar bounds are unit-tested separately.",
       "elapsed_seconds_including_cleanup": 803.08
     },
@@ -165,40 +258,18 @@
     },
     "tls": {
       "source": {
-        "phases": [
-          "before_install",
-          "after_install"
-        ],
-        "endpoints": [
-          "Web",
-          "management",
-          "HEC"
-        ],
+        "phases": ["before_install", "after_install"],
+        "endpoints": ["Web", "management", "HEC"],
         "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
       },
       "occupied": {
-        "phases": [
-          "before_install",
-          "after_install"
-        ],
-        "endpoints": [
-          "Web",
-          "management",
-          "HEC"
-        ],
+        "phases": ["before_install", "after_install"],
+        "endpoints": ["Web", "management", "HEC"],
         "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
       },
       "target": {
-        "phases": [
-          "before_install",
-          "after_install",
-          "after_restore_restart"
-        ],
-        "endpoints": [
-          "Web",
-          "management",
-          "HEC"
-        ],
+        "phases": ["before_install", "after_install", "after_restore_restart"],
+        "endpoints": ["Web", "management", "HEC"],
         "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
       }
     },
@@ -442,9 +513,7 @@
       },
       "source_search_jobs": 0,
       "fixture_authority": {
-        "capabilities": [
-          "adm_investigate"
-        ],
+        "capabilities": ["adm_investigate"],
         "imported_roles": [],
         "source_index_grants": [],
         "source_index_defaults": [],
@@ -563,11 +632,7 @@
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
       "lifetime_seconds": 2700,
-      "disk_samples_bytes": [
-        2508771328,
-        2161115136,
-        2600165376
-      ],
+      "disk_samples_bytes": [2508771328, 2161115136, 2600165376],
       "test_source_sha256": {
         "tests/splunk/lab.py": "f81b74aa579f9f6aafbf9f5d5b66e4873ce35dd08828ec38de42e1b465618ffa",
         "tests/splunk/lab.sh": "bbc865ebaaf5a2226064d33a58c80d7d11619ddf0da1fe2bab24a28ffeb53878",
@@ -742,20 +807,14 @@
       ],
       "csrf": {
         "rejections": 12,
-        "statuses": [
-          401
-        ],
+        "statuses": [401],
         "surfaces": [
           "POST create",
           "POST entries",
           "POST share",
           "DELETE case"
         ],
-        "token_cases": [
-          "missing",
-          "invalid",
-          "other session"
-        ],
+        "token_cases": ["missing", "invalid", "other session"],
         "native_error_identifies_csrf": true,
         "unchanged_case_or_membership_proved_after_each": true,
         "valid_actions_succeed": true,
@@ -763,9 +822,7 @@
       },
       "mutation_journal": {
         "requests": 22,
-        "states": [
-          "response_received"
-        ],
+        "states": ["response_received"],
         "sha256": "1fcbe4625446b90533d95150ff8fba46c9d499e41d06ff950c143e9eab5f658c",
         "scope": "Synthetic case requests only; raw journal outside Git"
       },
@@ -889,11 +946,7 @@
         "tls_absent": true,
         "ports_free": true
       },
-      "disk_samples_bytes": [
-        2509172736,
-        2415509504,
-        2547752960
-      ],
+      "disk_samples_bytes": [2509172736, 2415509504, 2547752960],
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
       "lifetime_seconds": 2700,
@@ -1143,11 +1196,7 @@
       "resource_scope": "Configured Docker limits verified, not native Linux limit qualification",
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
-      "disk_samples_bytes": [
-        2508402688,
-        1447993344,
-        2546466816
-      ],
+      "disk_samples_bytes": [2508402688, 1447993344, 2546466816],
       "lifetime_seconds": 2700,
       "elapsed_seconds": 164.59,
       "cleanup": {
@@ -1439,15 +1488,8 @@
       "implemented": true,
       "installed_web_csrf_acl_qualified": false,
       "provisioning_added": false,
-      "request_fields": [
-        "binding_id",
-        "expected_revision"
-      ],
-      "response_fields": [
-        "id",
-        "revision",
-        "enabled"
-      ],
+      "request_fields": ["binding_id", "expected_revision"],
+      "response_fields": ["id", "revision", "enabled"],
       "route": "POST adm/dependency-monitoring/watch-management/disable",
       "source_independent": true,
       "uncertain_run_state_and_quota_preserved": true
@@ -2288,10 +2330,7 @@
     "proofs": "Pinned baseline and page/lookahead occurrence evidence reauthorized; compatibility and stored window checked; final ACL/revision recheck",
     "provider_added": false,
     "rendered_review": "Four corrected 1440/320 light/dark views accepted; dual-kind and not-observed examples use distinct windows",
-    "response_fields": [
-      "changeKinds",
-      "baselineVersion"
-    ],
+    "response_fields": ["changeKinds", "baselineVersion"],
     "runtime_path": "splunk_adm/bin/adm_baselines_lib/store.py",
     "runtime_sha256": "8f6b21243e011a0177cb031cb19c2d04113e229e2fa4fb467380f0b0902b21ac",
     "schedules_enabled": false,
@@ -3094,9 +3133,7 @@
         "symlink": false
       },
       "private_recovery_secret_state_present": false,
-      "remaining_task_files": [
-        "receipt.json"
-      ],
+      "remaining_task_files": ["receipt.json"],
       "active_license_group": "Enterprise",
       "tls_verified": true,
       "mutations": false
