@@ -1,4 +1,294 @@
 {
+  "cases_cold_recovery_20261117": {
+    "date_local": "2026-11-17",
+    "base_main": "c5e070adb0546b4e8e1bf1a6574b8beee96b4011",
+    "status": "local_installed_same_build_cold_notes_and_ledger_recovery_passed",
+    "customer_outcome": "Recover private/shared notes, revisions, access rules, exports and old retries after restart and cold restore into a fresh local Splunk container without discarding unresolved job slots.",
+    "application_runtime_changed": false,
+    "application_version": "0.9.8",
+    "version_bump_required": false,
+    "implemented_software": [
+      "Fixed-path cold case/ledger snapshot validation and sealed SQLite backup helper",
+      "Exact-task installed restart/source/occupied-target/fresh-target fixtures",
+      "Direct-parent lifecycle driver with separate child lock tokens, retained frozen archive, process retirement, bounded phases and cleanup independent of evidence-storage availability"
+    ],
+    "installed_archive": {
+      "version": "0.9.8",
+      "build": 1794966952,
+      "sha256": "8c2f61206fad88faa3a62d6689b826a4a34e2b42b3c3488ca05a8ccd4341802b",
+      "bytes": 1417735,
+      "origin": "Previously frozen installed 0.9.8 candidate; a private verified copy was used for every installation",
+      "later_generated_archives_are_separate": true
+    },
+    "private_evidence_root": "atlas-case-recovery outside Git; attempt-1, attempt-2 and successful attempt-3 retained with synthetic data only",
+    "receipt_sha256": "0b9e58a47d5406ab1878795f53fa28411d7698166088986ef23f4281064fbe92",
+    "snapshot_manifest_sha256": "88d486524422b676488e7a012f768ede3ec3d951da8136c7386f589f04b9cb4b",
+    "snapshot_provenance": {
+      "application_sha256": "8c2f61206fad88faa3a62d6689b826a4a34e2b42b3c3488ca05a8ccd4341802b",
+      "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+      "source_container_id": "17e281f85f9f26a2f4f7c5698a842763823ffb8e25cbc8ba9b367d037038bd60",
+      "source_task": "cases-recovery-source-20261117",
+      "fixed_path": "/opt/splunk/var/lib/splunk/splunk_adm_investigations"
+    },
+    "sealed_databases": {
+      "capture_jobs.sqlite": {
+        "bytes": 28672,
+        "sha256": "9919b0e439ecda78dbc598ec5853110cb30500f881d97d15ace6e0b83bcc5dc4"
+      },
+      "cases.sqlite": {
+        "bytes": 45056,
+        "sha256": "81dece66b746f1e12dd649731758192380aaf998c973231be6f2a796a7edfdb3"
+      }
+    },
+    "preserved_logical_tables": {
+      "capture_jobs.sqlite": {
+        "schema": {
+          "schema_sha256": "1597bf175ed16ad431af5370a0a7bb39b44c874236f90e5536248a7d5c5e8581",
+          "user_version": 3
+        },
+        "tables": [
+          {
+            "name": "jobs",
+            "rows": 3,
+            "sha256": "142ab5e9eb31435c90270677f91acdfabcc4549ce8d5bd6c02b96511489c1e7f"
+          },
+          {
+            "name": "ledger_meta",
+            "rows": 1,
+            "sha256": "3aa8a689d92623bfa8008edcdeb0e518093aefea8673a4b0dcf26179c5976417"
+          }
+        ]
+      },
+      "cases.sqlite": {
+        "schema": {
+          "schema_sha256": "b32611e11b0de5e280e0223442866cf35d9816b3d4a4dbeef5b80736551dfd6b",
+          "user_version": 0
+        },
+        "tables": [
+          {
+            "name": "acl",
+            "rows": 4,
+            "sha256": "976788704228fa9c1b1315d295b490fb7210d46237636c1d4bc0ee46540699cd"
+          },
+          {
+            "name": "audit",
+            "rows": 17,
+            "sha256": "d62c0636248ec7bca7945e4eb08934bc72fdd0a7a6e1e4e5201c54bdef7d7552"
+          },
+          {
+            "name": "cases",
+            "rows": 3,
+            "sha256": "f4431bfc575449d3af8b12852f79fba10359c07fdc54f8a9c8411e40a3c238d4"
+          },
+          {
+            "name": "requests",
+            "rows": 9,
+            "sha256": "afc74b63c6119591138c88607087dffbfd8fb2927f0602ba7e89153d587f8b25"
+          }
+        ]
+      }
+    },
+    "installed_evidence": {
+      "source_fixture_tests_passed": 1,
+      "target_fixture_tests_passed": 1,
+      "fixture_skips": 0,
+      "source_mutations_with_responses": 15,
+      "target_mutations_with_responses": 7,
+      "checks": [
+        "Source restart preserves exact private/shared/revoked projections and exports, immutable revisions and original retries",
+        "Same fully stopped source container supplies both databases; live export refused",
+        "Every logical table matches after native restore before case API access",
+        "Three cases, four ACL rows, nine retry rows and seventeen audit rows preserved",
+        "Three synthetic unresolved slots remain charged after fixture clock advances; fourth reservation denied",
+        "No real source jobs dispatched",
+        "Private and revoked member reads/exports denied; shared member reads/exports and old retry responses retained",
+        "New shared question succeeds while preserving earlier entries",
+        "Occupied target refused with unchanged sentinel",
+        "Corrupt and future-schema bundles refused before restore destination creation; installed target directory still absent",
+        "Cold restored bytes, numeric service ownership and 0700/0600 permissions checked before startup",
+        "Source and target fixture users/role absent and saved disabled flags restored before resource purge"
+      ],
+      "access_scope": "Two non-admin fixture users with exactly adm_investigate, no imported roles or searchable indexes; re-created on target with new in-memory passwords. Platform identities/authentication state are not backed up.",
+      "web_scope": "Authenticated Splunk Web proxy HTTP sessions using native cookies/CSRF; no new rendered UI change or screenshot qualification",
+      "raw_cold_files": [
+        "capture_jobs.sqlite",
+        "cases.sqlite"
+      ],
+      "wal_scope": "This stopped installed copy had no retained WAL/SHM sidecars. Retained-WAL inclusion and physical sidecar bounds are unit-tested separately.",
+      "elapsed_seconds_including_cleanup": 803.08
+    },
+    "platform": {
+      "engine": {
+        "Name": "docker-desktop",
+        "OSType": "linux",
+        "Architecture": "aarch64",
+        "NCPU": 12,
+        "MemTotal": 15527374848,
+        "ServerVersion": "29.9.3"
+      },
+      "socket": "Verified user-owned local Docker Desktop Unix socket; exact path retained in the private receipt",
+      "image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+      "cached_image": {
+        "Id": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "Os": "linux",
+        "Architecture": "amd64",
+        "RepoDigests": [
+          "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
+        ]
+      },
+      "installed_python": "3.13.11",
+      "installed_sqlite": "3.44.2",
+      "service_uid": 41812,
+      "service_gid": 41812,
+      "container_machine": "x86_64 emulated on Mac ARM64/aarch64 engine",
+      "host_python": "3.13.14",
+      "host_sqlite": "3.53.1",
+      "host_node": "22.16.0",
+      "ci_runtimes": "Ubuntu24.04; Node22.13.0; Python3.13 unit checks and Python3.11 package/AppInspect job"
+    },
+    "resources": {
+      "one_heavy_container_at_a_time": true,
+      "cpu": 4,
+      "memory_bytes": 8589934592,
+      "memory_plus_swap_bytes": 8589934592,
+      "pids": 1024,
+      "log_limits": "json-file 10MiB x2",
+      "execution_deadline_seconds": 2700,
+      "aggregate_named_volume_budget_bytes": 8589934592,
+      "peak_named_volume_phase_sample_bytes": 5150539776,
+      "disk_enforcement": "cooperative running-volume phase samples and host free-space checks; not a filesystem quota; excludes image cache, writable layers and logs"
+    },
+    "container_ids": {
+      "source": "17e281f85f9f26a2f4f7c5698a842763823ffb8e25cbc8ba9b367d037038bd60",
+      "occupied": "b8190a0442119d52c25f0cf7fa109842679404362fec2c70ccf3287c52622a9c",
+      "target": "08e4e84d5891cc3e8c44873c629d49027a4d253e7d428a29fdeebbbb9dc13f6c"
+    },
+    "tls": {
+      "source": {
+        "phases": [
+          "before_install",
+          "after_install"
+        ],
+        "endpoints": [
+          "Web",
+          "management",
+          "HEC"
+        ],
+        "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
+      },
+      "occupied": {
+        "phases": [
+          "before_install",
+          "after_install"
+        ],
+        "endpoints": [
+          "Web",
+          "management",
+          "HEC"
+        ],
+        "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
+      },
+      "target": {
+        "phases": [
+          "before_install",
+          "after_install",
+          "after_restore_restart"
+        ],
+        "endpoints": [
+          "Web",
+          "management",
+          "HEC"
+        ],
+        "each_endpoint": "Trusted task CA and hostname succeeds; wrong CA and wrong hostname rejected"
+      }
+    },
+    "cleanup": {
+      "occupied": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      },
+      "source": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      },
+      "target": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      }
+    },
+    "residual_state": "Private raw/sealed synthetic backups, request journals, public inspection code and receipts retained outside Git. No erasure claim. Three unrelated collector containers and older unrelated labeled volumes/networks preserved.",
+    "earlier_attempts": [
+      {
+        "attempt": 1,
+        "result": "Source restart/projection/ACL/export/retry checks reached native staging; checksum default-user permission failure stopped before snapshot. Fixed explicit service checksum identity and service-owned 0600 staging.",
+        "cleanup_verified": true
+      },
+      {
+        "attempt": 2,
+        "result": "Source cold snapshot and all three negative restore checks passed; cold target readback refused incorrect ownership before startup. Docker cp -a applied image Config.User instead of validated tar IDs; removed -a, retaining the mandatory ownership/bytes checks.",
+        "cleanup_verified": true
+      }
+    ],
+    "local_validation": {
+      "python_focused": "python -m unittest discover -s tests -p test_case_recovery*.py: 25 passed",
+      "python_full": "python -m unittest discover -s tests -p test_*.py: 1358 passed; generated bundles present. Existing CaseStore/baseline SQLite ResourceWarnings remain; no endpoint resource qualification is claimed.",
+      "python_distributed": "126 passed",
+      "python_upgrade": "15 passed, 3 installed opt-in tests skipped",
+      "ruff": "ruff check tools tests and ruff format --check tools tests passed; 251 files formatted",
+      "frontend": "npm run lint; npm test -- --run: 1337 passed; npm run package (includes build) passed",
+      "browser": "ADM_BROWSER_PORT=4275 CI=1 npm run test:browser: 214 passed, 1 optional scale benchmark skipped",
+      "archive_bundle_security": "check_release passed; test_atlas_build 3 passed; AppInspect4.3.1 Cloud precert and check_appinspect passed with 0 error/failure/future_failure, 6 warnings, 1 skipped, 100 not-applicable, 139 success. This separately generated local archive was not installed.",
+      "installed": "tools/rehearse_case_recovery.py --run with new private runtime, trusted frozen archive/SHA, read-only extracted TAs and exact verified local Unix socket: attempt-3 exit0; source and target fixture each1 passed/zero skips",
+      "coordinator_verification": "Revalidated sealed snapshot against external digest/provenance/trusted schemas; independently matched target cold bytes and native logical tables/ledger; verified task resources absent and unrelated container IDs unchanged",
+      "ci": "Normal required frontend, browser and Python jobs required before integration. The separate gated Splunk integration job is not counted as passed by this record."
+    },
+    "independent_review": {
+      "profile": "Configured read-only reviewer, GPT-6.1 Sol/high",
+      "worker": "Project-selected GPT-6 Luna/medium override accepted by tool; snapshot/unit module and installed fixture ownership were disjoint from coordinator lifecycle/transfer files",
+      "runtime_identity_limit": "Project coordinator default is gpt-6.1-sol/high; live provider identity is not independently exposed",
+      "resolved_findings": [
+        "Count physical WAL/SHM bytes before SQLite and bound manifest reads",
+        "Seal new bundles without sidecars and reject unexpected complete mounts",
+        "Use private retained exact archive for every install",
+        "Continue all owned cleanups despite receipt/log write failure",
+        "Installed staging identity mismatch fixed without weakening modes",
+        "Installed Docker archive ownership override fixed without weakening cold readback"
+      ],
+      "final_review": "Clear across all 14 staged files; reviewer verified frozen archive, receipt/manifest hashes, restored bytes, native tables/ledger, journals, cleanup and failed-attempt separation. 25 focused tests and staged whitespace checks passed; reviewer did not rerun Docker or full suites."
+    },
+    "rollout": "Test tooling/docs only; shipped runtime, disabled defaults, watch/schedule/notification gates unchanged. Permanent Enterprise and Cloud untouched.",
+    "rollback": "Remove rehearsal tooling/docs if needed; preserve retained backups and any unresolved owned-resource receipts. No production application rollback or database deletion is part of this change.",
+    "native_platform_qualification": false,
+    "real_source_qualification": false,
+    "production_readiness": false,
+    "not_qualified": [
+      "Current supervised source capture and source-backed authorization/revocation/reads/exports/retries",
+      "Whole-endpoint deadlines/resources/cancellation",
+      "Native Linux AMD64 resource enforcement",
+      "Real-source behavior or connected journeys",
+      "Live-writer or large-scale recovery, RPO/RTO, schema migration, downgrade or cross-build compatibility",
+      "Baseline/watch SQLite, KV, platform identities/configuration or raw/summary index backups",
+      "Native job reconciliation or clearing unresolved slots",
+      "Cloud/SHC persistence",
+      "Production recovery/readiness"
+    ],
+    "permanent_enterprise_changed": false,
+    "cloud_changed": false,
+    "capture_enabled": false,
+    "watch_or_schedules_enabled": false
+  },
   "cases_rendered_ui_20261117": {
     "date_local": "2026-11-17",
     "base_main": "0e63a2ee4881b679094d665a4591b54e9c252bac",
@@ -152,7 +442,9 @@
       },
       "source_search_jobs": 0,
       "fixture_authority": {
-        "capabilities": ["adm_investigate"],
+        "capabilities": [
+          "adm_investigate"
+        ],
         "imported_roles": [],
         "source_index_grants": [],
         "source_index_defaults": [],
@@ -271,7 +563,11 @@
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
       "lifetime_seconds": 2700,
-      "disk_samples_bytes": [2508771328, 2161115136, 2600165376],
+      "disk_samples_bytes": [
+        2508771328,
+        2161115136,
+        2600165376
+      ],
       "test_source_sha256": {
         "tests/splunk/lab.py": "f81b74aa579f9f6aafbf9f5d5b66e4873ce35dd08828ec38de42e1b465618ffa",
         "tests/splunk/lab.sh": "bbc865ebaaf5a2226064d33a58c80d7d11619ddf0da1fe2bab24a28ffeb53878",
@@ -446,14 +742,20 @@
       ],
       "csrf": {
         "rejections": 12,
-        "statuses": [401],
+        "statuses": [
+          401
+        ],
         "surfaces": [
           "POST create",
           "POST entries",
           "POST share",
           "DELETE case"
         ],
-        "token_cases": ["missing", "invalid", "other session"],
+        "token_cases": [
+          "missing",
+          "invalid",
+          "other session"
+        ],
         "native_error_identifies_csrf": true,
         "unchanged_case_or_membership_proved_after_each": true,
         "valid_actions_succeed": true,
@@ -461,7 +763,9 @@
       },
       "mutation_journal": {
         "requests": 22,
-        "states": ["response_received"],
+        "states": [
+          "response_received"
+        ],
         "sha256": "1fcbe4625446b90533d95150ff8fba46c9d499e41d06ff950c143e9eab5f658c",
         "scope": "Synthetic case requests only; raw journal outside Git"
       },
@@ -585,7 +889,11 @@
         "tls_absent": true,
         "ports_free": true
       },
-      "disk_samples_bytes": [2509172736, 2415509504, 2547752960],
+      "disk_samples_bytes": [
+        2509172736,
+        2415509504,
+        2547752960
+      ],
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
       "lifetime_seconds": 2700,
@@ -835,7 +1143,11 @@
       "resource_scope": "Configured Docker limits verified, not native Linux limit qualification",
       "disk_budget_bytes": 10737418240,
       "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
-      "disk_samples_bytes": [2508402688, 1447993344, 2546466816],
+      "disk_samples_bytes": [
+        2508402688,
+        1447993344,
+        2546466816
+      ],
       "lifetime_seconds": 2700,
       "elapsed_seconds": 164.59,
       "cleanup": {
@@ -1127,8 +1439,15 @@
       "implemented": true,
       "installed_web_csrf_acl_qualified": false,
       "provisioning_added": false,
-      "request_fields": ["binding_id", "expected_revision"],
-      "response_fields": ["id", "revision", "enabled"],
+      "request_fields": [
+        "binding_id",
+        "expected_revision"
+      ],
+      "response_fields": [
+        "id",
+        "revision",
+        "enabled"
+      ],
       "route": "POST adm/dependency-monitoring/watch-management/disable",
       "source_independent": true,
       "uncertain_run_state_and_quota_preserved": true
@@ -1969,7 +2288,10 @@
     "proofs": "Pinned baseline and page/lookahead occurrence evidence reauthorized; compatibility and stored window checked; final ACL/revision recheck",
     "provider_added": false,
     "rendered_review": "Four corrected 1440/320 light/dark views accepted; dual-kind and not-observed examples use distinct windows",
-    "response_fields": ["changeKinds", "baselineVersion"],
+    "response_fields": [
+      "changeKinds",
+      "baselineVersion"
+    ],
     "runtime_path": "splunk_adm/bin/adm_baselines_lib/store.py",
     "runtime_sha256": "8f6b21243e011a0177cb031cb19c2d04113e229e2fa4fb467380f0b0902b21ac",
     "schedules_enabled": false,
@@ -2772,7 +3094,9 @@
         "symlink": false
       },
       "private_recovery_secret_state_present": false,
-      "remaining_task_files": ["receipt.json"],
+      "remaining_task_files": [
+        "receipt.json"
+      ],
       "active_license_group": "Enterprise",
       "tls_verified": true,
       "mutations": false

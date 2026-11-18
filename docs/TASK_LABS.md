@@ -95,6 +95,15 @@ small host and disclose other host activity; namespace isolation does not imply
 performance isolation. Local Docker measurements do not establish production or
 Splunk Cloud qualification.
 
+The test-only [cold case recovery rehearsal](BACKUP_RESTORE.md#installed-cold-case-recovery-rehearsal)
+uses `tools/rehearse_case_recovery.py` to hold three direct parent locks across
+source, occupied negative target and fresh restore target. It supplies each child
+the matching task environment and lock token, runs one heavy container at a time,
+retains a verified private archive copy, and attempts every owned cleanup even if
+receipt or log storage fails. Its fixed identities, ports, lifetime and disk
+budget are documented with that workflow. Do not substitute the older KV reset
+driver or rename an existing lab to satisfy its guards.
+
 ## Verified qualification traffic
 
 The lab pins the reviewed Splunk 10.6.0.5 image digest. Before initial startup,

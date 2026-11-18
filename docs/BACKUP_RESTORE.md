@@ -2,7 +2,7 @@
 
 `tools/rehearse_restore.py` retains the earlier KV/configuration restore
 rehearsal. Its earlier results do not qualify the new case, baseline or
-capture-job SQLite databases. The current local check for those databases is
+capture-job SQLite databases. The synthetic local check for those databases is
 `python3 -m unittest tests.test_sqlite_restore_rehearsal`, described below.
 
 The KV/lab lifecycle has not been requalified after the task-owned verified-TLS
@@ -55,3 +55,104 @@ reconciliation. In particular, it does not clear unknown jobs or infer that a
 job is absent from elapsed time. Preserve the case database and capture-job
 ledger together in any future qualified recovery procedure; do not overwrite
 existing state or clear unresolved slots to restore capacity.
+
+## Installed cold case recovery rehearsal
+
+The 2026-11-17 local Docker rehearsal passed against the frozen 0.9.8 archive.
+It qualifies only the same-build synthetic notes and populated-ledger scenario
+below. Exact archive/snapshot hashes, failed attempts, cleanup and remaining
+limits are retained in the [qualification record](FEATURE_QUALIFICATION.json).
+
+`tools/rehearse_case_recovery.py` is a test-only, same-build rehearsal using
+three exact disposable task namespaces: source, occupied negative target and
+fresh positive target. It runs one Splunk container at a time. It does not
+provide a production backup command or qualify the older KV workflow above.
+
+The source fixture creates private, shared and revoked synthetic notes cases,
+then checks the same records, immutable revisions, exports and original retry
+responses after a container restart. Fixture accounts and roles are removed and
+the disabled configuration is restored before the cold copy. Three deliberately
+unresolved synthetic capture-ledger slots are seeded without dispatching searches.
+These represent `creating`, `creation_unknown` and `cleanup_unknown` states.
+
+Both databases are read from the **same stopped container**, after verifying its
+exact recorded ID, pinned image, labels, complete mount set, local socket,
+loopback ports and stopped process state. Other containers mounting either
+volume prevent copying. The fixed directory is
+`$SPLUNK_DB/splunk_adm_investigations`; arbitrary source or restore paths are not
+accepted. The Docker archive reader manually accepts only this directory and
+its known database/WAL/SHM files, with service ownership and modes 0700/0600.
+It rejects links, unexpected entries and excessive physical size before opening
+SQLite. No general archive extraction is used.
+
+The host uses SQLite's backup API to include any retained WAL rows and writes
+new sealed databases in DELETE journal mode. Schema identities come from fresh
+stores created independently by the installed runtime. Integrity, foreign keys,
+logical table digests, database bytes, exact source provenance and an externally
+retained manifest digest must agree. SHA-256 detects changed bytes; it does not
+authenticate an untrusted backup and manifest supplied together. Both databases
+are retained together; explicit ledger absence is supported by the helper but
+the installed scenario exercises a populated ledger.
+
+An occupied target must reject restoration without changing its sentinel.
+Corrupt and unsupported-future backups must fail before creating any restore
+destination. Only a fresh stopped target with no case directory may receive the
+validated sealed files. Target file bytes are compared before startup, then the
+installed runtime checks schema, service permissions, every logical table and
+the unresolved slots before opening case endpoints. Advancing the fixture clock
+must leave all three slots charged. Recreated fixture identities then exercise
+the saved ACLs, notes, exports and old retries through authenticated Splunk Web
+proxy sessions, followed by a new shared question entry.
+
+The constructed tar carries numeric service IDs and fixed permissions. Restore
+uses tar stdin without `docker cp -a`: the CLI maps that option to `CopyUIDGID`,
+and the daemon applies the image's configured user, overriding tar ownership.
+See the primary [CLI copy implementation](https://github.com/docker/cli/blob/master/cli/command/container/cp.go)
+and [daemon ownership handling](https://github.com/moby/moby/blob/master/daemon/archive_unix.go).
+The cold readback must still prove service ownership, permissions and exact bytes;
+a successful copy command alone is insufficient evidence.
+
+All three cross-worktree locks remain held by the parent through child retirement,
+evidence retention and cleanup. Cancellation retires each child process group;
+receipt or log write failures cannot prevent attempts to clean every owned lab.
+Interrupted mutations and cleanup uncertainty remain failures. A forced parent
+kill, host crash or unavailable Docker engine can still require explicit recovery
+using retained ownership evidence. Never prune or adopt an existing namespace.
+
+Run only after reviewing [task lab requirements](TASK_LABS.md), with a new empty
+mode-0700 runtime directory outside every checkout, a retained canonical archive
+and checksum, and read-only reviewed TA inputs:
+
+```sh
+python3 tools/rehearse_case_recovery.py --run \
+  --runtime /absolute/private/new-recovery-attempt \
+  --package /absolute/private/artifacts/splunk_adm-0.9.8.tar.gz \
+  --package-sha256 <trusted-retained-sha256> \
+  --extracted /absolute/read-only/research/extracted \
+  --socket unix:///absolute/local/docker.sock
+```
+
+The driver verifies the active local context and Unix socket, a cached reviewed
+Linux/amd64 image, available resources, empty fixed namespaces and available
+ports. It retains a private verified archive copy for every installation. Fixed
+ports are 30900/30989/30988, 31900/31989/31988 and 32900/32989/32988. Each container
+has the framework's 4-CPU, 8-GiB, no-extra-swap and 1,024-process limits. The task
+has a 45-minute execution deadline plus bounded cleanup, an 8-GiB aggregate
+named-volume budget sampled between phases, and a 12-GiB host disk reserve.
+Disk checks are cooperative, not filesystem quotas; image cache, writable layers
+and logs are outside that volume budget. Management, HEC and Web TLS each require
+trusted success plus wrong-CA and wrong-hostname rejection.
+
+Private outputs include the frozen archive, raw synthetic databases, sealed
+bundle, external manifest digest, request journals and final recovery receipt.
+Keep them outside Git with directories 0700 and files 0600. Credentials, cookies,
+CSRF tokens and private keys are excluded from evidence. The fixture uses new
+passwords after restore: Splunk identities and authentication state are not backed
+up. Purge removes only exact owned containers, networks, volumes and credentials;
+retained backups and audit/retry/history records are not erasure.
+
+This scope excludes baseline/watch SQLite state, KV/platform configuration,
+indexes, live writers, schema upgrades/downgrades, cross-build compatibility,
+Cloud/SHC, real source authorization, source capture, job reconciliation and
+production recovery. See [delivery evidence](FEATURE_DELIVERY.md) and the
+[qualification record](FEATURE_QUALIFICATION.json) for performed tests and limits.

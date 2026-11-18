@@ -268,7 +268,12 @@ Management and HEC qualification traffic verified the task CA and hostname;
 wrong-CA and wrong-hostname connections failed. Native output includes typed
 service identity provenance. The evidence fixtures were synthetic, and the lab
 was purged with independent resource and credential cleanup checks. See
-[exact qualification scope and hashes](FEATURE_QUALIFICATION.json). This does
-does not qualify the newer supervised transport or ledger, Linux resource limits,
-Web/CSRF, backup/restore, Cloud/SHC or real-source coverage. Persistence and
-capture remain disabled by default.
+[exact qualification scope and hashes](FEATURE_QUALIFICATION.json). This earlier
+capture result does not qualify the newer supervised transport or ledger, Linux
+resource limits, source-backed Web/CSRF, backup/restore, Cloud/SHC or real-source
+coverage. Later 0.9.8 installed notes-only Web and rendered Cases checks qualify
+their exercised login, CSRF, revisions, sharing, revocation and export paths.
+Persistence and capture remain disabled by default. The separate
+[cold recovery rehearsal](BACKUP_RESTORE.md#installed-cold-case-recovery-rehearsal)
+defines the narrower same-build case/ledger backup test; its performed evidence
+and remaining limits are recorded separately in the qualification record.
