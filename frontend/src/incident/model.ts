@@ -1,4 +1,5 @@
 import { diffGraphs, type GraphDiff } from "../diff";
+import type { AuditProjection } from "./audit";
 import type { Graph, GraphEdge } from "../graph";
 
 export type Window = { start: string; end: string };
@@ -344,6 +345,7 @@ export function buildTimeline(
   baseline: Graph,
   incident: Graph,
   diff: GraphDiff = diffGraphs(baseline, incident),
+  audit?: AuditProjection,
 ): TimelineItem[] {
   const items: TimelineItem[] = [];
   const start = baseline.window.end,
@@ -395,6 +397,21 @@ export function buildTimeline(
           edgeIds: [edge.id],
         });
     }
+  for (const { event, binding } of audit?.events ?? []) {
+    const time = Date.parse(event.actionTime);
+    if (
+      time >= Date.parse(incident.window.start) &&
+      time < Date.parse(incident.window.end)
+    )
+      items.push({
+        id: `audit:${JSON.stringify([event.authority, event.scope, event.eventId])}`,
+        kind: "native",
+        start: event.actionTime,
+        title: "Audit action reported",
+        detail: `${event.action} · native action time ${event.actionTime} · object ${event.objectId} · source ${event.authority} / ${event.scope} · event ${event.eventId} · received ${event.receivedTime} · binding ${binding.bindingAuthority} / ${binding.bindingEvidenceId} (${binding.validFrom} to ${binding.validUntil}, end exclusive)`,
+        edgeIds: [],
+      });
+  }
   return items.sort(
     (a, b) =>
       Date.parse(a.start) - Date.parse(b.start) || a.id.localeCompare(b.id),

@@ -124,9 +124,13 @@ Stopping preserves all uncertain run states, retained references and quota
 accounting. Existing journal schema and canonical binding records are validated
 before their ownership data is used. A narrow authenticated HTTP stop route is
 described below. No management UI, provisioning or enable route is exposed.
-Bindings can currently be provisioned only through the trusted host/executor
-interface. This is a local execution-mechanics increment, not an operator-ready
-watch workflow.
+The bounded-stdin `adm_baseline_provision.py` command now provides create,
+enable, disable, inspect and exact-request reconciliation for an authenticated
+administrator who owns the binding. Creation and enablement still require a
+separately verified source provider, which the shipped host does not supply.
+Source-independent inspection, disablement and receipt lookup retain recovery
+access. See [the provider and operator contract](BASELINE_SOURCE_PROVIDER.md).
+No HTTP provisioning route or management UI is exposed.
 
 Local tests use an explicitly injected synthetic provider. They verify journal
 admission, crash boundaries, leases, source/owner revocation, capture digests,
@@ -138,9 +142,11 @@ positive real-source scheduling and operational journal recovery remain unqualif
 
 For rollback, keep execution disabled and preserve both databases. Do not delete
 uncertain runs to regain quota, rewrite binding revisions, or run an older writer
-against this journal. Schema 1 is the first local contract; unsupported or earlier
-unreleased layouts fail closed. Offline backup/restore of this new journal has
-not been operationally qualified.
+against this journal. The operator workflow migrates schema 1 to schema 2
+transactionally while preserving bindings and unresolved runs; older writers
+reject schema 2. Keep both databases and a validated compatible writer for
+rollback. Unsupported layouts fail closed. Offline backup/restore of this
+journal has not been operationally qualified.
 
 
 ## Operator stop command

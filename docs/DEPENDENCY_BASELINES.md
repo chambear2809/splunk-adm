@@ -30,6 +30,14 @@ qualification. `source_mode = unavailable` is the only shipped source mode;
 there is no production source provider or configuration flag that establishes
 source completeness. A trusted Python-injected provider is used in tests only.
 
+The retained-artifact adapter and bounded operator command are described in
+[the provider contract](BASELINE_SOURCE_PROVIDER.md). The adapter checks exact
+selection, retained provenance, coverage and closed-window/lateness assertions,
+and requires independent producer verification plus current caller source
+authorization. Those production integrations remain missing. Operator create,
+enable, disable, inspect and receipt reconciliation are implemented locally;
+creation and enablement remain unavailable in the shipped host.
+
 Once enabled and runtime-qualified, the host uses the fixed private path
 `$SPLUNK_DB/splunk_adm_baselines/baselines.sqlite`. It checks directory and file
 ownership and permissions and rejects links. This database is separate from

@@ -4,6 +4,7 @@ import copy
 import datetime as dt
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +12,7 @@ sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/bin")
 )
 from adm_cases_lib.source import ComparisonSource, SourceError  # noqa: E402
+from adm_cases_lib.store import CaseStore  # noqa: E402
 
 
 SCOPE = {
@@ -124,6 +126,66 @@ class Tests(unittest.TestCase):
         self.rows = denied
         self.assertFalse(self.source.entitled("bob", "capture", result))
         self.assertFalse(self.source.entitled("bob", "attachment", result))
+
+    def test_stored_capture_rechecks_actual_comparison_on_read_export_and_retry(self):
+        denied = set()
+
+        def run(principal, _query, start, end):
+            if principal in denied:
+                raise PermissionError()
+            return graph(start, end)
+
+        source = ComparisonSource(run, lambda: "config-1", lambda: NOW)
+        with tempfile.TemporaryDirectory() as directory:
+            store = CaseStore(
+                str(Path(directory) / "cases.sqlite"),
+                lambda *_: True,
+                capture_resolver=source.resolve,
+                source_entitlement=source.entitled,
+            )
+            case = store.create(
+                "alice",
+                "create",
+                {
+                    "schema_version": 1,
+                    "title": "Synthetic",
+                    "window": {
+                        "start": "2026-01-01T00:00:00Z",
+                        "end": "2026-01-02T00:00:00Z",
+                    },
+                },
+            )
+            case_id = case["id"]
+            store.append(
+                "alice",
+                "note",
+                case_id,
+                1,
+                "entry",
+                {"type": "note", "text": "retained"},
+            )
+            saved = store.append_capture("alice", "capture", case_id, 2, reference())
+            capture_id = saved["capture_ids"][0]
+            store.share("alice", "share", case_id, 3, "bob", True)
+            self.assertEqual(
+                len(store.get("bob", case_id, capture_id=capture_id)["captures"]), 1
+            )
+            denied.add("bob")
+            for document in (
+                store.get("bob", case_id, capture_id=capture_id),
+                store.export("bob", case_id, capture_id=capture_id),
+            ):
+                self.assertEqual(document["captures"], [])
+                self.assertEqual(document["redactions"]["captures"], 1)
+                self.assertEqual(document["entries"][0]["text"], "retained")
+            denied.add("alice")
+            retry = store.append_capture("alice", "capture", case_id, 2, reference())
+            self.assertEqual(retry["captures"], [])
+            self.assertEqual(retry["redactions"]["captures"], 1)
+            denied.clear()
+            self.assertEqual(
+                len(store.export("bob", case_id, capture_id=capture_id)["captures"]), 1
+            )
 
     def test_reference_validation_and_injection(self):
         cases = [

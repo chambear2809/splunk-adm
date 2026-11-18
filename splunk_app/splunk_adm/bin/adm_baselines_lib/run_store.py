@@ -195,6 +195,7 @@ def _check_sidecars(path):
 
 _BINDINGS_DDL = "CREATE TABLE IF NOT EXISTS bindings (id TEXT PRIMARY KEY, definition TEXT NOT NULL, fingerprint TEXT NOT NULL, revision INTEGER NOT NULL, enabled INTEGER NOT NULL)"
 _RUNS_DDL = "CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, principal TEXT NOT NULL, request_id TEXT NOT NULL, binding_id TEXT NOT NULL REFERENCES bindings(id), fingerprint TEXT NOT NULL, binding_revision INTEGER NOT NULL, window_start INTEGER NOT NULL, window_end INTEGER NOT NULL, state TEXT NOT NULL, revision INTEGER NOT NULL, lease_owner TEXT, lease_until REAL, reference TEXT, baseline_revision INTEGER, evaluation_key TEXT, capture_digest TEXT, receipt TEXT, UNIQUE(principal,request_id), UNIQUE(binding_id,window_start,window_end))"
+_MANAGEMENT_DDL = "CREATE TABLE IF NOT EXISTS management_receipts (principal TEXT NOT NULL, request_id TEXT NOT NULL, binding_id TEXT NOT NULL REFERENCES bindings(id), expected_revision INTEGER NOT NULL, enabled INTEGER NOT NULL, result_revision INTEGER NOT NULL, PRIMARY KEY(principal,request_id))"
 
 
 class ExecutionStore:
@@ -240,7 +241,7 @@ class ExecutionStore:
             db.execute("BEGIN IMMEDIATE")
             try:
                 version = db.execute("PRAGMA user_version").fetchone()[0]
-                if version not in (0, 1):
+                if version not in (0, 1, 2):
                     raise Invalid("unsupported journal schema")
                 if (
                     version == 0
@@ -249,13 +250,18 @@ class ExecutionStore:
                     ).fetchone()
                 ):
                     raise Invalid("unversioned journal schema")
+                if version in (1, 2):
+                    self._validate_existing_schema(db)
+                if version == 1:
+                    self._ensure_no_management_table(db)
                 db.execute(_BINDINGS_DDL)
                 db.execute(_RUNS_DDL)
+                db.execute(_MANAGEMENT_DDL)
                 if not {"capture_digest", "binding_revision"} <= {
                     column[1] for column in db.execute("PRAGMA table_info(runs)")
                 }:
                     raise Invalid("unsupported journal schema")
-                db.execute("PRAGMA user_version=1")
+                db.execute("PRAGMA user_version=2")
                 db.commit()
             except Exception:
                 db.rollback()
@@ -287,13 +293,25 @@ class ExecutionStore:
         return db
 
     @staticmethod
+    def _ensure_no_management_table(db):
+        if db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='management_receipts'"
+        ).fetchone():
+            raise Invalid("unsupported journal schema")
+
+    @staticmethod
     def _validate_existing_schema(db):
-        if db.execute("PRAGMA user_version").fetchone()[0] != 1:
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version not in (1, 2):
             raise Invalid("unsupported journal schema")
         expected = {
             "bindings": _BINDINGS_DDL.replace("IF NOT EXISTS ", ""),
             "runs": _RUNS_DDL.replace("IF NOT EXISTS ", ""),
         }
+        if version == 2:
+            expected["management_receipts"] = _MANAGEMENT_DDL.replace(
+                "IF NOT EXISTS ", ""
+            )
         for table, ddl in expected.items():
             row = db.execute(
                 "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
@@ -376,12 +394,73 @@ class ExecutionStore:
             "receipt": json.loads(row["receipt"]) if row["receipt"] else None,
         }
 
-    def create_binding(self, definition):
+    @staticmethod
+    def binding_request_id(principal, request_id):
+        _text(principal)
+        _text(request_id, 128)
+        return str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                _canonical(["splunk-adm-binding-v1", principal, request_id]),
+            )
+        )
+
+    def management_receipt(self, principal, ident, request_id):
+        _text(principal)
+        _id(ident)
+        _text(request_id, 128)
+        with closing(self._connect()) as db:
+            if db.execute("PRAGMA user_version").fetchone()[0] != 2:
+                raise NotFound("management receipt unavailable")
+            binding = self._binding(db, ident)
+            if json.loads(binding["definition"])["principal"] != principal:
+                raise Forbidden("binding owner required")
+            row = db.execute(
+                "SELECT * FROM management_receipts WHERE principal=? AND request_id=?",
+                (principal, request_id),
+            ).fetchone()
+            if row is None:
+                raise NotFound("management receipt unavailable")
+            if (
+                row["binding_id"] != ident
+                or type(row["expected_revision"]) is not int
+                or row["expected_revision"] < 1
+                or type(row["enabled"]) is not int
+                or row["enabled"] not in (0, 1)
+                or type(row["result_revision"]) is not int
+                or row["result_revision"]
+                not in (row["expected_revision"], row["expected_revision"] + 1)
+                or row["result_revision"] > binding["revision"]
+            ):
+                raise Invalid("invalid management receipt")
+            return {
+                "id": ident,
+                "expected_revision": row["expected_revision"],
+                "revision": row["result_revision"],
+                "enabled": bool(row["enabled"]),
+            }
+
+    def create_binding(self, definition, *, request_id=None):
         encoded = _definition(definition)
         digest = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
-        ident = str(uuid.uuid4())
+        ident = (
+            str(uuid.uuid4())
+            if request_id is None
+            else self.binding_request_id(definition["principal"], request_id)
+        )
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
+            existing = db.execute(
+                "SELECT * FROM bindings WHERE id=?", (ident,)
+            ).fetchone()
+            if existing is not None:
+                existing = self._binding(db, ident)
+                if (
+                    existing["definition"] != encoded
+                    or existing["fingerprint"] != digest
+                ):
+                    raise Conflict("binding request changed")
+                return self._binding_record(existing)
             if (
                 db.execute("SELECT count(*) FROM bindings").fetchone()[0]
                 >= self.max_bindings
@@ -399,7 +478,7 @@ class ExecutionStore:
         with closing(self._connect()) as db:
             return self._binding_record(self._binding(db, ident))
 
-    def set_enabled(self, ident, expected_revision, enabled):
+    def set_enabled(self, ident, expected_revision, enabled, *, request_id=None):
         _id(ident)
         _revision(expected_revision)
         if type(enabled) is not bool:
@@ -407,14 +486,85 @@ class ExecutionStore:
         with closing(self._connect()) as db:
             db.execute("BEGIN IMMEDIATE")
             row = self._binding(db, ident)
+            if request_id is not None:
+                _text(request_id, 128)
+                if db.execute("PRAGMA user_version").fetchone()[0] == 1:
+                    self._validate_existing_schema(db)
+                    self._ensure_no_management_table(db)
+                    db.execute(_MANAGEMENT_DDL)
+                    db.execute("PRAGMA user_version=2")
+                principal = json.loads(row["definition"])["principal"]
+                prior = db.execute(
+                    "SELECT * FROM management_receipts WHERE principal=? AND request_id=?",
+                    (principal, request_id),
+                ).fetchone()
+                if prior is not None:
+                    if (
+                        prior["binding_id"] != ident
+                        or prior["expected_revision"] != expected_revision
+                        or prior["enabled"] != int(enabled)
+                        or type(prior["result_revision"]) is not int
+                        or prior["result_revision"]
+                        not in (expected_revision, expected_revision + 1)
+                        or prior["result_revision"] > row["revision"]
+                    ):
+                        raise Conflict("management request changed")
+                    return {
+                        "id": ident,
+                        "revision": prior["result_revision"],
+                        "enabled": enabled,
+                    }
             if row["revision"] != expected_revision:
                 raise Conflict("binding revision changed")
-            if bool(row["enabled"]) != enabled:
+            changing = bool(row["enabled"]) != enabled
+            if request_id is not None or (enabled and changing):
+                version = db.execute("PRAGMA user_version").fetchone()[0]
+                count = (
+                    db.execute("SELECT count(*) FROM management_receipts").fetchone()[0]
+                    if version == 2
+                    else 0
+                )
+                enabled_count = db.execute(
+                    "SELECT count(*) FROM bindings WHERE enabled=1"
+                ).fetchone()[0]
+                resulting_enabled = enabled_count + (
+                    (1 if enabled else -1) if changing else 0
+                )
+                # Every enabled binding needs room for its own keyed stop receipt.
+                # A stop may also reduce an existing overcommit from an older journal.
+                stopping = changing and not enabled
+                if (
+                    (request_id is not None and count >= 1024)
+                    or (request_id is not None and enabled and count >= 896)
+                    or (
+                        not stopping
+                        and count + (request_id is not None) + resulting_enabled > 1024
+                    )
+                ):
+                    raise QuotaExceeded("management receipt capacity exhausted")
+            if changing:
                 db.execute(
                     "UPDATE bindings SET enabled=?,revision=revision+1 WHERE id=?",
                     (enabled, ident),
                 )
             result = self._binding_record(self._binding(db, ident))
+            if request_id is not None:
+                db.execute(
+                    "INSERT INTO management_receipts VALUES (?,?,?,?,?,?)",
+                    (
+                        principal,
+                        request_id,
+                        ident,
+                        expected_revision,
+                        int(enabled),
+                        result["revision"],
+                    ),
+                )
+                result = {
+                    "id": ident,
+                    "revision": result["revision"],
+                    "enabled": enabled,
+                }
             db.commit()
         return result
 

@@ -85,6 +85,7 @@ BASELINE_RUNTIME_FILES = frozenset(
     {
         "splunk_adm/bin/adm_baselines.py",
         "splunk_adm/bin/adm_dependency_watch.py",
+        "splunk_adm/bin/adm_baseline_provision.py",
         *(
             f"splunk_adm/bin/adm_baselines_lib/{name}.py"
             for name in (
@@ -95,6 +96,8 @@ BASELINE_RUNTIME_FILES = frozenset(
                 "executor",
                 "run_store",
                 "watch_management",
+                "retained_artifacts",
+                "source_provider",
             )
         ),
     }
@@ -822,6 +825,10 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/DATA_LAYER.md",
         "splunk_adm/docs/DEPENDENCY_BASELINES.md",
         "splunk_adm/docs/DEPENDENCY_WATCH_EXECUTION.md",
+        "splunk_adm/docs/BASELINE_SOURCE_PROVIDER.md",
+        "splunk_adm/docs/CASE_REQUEST_SUPERVISION.md",
+        "splunk_adm/docs/CASE_SOURCE_QUALIFICATION.md",
+        "splunk_adm/docs/INCIDENT_SOURCE_ASSOCIATIONS.md",
         "splunk_adm/docs/INVESTIGATION_RECORDS.md",
         "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md",
         "splunk_adm/docs/FEATURE_FOUNDATIONS.md",

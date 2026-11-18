@@ -64,7 +64,36 @@ class WatchStopper:
     def __init__(self, journal, principal, is_admin):
         self.journal, self.principal, self.is_admin = journal, principal, is_admin
 
-    def set_enabled(self, binding_id, expected_revision, enabled):
+    def inspect(self, binding_id):
+        principal = _text(self.principal(), "principal")
+        if self.is_admin(principal) is not True:
+            raise Forbidden("administrator required")
+        binding = self.journal.binding(binding_id)
+        if binding["definition"]["principal"] != principal:
+            raise Forbidden("binding owner required")
+        if self.principal() != principal or self.is_admin(principal) is not True:
+            raise Forbidden("administrator identity changed")
+        return {
+            key: binding[key] for key in ("id", "revision", "enabled", "definition")
+        }
+
+    def find_created(self, request_id):
+        principal = _text(self.principal(), "principal")
+        if self.is_admin(principal) is not True:
+            raise Forbidden("administrator required")
+        ident = self.journal.binding_request_id(principal, request_id)
+        return self.inspect(ident)
+
+    def receipt(self, binding_id, request_id):
+        principal = _text(self.principal(), "principal")
+        if self.is_admin(principal) is not True:
+            raise Forbidden("administrator required")
+        result = self.journal.management_receipt(principal, binding_id, request_id)
+        if self.principal() != principal or self.is_admin(principal) is not True:
+            raise Forbidden("administrator identity changed")
+        return result
+
+    def set_enabled(self, binding_id, expected_revision, enabled, *, request_id=None):
         if enabled is not False:
             raise Invalid("only disabling is permitted")
         principal = _text(self.principal(), "principal")
@@ -75,7 +104,9 @@ class WatchStopper:
             raise Forbidden("binding owner required")
         if self.principal() != principal or self.is_admin(principal) is not True:
             raise Forbidden("administrator identity changed")
-        result = self.journal.set_enabled(binding_id, expected_revision, False)
+        result = self.journal.set_enabled(
+            binding_id, expected_revision, False, request_id=request_id
+        )
         return {"id": result["id"], "revision": result["revision"], "enabled": False}
 
 
@@ -230,7 +261,7 @@ class WatchExecutor:
         ):
             raise Unavailable("source selection unverified")
 
-    def create_binding(self, baseline_id, watch_id, selection):
+    def create_binding(self, baseline_id, watch_id, selection, *, request_id=None):
         principal, revision, budget, store = self._start()
         selection = self._selection(selection)
         context = self._context(store, principal, baseline_id, watch_id, budget)
@@ -254,7 +285,8 @@ class WatchExecutor:
                 "principal": principal,
                 "selection": selection,
                 "providerContractRevision": revision,
-            }
+            },
+            request_id=request_id,
         )
 
     def _binding(self, binding_id, principal, provider_revision):
@@ -265,11 +297,13 @@ class WatchExecutor:
             raise Unavailable("provider revision changed")
         return binding
 
-    def set_enabled(self, binding_id, expected_revision, enabled):
+    def set_enabled(self, binding_id, expected_revision, enabled, *, request_id=None):
         if enabled is False:
             if self.stopper is None:
                 raise Forbidden("disable management unavailable")
-            return self.stopper.set_enabled(binding_id, expected_revision, False)
+            return self.stopper.set_enabled(
+                binding_id, expected_revision, False, request_id=request_id
+            )
         principal, revision, budget, store = self._start()
         binding = self._binding(binding_id, principal, revision)
         context = self._context(
@@ -301,7 +335,9 @@ class WatchExecutor:
         ):
             raise Conflict("baseline changed")
         self._current(principal, budget)
-        return self.journal.set_enabled(binding_id, expected_revision, enabled)
+        return self.journal.set_enabled(
+            binding_id, expected_revision, enabled, request_id=request_id
+        )
 
     def execute(self, binding_id, window, request_id):
         principal, revision, budget, store = self._start()

@@ -156,3 +156,13 @@ indexes, live writers, schema upgrades/downgrades, cross-build compatibility,
 Cloud/SHC, real source authorization, source capture, job reconciliation and
 production recovery. See [delivery evidence](FEATURE_DELIVERY.md) and the
 [qualification record](FEATURE_QUALIFICATION.json) for performed tests and limits.
+
+## Watch management journal schema 2
+
+The baseline operator workflow upgrades `watch_runs.sqlite` from schema 1 to 2
+transactionally to retain exact management request receipts. Existing binding
+and unresolved run identities are preserved. This is not an installed recovery
+qualification: preserve both baseline databases and use a validated compatible
+writer for rollback; older writers reject schema 2. Never remove unresolved
+runs or receipts to recover quota. See
+[operator provisioning and reconciliation](BASELINE_SOURCE_PROVIDER.md).
