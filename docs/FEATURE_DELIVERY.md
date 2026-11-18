@@ -18,7 +18,7 @@ not authorize collector/schedule activation or infrastructure changes.
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
 | Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified. A later disable-only HTTP stop command now manages an existing owned binding; it does not provision or enable one.                                                                             |
-| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, Web proxy, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; rendered-client and source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and backup/restore remain unavailable or unqualified. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -1157,3 +1157,72 @@ private reports are under `local-notes-run-4/outputs/` in the external task
 workspace. No native capture, real-source, Web/CSRF, operational restore
 or production-readiness qualification is implied by the checks above. Source
 capture remains disabled by default; the six-feature request remains incomplete.
+
+
+## Installed Splunk Web notes, CSRF and case ACLs
+
+A dedicated disposable Mac Docker lab now passes the cases workflow through
+**real Splunk Web login cookies and its `/splunkd/__raw` proxy**. The final
+frozen-source scenario passes anonymous/incorrect-password denial; two verified
+restricted Web identities; private list/read/JSON-export isolation; idempotent
+create retry and immutable note revision; sharing/read/member append/export;
+revocation blocking read/export/old retry/new writes while the member remains
+logged in with unchanged role/capability; owner export/deletion; and stale-session
+rejection after logout. A cloned session is first proven valid before that final
+logout check. This is native Web HTTP behavior, not rendered-browser interaction
+or a qualification of the bundled JavaScript download/handoff flow.
+
+Twelve negative CSRF requests cover missing, invalid and other-session tokens
+on create, entry writes, share and DELETE. Each native rejection must identify
+CSRF, and subsequent reads prove no case/membership change; valid actions then
+succeed. Splunk Web returned 401 for these denials. The first harness expected
+403 and stopped before valid case creation; its failed/uncertain receipt remains
+separate. The corrected assertion accepts 401/403 only with the CSRF error and
+unchanged-state proof. No CSRF flag, route pattern, capability, source grant or
+TLS check was weakened.
+
+`ADM_LAB_WEB_TLS=1` opts a new lab into task-bound Web HTTPS without changing
+legacy lab defaults. Management, HEC and Web separately passed task-CA/hostname
+verification and wrong-CA/wrong-hostname rejection before and after installation.
+The private key remains in the protected host runtime and owned container until
+purge; no global trust store or browser TLS exception is used. The HTTP client
+follows no redirects and ignores proxy environment variables. A mode-0600 private
+journal checkpoints exact synthetic case bodies and idempotency keys before
+sending and retains response status/hashes or uncertainty. Login bodies, cookies
+and CSRF values are excluded; raw journals remain outside Git.
+
+The exact installed archive is 0.9.5, build 1794957921, 1,409,564 bytes,
+SHA-256 `6b7e33ac54c745d7f06593108165c69d71130f8e02f9b2cb5b169950a0c9a57b`.
+It is the retained PR29 CI artifact, distinct from the earlier local 0.9.5 test
+archive and the frozen permanent Enterprise 0.9.4 installation. This increment
+changes test tooling and records, not packaged application runtime code, so it
+does not bump the app version. Newly rebuilt/CI archives remain separate artifacts.
+
+The final scenario passed in 27.431 seconds; the whole lifecycle took 193.91
+seconds. All five exercise/guard source hashes were checked before and after the
+run. The journal has 22 mutation requests, all with responses, including the 12
+CSRF refusals. Effective fixture permissions were exactly `adm_investigate`, with
+no imported roles or source-index grants/defaults/filter. A postcheck confirmed
+both users and their role absent and persistence flags restored before purge.
+The exact container/image, labels, mounts, ports, configured limits, TLS results,
+source/driver hashes and cleanup are retained in qualification evidence. Container,
+network, volumes, credentials, TLS files and ports were independently confirmed
+absent/free after purge. A bounded port-release retry stays under the same lock;
+the earlier immediate-bind uncertainty was preserved rather than overwritten.
+
+Limits remain 4 CPUs, 8 GiB RAM/memory-plus-swap, 1,024 processes, rotated logs,
+a 10 GiB cooperative named-volume budget and a 45-minute lifecycle allowance.
+The largest final volume sample was 2,547,752,960 bytes. Three unrelated collector
+containers kept running; these elapsed observations are not performance isolation,
+a filesystem quota or native Linux resource qualification. Native resource
+qualification remains deferred as requested. No permanent Enterprise, Cloud,
+shared-HF, AWS, collector, watch or schedule operation occurred. Capture stayed
+disabled throughout; source-backed reads/exports/revocation, endpoint supervision,
+restore and production readiness remain unqualified.
+
+Local checks pass: 35 focused Web/lab checks, full Python discovery (1,333 tests),
+Ruff check/format (242 files), build/package and release archive/security/bundle
+gates. Independent review added destructive-method CSRF coverage, stronger
+revocation/logout proofs and the cleanup/key-residence clarifications. Final independent review found no actionable issues. Repository CI results are attached to the corresponding PR and main commit;
+those jobs do not replace the explicitly opted-in installed Web scenario. Private receipts are under `attempt-3/outputs/` in the external
+`atlas-cases-web-validation` task directory.

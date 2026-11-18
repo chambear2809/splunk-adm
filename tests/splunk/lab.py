@@ -42,6 +42,7 @@ SECRETS = Path(
 )
 MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
 HEC = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_HEC_PORT', '8088'))}"
+WEB = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_WEB_PORT', '8000'))}"
 IMAGE = "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4"
 APP = "splunk_adm"
 MAX_BATCH_BYTES = 5 * 1024 * 1024
@@ -301,7 +302,16 @@ def urlopen(req: urllib.request.Request, timeout: float = 120):
         or target.password is not None
         or target.fragment
         or port
-        not in {urllib.parse.urlsplit(MGMT).port, urllib.parse.urlsplit(HEC).port}
+        not in {
+            urllib.parse.urlsplit(MGMT).port,
+            urllib.parse.urlsplit(HEC).port,
+            *(
+                [urllib.parse.urlsplit(WEB).port]
+                if task_identity() is not None
+                and os.environ.get("ADM_LAB_WEB_TLS") == "1"
+                else []
+            ),
+        }
     ):
         raise LabError("lab requests require an exact loopback HTTPS target")
     verify_target()
@@ -386,6 +396,11 @@ def stage_tls():
             f"[http]\nenableSSL = 1\nserverCert = {prefix}server.pem\nsslPassword =\n"
         ).encode(),
     }
+    if os.environ.get("ADM_LAB_WEB_TLS") == "1":
+        files["etc/system/local/web.conf"] = (
+            "[settings]\nenableSplunkWebSSL = true\n"
+            f"privKeyPath = {prefix}server.pem\nserverCert = {prefix}server.pem\n"
+        ).encode()
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as output:
         parents = sorted(

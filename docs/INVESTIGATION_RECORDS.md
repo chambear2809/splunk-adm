@@ -62,6 +62,36 @@ the exercised notes/membership path, not Web/CSRF, protected-source access, curr
 supervised capture, whole-endpoint bounds or restore. See the latest delivery and
 qualification records for the exact frozen archive and cleanup evidence.
 
+## Installed Splunk Web HTTP test scope
+
+`tests/splunk/test_cases_web.py` exercises the real installed Web login and
+`/splunkd/__raw` case proxy with two separate cookie sessions. Its restricted
+notes fixture has exactly `adm_investigate` and no imported roles or source-index
+grants. The test covers denied anonymous/incorrect-password access, private-case
+list/read/JSON-export behavior, immutable note revisions and idempotent retry,
+sharing and member append/export, membership revocation and old retry denial,
+owner deletion, and stale-session rejection after logout. It checks that the
+revoked member still has a valid login and unchanged role/capability context.
+
+Missing, invalid and other-session CSRF tokens are tested on creation, entry
+writes, sharing and DELETE. A 401 or 403 is accepted only when the native Web
+response identifies CSRF; subsequent reads prove that the rejected request did
+not change case state. Valid operations must then succeed. Neither native CSRF
+protection nor the app's exact route allowlist is disabled for these checks.
+
+Web HTTPS is task-opted-in using the private lab CA, independently verified
+alongside management and HEC. No insecure TLS option or shared trust-store edit
+is used. Synthetic case mutation requests and their keys/status/provenance are
+checkpointed outside Git before sending; transport uncertainty remains recorded.
+Login payloads, cookies and CSRF values are excluded from that journal.
+
+This is HTTP session/proxy qualification, not rendered-browser interaction or
+qualification of the bundled JavaScript download/handoff flow. Capture remains
+disabled: these checks do not establish protected-source access or revocation,
+whole-endpoint bounds, restore, Cloud/SHC support or production readiness. Exact
+installed outcomes, artifact provenance and cleanup are recorded in the latest
+`FEATURE_DELIVERY.md` and `FEATURE_QUALIFICATION.json` entries.
+
 ## Rechecked comparison evidence
 
 After separate target qualification, an operator may set
