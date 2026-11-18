@@ -1,5 +1,13 @@
 # Investigation records and portable evidence
 
+The [bounded native real-source exercise](CASE_REAL_SOURCE_QUALIFICATION.md)
+records current supervised capture, selected reads/exports and exact retries
+across a configuration change for one historical service selection. The
+[isolated native recovery exercise](CASE_NATIVE_RECOVERY.md) separately records
+same-build synthetic library restoration and its limits. These records do not
+qualify complete collection, non-admin real-source revocation or production
+recovery; the earlier results below retain their original scope.
+
 The incident workspace provides two explicitly separate workflows. Portable
 records capture fixed graph comparisons and note revisions for download. Shared
 cases store user-authored notes, hypotheses, questions and absolute time windows

@@ -1,5 +1,14 @@
 # Current case source capture qualification
 
+This record preserves the earlier disposable attempts below. The later native
+0.9.11 results are recorded separately in
+[delivery evidence](FEATURE_DELIVERY.md#native-current-transport-capture-follow-up--2026-11-18-0911)
+and the [bounded real-source exercise](CASE_REAL_SOURCE_QUALIFICATION.md).
+The latter qualifies only its selected historical observations and current
+administrator/configuration-withholding path; it does not qualify non-admin
+real-source revocation or complete collection. Earlier failed outcomes remain
+unchanged.
+
 The current supervised source-capture path is **not yet qualified** by this
 record. `tests/splunk/case_source_capture.py` is an opt-in synthetic installed
 fixture, adapted from the earlier evidence scenario. Its existence or a local

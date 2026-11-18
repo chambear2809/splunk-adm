@@ -3439,5 +3439,281 @@
       "no verified historical audit producer or complete-source producer",
       "Cloud/SHC persistence unsupported; no production readiness claim"
     ]
+  },
+  "native_qualification_continuation_20261118": {
+    "date_utc": "2026-11-18",
+    "version": "0.9.11",
+    "build": "1795023134",
+    "frozen_installed_archive": {
+      "sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "bytes": 1459090,
+      "installed_runtime_files": 88,
+      "app_runtime_bytes_changed": false,
+      "new_archive_installed": false
+    },
+    "architecture": {
+      "coordinator": "gpt-6.1-sol/high",
+      "source_and_rotated_recovery_worker": "gpt-6.1-terra/high",
+      "interruption_worker": "gpt-6.1-terra/high",
+      "independent_reviewer": "gpt-6-astra/high, read-only task contract",
+      "effective_models_verified": "active and child turn_context records; no substitution",
+      "project_concurrency_including_root": 4,
+      "peak_concurrency_including_root": 4
+    },
+    "real_source": {
+      "status": "bounded_current_admin_capture_and_configuration_withholding_passed",
+      "first_attempt": "failed_or_uncertain; restored-setting POST changed file bytes and fingerprint; original retained",
+      "second_attempt": "passed after exact file-byte/metadata restoration; independent postcheck 11/11",
+      "selection": {
+        "service": "coreapi",
+        "environment": "lab",
+        "cluster": "k8s-01.uktme.cisco.com",
+        "namespace": "tenant-jobs",
+        "scope": "uktme-k8s-lab",
+        "windows_utc": [
+          "2026-11-16T15:55:00Z/2026-11-16T15:56:00Z",
+          "2026-11-16T15:56:00Z/2026-11-16T15:57:00Z"
+        ]
+      },
+      "paired_sources": [
+        "atlas_identity / atlas:identity:uktme / adm:pod_ip_interval:v2",
+        "otel_traces / atlas:k8s:uktme:tenant-jobs / otel:traces"
+      ],
+      "producer_authority": "uktme-atlas-identity",
+      "producer_configuration_revision": "0b0d18412ba0d8c424ca1d0abe7603612edd66a48a9501eb82d6a288208266fc",
+      "profile_configuration_sha256": "1e7d289037f437f48bc1cc48c2d6003a2b3298d63b1eeac7632e2754677e948e",
+      "canonical_observation_digest": "3f749c656afab7c0a56369437226c88e4e2cc397c9b1b49a7050685d73bf31e8",
+      "useful_graph_rows": 4,
+      "excluded_spans_by_window": [
+        87,
+        90
+      ],
+      "reproducibility": "same exact-window canonical digest in both attempts; finite ownership/span observations only",
+      "authorization": "existing admin source roles unchanged; temporary investigator-only role removed; no real-index grants",
+      "operations": [
+        "selected stored read",
+        "selected export",
+        "exact original capture retry"
+      ],
+      "phases": [
+        "visible before configuration change",
+        "withheld while disabled",
+        "visible after exact original configuration restoration"
+      ],
+      "source_job_evidence": "13 and 17 terminal bound jobs with native SIDs absent in conservative admin sequence-range supersets; no owner-wide job mutation",
+      "non_admin_real_source_revocation_qualified": false,
+      "source_completeness_qualified": false,
+      "loss_and_lateness": "unbounded/unknown collector loss; memory-backed retry queue; fixed receipt horizon excludes late data; no clock-completeness claim",
+      "postcleanup_history": "audit and ledger history plus request identities/digests remain; owned deletion clears stored protected response snapshots"
+    },
+    "isolated_recovery": {
+      "status": "passed",
+      "scope": "installed native same-build synthetic CaseStore/ComparisonSource/JobLedger library exercise; separate private paths, not endpoints or cold platform restore",
+      "receipt_sha256": "e7c142c14b727128773a9f2eb9f1ce96540613bd030a0001916382356e198f93",
+      "manifest_sha256": "12434cbb0f46fd809151ad60f30f075a8f0df9b0c7fb483d8e905382b4c2954c",
+      "checks": [
+        "complete logical tables/schema/integrity/foreign keys",
+        "notes and immutable revisions",
+        "ACL and source-redacted capture attachments",
+        "audit and exact retry identity, with retained private synthetic fixture content",
+        "three unresolved slots remain charged",
+        "occupied target preserved",
+        "corrupt backup rejected before target creation",
+        "injected second-copy failure removes owned partial target"
+      ],
+      "independent_postcheck": "8/8; live database and configuration bytes/metadata unchanged; service active, gates disabled, retained tree private",
+      "live_database_mutation": false,
+      "native_searches_dispatched": false,
+      "retained_synthetic_tree": true
+    },
+    "server_interruption": {
+      "status": "native_synthetic_precommit_and_postcommit_worker_interruption_passed",
+      "first_attempt": "failed_or_uncertain before hook installation: Splunk CLI dropped sudo launch to service uid, root guard refused; original receipt unchanged",
+      "first_attempt_recovery": "separate reviewed cleanup passed; 19 independent postchecks; source/cache original and root task absent; no case or fault dispatched",
+      "first_postcheck_reporting_correction": "runtime count summary shadowed after actual 88-hash comparisons; original report and explicit correction retained",
+      "second_attempt": "passed actual worker-only SIGKILL at pre/post durable commit; exact original operation retries and final uninjected capture passed",
+      "signal_contract": "Linux pidfd, exported libc APIs; self-open/signal-zero kernel preflight; exact independently attested parent argv; worker/parent/child UID, start-time, session/group relationship checked before worker-only SIGKILL",
+      "precommit": {
+        "receipt_count_before_kill": 0,
+        "capture_count_before_kill": 0,
+        "receipt_count_after_exact_retry": 1,
+        "capture_count_after_exact_retry": 1
+      },
+      "postcommit": {
+        "receipt_count_before_kill": 1,
+        "capture_count_before_kill": 1,
+        "receipt_count_after_exact_retry": 1,
+        "capture_count_after_exact_retry": 1,
+        "same_capture_and_receipt_digest": true
+      },
+      "source_jobs_at_each_checkpoint": "two known source jobs already terminal/deleted with native SIDs absent before worker interruption",
+      "source_access": "both phases independently exercised stored read/export/exact original retry under source-filter revocation and synthetic configuration change, with source withholding and restored access",
+      "independent_postcheck": {
+        "status": "passed",
+        "checks": 25,
+        "source_jobs_terminal_and_bound_native_sids_absent": 34,
+        "runtime_hashes_verified": 88,
+        "worker_descendant_groups_absent": true,
+        "original_config_and_startup_source_cache_bytes_metadata_restored": true,
+        "hook_task_and_temporary_api_resources_credentials_absent": true
+      },
+      "postcleanup_receipts": "three exact original write principal/key/case/digest tombstones and exact delete receipts verified; owned case deletion clears protected response snapshots, capture identity/cardinality remains in precleanup phase journal",
+      "failed_checker": "first read-only postchecker incorrectly expected capture action/projected capture_ids and protected receipt payload after deletion; failed output/code retained. Tombstone-aware repair tested against actual CaseStore create/capture/delete; fault scenario not repeated",
+      "native_journal_sha256": "9583066338c54ccb6484dcf4d4d51b496a18efefdaceefd2bf4acc18b6832cb5",
+      "failure_distinctions": "client stayed to receive unavailable responses; actual server worker killed, supervisor retired child/group. No service/host restart, unknown native job creation/deletion or cleanup crash injected"
+    },
+    "local_checks": {
+      "python_full": {
+        "python": "3.13.14",
+        "tests": 1516,
+        "status": "passed",
+        "skipped": 9
+      },
+      "distributed": {
+        "tests": 126,
+        "status": "passed"
+      },
+      "upgrade_gate": {
+        "tests": 18,
+        "status": "passed",
+        "skipped": 3
+      },
+      "ruff_check": "passed all tools/tests",
+      "ruff_format_check": "passed all 275 tools/tests files",
+      "initial_full_check": "failed only because local interpreter lacked CI-pinned SignalFlow client; rerun with exact repository requirement passed",
+      "initial_focused_invocation": "one nonexistent test module name errored; correctly named suites covered by final full run",
+      "frontend_and_packaging": "deferred to normal PR CI; no frontend or application runtime edits",
+      "private_checker_regressions": "three actual CaseStore create/capture/delete tests passed; source lifecycle eight private failure/identity restoration tests passed; native scaffold safety and hook-transaction checks reviewed"
+    },
+    "remaining_unqualified": [
+      "non-admin real-source permission revocation",
+      "complete-source and historical audit producers",
+      "source-backed Web/CSRF",
+      "unknown native search-job creation/deletion recovery",
+      "service restart or host-level failure",
+      "source-backed endpoint/cold platform restore",
+      "live-writer atomic backup, baseline/watch/KV/platform/index recovery and cross-build migration",
+      "strict whole-endpoint resource bounds",
+      "Cloud/SHC persistence and production readiness"
+    ],
+    "shipped_defaults": "privileged execution, capture, persistence, watch, scheduling and notifications remain disabled",
+    "evidence_root": "{private_task_workspace}/atlas-recovery-qualification",
+    "evidence": {
+      "execution-plan.json": {
+        "sha256": "0ba178f9c2301ec419f4fbaa39c3f35ed854133428159f39be45cb9477aa91f4"
+      },
+      "catalog-output.json": {
+        "sha256": "24ef3302d5c3d2a942a3ab1c076b34109dcadeafd655622f92657778a0111b92"
+      },
+      "source_lifecycle.py": {
+        "sha256": "c2bdff3ebd419c4e7aba25de97a111b0b40f7cc12a3de5b40501b9a00ff373fe"
+      },
+      "source-installed-output.json": {
+        "sha256": "91283b359769eb147523ed064007d6b2a2eb984acbd4b3628ad9c8c52847c4ef"
+      },
+      "source-independent-postcheck.json": {
+        "sha256": "1c4c76c79ca9f279b717b63fbf043e732dddafaf1d44e650c7d6966a86e20023"
+      },
+      "source_lifecycle_attempt2.py": {
+        "sha256": "c2283c2512b62c29da1535d714ea92a5f7661195c8c1049924105218fe39ee65"
+      },
+      "source-attempt2-installed-output.json": {
+        "sha256": "411cddc6c3f6c3768fd096a96f26328b0eb9e4a9a5a615e5c19f984a6932a568"
+      },
+      "source-attempt2-independent-postcheck.json": {
+        "sha256": "620da76757d6844c1462b65f77abf4a889f266550114aa0e4b214ab72276c8dc"
+      },
+      "recovery_lifecycle.py": {
+        "sha256": "754cf25f9be5f02779e1019b7954ba5e0e911d78c6671921548c2175443f9949"
+      },
+      "recovery-installed-output.json": {
+        "sha256": "99cf8b5bb7c1d20896d7156cd3947913fac0748329be82a6cafaf6a42d3f8e31"
+      },
+      "recovery-independent-postcheck.json": {
+        "sha256": "fe9f8b7b6c4c0fcb1f6446f56e5ca88f8ef03f36022652a3d676991e3571de9a"
+      },
+      "native_interruption_runner.py": {
+        "sha256": "7cd5dc7a5fdb5f0836c67c1467194eb5a22ec0b19686b23ced264e42fe5b0257"
+      },
+      "interruption-installed-output.json": {
+        "sha256": "a5a4453ff5a44519c1e2c6e26406653feca60109b9284113803c3a3ec33330cf"
+      },
+      "interruption_recovery.py": {
+        "sha256": "18a0de072adcd8f6b018006151f0d2e165c1e122000c46a5976a32bc8a0418fe"
+      },
+      "interruption-cleanup-recovery-output.json": {
+        "sha256": "3acff1e625c6338f3060e22a5026a7194860a6b41f7867b80a619f39f71f5987"
+      },
+      "interruption-attempt1-independent-postcheck.json": {
+        "sha256": "97058ef79d7b8e3c052a743161f0e37f4c03c3d61fa7cfd966a75845800e7e94"
+      },
+      "interruption-attempt1-postcheck-report-correction.json": {
+        "sha256": "0db25e736891ea531872c132b0abca29113ce27a11687682701ed803a6c2a467"
+      },
+      "interruption_attempt2.py": {
+        "sha256": "9c9bb9ccbe71e5f76727a85c02e18102c9d3866f1c216efbc32ef80d51dbfece"
+      },
+      "worker-parent-probe-output.json": {
+        "sha256": "61511d9c03663c3e25c8caaea13fc8d43abe7d2de76c850c71df267a58b27a9b"
+      },
+      "direct-root-probe-output.json": {
+        "sha256": "99b07fdc0d2f3ea3ae9676a946065f80c5e2cb40cdb3e9eb58aa05b3b2eef9d8"
+      },
+      "interruption-attempt2-installed-output.json": {
+        "sha256": "25a2cc1bef2e03fa5e12ce5e3580be8697a1ab18dd535c12c94f1d53e9e7e5b4"
+      },
+      "interruption_attempt2_postcheck.py": {
+        "sha256": "1110fa2083607b43686cfbacc9085146d4880971c177f0374daed0320840e052"
+      },
+      "interruption_attempt2_postcheck_corrected.py": {
+        "sha256": "4506b7ee908cadfbe4ed8abf483dd9dc298e3517bde2c0eccfcf7d8782383cf7"
+      },
+      "interruption_attempt2_postcheck_tombstone.py": {
+        "sha256": "4100916aa7c55db6c0aaa6d7e2691e052f941adbb8167e0be353073de9dafddf"
+      },
+      "interruption-attempt2-tombstone-postcheck.json": {
+        "sha256": "0ddc6e7749760a3281e2f5cd7c7aad40782546c97db113a40e67457d77b817f4"
+      },
+      "interruption-attempt2-postcheck-summary.json": {
+        "sha256": "e7510daaff9265c0d7e130ae6b594798d80d2cc78377838d89eb7a400995933b"
+      },
+      "interruption-attempt2-native-operations.jsonl": {
+        "sha256": "9583066338c54ccb6484dcf4d4d51b496a18efefdaceefd2bf4acc18b6832cb5"
+      },
+      "interruption-progress-observation.json": {
+        "sha256": "10331e32a1a229370e68c5fc090df53fe306a1e87ddbc8dca28c4cd6fd1123d6"
+      },
+      "run_remote.sh": {
+        "sha256": "1f5d349343199fb2e8c17482cb88caacede6c968f648621f6331c3c8e44f74b9"
+      },
+      "python-regression.log": {
+        "sha256": "0f5f68ca435e658e5d146571c9974d62321ef95b013e0b862befc4840bafae4f"
+      },
+      "python-regression-complete.log": {
+        "sha256": "f0f735e72521729e2edbe2b329e90b636c16ded928816e0497f13599fded9a9b"
+      },
+      "distributed-regression.log": {
+        "sha256": "19315efd7e9d0c626c1c531aa9e6beb5a32e44d130a1de541d629bc9b6fa7354"
+      },
+      "upgrade-gate.log": {
+        "sha256": "d57692f0482e4ed44d030cdf96d5ad7e41d25d3276b3ed043058996453c7c829"
+      },
+      "test_interruption_postcheck.py": {
+        "sha256": "895ca04124036e5d5ba6c7bcdf3a26cb05183671d9b20b5f553ff35447fcdeaa"
+      },
+      "test_interruption_postcheck_tombstone.py": {
+        "sha256": "feff2ef8e25e2b94e82ef551bf6e74ef44da68ec1ba284c0a78c19723c625b81"
+      }
+    },
+    "independent_review": "Exact prelaunch wrappers and recovery deltas cleared; scoped installed source, interruption and recovery evidence independently cleared; final integrated repository review recorded with this change PR/private receipt",
+    "integration": "Explicit owned paths only; normal PR and CI gates. Final PR URL, CI and merge outcome retained in private integration receipt and change PR.",
+    "implementation_sources": {
+      "tools/qualify_native_interruption.py": "38922779c435c6901354eeed52ee4d16448ec951b703d719308a56fe8e3fbaa4",
+      "tools/qualify_native_real_source.py": "2f78f3b2fd585b80a1361cc103bd5cc361fa967a51237ccc80a44dbf2054e3a8",
+      "tools/qualify_native_recovery.py": "08bc3bdbd02fa644a68d415a957d810ba646a7f712e8a05bf75f179bf39423fd",
+      "tests/test_native_interruption_qualification.py": "e8a3daac882e8d1efe36fbaba1e80d730e0822523fd07a72c15e613fa7f01b39",
+      "tests/test_native_real_source_qualification.py": "4505a786f8e32a88bf0f02b86e3ff3e243d695129c66dc83984c599e74c49165",
+      "tests/test_native_recovery_qualification.py": "359b208fd87b72cc1c69ae9118d96eb2b6ccd942b7cf36c7f6a8cf386e0123c8"
+    }
   }
 }

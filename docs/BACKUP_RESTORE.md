@@ -1,5 +1,12 @@
 # Backup and restore rehearsal
 
+The current native same-build follow-up is the
+[isolated case/ledger library exercise](CASE_NATIVE_RECOVERY.md). It adds
+synthetic source-backed captures, current source redaction and partial-copy
+failure checks using the installed 0.9.11 libraries. Its passed result and
+independent unchanged-live-data checks do not extend the older cold endpoint
+restore result to source-backed endpoints or production recovery.
+
 `tools/rehearse_restore.py` retains the earlier KV/configuration restore
 rehearsal. Its earlier results do not qualify the new case, baseline or
 capture-job SQLite databases. The synthetic local check for those databases is
