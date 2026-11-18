@@ -3299,5 +3299,145 @@
         "result": "exit0; identities absent, flags disabled, private DB retained, secret state absent"
       }
     ]
+  },
+  "cases_current_transport_native_20261118": {
+    "status": "synthetic_rest_capture_checks_passed_cleanup_reconciled",
+    "source_commit": "e1ba17229907f0609e9abae3046d4feb003b018f",
+    "target": {
+      "address": "10.237.100.70",
+      "platform": "single-head Enterprise",
+      "splunk": "10.6.0.5",
+      "license_group": "Enterprise",
+      "architecture": "native x86_64",
+      "python": "3.13.11",
+      "application_version": "0.9.11",
+      "build": "1795023134"
+    },
+    "artifact": {
+      "sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "bytes": 1459090,
+      "runtime_static_files_verified": 88,
+      "runtime_changed_by_this_followup": false
+    },
+    "deployment": {
+      "upgraded_from": "0.9.4",
+      "user_authorized_lab_upgrade": true,
+      "restart": "native systemd Splunk CLI",
+      "docker_installed_or_used_on_target": false,
+      "management_tls": "new loopback-capable leaf signed by existing CA; existing CA retained; positive loopback/canonical hostname and negative CA/hostname checks passed",
+      "leaf_sha256": "e88217d3d5b0f294ccfa8a36fc7d5d92ebeb8adf4897e4fba42d8bb848f4bd56",
+      "leaf_expires_utc": "2027-02-16T18:46:01Z",
+      "management_uri": "https://127.0.0.1:8089",
+      "public_ca_file": "/opt/splunk/etc/auth/cacert.pem"
+    },
+    "installed_synthetic_rest": {
+      "checks_passed": 11,
+      "source_captures": 2,
+      "source_jobs_terminal_and_server_absent": 27,
+      "non_admin_context": "two temporary identities with exactly search and adm_investigate, no imported roles, and only four new task indexes",
+      "checks": [
+        "successful caller-specific capture and provenance digest format",
+        "two distinct captures; unselected list evidence withheld",
+        "restricted shared member retains notes while source evidence withheld",
+        "permission expansion permits selected stored read/export",
+        "source filter revocation redacts stored read/export/exact retry",
+        "index grant revocation redacts stored read/export/exact retry; restoring grant restores selected read",
+        "changed source configuration redacts stored read/exact retry",
+        "source disabled before commit returns unavailable and creates no receipt; exact original operation succeeds after restoring source",
+        "client closes without reading response after observing durable commit; exact original body/key preserves revision, capture IDs and single receipt",
+        "all owned capture ledger rows terminal with bound native jobs absent"
+      ]
+    },
+    "failure_and_cleanup": {
+      "original_primary_status": "failed_or_uncertain",
+      "original_scenario_status": "passed",
+      "cause": "Final unfiltered job inventory exceeded the response budget on a host with 101 unrelated jobs. Cleanup restored original configuration, deleted the case and HEC input, and retained owner recovery access.",
+      "repair": "Reviewed bounded exact-native-owner inventory; assert every returned owner and zero paging total before absence. Standalone cleanup only; successful functional checks were not repeated.",
+      "subsequent_cleanup_all_ten_success_flags": true,
+      "independent_readonly_postcheck": "16/16 checks passed; 27 source jobs terminal and native SIDs absent; 88 runtime/static hashes match",
+      "original_result_overwritten": false,
+      "configs_restored": "exact bytes, UID, GID, mode and mtime_ns for existing identity/investigations local files",
+      "temporary_resources": "owned case, users, roles, HEC input and indexes API-absent; generated credentials and known owned temporary files absent",
+      "persistence_and_capture": "disabled after restoration; original identity configuration restored",
+      "retained_history": "normal case deletion retains audit/retry/ledger history; no erasure claim",
+      "physical_index_erasure_verified": false
+    },
+    "native_process_units": {
+      "request_supervisor": {
+        "passed": 11,
+        "skipped": 0,
+        "source_sha256": "1a2e7b4f42884aa4019bc15042603d67af66d84f06a4edcccd7c8a22c6f3957e"
+      },
+      "transport": {
+        "passed": 12,
+        "skipped": 0,
+        "source_sha256": "cc296cb1ccf14eb318fae1413ef2f138df7c0f5b758381541b5944276b16047c"
+      },
+      "initial_attempt": "11 supervisor tests passed; transport class setup errored because the Splunk OpenSSL executable inherited PATH while fixture generation removed its loader path. Initial failed receipt retained.",
+      "test_only_fix": "Linux certificate fixtures select host OpenSSL from os.defpath; production worker environment, TLS verification and archive unchanged."
+    },
+    "local_checks": {
+      "fixture_recovery_tests": 9,
+      "mac_transport_tests": 12,
+      "local_python": "3.13.14",
+      "ruff_check": "passed",
+      "ruff_format_check": "passed"
+    },
+    "review": "Independent GPT-6 Astra adversarial launch review, separate cleanup-delta clearance, and final integrated review clear; nine evidence hashes and both native test source hashes verified",
+    "commands": [
+      "bash {private_task_workspace}/run_remote.sh run",
+      "bash {private_task_workspace}/run_remote.sh cleanup",
+      "bash {private_task_workspace}/run_postcheck.sh run",
+      "bash {private_task_workspace}/run_units.sh run",
+      "/tmp/atlas-ci-python/bin/python {private_task_workspace}/test_fixture_recovery.py",
+      "/tmp/atlas-ci-python/bin/python -m unittest discover -s tests -p test_cases_transport.py"
+    ],
+    "evidence_root": "{private_task_workspace}/atlas-native-source-capture",
+    "evidence": {
+      "original_fixture": {
+        "file": "attempt-1-fixture/native_runner.py",
+        "sha256": "02611af9bc14937ef178de3f579e5b08ce4c9bd944075fe25455e0284c8ce444"
+      },
+      "original_plan": {
+        "file": "attempt-1-fixture/plan.json",
+        "sha256": "d0e892bc1b1fa7cfcbeeed20d830435207194b77ed19b49ff2efb618b44f187a"
+      },
+      "original_primary_result": {
+        "file": "attempt-1-output.json",
+        "sha256": "b5f8f9ec5558258acae54f95c98f07e036d10ac0622d55f7272f160551993946"
+      },
+      "cleanup_recovery": {
+        "file": "cleanup-recovery-output.json",
+        "sha256": "7e9a629b66de82cdf23bb31f50fab7773891fbc5f3550b8e898b078562036543"
+      },
+      "independent_postcheck": {
+        "file": "postcheck-output.json",
+        "sha256": "5df258d6224c095d48a16973cf165b3ad5083902607a5214c278fa8aa05bbce5"
+      },
+      "initial_native_units": {
+        "file": "native-unit-initial-output.json",
+        "sha256": "a555738e5b0ccf47e9c9025a826c9e7e86d425ea5fd44e92d8cce3bf2b650804"
+      },
+      "native_transport_units": {
+        "file": "native-transport-unit-output.json",
+        "sha256": "5145e527251edd2670527ed4e0544d1ad82fb47de3d9851c6998d5c1787fd824"
+      },
+      "recovery_fixture": {
+        "file": "native_runner.py",
+        "sha256": "136cb8d78dd42faf8243bd839f01fbb8e9fbd9b77ae25f44b02c463b6129a92d"
+      },
+      "local_fixture_recovery_tests": {
+        "file": "test_fixture_recovery.py",
+        "sha256": "2d896805c2b0f88588ef6c35165b7edebddcf3d7a4461cfc8aba01d8338feda4"
+      }
+    },
+    "qualification_limits": [
+      "synthetic management REST only; no real-source capture qualification",
+      "no current source-backed Web/CSRF qualification",
+      "precommit source unavailability and postcommit client closure do not establish server-worker interruption, injected capture commit stalls, unknown job creation recovery or cold restore",
+      "no strict whole-endpoint, CPU/memory or native amd64 resource qualification",
+      "no verified historical audit producer or complete-source producer",
+      "Cloud/SHC persistence unsupported; no production readiness claim"
+    ]
   }
 }

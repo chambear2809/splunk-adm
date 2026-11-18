@@ -18,7 +18,7 @@ not authorize collector/schedule activation or infrastructure changes.
 | Incident timeline and explanations          | `Investigate` compares baseline, incident and recovery windows, ranks deterministic investigation leads by observed contrasts, and separates support, counterevidence, missing evidence and the next read-only check.                                                                                                                                                          | Local comparison rules and historical scenarios; see the current bounded [source observations](FEATURE_SOURCE_OBSERVATIONS.md).                                                                                                                   | Observed source samples now support bounded native-parser and traffic-evidence replay; they do not qualify rendered incident comparisons, audit-event coverage, retention, causation or exact change time.                                                                                                                                                                                                                                                                           |
 | Maintenance and failover                    | The optional Impact workflow can capture a before state and compare an after state; assessment separates exposure, readiness, health, capacity, failure domains and substitutability.                                                                | Local conservative model and capture workflow; unknown or incomplete evidence fails closed.                                                                                                                                                       | No qualified live Impact, measured peak-capacity or alternate-readiness feed; do not use the assessment to authorize failover.                                                                                                                                                                                                                                                                                |
 | Dependency baselines and drift              | Dedicated authenticated storage, version/history review and manual passive-watch evaluation are connected in the incident Connections section. Watch observations and status now show readable dependency identities, distinct windows and explicit pagination limits. Source-backed capture remains unavailable without a trusted complete provider.                        | Local domain and frontend coverage; the top-N map is ineligible as a complete baseline.                                                                                                                                                           | The HTTP host ships disabled/unqualified and has no production source provider. Collector loss, sampling and lateness closure are unproven; The installed disabled/source-unavailable host contract passes; positive source-backed capture/version/watch, Web/CSRF and backup/restore remain unqualified. A disabled explicit-window action and durable run journal now have local synthetic tests; automatic scheduling, provider-backed execution, installed action/session ACLs and administrator provisioning remain unavailable or unqualified. A later disable-only HTTP stop command now manages an existing owned binding; it does not provision or enable one.                                                                             |
-| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; the 0.9.8 rendered Cases notes workflow also passed. Source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. The new supervised capture transport has not passed positive installed qualification: this Mac’s Rosetta runtime cannot enforce the unchanged helper address-space contract. Native Linux/amd64 end-to-end capture qualification, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and production restore remain unavailable or unqualified. The separate same-build cold notes/ledger recovery rehearsal passes locally. Cloud/SHC are unsupported; browser retry state is memory-only. |
+| Investigation records and evidence packages | Private shared cases support immutable superseding note/hypothesis/question revisions, source-authorized links from entries to saved comparison captures, per-capture read/export, readable handoffs and explicit JSON evidence packages. Source access is revalidated for each current reader and old retry response. | Domain/API/native/host tests and rendered browser workflows pass. The earlier SDK-based direct REST capture path passed on Enterprise 10.6.0.5 using two non-admin investigators with identical index grants and different search filters, including a second capture. Later local Web HTTP checks pass notes, native CSRF and case ACLs; the 0.9.8 rendered Cases notes workflow also passed. Source-backed Web workflows remain unqualified. | Persistence and capture mode ship disabled. Raw comparison windows are limited to five minutes each; source retention/configuration changes can withhold evidence while notes remain usable. Native 0.9.11 synthetic management-REST capture and source-filter/index revocation checks passed with separately reconciled cleanup; Mac Rosetta helper execution remains unsupported. Native resource qualification, capture commit-stall/worker recovery, protected-capture Web and rendered-client behavior, real-source collection, whole-endpoint bounds, arbitrary file uploads, cleanup scheduling and production restore remain unavailable or unqualified. The separate same-build cold notes/ledger recovery rehearsal passes locally. Cloud/SHC are unsupported; browser retry state is memory-only. |
 | Business-service ownership                  | Admin Setup validates versioned claims and separate technical bindings. Catalog, Map, incident and Impact/maintenance entrypoints show imported ownership with explicit native identity references, temporal limits, provenance and conflicts.       | Strict import/binding/mapper tests and synthetic browser checks validate exact tuples, unknown/stale contexts, conflict retention and explicit native-reference exports.                                                                          | Browser-local assertions are not shared, source-authorized or verified business feeds. Native provenance is available only from matching qualified raw reads; legacy/summary-only catalog/maps and IP/name-only Impact evidence remain unresolved. No qualified ownership/criticality vendor adapter.                                                                                                         |
 | NAT, proxy, and load-balancer journeys      | Inspector Flows and Proxy evidence render separate FTD, Envoy and selected-client Hubble evidence with gaps and explicit exports.                                                                                                                    | Local model and browser coverage; current bounded Cloud observations are recorded separately.                                                                                                                                                     | A bounded sanitized observed Hubble sample now passes native normalization and existing evidence rendering; it is not a connected journey capture or installed candidate qualification. Observer-scope mapping lacks verified historical validity, so live trace fails closed. FTD real emission, V2 NAT projection, Hubble SNAT/XFF and deployed Envoy logging remain unqualified. Per-source cards do not establish an end-to-end route.                                                                                           |
 
@@ -1539,3 +1539,65 @@ persistence, watch, schedule and notification defaults stay disabled.
 Final independent review found no remaining actionable blocker in the integrated
 code or retained evidence. Subsequent repository CI and merge outcomes are
 recorded with the corresponding pull request and main commit.
+
+## Native current-transport capture follow-up — 2026-11-18 (0.9.11)
+
+The authorized Enterprise lab at `10.237.100.70` now runs the same frozen
+0.9.11/build `1795023134` archive recorded above, upgraded from 0.9.4. All 88
+packaged runtime/static hashes match. A management leaf signed by the existing
+CA now covers loopback and existing management names; the CA was retained.
+Strict positive and wrong-CA/wrong-hostname checks passed, followed by native
+helper preflight and an authenticated loopback request. The new leaf expires
+2027-02-16 18:46:01 UTC. No Docker was installed or used on this target.
+
+A separately reviewed native fixture exercised two temporary non-admin callers
+with exactly `search` and `adm_investigate`, four new synthetic indexes, and a
+new HEC input. It preserved the active original identity configuration and
+restored it afterward. Eleven functional checks passed: two captures and
+provenance digests; selected versus unselected projections; restricted-member
+notes access; source-filter and index-grant expansion/revocation; stored reads,
+exports and exact retries under current authorization; and redaction after a
+source-configuration change. A source-disabled precommit attempt wrote no
+receipt and succeeded after restoration using the same operation. For a second
+capture the client closed without reading its response after a read-only
+SQLite observation established durable commit; retrying the original body and
+key retained one receipt, the same revision and capture identities.
+
+The original run remains **failed_or_uncertain**, with a separately passed
+functional scenario. Its final unfiltered search-job inventory exceeded the
+response budget on a host with 101 unrelated jobs. Cleanup restored original
+configuration, deleted its case and HEC input, and preserved temporary owner
+credentials/users/roles/indexes for reconciliation. A reviewed bounded inventory
+by exact native owner repaired cleanup without repeating successful functional
+checks. Subsequent standalone cleanup passed all ten required success flags;
+an independent read-only postcheck passed 16/16 checks, verified all 27 capture
+ledger jobs terminal and their native SIDs absent, and rechecked all 88 runtime
+hashes. The original failed receipt was retained unchanged. Source evidence
+came only from task indexes; unrelated jobs were preserved.
+
+The case, test users/roles, HEC input and indexes are API-absent; generated
+credentials and known owned temporary files are absent. Both app-local config
+files match their original bytes, UID/GID, mode and nanosecond modification
+time. Persistence and capture are disabled, and the original identity profile
+is restored. Audit/retry/ledger history is retained. API absence does not prove
+physical index-data erasure.
+
+Native embedded Python 3.13.11 passed all 11 request-supervisor tests and all
+12 transport tests with no skips. An initial transport fixture setup failed:
+Splunk prepended its OpenSSL executable to PATH, while fixture code removed the
+vendor library path, pairing that executable with incompatible system libraries.
+The test-only repair selects host OpenSSL from the Linux default system path;
+production transport settings and application bytes are unchanged. The repaired
+transport suite also passed 12/12 on Mac Python 3.13.14; nine fixture recovery
+regressions and focused Ruff checks passed. Exact source/evidence hashes,
+commands, original failures and review are retained in
+`cases_current_transport_native_20261118` in `FEATURE_QUALIFICATION.json`.
+
+This establishes installed synthetic management-REST capture and the exercised
+source-authorization/retry paths through the current supervised transport.
+It does not establish real-source behavior, source-backed Web/CSRF, server-worker
+interruption or injected capture commit stalls, unknown job-creation recovery,
+cold restore, strict whole-endpoint/resource bounds, Cloud/SHC support, or
+production readiness. Verified historical audit and complete-source producers
+remain missing. Shipped privileged execution, capture, persistence, watch,
+schedule and notification defaults remain disabled.
