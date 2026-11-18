@@ -1601,3 +1601,94 @@ cold restore, strict whole-endpoint/resource bounds, Cloud/SHC support, or
 production readiness. Verified historical audit and complete-source producers
 remain missing. Shipped privileged execution, capture, persistence, watch,
 schedule and notification defaults remain disabled.
+
+## Native source, worker interruption and library recovery — 2026-11-18 (0.9.11)
+
+This continuation reuses the frozen 0.9.11/build `1795023134` archive, SHA-256
+`0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e`.
+No application runtime bytes changed or new archive was installed. Effective
+session records confirmed Sol/high coordination, two Terra/high worker slots
+(one rotated into recovery), and independent read-only Astra/high review, with
+four threads including the coordinator. The original checkout and dirty peer
+worktrees were preserved; work used a new branch from PR #35's merged commit.
+
+The [real-source exercise](CASE_REAL_SOURCE_QUALIFICATION.md) captured the
+configured `atlas_identity`/`otel_traces` pair for `coreapi`, `tenant-jobs`,
+`lab`, on `k8s-01.uktme.cisco.com`, in adjacent one-minute windows beginning
+2026-11-16 15:55 UTC. Existing administrator source authority was supplemented
+only with a temporary investigator capability; no real-index grant was added.
+Selected reads, exports and the exact original capture retry were visible,
+withheld while the source profile was disabled, and visible after exact original
+file restoration with the original fingerprint. Four useful graph rows and the
+same canonical observation digest were retained in both attempts. The producer
+identity/scope/configuration revision agrees with the independent catalog.
+Warnings preserve 87 and 90 excluded spans in the respective windows; these
+finite ownership/span observations establish neither network traffic/ACI paths
+nor source completeness. Collector loss/lateness remains unknown, and the
+fixed receipt horizons exclude later arrivals.
+
+The first source attempt remains `failed_or_uncertain`: restoring a setting
+through the configuration API rewrote file bytes and correctly caused source
+withholding. Its cleanup and independent 11-check postcheck passed. The separate
+reviewed second attempt restored exact bytes/UID/GID/mode/mtime before its final
+phase and passed, followed by another 11-check postcheck. The 13/17 terminal,
+bound, absent SIDs are conservative administrator sequence-range supersets;
+no administrator-owner-wide deletion occurred. Original source roles, both
+configuration files and disabled gates were restored, the temporary role and
+exact task cases were removed, and audit/retry/ledger history was retained.
+Owned case deletion clears protected response snapshots while preserving
+request identities and digests as tombstones.
+Non-admin real-source permission revocation remains unqualified.
+
+The [worker-interruption fixture](CASE_NATIVE_INTERRUPTION.md) uses a task-only
+startup extension outside the application archive, exact original operation
+journals and authenticated synthetic sources. A failed first attempt stopped
+at the root check before hook installation: the Splunk CLI dropped the elevated
+interpreter to the service account. A separately reviewed recovery reconciled
+its exact temporary resources; 19 independent checks confirmed cleanup and
+original platform/configuration state. Its failed primary receipt is unchanged.
+The second attempt uses the independently verified direct embedded interpreter
+and Linux libc pidfd functions, since the embedded Python exposes neither
+Python pidfd API. Its installed primary passed actual worker-only interruption
+immediately before and after durable commit, followed by the exact retries,
+source permission/configuration changes, process/job retirement, exact startup
+source/cache restoration and a successful uninjected capture. The independent
+postcheck passed 25 checks, verified all 34 source jobs terminal with bound
+native SIDs absent, and rechecked all 88 runtime hashes. Both original worker
+groups and descendants were absent. The three exact original write tombstones
+and exact owned delete receipts matched; capture identity/cardinality comes
+from the precleanup phase journal because deletion clears response snapshots.
+The initial read-only checker incorrectly expected projected response fields
+and a retained payload after deletion; its failed run and the separately tested
+tombstone-aware repair are retained without repeating the fault scenario.
+Final integrated review is recorded with the qualification evidence and PR.
+A worker kill is separate from the earlier client disconnect; this exercise did
+not restart the service or host or create an unknown native search job.
+
+The [isolated recovery exercise](CASE_NATIVE_RECOVERY.md) passed using the
+installed native x86_64 `CaseStore`, `ComparisonSource` and `JobLedger` with
+synthetic source callbacks in a new private directory. It verified complete
+logical case/ledger content, immutable revisions, ACLs, capture attachment
+linkage, audit/retry identity, source-redacted projections, unresolved charged
+slots, occupied/corrupt target refusal and cleanup of an injected second-copy
+failure. All eight independent postchecks passed, including unchanged live
+case/ledger and configuration bytes and metadata. This advances same-build
+synthetic library recovery; it does not qualify source-backed endpoint or cold
+platform restore, live-writer atomicity, native unknown-job reconciliation,
+baseline/watch/KV/platform/index recovery or cross-build migration.
+
+Local checks passed 1,516 Python tests (9 skipped), 126 distributed tests and
+18 upgrade-gate checks (3 skipped); full Python lint/format checks passed. The
+initial broad run lacked the CI-pinned optional SignalFlow client; a new private
+environment with the repository's exact requirement passed. Normal PR CI covers
+frontend/packaging; no local frontend suite is claimed for this tool/test/docs
+change. Exact wrappers, failed attempts, independent evidence, remediation and
+remaining limits are recorded under
+`native_qualification_continuation_20261118` in `FEATURE_QUALIFICATION.json`.
+
+Shipped privileged execution, capture, persistence, watch, scheduling and
+notification defaults stay disabled. Source-backed Web/CSRF, complete-source
+and historical audit producers, service/host failure recovery, strict endpoint
+resource bounds and production readiness remain unqualified. Cloud/SHC
+persistence remains unsupported. This record does not revise any earlier failed
+primary outcome or turn cleanup into a successful functional result.
