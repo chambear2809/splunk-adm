@@ -1,4 +1,265 @@
 {
+  "cases_web_http_20261117": {
+    "date_local": "2026-11-17",
+    "base_main": "df3d53fccaf1bef978858e1b3aae89ab6be1fe60",
+    "status": "local_installed_web_http_notes_passed",
+    "customer_outcome": "Cases operate through real Splunk Web cookie login and raw proxy with native CSRF and case-membership ACL enforcement.",
+    "application_runtime_changed": false,
+    "application_version": "0.9.5",
+    "version_bump_required": false,
+    "installed_archive": {
+      "sha256": "6b7e33ac54c745d7f06593108165c69d71130f8e02f9b2cb5b169950a0c9a57b",
+      "bytes": 1409564,
+      "build": 1794957921,
+      "origin": "PR29 offline-qualification artifact from run44198918801, source merge3130301953fe62281f17d337c626796d6e3d23ad, tree7145161494aa36570041f6dcf7937dad319165e0",
+      "not_the_frozen_enterprise_094_archive": true,
+      "new_local_build_deployed": false
+    },
+    "implemented_test_support": [
+      "Opt-in ADM_LAB_WEB_TLS=1 stages fixed task Web HTTPS without changing legacy labs or native CSRF defaults",
+      "Exact task/port/TLS/ownership guards apply to Web transport",
+      "Cookie-authenticated Web HTTP client rejects redirects/proxy environment and verifies task CA/hostname",
+      "Private durable synthetic-case mutation journal preserves exact bodies/keys and uncertain outcomes without login bodies/cookies/CSRF values",
+      "Dedicated Web suite skips non-Web discovery; explicit Web task identity remains mandatory"
+    ],
+    "installed_container_evidence": {
+      "suite": "ADM_LAB=1 ADM_LAB_WEB_TLS=1 python -m unittest discover -s tests/splunk -p test_cases_web.py -v",
+      "unittest_scenarios": 1,
+      "passed": 1,
+      "skipped": 0,
+      "suite_seconds": 27.431,
+      "lifecycle_seconds": 193.91,
+      "flows": [
+        "Anonymous API access denied",
+        "Incorrect password denied; both real Web login contexts match exact restricted identities",
+        "Private list/read/JSON export isolated",
+        "Idempotent create retry and immutable superseding note revision",
+        "Shared read/append/JSON export works",
+        "Revoked member remains logged in with same exact role/capability while case read/export/old retry/new writes are denied",
+        "Owner JSON export and DELETE work",
+        "Cloned old session works before logout and is denied after logout"
+      ],
+      "csrf": {
+        "rejections": 12,
+        "statuses": [
+          401
+        ],
+        "surfaces": [
+          "POST create",
+          "POST entries",
+          "POST share",
+          "DELETE case"
+        ],
+        "token_cases": [
+          "missing",
+          "invalid",
+          "other session"
+        ],
+        "native_error_identifies_csrf": true,
+        "unchanged_case_or_membership_proved_after_each": true,
+        "valid_actions_succeed": true,
+        "native_csrf_or_proxy_bypass_enabled": false
+      },
+      "mutation_journal": {
+        "requests": 22,
+        "states": [
+          "response_received"
+        ],
+        "sha256": "1fcbe4625446b90533d95150ff8fba46c9d499e41d06ff950c143e9eab5f658c",
+        "scope": "Synthetic case requests only; raw journal outside Git"
+      },
+      "permissions": "Two temporary non-admin principals, exactly adm_investigate, no imported roles/index grants/defaults/filter; effective management and Web contexts verified",
+      "fixture_postcheck": {
+        "users_absent": true,
+        "role_absent": true,
+        "persistence_restored": true,
+        "requests_with_responses": 22,
+        "journal_sha256": "1fcbe4625446b90533d95150ff8fba46c9d499e41d06ff950c143e9eab5f658c"
+      },
+      "container": {
+        "id": "210f44041f3832bf65dc3c8b33213c2dc7acc7c63f9b38ccf9e40958a676ef32",
+        "image": "sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "configured_image": "splunk/splunk@sha256:9280f9ce267b212e5596aa1832cdfd3f9be886c378da35ebc87499323ee447a4",
+        "labels": {
+          "org.splunk-adm.lab": "adm-cases-web-20261117",
+          "org.splunk-adm.task": "cases-web-20261117"
+        },
+        "limits": {
+          "NanoCpus": 4000000000,
+          "Memory": 8589934592,
+          "MemorySwap": 8589934592,
+          "PidsLimit": 1024,
+          "LogConfig": {
+            "Type": "json-file",
+            "Config": {
+              "max-file": "2",
+              "max-size": "10m"
+            }
+          }
+        },
+        "ports": {
+          "8000/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "28900"
+            }
+          ],
+          "8088/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "28988"
+            }
+          ],
+          "8089/tcp": [
+            {
+              "HostIp": "127.0.0.1",
+              "HostPort": "28989"
+            }
+          ]
+        },
+        "mounts": [
+          {
+            "Name": "adm-cases-web-20261117-etc",
+            "Destination": "/opt/splunk/etc",
+            "Type": "volume"
+          },
+          {
+            "Name": "adm-cases-web-20261117-var",
+            "Destination": "/opt/splunk/var",
+            "Type": "volume"
+          }
+        ]
+      },
+      "engine": {
+        "Name": "docker-desktop",
+        "Architecture": "aarch64",
+        "OSType": "linux",
+        "NCPU": 12,
+        "MemTotal": 15527374848,
+        "ServerVersion": "29.9.3"
+      },
+      "tls_before_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "web": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      },
+      "tls_after_install": {
+        "management": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "hec": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        },
+        "web": {
+          "verified": true,
+          "wrong_ca_rejected": true,
+          "wrong_hostname_rejected": true
+        }
+      },
+      "cleanup": {
+        "container_absent": true,
+        "network_absent": true,
+        "volume_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_released": true
+      },
+      "independent_cleanup_postcheck": {
+        "exact_container_absent": true,
+        "network_absent": true,
+        "volumes_absent": true,
+        "credentials_absent": true,
+        "tls_absent": true,
+        "ports_free": true
+      },
+      "disk_samples_bytes": [
+        2509172736,
+        2415509504,
+        2547752960
+      ],
+      "disk_budget_bytes": 10737418240,
+      "disk_budget_enforcement": "named-volume cooperative phase checks only; excludes cached image, writable layer, logs; not filesystem quota",
+      "lifetime_seconds": 2700,
+      "other_host_activity": "Three pre-existing collector containers remained running on the shared Docker engine; no isolation/performance qualification."
+    },
+    "synthetic_unit_evidence": {
+      "focused_web_and_lab_tests": 35,
+      "focused_result": "passed",
+      "full_python_discovery": {
+        "tests": 1333,
+        "result": "passed",
+        "seconds": 103.987,
+        "runtime": "CPython3.13.14 macOSARM64; CI uses Python3.13"
+      },
+      "ruff_check": "passed",
+      "ruff_format_check": "passed;242files",
+      "npm_run_package": "passed; rebuilt archive is not the installed frozen test artifact",
+      "archive_release_integrity_security_bundle_gate": "passed; tools/check_release.py --dist dist"
+    },
+    "test_source_sha256": {
+      "tests/splunk/lab.py": "f81b74aa579f9f6aafbf9f5d5b66e4873ce35dd08828ec38de42e1b465618ffa",
+      "tests/splunk/web_session.py": "a2056175569548d510d1cc29ae8cac320fe6fe9d47476748e7ec9f6f6e94eb22",
+      "tests/splunk/test_cases_web.py": "e22529d4166311352d1ccbc5c14f1d07fdadcfc1d23f3ce63d1b8eb91d1c686f",
+      "tests/splunk/test_cases_endpoint.py": "a72a1114b6faee93a376c351aa5a5b09be7d3be3e93d7536dc9313fffb715e0e",
+      "tools/lab_lock.py": "845a237d7df69663c8d74e6488028cda847754ad5dc1ddfe16691e6ecb257b07"
+    },
+    "private_driver_sha256": "75f9b32597178c03b4998405ae616e5e10e108d5985871ba2ae0408c219b3558",
+    "review": {
+      "worker": "Exposed Luna role (GPT-5.6 Luna/medium); lab.py and lab-client tests only",
+      "reviewer": "Exposed GPT-6.1 Sol/high, independent read-only",
+      "coordinator_model": "not independently exposed; no inference from repo defaults",
+      "findings_resolved": [
+        "Add DELETE plus create/entry/share CSRF negative proofs",
+        "Accept native401/403 only with CSRF-identifying response and unchanged-state proof",
+        "Retain lock through bounded port-release retry",
+        "Explicit proof that revocation does not log member out",
+        "Validate cloned session before logout denial",
+        "Correct documentation of private-key residence on host and container"
+      ],
+      "status": "complete; no actionable findings"
+    },
+    "attempts": [
+      {
+        "path": "outputs/",
+        "result": "Native CSRF rejection was401, harness expected403; stopped before valid case creation. All Docker resources/TLS/credentials removed; immediate port bind inconclusive, independent named-lock postcheck proved ports free. Original failed/uncertain receipt retained."
+      },
+      {
+        "path": "attempt-2/outputs/",
+        "result": "Core scenario passed and all cleanup checks passed; final attempt added explicit post-revocation current-context proof and source freezing."
+      },
+      {
+        "path": "attempt-3/outputs/",
+        "result": "Final frozen-source scenario and fixture/resource cleanup passed"
+      }
+    ],
+    "permanent_enterprise_cloud_hf_aws_changed": false,
+    "global_host_or_browser_trust_changed": false,
+    "native_platform_resource_qualification": "deferred by user; ARM64-host emulation is not nativeAMD64 qualification",
+    "real_source_qualification": false,
+    "protected_source_web_authorization_qualified": false,
+    "rendered_browser_or_bundled_javascript_download_qualified": false,
+    "whole_endpoint_deadline_or_restore_qualified": false,
+    "production_readiness": false,
+    "remaining": "Protected capture/source authorization and revocation, rendered installed client, endpoint supervision, supported restore and real-source six-feature contracts remain open. Capture/watch/schedules stay disabled.",
+    "rollout_rollback": "Only disposable lab configuration changed; no application runtime version change, permanent install, source collection or schedule activation. Purge task-owned lab; retain private receipts without erasing prior uncertainty.",
+    "evidence": "Private external atlas-cases-web-validation directory; final receipts under attempt-3/outputs/, synthetic request journal under attempt-3/runtime/; credentials/TLS removed."
+  },
   "local_request_admission_095": {
     "date_local": "2026-11-17",
     "base_remote_main": "7a783929898d5a8857f76b884c6fd680cd611037",

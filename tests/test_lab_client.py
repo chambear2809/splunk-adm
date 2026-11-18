@@ -293,6 +293,45 @@ class LabClientTests(unittest.TestCase):
             verify.assert_not_called()
             build.assert_not_called()
 
+    def test_web_url_requires_task_identity_and_exact_configured_port(self):
+        with (
+            mock.patch.object(lab, "verify_target") as verify,
+            mock.patch.object(lab.urllib.request, "build_opener") as build,
+            mock.patch.dict(
+                os.environ,
+                {**ENV, "ADM_LAB_TASK": "", "ADM_LAB_NAME": ""},
+                clear=False,
+            ),
+        ):
+            req = urllib.request.Request(lab.WEB + "/en-US/")
+            with self.assertRaises(lab.LabError):
+                lab.urlopen(req)
+            verify.assert_not_called()
+            build.assert_not_called()
+        with (
+            mock.patch.object(lab, "verify_target"),
+            mock.patch.object(lab.urllib.request, "build_opener"),
+            mock.patch.object(lab, "task_identity", return_value=(TASK, NAME)),
+            mock.patch.dict(os.environ, {"ADM_LAB_WEB_TLS": ""}, clear=False),
+        ):
+            with self.assertRaises(lab.LabError):
+                lab.urlopen(urllib.request.Request(lab.WEB + "/en-US/"))
+            with self.assertRaises(lab.LabError):
+                lab.urlopen(urllib.request.Request("https://127.0.0.1:8001/en-US/"))
+        opener = mock.Mock()
+        opener.open.return_value = object()
+        with (
+            mock.patch.object(lab, "WEB", "https://127.0.0.1:18100"),
+            mock.patch.object(lab, "verify_target") as verify,
+            mock.patch.object(lab.urllib.request, "build_opener", return_value=opener),
+            mock.patch.object(lab, "_context", return_value=object()),
+            mock.patch.object(lab, "task_identity", return_value=(TASK, NAME)),
+            mock.patch.dict(os.environ, {"ADM_LAB_WEB_TLS": "1"}, clear=False),
+        ):
+            req = urllib.request.Request("https://127.0.0.1:18100/en-US/")
+            self.assertIs(lab.urlopen(req), opener.open.return_value)
+            verify.assert_called_once_with()
+
     def test_valid_url_uses_no_proxy_no_redirect_and_verified_context(self):
         context = object()
         opener = mock.Mock()
@@ -383,6 +422,7 @@ class LabClientTests(unittest.TestCase):
             fake_bundle = b"private-test-bundle"
             with (
                 mock.patch.object(lab, "SECRETS", secrets_path),
+                mock.patch.dict(os.environ, {"ADM_LAB_WEB_TLS": "1"}, clear=False),
                 mock.patch.object(lab, "verify_target") as verify,
                 mock.patch.object(lab, "task_identity", return_value=(TASK, NAME)),
                 mock.patch.object(lab.lab_tls, "read_container", return_value=ID),
@@ -413,6 +453,7 @@ class LabClientTests(unittest.TestCase):
                             "etc/auth/adm_lab_tls/ca.pem",
                             "etc/system/local/server.conf",
                             "etc/system/local/inputs.conf",
+                            "etc/system/local/web.conf",
                         },
                     )
                     self.assertTrue(
@@ -433,6 +474,19 @@ class LabClientTests(unittest.TestCase):
                             files["etc/system/local/server.conf"]
                         ).read(),
                     )
+                    web_conf = archive.extractfile(
+                        files["etc/system/local/web.conf"]
+                    ).read()
+                    self.assertIn(b"enableSplunkWebSSL = true", web_conf)
+                    self.assertIn(
+                        b"privKeyPath = /opt/splunk/etc/auth/adm_lab_tls/server.pem",
+                        web_conf,
+                    )
+                    self.assertIn(
+                        b"serverCert = /opt/splunk/etc/auth/adm_lab_tls/server.pem",
+                        web_conf,
+                    )
+                    self.assertNotRegex(web_conf, rb"(?i)(csrf|hosts|globaltrust)")
                 execute.reset_mock()
                 lab.subprocess.check_output.return_value = json.dumps(
                     [{"State": {"Status": "running"}}]

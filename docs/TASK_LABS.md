@@ -121,3 +121,46 @@ Check management and HEC handshakes separately before and after installation,
 and demonstrate rejection of a wrong CA and hostname. Record those outcomes,
 the exact package hash and the installed tests. Direct management endpoint tests
 do not qualify Splunk Web proxy or CSRF behavior. Keep those checks separate.
+
+
+## Opt-in Splunk Web HTTPS qualification
+
+Set `ADM_LAB_WEB_TLS=1` consistently before creation and for installation,
+clients, tests and cleanup. New containers then receive fixed Web HTTPS settings
+using the same task-bound leaf/CA as management and HEC, following the
+[Splunk 10.6 Web TLS settings](https://help.splunk.com/en/splunk-enterprise/administer/admin-manual/10.6/configuration-file-reference/10.6.0-configuration-file-reference/web.conf).
+The private bundle stays in the protected host runtime and the owned container
+until their verified cleanup; no operating-system/browser trust store, CSRF bypass
+or remote host is changed. Default legacy labs keep their existing Web behavior.
+The shared client admits the exact Web HTTPS loopback port only with this opt-in
+and task identity. Redirect following and proxy-environment use remain refused.
+
+The notes Web HTTP suite additionally requires exactly:
+
+```text
+ADM_LAB_TASK=cases-web-20261117
+ADM_LAB_NAME=adm-cases-web-20261117
+ADM_LAB=1
+ADM_LAB_WEB_TLS=1
+ADM_LAB_WEB_RECEIPT=/absolute/private/runtime/web-journal.json
+```
+
+Choose available loopback ports and set all the ordinary variables above; the
+current exercise uses Web 28900, management 28989 and HEC 28988. Run only the
+selected `test_cases_web.py` suite in that lab. Other labs skip this explicitly
+opted-in suite; an opted-in lab with the wrong identity is refused before fixture
+mutation. The journal destination must be new, private and outside every checkout.
+It retains exact synthetic case request bodies/idempotency keys, response status,
+case IDs/revisions and hashes, but never login bodies, session cookies or CSRF
+values. A transport failure preserves unresolved request state. Raw journals
+stay outside Git.
+
+This suite authenticates through the installed Web login and uses its cookie
+sessions and `/splunkd/__raw` proxy. It exercises native HTTP behavior rather
+than rendered-browser interaction. Keep protected-source capture, real-source
+access, browser rendering/accessibility, whole-endpoint deadlines and native
+resource qualification separate. Check management, HEC and Web TLS independently
+before/after installation, including wrong-CA and wrong-hostname rejection.
+Retain exact package/container provenance, fixture cleanup and final resource
+absence under the same lock. A short bounded port-release wait after container
+removal can account for teardown, without treating an occupied port as free.
