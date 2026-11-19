@@ -4781,5 +4781,118 @@
       "not_rerun_locally": "Frontend/browser/distributed/upgrade suites not rerun for this standalone read-only tool/test/docs change; normalCI required."
     },
     "application_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e"
+  },
+  "source_contract_recovery_admission_20261119": {
+    "date": "2026-11-19",
+    "status": "offline_source_contract_native_linux_admission_primitives_only",
+    "source_completeness_qualified": false,
+    "operational_restore_qualified": false,
+    "application_runtime_changed": false,
+    "models": {
+      "coordinator": "gpt-6.1-sol/high",
+      "source_worker": "gpt-6.1-terra/high",
+      "recovery_worker": "gpt-6.1-terra/high",
+      "independent_readonly_reviewer": "gpt-6-astra/high",
+      "verification": "Effective model and effort read from each session turn_context, not inferred from role/config. Four total threads, no nested delegation; no shared settings changes."
+    },
+    "source": {
+      "implementation": "Separate policy/evidence bindings, per-family sequence/receipt/indexed acknowledgement uniqueness, settled delivery counters, clock/lateness watermark; at most eligible_for_independent_review with qualified false. Evidence digests are unauthenticated attestations.",
+      "candidate": "One explicitly selected Pod owned through ReplicaSet by kube-system/coredns in isovalent-demo, conditional on supported identity/span emitters. Exact Pod/process/config/destination/time bindings unobserved. Proposed120-second emission,600-second lateness plus measured clock bound,2000 records/family,16MiB evidence; not measured or authorized instrumentation.",
+      "projection": "Paired offline Deployment/ReplicaSet/Pod claims only; fixed owner chain and bounded hash/status projection. No live entrypoint, cluster query, effective configuration or running-process attestation. Init/ephemeral containers and nonprojected fields excluded.",
+      "external_access": "No new AWS/Kubernetes request, Duo renewal, source grant, instrumentation, collection deployment or configuration change dispatched. Existing read-only inventory authorization persists; concrete instrumentation packet still needs review and narrow authorization."
+    },
+    "native_state": {
+      "classification": "Current read-only custody/capacity/retirement observation, without repeated archive-content comparison.",
+      "aggregate_before_tests": 17014624256,
+      "aggregate_after_tests": 17014661120,
+      "budget_bytes": 17179869184,
+      "headroom_after_bytes": 165208064,
+      "new_retained_test_bytes": 36864,
+      "reservation_bytes": 1048576,
+      "postcheck_free_filesystem_bytes": 131647086592,
+      "free_floor_bytes": 12884901888,
+      "original_protected_file_records": 20,
+      "runtime_files": 88,
+      "original_baseline_exact": true,
+      "prior_task_process_samples_before_tests": [
+        442,
+        442
+      ],
+      "postcheck_process_samples": [
+        441,
+        441
+      ],
+      "new_stage_process_sample": 441,
+      "adverse_process_counters": 0,
+      "archive_content_reverified": false
+    },
+    "native_tool_tests": {
+      "status": "passed_native_tool_tests",
+      "tests_run": 10,
+      "skipped": 0,
+      "machine": "x86_64",
+      "interpreter": "/usr/bin/python3.12",
+      "classification": "Native Linux host Python tool-primitives only; not installed Splunk Python3.13, app endpoints or operational restore.",
+      "coverage": [
+        "Actual procfs mount-ID observation",
+        "Direct-parent inherited exclusive flock success and refusal after unlock",
+        "Bounded packet digest/inventory and growing-input refusal",
+        "Database/WAL/auxiliary/stale-file accounting and high water",
+        "In-memory lease order/expiry/reuse refusal"
+      ],
+      "unit_started": false,
+      "backup_performed": false,
+      "restore_performed": false,
+      "new_instance_lifetime_seconds": 0,
+      "module_sha256": "124a16db408886b317c20f80260cf1d6fc454a936957d80ce757ab8000bb36d8",
+      "test_sha256": "12f958ccd5d849d16acedb55bea9b2563ab094019d77df363ff82b365e18cddf"
+    },
+    "prior_outcomes": "All three bootstrap and five compaction primary outcomes remain failed_or_uncertain. Prior archive fidelity remains byte-custody evidence; no root cleanup, compaction retry, bootstrap or restore followed in this increment.",
+    "lifetime": {
+      "rounded_prior_seconds": [
+        28,
+        69,
+        87
+      ],
+      "rounded_total_seconds": 184,
+      "limit_seconds": 2700,
+      "reserved_stop_seconds": 15,
+      "next_whole_minute_active_limit": 41,
+      "limits": "Re-derived from retained monotonic/journal identities; no reset of cumulative allowance. No new Splunk instance started."
+    },
+    "cleanup": {
+      "new_test_stage": "Exact protected input stage intentionally retained and charged, device2050/inode7223222; scratch empty and separate read-only postcheck found no cwd-matching fixture worker/descendant. Cwd proof applies to pinned fixture code which does not change cwd.",
+      "retained": "All prior raw trees, sealed archive/manifest, partials, failed primaries and recovery access preserved. No deletion packet cleared or executed. Conditional narrow cleanup authorization persists but requires exact reviewed custody/retirement plan.",
+      "original": "Original service stayed active under unchanged identity and selected protected footprint. Natural ingestion/log changes outside selected footprint remain excluded.",
+      "lock": "Program finally closes existing lock; separate completed postcheck reacquired it. Native child process group retired under unreaped-leader ownership; no source jobs dispatched."
+    },
+    "review": "Independent Astra prelaunch clearance for exact state packet, native tool-test packet version2 and separate postcheck; actual code/assertions/digests/evidence reviewed. Version1 native-test packet was not executed: fresh lock-held admission and TERM/HUP cleanup gaps fixed in immutable version2. Source overflow/cross-kind uniqueness and recovery mount/growing-input findings fixed and independently verified.",
+    "local_validation": {
+      "environment": "Existing qualifiedCPython3.13.14 environment, signalflow-client-python1.3.9, Ruff0.13.2; uv pip check passed; normal022 test umask and private evidence logs.",
+      "full_python": "1650 tests ran successfully,12 skipped; includes source reconciliation and recovery admission.",
+      "additional_projection": "Five projection CLI tests passed after full-suite discovery; not included in1650.",
+      "distributed": "126 tests passed",
+      "upgrade": "18 tests ran successfully,3 skipped",
+      "ruff": "Check and format passed297files",
+      "not_run": "Local frontend/browser and gated installed Splunk integration suite not run for standalone tools/test/docs changes; normal PR CI required."
+    },
+    "evidence_sha256": {
+      "recovery-admission-state-attempt1-output.json": "cea44c5572aa12faf529b6a8e8fa0bba95382d4908002c76ab60ab635dea4cbc",
+      "admission-native-tests-attempt2-output.json": "244793c8dbaf5626ac66815d1c790bf317bcd6dd7d919bfaae3cf07cd46e69ee",
+      "admission-native-postcheck-attempt1-output.json": "2b20e532d61c011812e046492f0566a081c98e5d0fc66c77200bdff9d6e22ef2"
+    },
+    "packet_manifest_sha256": {
+      "recovery-admission-state-20261119-attempt1-frozen": "73e8ff7063b018fb41eb3497df33a259b0341189256453c1c73187754e2855bd",
+      "admission-native-tests-20261119-attempt2-frozen": "f42a1ac7695bb244070a4013e3be16485a5bf76da90ad6547b3d4f2d6592faa8",
+      "admission-native-postcheck-20261119-attempt1-frozen": "2b3faf5905aacb9376e673d23eaa6e7313505f43aaba1865f25807310d54d9fa"
+    },
+    "not_qualified": [
+      "Authoritative producer population/receipts, runtime configuration, sampling/loss/lateness or indexed delivery completeness",
+      "Complete native launcher/observer/controller/lease/witness integration or root admission enforcement",
+      "Fresh isolated native target, supported quiescent all15KV/fourSQLite/index/config/authentication/TLS/GUID/license backup and restore",
+      "Actual application endpoint case/revision/ACL/redaction/export/audit/exactretry/quota acceptance after full restore",
+      "Host failure, production readiness or Cloud/SHC persistence"
+    ],
+    "application_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e"
   }
 }

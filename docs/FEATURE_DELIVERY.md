@@ -1900,3 +1900,32 @@ retained-generation and replacement-cleanup fixes; native source launch remains
 held by missing root capacity admission and full fixture integration. See
 [the recovery boundary](PLATFORM_RECOVERY_QUALIFICATION.md) and
 `native_recovery_custody_followup_20261119` for exact evidence and exclusions.
+
+
+### Prospective contract and recovery admission — November 19 continuation
+
+The new [source contract](SOURCE_PRODUCER_CONTRACT.md) separates independently
+selected policy from supplied producer/index attestations and refuses gaps,
+duplicate receipts/acknowledgements, loss, unsettled delivery and insufficient
+watermarks. The bounded paired Pod projection is offline only. Neither tool
+qualifies source completeness or running configuration; no new cluster request
+or instrumentation was dispatched.
+
+The [recovery admission primitives](PLATFORM_RECOVERY_ADMISSION.md) passed ten
+native Linux host-Python tests with no skips, including actual mount IDs and
+inherited-lock success/refusal. A separate read-only postcheck verified empty
+test scratch, retained exact input bytes, retired fixture processes, unchanged
+original protected footprint and all 88 runtime hashes. Aggregate retained task
+state is now 17,014,661,120 bytes; no Splunk instance started and no backup,
+restore or raw cleanup occurred. All prior failed primaries remain failed.
+
+Local checks passed 1,650 Python tests with twelve skipped, then five additional
+projection tests; distributed checks passed 126, upgrade ran eighteen with three
+skipped, and Ruff passed 297 files. Native tests used host Python 3.12 and are
+separate from installed Splunk Python 3.13 and application qualification. Normal
+PR CI remains required. Effective runtime records verified Sol/high coordination,
+two Terra/high workers and independent Astra/high review within four threads.
+No application runtime bytes or shipped disabled defaults changed. Full
+operational restore, source completeness, production and Cloud/SHC persistence
+remain unqualified. See `source_contract_recovery_admission_20261119` in
+`FEATURE_QUALIFICATION.json`.

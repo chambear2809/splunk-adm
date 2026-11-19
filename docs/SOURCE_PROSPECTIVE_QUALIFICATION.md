@@ -78,3 +78,21 @@ indexed acknowledgements and lateness watermarks for explicitly chosen windows.
 Those records and their provenance must be reviewed separately before any
 completeness claim. A new durable queue or producer instrumentation is a future
 change requiring its own design, operational review and authorization.
+
+
+## Offline prospective contract — November 19 continuation
+
+The [producer contract](SOURCE_PRODUCER_CONTRACT.md) now defines a bounded
+prospective candidate and an offline reconciler for exact policy/epoch/window
+bindings, continuous sequences, receipts, indexed-record acknowledgements,
+delivery counters and clock/lateness watermarks. A separate paired offline Pod
+projection checks a fixed controller chain and hash/status metadata. Both tools
+check supplied claims; neither reads Kubernetes nor authenticates evidence.
+No new running configuration, producer population or delivery was observed.
+
+The CoreDNS candidate still needs exact Pod/process/configuration/destination
+bindings and supported emitters. The proposed window and lateness allowance
+are not measured bounds. Existing read-only inventory authorization persists;
+new instrumentation, queues or collection changes require a concrete reviewed
+proposal and narrow authorization. No historical source identity is transferred.
+See `source_contract_recovery_admission_20261119` in `FEATURE_QUALIFICATION.json`.
