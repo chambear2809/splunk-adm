@@ -249,3 +249,32 @@ Recorded atime/ctime/birth-time provenance is not a restoration guarantee.
 Full platform, host-failure, production and Cloud/SHC recovery remain unqualified.
 Exact failed, reconciliation and fresh-comparison digests are recorded under
 `native_recovery_custody_followup_20261119` in `FEATURE_QUALIFICATION.json`.
+
+
+## Recovery admission primitives — November 19 continuation
+
+The [admission building blocks](PLATFORM_RECOVERY_ADMISSION.md) now provide
+exact packet digest/inventory checks, bounded growing-file refusal, conservative
+DB/WAL/auxiliary accounting, Linux mount IDs and direct-parent inherited-lock
+checks. They remain separate from the prepared native launcher; durable fencing,
+all-executable dependency binding and integrated resource enforcement remain
+unqualified. Ten primitive tests passed on native Linux x86_64 under host Python
+3.12, including the actual procfs and lock lifecycle cases. This does not qualify
+Splunk's installed Python, application recovery or supported backup execution.
+
+A separately cleared read-only state observation and independent postcheck
+verified prior-task retirement, original-service/protected state and 88 runtime
+hashes. The new 36,864-byte test-input stage remains charged; its scratch is empty
+and the separate stage process scan was clean. Current aggregate storage is
+17,014,661,120 of 17,179,869,184 bytes, leaving 165,208,064 bytes. The original
+sealed archive's content comparison was not repeated. All earlier raw state,
+partials, failed results and private recovery access remain retained.
+
+No deletion packet, new bootstrap, isolated Splunk instance, backup or restore
+was dispatched. Prior failed primary outcomes are unchanged; no instance time
+was added to the conservatively rounded 184 seconds already used. A fresh native
+restore remains blocked on integrated custody/capacity admission and the full
+supported quiescent backup/restore and application-acceptance packet. No budget
+increase or isolation relaxation is assumed. Exact evidence and exclusions are
+recorded under `source_contract_recovery_admission_20261119` in
+`FEATURE_QUALIFICATION.json`.
