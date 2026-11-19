@@ -278,3 +278,42 @@ supported quiescent backup/restore and application-acceptance packet. No budget
 increase or isolation relaxation is assumed. Exact evidence and exclusions are
 recorded under `source_contract_recovery_admission_20261119` in
 `FEATURE_QUALIFICATION.json`.
+
+
+## Verified retirement of one archived failed tree — November 19 continuation
+
+A new [exact-tree retirement primitive](PLATFORM_CUSTODY_RETIREMENT.md) passed
+three unpatched native Linux synthetic cases: positive retirement, inode
+replacement refusal, and retained partial state after guard interruption. An
+integrated no-removal preflight then failed during independent verification at
+`live_guard_unavailable`; its precise historical predicate remains unproved.
+Separate reconciliation verified the full 38,587-entry source and archive hash,
+empty removal journal, preserved access records, retired registered workers and
+unchanged original protected baseline. The failed primary remains failed.
+
+Independent review found guard diagnostic and locking defects. Revised frozen
+helpers now retain typed failure/sample evidence and avoid waiting behind slow
+observers for freshness checks. The guard contract explicitly separates
+continuous original/unit/custody/lock/capacity/freshness checks from full clean
+process proofs at phase boundaries. Protected task ancestry and trusted host
+administrator serialization remain assumptions; no hostile-root or continuous
+global-process exclusion guarantee is claimed. A new no-removal preflight and
+independent postcheck passed before a distinct cleanup packet was cleared.
+
+That one-shot action retired only the stopped, archived second-attempt
+`canonical-state` tree. The separate post-action observer verified source
+absence, complete 77,175-record journal for 38,587 entries, original archive and
+manifest, four recovery-access records, registered process retirement and
+unchanged original protected records/runtime hashes. Native task usage is now
+12,686,090,240 bytes after a measured net reduction of 4,328,734,720 bytes.
+The archive, manifest-only partial, prior failed outputs, other failed tree and
+input copies remain retained. No new isolated instance or instance lifetime was
+added; the conservatively rounded prior total remains 184 seconds.
+
+This cleanup does not establish an extracted filesystem, consistent SQLite/KV
+state, supported native backup or full operational restore. The 4,493,778,944-byte
+task headroom is still smaller than the distinct 5,502,337,024-byte failed tree,
+before backup/observer/restore overhead. Additional exact input inventory and
+separately reviewed capacity work are needed before fresh-instance admission.
+No budget increase, isolation relaxation or production operation is assumed.
+See `native_custody_retirement_20261119` for exact receipts and exclusions.

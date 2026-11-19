@@ -96,3 +96,24 @@ are not measured bounds. Existing read-only inventory authorization persists;
 new instrumentation, queues or collection changes require a concrete reviewed
 proposal and narrow authorization. No historical source identity is transferred.
 See `source_contract_recovery_admission_20261119` in `FEATURE_QUALIFICATION.json`.
+
+
+## Paired CoreDNS metadata — November 19 continuation
+
+A separately reviewed bounded read-only probe now observed the pinned
+`kube-system/coredns` Deployment and paired selector-restricted ReplicaSet/Pod
+metadata. Namespace/Deployment identities remained pinned to the selected EKS
+cluster; caller, provider, executable, context and CA checks passed. Two Pods
+reported Running/ready and zero restart counters with the same image-ID hash.
+Three ReplicaSets and one Deployment-template volume ConfigMap reference were
+projected. No ConfigMap values, Secrets, logs or workload execution were requested.
+The existing session was still valid for this observation; no new login ran.
+
+The [provenance boundary and next contract](SOURCE_RUNTIME_PROVENANCE.md)
+records the exact conditional Pod selection, missing runtime/process and signal
+semantics, and future proposal requirements. A separate bounded local process
+snapshot found zero exact candidate/context/token-command matches. These checks
+are not continuous exclusion or effective running-configuration attestation. No
+producer sequence, sampling/loss bound, indexed acknowledgement or lateness
+watermark was observed. Source completeness remains unqualified; no historical
+cluster identity or scope was transferred.

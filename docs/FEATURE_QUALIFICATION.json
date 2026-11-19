@@ -4894,5 +4894,199 @@
       "Host failure, production readiness or Cloud/SHC persistence"
     ],
     "application_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e"
+  },
+  "prospective_runtime_provenance_20261119": {
+    "date": "2026-11-19",
+    "status": "bounded_readonly_kubernetes_metadata_observed_completeness_unqualified",
+    "source_completeness_qualified": false,
+    "application_runtime_changed": false,
+    "implementation": "tools/qualify_prospective_runtime.py assembles only a fixed CoreDNS namespace/Deployment/selector ReplicaSet/Pod allowlist through an injected bounded caller; paired projections omit raw values. The reviewed private launcher freezes all five helper/projector/assembly sources and pins caller provider, context, endpoint/CA and executable/interpreter identities.",
+    "observed": {
+      "cluster_context": "isovalent-demo in us-east-1",
+      "namespace": "kube-system",
+      "deployment": "coredns",
+      "pods": 2,
+      "replicasets": 3,
+      "paired_projections_equal": true,
+      "reported_pod_phase": "Running",
+      "reported_containers_ready": true,
+      "reported_container_restarts": 0,
+      "distinct_reported_image_id_hashes": 1,
+      "selected_replicaset_owner_hashes": 1,
+      "deployment_configmap_volume_references": 1,
+      "raw_configmap_values_read": false,
+      "secrets_logs_exec_requested": false,
+      "running_process_or_effective_configuration_attested": false
+    },
+    "identity": "Predeclared namespace/Deployment UIDs remained equal to selected-cluster pins; exact caller/context/executable/provider/configuration/CA checks passed around the reads. Existing Duo session was valid for this request; no SSO renewal or login was performed. Identity hashes are metadata evidence, not producer receipt or provenance signatures.",
+    "next_candidate": {
+      "pod_uid_sha256": "2ddca949ee83f1673528b32445ea26fa33b5fbef9694ec7df45e80f2ae74f8ca",
+      "classification": "Conditional prospective selection only, to be revalidated; no emitter capability, production denominator or receipt history established.",
+      "contract_document": "SOURCE_RUNTIME_PROVENANCE.md",
+      "mutations": "No instrumentation, queue, grant, collector/runtime/configuration or cluster-resource change. Future such changes need a complete reviewed deployment-specific proposal and narrow authorization; existing read-only inventory authorization persists."
+    },
+    "postcheck": {
+      "candidate_process_matches": 0,
+      "cluster_token_process_matches": 0,
+      "kubectl_context_process_matches": 0,
+      "scope": "Current bounded local rendered-command snapshot only; normal helper path retired its owned process groups. No arbitrary escaped/uninterruptible-descendant or historical absence guarantee."
+    },
+    "validation": {
+      "public_assembly_tests": 4,
+      "private_launcher_tests": 5,
+      "private_postcheck_tests": 5,
+      "scope": "Public assembly uses real subprocess-produced fixture responses; private lifecycle tests cover actual timeout/TERM/HUP and separately sessioned cooperative descendants. These are implementation/lifecycle tests, separate from live metadata."
+    },
+    "evidence_sha256": {
+      "prospective-runtime-attempt1-output.json": "ea913eb46302253128de3d92e05d445900ad3b0bc44d024bb5cc2958c03e1d43",
+      "prospective-runtime-postcheck-attempt2-output.json": "452e33d67418a1604749eb323adfd94a8419feae53af40c6c8927ce431308e62"
+    },
+    "packet_manifest_sha256": {
+      "prospective-runtime-20261119-attempt1-frozen": "5c4615f55905ecf4024c4d01d8e439e1a563916c108973186cacaa8e3dcf0644",
+      "prospective-runtime-postcheck-20261119-attempt2-frozen": "ab909f0bd418c53d2aa8ec9835c6fc37c543975d56fe61882906faa51158fe95"
+    },
+    "not_qualified": [
+      "Actual producer process, effective running configuration and route to collector/index",
+      "Authoritative complete identity/span population, immutable sequence receipts or record-to-index reconciliation",
+      "Loss/sampling/retry/drop bounds, measured clock error, lateness horizon or indexed watermark",
+      "Historical k8s-01 population recovery or identity transfer; production completeness"
+    ]
+  },
+  "native_custody_retirement_20261119": {
+    "date": "2026-11-19",
+    "status": "exact_stopped_task_tree_retired_after_verified_archive_custody_operational_restore_unqualified",
+    "operational_restore_qualified": false,
+    "application_runtime_changed": false,
+    "public_primitive": {
+      "path": "tools/platform_custody_retirement.py",
+      "sha256": "f7f5d6f8a292d89e61b1e29ac61ee4a19208fa006b9f8239c7e173445504d943",
+      "contract": "No CLI. Fresh corrected comparison, separately pinned source/source-parent/archive/journal identities and digests, independent prerequisite, bounded private durable per-entry journal, descriptor-relative no-follow/mount/xattr checks and explicit final-root transition callback. Trusted lifecycle/exclusive namespace and all executable bytes remain caller duties. Failures retain remainder/custody and prohibit automatic retry."
+    },
+    "native_synthetic": {
+      "cases_passed": 3,
+      "cases": [
+        "Unpatched native positive retirement including symlink and long-directory PAX",
+        "Controlled inode replacement refused with replacement and original retained",
+        "Guard interruption refused with remaining tree/archive/journal retained"
+      ],
+      "platform": "Linux x86_64 host Python3.12; actual O_NOATIME/O_PATH/procfs mount/xattr checks; not installed Splunk Python3.13 or application restore",
+      "retained_stage_bytes": 143360
+    },
+    "failed_preflight": {
+      "identity": "preflight attempt2, nonce a8e80ac04b6f4b889c9c297b3da8d89e",
+      "primary_status": "failed_or_uncertain",
+      "phase": "independent_verification",
+      "recorded_failure": "live_guard_unavailable",
+      "historical_predicate": "Unproved: the original guard collapsed the underlying predicate and did not retain its samples. Later code review found logging/locking defects but did not establish the historical cause.",
+      "separate_reconciliation": "Full38587-entry source still matched retained manifest; archive digest and four private-access records intact; removal journal empty; registered controller/verifier retired; original20/runtime88 exact. No removal or automatic retry occurred."
+    },
+    "revised_guard": "A new immutable version uses sticky bounded typed gate/phase/timing/exception and actual ScanUncertain counters, independent short publication/failure locks, timed transition locks and freshness refusal while an observer blocks. Actual helper8 tests cover three incomplete samples, unsafe/read/anchor/deadline, recovery, locks and slow observer. Continuous original/unit/custody/lock/mount/capacity/freshness checks are separate from complete clean phase-boundary process proofs. Protected root ancestry/task retirement and trusted host-administrator serialization are explicit assumptions between proofs; no ongoing global process exclusion or hostile-root guarantee. A cooperative1800s SIGALRM is not a hard OS scheduling guarantee.",
+    "successful_preflight": {
+      "identity": "preflight attempt4, nonce68ca0c6dc8474ab5b43cd79df1bf6b0c",
+      "result": "validated_retirement_preflight_no_removal",
+      "independent_postcheck": "passed with all source38587 entries still present, empty retirement journal, archive/manifest/access custody and registered process retirement. App update interrupted the chat after launch; postcheck completed with its retained primary and was reconciled before any mutation."
+    },
+    "actual_retirement": {
+      "identity": "retirement attempt1, nonceea473b916421445ca37a545d9597070a",
+      "status": "retired_exact_archived_task_tree",
+      "source_device": 2050,
+      "source_inode": 6588437,
+      "source_parent_inode": 7088895,
+      "source_uid": 61397,
+      "source_name": "canonical-state",
+      "scope": "Only stopped second-attempt partial-bootstrap raw tree; other failed state and input copies preserved. This was a new separately reviewed action, not completion or replacement of any failed compaction primary.",
+      "journal_inode": 7225206,
+      "journal_bytes": 11836308,
+      "journal_rows": 77175,
+      "manifest_entries": 38587,
+      "journal_sha256": "8c2b727474b5fcc6627b23f7b6f30a17b83bc83977ff87c06a8cf94e5f356a3e",
+      "source_root_absent": true,
+      "registered_controller_and_verifier_retired": true,
+      "private_access_records_verified": 4,
+      "private_access_records_sha256": "d5496effcab509b8fdcb37ad531b459fab91fcc6b4da053a3002b380100c908a",
+      "original_protected_records": 20,
+      "runtime_files_verified": 88,
+      "original_baseline_exact": true,
+      "postcheck_process_counts": [
+        438,
+        437
+      ],
+      "adverse_postcheck_counters": 0
+    },
+    "retained_archive": {
+      "bytes": 1783356815,
+      "sha256": "73459275aae5120eefd308de282fad97ae6c1ca8f2af387b7592b2fcca7920fc",
+      "manifest_bytes": 14073909,
+      "manifest_entries": 38587,
+      "manifest_sha256": "46c1e469945d7ae6cb623877a80103db0b2f1496850e8e4b0e87840b3246cd37",
+      "custody": "Sealed root-protected archive directory remains exactly manifest.json/state.tar.gz. Separate control/journal/independent receipt remain in new protected task state. Archive content and private access were verified by separate post-action reader; no extraction or restoration occurred. Atime/ctime/birth-time provenance is not a restoration guarantee."
+    },
+    "capacity": {
+      "aggregate_before": 17014824960,
+      "aggregate_after": 12686090240,
+      "net_reduction_bytes": 4328734720,
+      "task_budget_bytes": 17179869184,
+      "remaining_task_headroom_bytes": 4493778944,
+      "controller_reservation_bytes": 68157440,
+      "classification": "Fresh complete point-in-time cooperative allocated-byte observation after source descriptors closed; no hard quota, ongoing free-space guarantee or fresh-instance admission.",
+      "distinct_unarchived_failed_tree_bytes": 5502337024,
+      "minimum_shortfall_against_that_tree": 1008558080,
+      "future_gate": "Read-only exact inventory/hash/provenance of candidate duplicate installer inputs is proposed; no additional copy retirement is qualified or authorized by equality alone. Fresh source/restore peak must include all retained archives, backup/target, observer DB/WAL/auxiliary/stale generations and margin."
+    },
+    "lifetime": {
+      "prior_rounded_seconds": [
+        28,
+        69,
+        87
+      ],
+      "prior_total_seconds": 184,
+      "new_isolated_instance_seconds": 0,
+      "limit_seconds": 2700,
+      "stop_reserve_seconds": 15,
+      "next_whole_minute_active_limit": 41
+    },
+    "cleanup_retained_uncertainty": "All3 bootstrap and5 compaction primary outcomes remain failed_or_uncertain; failed preflight2 remains failed_or_uncertain with a separate current no-removal reconciliation. Original results, partials, manifest-only archive partial, private recovery access and distinct5.50GB failed tree remain retained. No original service stop/restart, setting/grant reset, input-copy deletion, new bootstrap, native KV/Pdl/index backup, restored target or source jobs were dispatched. Permanent0755 directory hardening was untouched.",
+    "evidence_sha256": {
+      "custody-capacity-plan-attempt2-output.json": "6f06fd2a9ddc4a5cbcbb09a1df16a08af14da5bb94f33ff315eb71a77155727e",
+      "custody-retirement-native-attempt2-output.json": "a693d5370ec3bfb1d4ceb01e30042d0e4631449e92bef38b17c74bb169c3b772",
+      "custody-retirement-preflight-attempt2-output.json": "0f363b49a710d3482a6afc38f80b2da1fe755f333e7d3410dd2dff863c77af57",
+      "custody-preflight-failure-reconcile-attempt1-output.json": "05c52cbc1992f2e8b07afe5867f9d6c1d1cd3f49958941b9dc5a8b9ac00e608f",
+      "custody-retirement-preflight-attempt4-output.json": "9db6b7178b902f6de549f1ef9fd3050971177c848cd0940ea7d9f96cadd97a08",
+      "custody-retirement-preflight-postcheck-attempt3-output.json": "531514e3f7091fe525546bf1854067c232e98b848e4b48e58e4ac4513cb38f11",
+      "custody-retirement-attempt1-output.json": "403e76783b69f081ac8abffbe99a8a0e8404ec21b3fe5a6743845e241ae33377",
+      "custody-retirement-postcheck-attempt1-output.json": "0737968c62901744d6d11309f193270016468729a945376055afbcd261b0e040"
+    },
+    "executed_packet_manifests_sha256": {
+      "custody-capacity-plan-20261119-attempt2-frozen": "c2bbe00d717ad5df6ab9608f99c6f404d0e1e16688bee80702fdf3db0ad3ef48",
+      "custody-retirement-native-20261119-attempt2-frozen": "513dac1e7b318bbdb956bbe99eba8611c529acc63de45870949e30b37559f5c9",
+      "custody-retirement-preflight-20261119-attempt2-frozen": "c263ae86fbb3550d7eff9f4187e9c0dbdf41e0968393dbe000ef94a7b28b356b",
+      "custody-preflight-failure-reconcile-20261119-attempt1-frozen": "93794a8487ad3e93736f7f065811ca2a070691b45405e3ba0f81320b4859d885",
+      "custody-retirement-preflight-20261119-attempt4-frozen": "c508e792c8f33397fd0b4802c19e9b30855eb6ef299d2b149b5894fc60fb97b8",
+      "custody-retirement-preflight-postcheck-20261119-attempt3-frozen": "bc13c3028e39d39153b7f62e6f7b38b2a3959cbdd6f9967424031a1a46854fc1",
+      "custody-retirement-20261119-attempt1-frozen": "e1703a709b71d14bc6f132093f71e358ef46f3f5b5cc6dc9f315ace141b86f61",
+      "custody-retirement-postcheck-20261119-attempt1-frozen": "e61c378f00defde6ddf08f536250d899adac90e732d49546ecf5d17554730525"
+    },
+    "not_executed": "Other prepared packet revisions were not launched. Cleared progress snapshot was skipped because the primary had completed; no native progress read or completion inference was used.",
+    "review_and_models": {
+      "effective_runtime_verified": "Coordinatorgpt-6.1-sol/high, two gpt-6.1-terra/high workers and read-only gpt-6-astra/high reviewer verified in session turn_context before and after app restart; old worker local metadata uncertainty separately resolved by coordinator. Four total threads at a time, no nested delegation/shared setting changes.",
+      "authorization": "Existing user-approved bounded exact-owned task-only cleanup; distinct explicit independent prelaunch clearances and separate post-observers. Coordinator alone executed lab operations.",
+      "final_review": "Independent read-only Astra final review approved actual public code, assertions, chronological records and all20 cited retained evidence/packet hashes; no actionable findings remain. Normal PR CI required before merge."
+    },
+    "local_validation": {
+      "full_python": "1666 tests ran successfully,12 skipped in qualifiedPython3.13.14 with signalflow-client-python1.3.9/Ruff0.13.2 under022 test umask; private evidence logs.",
+      "public_targeted": "11 tests passed (assembly4 +retirement7).",
+      "private_guard": "8 actual helper tests passed with ResourceWarnings as errors, including actual typed bounded-scan wiring.",
+      "private_postcheck": "3 journal tests passed.",
+      "private_launcher_and_process": "5 source launcher and5 source postcheck tests passed; actual process timeout/TERM/HUP/owned-child reaping boundaries, not arbitrary escaped-descendant guarantees.",
+      "ruff": "Check and format passed301 publicPython files.",
+      "not_run": "Local frontend/browser/distributed/upgrade not rerun for tool/test/docs-only changes; normal PR CI required. Gated installed Splunk integration suite not executed."
+    },
+    "not_qualified": [
+      "Fresh isolated native target, source quiescence and supported version-specific all15KV/fourSQLite/index/config/identity backup and operational restore",
+      "Actual post-restore endpoint case/revision/ACL/source-redaction/export/audit/exact-request retry/quota acceptance",
+      "Source producer completeness/loss/sampling/lateness or historical identity recovery",
+      "Host failure, production recovery readiness and Cloud/SHC persistence"
+    ],
+    "application_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e"
   }
 }

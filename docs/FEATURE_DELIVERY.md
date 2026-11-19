@@ -1929,3 +1929,41 @@ No application runtime bytes or shipped disabled defaults changed. Full
 operational restore, source completeness, production and Cloud/SHC persistence
 remain unqualified. See `source_contract_recovery_admission_20261119` in
 `FEATURE_QUALIFICATION.json`.
+
+
+### Source runtime metadata and verified custody retirement — November 19 continuation
+
+The [bounded source assembly](SOURCE_RUNTIME_PROVENANCE.md) observed paired
+CoreDNS Deployment/ReplicaSet/Pod metadata on the selected EKS cluster. Two Pods
+reported Running/ready with matching image-ID hashes and zero restart counters;
+three ReplicaSets and one Deployment volume ConfigMap reference were projected.
+These are current Kubernetes declarations/status, not process attestation,
+effective configuration, producer receipts or delivery completeness. No source
+configuration, instrumentation or grants changed. A separate bounded local
+postcheck found no exact candidate/context/token-command matches.
+
+The [custody retirement primitive](PLATFORM_CUSTODY_RETIREMENT.md) passed three
+unpatched native Linux synthetic cases before any retained-state removal. One
+integrated no-removal preflight failed at a generic live guard; its exact
+historical predicate remains unproved. Separate read-only reconciliation
+verified the full source, archive, access records, original baseline and retired
+workers. Reviewed guard revisions then passed a new preflight and independent
+postcheck; the failed primary was preserved.
+
+A separate exact-owned cleanup retired only the already archived second-attempt
+partial-bootstrap tree. The independent postcheck verified all 77,175 journal
+records for 38,587 entries, exact source absence, archive/manifest and four
+recovery-access records, registered process retirement, original protected
+footprint and 88 runtime hashes. Aggregate native task usage fell from
+17,014,824,960 to 12,686,090,240 bytes: a net reduction of 4,328,734,720 bytes.
+This is byte-custody cleanup, with other failed state and inputs retained.
+Remaining 4,493,778,944 bytes of task headroom does not admit a comparable fresh
+instance or a source/restore peak. No new Splunk instance, backup or restore ran.
+
+Local qualified Python ran 1,666 tests successfully with twelve skipped; scoped
+checks and Ruff passed. Independent prelaunch review and separately retained
+post-observations are recorded under `prospective_runtime_provenance_20261119`
+and `native_custody_retirement_20261119` in `FEATURE_QUALIFICATION.json`.
+Application runtime bytes and disabled defaults are unchanged. Source
+completeness, operational restore and production readiness remain unqualified;
+Cloud/SHC persistence remains unsupported.
