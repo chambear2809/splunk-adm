@@ -79,7 +79,6 @@ def validate_count_observation(
     NativeComparisonSearch._verify_metadata(
         principal, record, job, require_complete=True
     )
-    require(not job.get("messages"), "native job messages")
     entry = job["entry"][0]
     content = entry["content"]
     require(
@@ -93,7 +92,6 @@ def validate_count_observation(
         and content.get("eventIsTruncated") in false
         and content.get("resultIsTruncated", False) in false
         and str(content.get("dropCount")) == "0"
-        and not content.get("messages")
         and str(content.get("resultCount")) == "1",
         "native count incomplete",
     )
@@ -145,20 +143,30 @@ def validate_count_observation(
         and len(str(count)) <= 20,
         "invalid count",
     )
-    messages = data.get("messages")
-    require(
-        isinstance(messages, list) and len(messages) <= 1, "unsupported count messages"
-    )
-    if messages:
-        message = messages[0]
+    message_locations = []
+    for location, messages, optional in (
+        ("job", job.get("messages"), True),
+        ("job_content", content.get("messages"), True),
+        ("results", data.get("messages"), False),
+    ):
+        if messages is None and optional:
+            continue
         require(
-            isinstance(message, dict)
-            and message.get("type") == "INFO"
-            and message.get("text") == COUNT_INFO
-            and hashlib.sha256(message["text"].encode()).hexdigest()
-            == COUNT_INFO_SHA256,
-            "unsupported count message",
+            isinstance(messages, list) and len(messages) <= 1,
+            "unsupported count messages",
         )
+        if messages:
+            message = messages[0]
+            require(
+                isinstance(message, dict)
+                and set(message) == {"type", "text"}
+                and message.get("type") == "INFO"
+                and message.get("text") == COUNT_INFO
+                and hashlib.sha256(message["text"].encode()).hexdigest()
+                == COUNT_INFO_SHA256,
+                "unsupported count message",
+            )
+            message_locations.append(location)
     retained_content = {
         key: content.get(key)
         for key in (
@@ -179,7 +187,8 @@ def validate_count_observation(
             "messages",
         )
     }
-    retained_content["resultIsTruncated"] = content.get("resultIsTruncated", False)
+    if "resultIsTruncated" not in content:
+        retained_content.pop("resultIsTruncated")
     retained_content["request"] = {
         key: content["request"].get(key)
         for key in ("id", "search", "earliest_time", "latest_time")
@@ -197,8 +206,9 @@ def validate_count_observation(
     }
     return {
         "count": int(count),
-        "message": COUNT_INFO if messages else None,
-        "message_sha256": COUNT_INFO_SHA256 if messages else None,
+        "message": COUNT_INFO if message_locations else None,
+        "message_sha256": COUNT_INFO_SHA256 if message_locations else None,
+        "message_locations": message_locations,
         "effective_start": earliest,
         "effective_end": latest,
         "expected_start": effective_start,
@@ -206,6 +216,7 @@ def validate_count_observation(
         "search_start": normalized(content.get("searchEarliestTime")),
         "search_end": normalized(content.get("searchLatestTime")),
         "native_binding_verified": True,
+        "result_truncated_present": "resultIsTruncated" in content,
         "native_job": retained_job,
     }
 

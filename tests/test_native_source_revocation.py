@@ -426,6 +426,76 @@ class CountObservationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.validate()
 
+    def test_known_info_in_each_native_location_and_replay(self):
+        info = {"type": "INFO", "text": rev.COUNT_INFO}
+        for location in ("job", "job_content", "results"):
+            with self.subTest(location=location):
+                self.data["messages"] = []
+                self.job.pop("messages", None)
+                self.job["entry"][0]["content"].pop("messages", None)
+                if location == "job":
+                    self.job["messages"] = [info]
+                elif location == "job_content":
+                    self.job["entry"][0]["content"]["messages"] = [info]
+                else:
+                    self.data["messages"] = [info]
+                result = self.validate()
+                self.assertEqual(result["message_locations"], [location])
+                replay = rev.validate_count_observation(
+                    self.data,
+                    result["native_job"],
+                    "investigator",
+                    "abc.123",
+                    self.query,
+                    self.start,
+                    self.end,
+                    task_role=True,
+                )
+                self.assertEqual(result, replay)
+
+    def test_unknown_and_malformed_message_each_location(self):
+        for location in ("job", "job_content", "results"):
+            for messages in (
+                [{"type": "WARN", "text": rev.COUNT_INFO}],
+                [{"type": "INFO", "text": "unknown"}],
+                [{"type": "INFO", "text": rev.COUNT_INFO, "other": "unexpected"}],
+                {},
+                [None],
+                [1, 2],
+            ):
+                with self.subTest(location=location, messages=messages):
+                    self.data["messages"] = []
+                    self.job.pop("messages", None)
+                    self.job["entry"][0]["content"].pop("messages", None)
+                    if location == "job":
+                        self.job["messages"] = messages
+                    elif location == "job_content":
+                        self.job["entry"][0]["content"]["messages"] = messages
+                    else:
+                        self.data["messages"] = messages
+                    with self.assertRaises(ValueError):
+                        self.validate()
+
+    def test_known_info_does_not_mask_incomplete_or_wrong_window(self):
+        self.job["entry"][0]["content"]["messages"] = [
+            {"type": "INFO", "text": rev.COUNT_INFO}
+        ]
+        content = self.job["entry"][0]["content"]
+        for key, invalid in (
+            ("isDone", False),
+            ("isFinalized", True),
+            ("eventIsTruncated", True),
+            ("dropCount", 1),
+            ("earliestTime", "1794844499"),
+            ("resultCount", 2),
+        ):
+            with self.subTest(key=key):
+                old = content[key]
+                content[key] = invalid
+                with self.assertRaises(Exception):
+                    self.validate()
+                content[key] = old
+
     def test_effective_window_mismatch_and_missing_fail(self):
         for value in ("1794844499", None):
             self.job["entry"][0]["content"]["earliestTime"] = value

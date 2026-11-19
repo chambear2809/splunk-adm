@@ -169,9 +169,30 @@ establish an additional blocker. The diagnostic's independent postcheck passed
 Its private `counter-independent-postcheck.json` has SHA-256
 `1d0bf036d609c334b2c449a2fde2e7b7349b628199f7e9ec2469f5da90be513a`.
 
-The broader count controls remain unqualified and were not run in the passing
-case-only exercise. No warning was generalized into permission to ignore other
-messages. The application's capture message policy was not changed.
+A subsequent fixture-only change applies the exact observed INFO rule consistently
+at the job, job-content and results message locations, after the native identity,
+completion, truncation and effective-window checks. Unknown or malformed messages
+still fail. This fixture change does not alter the application's native capture
+message policy.
+
+A separate installed count-only matrix passed with nine validated native jobs;
+its independent postcheck passed all 19 checks, including exact job retirement,
+proof replay and restoration of the temporary account and configuration. For the
+selected historical window, the administrator and temporary investigator each
+observed 336 identity events and 258 spans. With positive administrator
+comparators, an outside-window identity query returned 9,856 versus zero to the
+restricted investigator, and an `_internal` index query returned 2,301 versus
+zero. These are bounded controls for the exact account, queries and time ranges,
+not general proof of access isolation. The alternate span-source administrator
+count was zero, so the investigator query was not run and that control remains
+unavailable. Count controls were separate from the earlier passing case-only
+exercise and do not establish source population completeness or loss bounds.
+
+The private `count-matrix-installed-output.json` has SHA-256
+`5e711e8225709a786d4c1efee3f688e77b511435351934b52a089abbc5e64c0b`, and
+`count-matrix-independent-postcheck.json` has SHA-256
+`000e9e6ced1c596c208f92f8191e3e6a65a2e5018760ca766fb2c12e3f8f13a5`.
+No warning was generalized into permission to ignore other messages.
 
 The retained historical graph evidence included excluded-span warnings of 87
 and 90 for the two windows and no network/ACI path. Collector loss, lateness and

@@ -1779,3 +1779,47 @@ live-writer atomic backup, full operational restore and production readiness
 remain unqualified. Cloud/SHC persistence remains unsupported. Each unchanged
 live-database result applies to its own exercise interval; later authorized
 case operations do not retroactively revise that observation.
+
+## Bounded count controls and source completeness follow-up (2026-11-18)
+
+The [fixture-only count repair](CASE_NATIVE_SOURCE_REVOCATION.md) now accepts the
+single verified time-substitution INFO consistently at each observed native
+message location, after checking exact job identity, completion and effective
+bounds. Unknown or malformed messages remain failures; the application's
+capture message policy and runtime bytes are unchanged.
+
+A fresh native count matrix passed with nine exact jobs and 19 independent
+postchecks. Administrator and restricted-investigator counts matched for the
+selected identity feed (336) and span feed (258). The tested other-index and
+outside-time controls had positive administrator counts (2,301 and 9,856) and
+zero investigator counts. The alternate span-source administrator count was
+zero: its investigator query was not run and the control remains unavailable.
+Temporary account, role and secret cleanup and exact job absence were verified;
+original authority/configuration and all 88 runtime hashes matched. Earlier
+failed primaries and their separate recovery records remain unchanged.
+
+[Source completeness](SOURCE_COMPLETENESS_QUALIFICATION.md) remains unqualified.
+The new evidence assessor checks internal consistency only and never grants
+qualification. Current collector metadata could not be observed: the configured
+Kubernetes client certificate expired November 16, and strict API peer-chain
+verification separately reports certificate expiry. The configured CA is within
+its validity period; the handshake does not identify the expired peer-chain
+certificate. No TLS check was bypassed and no cluster resource was changed.
+Refreshed approved access is needed before the live audit can continue. Historical
+producer populations, continuous receipts, loss/sampling, lateness and watermarks
+are still missing; current counts cannot reconstruct them. Prospective durable
+collection and producer receipts are proposed, not installed.
+
+Local validation passed 1,583 Python tests with nine skipped and Ruff checks
+for 285 files in an isolated count/source snapshot. The first local run applied
+a restrictive evidence umask to the test process and failed six intentional
+permission-fixture assertions; that result is retained separately. The corrected
+run used the normal test umask while keeping evidence logs private.
+
+Exact count and certificate evidence, the inherited single-count scope-label
+correction, validation and remaining limits are recorded under
+`native_count_controls_followup_20261118` and
+`source_completeness_assessment_20261118` in `FEATURE_QUALIFICATION.json`.
+Separate native platform recovery work is in preparation; this increment makes
+no fresh-instance, operational restore or production-readiness claim. Shipped
+disabled defaults and unsupported Cloud/SHC persistence are unchanged.
