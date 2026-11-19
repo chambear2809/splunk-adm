@@ -4604,5 +4604,83 @@
     },
     "source_observer_limitations": "New offline observer is unqualified: normal handler deletion can precede post-hoc metadata reads, so404 cannot prove terminal state; concurrent observer, WAL/actual connection inode binding and whole-ledger generation/sequence coverage remain independent acceptance gates.",
     "independent_review_remediation": "Entry-freeze expected snapshots/archives and detach provenance passed to external callbacks so mutable aliases cannot manufacture verified restoration, retirement or custody. Four mutation regressions independently reviewed and passed. Clarified nominal polling cadence and offline artifact writes."
+  },
+  "prospective_source_inventory_20261119": {
+    "date": "2026-11-19",
+    "status": "current_declarations_observed_source_completeness_unqualified",
+    "source_completeness_qualified": false,
+    "authorization": "User selected existing isovalent-demo for read-only inventory and completed established Duo renewal. No source grants, collection changes, Secret/log reads or workload execution.",
+    "identity": "Exact selected EKS context, endpoint and CA; supported credential-provider chain and fixed executable resolution/hash checks; stable effective Kubernetes caller identity brackets each successful probe. Launcher/interpreter hashes do not attest their entire dependency trees.",
+    "failed_primaries_preserved": "Post-login namespace request exited successfully but original fixture rejected valid v1/List. Separate reviewed shape diagnostic confirmed 15 valid Namespace items; versioned v2 accepts List and NamespaceList with per-item validation. Initial failures remain failed_or_uncertain.",
+    "installed_readonly_observations": {
+      "namespace_inventory": {
+        "count": 15,
+        "caller_stable": true,
+        "endpoint_and_ca_verified": true
+      },
+      "workload_scope": [
+        "otel-splunk",
+        "kube-system"
+      ],
+      "workload_kinds": [
+        "Deployment",
+        "DaemonSet",
+        "StatefulSet"
+      ],
+      "declared_versions": {
+        "splunk_otel": "0.148.0",
+        "obi": "v0.4.1",
+        "cilium_hubble": "v1.18.8-cee.1"
+      },
+      "configuration_scope": "Exactly three referenced Splunk OTel collector/agent/cluster-receiver ConfigMaps and kube-system/cilium-config, paired reads with matching projections and stable namespace UID/resourceVersion/caller.",
+      "configmap_data_key_counts": [
+        1,
+        1,
+        1,
+        189
+      ],
+      "configuration_output": "UID/resourceVersion, key counts and value hashes only. Three OTel values unparsed by the first JSON-only probe; queue/retry/storage/sampling and telemetry structure unknown. No raw values retained.",
+      "limits": "Declarations only: no Pod digest/process/health/effective configuration attestation; no producer population, sequence receipts, loss, sampling, queue durability or lateness evidence.",
+      "structure_followup": {
+        "parser": "Separately reviewed in-memory hash-pinned pure-Python PyYAML6.0.3; bounded size/events/depth; rejects aliases, anchors, explicit tags, duplicate/nonstring keys and unsupported scalar types. No dependency installation.",
+        "identity": "All four map UIDs/resourceVersions, key counts and value hashes match the earlier JSON-only observation; stable paired reads and caller/namespace identities.",
+        "otel_pipeline_signals": {
+          "collector": [
+            "logs",
+            "metrics",
+            "traces"
+          ],
+          "agent": [
+            "logs",
+            "metrics",
+            "traces"
+          ],
+          "cluster_receiver": [
+            "logs",
+            "metrics"
+          ]
+        },
+        "literal_presence": "Recognized queue fields present in collector and cluster-receiver values; not observed in agent. Retry, storage and sampling field names not observed by this fixed projection.",
+        "limits": "Literal structure only; unrecognized component types retained as counts. Field non-observation does not establish disabled behavior, default policy, applicability or effective runtime settings; queue presence does not establish durability, binding or completeness."
+      }
+    },
+    "evidence_sha256": {
+      "prospective-post-login-inventory-output.json": "69eae0dab58b919f70545df8452653f39c843f4fb4c9d74cf08de51dd040d0bf",
+      "prospective-post-login-diagnostic-output.json": "efda64cfc0b1cc829af9bed633ef4dfe91bf03c0d21ac9d4fafd0c7a801f5f7d",
+      "prospective-namespace-shape-output.json": "3c7c6854b472184a9b9dffd25ec34e87ec3baf08a7eda92de99aa36b6bfc1cb1",
+      "prospective-inventory-v2-output.json": "f4f7c623e02591a456191edb63234259063e26eae0e12a0a1fdef7cc6aecdab3",
+      "prospective-collector-metadata-output.json": "a659d36effba5d04b394e7b6ab5693ab4da2a9ebad5d9e79ff1a98b6dde13371",
+      "prospective-configmap-structure-output.json": "8228742e8e8ee4f2df73fa2fd217704aa3ab7fedf831f2956d11c2cbcda8de62",
+      "prospective-configmap-structure-v2-output.json": "e757750c810075c1c877a2db4447837802a1f0f681a55c81a89ef1e185889acd"
+    },
+    "local_validation": "Independent read-only reviewer cleared exact probes before execution; namespace response correction4 tests, collector metadata5 tests, ConfigMap structure5 tests passed. Separately reviewed safe-parser scope correction6 tests passed.",
+    "not_qualified": [
+      "Historical replacement for inaccessible old cluster",
+      "Comparable real-source windows and exact producer populations",
+      "Delivery completeness or loss/sampling bounds",
+      "Installed real-source capture through supervised transport",
+      "Full platform restoration or production readiness"
+    ],
+    "custody": "Private external evidence retained. Public records contain sanitized scope and digests; credentials and raw configurations excluded."
   }
 }

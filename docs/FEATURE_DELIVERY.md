@@ -1853,3 +1853,27 @@ first caller-identity request failed before namespace inventory, and the cached
 AWS session was independently expired. Duo renewal awaits the user's return.
 No cluster configuration or grants changed; no new source completeness claim
 is supported. See [prospective source qualification](SOURCE_PROSPECTIVE_QUALIFICATION.md).
+
+
+### Prospective source inventory — November 19 continuation
+
+After the user completed Duo renewal, the selected EKS cluster's read-only
+namespace inventory passed with a stable caller identity and verified endpoint
+and CA. The first post-login request exposed a fixture response-shape defect;
+its failure remains retained separately from the reviewed versioned correction.
+Current workload declarations in the two selected namespaces identify Splunk
+OTel, OBI and Cilium/Hubble collectors. Four exact referenced ConfigMaps were
+read twice with stable identities and matching hash-only projections. The first
+probe leaves their unsupported value structure unknown. A separately reviewed
+bounded parser then projected OTel pipeline and literal field structure without
+retaining raw settings; map identities, revisions and value hashes matched.
+Queue fields do not prove durability, and field non-observation does not prove
+a disabled or effective policy. No configuration, collection or grants
+changed; no Secret or log reads or workload execution occurred.
+
+These are current declaration observations. Producer populations, comparable
+windows, receipts, loss/sampling bounds, lateness and effective running
+configuration remain unqualified. The new record
+`prospective_source_inventory_20261119` preserves that boundary and the exact
+failed and successful evidence digests. See
+[prospective source qualification](SOURCE_PROSPECTIVE_QUALIFICATION.md).
