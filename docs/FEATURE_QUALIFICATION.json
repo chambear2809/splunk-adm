@@ -4263,5 +4263,230 @@
       "tools/qualify_native_service_restart.py": "1a2e2f714a2267035888ef380cc7aeb4eb570c5dca8e59eb71275faac6694d98",
       "tools/qualify_native_source_revocation.py": "2c85b740551d59cc2794c63a514e25d8f7b2e9ee92bf36f2b9d35037d3161b30"
     }
+  },
+  "native_count_controls_followup_20261118": {
+    "date": "2026-11-18",
+    "status": "bounded_count_controls_passed_and_independently_cleared",
+    "implementation_scope": "Fixture/tools, tests and documentation only; application runtime bytes unchanged; same frozen0.9.11 archive reused.",
+    "architecture": {
+      "coordinator": "GPT-6.1 Sol/high",
+      "workers": "Two GPT-6.1 Terra/high workers, disjoint source and recovery ownership",
+      "reviewer": "GPT-6 Astra/high, independent read-only",
+      "concurrency": "Four threads including coordinator; effective session models reverified before reassignment",
+      "lab_execution_owner": "coordinator only"
+    },
+    "installed_target": {
+      "platform": "native Linux x86_64 standalone Splunk Enterprise10.6.0.5 with existing active Enterprise license",
+      "application": "0.9.11",
+      "build": "1795023134",
+      "archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "archive_bytes": 1459090,
+      "runtime_hashes_verified": 88,
+      "transport": "Pinned SSH and verified loopback TLS; actual native job metadata and exact administrator absence reads"
+    },
+    "fixture_change": "Exact known INFO type/text/digest accepted consistently at job, job-content and result message locations only after native identity, completion, truncation, count and effective-window checks. Extra keys and unknown/malformed messages rejected. Shipped capture policy unchanged.",
+    "single_count": {
+      "primary": "passed",
+      "count": 336,
+      "independent_checks": 19,
+      "scope": "One task identity count; no source revocation executed. Inherited original primary scope text mentions revocation and is explicitly corrected here without changing its bytes."
+    },
+    "matrix": {
+      "primary": "passed",
+      "independent_checks": 19,
+      "validated_exact_jobs_terminal_and_absent": 9,
+      "observations": {
+        "negative": {
+          "other_index": {
+            "admin_count": 2301,
+            "coverage": "observed",
+            "user_count": 0
+          },
+          "other_span_source": {
+            "admin_count": 0,
+            "coverage": "unavailable",
+            "user_check": "not_run"
+          },
+          "outside_time": {
+            "admin_count": 9856,
+            "coverage": "observed",
+            "user_count": 0
+          }
+        },
+        "selected": {
+          "identity": {
+            "admin_count": 336,
+            "user_count": 336
+          },
+          "spans": {
+            "admin_count": 258,
+            "user_count": 258
+          }
+        }
+      },
+      "scope": "Only exact temporary two-capability account, two source/index/type families, historical grant and tested query/window contracts; no general isolation or completeness proof.",
+      "grant": "search+adm_investigate only; no imported roles/default indexes; existing two exact source families and1794844500<=_time<1794844620. No wider grants.",
+      "cleanup": "Temporary user/role/generated secret absent; owned jobs exact404; original authorization layers, existing roles/memberships and application config restored; source profile unchanged; runtime88 hashes verified; persistence/capture disabled."
+    },
+    "preserved_history": "Prior failed count attempts and original uncertainty/recovery outcomes in earlier qualification records remain unchanged; this is a separately reviewed fresh increment.",
+    "validation": {
+      "focused_public": "25 source-revocation tests and5 source-completeness tests passed",
+      "private": "Actual runner/postchecker replay and tampering, source-probe safety and local certificate-query tests independently reviewed and passed",
+      "full_python": "1583 tests; passed with9 skipped in isolated eight-path count/source snapshot under normal umask022",
+      "python_lint_format": "Ruff check and format passed285 files in isolated count/source snapshot",
+      "frontend_local": "not run for tool/test/docs-only change; normal PR CI required",
+      "test_environment_correction": "Evidence logs remain0600. Child test process uses normal umask022 so existing negative permission fixtures actually create requested0755 directories/0644 files. No runtime authorization or security check changed.",
+      "preserved_failed_run": "Initial1583-test run under inherited umask077 failed6 permission-fixture assertions with9 skips. Evidence retained separately; tests use normal022 in corrected run, logs remain0600."
+    },
+    "remaining_count_limit": "Alternate span-source administrator count0 leaves its denial control unavailable; task query not run. Do not manufacture data or widen grants.",
+    "defaults": "Privileged execution, capture, persistence, watch, scheduling and notifications remain disabled as shipped; Cloud/SHC persistence unsupported.",
+    "evidence_root": "{private_task_workspace}/atlas-count-completeness-recovery",
+    "evidence": {
+      "plan.json": {
+        "sha256": "9a476c4c5b38d9926ab2ca8585fee4447a672abe79e4b42b3f09c9dd170d1600"
+      },
+      "count_single_runner.py": {
+        "sha256": "5fd0f7aab16a566d5b262b3674257bbcfbd3e5e5ee770a3d68a79878659a8565"
+      },
+      "count_single_postcheck.py": {
+        "sha256": "74cbe70bd75eec982e80a98e41a3289cfa08db0e39c508e9e5c6ada000e0971c"
+      },
+      "count-single-installed-output.json": {
+        "sha256": "9fae668f4fb1eb5d0113bf523ea3dd9e4854adff868554d596cf9e63b67cd1bb"
+      },
+      "count-single-independent-postcheck.json": {
+        "sha256": "23be31672c8b1619e505df7d727b2cec843eaa2266db73d97ec9b133caae5e93"
+      },
+      "count_matrix_runner.py": {
+        "sha256": "0c86fd93d53a1c85d55b83af2fd47793d864239b8893e16c6a114ad3a1ba9149"
+      },
+      "count_matrix_postcheck.py": {
+        "sha256": "f009efd04cd3fe2f12b4523eec57482177d87749f1bbc5d2bc136b43649962d8"
+      },
+      "count-matrix-installed-output.json": {
+        "sha256": "5e711e8225709a786d4c1efee3f688e77b511435351934b52a089abbc5e64c0b"
+      },
+      "count-matrix-independent-postcheck.json": {
+        "sha256": "000e9e6ced1c596c208f92f8191e3e6a65a2e5018760ca766fb2c12e3f8f13a5"
+      },
+      "source_readonly_k8s_probe.py": {
+        "sha256": "a57f8f932158bfea324ea020e3e58a5cb2c543be5e2f224861a167ce9f20f641"
+      },
+      "source_readonly_k8s_diagnostic.py": {
+        "sha256": "464d579a9804bb32953a828622a40a42dffc5345289834a9401ddfbfa26cc67c"
+      },
+      "source_readonly_k8s_failure_classify.py": {
+        "sha256": "0bf753c19de7d93072d915aba01a1d86129a15531c13cc70f15ba87572c3828f"
+      },
+      "source_public_certificate_probe.py": {
+        "sha256": "15ebdf5e5f4e4734377083b1250999dfea8d237f41e3910d46eb6a89badfc0a7"
+      },
+      "source-readonly-k8s-output.json": {
+        "sha256": "446f8ccea2ed614ab8920cdf37e5cfd77451d308a584d0fb568ed2b89023dcaf"
+      },
+      "source-readonly-k8s-diagnostic-output.json": {
+        "sha256": "a6fde5ab8bcd2f233918269152c46a93d2a6cd081cb650ba14e0b0919893b7e2"
+      },
+      "source-readonly-k8s-classifier-output.json": {
+        "sha256": "82572be1ef076019d144715a3afc272b143f0b42152a3883cbf82d2533a91e96"
+      },
+      "source-public-certificate-output.json": {
+        "sha256": "e57540108ce4c3c598f50a5e5737367645a5a797dc09d94203a73341c3b048c0"
+      },
+      "run_remote.sh": {
+        "sha256": "1f5d349343199fb2e8c17482cb88caacede6c968f648621f6331c3c8e44f74b9"
+      },
+      "count_matrix_extension.py": {
+        "sha256": "1087a0629137b3a87b8bc40204820bcd0c023089349812f58fe4d48741c4b83c"
+      },
+      "test_count_matrix.py": {
+        "sha256": "1808cc3f91576eb71cffeb5f2a56f1f5780af1fddba5c91e0cb6fac5b123b623"
+      },
+      "test_count_single_postcheck.py": {
+        "sha256": "6e413c3c35e6d5195edfc19ecd31b3dfe85a3a1e00c3aa8b9df63707863d60a5"
+      },
+      "test_source_public_certificate_probe.py": {
+        "sha256": "e613d437128ee459d4e3a77325ff482b766ece65b837c2ebaa9f494bd41b5c16"
+      },
+      "test_source_readonly_k8s_diagnostic.py": {
+        "sha256": "b40d04e38bd798b3a1421ab8438f5c8b3b56037a2987b8465e657678d6a0024c"
+      },
+      "test_source_readonly_k8s_failure_classify.py": {
+        "sha256": "0dfc307478be9c33785b4c5cc06f9977f5723f686202fb2f1c5ccbb0ea60871c"
+      },
+      "test_source_readonly_k8s_probe.py": {
+        "sha256": "8d0b51de9a0793f048fb66eba1968c44cd9c7d149fd1c6fb428563e51879e71b"
+      },
+      "count-full-python.log": {
+        "sha256": "268e467558fb52fa0796e8c88c67a609e42feea0206e3997010dbf83eb3ad84c"
+      },
+      "count-full-python-standard-umask.log": {
+        "sha256": "219d08d9fae2d10a03f11c73b3754e34f634ef0a3c8e4f70b364a16307a07e50"
+      },
+      "source-historical-assessment-input.json": {
+        "sha256": "adf4c0500a62ee27260601c6b29a7029cf285fca0a5dc1965d1164ceec79c987"
+      },
+      "source-historical-assessment-output.json": {
+        "sha256": "9c8d88ec9e7ef096bdcd5ff10ccacd6ef61222f03c13cb7085f455595b52887b"
+      }
+    },
+    "implementation_sources": {
+      "tools/qualify_native_source_revocation.py": "bc86df7aabcbb63b0bc26b6882f5cd2c2da62dd906d64ed59736a63b7719eeea",
+      "tests/test_native_source_revocation.py": "8455fd8de51d04086ac52da57ffd5ae2b756513562323b84a387acfcdee1da60",
+      "tools/qualify_source_completeness.py": "abefb2b1d10e0684173088d8357810fce5c2f37cc9013e9040b945030d76b762",
+      "tests/test_source_completeness.py": "34877716da53e3d30deda6558a3642819f40819fc0f94a31cbf4db49dcfff263"
+    }
+  },
+  "source_completeness_assessment_20261118": {
+    "date": "2026-11-18",
+    "status": "historical_completeness_unqualified_live_metadata_audit_blocked",
+    "qualified": false,
+    "scope": "Selected coreapi/tenant-jobs historical windows1794844500..1794844620. Counts/capture/projection reproducibility are separate from completeness.",
+    "evidence_assessor": "Checks only internal consistency of evidence claims; always qualified=False, including when eligible for independent review. Hashes alone do not authenticate producer receipts or population truth.",
+    "assessor_execution": {
+      "status": "evidence_insufficient",
+      "qualified": false,
+      "named_gaps": 36,
+      "expected_exit_code": 1,
+      "scope": "Executed on explicit unknown historical coverage input; no population numbers fabricated from combined counts."
+    },
+    "historical_gaps": [
+      "Independently expected identity and span populations",
+      "Continuous producer receipts and historical configuration coverage",
+      "Measured drop/sampling and lateness bounds",
+      "Indexed watermark after lateness closure; existing87/90 excluded spans do not define original population"
+    ],
+    "current_cluster_probe": {
+      "status": "failed_or_uncertain",
+      "stage": "ConfigMap GET",
+      "classification": "Client error-text classifier tls_or_certificate; not authoritative HTTP status or proof of resource absence",
+      "current_collector_configuration": "unobserved",
+      "mutations": "none; no Secrets/log requests, environment values not output or retained"
+    },
+    "public_certificate_diagnostic": {
+      "api_tls": {
+        "category": "certificate_expired",
+        "verification_code": 10,
+        "verified": false
+      },
+      "ca": {
+        "currently_within_dates": true,
+        "not_after_utc": "2035-11-14T16:04:53+00:00",
+        "not_before_utc": "2025-11-16T15:59:53+00:00",
+        "public_certificate_sha256": "4e8a289254e4223eb06d311701c4ec6a7d55ea9782a2a1e4d0c580837b72473b"
+      },
+      "client": {
+        "currently_within_dates": false,
+        "not_after_utc": "2026-11-16T16:04:53+00:00",
+        "not_before_utc": "2025-11-16T15:59:53+00:00",
+        "public_certificate_sha256": "78a5e3e08af578d329ca6932b17aa65a2c833886c48f8e53cb1401f5307709cb"
+      },
+      "scope": "Public certificate dates and fixed API TLS only; no kubeconfig writes or Kubernetes resource requests.",
+      "status": "observed_readonly"
+    },
+    "interpretation": "Configured client certificate expired2026-11-16T16:04:53Z. Configured CA remains within validity. Strict fixed API peer-chain verification reports code10 expiry; it does not identify which peer-chain certificate expired and performs no Kubernetes resource read. No TLS bypass.",
+    "next_dependency": "Existing approved control-plane SSH profile or refreshed approved kubeconfig requested from user; renewal/cluster changes require separately concrete scope and authorization.",
+    "prospective_work": "Producer population/sequence/receipt contracts, durable queue and loss/sampling/watermark instrumentation proposed but not deployed; cannot retroactively repair missing historical evidence.",
+    "platform_boundary": "Separate native platform bootstrap/recovery work continues outside this bounded count/source change; no new instance launched or operational restore qualification claimed."
   }
 }
