@@ -4488,5 +4488,121 @@
     "next_dependency": "Existing approved control-plane SSH profile or refreshed approved kubeconfig requested from user; renewal/cluster changes require separately concrete scope and authorization.",
     "prospective_work": "Producer population/sequence/receipt contracts, durable queue and loss/sampling/watermark instrumentation proposed but not deployed; cannot retroactively repair missing historical evidence.",
     "platform_boundary": "Separate native platform bootstrap/recovery work continues outside this bounded count/source change; no new instance launched or operational restore qualification claimed."
+  },
+  "native_platform_recovery_preparation_20261118": {
+    "date": "2026-11-18",
+    "status": "bootstrap_failed_or_uncertain_operational_restore_unqualified",
+    "operational_restore_qualified": false,
+    "implementation": "Qualification tools/tests/docs only; frozen Atlas0.9.11 runtime archive unchanged. Offline inventory, cold four-database adapter and native restore primitives are separate from installed qualification.",
+    "architecture": {
+      "coordinator": "GPT-6.1 Sol/high",
+      "workers": "Two GPT-6.1 Terra/high; disjoint ownership, recovery role rotated into existing capacity",
+      "reviewer": "GPT-6 Astra/high; independent read-only",
+      "concurrency": "Four threads including coordinator",
+      "lab_execution_owner": "coordinator only"
+    },
+    "authorization": "User approved isolated native environment and packaged license acceptance only while original Splunk remains active; exact identity watchdog and guarded test-unit retirement. No original service restart, live database replacement, real-source grant or production rollout.",
+    "artifacts": {
+      "platform_version": "Splunk Enterprise10.6.0.5 Linux x86_64",
+      "platform_archive_sha256": "a84961c31c4bb9dad35f1fb10fb4eb3a9e924bb54774450ee1c13b640b4dbc94",
+      "platform_archive_bytes": 1785187608,
+      "atlas_version": "0.9.11",
+      "atlas_build": "1795023134",
+      "atlas_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e",
+      "atlas_archive_bytes": 1459090,
+      "runtime_files": 88
+    },
+    "attempts": [
+      {
+        "attempt": 1,
+        "primary": "failed_or_uncertain",
+        "primary_sha256": "12b3591eb5ebf6e064df561dad9d4f0e1cccd67cb9867620ba9463a593e3715b",
+        "observed_failure": "NotADirectoryError at first journal directory fsync: strict no-follow operation encountered legitimate relative systemd StateDirectory alias. New Splunk daemon was not started.",
+        "reconciliation": "Exact failed invocation and driver retired; source/TLS/secret/result absent; retained sealed inputs and journals verified.",
+        "formal_readonly_sha256": "a95df9a8051ae0dda15c9750601e665db0cf258d6f49efe263545cc0e0af4b5e"
+      },
+      {
+        "attempt": 2,
+        "primary": "failed_or_uncertain",
+        "primary_sha256": "05227d8be68424cf6f3869a2e895e4c06bebb5248ebf67bd8362d9686d157923",
+        "live_isolation": "Actual service-visible state inode/UID mapping, distinct network namespace, dynamic identity, empty capabilities, read-only input mounts, original-home mask and cgroup controls observed by sealed independent monitor.",
+        "sealed_monitor_sha256": "8576cffb24499ca52021d021670568886f441b981a81f95666982e73074fa92d",
+        "configured_limits": "4CPUs/8GiB/zero extra swap/1024tasks;44min active plus15s stop allowance, reserving prior lifetime. Process retirement separately checked.",
+        "driver_progress": [
+          "source_create_intent",
+          "source_create_ack",
+          "start_intent"
+        ],
+        "ready_result": "absent; startup/TLS/listener/license checks unqualified",
+        "failure_predicate": "unproved; an earlier invocation error must not be attributed to this attempt",
+        "retirement": "Exact owned-unit stop acknowledged, original driver PID/start absent, cgroup empty and unit absent; independent evidence accepted.",
+        "retirement_evidence_sha256": "4699a93d48309fae26abc01bdf1f38f6292e81aa370a68d82bd17f109569f7e4",
+        "original_postbaseline_sha256": "16914c7af4691aa48528de1f927ffc976d279ef1b3649d350e7e6246bbd508de",
+        "retained_state": "Partial task home, TLS, generated credentials and exact artifacts preserved privately. No source/capture/restore result or cleanup success inferred.",
+        "formal_reconciliation_sha256": "4aee9b9e71f72394a574a317800c3a865cebeb1280082bc83fd33fd192802a4a"
+      },
+      {
+        "attempt": 3,
+        "primary": "failed_or_uncertain",
+        "primary_sha256": "83d5ab69bfb97cba2489446430b1dbcfec3ca435d73893a6b746c407a8b361f7",
+        "configured_limits": "43min active plus15s stop reserve after separately rounded prior28+69seconds; same4CPUs/8GiB/zero extra swap/1024tasks",
+        "budget_measurement": "null in failed primary; no budget failure predicate established",
+        "driver_progress": [
+          "source_create_intent",
+          "source_create_ack",
+          "start_intent",
+          "start_ack",
+          "stop_intent",
+          "stop_ack"
+        ],
+        "observed_native_progress": "Authenticated native server info and Trial license recorded; daemon identity cardinality check raised RuntimeError before a readiness pass was retained. Exact invocation-bound traceback identifies daemon_identity, not an earlier invocation error.",
+        "driver_result_sha256": "a93c0d89c1016d26372a2a7d637ab77d0679c6f000d16c9fd87861fec0fcc9e0",
+        "retirement_distinction": "Driver stop acknowledged but its immediate owned_processes_retired flag was false. Later independent host evidence found exact unit failed/MainPID0, empty cgroup, old driver absent and no processes matching retained native binary inode, task executable path, cgroup or private network;433 process records inspected with zero errors or vanished records. This does not create an exact historical daemon PID or prove graceful shutdown.",
+        "retirement_inventory_sha256": "72c8950e2ad2ce4f77bd644a43c7b4d013c3d73638b91040a539c7fd20ad1dae",
+        "journal_identity_sha256": "1aedb55ab30c8e9cbbe770d94ec9b02c08092fa55768b99049de78ac7a6b33c8",
+        "sealed_monitor_sha256": "373d9a6948afd8fd6e593f4f61c3cf061cda189d7916146476f876a24eafff5f",
+        "original_postbaseline_sha256": "16914c7af4691aa48528de1f927ffc976d279ef1b3649d350e7e6246bbd508de",
+        "retained_state": "All partial state, credentials, TLS, code and failed primaries retained. No fourth launch or custody compaction yet."
+      }
+    ],
+    "original_service": "Same active PID/start/invocation and selected20protected file records plus88runtime hashes; byte-identical original baseline. Naturally changing original indexes/logs excluded.",
+    "original_baseline_sha256": "16914c7af4691aa48528de1f927ffc976d279ef1b3649d350e7e6246bbd508de",
+    "current_cold_capacity": {
+      "evidence_sha256": "ccbf98ea500ec87addeb9f86614622251571a61113fdfcf74fe2d6db2b475911",
+      "status": "within_budget",
+      "state_bytes": 4340588544,
+      "free_bytes": 140989755392,
+      "scope": "Current stopped-state measurement only; does not explain prior stop.16GiB cooperative state budget/12GiB reserve are not a filesystem quota."
+    },
+    "offline_validation": {
+      "public": "10 platform-recovery tests and30 restore-adapter tests passed;40 focused tests independently passed after final review remediation",
+      "independent_prelaunch": "39 resume/checker/outer +10 renderer +13 driver/monitor tests passed for exact second packet; not installed functional proof",
+      "full_python": "1623 tests passed,9 skipped in the qualified existing Python3.13.14 environment under normal umask022; rerun after final evidence-alias remediation",
+      "python_lint_format": "Ruff check and format passed289 files",
+      "retained_environment_failure": "Initial full run used default Python3.15 without the declared SignalFlow dependency:1612 tests,1 class-setup import error,9 skipped. Corrected only the test environment; no code/security checks relaxed.",
+      "distributed": "126 tests passed",
+      "upgrade": "18 tests run; passed with3 skipped because installed-lab gate was not enabled"
+    },
+    "not_qualified": [
+      "Native readiness and license/TLS/listener acceptance in the isolated instance",
+      "Actual full15-collection native KV backup/restore",
+      "Actual index/configuration/authentication/four-SQLite platform restoration",
+      "Restored case/revisions/ACLs/redaction/audit/retry/capture-ledger endpoint checks",
+      "Production disaster recovery, host failure, Cloud/SHC persistence"
+    ],
+    "evidence_custody": "Protected external task evidence; failed primary bytes and frozen code retained separately from cleanup/monitor observations. Temporary original-host app settings were not enabled by these bootstrap attempts.",
+    "checker_repair": {
+      "retained_failure_sha256": "70d392fb42b37b9217705cd7e3b0aa7633e042f2eed693d9c19a89e6a0b9b3fa",
+      "observed_failure": "Checker compared journal JSON serialization bytes; bounded re-read showed changed raw bytes with identical selected manager identities.",
+      "correction": "Separate reviewed verifier checks unique exact trusted manager PID/UID/executable/boot/unit/invocation/start and complete-stop records; raw digest retained as provenance. Successful read-only result does not overwrite failed bootstrap or checker outputs."
+    },
+    "aggregate_disk_boundary": {
+      "observed_task_bytes": 15203082240,
+      "budget_bytes": 17179869184,
+      "locations": 5,
+      "scope": "Includes canonical state, all prior task custody and sealed input archives. Another fresh install is held because it would exceed the aggregate allocation. Proposed verified private compaction has not executed; renaming does not release budget."
+    },
+    "source_observer_limitations": "New offline observer is unqualified: normal handler deletion can precede post-hoc metadata reads, so404 cannot prove terminal state; concurrent observer, WAL/actual connection inode binding and whole-ledger generation/sequence coverage remain independent acceptance gates.",
+    "independent_review_remediation": "Entry-freeze expected snapshots/archives and detach provenance passed to external callbacks so mutable aliases cannot manufacture verified restoration, retirement or custody. Four mutation regressions independently reviewed and passed. Clarified nominal polling cadence and offline artifact writes."
   }
 }

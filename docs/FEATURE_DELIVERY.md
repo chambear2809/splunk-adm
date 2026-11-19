@@ -1823,3 +1823,33 @@ correction, validation and remaining limits are recorded under
 Separate native platform recovery work is in preparation; this increment makes
 no fresh-instance, operational restore or production-readiness claim. Shipped
 disabled defaults and unsupported Cloud/SHC persistence are unchanged.
+
+### Native platform recovery preparation — November 18 continuation
+
+The user approved a bounded isolated native test environment while the original
+Splunk service remains active. Three bootstrap attempts are retained as
+`failed_or_uncertain`. The first encountered the systemd state-directory alias.
+The second passed independent live isolation and resource-control checks, then
+stopped without a readiness result; its precise failure predicate is unproved.
+The third reached authenticated server information and a Trial license, then
+failed the fixture's daemon-identity cardinality check.
+Independent reconciliation found the exact test driver retired, its cgroup
+empty and the original service active under the same identity. The selected
+original configuration/database-family records and 88 runtime hashes still
+matched the original baseline. Partial test state and private recovery access
+remain retained. Cleanup observations do not replace any failed primary. Another
+fresh installation is held by the aggregate 16 GiB disk budget; proposed
+verified private compaction has not executed.
+
+Offline recovery primitives cover fresh-target refusal, four SQLite files,
+all 15 configured KV collections, native KV command boundaries, index custody
+and recovery proof contracts. Their unit checks are implementation evidence;
+no installed platform restore has passed. See
+[the recovery boundary](PLATFORM_RECOVERY_QUALIFICATION.md) and
+`native_platform_recovery_preparation_20261118` in `FEATURE_QUALIFICATION.json`.
+
+The user selected `isovalent-demo` for a prospective read-only inventory. Its
+first caller-identity request failed before namespace inventory, and the cached
+AWS session was independently expired. Duo renewal awaits the user's return.
+No cluster configuration or grants changed; no new source completeness claim
+is supported. See [prospective source qualification](SOURCE_PROSPECTIVE_QUALIFICATION.md).
