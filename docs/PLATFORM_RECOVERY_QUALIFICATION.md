@@ -200,3 +200,52 @@ and TLS trees have moved into root-protected, no-replace custody. The restore
 home must then be absent and created fresh; the retained source must be
 inaccessible to the restore service. This does not authorize overwriting any
 existing original-host home or adopting a partial target as a verified restore.
+
+
+## Retained test-state custody — November 19 continuation
+
+Five task-state compaction attempts remain `failed_or_uncertain`. The first
+stopped at a combined process-scan predicate whose precise failure is unproved;
+the second exceeded a 1.5-second aggregate disk-measurement timeout before
+custody creation. The third refused a guard during a source snapshot before
+archive creation and left a retained manifest-only partial. The fourth produced
+no primary JSON: an independently reproduced launch-helper substitution
+corrupted an encoded payload and made its generated Python invalid. Exact-nonce
+read-only reconciliation found no fourth-attempt output. The fifth wrote and
+sealed an archive, then failed its independent verifier-child exit check before
+creating a verification receipt or dispatching raw-state removal. Its exact
+child cause remains unproved. All failed outputs and operation identities are
+retained privately; no failed primary was replaced.
+
+A separate read-only diagnostic localized a fresh verifier failure to archive
+path lookup. An original-semantics member probe observed a directory whose
+single terminal slash prevented a manifest match. The actual frozen archive
+writer independently reproduced this legitimate long-directory PAX form.
+The new [read-only verifier](../tools/platform_custody_archive_verifier.py)
+handles that narrow directory form while retaining strict duplicate, alias,
+traversal, metadata and content checks. It has no extraction, deletion or restore
+entrypoint; callers must establish authorization, quiescence and lock provenance.
+
+A separately reviewed native invocation of the exact public verifier bytes
+passed full archive-to-source comparison. The private archive is 1,783,356,815
+bytes, SHA-256 `73459275aae5120eefd308de282fad97ae6c1ca8f2af387b7592b2fcca7920fc`;
+its 14,073,909-byte manifest covers 38,587 entries. Clean complete process samples
+before and after counted 436 and 444 processes with zero adverse counters.
+Original protected-baseline and aggregate-budget assertions passed before and
+after. This is a new read-only observation, separate from the failed fifth
+operation. No raw removal, new bootstrap or restore was performed. The latest
+retained artifact inventory totals 17,014,624,256 bytes against the agreed
+17,179,869,184-byte aggregate limit; this is cooperative accounting, not a quota.
+No further allocation is assumed safe from that small remaining headroom.
+
+Raw test state, archive, manifest-only partial, private recovery access and
+failed results remain retained. The original service remains active under its
+same identity, with the selected 20 protected original file records and 88
+runtime hashes matching the baseline. Naturally changing original logs/indexes
+are outside that footprint. Byte fidelity of a stopped task-state archive does
+not establish SQLite/KV logical consistency, restored identity, index recovery,
+endpoint read/export/retry/ACL behavior or operational platform restoration.
+Recorded atime/ctime/birth-time provenance is not a restoration guarantee.
+Full platform, host-failure, production and Cloud/SHC recovery remain unqualified.
+Exact failed, reconciliation and fresh-comparison digests are recorded under
+`native_recovery_custody_followup_20261119` in `FEATURE_QUALIFICATION.json`.

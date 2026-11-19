@@ -1877,3 +1877,26 @@ configuration remain unqualified. The new record
 `prospective_source_inventory_20261119` preserves that boundary and the exact
 failed and successful evidence digests. See
 [prospective source qualification](SOURCE_PROSPECTIVE_QUALIFICATION.md).
+
+
+### Recovery custody verifier — November 19 continuation
+
+A new standalone read-only qualification tool compares a held archive and
+manifest against the retained source without extraction, deletion or restoration.
+Native diagnostics exposed a legitimate long-directory PAX terminal-slash case;
+the narrow fix rejects unsafe aliases, duplicates and non-directory slash forms.
+A fresh independently reviewed native invocation of the exact public tool bytes
+passed complete archive-to-source comparison. This does not change any of the
+five failed compaction outcomes or qualify an operational restore. Raw source,
+archive, partial evidence and recovery access remain retained; original service
+identity and protected baseline checks pass. No application runtime bytes changed.
+
+Local verification ran 1,635 Python tests successfully with 10 skipped, including
+the explicit macOS skip of the native Linux FD/mount test; Ruff checks passed
+291 files. Independent review covered actual code, test assertions, failed and
+successful native evidence, generated programs and process-lifecycle boundaries.
+Unshipped observer scratch preparation separately passed 52 local checks after
+retained-generation and replacement-cleanup fixes; native source launch remains
+held by missing root capacity admission and full fixture integration. See
+[the recovery boundary](PLATFORM_RECOVERY_QUALIFICATION.md) and
+`native_recovery_custody_followup_20261119` for exact evidence and exclusions.
