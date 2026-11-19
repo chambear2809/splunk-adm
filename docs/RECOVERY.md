@@ -273,3 +273,20 @@ Splunk documents the underlying bucket and event-address fields in [Use default 
 ## Clean restore rehearsal
 
 The [backup/restore rehearsal](https://github.com/chambear2809/splunk-adm/blob/main/docs/BACKUP_RESTORE.md) recreates the disposable lab, restores all six app collections and deployment-local files, rebuilds summaries from retained synthetic fixtures, and compares the resulting map. It does not substitute for a production raw-index or platform backup.
+
+
+### Retained failed-state custody — November 19 follow-up
+
+One exact stopped partial-bootstrap raw tree has now been retired after fresh
+independent archive/source comparison and separately reviewed cleanup. A separate
+postcheck verified all per-entry intents/completions, source absence, retained
+archive/access custody, registered process retirement and the selected original
+service footprint. See [the qualification record](PLATFORM_RECOVERY_QUALIFICATION.md)
+and [custody retirement boundary](PLATFORM_CUSTODY_RETIREMENT.md).
+
+This is task-only byte-custody cleanup. It is not a native backup procedure,
+restored filesystem, SQLite/KV consistency proof or operational restore. All
+failed primary results remain unchanged, including the new failed preflight and
+its separate reconciliation. The other failed source and input copies remain
+retained. Further capacity and complete supported source/restore lifecycle
+admission are required before any new instance.
