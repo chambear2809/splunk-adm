@@ -4682,5 +4682,104 @@
       "Full platform restoration or production readiness"
     ],
     "custody": "Private external evidence retained. Public records contain sanitized scope and digests; credentials and raw configurations excluded."
+  },
+  "native_recovery_custody_followup_20261119": {
+    "date": "2026-11-19",
+    "status": "failed_compaction_fresh_readonly_archive_verified_operational_restore_unqualified",
+    "operational_restore_qualified": false,
+    "application_runtime_changed": false,
+    "scope": "Task-only stopped synthetic bootstrap state; no original service restart, app runtime change, real-source grant or platform restoration. Existing0.9.11 frozen archive unchanged.",
+    "failed_attempts": [
+      {
+        "attempt": 1,
+        "observation": "Combined complete-process-scan predicate refused before custody creation; exact failing predicate unproved."
+      },
+      {
+        "attempt": 2,
+        "observation": "Full task aggregate disk measurement exceeded1.5s subprocess timeout before custody creation. Separate30s bounded measurement adopted; no earlier failure retrospectively diagnosed."
+      },
+      {
+        "attempt": 3,
+        "observation": "Guard refused during second source snapshot before archive creation; specific reason unproved. Private manifest-only partial retained and charged to aggregate budget."
+      },
+      {
+        "attempt": 4,
+        "observation": "Empty primary output; separate failed dispatch receipt retains exact nonce and stderr digest. Independent offline reproduction showed unused global MODE replacement corrupted an encoded payload, making generated remote Python invalid. Read-only host reconciliation confirmed nonce outputs absent; failed result retained."
+      },
+      {
+        "attempt": 5,
+        "observation": "Archive creation and producer sealing reached; independent verifier child did not exit successfully. Specific child cause unproved. Failed primary retained. No independent verification receipt or raw removal dispatched."
+      }
+    ],
+    "retained_archive": {
+      "bytes": 1783356815,
+      "sha256": "73459275aae5120eefd308de282fad97ae6c1ca8f2af387b7592b2fcca7920fc",
+      "manifest_bytes": 14073909,
+      "manifest_entries": 38587,
+      "manifest_sha256": "46c1e469945d7ae6cb623877a80103db0b2f1496850e8e4b0e87840b3246cd37",
+      "classification": "Fresh separately reviewed native read-only invocation of exact public verifier bytes compared the complete archive against retained source; no material restore or removal. Original failed compaction remains failed."
+    },
+    "last_reconciliation": {
+      "status": "observed_readonly",
+      "original_baseline_exact": true,
+      "selected_original_files": 20,
+      "runtime_files": 88,
+      "original_baseline_sha256": "16914c7af4691aa48528de1f927ffc976d279ef1b3649d350e7e6246bbd508de",
+      "processes_scanned": 441,
+      "adverse_process_counters": 0,
+      "raw_source_present": true,
+      "removal_not_dispatched": true,
+      "aggregate_task_bytes": 17014624256,
+      "task_budget_bytes": 17179869184,
+      "headroom_bytes": 165244928,
+      "limits": "Selected original footprint only; changing original logs/indexes excluded. Cooperative aggregate monitoring is not a filesystem quota."
+    },
+    "offline_fixture_improvements": "Unshipped operator fixture improvements separately reviewed: sticky typed failure latch, continuous lock FD/path checks, phase-boundary full process scans, conservative disk high-water, exact generated Python/payload round-trip checks. Fifty focused custody checks passed; frozen diagnostic subset36 passed. Initial frozen-only test run lacked two test-only dependencies, retained separately before corrected pass. No installed restore pass inferred.",
+    "observer_preparation": "Separate unshipped observer scratch changes use managed task state and144MiB reservation, refuse stale generations and protect cleanup identities immediately per action. Independent review resolved retained-generation/replacement/timing findings;52 local tests passed. Root capacity admission and actual Linux/native integration remain unverified; no source launch clearance.",
+    "not_qualified": [
+      "Extraction into a fresh restored filesystem and operational platform restoration",
+      "Complete supported KV/index/config/authentication/four-SQLite restore",
+      "Fresh source/restore endpoint and exact retry/ACL/ledger acceptance",
+      "Host failure, production disaster recovery and Cloud/SHC persistence"
+    ],
+    "evidence_sha256": {
+      "custody-compaction-attempt1-native-output.json": "3f4a7bfb778612307603ff767e97d42600dc72c2c2e2e0357d889960a2d15cfe",
+      "custody-compaction-attempt2-native-output.json": "5efb215b5b52fe703fa847761fd92f4cd48c78cba4964b70e881d3afe193c9d5",
+      "custody-compaction-attempt3-native-output.json": "fcfd6947df017b5c6fea553b05088b9ecf7ab7449ece3f7d1c6d3c515c0640ac",
+      "custody-compaction-attempt4-dispatch-receipt.json": "5ee9d5cea2c7880ec700c7e5a645306b490f5140b2b20c0d2b552dbeebc43ea2",
+      "custody-compaction-attempt5-native-output.json": "5af9b7ba4c36e328985096218b8d6a9bf3eec84cb9522c1a9608ba6895ca7773",
+      "custody-compaction-failure-reconciliation-output.json": "46ab511fbec06d27b4bd537b6b20476fbb14f3c34b1afbf9875d6011ac7afdbd",
+      "custody-compaction-failure2-reconciliation-output.json": "d30688e39edfaba1a1fb667dce31ea38f28ed14acd02fcb047bb4acd73192dd5",
+      "custody-compaction-partial-reconciliation-output.json": "04f675c38a44f7a6c7d9ea1e3f91fe8402c47285140b19700e64df5e9ec4016a",
+      "custody-compaction-dispatch-reconciliation-output.json": "f2f773e23d0fbeaa8ab0bf35b9bef213932c8b5545c7f676ee1e66019282fce4",
+      "custody-compaction-sealed-reconciliation-output.json": "8563601dc0d1c9d65921a0d96583b059e4c738316f9ec50e19a30d5189ab899b",
+      "custody-independent-verifier-diagnostic-output.json": "66821c49927990a255066174370a7f3164f41a11a01c20daabca46fd125d5056",
+      "custody-member-diagnostic-output.json": "d36bf5613800c95b91b405ffddba3abc9b503e742b43e85241a4e2f2c80b2fff",
+      "custody-corrected-verifier-output.json": "91d6a42357ccd2819a27bb248eeac5f28c971ff61b96624a1aa1a7cfa703e72a"
+    },
+    "cleanup": "After the fresh successful read-only comparison, no raw removal, compaction retry, additional bootstrap or restore was performed. Task processes retired; raw source, partial artifacts, archive, original failed results and private recovery access intentionally retained. Original settings/protected footprint unchanged; naturally changing original logs/indexes excluded. Fresh verification cannot replace failed primary outcomes.",
+    "public_verifier": {
+      "path": "tools/platform_custody_archive_verifier.py",
+      "sha256": "4760489a57fa1ce8caba6dd0fe59eb86d14ab69b3f9062db83bd48e9e5cd0889",
+      "contract": "Read-only caller-held source/archive/manifest descriptor comparison, strict gzip/tar/PAX grammar and metadata/content coverage. Caller owns quiescence, lock provenance and authorization. No extraction, deletion, restore or CLI."
+    },
+    "fresh_readonly_comparisons": {
+      "first": "Unmodified verifier failed current path membership/duplicate predicate. A separate original-semantics member probe observed a directory111bytes long with one terminal slash: exact path absent/notseen, single-terminal-slash-removed path present/notseen. Raw paths excluded. This establishes this fresh mismatch, not the earlier opaque child cause.",
+      "fix": "Narrow directory-only PAX terminal-slash compatibility; actual frozen writer reproduction and Unicode/alias/duplicate/non-directory-slash tests. Frozen old verifier and failed outcomes retained.",
+      "public_module_result": "verified_readonly with source_comparison true, separate from failed original operation",
+      "processes_before": 436,
+      "processes_after": 444,
+      "adverse_process_counters": 0,
+      "guards": "Inherited qualification lock and direct-parent identity, bounded subprocess/report-exit consistency, original protected baseline and full aggregate assertions before/after. Cooperative timing, not an absolute OS scheduling guarantee.",
+      "scope": "Byte/metadata custody comparison only; timestamps recorded as provenance do not establish restoration. No source completeness, SQLite/KV logical consistency or endpoint restoration implied."
+    },
+    "local_validation": {
+      "full_python": "1635 tests ran successfully;10 skipped in qualifiedPython3.13 environment under normal022 test umask",
+      "focused_public": "12 tests ran successfully;1 nativeLinux FD/mount test explicitly skipped onmacOS (11 executed)",
+      "lint_format": "Ruff check and format passed291 files",
+      "private_diagnostic": "14 combined diagnostic/verifier tests; actual timeout/descendant and parentTERM checks; successful already-exited process-group kill mocked onmacOS. Exactgenerated parent/child programs and payload digests independently verified before native execution.",
+      "not_rerun_locally": "Frontend/browser/distributed/upgrade suites not rerun for this standalone read-only tool/test/docs change; normalCI required."
+    },
+    "application_archive_sha256": "0a87171ca77fbeedc778844fb326e523f7c427920ea36dcd4fc4cd54cb62bc7e"
   }
 }

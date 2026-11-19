@@ -2,8 +2,8 @@
 
 A replacement cluster can support a future source-completeness exercise, but it
 cannot supply missing historical evidence from `k8s-01.uktme.cisco.com`. No
-prospective producer, namespace, collection configuration or time window
-has yet been selected or qualified. The previous cluster's source identifiers,
+producer population, collection configuration or comparable telemetry windows
+have been qualified for completeness. The previous cluster's source identifiers,
 configuration revisions, results and hashes must not be carried into a new
 qualification as evidence of this cluster's producer population.
 
