@@ -47,6 +47,9 @@ evidence for the native session. A temporary invalid marker can exercise
 transport and show whether the device exposes the configured value. Before provisioning a real
 token, verify certificate validation and credential handling. Enable the ADM
 source mapping once the receiver has indexed and parsed the intended sensor.
+For a two-source state comparison, match the operational state on the same
+interface and window. Administrative state and inactive enum gauges require
+separate interpretation.
 
 ## Receiver (`Splunk_TA_stream/local/streamfwd.conf` on the HF)
 
