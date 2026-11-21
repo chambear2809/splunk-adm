@@ -34,6 +34,18 @@ adjacent, show that link as corroborating context. The observed interface
 diversity supports maintenance planning. An outage or failover claim needs a
 measured change and an independent application result.
 
+## Check prerequisites for a separate switch input
+
+Qualify a sampled flow input on an eligible physical interface with an
+independent collector. Verify the installed switch build's coexistence rules
+with existing flow monitors before enabling sampling.
+
+For native switch-to-HEC telemetry, qualify a single sensor and dedicated
+destination first. A temporary invalid marker can exercise transport and show
+whether the device exposes the configured value. Before provisioning a real
+token, verify certificate validation and credential handling. Enable the ADM
+source mapping once the receiver has indexed and parsed the intended sensor.
+
 ## Receiver (`Splunk_TA_stream/local/streamfwd.conf` on the HF)
 
 ```ini
