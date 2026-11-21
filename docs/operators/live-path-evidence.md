@@ -33,6 +33,16 @@ The bounded reader accepts at most 32 result rows, 32 segments per capture and 1
 
 To disable the source, remove only the local macro override and verify the empty default readback. Preserve captured events and evidence receipts for historical investigation. Rolling back the frontend should restore the prior installed assets and configuration from the deployment backup.
 
+## Qualify each direction across a firewall
+
+Match request and reply separately at the outside and inside capture points.
+A matching firewall verdict establishes the recorded policy action. If the
+firewall changes TCP sequence numbers, derive each direction's offset from the
+captured handshake and verify it against additional unique headers. Across a
+virtual switch, confirm the interface mapping and match the same headers at
+the gateway vNIC and the physical uplink. Report the count that matches at
+every claimed point and retain the independent allow or deny receipt.
+
 ## Compare counters on both ends of a link
 
 Use reciprocal LLDP or equivalent interface inventory to establish the peer
