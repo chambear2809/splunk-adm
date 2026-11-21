@@ -48,6 +48,11 @@ healthy comparison window. To attribute an incident to the link, capture the
 counter change in the incident window and corroborate it with independent
 evidence of the affected connection or user outcome.
 
+When two devices reuse an ifIndex, verify each device and source address
+association in the selected scope. Run a swapped-source control in the same
+time window. If the collector encodes link state as separate 0/1 gauge series,
+check the value of the state gauge. A sample count includes zero-valued gauges.
+
 ## Fixed-window Impact
 
 The built-in **If this fails** view can compare recorded user journeys for an explicitly qualified device cohort. The shipped `adm_impact_journeys(1)` reader is empty. Configure its local override to read exactly one approved index, immutable producer source and journey sourcetype using the request's scope and exact absolute start and end. Keep the normal caller's index permissions. Use one JSON event per cohort, timestamped at the cohort start. Unsupported scopes, times and devices produce no assessment.
