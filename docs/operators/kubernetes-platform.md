@@ -95,7 +95,7 @@ Notes:
 - **Watch-mode start-up (required):** in the collector shipped with chart 0.161.0, watch mode sends only changes. Without `include_initial_state: true`, Pods, Services and Nodes that already exist when the collector starts are never reported, and their IPs stay unknown in the map. The chart doesn't expose this option under `k8sObjects`, so it is set through `clusterReceiver.config` as above (receiver `k8s_objects`, merged over the chart defaults). After a collector restart, existing objects are sent once as `ADDED` events.
 - **Required objects:** pods, services, endpointslices, ingresses, httproutes and nodes. Gateways are optional; the map uses HTTPRoutes and the Gateway's Service.
 - **Container logs:** they also go to `splunkPlatform.index` by default. Route them elsewhere with the `splunk.com/index` pod or namespace annotation, or set `logsCollection.containers.enabled: false` if this pilot does not need them.
-- **Gateway API:** collect `gateways` and `httproutes` only if the Gateway API CRDs are installed; otherwise remove those two entries (and their RBAC rule).
+- **Gateway API:** collect `gateways` and `httproutes` only if the Gateway API CRDs are installed; otherwise remove those two entries (and their RBAC rule). When limiting collected fields, keep route parent and backend references and path matches needed by ADM. Check nested field filtering against actual indexed objects and run a read-only parse before enabling shared lookup writes.
 - **Hubble export:** the file is written by Cilium only when the Hubble exporter is enabled (see [cilium-isovalent.md](cilium-isovalent.md)). Cilium rotates it; the include pattern matches only the active file.
 
 ## LLDP on nodes
