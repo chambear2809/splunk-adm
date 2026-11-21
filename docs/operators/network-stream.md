@@ -41,8 +41,10 @@ independent collector. Verify the installed switch build's coexistence rules
 with existing flow monitors before enabling sampling.
 
 For native switch-to-HEC telemetry, qualify a single sensor and dedicated
-destination first. A temporary invalid marker can exercise transport and show
-whether the device exposes the configured value. Before provisioning a real
+destination first. Test HTTPS from the intended routing domain and explicitly
+bind the telemetry destination to it. Check transport counters or receiver
+evidence for the native session. A temporary invalid marker can exercise
+transport and show whether the device exposes the configured value. Before provisioning a real
 token, verify certificate validation and credential handling. Enable the ADM
 source mapping once the receiver has indexed and parsed the intended sensor.
 
