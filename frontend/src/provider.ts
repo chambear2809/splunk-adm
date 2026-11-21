@@ -1,4 +1,4 @@
-import { type Graph } from "./graph";
+import { validVmScope, type Graph } from "./graph";
 import { MAX_ROWS, rowsToGraph, type GraphArgs, type Row } from "./rows";
 import { MAX_TOPOLOGY_ROWS, rowsToTopology, type Topology } from "./topology";
 import type {
@@ -23,26 +23,30 @@ export interface LiveRequest extends GraphArgs {
 }
 const MAX_MESSAGE_CHARS = 300;
 const MAX_MESSAGES = 20;
-export const ARG_RULES: Record<keyof GraphArgs, { re: RegExp; hint: string }> =
-  {
-    service: {
-      re: /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/,
-      hint: "letters, numbers and . _ : / @ -",
-    },
-    environment: {
-      re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
-      hint: "letters, numbers and . _ -",
-    },
-    cluster: {
-      re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/,
-      hint: "letters, numbers and . _ -",
-    },
-    namespace: {
-      re: /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/,
-      hint: "lowercase letters, numbers and -, at most 63 characters",
-    },
-  };
-export function argError(key: keyof GraphArgs, value: string) {
+export type GraphScopeKey = Exclude<keyof GraphArgs, "vmScope">;
+export const ARG_RULES: Record<GraphScopeKey, { re: RegExp; hint: string }> = {
+  service: {
+    re: /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}$/,
+    hint: "letters, numbers and . _ : / @ -",
+  },
+  environment: {
+    re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/,
+    hint: "letters, numbers and . _ -",
+  },
+  cluster: {
+    re: /^[A-Za-z0-9][A-Za-z0-9._-]{0,252}$/,
+    hint: "letters, numbers and . _ -",
+  },
+  namespace: {
+    re: /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/,
+    hint: "lowercase letters, numbers and -, at most 63 characters",
+  },
+};
+export function argError(key: keyof GraphArgs, value: string | undefined) {
+  if (value === undefined)
+    return `${key[0].toUpperCase()}${key.slice(1)} is missing.`;
+  if (key === "vmScope")
+    return validVmScope(value) ? undefined : "VM scope is invalid.";
   return ARG_RULES[key].re.test(value)
     ? undefined
     : `${key[0].toUpperCase()}${key.slice(1)} may contain ${ARG_RULES[key].hint}.`;
@@ -53,13 +57,32 @@ export function buildGraphSearch(
   request: LiveRequest,
   tail?: GraphTail,
 ): string {
-  for (const key of Object.keys(ARG_RULES) as (keyof GraphArgs)[]) {
+  const vmRequest = request.vmScope !== undefined;
+  for (const key of Object.keys(ARG_RULES) as GraphScopeKey[]) {
+    if (vmRequest && (key === "cluster" || key === "namespace")) continue;
     const error = argError(key, String(request[key] ?? ""));
     if (error) throw new Error(error);
   }
-  const { service, environment, cluster, namespace } = request;
+  const { service, environment, cluster, namespace, vmScope } = request;
   if (tail !== undefined && tail !== "raw" && tail !== "deferred")
     throw new Error("Invalid graph tail mode.");
+  if (vmScope !== undefined) {
+    if (!validVmScope(vmScope)) throw new Error("VM scope is invalid.");
+    if (cluster || namespace)
+      throw new Error(
+        "VM graph scope cannot include a Kubernetes cluster or namespace.",
+      );
+    const start = request.earliest;
+    const end = request.latest ?? "";
+    if (!/^\d+$/.test(start) || !/^\d+$/.test(end))
+      throw new Error("VM graph scope requires absolute time bounds.");
+    const seconds = Number(end) - Number(start);
+    if (!(seconds > 0 && seconds <= 300))
+      throw new Error(
+        "VM graph scope requires a window of at most 300 seconds.",
+      );
+    return `| \`adm_vm_application_graph_read("${service}","${environment}","${vmScope}")\``;
+  }
   return tail
     ? `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}","${tail}")\``
     : `| \`adm_application_graph_read("${service}","${environment}","${cluster}","${namespace}")\``;

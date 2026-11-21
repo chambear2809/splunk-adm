@@ -1,4 +1,5 @@
 import { argError } from "../provider";
+import { validVmScope } from "../graph";
 import { isSafeTime } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 import type { DemoScenario } from "../data/demoClient";
@@ -86,16 +87,36 @@ export function parseUrlState(
     ? "live"
     : ((rawMode === "fails" || rawMode === "depends" ? null : rawMode) ??
       (inSplunk ? "live" : "demo"));
+  const vmScope = params.get("vm_scope");
   const args =
     mode === "live"
-      ? { service: "", environment: "", cluster: "", namespace: "" }
+      ? {
+          service: "",
+          environment: "",
+          cluster: "",
+          namespace: "",
+          ...(vmScope ? { vmScope } : {}),
+        }
       : { ...defaults };
-  for (const key of Object.keys(args) as (keyof GraphArgs)[]) {
+  for (const key of [
+    "service",
+    "environment",
+    "cluster",
+    "namespace",
+  ] as const) {
     const value = params.get(key) ?? args[key];
     const error =
       mode === "live" && value === "" ? undefined : argError(key, value);
     if (error) throw new Error(error);
     args[key] = value;
+  }
+  if (vmScope !== null) {
+    if (mode !== "live" || !validVmScope(vmScope))
+      throw new Error("Invalid VM scope.");
+    if (args.cluster || args.namespace)
+      throw new Error("VM scope cannot be combined with a Kubernetes scope.");
+    if (!args.service || !args.environment)
+      throw new Error("VM scope requires a service and environment.");
   }
   const earliest = params.get("earliest") ?? "-15m";
   const latest = params.get("latest") ?? "now";
@@ -107,6 +128,13 @@ export function parseUrlState(
     Number(earliest) >= Number(latest)
   )
     throw new Error("Earliest must precede latest.");
+  if (vmScope !== null) {
+    if (!/^\d+$/.test(earliest) || !/^\d+$/.test(latest))
+      throw new Error("VM scope requires absolute time bounds.");
+    const seconds = Number(latest) - Number(earliest);
+    if (!(seconds > 0 && seconds <= 300))
+      throw new Error("VM scope requires a window of at most 300 seconds.");
+  }
   const scenario = params.get("scenario") ?? "aci";
   const tab = params.get("tab") ?? "network";
   if (mode !== "demo" && mode !== "live")
@@ -278,6 +306,17 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
       }
     }
   }
+  if (clean.has("vm_scope")) {
+    try {
+      parseUrlState(clean, inSplunk);
+    } catch {
+      for (const key of ["vm_scope", "cluster", "namespace"]) {
+        if (!clean.has(key)) continue;
+        clean.delete(key);
+        dropped.push(key);
+      }
+    }
+  }
   try {
     parseUrlState(clean, inSplunk);
   } catch {
@@ -297,13 +336,17 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
 
 export function stateParams(state: UrlState): URLSearchParams {
   const params = new URLSearchParams({
-    ...state.args,
+    service: state.args.service,
+    environment: state.args.environment,
+    cluster: state.args.cluster,
+    namespace: state.args.namespace,
     earliest: state.earliest,
     latest: state.latest,
     mode: state.mode,
     scenario: state.scenario,
     tab: state.tab,
   });
+  if (state.args.vmScope) params.set("vm_scope", state.args.vmScope);
   if (state.query) params.set("q", state.query);
   if (state.trace) {
     params.set("trace_src", state.trace.src);
@@ -334,6 +377,7 @@ export function writeUrlState(state: UrlState) {
       "environment",
       "cluster",
       "namespace",
+      "vm_scope",
       "earliest",
       "latest",
       "mode",

@@ -397,6 +397,8 @@ function HopDetail({
   deviceId?: string;
   onClose: () => void;
 }) {
+  const sampleClock = (epoch: number) =>
+    `${new Date(epoch * 1000).toISOString().slice(11, 19)} UTC`;
   const rows: [string, ReactNode][] = [
     ["Kind", kind],
     ["Detail", hop.detail],
@@ -454,6 +456,35 @@ function HopDetail({
           <X size={14} />
         </button>
       </header>
+      {hop.sources.includes("Stream NetFlow") && (
+        <section aria-label="gNMI interface health">
+          <strong>gNMI interface health</strong>
+          {hop.interfaceContext?.map((item) => (
+            <div key={`${item.authority}|${item.interface}|${item.ifIndex}`}>
+              <div>
+                <code>{item.interface}</code> · ifIndex {item.ifIndex} ·{" "}
+                {item.authority}
+              </div>
+              <div>
+                {item.operStatus
+                  ? `${item.operStatus.value} · sample ${sampleClock(item.operStatus.sampledAt)}`
+                  : "Operating status unavailable"}
+              </div>
+              {Object.keys(item.counters).length > 0 && (
+                <div>
+                  Cumulative counters{" "}
+                  {Object.entries(item.counters)
+                    .map(
+                      ([key, { value, sampledAt }]) =>
+                        `${key}=${value} (${sampleClock(sampledAt)})`,
+                    )
+                    .join(", ")}
+                </div>
+              )}
+            </div>
+          )) ?? <div>No gNMI sample available for this Trace window</div>}
+        </section>
+      )}
       <dl>
         {rows
           .filter(

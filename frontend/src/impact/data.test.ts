@@ -26,29 +26,20 @@ describe("impact members", () => {
 });
 
 describe("impact search and rows", () => {
-  it("fails closed before dispatching live impact without a qualified source", async () => {
-    let called = false;
+  it("requires a routing scope before dispatching live Impact", async () => {
     await expect(
       loadLiveImpact({
         tokens: ["leaf101"],
         client: {
           search: async () => {
-            called = true;
-            return { rows: [], warnings: [], errors: [] };
+            throw new Error("unexpected search");
           },
         },
         earliest: "1000",
         latest: "1600",
-        scope: "scope-a",
         signal: new AbortController().signal,
-        loadBaseTopology: async () => {
-          called = true;
-          throw new Error("unexpected topology query");
-        },
-        merge: (base) => base,
       }),
-    ).rejects.toThrow("Live impact analysis is unavailable");
-    expect(called).toBe(false);
+    ).rejects.toThrow(/scope/i);
   });
   it("passes only validated tokens and '-' for an empty side", () => {
     expect(

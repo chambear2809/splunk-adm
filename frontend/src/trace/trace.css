@@ -102,6 +102,15 @@
 .atlas-trace-body.has-detail {
   grid-template-columns: minmax(0, 1fr) 260px;
 }
+
+.atlas-trace-body.has-detail:has([aria-label="gNMI interface health"]) {
+  grid-template-columns: minmax(0, 1fr) 400px;
+}
+@media (max-width: 760px) {
+  .atlas-trace-body.has-detail:has([aria-label="gNMI interface health"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .atlas-trace-hops {
   list-style: none;
   margin: 0;
@@ -208,6 +217,8 @@
   display: grid;
   gap: 6px;
   font-size: 12.5px;
+  max-height: min(480px, 60vh);
+  overflow-y: auto;
 }
 .atlas-trace-detail header {
   display: flex;

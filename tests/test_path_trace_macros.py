@@ -106,8 +106,37 @@ class PathTraceMacroTests(unittest.TestCase):
             self.d["adm_path_trace_resolve(1)"].startswith("inputlookup "), body
         )
 
+    def test_bounded_path_evidence_is_inert_and_validates_its_scope(self):
+        body = self.m["adm_path_evidence(3)"]
+        self.assertEqual(
+            self.d["adm_path_evidence(3)"].strip(),
+            "makeresults | where 1=0 | fields _raw",
+        )
+        self.assertIn('NOT match(scope, "(?i)^unmapped:")', body)
+        self.assertIn("args = src, dst, scope", body)
+        self.assertNotIn("index=*", body)
+
+    def test_gnmi_context_uses_the_same_pair_and_scope_validation_as_trace(self):
+        def validation(name):
+            return next(
+                line
+                for line in self.m[name].splitlines()
+                if line.startswith("validation = ")
+            )
+
+        self.assertEqual(
+            validation("adm_path_trace_gnmi_context(3)"),
+            validation("adm_path_trace(3)"),
+        )
+        self.assertTrue(
+            self.d["adm_path_trace_gnmi_context(3)"].startswith(
+                "makeresults | where 1=0"
+            )
+        )
+
     def test_scoped_observations_require_a_time_qualified_unambiguous_mapping(self):
         body = self.d["adm_path_trace(3)"]
+        self.assertIn("`adm_path_trace_netflow($src$,$dst$,$scope$)`", body)
         self.assertIn('lower(trim(mapping_status))=="mapped"', body)
         self.assertIn("tonumber(valid_from)<=info_min_time", body)
         self.assertIn("tonumber(valid_end)>=info_max_time", body)
@@ -214,6 +243,46 @@ class PathTraceMacroTests(unittest.TestCase):
             "`adm_l3out_path_evidence",
         ):
             self.assertNotIn(unsafe, body)
+
+    def test_scoped_native_netflow_trace_requires_exact_nexus_profile(self):
+        body = self.d["adm_path_trace_netflow(3)"]
+        self.assertIn('sourcetype="stream:netflow" TERM($src$) TERM($dst$)', body)
+        for field in (
+            "observation_domain_id",
+            "adm_scope_mapping_key",
+            'adm_profile_status=="mapped"',
+            'adm_profile=="nexus_nxos_netflow"',
+            'adm_scope=="$scope$"',
+            "adm_start<info_max_time AND adm_end>=info_min_time",
+            "metrics_authoritative=0",
+            "records_capped=if(adm_qualified_total>32,1,0)",
+            "adm_valid_from<=info_min_time",
+            "adm_valid_end>=info_max_time",
+            "adm_valid_end>=adm_valid_from",
+            "profile_status=adm_profile_status",
+            'adm_transport IN ("tcp","udp","icmp","ipv6-icmp")',
+            "interface_in interface_out interfaces",
+            "reference=adm_native_reference",
+        ):
+            self.assertIn(field, body)
+        self.assertIn("does not prove adjacent-hop traversal", body)
+        self.assertIn("adm_network_source_scope", self.d["adm_flow_enrich_v2"])
+        self.assertIn(
+            'adm_profile=="nexus_nxos_netflow"',
+            self.d["adm_flow_enrich_v2"],
+        )
+
+    def test_impact_reads_bounded_candidates_without_exporter_scope_changes(self):
+        self.assertIn("where 1=0", self.d["adm_impact_journeys(1)"])
+        native = self.d["adm_impact_stream_tuple(5)"]
+        self.assertIn('sourcetype="stream:netflow"', native)
+        self.assertIn('tonumber(spath(_raw,"protoid"))==6', native)
+        self.assertIn("src_port==$sport$ AND dest_port==$dport$", native)
+        self.assertIn("src_port==$dport$ AND dest_port==$sport$", native)
+        self.assertIn('profile_status="tuple-candidate"', native)
+        self.assertIn("head 33", native)
+        self.assertNotIn("adm_network_source_scope", native)
+        self.assertNotIn("outputlookup", native)
 
     def test_scoped_resolver_rejects_incomplete_identity_results(self):
         body = self.d["adm_path_trace_resolve(2)"]

@@ -14,6 +14,11 @@ import {
   type PortChannel,
 } from "./elements";
 import { accessFor, type ImpactEndpoint, type PathContext } from "./paths";
+import {
+  loadObservedImpactEvidence,
+  type ObservedImpactEvidence,
+} from "./observedEvidence";
+import { observedImpactData } from "./observedImpact";
 
 export const MAX_IMPACT_ROWS = 2500;
 export const IMPACT_INVENTORY_SEARCH = "| `adm_impact_inventory`";
@@ -512,6 +517,7 @@ export interface ImpactData {
   portChannels?: PortChannel[];
   /** Limits of this analysis the reader should see (e.g. unread members). */
   notes?: string[];
+  observed?: ObservedImpactEvidence;
 }
 
 export function resolveAll(
@@ -526,7 +532,7 @@ export function resolveAll(
   );
 }
 
-/** The current live reader cannot establish a scoped, time-qualified result. */
+/** Live Impact uses a deployment-qualified fixed-window sample only. */
 export async function loadLiveImpact(opts: {
   tokens: string[];
   client: SearchClient;
@@ -535,13 +541,10 @@ export async function loadLiveImpact(opts: {
   scope?: string;
   timezone?: string;
   signal: AbortSignal;
-  loadBaseTopology: () => Promise<Topology>;
-  merge: (base: Topology, rows: readonly unknown[]) => Topology;
 }): Promise<ImpactData> {
-  if (!opts.scope)
-    throw new Error("Select a routing scope to assess live impact.");
-  throw new Error(
-    "Live impact analysis is unavailable until the source can verify routing scope, identity and the selected time window.",
+  return observedImpactData(
+    await loadObservedImpactEvidence(opts),
+    opts.tokens,
   );
 }
 

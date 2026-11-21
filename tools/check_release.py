@@ -36,6 +36,11 @@ JOURNEYS_CSS_PATH = "splunk_adm/appserver/static/journeys.css"
 JOURNEYS_DOC_PATH = "splunk_adm/docs/CONNECTED_JOURNEYS.md"
 MAX_JOURNEYS_GZIP_BYTES = 32 * 1024
 MAX_JOURNEYS_CSS_BYTES = 16 * 1024
+IMPACT_BUNDLE_PATH = "splunk_adm/appserver/static/pages/impact.js"
+IMPACT_MANIFEST_PATH = "splunk_adm/appserver/static/impact-manifest.json"
+IMPACT_CSS_PATH = "splunk_adm/appserver/static/impact.css"
+MAX_IMPACT_GZIP_BYTES = 64 * 1024
+MAX_IMPACT_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -763,6 +768,9 @@ STATIC_ALLOWLIST = frozenset(
         JOURNEYS_BUNDLE_PATH,
         JOURNEYS_MANIFEST_PATH,
         JOURNEYS_CSS_PATH,
+        IMPACT_BUNDLE_PATH,
+        IMPACT_MANIFEST_PATH,
+        IMPACT_CSS_PATH,
     }
 )
 
@@ -956,6 +964,49 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(
                 "Journey asset version/hash does not match the main bundle"
+            ) from exc
+    # Impact is an independently versioned optional page. Once the main bundle
+    # registers its host, or any one asset is present, require the complete set.
+    impact_files = {
+        IMPACT_BUNDLE_PATH,
+        IMPACT_MANIFEST_PATH,
+        IMPACT_CSS_PATH,
+    }
+    impact_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasImpactHost", b"pages/impact.js")
+    )
+    if impact_registered or impact_files.intersection(files):
+        missing = sorted(impact_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Impact files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[IMPACT_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_IMPACT_GZIP_BYTES
+        ):
+            raise ValueError("Impact optional bundle exceeds its 64 KiB gzip budget")
+        if len(files[IMPACT_CSS_PATH]) > MAX_IMPACT_CSS_BYTES:
+            raise ValueError("Impact optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[IMPACT_MANIFEST_PATH])
+            impact_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(impact_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", impact_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[IMPACT_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[IMPACT_CSS_PATH]).hexdigest()
+                or impact_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or impact_version.encode() not in files[IMPACT_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Impact asset version/hash does not match the main bundle"
             ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:

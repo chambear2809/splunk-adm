@@ -9,7 +9,7 @@ async function expectScopedGap(page: Page, scenario: "acl" | "pod") {
   const trace = page.getByRole("region", { name: `Trace ${pair}` });
   await expect(trace).toContainText("Source coverage incomplete");
   await expect(trace).toContainText(
-    "Scoped path topology and NetFlow are unavailable",
+    "A complete scoped packet route is unavailable for this window.",
   );
   await expect(trace).toContainText(
     "missing observations do not prove absence",

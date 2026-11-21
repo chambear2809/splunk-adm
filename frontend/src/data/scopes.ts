@@ -6,6 +6,7 @@ export const SCOPE_FIELDS = [
   "namespace",
   "service",
 ] as const;
+type ScopeKey = (typeof SCOPE_FIELDS)[number];
 export interface ScopeOption extends GraphArgs {
   last_seen: number;
   pods: number;
@@ -39,7 +40,7 @@ export function parseScopes(rows: readonly Row[]): ScopeOption[] {
 export function scopeValues(
   rows: readonly ScopeOption[],
   args: GraphArgs,
-  key: keyof GraphArgs,
+  key: ScopeKey,
 ): string[] {
   const index = SCOPE_FIELDS.indexOf(key);
   return [
@@ -56,7 +57,7 @@ export function scopeValues(
 }
 export function cascadeScope(
   args: GraphArgs,
-  key: keyof GraphArgs,
+  key: ScopeKey,
   value: string,
 ): GraphArgs {
   const next = { ...args, [key]: value };

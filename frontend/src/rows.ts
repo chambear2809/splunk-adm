@@ -39,6 +39,8 @@ export interface GraphArgs {
   environment: string;
   cluster: string;
   namespace: string;
+  /** Explicit VM/provider scope; mutually exclusive with Kubernetes scope. */
+  vmScope?: string;
 }
 export const MAX_NODES = MAX_GRAPH_NODES;
 export const MAX_EDGES = MAX_GRAPH_EDGES;
@@ -96,7 +98,9 @@ const required = (row: Row, key: string) =>
   one(row, key) ?? fail(`${String(row.row_type)} row is missing ${key}`);
 
 export const serviceNodeId = (a: GraphArgs) =>
-  `service:${a.cluster}/${a.namespace}/${a.service}/${a.environment}`;
+  a.vmScope
+    ? `service:vm/${a.vmScope}/${a.service}/${a.environment}`
+    : `service:${a.cluster}/${a.namespace}/${a.service}/${a.environment}`;
 
 function toNode(row: Row): GraphNode {
   const attributes: Record<string, string> = {};
@@ -440,7 +444,9 @@ export function rowsToGraph(
     (w) => !reduced.truncation || !/^Graph exceeds/i.test(w),
   );
   if (reduced.truncation) warnings.push(truncationWarning(reduced.truncation));
-  const boundaryId = `${args.cluster}/${args.namespace}/${args.service}/${args.environment}`;
+  const boundaryId = args.vmScope
+    ? `vm/${args.vmScope}/${args.service}/${args.environment}`
+    : `${args.cluster}/${args.namespace}/${args.service}/${args.environment}`;
   const window = {
     start: epochIso(meta, "window_start"),
     end: epochIso(meta, "window_end"),

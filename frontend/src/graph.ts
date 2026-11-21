@@ -2,6 +2,15 @@ import { MAX_GRAPH_EDGES, MAX_GRAPH_NODES } from "./scale/limits";
 import { isoTime } from "./time";
 import { sameNatIp, usableNatIp } from "./ip";
 import { checkedIdentityContext } from "./data/identityContext";
+
+export function validVmScope(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value) &&
+    !/^(unmapped|unknown|reserved)(?:[._-]|$)/i.test(value)
+  );
+}
+
 export type NodeKind = "service" | "workload" | "endpoint" | "client";
 export type Relationship =
   | "calls"
@@ -263,6 +272,7 @@ export interface Graph {
     environment: string;
     cluster: string;
     namespace: string;
+    vmScope?: string;
     root_node_id: string;
   };
   nodes: GraphNode[];
@@ -741,14 +751,14 @@ export function parseGraph(value: unknown): Graph {
     c = value.coverage;
   if (
     !object(b) ||
-    ![
-      "id",
-      "service",
-      "environment",
-      "cluster",
-      "namespace",
-      "root_node_id",
-    ].every((k) => id(b[k])) ||
+    !["id", "service", "environment", "root_node_id"].every((k) => id(b[k])) ||
+    (b.vmScope === undefined
+      ? !id(b.cluster) || !id(b.namespace)
+      : !validVmScope(b.vmScope) ||
+        b.cluster !== "" ||
+        b.namespace !== "" ||
+        b.root_node_id !==
+          "service:vm/" + b.vmScope + "/" + b.service + "/" + b.environment) ||
     !object(w) ||
     !date(w.start) ||
     !date(w.end) ||

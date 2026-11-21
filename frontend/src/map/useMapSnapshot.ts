@@ -236,9 +236,14 @@ export function useMapSnapshot({
     if (
       initialState.mode === "live" &&
       client &&
-      (Object.keys(ARG_RULES) as (keyof GraphArgs)[]).every(
-        (key) => !argError(key, initialState.args[key]),
-      )
+      (initialState.args.vmScope
+        ? initialState.args.cluster === "" &&
+          initialState.args.namespace === "" &&
+          !argError("service", initialState.args.service) &&
+          !argError("environment", initialState.args.environment)
+        : (Object.keys(ARG_RULES) as (keyof typeof ARG_RULES)[]).every(
+            (key) => !argError(key, initialState.args[key]),
+          ))
     )
       void refresh();
     // Initial deep links dispatch once. Draft edits require Build map.

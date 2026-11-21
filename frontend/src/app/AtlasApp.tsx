@@ -17,7 +17,7 @@ import { HelpPage } from "../pages/HelpPage";
 import { AdminPage } from "../pages/AdminPage";
 import { DevicePage } from "../pages/DevicePage";
 import { ExploreTabs } from "../pages/ExploreTools";
-import { ImpactPage } from "../impact/ImpactPage";
+import { ImpactLazyPage } from "../impact/ImpactLazyPage";
 import { CasesPage } from "../pages/CasesPage";
 import type { SearchClient } from "../data/searchClient";
 import type { Page, UrlState } from "./urlState";
@@ -110,7 +110,7 @@ export function AtlasApp({
             />
           </AdminPage>
         ) : page === "impact" ? (
-          <ImpactPage
+          <ImpactLazyPage
             client={client}
             live={live}
             timezone={timezone}

@@ -1,3 +1,4 @@
+import { impactAssetVersion } from "./vite.impact.shared";
 import { defineConfig, type Plugin } from "vite";
 import { basename, isAbsolute, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -117,6 +118,7 @@ export default defineConfig({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     __ADM_SPLUNK_BUILD__: "true",
+    __ADM_IMPACT_ASSET_VERSION__: JSON.stringify(impactAssetVersion()),
     __ADM_TE_ASSET_VERSION__: JSON.stringify(thousandEyesAssetVersion()),
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify(journeysAssetVersion()),
   },

@@ -197,6 +197,9 @@ export function hopIcon(
     case "gap":
       return { icon: "gap", kind: "Gap" };
     default:
+      // Prefer the device itself to provenance text that may name another hop.
+      if (!role && /(?:^|[\s-])leaf(?:\d|\b)/i.test(hop.label))
+        return { icon: "leaf", kind: "Leaf" };
       if (role === "spine" || /\bspine/i.test(detail + hop.label))
         return { icon: "spine", kind: "Spine" };
       if (role === "leaf" || /\bleaf\b/i.test(detail))

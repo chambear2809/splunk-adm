@@ -39,7 +39,7 @@ const row = (c: Classified) => [
   c.conv.flows,
   c.alternate.join("; "),
   c.alternateEvidence ?? "",
-  c.traversal,
+  c.linkedTraversal ? "linked leg" : c.traversal,
   c.reason,
   c.failedAt.join("; "),
 ];

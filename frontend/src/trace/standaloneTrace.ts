@@ -3,11 +3,13 @@ import { requireNoSearchErrors, type SearchClient } from "../data/searchClient";
 import type { EndpointKind, Graph, GraphNode } from "../graph";
 import { emptyTopology } from "../topology";
 import { isSafeIdentifier } from "../app/urlState";
+import { parsePathEvidenceRows, type PathEvidence } from "./pathEvidence";
 
 const IP = /^[0-9A-Fa-f:.]{2,45}$/;
 export const isIpLiteral = (s: string) => IP.test(s) && /[.:]/.test(s);
 const MAX_RESOLVE_ROWS = 64;
 const MAX_TRACE_ROWS = 2000;
+const MAX_EVIDENCE_ROWS = 32;
 
 const first = (v: unknown): string | undefined => {
   const x = Array.isArray(v) ? v[0] : v;
@@ -371,16 +373,62 @@ export async function loadStandaloneTrace(
       "Endpoint identity results exceeded the limit; narrow the selection.",
     );
   const identities = qualifiedEndpointRows(rows, w.scope!, start, end);
+  const evidenceResult = requireNoSearchErrors(
+    await client.search({
+      search: `| \`adm_path_evidence(${src},${dst},${w.scope})\``,
+      earliest: w.earliest,
+      latest: w.latest,
+      timezone: w.timezone,
+      maxRows: MAX_EVIDENCE_ROWS,
+      overflow: "error",
+      allowEmpty: true,
+      signal: w.signal,
+    }),
+    "Path evidence",
+  );
+  const evidence: PathEvidence[] = parsePathEvidenceRows(
+    evidenceResult.rows,
+    { src, dst, scope: w.scope! },
+    { start, end },
+  );
+  // Optional, observation-only gNMI context. The default macro is inert; a
+  // deployment may opt in by replacing it with a TA-backed query. It can
+  // enrich an existing observed exporter hop but never adds route hops.
+  let gnmiRows: readonly unknown[];
+  try {
+    const gnmiResult = requireNoSearchErrors(
+      await client.search({
+        search: `| \`adm_path_trace_gnmi_context(${src},${dst},${w.scope})\``,
+        earliest: w.earliest,
+        latest: w.latest,
+        timezone: w.timezone,
+        maxRows: 256,
+        overflow: "error",
+        allowEmpty: true,
+        signal: w.signal,
+      }),
+      "gNMI interface context",
+    );
+    gnmiRows = gnmiResult.rows;
+  } catch {
+    // Optional telemetry must not hide the core Trace result.
+    gnmiRows = [];
+  }
   return {
     addresses: { src, dst },
-    rows: rows.filter(
-      (r) =>
-        r &&
-        typeof r === "object" &&
-        (r as Record<string, unknown>).row_type === "observation" &&
-        first((r as Record<string, unknown>).scope) === w.scope,
-    ),
+    window: { start, end },
+    rows: [
+      ...rows.filter(
+        (r) =>
+          r &&
+          typeof r === "object" &&
+          (r as Record<string, unknown>).row_type === "observation" &&
+          first((r as Record<string, unknown>).scope) === w.scope,
+      ),
+      ...gnmiRows,
+    ],
     graph: endpointGraph(identities, [src, dst]),
     topology: emptyTopology(),
+    evidence,
   };
 }
