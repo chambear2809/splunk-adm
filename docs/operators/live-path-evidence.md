@@ -33,6 +33,21 @@ The bounded reader accepts at most 32 result rows, 32 segments per capture and 1
 
 To disable the source, remove only the local macro override and verify the empty default readback. Preserve captured events and evidence receipts for historical investigation. Rolling back the frontend should restore the prior installed assets and configuration from the deployment backup.
 
+## Compare counters on both ends of a link
+
+Use reciprocal LLDP or equivalent interface inventory to establish the peer
+pair. Check recent indexed metrics for each exact device, interface, ifIndex,
+and collector source before building a replay. A running collector and a
+successful read of the interface do not establish that the stream is reaching
+the index. Test a known-good interface from the same source as a control.
+
+Compare counter deltas over the same sample buckets at both ends. Preserve the
+sample count, link state, and carrier transitions. Leave missing or reset
+counters unqualified. Traffic with no observed error or discard increase is a
+healthy comparison window. To attribute an incident to the link, capture the
+counter change in the incident window and corroborate it with independent
+evidence of the affected connection or user outcome.
+
 ## Fixed-window Impact
 
 The built-in **If this fails** view can compare recorded user journeys for an explicitly qualified device cohort. The shipped `adm_impact_journeys(1)` reader is empty. Configure its local override to read exactly one approved index, immutable producer source and journey sourcetype using the request's scope and exact absolute start and end. Keep the normal caller's index permissions. Use one JSON event per cohort, timestamped at the cohort start. Unsupported scopes, times and devices produce no assessment.
