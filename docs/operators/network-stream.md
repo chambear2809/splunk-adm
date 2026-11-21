@@ -26,6 +26,14 @@ The reader retains each record's tuple, direction, exporter/domain, timestamps, 
 
 Some exporters report zero byte counts and omit the egress index. Treat a populated ingress index as evidence at that interface. Verify the producer's timestamp and counter semantics before using Stream fields to report duration or traffic volume.
 
+For an alternate-path comparison, scope each exact tuple to its recorded
+window. Keep forward and reverse records separate even when the client port
+is reused in another run. Resolve each interface index under its own exporter
+and domain. Where a reported egress and another reporter's ingress are
+adjacent, show that link as corroborating context. The observed interface
+diversity supports maintenance planning. An outage or failover claim needs a
+measured change and an independent application result.
+
 ## Receiver (`Splunk_TA_stream/local/streamfwd.conf` on the HF)
 
 ```ini
