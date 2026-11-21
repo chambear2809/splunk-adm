@@ -73,6 +73,8 @@ class ScopeConfigTest(unittest.TestCase):
                 "te_bindings",
                 "te_path_sources",
                 "thousandeyes_origin",
+                "valid_from",
+                "valid_end",
             },
         )
         self.assertNotIn("mapping_status", definition["fields_list"].split(","))
