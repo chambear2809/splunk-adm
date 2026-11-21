@@ -33,6 +33,15 @@ The bounded reader accepts at most 32 result rows, 32 segments per capture and 1
 
 To disable the source, remove only the local macro override and verify the empty default readback. Preserve captured events and evidence receipts for historical investigation. Rolling back the frontend should restore the prior installed assets and configuration from the deployment backup.
 
+## Match pod and node sockets through NAT
+
+Verify the pod identity in the observation window. Record the original
+protocol and tuple before the request, then read the exact egress translation
+and reciprocal ingress entry. Match the translated address and port to the
+same connection at the firewall or another independent observer. A paired
+readback qualifies that connection. Continuous NAT history requires its own
+qualified producer.
+
 ## Qualify each direction across a firewall
 
 Match request and reply separately at the outside and inside capture points.
