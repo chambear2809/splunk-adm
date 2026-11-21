@@ -9,6 +9,8 @@ Choose the script for your audience:
 
 The two scripts above use repository synthetic data. They require no customer credentials, Splunk installation, collector changes or lab lifecycle. Prepare and rehearse before the meeting; these are demonstrations of behavior, not source or deployment qualification.
 
+Use the [ADM customer meeting field guide](ADM_FIELD_GUIDE.md) to rehearse the evidence and decisions for six workflows with qualified data from your own deployment.
+
 ## Presenter setup
 
 From the repository root, use Node 22.13+ within 22.x, 24.x or 26+, and npm:
