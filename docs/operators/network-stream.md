@@ -98,6 +98,8 @@ Marks the VDS hop "Seen" on path trace and lists the host on the Device page.
 - Requires the APIC VMM and adjacency classes ([ACI_VMM_ADJACENCY_CLASSES](ACI_VMM_ADJACENCY_CLASSES.md)) so the exporter resolves to a VDS.
 - Unverified: that VDS `input_snmpidx`/`output_snmpidx` carry DVS port IDs.
 
+When qualifying an existing input, read the switch, port group, and connected port policies to confirm effective IPFIX. Check delivery at the configured receiver and verify the emitting address and observation domain in indexed Stream records before registering the profile. If a search for candidate addresses returns zero matches, check a known-good exporter in the same window and label the vDS feed unqualified. [vSphere port policy](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/data-structures/VMwareDVSPortSetting/) · [Splunk Stream receipt requirements](https://help.splunk.com/en/splunk-cloud-platform/collect-stream-data/install-and-configure-splunk-stream/8.1/configure-your-splunk-stream-installation/use-splunk-stream-to-ingest-netflow-and-ipfix-data)
+
 ## Sizing
 
 Events/s ≈ active flows per exporter ÷ export interval × exporters. Size the HF, `netflow` index and license. Sampling reduces volume.
