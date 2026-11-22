@@ -22,9 +22,11 @@ Confirm which other application instances need testing when a shared backend cha
 
 ## Did security policy block the connection, or did the application fail?
 
-A user reports a timeout. Trace the failing tuple and a known-good control in their respective windows. Select the enforcement or endpoint response and confirm the location and reason. A positive policy denial supports escalation to the policy owner. A rejected HTTP request after verified TLS supports escalation to the application owner. A Smart Switch DPU return observation establishes that the request reached the DPU. It takes a matching enforcement record to assign a policy verdict.
+A user reports a timeout. Trace the failing tuple and a known-good control in their respective windows. Select the enforcement or endpoint response and confirm the location and reason. A positive policy denial supports escalation to the policy owner. A rejected HTTP request after verified TLS supports escalation to the application owner.
 
 Capture the control and the relevant selected detail. Label any unverified application response in the caption.
+
+If the lab has a qualified Cisco Nexus Smart Switch replay, start with a user reporting an SSH timeout. Open the saved **Trace** and select the DPU observation labeled **SYN returned**. The network team can verify that the exact connection attempt reached the DPU. The application team still needs evidence of the server response, and the security team needs a matching enforcement record to assign a verdict. Capture the selected DPU observation and label the SSH response as unverified when the evidence ends at the returned SYN.
 
 ## Can users still save if a leaf goes out of service?
 
@@ -37,3 +39,7 @@ Choose what to validate in the maintenance window. Capture both selections with 
 A network engineer opens **Device** for a busy exporter and sorts the displayed conversations by **Flows**. Read the selected time window, the number of records sampled and any result cap. Choose a high-count conversation and open it in Trace.
 
 Use the ranked sample to prioritize inspection. Capture the sorted table with the window and cap visible.
+
+## Kubernetes topology reference
+
+When the demo includes a Kubernetes workload, show the client-facing Gateway and the serving nodes alongside their physical attachments. Label HTTPRoute backends as configured dependencies. Use matching firewall, host or Hubble observations to confirm individual segments for the selected request. Mark where coverage ends and record any translation boundary where the tuple changes. [Kubernetes telemetry setup and verification](../operators/kubernetes-platform.md)
