@@ -132,6 +132,17 @@ vNIC and physical uplink. A vNIC capture can have untagged Ethernet headers
 while the uplink capture reports VLAN metadata. Use an independent receipt
 for the exact connection to identify the leaf ingress.
 
+For a recorded VMware migration, match the VM identity and vCenter event
+chain before assigning the source and destination hosts. Distinguish a queued
+task, a relocation followed by power-on, and a recorded migration. Use separate
+application or packet evidence in the original event window to assess
+connection continuity. [vSphere DRS migration event](https://developer.broadcom.com/xapis/vsphere-web-services-api/latest/vim.event.DrsVmMigratedEvent.html)
+
+If the original event predates the validation index's retention window,
+retain a readback snapshot with its own collection time. Display the original
+vCenter event times for the chronology. Retain the source event keys and
+receipt digest so the replay can be verified against the original chain.
+
 For a Layer 2 Gateway VIP, keep lease and ARP cache readbacks as ownership
 evidence at their sampling time. To verify a connection at that attachment,
 match the exact TCP SYN and SYN-ACK at the adjacent interface and VM vNIC.
