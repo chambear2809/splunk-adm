@@ -27,8 +27,10 @@ A bounded ASIC receive-pipeline report can identify ingress and the
 hardware-selected egress for one exact packet. Record the decoded tuple and
 interface pair. A matching connection at the adjacent ingress, joined by
 reciprocal LLDP, corroborates the handoff. Keep the original flow record’s
-missing output separate from any later capture, and verify that the temporary
-trigger is cleared. [Cisco NX-OS Packet Tracer](https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/106x/configuration/troubleshooting/cisco-nexus-9000-series-nx-os-troubleshooting-guide-106x/m-troubleshooting-packet-flow-issues.html)
+missing output separate from any later capture, even when a client port was
+reused. Verify the exact tuple and absolute window with each observer, keep
+request and reply evidence separate, and verify that the temporary trigger is
+cleared. [Cisco NX-OS Packet Tracer](https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/106x/configuration/troubleshooting/cisco-nexus-9000-series-nx-os-troubleshooting-guide-106x/m-troubleshooting-packet-flow-issues.html)
 
 Independent segments remain separated by ordering gaps. A pod tuple and a post-masquerade node tuple need explicit translation or handoff evidence before they can be represented as one transport leg. Without that proof, record the workload correlation as a limitation and trace the node tuple independently. Source labels must describe the actual collection method, including CLI cache snapshots. Never emit a CLI snapshot under a vendor continuous-export sourcetype.
 
