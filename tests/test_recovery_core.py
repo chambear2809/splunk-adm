@@ -104,6 +104,18 @@ class RecoveryDeploymentTest(unittest.TestCase):
                 )
                 self.qualify(responses)
 
+    def test_new_standalone_build_must_match_exactly(self):
+        for build in ("b2ae2962645c", None, "wrong"):
+            with self.subTest(build=build):
+                responses = self.responses()
+                server = responses["/services/server/info"]["entry"][0]["content"]
+                server.update(version="10.6.1.1", build=build)
+                if build == "b2ae2962645c":
+                    self.qualify(responses)
+                else:
+                    with self.assertRaises(Refused):
+                        self.qualify(responses)
+
     def test_other_or_malformed_versions_are_refused(self):
         for version in (
             "10.6.1",
