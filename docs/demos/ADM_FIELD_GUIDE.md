@@ -18,6 +18,8 @@ Choose a conversation the network team can investigate in Trace. Capture the dev
 
 An application owner opens the invoice form. Open its **Services** map and select the entry service and the downstream database dependency. Identify shared backends and inspect each edge’s evidence. Where a database proxy stands between the app and database, compare the application spans with independently correlated sockets.
 
+The form read establishes the dependency for that action. Use the recorded Save in **Trace** to show the database commit.
+
 Confirm which other application instances need testing when a shared backend changes. Capture the map, its scope and the selected edge.
 
 ## Did security policy block the connection, or did the application fail?

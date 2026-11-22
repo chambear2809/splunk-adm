@@ -65,6 +65,8 @@ Use the Services view with an explicit `vm_scope`, service and environment, and 
 
 The reader must verify the source authority, VM identity, trace and span IDs, and complete observation window before emitting graph rows. Use the root ID `service:vm/<scope>/<service>/<environment>`. Keep the caller's index permissions and return one metadata row, even when a scope or window has no qualifying evidence. When the span lacks a peer address, only a separately matched socket can support a correlated endpoint. A proxy listener and its upstream database require a paired socket observation. Keep VM telemetry under its actual resource identity.
 
+For a write canary, first verify that a form read exports a server span and related database client spans through the same collector and filter. Raw OTLP JSON can encode span kinds as integers (`2` for server and `3` for client), so check the raw capture before filtering by span kind. Qualify the write using the Save span and its own database child spans, then check the database commit independently.
+
 ## Automation skills
 
 Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
