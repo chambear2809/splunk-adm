@@ -81,6 +81,11 @@ healthy comparison window. To attribute an incident to the link, capture the
 counter change in the incident window and corroborate it with independent
 evidence of the affected connection or user outcome.
 
+For an optical baseline, compare transmit and receive dBm at both ends with
+each optic’s reported warning thresholds. Keep the sample times alongside the
+link identity and bracket the readings with independent traffic and error
+counters. Use a separate qualification to verify continuous optical collection.
+
 When two devices reuse an ifIndex, verify each device and source address
 association in the selected scope. Run a swapped-source control in the same
 time window. If the collector encodes link state as separate 0/1 gauge series,
