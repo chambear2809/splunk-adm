@@ -76,6 +76,11 @@ TTL change separately. The matched headers qualify the observed endpoints,
 including an asymmetric uplink choice when both directions are captured.
 Forwarding at intermediate switches requires its own evidence.
 
+For an attachment check during a recorded user action, give the exact window
+around the click and report request and reply match counts separately. TCP
+header counts can include acknowledgements and setup packets. Use the
+application receipt to establish which action completed.
+
 A matching firewall verdict establishes the recorded policy action. If the
 firewall changes TCP sequence numbers, derive each direction's offset from the
 captured handshake and verify it against additional unique headers. Across a
