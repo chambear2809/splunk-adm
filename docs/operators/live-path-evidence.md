@@ -132,6 +132,14 @@ vNIC and physical uplink. A vNIC capture can have untagged Ethernet headers
 while the uplink capture reports VLAN metadata. Use an independent receipt
 for the exact connection to identify the leaf ingress.
 
+For a Layer 2 Gateway VIP, keep lease and ARP cache readbacks as ownership
+evidence at their sampling time. To verify a connection at that attachment,
+match the exact TCP SYN and SYN-ACK at the adjacent interface and VM vNIC.
+Verify that the reply acknowledges the SYN and that the SYN destination and
+SYN-ACK source both match the vNIC MAC. Retain each VIP's tuple and capture
+window separately. Evidence of a fresh ARP exchange or a BGP advertisement
+requires its own observation.
+
 Compare counter deltas over the same sample buckets at both ends. Preserve the
 sample count, link state, and carrier transitions. Leave missing or reset
 counters unqualified. Traffic with no observed error or discard increase is a
