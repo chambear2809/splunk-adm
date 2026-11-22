@@ -28,6 +28,9 @@ import {
 import { emptyTopology } from "../topology";
 import { sourceLabel } from "../glossary";
 import { resolveTime } from "../data/timeBounds";
+import { assemblePathEvidence } from "./pathEvidence";
+import { nativeObservationHops, nativeSourceHops } from "./nativeObservations";
+import { attachGnmiContext } from "./gnmiContext";
 
 export const MAX_PATH_TRACE_ROWS = 2000;
 
@@ -73,6 +76,7 @@ export function assembleScopedTrace(
   request: TraceRequest,
   graph: Graph,
   rows: readonly unknown[],
+  window?: { start: number; end: number },
 ) {
   const topo = indexTopology(emptyTopology());
   const sources = new Map<string, { records: number; drops: number }>();
@@ -95,14 +99,27 @@ export function assembleScopedTrace(
       });
     }
   }
-  const gap =
-    "Scoped path topology and NetFlow are unavailable for this window.";
+  const nativeHops = attachGnmiContext(
+    [
+      ...nativeSourceHops(rows, request),
+      ...nativeObservationHops(rows, request),
+    ],
+    rows,
+    { scope: request.scope, earliest: window?.start, latest: window?.end },
+  );
+  const gap = "A complete scoped packet route is unavailable for this window.";
   const trace: PathTrace = {
     status: "partial",
     src: resolveTraceEndpoint(request.src, graph, topo),
     dst: resolveTraceEndpoint(request.dst, graph, topo),
-    hops: [{ kind: "gap", label: gap, evidence: "gap", sources: [], seen: [] }],
-    gaps: [gap],
+    hops: nativeHops.length
+      ? nativeHops
+      : [{ kind: "gap", label: gap, evidence: "gap", sources: [], seen: [] }],
+    gaps: nativeHops.length
+      ? nativeHops
+          .filter((hop) => hop.evidence === "gap")
+          .map((hop) => hop.label)
+      : [gap],
     conversations: [],
     drops: [],
     notes: [
@@ -120,6 +137,47 @@ export function assembleScopedTrace(
     ],
   };
   return { trace, summary: traceSummary([]), topo };
+}
+
+/** Combine bounded captures with independently reported source observations. */
+export function assembleStandaloneResult(
+  request: TraceRequest,
+  result: {
+    addresses: TraceRequest;
+    window?: { start: number; end: number };
+    graph: Graph;
+    rows: readonly unknown[];
+    evidence: Parameters<typeof assemblePathEvidence>[2];
+  },
+) {
+  const addresses = { ...result.addresses, scope: request.scope };
+  const scoped = assembleScopedTrace(
+    addresses,
+    result.graph,
+    result.rows,
+    result.window,
+  );
+  if (!result.evidence.length) return scoped;
+  const trace = assemblePathEvidence(request, result.graph, result.evidence);
+  const nativeHops = scoped.trace.hops.filter(
+    (hop) =>
+      hop.kind !== "gap" || hop.sources.length || scoped.trace.hops.length > 1,
+  );
+  return {
+    trace: {
+      ...trace,
+      hops: [...trace.hops, ...nativeHops],
+      gaps: [
+        ...trace.gaps,
+        ...nativeHops
+          .filter((hop) => hop.evidence === "gap")
+          .map((hop) => hop.label),
+      ],
+      notes: [...trace.notes, ...scoped.trace.notes],
+    },
+    summary: traceSummary([]),
+    topo: scoped.topo,
+  };
 }
 
 /** Resolves a name or IP to the IP adm_path_trace needs. */
@@ -240,7 +298,7 @@ export function usePathTrace({
         .then((r) =>
           done({
             status: "done",
-            ...assembleScopedTrace(r.addresses, r.graph, r.rows),
+            ...assembleStandaloneResult(pair, r),
           }),
         )
         .catch(fail);
@@ -301,7 +359,7 @@ export function usePathTrace({
       .then((r) =>
         done({
           status: "done",
-          ...assembleScopedTrace(r.addresses, r.graph, r.rows),
+          ...assembleStandaloneResult({ ...pair, scope }, r),
         }),
       )
       .catch(fail);

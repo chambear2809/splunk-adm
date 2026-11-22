@@ -16,6 +16,21 @@ describe("Atlas deep links", () => {
     );
     expect(parseUrlState(stateParams(state))).toEqual(state);
   });
+  it("round trips an explicit VM map scope without Kubernetes identity", () => {
+    const state = parseUrlState(
+      new URLSearchParams(
+        "mode=live&service=invoice&environment=validation&vm_scope=validation-invoice-hs2&earliest=1795283857&latest=1795284000&tab=services",
+      ),
+    );
+    expect(state.args).toEqual({
+      service: "invoice",
+      environment: "validation",
+      cluster: "",
+      namespace: "",
+      vmScope: "validation-invoice-hs2",
+    });
+    expect(parseUrlState(stateParams(state))).toEqual(state);
+  });
   it.each([
     "service=foo%22%29%7Cdelete",
     "namespace=bad%0Aname",
@@ -28,6 +43,7 @@ describe("Atlas deep links", () => {
     "tab=other",
     "q=%00",
     "scenario=other",
+    "mode=live&service=invoice&environment=validation&vm_scope=validation-invoice-hs2&earliest=100&latest=401",
   ])("rejects unsafe or invalid state %s", (query) => {
     expect(() => parseUrlState(new URLSearchParams(query))).toThrow();
   });

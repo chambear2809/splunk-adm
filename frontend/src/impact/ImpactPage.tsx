@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Download, Map as MapIcon, RefreshCw, X, Zap } from "lucide-react";
 import {
   SearchAccessDeniedError,
@@ -9,15 +9,13 @@ import { plural, prettyBytes } from "../glossary";
 import { TimePicker } from "../map/TimePicker";
 import { ExploreTabs, deviceURL, traceURL } from "../pages/ExploreTools";
 import { pageURL } from "../app/urlState";
-import { loadTopology } from "../provider";
 import { VirtualTable, type VirtualColumn } from "../scale/VirtualTable";
 import type { Theme } from "../theme";
-import { traceTopology } from "../trace/traceModel";
 import { blastGraph } from "./blast";
 import { BlastMap } from "./BlastMap";
 import { classifier, compileFailure, type Classified } from "./classify";
 import { impactCsv } from "./csv";
-import { loadLiveImpact, windowHours, type ImpactData } from "./data";
+import { loadLiveImpact, type ImpactData } from "./data";
 import { loadDemoImpact } from "./demo";
 import { isImpactToken, MAX_IMPACT_ELEMENTS } from "./elements";
 import {
@@ -32,6 +30,12 @@ import {
   type Split,
 } from "./model";
 import { impactURL, isImpactScope, parseImpactParams } from "./url";
+import { ObservedJourneyImpact } from "./ObservedJourneyImpact";
+import {
+  observedImpactClassifier,
+  observedImpactData,
+  observedJourneyImpact,
+} from "./observedImpact";
 import "./impact.css";
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 
@@ -203,10 +207,10 @@ const failsColumns = (hours?: number): VirtualColumn<Classified>[] => [
     key: "ev",
     header: "Traversal",
     headerTitle:
-      "Observed: exported by a collector at the failed element. Inferred: from topology only.",
+      "Observed: direct evidence for this connection. Linked leg: observed on another TCP connection in this journey. Inferred: topology only.",
     render: (c) => (
       <span className={c.traversal === "observed" ? "" : "atlas-inferred"}>
-        {c.traversal}
+        {c.linkedTraversal ? "Linked leg" : c.traversal}
       </span>
     ),
     sortValue: (c) => c.traversal,
@@ -314,11 +318,14 @@ function Kpi({
 function ElementPicker({
   elements,
   onChange,
+  devices,
 }: {
   elements: string[];
   onChange: (e: string[]) => void;
+  devices?: NonNullable<ImpactData["observed"]>["devices"];
 }) {
   const id = useId();
+  const choices = devices?.filter((device) => !elements.includes(device.id));
   const [value, setValue] = useState("");
   const v = value.trim();
   const full = elements.length >= MAX_IMPACT_ELEMENTS;
@@ -360,11 +367,21 @@ function ElementPicker({
             : "Device, IP, VM, app, interface"
         }
         autoComplete="off"
+        list={choices?.length ? `${id}-choices` : undefined}
         spellCheck={false}
         disabled={full}
         value={value}
         onChange={(e) => setValue(e.target.value)}
       />
+      {!!choices?.length && (
+        <datalist id={`${id}-choices`}>
+          {choices.map((device) => (
+            <option key={device.id} value={device.id}>
+              {device.name}
+            </option>
+          ))}
+        </datalist>
+      )}
       <button className="atlas-button" type="submit" disabled={!valid}>
         {elements.length ? "Add" : "Go"}
       </button>
@@ -402,6 +419,11 @@ export function ImpactPage({
   const [scope, setScope] = useState(initial.scope ?? "");
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "idle" });
+  const qualified = useRef<{
+    key: string;
+    client: SearchClient;
+    cohort: NonNullable<ImpactData["observed"]>;
+  }>();
 
   // The URL is the shareable state.
   useEffect(() => {
@@ -430,35 +452,33 @@ export function ImpactPage({
       return;
     }
     const controller = new AbortController();
-    setLoad({ status: "loading" });
+    const key = JSON.stringify([scope, earliest, latest, timezone, nonce]);
+    const cached = qualified.current;
     const task: Promise<ImpactData> = demo
       ? loadDemoImpact(elements)
-      : client
-        ? loadLiveImpact({
-            tokens: elements,
-            client,
-            earliest,
-            latest,
-            scope,
-            timezone,
-            signal: controller.signal,
-            loadBaseTopology: () =>
-              // Inventory changes slowly: read at least a day of it.
-              loadTopology(
-                client,
-                /^-\d+[smh]$/.test(earliest) ? "-24h" : earliest,
-                controller.signal,
-                latest,
-                timezone,
-              ),
-            merge: traceTopology,
-          }).then((d) => ({ ...d, hours: windowHours(earliest, latest) }))
-        : Promise.reject(new Error("Live search runs inside Splunk."));
+      : cached?.key === key && cached.client === client
+        ? Promise.resolve().then(() =>
+            observedImpactData(cached.cohort, elements),
+          )
+        : client
+          ? loadLiveImpact({
+              tokens: elements,
+              client,
+              earliest,
+              latest,
+              scope,
+              timezone,
+              signal: controller.signal,
+            })
+          : Promise.reject(new Error("Live search runs inside Splunk."));
+    setLoad({ status: "loading" });
     task
-      .then(
-        (data) =>
-          !controller.signal.aborted && setLoad({ status: "done", data }),
-      )
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        if (client && data.observed)
+          qualified.current = { key, client, cohort: data.observed };
+        setLoad({ status: "done", data });
+      })
       .catch(
         (e: unknown) =>
           !controller.signal.aborted &&
@@ -472,13 +492,26 @@ export function ImpactPage({
   }, [elements, demo, client, earliest, latest, timezone, scope, nonce]);
 
   const data = load.status === "done" ? load.data : undefined;
-  const cls = useMemo(() => data && classifier(data.ctx), [data]);
+  const cls = useMemo(
+    () =>
+      data &&
+      (data.observed
+        ? observedImpactClassifier(data.ctx, data.observed)
+        : classifier(data.ctx)),
+    [data],
+  );
   const resolved = useMemo(
     () => data?.elements.filter((e) => e.resolved) ?? [],
     [data],
   );
   const result: FailsResult | DependsResult | undefined = useMemo(() => {
-    if (!data || !cls || !resolved.length) return undefined;
+    if (
+      !data ||
+      !cls ||
+      !resolved.length ||
+      (data.observed && mode === "depends")
+    )
+      return undefined;
     return mode === "fails"
       ? failsImpact(resolved, data.conversations, data.ctx, {
           hours: data.hours,
@@ -494,7 +527,23 @@ export function ImpactPage({
         : undefined,
     [result, cls, resolved],
   );
+  const observed = data?.observed;
+  const journeys = useMemo(
+    () =>
+      observed ? observedJourneyImpact(observed, compileFailure(resolved)) : [],
+    [observed, resolved],
+  );
+  const exposed = journeys.filter((journey) => journey.exposed.length > 0);
+  const browserJourneys = exposed.filter(
+    (journey) => journey.actor === "browser",
+  ).length;
+  const observedHead =
+    result?.mode === "fails" && observed
+      ? `${result.label} what-if · ${plural(new Set(exposed.map((j) => j.app)).size, "app")} with observed exposure · ${plural(browserJourneys, "browser journey exposed", "browser journeys exposed")}`
+      : undefined;
   const unresolved = data?.elements.filter((e) => !e.resolved) ?? [];
+  const deviceChoices = observed?.devices.map((device) => device.name);
+  const failedDeviceIds = resolved.flatMap((element) => [...element.devices]);
   const exportCsv = () => {
     if (!result || !data) return;
     downloadBlob(
@@ -503,7 +552,7 @@ export function ImpactPage({
         .replace(/[^A-Za-z0-9.+_-]+/g, "_")
         .slice(0, 80)}.csv`,
       "text/csv;charset=utf-8",
-      impactCsv(result, {
+      impactCsv(observedHead ? { ...result, headline: observedHead } : result, {
         window: `${earliest} to ${latest}`,
         source: data.source,
         generated: new Date().toISOString(),
@@ -523,7 +572,11 @@ export function ImpactPage({
     <main className="atlas-page atlas-page-wide atlas-explore atlas-impact-page">
       <ExploreTabs />
       <div className="atlas-explore-tools">
-        <ElementPicker elements={elements} onChange={setElements} />
+        <ElementPicker
+          elements={elements}
+          onChange={setElements}
+          devices={observed?.devices}
+        />
         {!demo && (
           <label>
             Routing scope
@@ -550,6 +603,7 @@ export function ImpactPage({
               type="button"
               role="radio"
               aria-checked={mode === m}
+              disabled={!demo && m === "depends"}
               className={mode === m ? "active" : ""}
               onClick={() => setMode(m)}
             >
@@ -649,10 +703,22 @@ export function ImpactPage({
               UTC (none in this window)
             </p>
           ))}
+        {deviceChoices?.length && (
+          <p className="muted small">
+            Fixed-window evidence · Devices in this sample{" "}
+            {deviceChoices.join(", ")}
+          </p>
+        )}
+        {observed && mode === "depends" && (
+          <p role="status">
+            Select If this fails to compare the fixed-window device
+            observations.
+          </p>
+        )}
         {result && (
           <>
             <h1 className="atlas-impact-headline" aria-live="polite">
-              {result.headline.split(" · ").map((part, i) => (
+              {(observedHead ?? result.headline).split(" · ").map((part, i) => (
                 <Fragment key={part}>
                   {i > 0 && " · "}
                   {/possibly affected$/.test(part) ? (
@@ -670,38 +736,49 @@ export function ImpactPage({
             </h1>
             {result.mode === "fails" ? (
               <>
-                <div
-                  className="kpis atlas-impact-kpis"
-                  aria-label="Impact by severity"
-                >
-                  <Kpi label="Apps" split={result.kpis.apps} />
-                  <Kpi label="Services" split={result.kpis.services} />
-                  <Kpi label="Workloads" split={result.kpis.workloads} />
-                  <Kpi
-                    label="Conversations"
-                    split={result.kpis.conversations}
+                {observed && (
+                  <ObservedJourneyImpact
+                    cohort={observed}
+                    journeys={journeys}
+                    selectedDevices={failedDeviceIds}
                   />
-                  <Kpi
-                    label={data?.hours ? "Traffic/h" : "Traffic"}
-                    split={result.kpis.bytes}
-                    format={(n) =>
-                      n
-                        ? prettyBytes(Math.round(perHour(n, data?.hours) ?? n))
-                        : "0"
-                    }
-                  />
-                  <Kpi label="External" split={result.kpis.external} />
-                  <span className="atlas-impact-legend muted small">
-                    <i className="atlas-sev-n outage" /> outage{" "}
-                    <i className="atlas-sev-n degraded" /> degraded
-                  </span>
-                </div>
+                )}
+                {!observed && (
+                  <div
+                    className="kpis atlas-impact-kpis"
+                    aria-label="Impact by severity"
+                  >
+                    <Kpi label="Apps" split={result.kpis.apps} />
+                    <Kpi label="Services" split={result.kpis.services} />
+                    <Kpi label="Workloads" split={result.kpis.workloads} />
+                    <Kpi
+                      label="Conversations"
+                      split={result.kpis.conversations}
+                    />
+                    <Kpi
+                      label={data?.hours ? "Traffic/h" : "Traffic"}
+                      split={result.kpis.bytes}
+                      format={(n) =>
+                        n
+                          ? prettyBytes(
+                              Math.round(perHour(n, data?.hours) ?? n),
+                            )
+                          : "0"
+                      }
+                    />
+                    <Kpi label="External" split={result.kpis.external} />
+                    <span className="atlas-impact-legend muted small">
+                      <i className="atlas-sev-n outage" /> outage{" "}
+                      <i className="atlas-sev-n degraded" /> degraded
+                    </span>
+                  </div>
+                )}
                 <div className="atlas-impact-grid">
                   <section
                     aria-label="Top impacted apps"
                     className="atlas-impact-apps"
                   >
-                    <h2>Apps</h2>
+                    <h2>{observed ? "Apps with observed exposure" : "Apps"}</h2>
                     {result.apps.length ? (
                       <ol>
                         {result.apps.slice(0, 10).map((a) => (
@@ -745,14 +822,20 @@ export function ImpactPage({
                 <div className="atlas-impact-table">
                   <VirtualTable
                     caption={
-                      data && data.total > data.conversations.length
-                        ? `${result.rows.length.toLocaleString()} affected · top ${data.conversations.length.toLocaleString()} of ${data.total.toLocaleString()} conversations`
-                        : `${result.rows.length.toLocaleString()} affected of ${result.total.toLocaleString()} conversations`
+                      observed
+                        ? `${result.rows.length} of ${result.total} recorded samples with evidence on the selection`
+                        : data && data.total > data.conversations.length
+                          ? `${result.rows.length.toLocaleString()} affected · top ${data.conversations.length.toLocaleString()} of ${data.total.toLocaleString()} conversations`
+                          : `${result.rows.length.toLocaleString()} affected of ${result.total.toLocaleString()} conversations`
                     }
                     rows={result.rows}
                     columns={failsColumns(data?.hours)}
                     rowKey={(c) => c.conv.id}
-                    empty="No observed conversation traverses this element"
+                    empty={
+                      observed
+                        ? "No traversal of the selection in these recorded samples"
+                        : "No observed conversation traverses this element"
+                    }
                   />
                 </div>
               </>
@@ -793,7 +876,9 @@ export function ImpactPage({
                   </a>
                 ))}
               <span>
-                Observed = exported at the element · inferred = topology only
+                {observed
+                  ? "Observed evidence for selected devices · fixed-window sample"
+                  : "Observed = exported at the element · inferred = topology only"}
                 {data?.capped
                   ? " · record cap reached, totals are lower bounds"
                   : ""}

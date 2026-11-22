@@ -416,3 +416,30 @@ i.atlas-sev-n.degraded {
   padding-left: 16px;
   columns: 2;
 }
+
+.atlas-impact-observed {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--adm-line, #ccd2d8);
+  border-radius: 8px;
+}
+.atlas-impact-observed h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+.atlas-impact-observed p {
+  margin: 0 0 8px;
+}
+.atlas-impact-observed-scroll {
+  overflow-x: auto;
+}
+.atlas-impact-observed table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.atlas-impact-observed th,
+.atlas-impact-observed td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--adm-line, #ccd2d8);
+}

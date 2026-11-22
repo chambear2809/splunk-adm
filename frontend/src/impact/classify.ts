@@ -50,6 +50,8 @@ export interface Classified {
   severity: Severity;
   /** observed: a collector at a failed element exported this conversation. */
   traversal: Evidence;
+  /** A sibling TCP connection linked to this recorded user action. */
+  linkedTraversal?: true;
   alternate: string[];
   alternateEvidence?: Evidence;
   /** Terse reason, e.g. "single-homed", "vPC peer", "ECMP", "endpoint down". */

@@ -43,6 +43,33 @@ describe("buildGraphSearch", () => {
       buildGraphSearch(ok, '") | delete' as unknown as "raw"),
     ).toThrow();
   });
+  it("uses the VM reader for an explicit bounded absolute scope", () => {
+    expect(
+      buildGraphSearch({
+        service: "invoice",
+        environment: "validation",
+        cluster: "",
+        namespace: "",
+        vmScope: "validation-invoice-hs2",
+        earliest: "1795283857",
+        latest: "1795284000",
+      }),
+    ).toBe(
+      '| `adm_vm_application_graph_read("invoice","validation","validation-invoice-hs2")`',
+    );
+  });
+  it("rejects VM scopes without an exact short absolute window", () => {
+    expect(() =>
+      buildGraphSearch({
+        ...ok,
+        cluster: "",
+        namespace: "",
+        vmScope: "validation-invoice-hs2",
+        earliest: "-15m",
+        latest: "now",
+      }),
+    ).toThrow(/absolute/);
+  });
 });
 describe("messages", () => {
   it("normalizes and bounds messages", () => {

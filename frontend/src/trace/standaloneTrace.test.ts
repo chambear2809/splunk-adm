@@ -95,6 +95,8 @@ const fakeClient = (requests: SearchRequest[]): SearchClient => ({
         warnings: [],
         errors: [],
       };
+    if (request.search.includes("adm_path_evidence("))
+      return { rows: [], warnings: [], errors: [] };
     throw new Error(`Unexpected search ${request.search}`);
   },
 });
@@ -122,6 +124,7 @@ describe("trace without a built map", () => {
       "orders-db-01",
     ]);
     expect(result.topology.devices).toEqual([]);
+    expect(result.evidence).toEqual([]);
     expect(result.rows).toHaveLength(1);
     const trace = assembleScopedTrace(
       result.addresses,

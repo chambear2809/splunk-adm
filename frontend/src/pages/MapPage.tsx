@@ -493,9 +493,12 @@ function StandardMapPage({
     clearSelection();
     setPanel("scope");
   };
-  const argErrors = ARG_FIELDS.map(([key]) => argError(key, args[key])).filter(
-    Boolean,
-  );
+  const argErrors = args.vmScope
+    ? [
+        argError("service", args.service),
+        argError("environment", args.environment),
+      ].filter(Boolean)
+    : ARG_FIELDS.map(([key]) => argError(key, args[key])).filter(Boolean);
 
   const {
     exportBusy,
@@ -593,7 +596,12 @@ function StandardMapPage({
           className="scope-button"
           aria-label="Scope"
           aria-expanded={panel === "scope"}
-          title={[args.environment, args.cluster, args.namespace, args.service]
+          title={[
+            args.environment,
+            args.vmScope ? `VM:${args.vmScope}` : args.cluster,
+            args.vmScope ? "" : args.namespace,
+            args.service,
+          ]
             .filter(Boolean)
             .join(" · ")}
           onClick={() => togglePanel("scope")}
@@ -606,10 +614,18 @@ function StandardMapPage({
             {(visible
               ? [
                   graph.boundary.environment,
-                  graph.boundary.cluster,
-                  graph.boundary.namespace,
+                  (graph.boundary as GraphArgs).vmScope
+                    ? `VM scope: ${(graph.boundary as GraphArgs).vmScope}`
+                    : graph.boundary.cluster,
+                  (graph.boundary as GraphArgs).vmScope
+                    ? ""
+                    : graph.boundary.namespace,
                 ]
-              : [args.environment, args.cluster, args.namespace]
+              : [
+                  args.environment,
+                  args.vmScope ? `VM scope: ${args.vmScope}` : args.cluster,
+                  args.vmScope ? "" : args.namespace,
+                ]
             )
               .filter(Boolean)
               .join(" · ")}
@@ -776,22 +792,42 @@ function StandardMapPage({
             className="popover scope-popover"
             aria-label="Application scope"
           >
-            <ScopeBar
-              args={args}
-              live={mode === "live"}
-              autoSelectSingle
-              client={client}
-              scenario={scenario}
-              demoArgs={
-                !__ADM_SPLUNK_BUILD__ && mode === "demo"
-                  ? demoArgsFor(scenario)
-                  : undefined
-              }
-              onChange={(next) => {
-                cancelQuery();
-                setArgs(next);
-              }}
-            />
+            {args.vmScope ? (
+              <div>
+                <p>VM scope: {args.vmScope}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    cancelQuery();
+                    setArgs({
+                      service: "",
+                      environment: "",
+                      cluster: "",
+                      namespace: "",
+                    });
+                  }}
+                >
+                  Choose Kubernetes scope
+                </button>
+              </div>
+            ) : (
+              <ScopeBar
+                args={args}
+                live={mode === "live"}
+                autoSelectSingle
+                client={client}
+                scenario={scenario}
+                demoArgs={
+                  !__ADM_SPLUNK_BUILD__ && mode === "demo"
+                    ? demoArgsFor(scenario)
+                    : undefined
+                }
+                onChange={(next) => {
+                  cancelQuery();
+                  setArgs(next);
+                }}
+              />
+            )}
             {!__ADM_SPLUNK_BUILD__ && mode === "demo" && (
               <p className="muted small">
                 Demo scope is fixed ·{" "}

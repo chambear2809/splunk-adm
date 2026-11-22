@@ -8,6 +8,45 @@ import { MAX_EDGES, MAX_NODES, rowsToGraph, type Row } from "./rows";
 const args = demo.args;
 const rows = (): Row[] => structuredClone(demo.rows) as Row[];
 const graph = () => rowsToGraph(rows(), args, { demo: true });
+
+it("renders correlated VM service edges without Kubernetes dimensions", () => {
+  const scope = {
+    service: "invoice",
+    environment: "validation",
+    cluster: "",
+    namespace: "",
+    vmScope: "vm-lab",
+  };
+  const root = "service:vm/vm-lab/invoice/validation";
+  const evidence: Row[] = [
+    { row_type: "node", id: root, label: "Invoice", kind: "service" },
+    { row_type: "node", id: "service:pg1", label: "pg1", kind: "service" },
+    {
+      row_type: "edge",
+      id: "invoice-db",
+      source: root,
+      target: "service:pg1",
+      relationship: "calls",
+      confidence: "correlated",
+      evidence: ["Matched TLS socket"],
+      count: "1",
+    },
+    {
+      row_type: "meta",
+      generated_at: "1795283860",
+      window_start: "1795283855",
+      window_end: "1795283861",
+      spans: "2",
+    },
+  ];
+  const actual = rowsToGraph(evidence, scope);
+  expect(actual.boundary).toMatchObject({ ...scope, root_node_id: root });
+  expect(actual.edges[0]).toMatchObject({ confidence: "correlated" });
+  expect(() => rowsToGraph(evidence, { ...scope, cluster: "k3s" })).toThrow(
+    /boundary/,
+  );
+});
+
 const natObservation = () => ({
   source_authority: "cisco:sfw:estreamer",
   event_type: "ConnectionEvent",

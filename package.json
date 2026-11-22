@@ -42,5 +42,22 @@
     "typescript-eslint": "^8.71.1",
     "vite": "8.3.3",
     "vitest": "5.0.3"
-  }
+  },
+  "description": "**Network-first application dependency mapping for Splunk:** see which systems talk, over which path, and what breaks when a device fails, built from Cisco, VMware and Kubernetes data you already collect.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chambear2809/splunk-adm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chambear2809/splunk-adm/issues"
+  },
+  "homepage": "https://github.com/chambear2809/splunk-adm#readme"
 }

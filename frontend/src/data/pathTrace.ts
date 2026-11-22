@@ -48,6 +48,14 @@ export interface TraceHop {
   notSeen?: { device: string; label: string }[];
   /** Inferred hop backed by control-plane evidence (never packet observation). */
   support?: string[];
+  /** Optional, exact exporter/interface telemetry; never a route hop. */
+  interfaceContext?: Array<{
+    interface: string;
+    ifIndex?: string;
+    authority: string;
+    operStatus?: { value: string; sampledAt: number };
+    counters: Record<string, { value: number; sampledAt: number }>;
+  }>;
 }
 /** adm_fabric_path_evidence rows: IS-IS adjacencies and COOP endpoint records. */
 export interface FabricEvidence {
@@ -544,13 +552,14 @@ export function pathTraceObservers(rows: unknown): string[] {
 }
 
 /** Plain-text summary of one hop's evidence for tables and exports. */
-export const hopEvidenceText = (h: TraceHop) =>
-  h.evidence === "observed" && h.kind !== "endpoint"
-    ? `Observed by ${h.sources.map(sourceLabel).join(", ")}`
-    : h.evidence === "gap"
-      ? "No evidence"
-      : h.support?.length
-        ? `Inferred; supported by ${h.support.join(", ")}`
-        : h.kind === "endpoint"
-          ? "Endpoint"
-          : "Inferred from topology";
+export function hopEvidenceText(hop: TraceHop): string {
+  if (hop.evidence === "gap") return "No evidence";
+  if (hop.evidence === "observed") {
+    if (hop.sources.length)
+      return `Observed by ${hop.sources.map(sourceLabel).join(", ")}`;
+    return hop.kind === "endpoint" ? "Endpoint" : "Observed";
+  }
+  if (hop.support?.length)
+    return `Inferred; supported by ${hop.support.join(", ")}`;
+  return hop.kind === "endpoint" ? "Endpoint" : "Inferred from topology";
+}
