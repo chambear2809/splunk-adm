@@ -560,6 +560,7 @@ class TopologyGateTests(unittest.TestCase):
         cluster=None,
         member=None,
         version="10.6.0.5",
+        build=None,
         **current,
     ):
         from adm_settings_lib.rest import SplunkStore
@@ -575,6 +576,7 @@ class TopologyGateTests(unittest.TestCase):
                 elif "server/info" in path:
                     value = {
                         "version": version,
+                        "build": build,
                         "product_type": "enterprise",
                         "guid": server_guid,
                     }
@@ -854,6 +856,19 @@ class TopologyGateTests(unittest.TestCase):
         ):
             with self.subTest(values=values), self.assertRaises(SettingsError):
                 self.store(**values).persistence()
+
+    def test_new_build_is_standalone_only(self):
+        self.store(version="10.6.1.1", build="b2ae2962645c").persistence()
+        for build in (None, "wrong"):
+            with self.subTest(build=build), self.assertRaises(SettingsError):
+                self.store(version="10.6.1.1", build=build).persistence()
+        with self.assertRaises(SettingsError):
+            self.store(
+                mode="qualified_shc",
+                version="10.6.1.1",
+                build="b2ae2962645c",
+                standalone="0",
+            ).persistence()
 
     def test_unqualified_version_names_the_qualified_and_reported_versions(self):
         for version in ("10.6.1", "10.6.0.6", "10.7.0"):

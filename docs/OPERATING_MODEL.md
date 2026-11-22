@@ -5,11 +5,11 @@
 | Role | Model | Responsibility | Write access |
 | --- | --- | --- | --- |
 | Orchestrator | GPT-6.1 Sol | Understand request, plan, delegate, integrate, verify, report | Workspace, within sandbox |
-| Implementation workers | GPT-6 Luna | Implement bounded, independent subtasks | Workspace, within sandbox |
-| Reviewer | GPT-6.1 Sol | Independently inspect the finished diff and report defects | Read-only |
+| Implementation workers | GPT-6.1 Terra (medium) | Implement bounded, independent subtasks | Workspace, within sandbox |
+| Reviewer | GPT-6 Astra (medium) | Independently inspect the finished diff and report defects | Read-only |
 | Human | You / authorized maintainer | Resolve product decisions; approve commits, pushes, releases, and merges | Explicitly authorized actions |
 
-The project default makes spawned workers Luna. The named reviewer role and `/review` model setting route reviews to Sol. If the current Codex surface does not expose named roles, use `/review`; do not assume a worker has the reviewer role merely because its task says “review.” Confirm actual roles/models in the agent details when available.
+The project default requests `gpt-6.1-terra` workers with medium reasoning. The named reviewer configuration requests `gpt-6-astra` with medium reasoning; `review_model` selects Astra for review routing but does not itself establish reasoning effort. Verify the effective model and reasoning effort in the active surface. If a named role pins another model, use an explicitly configured default agent with the requested model and medium reasoning, supplying a bounded task and fresh context. Do not silently substitute models or claim that repository settings changed an already-running agent. The reviewer must remain read-only regardless of the role used to launch it.
 
 ## Task sizing
 
@@ -30,7 +30,7 @@ The default cap is four concurrent subagent threads. The root agent counts separ
 1. Root agent confirms the task scope and acceptance criteria.
 2. Workers implement disjoint tasks and return evidence.
 3. Root agent integrates changes, examines the full diff, and runs checks.
-4. Sol reviewer examines the final diff read-only.
+4. Astra reviewer independently challenges assumptions and examines the final diff read-only.
 5. Root agent fixes verified findings and reruns affected checks.
 6. A human examines the final patch and authorizes any commit, push, or merge.
 

@@ -1,0 +1,640 @@
+{
+  "generated_utc": "2026-11-19T19:06:53.987005+00:00",
+  "scope": "Static source and test-reference inventory; no live access, credential reads or test execution. Test refs are candidate verification, not a claim of current-target passes.",
+  "classification_definitions": {
+    "implemented": "Code path present; runtime qualification may still be required",
+    "config-disabled": "Shipped config defaults disabled/unqualified",
+    "staged": "Implementation or source exists but acceptance/integration remains incomplete",
+    "missing": "No production provider/capability exists within current contract"
+  },
+  "provider_inventory": [
+    {
+      "name": "Qualified native graph",
+      "classification": "config-disabled",
+      "implementation": "Real caller-context Splunk search reader and reducers; not a completeness-producing collector",
+      "refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/search.py",
+        "splunk_app/splunk_adm/bin/adm_identity_lib/qualified.py"
+      ]
+    },
+    {
+      "name": "Finite interval protocol",
+      "classification": "staged",
+      "implementation": "Pure IntervalState protocol exists; no deployed production LIST/watch producer proven by this inspection",
+      "refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/protocol.py"
+      ]
+    },
+    {
+      "name": "Kubernetes point-snapshot receiver",
+      "classification": "staged",
+      "implementation": "Experimental Go paginated LIST producer; point_snapshot only, no interval/watch, no accepted production consumer; offline validator is not an in-app reader",
+      "refs": [
+        "integrations/otel_atlas_receiver/README.md",
+        "tools/qualify_k8s_snapshot.py"
+      ]
+    },
+    {
+      "name": "Case comparison provider",
+      "classification": "config-disabled",
+      "implementation": "Real fixed raw graph source and supervised transport exist, not enabled; require trust and positive native Linux installed qualification",
+      "refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/source.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/transport.py"
+      ]
+    },
+    {
+      "name": "Baseline complete provider",
+      "classification": "missing",
+      "implementation": "Host only allows unavailable source mode; test-injected provider not deployable through configuration or HTTP",
+      "refs": [
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py",
+        "docs/DEPENDENCY_BASELINES.md"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "backend-001",
+      "family": "authentication",
+      "classification": "implemented",
+      "scenario": "Authenticated principal and dedicated capability",
+      "expected": "Only server session/current context identifies principal; no system token or client authority",
+      "code_refs": [
+        "splunk_app/splunk_adm/default/restmap.conf",
+        "splunk_app/splunk_adm/default/authorize.conf",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/splunk_host.py"
+      ],
+      "test_refs": [
+        "tests/test_cases_host.py::test_principal_comes_from_current_context_and_capability_rechecked"
+      ],
+      "operator_prerequisites": "Assign adm_investigate explicitly; role/index grants and native filters must be assessed independently",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-002",
+      "family": "authentication",
+      "classification": "implemented",
+      "scenario": "Invalid/duplicate input",
+      "expected": "Reject duplicate query/header/JSON, untrusted permission fields and malformed schema; sanitize errors",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/api.py",
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/api.py"
+      ],
+      "test_refs": [
+        "tests/test_cases_api.py::test_identity_schema_and_transport_validation",
+        "tests/test_baselines_api.py::test_strict_parser_and_sanitized_errors"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-003",
+      "family": "authentication",
+      "classification": "staged",
+      "scenario": "Splunk Web proxy/CSRF",
+      "expected": "Native CSRF defaults and registered exact exposures must reject cross-origin/untrusted mutations; installed Web behavior remains unqualified",
+      "code_refs": [
+        "splunk_app/splunk_adm/default/web.conf",
+        "docs/DEPLOYMENT_HEALTH.md",
+        "docs/INVESTIGATION_RECORDS.md"
+      ],
+      "test_refs": [
+        "tests/splunk/test_cases_endpoint.py",
+        "tests/splunk/test_baselines_endpoint.py"
+      ],
+      "operator_prerequisites": "Verify browser proxy with real session and CSRF form keys; native direct REST does not prove browser protection",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-004",
+      "family": "access-controls",
+      "classification": "implemented",
+      "scenario": "Lookup and collection write boundaries",
+      "expected": "Viewer can read configured scope mapping; only admin/sc_admin may write; owner-dispatched saved searches admin-only",
+      "code_refs": [
+        "splunk_app/splunk_adm/metadata/default.meta",
+        "docs/SECURITY.md"
+      ],
+      "test_refs": [
+        "tests/splunk/test_permissions.py",
+        "tests/splunk/test_upgrade.py::test_effective_savedsearch_acl_requires_admin_only_read_and_write"
+      ],
+      "operator_prerequisites": "Inspect effective local overrides, index grants, endpoint ACLs and search filters",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-005",
+      "family": "access-controls",
+      "classification": "staged",
+      "scenario": "Raw visibility versus derived summaries",
+      "expected": "Separate users with same index grants but different srchFilter must not receive broader source facts through privileged summaries or replays",
+      "code_refs": [
+        "docs/INVESTIGATION_RECORDS.md",
+        "docs/DATA_LAYER.md",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/source.py"
+      ],
+      "test_refs": [
+        "tests/splunk/test_cases_endpoint.py",
+        "tests/test_cases_source.py::test_tampering_or_revoked_source_fails_closed"
+      ],
+      "operator_prerequisites": "Provision independent principals and effective source/summary index and search-filter controls; test actual source",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-006",
+      "family": "settings",
+      "classification": "config-disabled",
+      "scenario": "Deployment settings write gate",
+      "expected": "Without admin capability, collection write ACL and exact qualified topology/version, GET remains readable and POST refused",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_settings_lib/rest.py",
+        "docs/DEPLOYMENT_HEALTH.md"
+      ],
+      "test_refs": [
+        "tests/test_atomic_settings.py",
+        "tests/splunk/test_atomic_settings.py"
+      ],
+      "operator_prerequisites": "10.6.0.5 pinned; 10.6.1.1 needs separate qualification",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-007",
+      "family": "settings",
+      "classification": "implemented",
+      "scenario": "Concurrent revisions and idempotent retry",
+      "expected": "One winning successor, stale/mismatched namespace conflicts; repeated identical request resolves to original outcome",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_settings_lib/__init__.py"
+      ],
+      "test_refs": [
+        "tests/test_atomic_settings.py"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-008",
+      "family": "qualified-identity",
+      "classification": "config-disabled",
+      "scenario": "Complete interval inventory and matching span",
+      "expected": "All-namespace manifests must have exact record counts and checksums and finite authority/window; qualifying spans produce identity in bounded <=300s slices",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/qualified.py",
+        "splunk_app/splunk_adm/bin/adm_identity_lib/search.py",
+        "splunk_app/splunk_adm/default/adm_identity.conf"
+      ],
+      "test_refs": [
+        "tests/test_qualified_identity.py::test_complete_actual_nanosecond_span_shape",
+        "tests/test_identity_search.py::test_query_is_bounded_and_filters_after_all_namespace_sources"
+      ],
+      "operator_prerequisites": "Trusted interval producer, explicit profile and allowed raw grants must be provisioned and qualified",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-009",
+      "family": "qualified-identity",
+      "classification": "implemented",
+      "scenario": "Missing/conflicting/late manifest or owner",
+      "expected": "Suppress qualification on absent record/checksum, disagreement, unknown clocks, stale horizon and conflicting ownership; hostNetwork cannot establish exclusive pod identity",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/qualified.py"
+      ],
+      "test_refs": [
+        "tests/test_qualified_identity.py::test_missing_manifest_owner_or_changed_checksum_fails_closed",
+        "tests/test_qualified_identity.py::test_late_snapshot_is_not_known_at_as_of",
+        "tests/test_qualified_identity.py::test_host_network_does_not_establish_exclusive_pod_ip"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-010",
+      "family": "qualified-identity",
+      "classification": "implemented",
+      "scenario": "Search completion and ownership",
+      "expected": "Caller-token search rejects preview, partial pages, failed/finalized/truncated result, warnings or missing owned SID; deletion bounded",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/search.py"
+      ],
+      "test_refs": [
+        "tests/test_identity_search.py::test_finalized_truncated_missing_and_failed_metadata_rejected",
+        "tests/test_identity_search.py::test_warnings_error_preview_and_short_page_rejected"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-011",
+      "family": "qualified-identity",
+      "classification": "staged",
+      "scenario": "Point snapshot receiver versus interval manifest",
+      "expected": "Receiver performs complete paginated independent Pod and Node LISTs and emits point manifests only; it does not provide interval/watches or an accepting consumer",
+      "code_refs": [
+        "integrations/otel_atlas_receiver/README.md",
+        "integrations/otel_atlas_receiver/snapshot.go",
+        "tools/qualify_k8s_snapshot.py"
+      ],
+      "test_refs": [
+        "integrations/otel_atlas_receiver/snapshot_test.go",
+        "tests/test_k8s_snapshot_qualification.py"
+      ],
+      "operator_prerequisites": "Custom collector build/image, RBAC LIST, protected HEC, producer attestation, destination verification and separate qualified interval producer required",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-012",
+      "family": "qualified-summary",
+      "classification": "config-disabled",
+      "scenario": "Rollup and complete manifest",
+      "expected": "Only complete matching per-slice runs count; qualified empty differs from unread; lateness/horizon/fingerprint retained",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_identity_lib/rollup.py",
+        "splunk_app/splunk_adm/bin/admqualified.py",
+        "splunk_app/splunk_adm/default/adm_identity.conf"
+      ],
+      "test_refs": [
+        "tests/test_qualified_rollup.py::test_physically_complete_incomplete_manifest_is_not_coverage",
+        "tests/test_qualified_reader.py::test_empty_slices_count_as_read"
+      ],
+      "operator_prerequisites": "Index provision, writer ACL, scheduler, source profile and tested retention required",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-013",
+      "family": "qualified-summary",
+      "classification": "implemented",
+      "scenario": "Replay/change during manifest aggregate",
+      "expected": "Choose complete run and avoid duplicate aggregate when new rollup appears during concurrent read; fail if unstable",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/admqualified.py"
+      ],
+      "test_refs": [
+        "tests/test_qualified_reader.py::test_slice_collected_between_aggregate_and_manifest_is_not_double_counted",
+        "tests/test_qualified_reader.py::test_runs_that_keep_changing_fail_instead_of_miscounting"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-014",
+      "family": "incident-timeline",
+      "classification": "implemented",
+      "scenario": "Comparison window and rank",
+      "expected": "Use distinct absolute windows, observed evidence ordering and explicit incomplete coverage; do not report cause or exact change time",
+      "code_refs": [
+        "frontend/src/incident/model.ts",
+        "docs/FEATURE_FOUNDATIONS.md"
+      ],
+      "test_refs": [
+        "frontend/src/incident/model.test.ts"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-015",
+      "family": "incident-timeline",
+      "classification": "staged",
+      "scenario": "Live source coverage",
+      "expected": "Do not claim real-source live comparison without retained data, finite clock evidence and reviewed search scope",
+      "code_refs": [
+        "docs/FEATURE_DELIVERY.md"
+      ],
+      "test_refs": [
+        "tests/test_capture_feature_replay.py"
+      ],
+      "operator_prerequisites": "Qualified sources, viewer index grants and clock/retention evidence",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-016",
+      "family": "maintenance",
+      "classification": "implemented",
+      "scenario": "Exposure versus readiness and capacity",
+      "expected": "Unknown, stale or incomplete capacity/readiness prevents safe failover conclusion; preserve absolute window and units",
+      "code_refs": [
+        "frontend/src/maintenance/model.ts",
+        "frontend/src/maintenance/adapter.ts"
+      ],
+      "test_refs": [
+        "frontend/src/maintenance/model.test.ts",
+        "frontend/src/maintenance/adapter.test.ts"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-017",
+      "family": "maintenance",
+      "classification": "missing",
+      "scenario": "Real capacity and functional substitutability",
+      "expected": "Candidate alternative is not proof of capacity or healthy replacement",
+      "code_refs": [
+        "docs/FEATURE_FOUNDATIONS.md",
+        "docs/DEPENDENCY_BASELINES.md"
+      ],
+      "test_refs": [
+        "frontend/src/maintenance/adapter.test.ts"
+      ],
+      "operator_prerequisites": "Measured capacity, independent failure domains and functional readiness",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-018",
+      "family": "baselines",
+      "classification": "config-disabled",
+      "scenario": "Private baseline lifecycle and metadata",
+      "expected": "Capability and owner ACL protect baseline/version/watch data; revisions and request keys enforce idempotence",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/store.py",
+        "splunk_app/splunk_adm/default/adm_baselines.conf"
+      ],
+      "test_refs": [
+        "tests/test_baselines.py::test_private_access_revocation_and_entitlement",
+        "tests/test_baselines_api.py::test_retries_and_concurrent_revision_conflicts"
+      ],
+      "operator_prerequisites": "Private single-head Enterprise, app capability and exact target qualification",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-019",
+      "family": "baselines",
+      "classification": "missing",
+      "scenario": "Trusted complete source provider",
+      "expected": "Shipped host source_mode accepts only unavailable; no production provider selected by configuration or HTTP; no source-backed version/watch execution",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/splunk_host.py",
+        "docs/DEPENDENCY_BASELINES.md"
+      ],
+      "test_refs": [
+        "tests/test_baselines_host.py::test_disabled_runtime_and_source_do_not_create_db",
+        "tests/test_baseline_executor.py::test_admin_owner_attestation_and_no_source"
+      ],
+      "operator_prerequisites": "Develop and qualify complete trustworthy provider with authorization, canonical evidence, coverage and bounded source callbacks",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-020",
+      "family": "baselines",
+      "classification": "implemented",
+      "scenario": "Revoked source and historical occurrence read",
+      "expected": "Rerun current source authorization for selected capture, history and lookahead; deny/withhold upon access change",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/store.py"
+      ],
+      "test_refs": [
+        "tests/test_baselines.py::test_current_source_access_on_all_reads_and_retry",
+        "tests/test_baselines.py::test_page_proofs_and_lookahead_do_not_leak_revoked_history"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-021",
+      "family": "baselines",
+      "classification": "staged",
+      "scenario": "Durable watch run recovery",
+      "expected": "Explicit one-window action binds principal, source contract, captured revision and 300s window; unknown capture never re-dispatches; disable stops future work",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/executor.py",
+        "splunk_app/splunk_adm/bin/adm_baselines_lib/run_store.py",
+        "splunk_app/splunk_adm/default/adm_dependency_watch.conf"
+      ],
+      "test_refs": [
+        "tests/test_baseline_executor.py::test_capture_unknown_never_recaptures",
+        "tests/test_baseline_executor.py::test_disable_reenable_during_capture_fences_evaluation"
+      ],
+      "operator_prerequisites": "Execution disabled, trusted provider absent; no automatic schedule or delivery",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-022",
+      "family": "cases",
+      "classification": "config-disabled",
+      "scenario": "Private create, share, revoke and delete",
+      "expected": "Owner-only membership mutations; current authenticated capability and case ACL checked for every action",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/store.py",
+        "splunk_app/splunk_adm/default/adm_investigations.conf"
+      ],
+      "test_refs": [
+        "tests/test_cases.py::test_private_share_revoke_and_current_entitlement",
+        "tests/test_cases_api.py::test_lifecycle_revision_retry_and_access"
+      ],
+      "operator_prerequisites": "Private fixed owner-only SQLite directory; explicitly qualify single-head Enterprise 10.6.0.5",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-023",
+      "family": "cases",
+      "classification": "implemented",
+      "scenario": "Entry revisions and unknown write receipt",
+      "expected": "Immutable same-type supersession requires latest revision; same idempotency key returns outcome with present authorization, conflicting payload rejected",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/store.py"
+      ],
+      "test_refs": [
+        "tests/test_cases.py::test_entry_revisions_preserve_history_and_reject_branching",
+        "tests/test_cases_api.py::test_denial_after_commit_does_not_prove_the_write_failed"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-024",
+      "family": "cases",
+      "classification": "config-disabled",
+      "scenario": "Capture admission and reauthorization",
+      "expected": "Only fixed qualified graph windows; canonical evidence and fingerprint rerun under current reader on read/export/retry; withheld evidence does not hide notes",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/source.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/store.py"
+      ],
+      "test_refs": [
+        "tests/test_cases_source.py::test_fixed_query_capture_and_recheck_as_caller",
+        "tests/test_cases.py::test_capture_projection_rechecks_each_historical_response"
+      ],
+      "operator_prerequisites": "Explicit reproducible_qualified_v1 capture mode, matching loopback TLS CA/GUID, source and runtime qualification",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-025",
+      "family": "cases",
+      "classification": "implemented",
+      "scenario": "User-selected evidence isolation",
+      "expected": "Each window <=300s; selector contains opaque ID; others withheld; source query inputs strictly whitelisted",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/source.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/api.py"
+      ],
+      "test_refs": [
+        "tests/test_cases_api.py::test_capture_selector_and_opaque_ids",
+        "tests/test_cases_source.py::test_reference_validation_and_injection"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-026",
+      "family": "cases",
+      "classification": "implemented",
+      "scenario": "Budget and crash/cleanup uncertainty",
+      "expected": "Three globally unresolved jobs maximum, capture up to three windows, 2000 rows/512KiB per window; unknown SID remains reserved and is never guessed or retried",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/native.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/job_ledger.py",
+        "docs/INVESTIGATION_RECORDS.md"
+      ],
+      "test_refs": [
+        "tests/test_cases_native.py::test_lost_creation_response_is_never_guessed_or_retried",
+        "tests/test_cases_native.py::test_foreign_jobs_exhaust_global_budget_without_disclosure"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-027",
+      "family": "cases",
+      "classification": "staged",
+      "scenario": "Supervised native Linux source transport",
+      "expected": "Fixed local HTTPS, bounded buffers, CPU/address-space limits, 25s source and 3s cleanup budgets; TLS hostname/CA/GUID checks; notes remain on capture denial",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/transport.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/transport_worker.py",
+        "splunk_app/splunk_adm/bin/adm_cases_lib/README.md"
+      ],
+      "test_refs": [
+        "tests/test_cases_transport.py::test_wrong_hostname_and_untrusted_ca_fail_closed",
+        "tests/test_cases_transport.py::test_preflight_is_token_free_and_requires_limits"
+      ],
+      "operator_prerequisites": "Native Linux amd64 positive end-to-end, two differently filtered investigators, failed helper, TLS change and SID cleanup proof; SDK calls outside source timeout",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-028",
+      "family": "cases",
+      "classification": "missing",
+      "scenario": "Uploads, Cloud/SHC and auto cleanup",
+      "expected": "Arbitrary file attachments and URLs unsupported; shared SQLite not portable to Cloud/SHC; no scheduled orphan purge",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/README.md",
+        "docs/INVESTIGATION_RECORDS.md"
+      ],
+      "test_refs": [
+        "tests/test_cases_host.py::test_disabled_and_cloud_fail_without_creating_storage"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-029",
+      "family": "cases",
+      "classification": "staged",
+      "scenario": "Backup and migration recovery",
+      "expected": "Preserve cases SQLite, job ledger and source descriptors, verify schema and unknown entries without assuming snapshot or deletion clears claims",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_cases_lib/job_ledger.py",
+        "docs/INVESTIGATION_RECORDS.md"
+      ],
+      "test_refs": [
+        "tests/test_cases_job_ledger.py::test_v1_migration_preserves_unknown_unbound_and_budget",
+        "tests/test_cases_job_ledger.py::test_v2_created_job_migrates_to_unknown_without_inferred_server_id"
+      ],
+      "operator_prerequisites": "Operational consistent backup/restore rehearsal and rollback on intended host",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-030",
+      "family": "business-services",
+      "classification": "staged",
+      "scenario": "Native reference versus business claim",
+      "expected": "Only explicit source-bound tuple/time/config identity can bind claims; stale, conflict, name/IP-only and browser-local assertions remain unverified",
+      "code_refs": [
+        "frontend/src/businessServices/bindings.ts",
+        "frontend/src/businessServices/README.md"
+      ],
+      "test_refs": [
+        "frontend/src/businessServices/bindings.test.tsx",
+        "frontend/src/businessServices/ownership.test.tsx"
+      ],
+      "operator_prerequisites": "Reviewed business source/authority and qualified identity provenance; no shared vendor adapter",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-031",
+      "family": "connected-journeys",
+      "classification": "staged",
+      "scenario": "NAT/Envoy/Hubble correlation",
+      "expected": "Separate same-event translation from possible cross-event association; unknown time/scope and ambiguous matches stay unresolved",
+      "code_refs": [
+        "frontend/src/journeys/model.ts",
+        "frontend/src/journeys/hubble.ts",
+        "docs/CONNECTED_JOURNEYS.md"
+      ],
+      "test_refs": [
+        "frontend/src/journeys/model.test.ts",
+        "frontend/src/journeys/hubble.test.ts"
+      ],
+      "operator_prerequisites": "Verify actual schema, historical observer authority, trace context and producer clocks; live trace fails closed without historical scope",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-032",
+      "family": "recovery",
+      "classification": "config-disabled",
+      "scenario": "Recovery authority and dry run",
+      "expected": "Only explicitly qualified standalone Enterprise local management target and admin ACL; other versions/Cloud/cluster rejected",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_recovery_lib/core.py",
+        "splunk_app/splunk_adm/metadata/default.meta"
+      ],
+      "test_refs": [
+        "tests/test_recovery_core.py::test_other_or_malformed_versions_are_refused",
+        "tests/test_recovery_core.py::test_clustering_and_incomplete_evidence_are_refused"
+      ],
+      "operator_prerequisites": "Recovery alert action disabled; separate maintenance approval and exact runtime qualification",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-033",
+      "family": "recovery",
+      "classification": "implemented",
+      "scenario": "Uncertain dispatch or cleanup",
+      "expected": "Lost claim response or unknown SID must not pause/re-dispatch blindly; restore known schedules; retain uncertain claim for operator reconciliation",
+      "code_refs": [
+        "splunk_app/splunk_adm/bin/adm_recovery_lib/core.py"
+      ],
+      "test_refs": [
+        "tests/test_recovery_core.py::test_lost_target_claim_response_is_uncertain_without_pausing_or_dispatching",
+        "tests/test_recovery_core.py::test_unacknowledged_cleanup_retains_sid_without_masking_search_result"
+      ],
+      "operator_prerequisites": "",
+      "status": "source-evidenced; not verified on current installed target"
+    },
+    {
+      "id": "backend-034",
+      "family": "migration",
+      "classification": "staged",
+      "scenario": "CSV-to-KV scope and provenance",
+      "expected": "Trusted CSV imported once only after collision/ACL checks; local overrides may defeat lookup; legacy default-scope identities remain quarantined",
+      "code_refs": [
+        "docs/UPGRADES.md",
+        "splunk_app/splunk_adm/metadata/default.meta"
+      ],
+      "test_refs": [
+        "tests/splunk/test_upgrade.py",
+        "tests/test_scope_config.py"
+      ],
+      "operator_prerequisites": "Back up all adm_* collections and CSV, pause writers, verify lookup and ACLs, rebuild history separately and retain rollback",
+      "status": "source-evidenced; not verified on current installed target"
+    }
+  ],
+  "bug_candidates": [],
+  "open_risks": [
+    "Case/baseline Web proxy CSRF and direct REST transport behavior require installed testing; this inventory does not establish a vulnerability.",
+    "Raw index filters and readable derived summaries require separate security acceptance; unit tests do not prove production role isolation.",
+    "Exact 10.6.1.1 unsupported by pinned settings/case/recovery gates until code and deployment qualification change.",
+    "Point snapshots do not establish trusted complete interval coverage or a baseline provider."
+  ]
+}

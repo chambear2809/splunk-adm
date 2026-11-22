@@ -27,3 +27,4 @@ tests/splunk/.lab-secrets*
 
 # Local, clickable demo guide with a real stack name (tools/demo_links.py)
 docs/demos/*.local.md
+docs/demos/*.local.html
