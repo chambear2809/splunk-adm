@@ -100,6 +100,16 @@ Marks the VDS hop "Seen" on path trace and lists the host on the Device page.
 
 When qualifying an existing input, read the switch, port group, and connected port policies to confirm effective IPFIX. Check delivery at the configured receiver and verify the emitting address and observation domain in indexed Stream records before registering the profile. If a search for candidate addresses returns zero matches, check a known-good exporter in the same window and label the vDS feed unqualified. [vSphere port policy](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/data-structures/VMwareDVSPortSetting/) · [Splunk Stream receipt requirements](https://help.splunk.com/en/splunk-cloud-platform/collect-stream-data/install-and-configure-splunk-stream/8.1/configure-your-splunk-stream-installation/use-splunk-stream-to-ingest-netflow-and-ipfix-data)
 
+If the receiver owner cannot provide a receipt, check the actual exporter
+first. Use vCenter to verify a connected port in the enabled port group on
+the selected host, and read its effective IPFIX policy. Identify the
+management VMkernel route and uplink to the configured collector. Use a
+short sender-side capture restricted to the existing collector address and
+UDP port. Retain the exporter address, protocol version, observation domain,
+and capture window. A matching egress datagram verifies export at the host.
+Receiver delivery and indexed parsing require their own evidence.
+[Broadcom sender and receiver capture guidance](https://knowledge.broadcom.com/external/article/454424/troubleshooting-missing-ipfix-flows-in-v.html)
+
 ## Sizing
 
 Events/s ≈ active flows per exporter ÷ export interval × exporters. Size the HF, `netflow` index and license. Sampling reduces volume.
