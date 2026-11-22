@@ -23,6 +23,13 @@ Each segment contains `id`, `label`, `source`, `reference`, `observed_at` and `h
 
 The producer must retain provenance for every segment. `observed` requires a flow record or endpoint receipt matching that segment's connection. Inventory and attachment evidence use `inferred`. A CDP ingress neighbor, observed switch and CDP egress neighbor can form one locally ordered segment when the observation explicitly identifies the switch's ingress and egress ports. The adjacent leaves still carry inferred traversal unless their own matching forwarding evidence exists.
 
+A bounded ASIC receive-pipeline report can identify ingress and the
+hardware-selected egress for one exact packet. Record the decoded tuple and
+interface pair. A matching connection at the adjacent ingress, joined by
+reciprocal LLDP, corroborates the handoff. Keep the original flow record’s
+missing output separate from any later capture, and verify that the temporary
+trigger is cleared. [Cisco NX-OS Packet Tracer](https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/106x/configuration/troubleshooting/cisco-nexus-9000-series-nx-os-troubleshooting-guide-106x/m-troubleshooting-packet-flow-issues.html)
+
 Independent segments remain separated by ordering gaps. A pod tuple and a post-masquerade node tuple need explicit translation or handoff evidence before they can be represented as one transport leg. Without that proof, record the workload correlation as a limitation and trace the node tuple independently. Source labels must describe the actual collection method, including CLI cache snapshots. Never emit a CLI snapshot under a vendor continuous-export sourcetype.
 
 ## Qualification
