@@ -83,7 +83,10 @@ application receipt to establish which action completed.
 
 A matching firewall verdict establishes the recorded policy action. If the
 firewall changes TCP sequence numbers, derive each direction's offset from the
-captured handshake and verify it against additional unique headers. Across a
+captured handshake and verify it against additional unique headers. If two
+intervals require different sequence translations, derive each one from its
+own boundary observations. Match only the signatures present at every point
+you claim. Check an incorrect offset returns zero matches. Across a
 virtual switch, confirm the interface mapping and match the same headers at
 the gateway vNIC and the physical uplink. Report the count that matches at
 every claimed point and retain the independent allow or deny receipt.
