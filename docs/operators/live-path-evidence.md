@@ -109,6 +109,13 @@ The built-in **If this fails** view can compare recorded user journeys for an ex
 
 A cohort has `schema_version`, `scope`, `start`, `end`, up to eight `devices` and up to eight `trials`. A device supplies its canonical management IPv4 address as `id`, display `name`, `role` and its numeric observation `domain`. A trial supplies `id`, `app`, `journey`, `actor` (`browser` or `operator`), `outcome`, exact TCP `src`, `dst`, `source_port` and `destination_port`, and an absolute `start` and `end` inside the cohort. `captures.forward` and optional `captures.reverse` identify authorized Trace receipts. Group repeats under the same journey name only when the producer has confirmed the same user action and its outcome.
 
+For a VM-backed entry point, arm the vNIC and both eligible host uplinks
+before opening the browser connection. Bind the user action to that
+connection using an exact browser and proxy receipt. Match request and
+reply headers separately against the attested switch peers. Retain and
+read back the original Stream records, event times and reference IDs for
+each connection before publishing the cohort.
+
 Version 1 uses `role: "spine"`, with `spines.forward` and `spines.reverse` for native exporter observations. Version 2 adds `leaf` and `border` roles and uses `exports.forward` and `exports.reverse` for native observations. Optional directional `trace_hops` bind a canonical `device` to an observed `segment` ID and exact `hop` label in that direction's Trace receipt. Publish these bindings only for an exact switch observation or packet-matched endpoint handoff, with independently verified device identity. A transmit-only host attachment or a switch interface that points toward a neighbor does not establish forwarding at that neighbor.
 
 Version 2 can also carry `linked_captures` with `src`, `dst`, `source_port`, `destination_port`, `capture`, `device`, `segment` and `hop`. This attaches a downstream exact TCP connection to the same journey. The source must establish that relationship with application, proxy or database evidence even when the transport tuple changes. A downstream observation contributes to exposure and preserves its own Trace replay.
