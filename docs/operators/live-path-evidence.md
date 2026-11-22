@@ -67,6 +67,13 @@ Preserve differing chassis identifiers and label which device reported each
 one. A neighbor report establishes an advertised adjacency. A matching
 connection observation is needed to show forwarding across it.
 
+For an ESXi path, match the guest’s active interface MAC to its runtime vNIC
+before using a host placement in Trace. Confirm each physical uplink against
+the host network hint and the switch port-channel member. Where both sides
+report LACP, compare the negotiated keys and member state and retain each
+reported identifier. A bundled uplink establishes eligibility for a later
+connection capture. [Broadcom ESXi uplink identification](https://knowledge.broadcom.com/external/article/435164/vm-connectivity-loss-on-a-vsphere-distri.html)
+
 Compare counter deltas over the same sample buckets at both ends. Preserve the
 sample count, link state, and carrier transitions. Leave missing or reset
 counters unqualified. Traffic with no observed error or discard increase is a
