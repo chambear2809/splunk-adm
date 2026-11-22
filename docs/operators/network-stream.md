@@ -110,6 +110,16 @@ and capture window. A matching egress datagram verifies export at the host.
 Receiver delivery and indexed parsing require their own evidence.
 [Broadcom sender and receiver capture guidance](https://knowledge.broadcom.com/external/article/454424/troubleshooting-missing-ipfix-flows-in-v.html)
 
+## Verify a relay with two destinations
+
+Match the full UDP payload digest at the relay's transmit interface and the
+second receiver's network interface in the same capture window. Confirm each
+interface against the runtime attachment. For NetFlow v9, match data exports
+to indexed Stream records using the exporter address, source ID mapped to the
+observation domain, packet sequence and export time. Track template receipt
+separately from data receipt. A receiver interface capture confirms delivery
+to that interface. Verify the second listener, parser and index separately.
+
 ## Sizing
 
 Events/s ≈ active flows per exporter ÷ export interval × exporters. Size the HF, `netflow` index and license. Sampling reduces volume.
