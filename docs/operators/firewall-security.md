@@ -41,9 +41,14 @@ Field references: [Cisco Connection Event field definitions](https://www.cisco.c
 ## How to verify
 
 ```spl
-index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | stats count by DeviceIP
-index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" | head 5
+index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" EventType="ConnectionEvent" earliest=-15m
+| stats count AS connections count(IngressInterface) AS ingress_present count(EgressInterface) AS egress_present max(_indextime) AS latest_receipt BY DeviceIP
+| convert ctime(latest_receipt)
 ```
+
+Use the aggregate to verify recent delivery from each reporting device. Confirm the device against the managed firewall inventory and verify its routing domain before assigning a scope. A scoped Trace requires a unique observer mapping whose validity covers the selected window. An expired binding can still support its original replay window.
+
+To compare a firewall connection with NetFlow, match the protocol, IP addresses, ports, and event-time intervals. Check the forward and reverse NetFlow tuples separately. A firewall `Allow` applies to the matching connection record. Responder counters provide evidence of return traffic at the firewall. Use an independent interface or packet observation to identify the physical return handoff.
 
 ## Automation skills
 
