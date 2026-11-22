@@ -60,6 +60,13 @@ and collector source before building a replay. A running collector and a
 successful read of the interface do not establish that the stream is reaching
 the index. Test a known-good interface from the same source as a control.
 
+For a branch with only local neighbor reports, retain the reporting interface,
+advertised peer port, and observation time. Corroborate the peer name and
+management address against the controller inventory in the intended fabric.
+Preserve differing chassis identifiers and label which device reported each
+one. A neighbor report establishes an advertised adjacency. A matching
+connection observation is needed to show forwarding across it.
+
 Compare counter deltas over the same sample buckets at both ends. Preserve the
 sample count, link state, and carrier transitions. Leave missing or reset
 counters unqualified. Traffic with no observed error or discard increase is a
