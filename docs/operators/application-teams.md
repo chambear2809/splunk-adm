@@ -50,6 +50,8 @@ The implemented network association uses **CLIENT** spans with a valid peer IP i
 
 Preserve W3C trace context through the ingress/gateway when your instrumentation supports it, then inspect exported spans and Hubble events. Do not assume forwarding `traceparent` automatically populates Hubble's `flow.trace_context.parent.trace_id`. The parser retains that field only when a valid trace ID is actually present. Ingress/Gateway backend attribution separately requires the supported L7/hand-off evidence described in the [data contract](../DATA_LAYER.md#attribution-from-frontend-to-backend-pod); a span's `client.address` alone is not that evidence.
 
+When a proxy and an application lack shared trace context, send one tagged read request and compare the tag and response in both access logs. Match each observed TCP connection independently. Database handshakes in the same window help verify transport. A per-query trace or database audit record is needed to tie a particular statement to the request.
+
 ## How to verify
 
 ```spl
