@@ -36,6 +36,10 @@ For a VXLAN handoff, require one packet decode that contains the outer VTEP
 addresses and UDP ports along with the exact inner transport tuple. Record the
 ingress and, when present, the hardware-selected egress. A matching capture
 at the next receiver is needed to show that the packet reached that receiver.
+Across decapsulation, match the inner packet's raw TCP sequence,
+acknowledgement, flags, IPv4 ID and length at the two observers. Check the
+inner TTL change separately. An outer flow record alone cannot identify an
+individual inner packet.
 Record a VNI as observed only when the packet decode exposes it. Cite a
 programmed VNI from route or NVE readback as separate control-plane evidence.
 
