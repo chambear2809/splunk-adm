@@ -60,6 +60,11 @@ and collector source before building a replay. A running collector and a
 successful read of the interface do not establish that the stream is reaching
 the index. Test a known-good interface from the same source as a control.
 
+For a new gNMI target, confirm the service and management VRF, then verify
+certificate validity, endpoint identity and trust before sending credentials.
+Check active subscriptions with the device owner before replacing a shared
+certificate. Verify the selected metric by name in the indexed scope. [Cisco gNMI status checks](https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/106x/programmability/cisco-nexus-9000-series-nx-os-programmability-guide-106x/m-gnmi.html)
+
 For a branch with only local neighbor reports, retain the reporting interface,
 advertised peer port, and observation time. Corroborate the peer name and
 management address against the controller inventory in the intended fabric.
