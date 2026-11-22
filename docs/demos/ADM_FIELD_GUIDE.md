@@ -45,3 +45,8 @@ Use the ranked sample to prioritize inspection. Capture the sorted table with th
 ## Kubernetes topology reference
 
 When the demo includes a Kubernetes workload, show the client-facing Gateway and the serving nodes alongside their physical attachments. Label HTTPRoute backends as configured dependencies. Use matching firewall, host or Hubble observations to confirm individual segments for the selected request. Mark where coverage ends and record any translation boundary where the tuple changes. [Kubernetes telemetry setup and verification](../operators/kubernetes-platform.md)
+
+For a Kubernetes health request, open the request and reply Traces side by side.
+Select the last verified switch in each direction and compare its ingress and
+egress ports. Use the first unverified handoff in the direction that matches
+the reported symptom to decide where to collect next.
