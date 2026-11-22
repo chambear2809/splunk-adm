@@ -17,7 +17,7 @@ Use a dedicated source with immutable capture IDs. Publish the JSON envelope as 
 
 ## Envelope
 
-The version 1 envelope contains `schema_version`, `capture_id`, `scope`, `src`, `dst`, `protocol`, `source_port`, `destination_port`, `start`, `end`, `collected_at`, `producer` and `segments`. Times are finite UTC epoch seconds. TCP and UDP require ports. The capture interval must be fully inside the selected trace window and at most 300 seconds long. Use exact source/destination orientation. A reverse-direction capture has a separate identity and reversed tuple.
+The version 1 envelope contains `schema_version`, `capture_id`, `scope`, `src`, `dst`, `protocol`, `source_port`, `destination_port`, `start`, `end`, `collected_at`, `producer` and `segments`. Times are finite UTC epoch seconds. TCP and UDP require ports. The capture interval must be fully inside the selected trace window and at most 300 seconds long. Set `collected_at` to the recorded time when evidence collection finished, at or after `end`. Use exact source/destination orientation. A reverse-direction capture has a separate identity and reversed tuple.
 
 Each segment contains `id`, `label`, `source`, `reference`, `observed_at` and `hops`. A hop contains `kind`, `label`, `evidence` and optional `device`, `detail`, `in` and `out`. Evidence is `observed`, `inferred` or `gap`. Supported kinds are `endpoint`, `host`, `virtual_switch`, `switch`, `firewall`, `handoff` and `gap`. Optional envelope `notes` carry collection limitations.
 
