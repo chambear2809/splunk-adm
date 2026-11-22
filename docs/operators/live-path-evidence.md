@@ -82,10 +82,12 @@ evidence on the exact flow.
 
 Match request and reply separately at the outside and inside capture points.
 Across a routed interval, compare the TCP sequence, acknowledgement, flags,
-and IPv4 packet metadata at the capture points in each direction. Check the
-TTL change separately. The matched headers qualify the observed endpoints,
-including an asymmetric uplink choice when both directions are captured.
-Forwarding at intermediate switches requires its own evidence.
+IPv4 ID and total length at the capture points in each direction. Report the
+TTL change for each direction. An unchanged TTL describes the two captured
+headers. Adjacency still requires independent evidence. Matched headers
+qualify the observed endpoints, including an asymmetric uplink choice when
+both directions are captured. Verify forwarding at intermediate switches
+with their own observations.
 
 For an attachment check during a recorded user action, give the exact window
 around the click and report request and reply match counts separately. TCP
