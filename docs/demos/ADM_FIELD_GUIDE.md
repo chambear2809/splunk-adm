@@ -1,6 +1,6 @@
 # ADM customer meeting field guide
 
-Use one user action per walkthrough. Before the meeting, test the saved view in the target ADM installation with its qualified scope and time window. Capture the selected evidence in ADM for offline use. Label each screenshot with its recorded window, and use a fresh view for current traffic when the original source has expired. Keep customer screenshots and evidence in the approved workspace for that deployment.
+Use one user action per walkthrough. Before the meeting, test the saved view in the target ADM installation with its qualified scope and time window. Open the evidence panel and check that its data still loads for the saved scope and time. Capture the selected evidence in ADM for offline use. Label each screenshot with its recorded window. If a saved view has lost its source data, keep the screenshot labeled as recorded evidence and use a fresh, verified link when available. Keep customer screenshots and evidence in the approved workspace for that deployment.
 
 ## Did the Save reach the database?
 
