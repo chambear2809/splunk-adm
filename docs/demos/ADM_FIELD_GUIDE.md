@@ -4,7 +4,7 @@ Use one user action per walkthrough. Before the meeting, test the saved view in 
 
 ## Did the Save reach the database?
 
-A user opens an invoice, edits it and clicks **Save**. In **Trace**, follow the browser to the web proxy, the selected application instance, the database proxy and PostgreSQL. Select the routed leg and compare the request and reply observations. Select the commit and confirm that the detail identifies an independently observed database write. Proxy logs can connect distinct sockets to one request. The route is verified only at the points with matching evidence.
+A user opens an invoice, edits it and clicks **Save**. In **Trace**, follow the browser to the web proxy, the selected application instance, the database proxy and PostgreSQL. Select the routed leg and compare the request and reply observations. Select the commit and confirm that the detail identifies an independently observed database write. Proxy logs can connect distinct sockets to one request. Save a separate Trace link for each TCP leg with its absolute window, scope, and both ports. Open each link and confirm it selects the intended evidence. The route is verified only at the points with matching evidence.
 
 Use the committed Save as the acceptance check for maintenance. Capture the routed leg and the selected commit detail.
 
