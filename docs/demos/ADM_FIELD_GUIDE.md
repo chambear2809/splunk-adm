@@ -16,9 +16,9 @@ Choose a conversation the network team can investigate in Trace. Capture the dev
 
 ## What should the application owner check before maintenance?
 
-An application owner opens the invoice form. Open its **Services** map and select the entry service and the downstream database dependency. Identify shared backends and inspect each edge’s evidence. Where a database proxy stands between the app and database, compare the application spans with independently correlated sockets.
+An application owner clicks **Save** on an invoice draft. Open **Services** for that observation window. Select the Save handler and follow its database calls through the database proxy to shared PostgreSQL. Inspect each edge for the same-trace spans and matching sockets that support it.
 
-The form read establishes the dependency for that action. Use the recorded Save in **Trace** to show the database commit.
+A separate form-read map can show dependencies for opening the invoice. Use the recorded Save in **Trace** to verify browser ingress, observed forwarding and the database commit.
 
 Confirm which other application instances need testing when a shared backend changes. Capture the map, its scope and the selected edge.
 
