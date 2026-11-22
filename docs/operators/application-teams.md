@@ -69,6 +69,14 @@ The reader must verify the source authority, VM identity, trace and span IDs, an
 
 For a write canary, first verify that a form read exports a server span and related database client spans through the same collector and filter. Raw OTLP JSON can encode span kinds as integers (`2` for server and `3` for client), so check the raw capture before filtering by span kind. Qualify the write using the Save span and its own database child spans, then check the database commit independently.
 
+For a browser entry in a Save replay, capture the actual browser submit and
+response. If the action uses an existing WebSocket, qualify context carried
+by that submit message. Verify that the indexed browser and server spans
+share a trace ID and that the server's parent span ID matches the browser
+span ID. Verify the database child spans and commit in the same run. Scope
+the replay to the entry path the browser used. A shared proxy needs its own
+same-request evidence before it appears in that graph. [W3C Trace Context](https://www.w3.org/TR/trace-context/#traceparent-header)
+
 ## Automation skills
 
 Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.
