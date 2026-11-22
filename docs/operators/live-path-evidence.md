@@ -79,6 +79,13 @@ report LACP, compare the negotiated keys and member state and retain each
 reported identifier. A bundled uplink establishes eligibility for a later
 connection capture. [Broadcom ESXi uplink identification](https://knowledge.broadcom.com/external/article/435164/vm-connectivity-loss-on-a-vsphere-distri.html)
 
+For a distributed port group, check the effective VLAN and teaming policy for
+the connected dvPort, including inheritance and port-level overrides. In the
+connection window, record the dvPort and team uplink and match headers at the
+vNIC and physical uplink. A vNIC capture can have untagged Ethernet headers
+while the uplink capture reports VLAN metadata. Use an independent receipt
+for the exact connection to identify the leaf ingress.
+
 Compare counter deltas over the same sample buckets at both ends. Preserve the
 sample count, link state, and carrier transitions. Leave missing or reset
 counters unqualified. Traffic with no observed error or discard increase is a
