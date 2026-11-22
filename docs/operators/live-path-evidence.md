@@ -32,6 +32,13 @@ reused. Verify the exact tuple and absolute window with each observer, keep
 request and reply evidence separate, and verify that the temporary trigger is
 cleared. [Cisco NX-OS Packet Tracer](https://www.cisco.com/c/en/us/td/docs/dcn/nx-os/nexus9000/106x/configuration/troubleshooting/cisco-nexus-9000-series-nx-os-troubleshooting-guide-106x/m-troubleshooting-packet-flow-issues.html)
 
+For a VXLAN handoff, require one packet decode that contains the outer VTEP
+addresses and UDP ports along with the exact inner transport tuple. Record the
+ingress and, when present, the hardware-selected egress. A matching capture
+at the next receiver is needed to show that the packet reached that receiver.
+Record a VNI as observed only when the packet decode exposes it. Cite a
+programmed VNI from route or NVE readback as separate control-plane evidence.
+
 Independent segments remain separated by ordering gaps. A pod tuple and a post-masquerade node tuple need explicit translation or handoff evidence before they can be represented as one transport leg. Without that proof, record the workload correlation as a limitation and trace the node tuple independently. Source labels must describe the actual collection method, including CLI cache snapshots. Never emit a CLI snapshot under a vendor continuous-export sourcetype.
 
 ## Qualification
