@@ -49,6 +49,22 @@ same connection at the firewall or another independent observer. A paired
 readback qualifies that connection. Continuous NAT history requires its own
 qualified producer.
 
+## Verify a Gateway socket and its application response
+
+For an approved HTTPS check, establish one connection with hostname and
+certificate validation. Before sending the request, match the established
+client and listener tuple to the socket owned by the actual Gateway proxy.
+Send one read-only request with a unique marker in a route that permits it.
+
+Find the original request and response records for that marker and backend
+identity in the selected window. Verify their reversed backend tuples and
+compare the observed response status to the status received by the client.
+Check that both clocks place the observations in the connection window. Keep
+the client-facing and backend tuples as reported, since a proxy may change
+them. This qualifies the Gateway and application observations for that
+request. Physical forwarding and policy action each require independent
+evidence on the exact flow.
+
 ## Qualify each direction across a firewall
 
 Match request and reply separately at the outside and inside capture points.
