@@ -13,9 +13,18 @@ Receives NetFlow v9 / IPFIX on the **heavy forwarder** and indexes it as `stream
 | Exporter | V2 profile | Observation domain |
 | --- | --- | --- |
 | ACI leaf (OOB source) | `aci_leaf_netflow` | Required |
+| NX-OS exporter (including spine) | `nexus_nxos_netflow` | Required |
 | ESXi host via VDS IPFIX | `vmware_vds_ipfix` | Required |
 | Generic NetFlow without domain | `standard_netflow` | Must be absent |
 | Catalyst / SD-WAN / Meraki MS390 | see [cisco-enterprise-networking](cisco-enterprise-networking.md) | Required |
+
+## Native NX-OS observations in Live Trace
+
+The scoped `adm_path_trace(3)` reader accepts native `stream:netflow` records through `adm_path_trace_netflow(3)`. Register the exact exporter and observation domain in `adm_network_source_scope` with `nexus_nxos_netflow`, `mapped`, one unambiguous mapping, and finite `valid_from` / `valid_end` epoch seconds containing the entire selected search window. Unregistered, ambiguous, expired, or wrong-scope observations do not qualify. Renew authority only after verifying the exporter configuration; do not widen an old qualification window merely to populate a demonstration.
+
+The reader retains each record's tuple, direction, exporter/domain, timestamps, positive interface indexes and indexed-event reference. The UI groups records by exporter for display, with explicit gaps between independent observations. This does not establish adjacency, device order, NAT or a complete route. At most 32 records are returned, interleaved across exporters, and truncation remains visible. Interface index zero is unknown, not a verified egress.
+
+The November 2026 validation lab uses Stream App, Forwarder and Wire Data 8.1.7 on its single Splunk host, with a dedicated UDP NetFlow receiver and no packet-capture processors. This differs from the separate-HF baseline above. Native SE1U leaf records have zero byte counts and no usable egress index; they prove ingress observation only. In this lab, Stream `timestamp` / `endtime` are export/source timestamps, not independently verified packet-first/last times. Do not derive packet duration or authoritative traffic volume from them.
 
 ## Receiver (`Splunk_TA_stream/local/streamfwd.conf` on the HF)
 

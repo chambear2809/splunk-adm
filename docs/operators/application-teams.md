@@ -59,6 +59,12 @@ index=otel_traces sourcetype="otel:traces" "SPAN_KIND_CLIENT" | spath | search k
 
 Each instrumented service should appear with its configured environment and namespace. CLIENT spans used for network association must carry the actual peer IP and destination port; `server.address` is useful context but does not replace the peer IP. Verify pod UID and span timestamps as well.
 
+## Recorded VM application evidence
+
+Use the Services view with an explicit `vm_scope`, service and environment, and an absolute observation window of at most five minutes. An administrator enables the scoped reader through the app-local `adm_vm_application_graph_rows(3)` macro. The shipped reader reports unqualified evidence until a deployment supplies that mapping.
+
+The reader must verify the source authority, VM identity, trace and span IDs, and complete observation window before emitting graph rows. Use the root ID `service:vm/<scope>/<service>/<environment>`. Keep the caller's index permissions and return one metadata row, even when a scope or window has no qualifying evidence. When the span lacks a peer address, only a separately matched socket can support a correlated endpoint. A proxy listener and its upstream database require a paired socket observation. Keep VM telemetry under its actual resource identity.
+
 ## Automation skills
 
 Skills from [splunk-cisco-skills](https://github.com/chambear2809/splunk-cisco-skills) render a plan for review, apply only the requested change, and validate it. Run them from Claude Code, Codex or Cursor, or run their scripts directly. Use the vendored commit rather than assuming upstream `main` matches it. Check the exact skill/package release status and guardrails in [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md](https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md) and follow any documented guardrails before applying.

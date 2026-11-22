@@ -77,10 +77,16 @@ Applies to the V2 contract (`adm_flows_netflow_v2`, staged) and source-qualified
 | --- | --- | --- | --- | --- |
 | `standard_netflow` | `exporter` | `0` / blank | blank | blank |
 | `aci_leaf_netflow` | `exporter` | `1` / required | blank | blank |
+| `nexus_nxos_netflow` | `exporter` | `1` / required | blank | blank |
 | `vmware_vds_ipfix` | `exporter` | `1` / required | blank | blank |
 | `catalyst_campus_fnf` | `exporter` | `1` / required | blank | any |
 | `catalyst_sdwan_ipfix` | `exporter` | `1` / required | required | = `vpn_id` |
 | `meraki_ms390_ipfix` | `exporter` | `1` / required | blank | blank |
+
+`nexus_nxos_netflow` is for explicitly registered NX-OS exporters (including
+spines) when the record carries a non-empty observation domain. It is an
+observation profile only: Atlas preserves the tuple and exporter interfaces,
+but does not infer adjacent switch hops or packet ordering from NetFlow.
 
 Checklist (administrator):
 

@@ -1,0 +1,1762 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Concrete UI qualification scenarios; presence of a referenced test is not a pass. No execution against the current candidate or live deployment is asserted.",
+  "outcome_definitions": {
+    "unexecuted": "Scenario has not been executed against the exact target.",
+    "blocked": "Required provider, capability, environment, supported deployment or pre-enable security gate is unavailable or unqualified."
+  },
+  "execution_evidence": "Record exact build/archive, deployment/source versions, role, UTC interval, each scenario result and sanitized evidence in the primary qualification ledger.",
+  "scenarios": [
+    {
+      "id": "navigation",
+      "area": "shell",
+      "entrypoint": "Eight routes, navigation, aliases and invalid routes",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/app/AtlasApp.tsx",
+        "frontend/src/app/urlState.ts",
+        "frontend/src/app/Shell.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Open each route and follow its corresponding navigation; aliases resolve to intended page.",
+        "negative": "Unknown route is rejected before search.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authenticated application route and role.",
+      "limitations": ""
+    },
+    {
+      "id": "url-input",
+      "area": "shell",
+      "entrypoint": "URL state and identifier validation",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/app/urlState.ts"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Valid absolute time, scope and identifiers restore the selected view.",
+        "negative": "Malformed or injected values dispatch no search.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Live connection and authorized dataset.",
+      "limitations": ""
+    },
+    {
+      "id": "catalog-list",
+      "area": "applications",
+      "entrypoint": "Application catalog load and sorting",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/ApplicationsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known catalog rows, counts and numeric sort agree with independently prepared expected records.",
+        "negative": "Empty catalog is distinguishable from failed or denied search.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Catalog builder and readable source/summary index.",
+      "limitations": ""
+    },
+    {
+      "id": "catalog-map",
+      "area": "applications",
+      "entrypoint": "Catalog row opens scoped map",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/ApplicationsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Open a result and verify exact service, namespace, cluster and time are carried into Map.",
+        "negative": "Missing or invalid target never opens an invented scope.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Catalog row with qualified native identity.",
+      "limitations": ""
+    },
+    {
+      "id": "find-exact",
+      "area": "applications",
+      "entrypoint": "Exact Find for IP, EPG and attached device",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/ApplicationsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Submit an exact known value and show independently expected matching applications.",
+        "negative": "Wildcard, malformed and injected input is rejected before dispatch.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authorized catalog and identity indexes.",
+      "limitations": ""
+    },
+    {
+      "id": "find-network",
+      "area": "applications",
+      "entrypoint": "Find network-client evidence and partial-source failure",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/ApplicationsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show matching network-client evidence with source and association uncertainty.",
+        "negative": "One failing branch does not erase another branch\u2019s successful matches or assert absence.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified network-client history and catalog.",
+      "limitations": ""
+    },
+    {
+      "id": "find-races",
+      "area": "applications",
+      "entrypoint": "Find cancellation and stale responses",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/ApplicationsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Newer completed query determines visible results.",
+        "negative": "Late old response cannot replace later selection.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Controllable delayed searches.",
+      "limitations": ""
+    },
+    {
+      "id": "map-scope",
+      "area": "map",
+      "entrypoint": "Scope selectors and load",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Valid cluster, namespace, application and UTC bounds produce only expected scoped graph.",
+        "negative": "Changing parent scope clears incompatible dependent selection.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authorized graph source, scope and time.",
+      "limitations": ""
+    },
+    {
+      "id": "map-time",
+      "area": "map",
+      "entrypoint": "Time picker and comparison bounds",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/map/TimePicker.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Relative and explicit absolute bounds resolve and display the intended window.",
+        "negative": "Invalid, reversed or incomplete bounds do not launch comparison.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Known timezone and fixed clock.",
+      "limitations": ""
+    },
+    {
+      "id": "map-network",
+      "area": "map",
+      "entrypoint": "Network graph view",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx",
+        "frontend/src/MapView.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known endpoints and edges render with truthful confidence and counts.",
+        "negative": "Unmapped or ambiguous scope is not joined to another authority.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified graph input with observer mappings.",
+      "limitations": ""
+    },
+    {
+      "id": "map-services",
+      "area": "map",
+      "entrypoint": "Services view and grouping",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx",
+        "frontend/src/MapView.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Service group and connections correspond to known graph membership.",
+        "negative": "Unresolved endpoints are not presented as verified ownership.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified service identity and graph.",
+      "limitations": ""
+    },
+    {
+      "id": "map-devices",
+      "area": "map",
+      "entrypoint": "Devices groups, counts and expansion",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/DevicesView.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/devices-tab.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known devices, compact connections and expandable groups agree with topology.",
+        "negative": "Unobserved device does not appear as observed traffic.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Device inventory, graph and topology source.",
+      "limitations": ""
+    },
+    {
+      "id": "map-table",
+      "area": "map",
+      "entrypoint": "Accessible connection table",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx",
+        "frontend/src/map/TableView.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Table lists expected loaded edges and selection opens matching inspector.",
+        "negative": "Filtering or caps do not imply unlisted edges are absent.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Known graph fixture.",
+      "limitations": ""
+    },
+    {
+      "id": "map-zoom",
+      "area": "map",
+      "entrypoint": "Map zoom, fit and keyboard alternative",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/MapView.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Zoom and fit preserve selected graph; table offers accessible edge list at image-render scale.",
+        "negative": "Offscreen and hidden edge imagery is not the sole keyboard navigation.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Rendered large and small graphs.",
+      "limitations": ""
+    },
+    {
+      "id": "map-filter",
+      "area": "map",
+      "entrypoint": "Filter, search and reset",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/map/FilterBar.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Filters narrow the displayed loaded data and reset restores it.",
+        "negative": "A filter cannot modify underlying evidence or declare full source absence.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Known diverse graph fixture.",
+      "limitations": ""
+    },
+    {
+      "id": "map-findings",
+      "area": "map",
+      "entrypoint": "Findings and warning disclosure",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/FindingsList.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show findings and job warnings with the window and applicable source scope.",
+        "negative": "A warning or truncated search is not shown as a clean complete graph.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Known warning and complete positive control.",
+      "limitations": ""
+    },
+    {
+      "id": "selection-node",
+      "area": "inspector",
+      "entrypoint": "Node overview and connected edges",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/Inspector.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Selecting a known node opens its details and relevant connections; closing clears selection.",
+        "negative": "Unknown, ambiguous or stale identity is labeled rather than substituted.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified identity with graph.",
+      "limitations": ""
+    },
+    {
+      "id": "selection-edge",
+      "area": "inspector",
+      "entrypoint": "Edge overview, flows and evidence tabs",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known edge shows its endpoints, counters, direction and tabs.",
+        "negative": "Inferred or sampled traffic is not represented as measured full traffic.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Conversation and source provenance.",
+      "limitations": ""
+    },
+    {
+      "id": "selection-bundle",
+      "area": "inspector",
+      "entrypoint": "Bundled edge list and caps",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Select a bundle and open each listed constituent edge.",
+        "negative": "Additional hidden edges and cap are disclosed rather than silently omitted.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Graph exceeding bundle display limit.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-interface",
+      "area": "inspector",
+      "entrypoint": "Observer interfaces and VLAN evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/ObserverInterfaces.tsx",
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/inspector-interfaces.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show exporter-specific interface and VLAN evidence in its own scope.",
+        "negative": "Missing ifIndex or name is not inferred as a proven hop.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Stream exporter and interface evidence.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-policy",
+      "area": "inspector",
+      "entrypoint": "ACI policy and fabric context",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/Inspector.tsx",
+        "frontend/src/AciFabricPanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Display known policy evidence with status and source.",
+        "negative": "Incomplete policy coverage cannot assert no policy permits traffic.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "APIC classes and qualified policy inputs.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-dns",
+      "area": "inspector",
+      "entrypoint": "DNS resolution evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/MapDnsInspection.tsx",
+        "frontend/src/DnsEvidencePanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/map-dns-inspection.spec.ts",
+        "tests/browser/dns-evidence.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known DNS record is displayed with authority and bounded times.",
+        "negative": "Missing, stale or denied DNS evidence cannot create ownership or graph edges.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Selected qualified DNS source and caller index access.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-proxy",
+      "area": "inspector",
+      "entrypoint": "Envoy proxy evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/ProxyEvidencePanel.tsx",
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/journeys.spec.ts"
+      ],
+      "expected": {
+        "positive": "Inspect same-stream proxy evidence with source, native timing and explicit gaps.",
+        "negative": "Names or nearby times alone cannot associate unrelated streams.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified Envoy logs.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-cloud",
+      "area": "inspector",
+      "entrypoint": "VPC flow evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/CloudFlowEvidencePanel.tsx",
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show known VPC flow observation and its scope.",
+        "negative": "Flow record is not a packet route or ownership proof.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Selected qualified VPC flow source.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-inventory",
+      "area": "inspector",
+      "entrypoint": "Inventory and asset-history evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/InventoryEvidencePanel.tsx",
+        "frontend/src/Inspector.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/journey-assets.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show scoped current and historical inventory with provenance.",
+        "negative": "A current-only snapshot does not establish historical ownership.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified asset history and relevant permissions.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-o11y-health",
+      "area": "inspector",
+      "entrypoint": "Observability historical health",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/O11yHealthPanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/o11y-health.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show known metrics, interval, units and completion state.",
+        "negative": "Partial capture cannot establish healthy absence of incidents.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Selected qualified health capture and index.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-detector",
+      "area": "inspector",
+      "entrypoint": "Observability detector lifecycle",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/O11yDetectorEventsPanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/o11y-detector-events.spec.ts"
+      ],
+      "expected": {
+        "positive": "Render selected detector event and explicit empty/complete status.",
+        "negative": "Truncated or conflicting history is not labeled complete or equated with a different incident ID.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified detector captures and authorized index.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-appd",
+      "area": "inspector",
+      "entrypoint": "AppDynamics inventory evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/AppDynamicsEvidencePanel.tsx",
+        "frontend/src/AppDynamicsCatalog.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/AppDynamicsEvidencePanel.test.tsx"
+      ],
+      "expected": {
+        "positive": "Show current snapshot and backend candidates with source provenance.",
+        "negative": "Names or IPs alone cannot create traffic edge or historical ownership.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified current Controller inventory.",
+      "limitations": ""
+    },
+    {
+      "id": "inspector-thousandeyes",
+      "area": "inspector",
+      "entrypoint": "ThousandEyes evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/ThousandEyesEvidencePanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/thousandeyes.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show bound test/agent/authority records and observation times.",
+        "negative": "Unbound results cannot establish graph edge or packet path.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Selected qualified integration and exact binding.",
+      "limitations": ""
+    },
+    {
+      "id": "trace-form",
+      "area": "trace",
+      "entrypoint": "Trace form, input and scoped links",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/pages/ExploreTools.tsx",
+        "frontend/src/trace/usePathTrace.ts"
+      ],
+      "test_refs": [
+        "tests/browser/trace-gaps.spec.ts"
+      ],
+      "expected": {
+        "positive": "Valid source/destination and scope open a bounded trace.",
+        "negative": "Ambiguous, injected or unqualified historical scope fails closed.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified source, explicit scope and historical validity.",
+      "limitations": "Live device/vSwitch hops fail closed without verified historical observer scope."
+    },
+    {
+      "id": "trace-view",
+      "area": "trace",
+      "entrypoint": "Trace hops, gaps and device links",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/trace/TraceView.tsx",
+        "frontend/src/trace/traceModel.ts"
+      ],
+      "test_refs": [
+        "tests/browser/trace-gaps.spec.ts"
+      ],
+      "expected": {
+        "positive": "Display observed and inferred hops with their evidence and gaps; links carry relevant time.",
+        "negative": "Missing topology is not shown as a complete packet route.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified temporal topology and trace data.",
+      "limitations": "Live historical scope unqualified."
+    },
+    {
+      "id": "endpoint-search",
+      "area": "endpoints",
+      "entrypoint": "Endpoint investigation and peer table",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/EndpointsPage.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/pages/EndpointsPage.test.tsx",
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Investigate a known endpoint and compare one-hop peers to expected scoped records.",
+        "negative": "Invalid identifier and denied source do not produce a no-peers claim.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Live endpoint evidence and caller access.",
+      "limitations": ""
+    },
+    {
+      "id": "endpoint-diagram",
+      "area": "endpoints",
+      "entrypoint": "Endpoint diagram cap and peer navigation",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/EndpointsPage.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/pages/EndpointsPage.test.tsx"
+      ],
+      "expected": {
+        "positive": "Show at most 20 diagram peers while table retains returned rows and links use matching scope.",
+        "negative": "Diagram cap is disclosed and not treated as complete coverage.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "More than 20 known peers.",
+      "limitations": ""
+    },
+    {
+      "id": "device-lookup",
+      "area": "device",
+      "entrypoint": "Device lookup, history and ambiguity",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/DevicePage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/device-window.spec.ts",
+        "frontend/src/pages/DevicePage.test.tsx"
+      ],
+      "expected": {
+        "positive": "Lookup an exact known device and display time-bounded matching inventory.",
+        "negative": "No selection, unknown and ambiguous matches remain distinct.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified device inventory and explicit UTC window.",
+      "limitations": ""
+    },
+    {
+      "id": "device-flow",
+      "area": "device",
+      "entrypoint": "Device interfaces, flow rows and trace handoff",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/DevicePage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/device-window.spec.ts",
+        "tests/browser/impact.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show ingress/egress and exporter provenance, then open trace or Impact on chosen device/interface.",
+        "negative": "Inferred egress is labeled and not treated as direct observation.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Flow records and device inventory.",
+      "limitations": ""
+    },
+    {
+      "id": "impact-failure",
+      "area": "impact",
+      "entrypoint": "What-if failure and blast radius",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/impact/ImpactPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/impact.spec.ts"
+      ],
+      "expected": {
+        "positive": "Evaluate a known single failure and compare affected paths and severity with independently prepared topology.",
+        "negative": "Missing topology produces unknown rather than guaranteed outage or safety.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Current qualified topology and flow evidence.",
+      "limitations": ""
+    },
+    {
+      "id": "impact-dependency",
+      "area": "impact",
+      "entrypoint": "Depends-on and redundant members",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/impact/ImpactPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/impact.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show known single points and redundant members with impact links.",
+        "negative": "Co-located or inferred components do not prove independent failure domains.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified independent topology and source.",
+      "limitations": ""
+    },
+    {
+      "id": "impact-export",
+      "area": "impact",
+      "entrypoint": "Impact CSV export",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/impact/ImpactPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/impact.spec.ts"
+      ],
+      "expected": {
+        "positive": "Export selected headline and expected affected conversation rows.",
+        "negative": "Export does not silently include inaccessible source data.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authorized selected Impact result.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-read",
+      "area": "setup",
+      "entrypoint": "Readiness and source configuration",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/SetupPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show effective source and job readiness, with unknowns and source-specific prerequisites.",
+        "negative": "Demo mode does not read or mutate live settings.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Admin scope and read access to effective config.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-write",
+      "area": "setup",
+      "entrypoint": "Atomic settings save and conflict",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/data/setupClient.ts",
+        "frontend/src/pages/SetupPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/settings-atomic.spec.ts"
+      ],
+      "expected": {
+        "positive": "Authorized valid revision saves once and refreshes displayed settings.",
+        "negative": "Denied, stale or unqualified writes preserve draft and require resolution.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Configured supported settings endpoint and admin capability.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-mappings",
+      "area": "setup",
+      "entrypoint": "Observer, network and cluster mapping editors",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/SetupPage.tsx",
+        "frontend/src/data/setupClient.ts"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Save valid mapping and confirm effective scoped result.",
+        "negative": "Reserved, malformed, duplicate or unauthorized mapping does not overwrite data.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Administrator role and supported KV mapping store.",
+      "limitations": ""
+    },
+    {
+      "id": "health-pipeline",
+      "area": "health",
+      "entrypoint": "Pipeline source freshness and job status",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/HealthPage.tsx",
+        "frontend/src/HealthPanel.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/health-review.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show source receipt times, required jobs and search warnings independently of map filters.",
+        "negative": "Quiet optional source or denied scheduler view is not claimed failed or healthy without evidence.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Source index visibility and job capability.",
+      "limitations": ""
+    },
+    {
+      "id": "health-refresh",
+      "area": "health",
+      "entrypoint": "Health refresh and error state",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/HealthPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/health-review.spec.ts"
+      ],
+      "expected": {
+        "positive": "Refresh produces a new report and exposes search completion.",
+        "negative": "Denied, timed-out or malformed response is not labeled current healthy.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Controlled read-only health search.",
+      "limitations": ""
+    },
+    {
+      "id": "help",
+      "area": "help",
+      "entrypoint": "Help guidance and navigation",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/HelpPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Help explains scope, evidence and navigation without requiring source reads.",
+        "negative": "Guidance does not claim packet paths or complete coverage from partial evidence.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Application UI only.",
+      "limitations": ""
+    },
+    {
+      "id": "incident-compare",
+      "area": "incident",
+      "entrypoint": "Compare baseline, incident and recovery",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/incident/IncidentWorkspace.tsx",
+        "frontend/src/incident/model.ts"
+      ],
+      "test_refs": [
+        "tests/browser/incident-ranking.spec.ts",
+        "tests/browser/investigation.spec.ts"
+      ],
+      "expected": {
+        "positive": "Three bounded comparable windows produce deterministically ranked leads with support and counterevidence.",
+        "negative": "Incomplete or incompatible windows cannot prove absence or causation.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authorized comparable source windows and normalization versions.",
+      "limitations": "Live rendered comparison and retention remain unqualified."
+    },
+    {
+      "id": "incident-tabs",
+      "area": "incident",
+      "entrypoint": "Overview, timeline and connections",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/incident/IncidentWorkspace.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/investigation.spec.ts"
+      ],
+      "expected": {
+        "positive": "Switch tabs and retain matching evidence and notes.",
+        "negative": "An interval change is not presented as exact event time or cause.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Successful bounded comparison.",
+      "limitations": ""
+    },
+    {
+      "id": "incident-failure",
+      "area": "incident",
+      "entrypoint": "Comparison cancellation and source denial",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/incident/IncidentWorkspace.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/investigation.spec.ts"
+      ],
+      "expected": {
+        "positive": "Cancel and rerun without replacing the latest valid selection with an old response.",
+        "negative": "A denied or failed comparison clears stale findings.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Controllable failing and delayed searches.",
+      "limitations": ""
+    },
+    {
+      "id": "maintenance-capture",
+      "area": "maintenance",
+      "entrypoint": "Before and after capture",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/maintenance/MaintenancePlanner.tsx",
+        "frontend/src/maintenance/ImpactMaintenancePlanner.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/planning.spec.ts"
+      ],
+      "expected": {
+        "positive": "Capture and compare explicitly selected before and after evidence with provenance.",
+        "negative": "Missing, denied or stale evidence blocks safe conclusion.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Fresh complete Impact topology and authorized source.",
+      "limitations": "Live measured capacity/readiness feed unqualified."
+    },
+    {
+      "id": "maintenance-assessment",
+      "area": "maintenance",
+      "entrypoint": "Readiness, capacity and failure domains",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/maintenance/MaintenanceAssessment.tsx",
+        "frontend/src/maintenance/model.ts"
+      ],
+      "test_refs": [
+        "frontend/src/maintenance/model.test.ts"
+      ],
+      "expected": {
+        "positive": "Show exposure, readiness, health, capacity and substitutability separately with explicit units and assumptions.",
+        "negative": "Observed average or topology alone cannot prove peak headroom or safe failover.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Fresh complete measurements and independent failure-domain proof.",
+      "limitations": "Qualified live failover-capacity and readiness sources unavailable."
+    },
+    {
+      "id": "baseline-capture",
+      "area": "drift",
+      "entrypoint": "Capture and baseline version review",
+      "implementation_status": "implemented disabled",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/drift/LiveDependencyMonitor.tsx",
+        "frontend/src/drift/BaselineReview.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/planning.spec.ts"
+      ],
+      "expected": {
+        "positive": "Create and review an authorized complete source-backed version with exact window and revision.",
+        "negative": "Top-N, capped, stale or incompatible captures cannot establish a baseline.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Enabled host and trusted complete provider.",
+      "limitations": "Host disabled by default; production source provider unqualified."
+    },
+    {
+      "id": "watch-evaluate",
+      "area": "drift",
+      "entrypoint": "Passive watch and historical observations",
+      "implementation_status": "implemented disabled",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/drift/DependencyMonitor.tsx",
+        "frontend/src/drift/watchPresentation.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/planning.spec.ts"
+      ],
+      "expected": {
+        "positive": "Evaluate a manual watch and show authorized historical observations and pagination.",
+        "negative": "No automatic notification or removal claim is invented from incomplete data.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Enabled host, complete provider and current source authorization.",
+      "limitations": "Automatic scheduling and positive source-backed capture unqualified."
+    },
+    {
+      "id": "cases-create",
+      "area": "cases",
+      "entrypoint": "Private case creation and revisions",
+      "implementation_status": "implemented disabled",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/investigations/CaseRecords.tsx",
+        "frontend/src/investigations/caseClient.ts"
+      ],
+      "test_refs": [
+        "tests/browser/case-records.spec.ts",
+        "tests/browser/investigation.spec.ts"
+      ],
+      "expected": {
+        "positive": "Owner creates case, revises note and reads retained history.",
+        "negative": "Stale revision or revoked principal cannot mutate or read protected records.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Enabled case endpoint, capability and current ACL.",
+      "limitations": "Disabled by default; Cloud/SHC unsupported."
+    },
+    {
+      "id": "cases-capture",
+      "area": "cases",
+      "entrypoint": "Attach authorized capture, sharing and export",
+      "implementation_status": "implemented disabled",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/investigations/CaseEvidence.tsx",
+        "frontend/src/investigations/CaseRecords.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/case-records.spec.ts"
+      ],
+      "expected": {
+        "positive": "Explicit consent attaches authorized saved capture and export rechecks access.",
+        "negative": "Revoked source entitlement withholds protected evidence even for shared case.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Enabled case transport and authorized source capture.",
+      "limitations": "Current supervised transport positive installed qualification outstanding."
+    },
+    {
+      "id": "cases-uncertain",
+      "area": "cases",
+      "entrypoint": "Lost response and conflict handling",
+      "implementation_status": "implemented disabled",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/investigations/CaseRecords.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/case-records.spec.ts",
+        "tests/browser/investigation.spec.ts"
+      ],
+      "expected": {
+        "positive": "Lost-response reconciliation preserves draft and single idempotency identity.",
+        "negative": "Uncertain creation does not blindly create duplicate records.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Case endpoint with controllable response loss.",
+      "limitations": "Browser retry state is memory-only."
+    },
+    {
+      "id": "business-import",
+      "area": "ownership",
+      "entrypoint": "Import and validate business service claims",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/businessServices/BusinessServiceImport.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/businessServices/import.test.tsx",
+        "tests/browser/ownership-integration.spec.ts"
+      ],
+      "expected": {
+        "positive": "Validate and save explicit versioned claims and technical bindings to browser-local storage.",
+        "negative": "Invalid or ambiguous claim cannot become verified identity.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Browser storage and exact qualified native tuple.",
+      "limitations": "Browser-local assertions are not a shared authoritative feed."
+    },
+    {
+      "id": "business-display",
+      "area": "ownership",
+      "entrypoint": "Ownership annotations across views",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/businessServices/OwnershipAnnotations.tsx",
+        "frontend/src/businessServices/BusinessOwnershipContext.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/ownership-integration.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show exact claim matches, conflicts and temporal provenance in Catalog, Map, incident and Impact.",
+        "negative": "Missing, stale or denied native context remains unresolved.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified raw native identity and local claims.",
+      "limitations": ""
+    },
+    {
+      "id": "business-export",
+      "area": "ownership",
+      "entrypoint": "Consent and technical reference export",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/businessServices/BusinessOwnershipContext.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/ownership-integration.spec.ts"
+      ],
+      "expected": {
+        "positive": "Explicit consent exports qualified native references for chosen scope.",
+        "negative": "No consent or unavailable provenance disables reference export.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified native references and browser download.",
+      "limitations": ""
+    },
+    {
+      "id": "journey-ftd",
+      "area": "journeys",
+      "entrypoint": "Firewall same-event NAT translation",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/journeys/FirewallJourneyEvidence.tsx",
+        "frontend/src/journeys/model.ts"
+      ],
+      "test_refs": [
+        "tests/browser/journeys.spec.ts"
+      ],
+      "expected": {
+        "positive": "Render same-event original and translated tuples with provenance and gaps.",
+        "negative": "Translation does not create a separate traffic edge or prove later hops.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Complete qualified FTD same-event data.",
+      "limitations": "Real FTD emission and V2 projection remain unqualified."
+    },
+    {
+      "id": "journey-hubble",
+      "area": "journeys",
+      "entrypoint": "Selected client Hubble handoff",
+      "implementation_status": "implemented with source gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/journeys/HubbleJourneyEvidence.tsx",
+        "frontend/src/journeys/hubble.ts"
+      ],
+      "test_refs": [
+        "tests/browser/journeys.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show candidate handoffs with evidence and ambiguity for selected client.",
+        "negative": "Approximate time or address alone cannot establish association.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified Hubble SNAT/XFF and scope.",
+      "limitations": "Real SNAT/XFF behavior unqualified."
+    },
+    {
+      "id": "journey-export",
+      "area": "journeys",
+      "entrypoint": "Journey detail, gaps and evidence export",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/journeys/JourneyEvidence.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/journeys.spec.ts"
+      ],
+      "expected": {
+        "positive": "Keep stream legs, retries and missing legs separate; export evidence only by explicit choice.",
+        "negative": "Ambiguous legs cannot become a packet-ordered end-to-end path.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authorized selected source evidence.",
+      "limitations": ""
+    },
+    {
+      "id": "saved-view",
+      "area": "views",
+      "entrypoint": "Save, restore, delete and copy local view",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/SavedViews.tsx",
+        "frontend/src/app/savedViews.ts"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Save named browser-local view, restore exact scope and copy validated link.",
+        "negative": "Storage unavailable or invalid state is reported and not presented as durable shared state.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Authenticated browser with local storage.",
+      "limitations": ""
+    },
+    {
+      "id": "map-export",
+      "area": "exports",
+      "entrypoint": "Map image, CSV and evidence exports",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/map/ExportMenu.tsx",
+        "frontend/src/map/useMapExports.ts"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Export the selected current authorized view with scope, UTC and warnings.",
+        "negative": "Denied evidence, unavailable view or no consent cannot leak protected records.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Loaded accessible graph and browser download.",
+      "limitations": ""
+    },
+    {
+      "id": "deep-links",
+      "area": "links",
+      "entrypoint": "Map, endpoint, device and Impact deep links",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/app/urlState.ts",
+        "frontend/src/pages/ExploreTools.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts",
+        "tests/browser/impact.spec.ts"
+      ],
+      "expected": {
+        "positive": "Reload supported link and restore exact validated scope, window and target.",
+        "negative": "Invalid identifiers, unauthorized target and injected query are rejected.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Supported route and caller entitlement.",
+      "limitations": ""
+    },
+    {
+      "id": "keyboard",
+      "area": "accessibility",
+      "entrypoint": "Keyboard controls and focus restoration",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/app/Shell.tsx",
+        "frontend/src/Inspector.tsx",
+        "frontend/src/MapView.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts",
+        "tests/browser/ownership-integration.spec.ts"
+      ],
+      "expected": {
+        "positive": "Operate navigation, tabs, table selection and overlays by keyboard and restore focus after close.",
+        "negative": "No critical graph action depends solely on pointer-only canvas edges.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Keyboard and screen reader test environment.",
+      "limitations": ""
+    },
+    {
+      "id": "responsive",
+      "area": "accessibility",
+      "entrypoint": "Narrow/wide viewport and themes",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/app/mountWidth.ts",
+        "frontend/src/styles.css"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts",
+        "tests/browser/planning.spec.ts"
+      ],
+      "expected": {
+        "positive": "Inspect each route at narrow and wide viewports in both themes with readable reachable controls.",
+        "negative": "Content or dialogs do not overflow or hide critical actions.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Browser viewport and mounted Splunk Web container.",
+      "limitations": ""
+    },
+    {
+      "id": "async-states",
+      "area": "cross-cutting",
+      "entrypoint": "Loading, empty, denied, error and retry",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/data/useGraphQuery.ts",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Loading then empty result is explicitly distinct from a complete nonempty result.",
+        "negative": "Denied, failed, truncated or stale result never appears as a successful empty or complete result.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Controlled search responses, entitlement and time bounds.",
+      "limitations": ""
+    },
+    {
+      "id": "source-access",
+      "area": "cross-cutting",
+      "entrypoint": "Derived source access and export boundaries",
+      "implementation_status": "planned qualification gate",
+      "qualification_outcome": "blocked",
+      "outcome_rationale": "Required source, capability or supported deployment remains unavailable or unqualified.",
+      "code_refs": [
+        "frontend/src/provider.ts",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Fully entitled user sees scoped authorized results across UI and export.",
+        "negative": "Restricted user is denied shared derived data across direct lookup, KV REST, summary, UI and export; raw deny alone is insufficient.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Pre-enable effective shared ACL gate and distinct restricted and fully entitled roles.",
+      "limitations": "Shipped shared data assumes viewers entitled to complete dataset."
+    },
+    {
+      "id": "map-change",
+      "area": "map",
+      "entrypoint": "Adjacent-window graph changes",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/ChangePanel.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/ChangePanel.test.ts",
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Compare two explicit windows and show observed changes and retained coverage.",
+        "negative": "Partial, capped or noncomparable results cannot establish removed dependencies.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Two comparable complete graph windows.",
+      "limitations": ""
+    },
+    {
+      "id": "map-legend",
+      "area": "map",
+      "entrypoint": "Legend, warnings and help popovers",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/map/Legend.tsx",
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Open, read and close legend, warnings and map help.",
+        "negative": "Warnings and evidence confidence are not hidden as success.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Loaded map with warning fixture.",
+      "limitations": ""
+    },
+    {
+      "id": "map-settings",
+      "area": "map",
+      "entrypoint": "Persona, display preferences and data mode",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx",
+        "frontend/src/app/prefs.ts"
+      ],
+      "test_refs": [
+        "frontend/src/app/prefs.test.ts",
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Change persona, view preferences or data mode and verify selection reflects requested setting.",
+        "negative": "Demo capture cannot be mistaken for live data or trigger live mutation.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Available demo and live source modes.",
+      "limitations": ""
+    },
+    {
+      "id": "map-kpis",
+      "area": "map",
+      "entrypoint": "Summary counts and selected graph detail",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/MapPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Known graph counts match loaded nodes, edges and findings; clicking relevant summary opens its detail.",
+        "negative": "Filtered or truncated loaded data is not represented as complete population.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Known graph and completion metadata.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-expectations",
+      "area": "setup",
+      "entrypoint": "Deployment source expectations, cadence and freshness",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/SetupPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/settings-atomic.spec.ts"
+      ],
+      "expected": {
+        "positive": "Save valid source expectation and show corresponding readiness and freshness.",
+        "negative": "Invalid cadence, stale revision or denied role does not overwrite configuration.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Supported settings write endpoint and admin entitlement.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-source-index",
+      "area": "setup",
+      "entrypoint": "Index macros, summary index and source setup",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/SetupPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Show effective index macros and summary index alignment with configuration.",
+        "negative": "Missing index or unavailable permissions remains unknown/blocked.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Effective config and authorized indexes.",
+      "limitations": ""
+    },
+    {
+      "id": "setup-cisco",
+      "area": "setup",
+      "entrypoint": "Cisco source scope, Cilium settings and V2 schedules",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/pages/SetupPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/app.spec.ts"
+      ],
+      "expected": {
+        "positive": "Display configured source profiles, Cilium settings and staged V2 jobs with correct enablement.",
+        "negative": "Staged or disabled jobs are not described as active or schema-qualified.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Cisco V2 configuration, scoped read access and scheduler metadata.",
+      "limitations": ""
+    },
+    {
+      "id": "observability-navigation",
+      "area": "integration",
+      "entrypoint": "Observability product navigation and context",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/O11yNavigationPanel.tsx"
+      ],
+      "test_refs": [
+        "frontend/src/O11yNavigationPanel.test.tsx"
+      ],
+      "expected": {
+        "positive": "Copy explicit identity and UTC bounds and navigate to validated product origin.",
+        "negative": "Reject unsafe origin and do not invent unsupported deep-filter formats or conflate event IDs.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Configured validated tenant and browser clipboard.",
+      "limitations": ""
+    },
+    {
+      "id": "map-service-health",
+      "area": "inspector",
+      "entrypoint": "Service health selection and evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/MapServiceHealthInspection.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/map-service-health.spec.ts"
+      ],
+      "expected": {
+        "positive": "Select a service and show matching authorized health evidence.",
+        "negative": "Unselected or denied service must not inherit another service\u2019s evidence.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified service identity and health source.",
+      "limitations": ""
+    },
+    {
+      "id": "scope-address-dns",
+      "area": "endpoints",
+      "entrypoint": "Standalone scoped address DNS evidence",
+      "implementation_status": "implemented",
+      "qualification_outcome": "unexecuted",
+      "outcome_rationale": "No current-candidate target execution recorded.",
+      "code_refs": [
+        "frontend/src/EndpointEvidencePanels.tsx",
+        "frontend/src/pages/EndpointsPage.tsx"
+      ],
+      "test_refs": [
+        "tests/browser/dns-evidence.spec.ts"
+      ],
+      "expected": {
+        "positive": "Inspect DNS records for an explicit address and authority in the chosen window.",
+        "negative": "An absent or mismatched authority cannot be used to correlate unrelated names.",
+        "failure": "An unavailable, denied, failed or incomplete dependency is surfaced in this entrypoint; prior evidence is not represented as a current successful result.",
+        "recovery": "Restore the dependency or correct the input, retry explicitly, and verify the newly returned scoped result."
+      },
+      "prerequisites": "Qualified DNS source and caller access.",
+      "limitations": ""
+    }
+  ]
+}
