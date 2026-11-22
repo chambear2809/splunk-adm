@@ -133,6 +133,18 @@ class HostTest(unittest.TestCase):
             self.host,
         )
 
+    def test_new_standalone_build_must_match_exactly(self):
+        server = self.responses["/services/server/info"]
+        server.update(version="10.6.1.1", build="b2ae2962645c")
+        self.host.store("alice")
+        for build in (None, "wrong"):
+            server["build"] = build
+            with self.subTest(build=build), self.assertRaises(HostUnavailable):
+                self.host.store("alice")
+        server.update(version="10.6.1.2", build="b2ae2962645c")
+        with self.assertRaises(HostUnavailable):
+            self.host.store("alice")
+
     def test_disabled_and_cloud_fail_without_creating_storage(self):
         self.assertFalse(
             handle({"method": "GET", "path_info": "capabilities"}, self.host)[1][

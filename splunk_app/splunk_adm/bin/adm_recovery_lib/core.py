@@ -261,11 +261,14 @@ class Recovery:
 
         server = content("/services/server/info")
         version = server.get("version")
-        if not isinstance(version, str) or version not in QUALIFIED_VERSIONS:
+        if not (
+            (isinstance(version, str) and version in QUALIFIED_VERSIONS)
+            or (version == "10.6.1.1" and server.get("build") == "b2ae2962645c")
+        ):
             raise Refused(
                 "only standalone Splunk Enterprise "
                 + ", ".join(sorted(QUALIFIED_VERSIONS))
-                + " is qualified"
+                + " is qualified; standalone 10.6.1.1 requires build b2ae2962645c"
             )
         # instance_type=cloud is the discriminator used by Splunk's solnlib.
         # The qualified Enterprise instance omits it. Any new value requires

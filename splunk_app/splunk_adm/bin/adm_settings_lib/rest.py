@@ -142,8 +142,12 @@ class SplunkStore:
         # Additional runtimes require installed endpoint/concurrency evidence.
         if (
             server.get("version") not in QUALIFIED_VERSIONS
-            or server.get("product_type") != "enterprise"
-        ):
+            and not (
+                mode == "single_namespace"
+                and server.get("version") == "10.6.1.1"
+                and server.get("build") == "b2ae2962645c"
+            )
+        ) or server.get("product_type") != "enterprise":
             reported = " ".join(
                 str(server.get(key) or "unknown") for key in ("product_type", "version")
             )
@@ -151,7 +155,13 @@ class SplunkStore:
                 503,
                 "unsupported",
                 f"Settings writes are qualified only on Splunk Enterprise "
-                f"{', '.join(sorted(QUALIFIED_VERSIONS))}; this server reports "
+                f"{', '.join(sorted(QUALIFIED_VERSIONS))}"
+                + (
+                    " or standalone 10.6.1.1 build b2ae2962645c"
+                    if mode == "single_namespace"
+                    else ""
+                )
+                + "; this server reports "
                 f"{reported}. Settings stay read-only until it is qualified.",
             )
         if (

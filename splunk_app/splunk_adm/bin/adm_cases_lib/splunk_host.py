@@ -239,7 +239,13 @@ class SplunkHost:
         server = self.request("/services/server/info")
         if (
             server.get("product_type") != "enterprise"
-            or server.get("version") != "10.6.0.5"
+            or not (
+                server.get("version") == "10.6.0.5"
+                or (
+                    server.get("version") == "10.6.1.1"
+                    and server.get("build") == "b2ae2962645c"
+                )
+            )
             # Enterprise 10.6.0.5 omits these optional markers in the installed
             # standalone lab. Platform attestation remains mandatory above.
             or server.get("isCloud") not in (None, False, 0, "0")
