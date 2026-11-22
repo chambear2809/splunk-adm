@@ -70,6 +70,12 @@ evidence on the exact flow.
 ## Qualify each direction across a firewall
 
 Match request and reply separately at the outside and inside capture points.
+Across a routed interval, compare the TCP sequence, acknowledgement, flags,
+and IPv4 packet metadata at the capture points in each direction. Check the
+TTL change separately. The matched headers qualify the observed endpoints,
+including an asymmetric uplink choice when both directions are captured.
+Forwarding at intermediate switches requires its own evidence.
+
 A matching firewall verdict establishes the recorded policy action. If the
 firewall changes TCP sequence numbers, derive each direction's offset from the
 captured handshake and verify it against additional unique headers. Across a
