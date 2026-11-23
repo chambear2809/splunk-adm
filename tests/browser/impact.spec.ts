@@ -29,6 +29,17 @@ test("deep link: a vPC leaf failure is degraded, single-homed pods are out", asy
   await expect(
     table.getByRole("row").filter({ hasText: "payment-np" }),
   ).toContainText("single-homed");
+  const untested = table.locator(".atlas-sev.unknown").first();
+  await expect(untested).toHaveText("Outcome not tested");
+  // The badge fits its cell: the label is not clipped.
+  const fits = await untested.evaluate((badge) => {
+    const cell = badge.closest('[role="cell"], td') ?? badge.parentElement!;
+    return (
+      badge.getBoundingClientRect().right <=
+      cell.getBoundingClientRect().right + 0.5
+    );
+  });
+  expect(fits).toBe(true);
   const blast = page.getByRole("figure", { name: "Blast map" });
   await expect(blast.locator(".blast-node.down text")).toHaveText("leaf-101");
   await expect(blast.locator(".blast-node.alternate text")).toContainText([
