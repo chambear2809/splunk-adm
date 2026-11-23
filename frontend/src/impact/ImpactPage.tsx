@@ -85,7 +85,8 @@ const failsColumns = (hours?: number): VirtualColumn<Classified>[] => [
     sortValue: (c) =>
       ({ outage: 3, unknown: 2, degraded: 1, unaffected: 0 })[c.severity],
     filterText: (c) => SEV_LABEL[c.severity],
-    width: 0.8,
+    // Wide enough for the longest label, "Outcome not tested".
+    width: 1.25,
   },
   {
     key: "app",
