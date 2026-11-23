@@ -48,7 +48,7 @@ type Load =
 const SEV_LABEL = {
   outage: "Outage",
   degraded: "Degraded",
-  unknown: "Unverified",
+  unknown: "Outcome not tested",
   unaffected: "Unaffected",
 } as const;
 const DEP_LABEL = {
@@ -297,7 +297,7 @@ function Kpi({
   return (
     <span
       className={`kpi atlas-impact-kpi ${none ? "none" : ""}`}
-      aria-label={`${label}: ${split.outage} outage, ${split.degraded} degraded${split.unknown ? `, ${split.unknown} unverified` : ""}`}
+      aria-label={`${label}: ${split.outage} outage, ${split.degraded} degraded${split.unknown ? `, ${split.unknown} outcome not tested` : ""}`}
     >
       <span className="kpi-label">{label}</span>
       <b className="atlas-sev-n outage" title="Outage">
@@ -307,7 +307,7 @@ function Kpi({
         {format(split.degraded)}
       </b>
       {split.unknown > 0 && (
-        <b className="atlas-sev-n unknown" title="Unverified">
+        <b className="atlas-sev-n unknown" title="Outcome not tested">
           {format(split.unknown)}
         </b>
       )}

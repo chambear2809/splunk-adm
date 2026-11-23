@@ -264,7 +264,7 @@ export function failsImpact(
   const main = [
     `${label} down: ${unit.split.outage} outage`,
     `${unit.split.degraded} ${unit.split.degraded === 1 ? unit.one : unit.many} degraded`,
-    ...(unit.split.unknown ? [`${unit.split.unknown} unverified`] : []),
+    ...(unit.split.unknown ? [`${unit.split.unknown} outcome not tested`] : []),
     `${peers.size} ${peers.size === 1 ? "peer" : "peers"}`,
     ...(top && top.bytesPerHour > 0
       ? [
