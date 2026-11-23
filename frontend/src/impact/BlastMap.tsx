@@ -9,7 +9,7 @@ const STATE_TEXT: Record<NodeState, string> = {
   down: "down",
   outage: "outage",
   degraded: "degraded",
-  unknown: "unverified",
+  unknown: "outcome not tested",
   alternate: "carries traffic",
   path: "on path",
 };

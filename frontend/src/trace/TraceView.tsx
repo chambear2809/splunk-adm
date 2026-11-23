@@ -25,8 +25,10 @@ import {
   blockedKindLabel,
   blockedLabel,
   collapseHops,
+  coverageLabel,
   epochLabel,
   hopIcon,
+  observedCoverage,
   openServices,
   portProtoLabel,
   type BlockedHop,
@@ -150,7 +152,7 @@ export function TraceView({
         : conversations
           ? plural(conversations, "conversation")
           : trace?.status === "partial"
-            ? "Source coverage incomplete"
+            ? coverageLabel(observedCoverage(trace.hops))
             : "No records"
       : undefined,
     trace

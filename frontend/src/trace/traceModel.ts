@@ -106,6 +106,34 @@ export function traceSummary(rows: readonly unknown[]): TraceSummary {
 }
 
 /** "tcp/5432", "tcp/443 +2", or undefined when nothing was observed. */
+/**
+ * Observed-hop coverage for traces whose records are not summed across
+ * sources (scoped and bounded-capture traces). Counts hops and distinct
+ * observing sources; never combines per-source record counts.
+ */
+export function observedCoverage(
+  hops: readonly {
+    evidence: string;
+    kind: string;
+    sources: readonly string[];
+  }[],
+): { hops: number; sources: number } {
+  const observed = hops.filter(
+    (hop) => hop.evidence === "observed" && hop.kind !== "gap",
+  );
+  return {
+    hops: observed.length,
+    sources: new Set(observed.flatMap((hop) => hop.sources)).size,
+  };
+}
+
+/** Header text for observed-hop coverage; falls back to the incomplete label. */
+export function coverageLabel(c: { hops: number; sources: number }): string {
+  if (!c.hops) return "Source coverage incomplete";
+  const hops = `${c.hops} observed ${c.hops === 1 ? "hop" : "hops"}`;
+  return `${hops} from ${c.sources} ${c.sources === 1 ? "source" : "sources"}`;
+}
+
 export function portProtoLabel(
   protocols: readonly string[],
   ports: readonly string[],

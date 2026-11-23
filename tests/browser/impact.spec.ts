@@ -12,11 +12,11 @@ test("deep link: a vPC leaf failure is degraded, single-homed pods are out", asy
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/impact?element=leaf-101&mode=fails&window=-1h");
   await expect(headline(page)).toHaveText(
-    /^leaf-101 down: 2 outage · 3 apps degraded · 2 unverified · \d+ peers · [\d.]+ KB\/h shifts to leaf-102$/,
+    /^leaf-101 down: 2 outage · 3 apps degraded · 2 outcome not tested · \d+ peers · [\d.]+ KB\/h shifts to leaf-102$/,
   );
   const kpis = page.getByLabel("Impact by severity");
   await expect(
-    kpis.getByLabel(/^Apps: 2 outage, 3 degraded, 2 unverified/),
+    kpis.getByLabel(/^Apps: 2 outage, 3 degraded, 2 outcome not tested/),
   ).toBeVisible();
   const table = page.getByRole("table");
   const db = table

@@ -145,6 +145,7 @@ Saved searches run as their owner. Grant source-index reads and the derived-inde
 ## Roles and KV store
 
 - Pilot users: read on selected source indexes and active derived indexes, plus the `splunk_adm` app; verify effective search messages and lookup ACLs. Shared searches can reference absent/unselected indexes; do not broaden access to unrelated data just to suppress a warning.
+- Reader role (demonstrations, application owners): create a role that imports only `user`, grants read on the selected source and active derived indexes, and sets `splunk_adm` as the default app. Do not grant `adm_investigate` or administrative capabilities. In validation, a role built this way rendered every Trace, Device, Impact, Services and evidence view the administrator could; app metadata restricts writes to administrators, but write refusal was not separately tested with this role.
 - Saved-search owner: same, plus the ability to write to the active contract's derived index (`adm_summary` for V1; the separately configured V2 index after qualified cutover).
 - KV store must be healthy. In addition to `adm_ip_identity`, `adm_service_workload` and `adm_interfaces`, the app uses scope, Kubernetes backend/route, ACI policy and catalog collections; V2 adds network source profiles/client history and a separate catalog. Preserve deployment-owned KV data during upgrades; see [backup/restore](../BACKUP_RESTORE.md) and [upgrades](../UPGRADES.md).
 
