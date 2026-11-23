@@ -110,6 +110,8 @@ Leaf access ports facing Kubernetes nodes need LLDP receive. Nodes run an LLDP a
 
 Enable `endpoints` and `flows` with the ND account, index `cisco_dc`, and the site. Enable flow telemetry for the application VRFs.
 
+Some fabrics cannot produce Nexus Dashboard flow records: Cisco excludes native Flow Telemetry for mixed CloudScale and Silicon One fabrics ([Cisco ND analysis requirements](https://www.cisco.com/c/en/us/td/docs/dcn/nd/4x/articles-431/analyzing-and-troubleshooting-your-network.html)). On such fabrics `cisco:dc:nd:flows` stays empty while endpoint records arrive, and the Data health row for Nexus Dashboard shows a warning instead of a healthy status. Use NX-OS NetFlow to Splunk Stream for flow evidence there.
+
 ## Contract logging (optional)
 
 Set `log` on contract subject filters for the application ports. ACL-log records are sampled and bounded: they confirm traffic, not count it.

@@ -46,7 +46,7 @@ index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" EventType="ConnectionEven
 | convert ctime(latest_receipt)
 ```
 
-Use the aggregate to verify recent delivery from each reporting device. Confirm the device against the managed firewall inventory and verify its routing domain before assigning a scope. A scoped Trace requires a unique observer mapping whose validity covers the selected window. An expired binding can still support its original replay window.
+Use the aggregate to verify recent delivery from each reporting device. Every reporting `DeviceIP` that should contribute to Trace needs its own `adm_observer_scope` binding; events from an unbound device are indexed but not attributed in scoped Trace. Confirm the device against the managed firewall inventory and verify its routing domain before assigning a scope. A scoped Trace requires a unique observer mapping whose validity covers the selected window. An expired binding can still support its original replay window.
 
 To compare a firewall connection with NetFlow, match the protocol, IP addresses, ports, and event-time intervals. Check the forward and reverse NetFlow tuples separately. A firewall `Allow` applies to the matching connection record. Responder counters provide evidence of return traffic at the firewall. Use an independent interface or packet observation to identify the physical return handoff.
 

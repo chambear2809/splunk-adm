@@ -63,7 +63,9 @@ netflowReceiver.0.decodingThreads = 4
 netflowReceiver.0.templateExpiry = 3600
 ```
 
-`filter` = leaf OOB addresses plus ESXi management addresses. Size `decodingThreads` to flow rate.
+`filter` = leaf OOB addresses plus ESXi management addresses, plus the VDS switch IP when one is configured (see switch-IP mode below). Stream silently discards datagrams from addresses that are not in the filter. Size `decodingThreads` to flow rate.
+
+NX-OS exports only from interfaces that have a flow monitor applied, so Device and Trace show only conversations that crossed those interfaces, not all traffic on the switch. An `output_snmpidx` of 0 or empty means the exporter did not report egress. Some platforms export zero byte counts; rank by flows in that case.
 
 ## Stream fields
 
@@ -97,6 +99,7 @@ Marks the VDS hop "Seen" on path trace and lists the host on the Device page.
 - APIC-managed VDS (VMM domain): configure NetFlow through the APIC VMM domain policy; direct vCenter edits may be overwritten. Confirm for your APIC release.
 - Requires the APIC VMM and adjacency classes ([ACI_VMM_ADJACENCY_CLASSES](ACI_VMM_ADJACENCY_CLASSES.md)) so the exporter resolves to a VDS.
 - Unverified: that VDS `input_snmpidx`/`output_snmpidx` carry DVS port IDs.
+- Switch-IP mode: when the VDS has a switch IP address set, every host exports from that one address and the observation domain can be unset (0). Add the switch IP to the Stream receiver `filter`, or Stream discards the datagrams. Atlas cannot attribute switch-IP-mode records to a host or VDS hop today (`vmware_vds_ipfix` expects the per-host mode above); treat them as delivery evidence only and verify with `` `adm_index_netflow` sourcetype=stream:netflow exporter_ip=<switch IP> netflow_version=10 ``. Changing the collector or switch IP is a switch-wide setting that affects every IPFIX-enabled port group on that VDS.
 
 When qualifying an existing input, read the switch, port group, and connected port policies to confirm effective IPFIX. Check delivery at the configured receiver and verify the emitting address and observation domain in indexed Stream records before registering the profile. If a search for candidate addresses returns zero matches, check a known-good exporter in the same window and label the vDS feed unqualified. [vSphere port policy](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/data-structures/VMwareDVSPortSetting/) · [Splunk Stream receipt requirements](https://help.splunk.com/en/splunk-cloud-platform/collect-stream-data/install-and-configure-splunk-stream/8.1/configure-your-splunk-stream-installation/use-splunk-stream-to-ingest-netflow-and-ipfix-data)
 
