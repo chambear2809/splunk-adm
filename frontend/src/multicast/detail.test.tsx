@@ -104,6 +104,16 @@ describe("multicast group detail", () => {
     expect(html).toContain("Segment not reported");
     expect(html).not.toMatch(FORBIDDEN);
   });
+  it("timeline titles a query without a reported scope", () => {
+    const html = timeline(
+      result([igmp("query", 1200, { reporter: "192.0.2.1" })]),
+    );
+    expect(html).toContain('class="mc-mark group-query"');
+    expect(html).toContain(
+      "<title>query (scope not reported) from 192.0.2.1 at ",
+    );
+    expect(html).not.toContain("<title>group query");
+  });
   it("timeline reports an empty window", () => {
     expect(timeline(result([]))).toContain("No IGMP evidence in this window");
   });
@@ -123,6 +133,9 @@ describe("multicast group detail", () => {
     expect(html).toContain("192.0.2.2");
     expect(html).not.toContain("192.0.2.10");
     expect(html.match(/class="mc-sender-bar"/g)).toHaveLength(2);
+    expect(html).toContain(
+      'aria-label="Query senders observed for vlan 110 · dc1: 2 query senders (192.0.2.1, 192.0.2.2)"',
+    );
     const steady = strip(
       result([
         igmp("query", 1100, { queryScope: "general", reporter: "192.0.2.1" }),
@@ -130,6 +143,9 @@ describe("multicast group detail", () => {
       ]),
     );
     expect(steady).not.toContain("Query senders changed");
+    expect(steady).toContain(
+      'aria-label="Query senders observed for vlan 110 · dc1: 1 query sender (192.0.2.1)"',
+    );
   });
   it("querier strip never says elected", () => {
     const html = strip(

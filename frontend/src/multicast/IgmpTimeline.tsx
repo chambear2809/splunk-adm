@@ -87,7 +87,11 @@ const plural = (count: number, one: string, many: string) =>
 function Mark({ item, x }: { item: IgmpEvidence; x: number }) {
   const kind = markKind(item);
   const label =
-    item.operation === "query" ? kind.replace("-", " ") : item.operation;
+    item.operation !== "query"
+      ? item.operation
+      : item.queryScope
+        ? kind.replace("-", " ")
+        : "query (scope not reported)";
   const who =
     item.reporter ??
     (item.operation === "query" ? "unknown sender" : "unknown reporter");

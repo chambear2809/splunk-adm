@@ -64,9 +64,11 @@ export function QuerierStrip({
             </h4>
             <svg
               role="img"
-              aria-label={`Query senders observed for ${row.label}: ${row.senders
+              aria-label={`Query senders observed for ${row.label}: ${
+                row.senders.length
+              } ${row.senders.length === 1 ? "query sender" : "query senders"} (${row.senders
                 .map((sender) => sender.address)
-                .join(", ")}`}
+                .join(", ")})`}
               viewBox={`0 0 ${CHART_WIDTH} ${row.senders.length * ROW_HEIGHT}`}
             >
               {row.senders.map((sender, index) => {
