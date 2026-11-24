@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { normalizeControllerCatalog } from "./appDynamicsCatalog";
+import { describe, expect, it, vi } from "vitest";
+import {
+  loadControllerCatalog,
+  normalizeControllerCatalog,
+} from "./appDynamicsCatalog";
 import { APPDYNAMICS_SCHEMA } from "./appdynamicsEvidence";
 import type { SupplementalSourceConfiguration } from "./evidenceConfig";
 import type { Row } from "../rows";
@@ -29,14 +32,10 @@ const common = {
   scope: "cv-lab",
   identity_basis: "controller_application_model_ids",
   snapshot_id: "snapshot-1",
-  snapshot_at: 990,
-  collection_started_at: 980,
-  collection_completed_at: 990,
   collection_skew_seconds: 10,
-  observed_at: 990,
   snapshot_complete: true,
 };
-function rows(): Row[] {
+function rows(snapshotAt = 990, indexedAt = 995): Row[] {
   const records = [
     {
       record_type: "snapshot",
@@ -87,9 +86,13 @@ function rows(): Row[] {
   ];
   return records.map((r, i) => ({
     index: "appd_inventory",
-    _indextime: "995",
+    _indextime: String(indexedAt),
     _raw: JSON.stringify({
       ...common,
+      snapshot_at: snapshotAt,
+      collection_completed_at: snapshotAt,
+      collection_started_at: snapshotAt - common.collection_skew_seconds,
+      observed_at: snapshotAt,
       ...r,
       record_fingerprint: String(i + 1).padStart(64, "0"),
     }),
@@ -137,5 +140,41 @@ describe("Controller catalog admission", () => {
         1000,
       ),
     ).toThrow();
+  });
+
+  it("admits an indexed fractional snapshot in the current second and rejects a future one", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_500);
+    try {
+      const search = vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: rows(1000.125, 1000),
+          warnings: [],
+          errors: [],
+        })
+        .mockResolvedValueOnce({
+          rows: rows(1000.75, 1000),
+          warnings: [],
+          errors: [],
+        });
+      const signal = new AbortController().signal;
+      const configurationClient = {
+        readAppDynamicsInventory: async () => ({
+          source: config,
+          fingerprint: "unchanged",
+        }),
+      };
+      await expect(
+        loadControllerCatalog({ search }, signal, configurationClient),
+      ).resolves.toMatchObject({ snapshotAt: 1000.125 });
+      expect(search).toHaveBeenCalledWith(
+        expect.objectContaining({ latest: "1001" }),
+      );
+      await expect(
+        loadControllerCatalog({ search }, signal, configurationClient),
+      ).rejects.toThrow("Invalid or stale Controller capture time.");
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

@@ -272,13 +272,15 @@ export async function loadControllerCatalog(
   const before = await configurationClient.readAppDynamicsInventory(signal);
   const source = before.source;
   const mapping = configuration(source);
-  const cutoff = Math.floor(Date.now() / 1000);
+  const cutoff = Date.now() / 1000;
+  // Dispatch with whole-second bounds and validate snapshot times at full precision.
+  const searchSecond = Math.floor(cutoff);
   const search = `search index=${mapping.index} sourcetype="${APPDYNAMICS_SOURCETYPE}" source="appdynamics_inventory" schema="${APPDYNAMICS_SCHEMA}" controller_authority="${mapping.authority}" scope="${literal(mapping.scope)}" | eval adm_snapshot_at=tonumber(snapshot_at) | eventstats max(adm_snapshot_at) AS adm_latest_snapshot_at BY controller_authority scope | eval adm_latest_ids=if(adm_snapshot_at=adm_latest_snapshot_at,snapshot_id,null()) | eventstats values(adm_latest_ids) AS adm_latest_ids BY controller_authority scope | eval adm_selected_snapshot=if(isnotnull(mvmap(adm_latest_ids,if(adm_latest_ids==snapshot_id,1,null()))),1,0) | where adm_selected_snapshot=1 OR adm_snapshot_at=adm_latest_snapshot_at OR isnull(adm_snapshot_at) | head 10001 | fields _raw index _indextime`;
   const result = requireNoSearchErrors(
     await client.search({
       search,
-      earliest: String(cutoff - source.staleAfterSeconds),
-      latest: String(cutoff + 1),
+      earliest: String(searchSecond - source.staleAfterSeconds),
+      latest: String(searchSecond + 1),
       maxRows: 10001,
       allowEmpty: true,
       signal,

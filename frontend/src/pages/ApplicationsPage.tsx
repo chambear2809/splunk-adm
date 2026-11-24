@@ -147,7 +147,10 @@ export function ApplicationsPage({
   const [error, setError] = useState<string>();
   const [findError, setFindError] = useState<string>();
   const [networkClientError, setNetworkClientError] = useState<string>();
-  const [warning, setWarning] = useState<string>();
+  // Catalog coverage and Find evidence have independent completeness. A Find
+  // request must not erase a warning attached to the rows still on screen.
+  const [catalogWarning, setCatalogWarning] = useState<string>();
+  const [findWarning, setFindWarning] = useState<string>();
   const [loading, setLoading] = useState(false);
   const [findLoading, setFindLoading] = useState(false);
   const [findRan, setFindRan] = useState(false);
@@ -183,7 +186,7 @@ export function ApplicationsPage({
     const current = ++revision.current;
     setLoading(true);
     setError(undefined);
-    setWarning(undefined);
+    setCatalogWarning(undefined);
     setCatalog([]);
     void client
       .search({
@@ -203,7 +206,7 @@ export function ApplicationsPage({
         const parsed = parseCatalogRows(result.rows);
         if (parsed.length) {
           setCatalog(parsed);
-          setWarning(result.warnings.join(" ") || undefined);
+          setCatalogWarning(result.warnings.join(" ") || undefined);
           return;
         }
         throw new Error("No application catalog rows were returned.");
@@ -231,7 +234,7 @@ export function ApplicationsPage({
             requireNoSearchErrors(narrowed, "Narrowed catalog search");
             if (narrowed.rows.length) {
               setCatalog(parseCatalogRows(narrowed.rows));
-              setWarning(
+              setCatalogWarning(
                 [
                   `Catalog narrowed to service “${selectedService}”; metrics use each row’s last completed hour.`,
                   ...narrowed.warnings,
@@ -252,7 +255,7 @@ export function ApplicationsPage({
           }
           return;
         }
-        setWarning(
+        setCatalogWarning(
           `Application catalog unavailable (${reason instanceof Error ? reason.message : "search failed"}); showing configured scopes.`,
         );
         try {
@@ -267,7 +270,7 @@ export function ApplicationsPage({
           if (controller.signal.aborted || current !== revision.current) return;
           requireNoSearchErrors(fallback, "Scope options search");
           setCatalog(createScopeCatalogRows(fallback.rows));
-          setWarning(
+          setCatalogWarning(
             fallback.rows.length
               ? `Application catalog unavailable (${reason instanceof Error ? reason.message : "search failed"}); metrics are unavailable for fallback scopes.`
               : "No catalog or configured scopes were returned.",
@@ -298,6 +301,7 @@ export function ApplicationsPage({
     setFindRan(false);
     setFindError(undefined);
     setNetworkClientError(undefined);
+    setFindWarning(undefined);
     if (state.mode === "live") loadCatalog();
     else if (!__ADM_SPLUNK_BUILD__) {
       catalogController.current?.abort();
@@ -320,7 +324,7 @@ export function ApplicationsPage({
           );
           setEarliest(capture.find.earliest);
           setLatest(capture.find.latest);
-          setWarning(undefined);
+          setCatalogWarning(undefined);
         })
         .catch((reason: unknown) => {
           if (current === revision.current)
@@ -466,6 +470,7 @@ export function ApplicationsPage({
     setFindLoading(false);
     setFindError(undefined);
     setNetworkClientError(undefined);
+    setFindWarning(undefined);
   };
   const findDisabled =
     findLoading ||
@@ -501,7 +506,7 @@ export function ApplicationsPage({
       setFindError(undefined);
       setNetworkClientError(undefined);
       setFindRan(true);
-      setWarning(undefined);
+      setFindWarning(undefined);
       return;
     }
     if (!client) return;
@@ -509,7 +514,7 @@ export function ApplicationsPage({
     try {
       search = validatedBuildFindSearch(findValue);
     } catch (reason) {
-      setError(
+      setFindError(
         reason instanceof Error ? reason.message : "Invalid find value.",
       );
       return;
@@ -524,8 +529,7 @@ export function ApplicationsPage({
     setNetworkClientError(undefined);
     setFindRan(true);
     setFindLoading(true);
-    setError(undefined);
-    setWarning(undefined);
+    setFindWarning(undefined);
     let networkSearch: string | undefined;
     try {
       networkSearch = validatedBuildNetworkClientFindSearch(findValue);
@@ -605,7 +609,7 @@ export function ApplicationsPage({
             ),
           );
         }
-        setWarning(
+        setFindWarning(
           [...new Set(warnings.filter(Boolean))].join(" ") || undefined,
         );
       })
@@ -684,6 +688,7 @@ export function ApplicationsPage({
             setFindLoading(false);
             setFindError(undefined);
             setNetworkClientError(undefined);
+            setFindWarning(undefined);
           }}
         />
         {!__ADM_SPLUNK_BUILD__ && state.mode === "demo" && (
@@ -850,9 +855,14 @@ export function ApplicationsPage({
           />
         </p>
       )}
-      {warning && (
+      {catalogWarning && (
         <p role="status" className="muted small">
-          {warning}
+          {catalogWarning}
+        </p>
+      )}
+      {findWarning && (
+        <p role="status" className="muted small">
+          {findWarning}
         </p>
       )}
       {!loading && !error && !sorted.length && (

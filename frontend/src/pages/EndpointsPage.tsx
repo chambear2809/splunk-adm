@@ -281,6 +281,7 @@ export function EndpointsPage({
               "",
               "",
               "",
+              "",
             ]),
             ...result.observations.map((o) => [
               "non_authoritative_observation",

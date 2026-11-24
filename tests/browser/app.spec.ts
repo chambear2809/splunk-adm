@@ -828,6 +828,15 @@ test("empty catalog falls back to scopes without invented metrics", async ({
   const batch = page.locator("tbody tr").filter({ hasText: "batch-worker" });
   await expect(batch).toBeVisible();
   await expect(batch).toContainText("—");
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("db");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.locator('[aria-label="Find results"]')).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: /metrics are unavailable/i }),
+  ).toBeVisible();
 });
 
 test("catalog bookkeeping marker falls back without rendering the marker", async ({
@@ -942,11 +951,75 @@ test("catalog preserves warnings from a narrowed service search", async ({
   page,
 }) => {
   await page.goto(
-    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-narrowed",
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-find-warning",
   );
   await expect(
     page.getByRole("status").filter({ hasText: "narrowed warning" }),
   ).toBeVisible();
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("db");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.locator('[aria-label="Find results"]')).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
+  const findWarning = page.getByRole("status").filter({
+    hasText: "Find evidence is partial.",
+  });
+  await expect(findWarning).toBeVisible();
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("");
+  await expect(findWarning).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
+});
+
+test("Endpoint CSV keeps all row types aligned with the download header", async ({
+  page,
+}) => {
+  await page.route("**/en-US/app/splunk_adm/endpoints?*", async (route) => {
+    const harness = await route.fetch({
+      url: new URL("/tests/browser/browser.html", route.request().url()).href,
+    });
+    await route.fulfill({ response: harness });
+  });
+  await page.goto(
+    "/en-US/app/splunk_adm/endpoints?endpoint_ip=192.0.2.1&endpoint_scope=prod&endpoint_start=100&endpoint_end=200",
+  );
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  const exportCsv = page.getByRole("button", { name: "Download endpoint CSV" });
+  await expect(exportCsv).toBeVisible();
+  const downloading = page.waitForEvent("download");
+  await exportCsv.click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("endpoint-investigation.csv");
+  const csv = await readFile((await download.path())!, "utf8");
+  // The fixture contains only unquoted fields. Reject malformed record widths.
+  expect(csv).not.toContain('"');
+  const [header, ...rows] = csv.split("\r\n").map((row) => row.split(","));
+  expect(header).toHaveLength(27);
+  expect(rows.map(([kind]) => kind)).toEqual([
+    "metadata",
+    "conversation",
+    "non_authoritative_observation",
+    "identity_history",
+  ]);
+  for (const row of rows) expect(row).toHaveLength(header.length);
+  const counts = Object.fromEntries(
+    header.map((field, i) => [field, rows[1][i]]),
+  );
+  expect(counts).toMatchObject({
+    records: "3",
+    connections_represented: "1",
+    bytes_client_to_server: "2048",
+    bytes_server_to_client: "1024",
+    packets: "12",
+  });
 });
 
 test("catalog uses its captured metric window when the Find/map picker changes", async ({

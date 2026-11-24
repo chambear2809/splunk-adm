@@ -4,6 +4,7 @@ import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
 import { DeepLinkNotice } from "../../frontend/src/app/DeepLinkNotice";
 import { AtlasApp } from "../../frontend/src/app/AtlasApp";
+import { EndpointsPage } from "../../frontend/src/pages/EndpointsPage";
 import {
   recoverUrlState,
   writeUrlState,
@@ -628,7 +629,10 @@ class FakeSearchClient implements SearchClient {
     }
     if (request.search.startsWith("| `adm_application_catalog_read`")) {
       if (
-        faultScenario === "catalog-overlimit-narrowed" &&
+        [
+          "catalog-overlimit-narrowed",
+          "catalog-overlimit-find-warning",
+        ].includes(faultScenario ?? "") &&
         request.search.includes('| search service="')
       )
         return {
@@ -637,9 +641,11 @@ class FakeSearchClient implements SearchClient {
           errors: [],
         };
       if (
-        ["catalog-overlimit", "catalog-overlimit-narrowed"].includes(
-          faultScenario ?? "",
-        )
+        [
+          "catalog-overlimit",
+          "catalog-overlimit-narrowed",
+          "catalog-overlimit-find-warning",
+        ].includes(faultScenario ?? "")
       )
         throw new SearchResultLimitError(5000);
       if (
@@ -707,7 +713,14 @@ class FakeSearchClient implements SearchClient {
           warnings: [],
           errors: [],
         };
-      return { rows: capture?.rows ?? [], warnings: [], errors: [] };
+      return {
+        rows: capture?.rows ?? [],
+        warnings:
+          faultScenario === "catalog-overlimit-find-warning"
+            ? ["Find evidence is partial."]
+            : [],
+        errors: [],
+      };
     }
     if (request.search.startsWith('| `adm_find_network_client("')) {
       if (faultScenario === "find-client-fails")
@@ -878,6 +891,55 @@ if (
   stateParams.delete("scenario");
 const root = document.getElementById("adm-root");
 if (!root) throw new Error("Missing browser test root");
+const endpointCompletion = {
+  row_type: "completion",
+  schema_version: 1,
+  input_count: 1,
+  output_count: 1,
+  input_capped: 0,
+  output_capped: 0,
+  unprotected_count: 0,
+};
+const endpointSearch: SearchClient = {
+  async search({ search }) {
+    const conversation = search.includes('source="adm:conversation"');
+    if (!conversation && !search.includes('source="adm:traffic_observation"'))
+      throw new Error("Unexpected Endpoint search");
+    const evidence = conversation
+      ? {
+          row_type: "conversation",
+          adm_root: "192.0.2.1",
+          adm_client: "192.0.2.1",
+          adm_server: "192.0.2.2",
+          adm_peer: "192.0.2.2",
+          adm_port: 443,
+          adm_transport: "tcp",
+          adm_records: 3,
+          adm_conns: "50000@110@120",
+          adm_bcs: 2048,
+          adm_bsc: 1024,
+          adm_packets: 12,
+        }
+      : {
+          row_type: "traffic_observation",
+          source_ip: "192.0.2.1",
+          destination_ip: "192.0.2.3",
+          source_port: 50001,
+          destination_port: 443,
+          transport: "tcp",
+          adm_quality_status: "accepted",
+          counter_semantics: "unknown",
+        };
+    return {
+      rows: [
+        { ...evidence, scope: "prod", adm_first: 110, adm_last: 120 },
+        endpointCompletion,
+      ],
+      warnings: [],
+      errors: [],
+    };
+  },
+};
 try {
   const { state, notice } = recoverUrlState(stateParams);
   if (notice) writeUrlState(state);
@@ -885,16 +947,53 @@ try {
   createRoot(root).render(
     <ThemeProvider family="enterprise" colorScheme={dark ? "dark" : "light"}>
       <DeepLinkNotice message={notice} />
-      <AtlasApp
-        user="browser-viewer"
-        usePersonaDefault={!queryParams.has("tab")}
-        page={page as Page}
-        state={state}
-        client={new FakeSearchClient()}
-        setupClient={new FakeSetupClient()}
-        deploymentClient={new FakeDeploymentClient()}
-        theme={dark ? "dark" : "light"}
-      />
+      {location.pathname === "/en-US/app/splunk_adm/endpoints" ? (
+        <EndpointsPage
+          live
+          client={endpointSearch}
+          configurationClient={{
+            async read() {
+              return {
+                trafficContract: 2,
+                summaryIndexes: ["adm_summary_v2"],
+                fingerprint: "a".repeat(64),
+                mappings: [
+                  {
+                    observer_kind: "exporter",
+                    observer: "router-a",
+                    scope: "prod",
+                    cluster: "",
+                    mapping_status: "verified",
+                  },
+                ],
+                identities: [
+                  {
+                    ip: "192.0.2.1",
+                    scope: "prod",
+                    entity_id: "checkout",
+                    entity_kind: "workload",
+                    valid_from: 100,
+                  },
+                ],
+                identityAvailable: true,
+                dns: [],
+                maxAgeSeconds: 3600,
+              };
+            },
+          }}
+        />
+      ) : (
+        <AtlasApp
+          user="browser-viewer"
+          usePersonaDefault={!queryParams.has("tab")}
+          page={page as Page}
+          state={state}
+          client={new FakeSearchClient()}
+          setupClient={new FakeSetupClient()}
+          deploymentClient={new FakeDeploymentClient()}
+          theme={dark ? "dark" : "light"}
+        />
+      )}
     </ThemeProvider>,
   );
 } catch (error) {
