@@ -116,7 +116,17 @@ python3 tools/prepare_multicast_cohort.py /protected/path/read-only-replay.json 
     --index atlas_multicast --host atlas-nxos-snapshot > forwarding-cohort.ndjson
 ```
 
-After an operator approves deployment and indexing, submit the envelope through the dedicated input and enable the profile. In Atlas, select the scope, group and exact sender from the receipt. Set **To (UTC)** to the snapshot anchor and **From (UTC)** before it. A replay snapshot is valid only at its anchor. For a later time, the UI retains the record and marks its branches stale. Device snapshots establish forwarding state. They do not establish packet delivery, endpoint membership or a VNI-specific overlay path.
+After an operator approves deployment and indexing, submit the envelope through the dedicated input and enable the profile.
+
+A scope whose only profile is `multicast_nxos` has no Overview and no Matrix. Those views summarise Stream IGMP and NetFlow profiles only, so **Investigate** on a forwarding-only scope reports "Choose a routing scope with a verified multicast source." and runs nothing. Open the snapshot with a group link instead, built from the receipt against your own search head:
+
+```
+/en-US/app/splunk_adm/multicast?mc_v=1&mc_scope=<scope>&mc_group=<group>&mc_sender=<sender>&mc_earliest=<from>&mc_latest=<anchor>
+```
+
+`mc_v` is always `1`. `mc_scope`, `mc_group` and `mc_sender` carry the scope, group and exact sender from the receipt; percent-encode a scope that contains a colon. `mc_earliest` and `mc_latest` are whole-second epoch times: set `mc_latest` to the snapshot anchor and `mc_earliest` before it, within one hour. `mc_view` is optional and only chooses which summary the **Back** control names; a forwarding-only scope cannot populate either summary. The link opens the group detail with those inputs filled in and searches nothing until you select **Investigate group**.
+
+A replay snapshot is valid only at its anchor. For a later time, the UI retains the record and marks its branches stale. Device snapshots establish forwarding state. They do not establish packet delivery, endpoint membership or a VNI-specific overlay path.
 
 ## Disable and roll back
 
