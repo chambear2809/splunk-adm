@@ -36,9 +36,9 @@ See [browser performance and scale](docs/BROWSER_PERFORMANCE.md) for measured ti
 
 ![Multicast investigation for group 239.1.2.3 with an observed sender, IGMPv2 and IGMPv3 receiver interest on VLAN 110, and an explicit forwarding coverage gap](docs/screenshots/readme/08-multicast-igmp.png)
 
-The illustrative tree below uses synthetic device state to show how supported links branch and where an unresolved interface ends the visible path. Live forwarding requires a qualified device-state source.
+**Follow the forwarding tree.** This sanitized replay preserves the shape of a verified NX-OS VXLAN underlay tree. Atlas shows four device-supported links across two spine paths and marks both leaf `nve1` next hops as unresolved. The snapshot shows forwarding state at one point in time. Packet delivery and receiver membership require separate evidence.
 
-![Illustrative multicast forwarding tree for 192.0.2.20 and 239.1.2.3, with a spine branching to two leaves and unresolved next hops beyond each leaf](docs/screenshots/readme/10-multicast-forwarding-illustration.png)
+![Atlas multicast tree with four supported links from leaf-a through spine-a and spine-b to leaf-b and leaf-c, whose nve1 next hops are both unresolved](docs/screenshots/readme/11-multicast-forwarding-tree.png)
 
 The setup screen appears when no multicast profiles are active. See the [Multicast operator guide](docs/operators/multicast.md) for capture placement, source verification, and enablement.
 
