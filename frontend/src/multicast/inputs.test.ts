@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { pageFromPath, pageURL, SECTION_OF } from "../app/urlState";
 import fixture from "../../../fixtures/multicast/profiles.json";
-import { multicastLink, parseMulticastLink, parseProfiles } from "./inputs";
+import {
+  multicastLink,
+  parseMulticastLink,
+  parseMulticastView,
+  parseProfiles,
+  parseScopeLink,
+  scopeLink,
+} from "./inputs";
 
 const request = {
   version: 1,
@@ -95,5 +102,60 @@ describe("multicast investigation inputs", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("round-trips scope link and view", () => {
+    const window = {
+      version: 1,
+      scope: request.scope,
+      earliest: request.earliest,
+      latest: request.latest,
+    } as const;
+    for (const view of ["overview", "matrix", "topology"] as const) {
+      const params = scopeLink(window, view);
+      expect(params.get("mc_view")).toBe(view);
+      expect(params.has("mc_group")).toBe(false);
+      expect(parseScopeLink(params)).toEqual(window);
+      expect(parseMulticastView(params)).toBe(view);
+    }
+    expect(parseMulticastView(new URLSearchParams())).toBe("overview");
+    expect(
+      parseScopeLink(new URLSearchParams("namespace=shop")),
+    ).toBeUndefined();
+    const group = multicastLink(request);
+    group.set("mc_view", "topology");
+    expect(parseMulticastLink(group)).toEqual(request);
+    expect(parseScopeLink(group)).toEqual(window);
+  });
+
+  it("rejects unknown mc_view", () => {
+    const params = multicastLink(request);
+    params.set("mc_view", "graph");
+    expect(() => parseMulticastView(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    expect(() => parseMulticastLink(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    expect(() => parseScopeLink(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    const repeated = multicastLink(request);
+    repeated.append("mc_view", "matrix");
+    repeated.append("mc_view", "matrix");
+    expect(() => parseMulticastView(repeated)).toThrow();
+  });
+
+  it("group link still requires mc_group", () => {
+    const params = scopeLink(
+      {
+        version: 1,
+        scope: request.scope,
+        earliest: request.earliest,
+        latest: request.latest,
+      },
+      "overview",
+    );
+    expect(() => parseMulticastLink(params)).toThrow(/multicast group/);
   });
 });

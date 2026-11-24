@@ -109,13 +109,16 @@ const LINK_KEYS = [
   "mc_sender",
   "mc_earliest",
   "mc_latest",
+  "mc_view",
 ] as const;
 
-export function parseMulticastLink(
-  params: URLSearchParams,
-  now?: number,
-): MulticastRequest | undefined {
-  if (![...params.keys()].some((key) => key.startsWith("mc_"))) return;
+export type MulticastView = "overview" | "matrix" | "topology";
+const VIEWS: readonly MulticastView[] = ["overview", "matrix", "topology"];
+const UNSUPPORTED = "The multicast link contains unsupported parameters.";
+
+/** True when the link carries multicast parameters, which are then all checked. */
+function checkLink(params: URLSearchParams): boolean {
+  if (![...params.keys()].some((key) => key.startsWith("mc_"))) return false;
   if (
     LINK_KEYS.some((key) => params.getAll(key).length > 1) ||
     [...params.keys()].some(
@@ -123,24 +126,71 @@ export function parseMulticastLink(
         key.startsWith("mc_") && !LINK_KEYS.some((known) => known === key),
     )
   )
-    throw new Error("The multicast link contains unsupported parameters.");
+    throw new Error(UNSUPPORTED);
+  parseMulticastView(params);
+  return true;
+}
+
+function linkFields(params: URLSearchParams) {
   const time = (key: string) => {
     const value = params.get(key) ?? "";
     return /^[1-9][0-9]{0,11}$/.exec(value)?.[0] === value
       ? Number(value)
       : NaN;
   };
+  return {
+    version: params.get("mc_v") === "1" ? MULTICAST_VERSION : undefined,
+    scope: params.get("mc_scope"),
+    earliest: time("mc_earliest"),
+    latest: time("mc_latest"),
+  };
+}
+
+export function parseMulticastView(params: URLSearchParams): MulticastView {
+  const values = params.getAll("mc_view");
+  if (!values.length) return "overview";
+  const view = VIEWS.find((known) => known === values[0]);
+  if (values.length > 1 || !view) throw new Error(UNSUPPORTED);
+  return view;
+}
+
+export function parseMulticastLink(
+  params: URLSearchParams,
+  now?: number,
+): MulticastRequest | undefined {
+  if (!checkLink(params)) return;
   return validateRequest(
     {
-      version: params.get("mc_v") === "1" ? MULTICAST_VERSION : undefined,
-      scope: params.get("mc_scope"),
+      ...linkFields(params),
       group: params.get("mc_group"),
       sender: params.get("mc_sender") ?? undefined,
-      earliest: time("mc_earliest"),
-      latest: time("mc_latest"),
     },
     now,
   );
+}
+
+/** The scope-wide link; a group, when present, is left to parseMulticastLink. */
+export function parseScopeLink(
+  params: URLSearchParams,
+  now?: number,
+): ScopeWindow | undefined {
+  if (!checkLink(params)) return;
+  return validateScopeWindow(linkFields(params), now);
+}
+
+export function scopeLink(
+  window: ScopeWindow,
+  view: MulticastView,
+): URLSearchParams {
+  const value = validateScopeWindow(window);
+  if (!VIEWS.includes(view)) throw new Error(UNSUPPORTED);
+  return new URLSearchParams({
+    mc_v: String(value.version),
+    mc_scope: value.scope,
+    mc_earliest: String(value.earliest),
+    mc_latest: String(value.latest),
+    mc_view: view,
+  });
 }
 
 export function multicastLink(request: MulticastRequest): URLSearchParams {
