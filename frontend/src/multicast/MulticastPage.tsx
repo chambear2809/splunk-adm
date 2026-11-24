@@ -11,6 +11,7 @@ import {
   MulticastConfigurationChangedError,
   readMulticastConfiguration,
 } from "./investigation";
+import { formatTime } from "./format";
 import { ForwardingTree } from "./ForwardingTree";
 import "./multicast.css";
 
@@ -37,17 +38,6 @@ const message = (error: unknown) =>
 export const utcInput = (seconds: number) =>
   new Date(seconds * 1000).toISOString().slice(0, 19);
 export const utcSeconds = (value: string) => Date.parse(`${value}Z`) / 1000;
-const formatTime = (seconds: number, timezone?: string) => {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "medium",
-      timeZone: timezone,
-    }).format(new Date(seconds * 1000));
-  } catch {
-    return new Date(seconds * 1000).toISOString();
-  }
-};
 
 const sourceLabel = {
   multicast_igmp: "Stream IGMP",
