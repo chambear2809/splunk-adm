@@ -77,7 +77,7 @@ export function buildMulticastSearch(
   const filters = isIgmp
     ? [
         `${rawField("network_interface")}="${profile.captureInterface}"`,
-        `(${rawField("multicast_address")}="${group}" OR ${groupRecords}="${group}" OR isnotnull(mvfind(json_array_to_mv(${groupRecords}),"^${groupRegex}$")))`,
+        `(${rawField("multicast_address")}="${group}" OR ${groupRecords}="${group}" OR isnotnull(mvfind(json_array_to_mv(${groupRecords}),"^${groupRegex}$")) OR (tonumber(${rawField("type")})=17 AND ${rawField("multicast_address")}="0.0.0.0"))`,
       ]
     : [
         `${rawField("dest_ip")}="${group}"`,
@@ -249,6 +249,7 @@ function parseRow(
     operation: IgmpOperation,
     sources: string[],
     ordinal: number,
+    queryScope?: "general" | "group",
   ): MulticastEvidence => ({
     ...base,
     id: `${id}:${ordinal}`,
@@ -267,30 +268,35 @@ function parseRow(
     interface: profile.captureInterface,
     segment: profile.segment,
     sources,
+    ...(queryScope && { queryScope }),
     limits: [
       "An observed message is not proof of current membership or delivery.",
       "Proxy and transit reports cannot establish downstream receiver identity.",
     ],
   });
-  if (type === 17 || type === 18 || type === 22 || type === 23) {
+  if (type === 17) {
+    const queryScope =
+      data.multicast_address === "0.0.0.0"
+        ? "general"
+        : typeof data.multicast_address === "string" &&
+            groupAddress(data.multicast_address) === request.group
+          ? "group"
+          : undefined;
+    if (!queryScope) return undefined;
+    const sources = sourceList(data.source_address, data.num_sources ?? 0);
+    if (!sources) return undefined;
+    return [make("query", sources, 0, queryScope)];
+  }
+  if (type === 18 || type === 22 || type === 23) {
     if (
       typeof data.multicast_address !== "string" ||
       groupAddress(data.multicast_address) !== request.group
     )
       return undefined;
-    const sources =
-      type === 17 ? sourceList(data.source_address, data.num_sources ?? 0) : [];
-    if (!sources) return undefined;
     return [
       make(
-        type === 17
-          ? "query"
-          : type === 18
-            ? "report-v1"
-            : type === 22
-              ? "report-v2"
-              : "leave",
-        sources,
+        type === 18 ? "report-v1" : type === 22 ? "report-v2" : "leave",
+        [],
         0,
       ),
     ];

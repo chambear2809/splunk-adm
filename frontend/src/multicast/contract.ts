@@ -95,6 +95,8 @@ export interface IgmpEvidence extends Evidence {
   reporter?: string;
   reporterKind: "endpoint" | "proxy" | "anonymous" | "unknown";
   sources: string[];
+  /** Set only for queries: general (group 0.0.0.0) or group-specific. */
+  queryScope?: "general" | "group";
 }
 
 export interface FlowEvidence extends Evidence {

@@ -184,6 +184,40 @@ describe("candidate multicast sources", () => {
       loadMulticastSource(denied, igmp, request, controller.signal),
     ).rejects.toThrow(/cancelled/);
   });
+  it("keeps general queries as query evidence", async () => {
+    const result = await run(igmp, [
+      row({
+        type: 17,
+        multicast_address: "0.0.0.0",
+        num_sources: 0,
+        src_ip: "192.0.2.1",
+      }),
+      row({
+        type: 17,
+        multicast_address: request.group,
+        num_sources: 0,
+        src_ip: "192.0.2.1",
+      }),
+    ]);
+    expect(result.outcome.state).toBe("complete");
+    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence[0]).toMatchObject({
+      kind: "igmp",
+      operation: "query",
+      queryScope: "general",
+      reporter: "192.0.2.1",
+    });
+    expect(result.evidence[1]).toMatchObject({
+      operation: "query",
+      queryScope: "group",
+    });
+    const report = await run(igmp, [row(candidates.igmpV2)]);
+    expect(report.evidence[0]).not.toHaveProperty("queryScope");
+    const search = buildMulticastSearch(igmp, request);
+    expect(search).toContain(
+      ' OR (tonumber(json_extract(_raw,"type"))=17 AND json_extract(_raw,"multicast_address")="0.0.0.0"))',
+    );
+  });
   it("uses fixed literal selectors and bounded projection", () => {
     const search = buildMulticastSearch(igmp, request);
     expect(search).toContain(
