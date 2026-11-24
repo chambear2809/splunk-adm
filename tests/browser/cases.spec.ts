@@ -260,7 +260,9 @@ test("case evidence is saved only by consent and hidden after source access is r
   expect(jsonText).toContain("Synthetic comparison");
   await page.getByLabel("Add note").fill("Preserve this note");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await expect(page.getByText("Preserve this note")).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "Preserve this note" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Recheck capture 1 of 1" }).click();
   await expect(page.getByText("Selected capture: 1 of 1")).toBeVisible();
   await page
