@@ -1,6 +1,9 @@
 """Convert a verified read-only NX-OS snapshot receipt to one Splunk HEC event.
 
-Writes to stdout only. It does not contact devices or Splunk.
+Writes to stdout only. It does not contact devices or Splunk. It applies the same
+structural limits as the Atlas parser (names, device, interface and adjacency counts,
+event size). The profile's host, scope, index and validity range are deployment
+settings the tool cannot see; Atlas rejects a cohort that does not match them.
 """
 
 from __future__ import annotations
@@ -18,7 +21,20 @@ def selector(value, pattern=r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}"):
     return value
 
 
+def dict_rows(value, limit=512):
+    """Return a list of objects, rejecting any other receipt shape."""
+    if (
+        not isinstance(value, list)
+        or len(value) > limit
+        or not all(isinstance(row, dict) for row in value)
+    ):
+        raise ValueError("Malformed receipt section.")
+    return value
+
+
 def build_event(receipt: dict, index: str, host: str) -> dict:
+    if not isinstance(receipt, dict) or not isinstance(receipt.get("request"), dict):
+        raise ValueError("Malformed receipt.")
     selector(index, r"[a-z][a-z0-9_-]{0,79}")
     selector(host)
     request = receipt["request"]
@@ -45,7 +61,7 @@ def build_event(receipt: dict, index: str, host: str) -> dict:
     ):
         raise ValueError("The snapshot anchor must fall within its capture window.")
     devices = {}
-    for row in receipt["evidence"]:
+    for row in dict_rows(receipt["evidence"]):
         observer = selector(row["observer"])
         input_port = selector(row["input"])
         if (
@@ -78,7 +94,7 @@ def build_event(receipt: dict, index: str, host: str) -> dict:
     endpoints = set()
     checked = {
         ((row["from"], row["output"]), (row["to"], row["input"]))
-        for row in receipt["comparisons"]
+        for row in dict_rows(receipt["comparisons"])
         if all(
             row.get(key) is True
             for key in (
@@ -88,7 +104,15 @@ def build_event(receipt: dict, index: str, host: str) -> dict:
             )
         )
     }
-    for link in receipt["adjacency"]:
+    adjacency = dict_rows(receipt["adjacency"])
+    # Same cap as the Atlas parser; a larger cohort would be rejected after indexing.
+    if len(adjacency) > 256:
+        raise ValueError("Device state exceeds the forwarding cohort limits.")
+    for link in adjacency:
+        if not isinstance(link.get("from"), dict) or not isinstance(
+            link.get("to"), dict
+        ):
+            raise ValueError("Malformed adjacency.")
         src = (selector(link["from"]["observer"]), selector(link["from"]["interface"]))
         dst = (selector(link["to"]["observer"]), selector(link["to"]["interface"]))
         if (
@@ -146,7 +170,7 @@ def main():
                 build_event(receipt, args.index, args.host), separators=(",", ":")
             )
         )
-    except (OSError, KeyError, TypeError, ValueError):
+    except (OSError, KeyError, TypeError, ValueError, AttributeError):
         parser.exit(2, "Invalid or unsupported verified forwarding receipt.\n")
 
 

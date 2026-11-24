@@ -332,7 +332,7 @@ export async function loadMulticastForwarding(
       outcome: outcome(
         expired ? "partial" : "complete",
         expired
-          ? "Newest forwarding cohort expired before the requested time."
+          ? `A forwarding snapshot is valid only at its anchor (${new Date(cohort.observedAt * 1000).toISOString()}). Set To (UTC) to that time to see its tree.`
           : "The newest caller-visible cohort is valid at the requested time; coverage is not guaranteed.",
       ),
     };

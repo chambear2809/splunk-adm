@@ -629,3 +629,27 @@ describe("caller-context evidence configuration", () => {
     expect(config.identities.map((o) => o.entity_id)).toEqual(["old", "new"]);
   });
 });
+
+describe("readMulticastProfileDocument", () => {
+  const read = (configuration: string) => {
+    const fetcher = (async () =>
+      new Response(JSON.stringify([{ _key: "active", configuration }]), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    return new ToolkitEvidenceConfigClient(
+      fetcher,
+      {} as DeploymentClient,
+    ).readMulticastProfileDocument();
+  };
+  it("parses the active document", async () => {
+    await expect(read('{"version":1,"profiles":[]}')).resolves.toEqual({
+      version: 1,
+      profiles: [],
+    });
+  });
+  it("reports corrupted JSON without leaking parser details", async () => {
+    await expect(read('{"version":1,')).rejects.toThrow(
+      "Shared multicast source configuration is invalid.",
+    );
+  });
+});

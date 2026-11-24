@@ -99,6 +99,8 @@ export function Shell({
   const navigationParams = (target: Page) => {
     const params = new URLSearchParams(search);
     if (page !== "multicast" && target !== "multicast") return params;
+    // Multicast owns only `mode` and `mc_*`. Entering or leaving it carries `mode` alone so
+    // another page's filters never reach the investigation and `mc_*` never leaks out.
     const selected = new URLSearchParams();
     if (params.has("mode")) selected.set("mode", params.get("mode")!);
     if (page === "multicast" && target === "multicast")

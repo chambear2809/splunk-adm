@@ -313,7 +313,11 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       value[0].configuration.length > 32768
     )
       throw new Error("Shared multicast source configuration is invalid.");
-    return JSON.parse(value[0].configuration) as unknown;
+    try {
+      return JSON.parse(value[0].configuration) as unknown;
+    } catch {
+      throw new Error("Shared multicast source configuration is invalid.");
+    }
   }
   async readAppDynamicsInventory(
     signal?: AbortSignal,
