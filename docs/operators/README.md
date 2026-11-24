@@ -122,6 +122,7 @@ Lab runbooks and records (lab addresses allowed; not deployment contracts): [loc
 | --- | --- | --- |
 | Explore | Applications (catalog, Find), Endpoints, Device (all flows through one device), path-trace form | Identity + flow sources |
 | Map | Dependency map (network, services, devices, table); src → dst path trace | Path trace adds ACI topology + VMM/spine classes. Limit 4,000 nodes / 10,000 edges; above that the top N edges are kept (structure, then bytes, then connections) with a warning |
+| Multicast | Standalone IPv4 group investigation for sender traffic, IGMP receiver interest, and device-reported forwarding | One verified routing scope, a bounded time window, and an active source profile for the evidence you need. [Multicast operator guide](multicast.md) |
 | Admin | Setup, Data health | Admin role for writes; writes ship disabled |
 
 Help is a separate page.
@@ -132,15 +133,25 @@ Macros behind path trace and Device: `adm_path_trace`, `adm_path_trace_resolve`,
 
 Vendored at `vendor/splunk-cisco-skills` (pinned submodule, commit `1c93cd8`). Run from that directory: `cd vendor/splunk-cisco-skills && bash skills/<skill>/scripts/setup.sh --help`. Always `--dry-run` first. Check [SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md][s-compat]. Setup in Claude Code / Cursor / Codex: [main README](../../README.md#operator-setup-skills). Mutation through the MCP server stays disabled.
 
-## Send back
+## Minimum data checklist
 
-- [ ] Selected sources, omitted products, cadence, required jobs, known gaps.
-- [ ] Versions: Splunk, APIC, ND, NX-OS, vCenter/ESXi, Intersight, Cilium/Isovalent, Kubernetes, OTel chart, FMC/FTD, Stream.
-- [ ] Address plan: node, pod, LoadBalancer, NodePort, client/VM, NAT ranges.
-- [ ] ACI names: tenants, VRFs, BDs, EPGs, L3Outs, external EPGs, VMM domains.
-- [ ] Routing scope rows ([observers](splunk-platform.md#routing-scope-lookup)) and source-scope profile rows (above).
-- [ ] One hour of sample events per new sourcetype.
-- [ ] One owner per system.
+For application mapping, start with one supported traffic feed that sees the conversation, a verified routing scope, and the endpoint or application you want to investigate. Add sources for the evidence you need. The table lists what to request from each source owner. Use the linked runbook for the full schema and qualification steps.
+
+| What you want to verify | Minimum data to request | Runbook |
+| --- | --- | --- |
+| Address conversations and exporter observations | NetFlow/IPFIX or Nexus Dashboard flow records with source and destination IPs, ports where applicable, protocol, observation time or flow interval, and exporter or fabric identity. Include bytes, packets, and sampling where reported for volume, and interface IDs for port context. | [Stream](network-stream.md), [Nexus Dashboard](aci-network.md#nexus-dashboard-inputs) |
+| Endpoint identity and candidate fabric paths | Endpoint IP, MAC, and attachment in scope, plus switch identities, fabric links, and LLDP or CDP neighbors. Include contract rules for policy, external attachments for L3Out paths, and VMM adjacency for VM paths. To name exported interfaces, include exporter-scoped ifIndex mappings. | [ACI and NX-OS](aci-network.md), [Splunk interface lookup](splunk-platform.md) |
+| Observed VMware VDS hop | VDS IPFIX from the ESXi management address, the observation domain and `vmware_vds_ipfix` profile, and matching ACI VMM attachment data. Include host uplink and VM distributed-port keys when interface names are needed. | [VMware VDS IPFIX](network-stream.md#vmware-vds-ipfix) |
+| Workload identity and service calls | Kubernetes Pod, Node, and Service history with the initial state, cluster identity, stable UIDs, IPs, and changes or deletions. Add EndpointSlices for backend attribution. For service calls, include OpenTelemetry service and pod identity, trace/span/parent IDs and span times. Add CLIENT peer IP, destination port, and pod UID to correlate calls with traffic. | [Kubernetes](kubernetes-platform.md), [Application teams](application-teams.md) |
+| Pod handoffs or firewall observations | For Hubble, include the flow timestamp, cluster/node, IP and transport tuple, verdict, direction, and observation point. Include translation and Layer 7 handoff fields when attributing a backend. For FTD, include the device, initiator and responder tuple, protocol, and first-packet time. Include a complete same-event translation tuple for NAT attribution. | [Cilium and Isovalent](cilium-isovalent.md), [Firewall](firewall-security.md) |
+| IPv4 multicast | Match the evidence to the question. For receiver interest, request indexed IGMP records and a verified sensor/interface-to-segment mapping. For sender traffic, request multicast flow tuples and the verified exporter, observation domain, template, direction, sampling, and replication context. For forwarding branches, request scoped NX-OS route snapshots with matching interfaces and adjacency evidence. | [Multicast](multicast.md) |
+
+Ask each source owner to provide:
+
+- [ ] An owner, product and add-on versions, collection cadence and expected delay, required jobs, and known gaps. Record any intentionally omitted sources.
+- [ ] The index, sourcetype, expected event timestamp, and fields the investigation depends on. Verify the fields and timestamps in Splunk using the intended reader role.
+- [ ] Observer-to-routing-scope and exporter-to-profile mappings as applicable. Include the relevant address ranges, VLANs or VNIs, VRFs, attachments, and any overlapping address space. [Routing scope lookup](splunk-platform.md#routing-scope-lookup) · [Source-scope profiles](#source-scope-profile-registration)
+- [ ] A representative sanitized sample for each new sourcetype, covering about one hour when available. For a point-in-time source, provide a complete snapshot with its capture time and provenance. [Data handling](#data-handling)
 
 ## Data handling
 
