@@ -261,6 +261,38 @@ test("defaults to the overview tab and drills into a group from the matrix", asy
   expect(params.get("mc_view")).toBe("matrix");
 });
 
+test("opens a flagged overview row with its IGMP timeline and returns", async ({
+  page,
+}) => {
+  await profiles(page, configuration.profiles);
+  await page.goto(scopeLink());
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  const flagged = page.getByRole("row", { name: /^239\.1\.2\.4/ });
+  await expect(flagged).toContainText("Interest, no sender seen");
+  await expect(
+    page.getByRole("row", { name: /^239\.1\.2\.3/ }),
+  ).not.toContainText("Interest, no sender seen");
+  await expect(page.getByRole("row", { name: /^0\.0\.0\.0/ })).toHaveCount(0);
+  const scopeRequests = await requests(page);
+
+  await flagged.getByRole("button", { name: "239.1.2.4", exact: true }).click();
+  await expect(page.getByLabel("Multicast group")).toHaveValue("239.1.2.4");
+  await expect(
+    page.getByRole("heading", { name: "IGMP timeline" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("img", { name: /^IGMP evidence for vlan 110/ }),
+  ).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("mc_group")).toBe("239.1.2.4");
+  const detailRequests = await requests(page);
+  expect(detailRequests).toBeGreaterThan(scopeRequests);
+
+  await page.getByRole("button", { name: "Back to Overview" }).click();
+  await expect(flagged).toContainText("Interest, no sender seen");
+  expect(await requests(page)).toBe(detailRequests);
+  expect(new URL(page.url()).searchParams.has("mc_group")).toBe(false);
+});
+
 test("editing inputs cancels the overview search", async ({ page }) => {
   await profiles(page, configuration.profiles);
   await page.goto(scopeLink("multicast-slow"));

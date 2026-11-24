@@ -1,6 +1,41 @@
 # Investigate IPv4 multicast
 
-Open **Multicast** in Application Atlas or go to `/en-US/app/splunk_adm/multicast` on your search head. Select one verified routing scope, an absolute window of up to one hour, and one IPv4 multicast group. The optional sender narrows traffic and source-specific receiver interest. Copy the page URL after investigating to share those inputs. The recipient runs the investigation under their own Splunk session.
+Open **Multicast** in Application Atlas or go to `/en-US/app/splunk_adm/multicast` on your search head. Select one verified routing scope and an absolute window of up to one hour, then select **Investigate**. Atlas lists the groups observed in that scope and window, and you can open any group to see its evidence. Copy the page URL to share the scope, window, view and any open group. The recipient runs the searches under their own Splunk session. Older links that name a group open that group's detail directly.
+
+## Read the views
+
+**Investigate** runs one bounded group summary search per active Stream IGMP and NetFlow profile in the scope. Overview and Matrix both use those results, so switching tabs does not search again. **Topology** is not yet available.
+
+- **Overview** lists one row per observed group. It shows the senders seen in flow records, the receiver interest seen in IGMP reports, packet and byte totals with the profile's sampling and replication position, any flags, and when the group was first and last seen. Rows with more flags sort first.
+- **Matrix** shows a grid with one row per group and one column per profile. IGMP columns are labelled by segment and NetFlow columns by exporter and direction. Each cell reads **Receiver interest**, **Sender traffic**, **None observed** or **Not covered**. **Not covered** means that profile's search did not complete, so its evidence for the group is unknown. Cells with evidence in the last five minutes of the window are styled differently from cells with only older evidence.
+- **Group detail** opens when you select a group in Overview or a cell in Matrix. It runs the per-group investigation and shows the multicast tree, the evidence records, an IGMP timeline of reports, leaves and queries for each segment, and the observed query senders. Enter a sender to narrow the investigation. **Back to Overview** or **Back to Matrix** returns to the summary without searching again.
+
+The summary counts each IGMPv3 group record under its own group. General IGMP queries (group `0.0.0.0`) count as query evidence for the capture. They clear **Leave without query** and contribute to **Multiple query senders**, but they never appear as a group row.
+
+Each profile returns at most 256 groups. If a profile observes more, its coverage is partial and Overview reports how many groups are not shown for that profile. Atlas never drops groups silently.
+
+### Flags
+
+Flags describe what the evidence shows, not faults. Select **?** next to a flag in Overview to see its rule.
+
+| Flag | Meaning |
+| --- | --- |
+| Interest, no sender seen | IGMP reports for this group were observed, but no flow summary in this scope showed sender traffic in this window. Uncovered paths or sampling can hide senders; it is an evidence gap, not a fault. |
+| Sender, no interest seen | Flow records showed sender traffic for this group, but no IGMP capture in this scope observed receiver interest in this window. Receivers may sit beyond the captured segments; it is an evidence gap, not a fault. |
+| New since previous window | This group was observed in this window but not in the previous window of equal length, which was searched completely. |
+| Leave without query | A leave was observed with no later query from that capture in this window. It may be normal; it is an evidence gap, not a fault. |
+| Multiple query senders | A capture covering this group observed IGMP queries from more than one source address in this window. It may be normal; it is an evidence gap, not a fault. |
+| Source coverage partial | At least one stream source in this scope did not complete its search, so evidence for this group may be missing. |
+
+### Compare with the previous window
+
+**Compare with previous window** reruns the summary and also searches the window of equal length that ends where the selected window starts. It costs a second group summary search per profile, so it runs only when you select it. **New since previous window** appears only when every previous-window search completed. If profile validity does not cover the previous window, or a previous-window search does not complete, Overview shows "Comparison unavailable" with the reason and flags no group as new.
+
+Editing the scope or window cancels a running search, and results from the earlier inputs are discarded.
+
+![Multicast Overview listing groups 239.1.2.4 and 239.1.2.3, with 239.1.2.4 flagged Interest, no sender seen](../screenshots/readme/12-multicast-overview.png)
+
+![Multicast Matrix with a VLAN 110 IGMP column and a NetFlow exporter column showing receiver interest and sender traffic per group](../screenshots/readme/13-multicast-matrix.png)
 
 ## Qualify the capture and export
 

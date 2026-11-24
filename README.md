@@ -32,9 +32,17 @@
 
 See [browser performance and scale](docs/BROWSER_PERFORMANCE.md) for measured timings.
 
-**7. Investigate an IPv4 multicast group.** Open **Multicast**, select a routing scope and time window, and see which senders were observed, which segments reported IGMP interest, and where forwarding visibility ends. Select an observation to inspect its source, capture point, and limits.
+**7. Investigate IPv4 multicast.** Open **Multicast**, select a routing scope and time window, and see every group observed there. **Overview** lists each group's senders, receiver interest and flow evidence, with flags for evidence gaps such as interest with no sender seen. **Compare with previous window** marks groups that are new since the previous window.
 
-![Multicast investigation for group 239.1.2.3 with an observed sender, IGMPv2 and IGMPv3 receiver interest on VLAN 110, and an explicit forwarding coverage gap](docs/screenshots/readme/08-multicast-igmp.png)
+![Multicast Overview listing groups 239.1.2.4 and 239.1.2.3, with 239.1.2.4 flagged Interest, no sender seen](docs/screenshots/readme/12-multicast-overview.png)
+
+**Matrix** shows the same results as a grid of groups by IGMP segment and NetFlow exporter.
+
+![Multicast Matrix with a VLAN 110 IGMP column and a NetFlow exporter column showing receiver interest and sender traffic per group](docs/screenshots/readme/13-multicast-matrix.png)
+
+Select a group to see which senders were observed, which segments reported IGMP interest, an IGMP timeline, and where forwarding visibility ends. Select an observation to inspect its source, capture point, and limits.
+
+![Multicast group detail for 239.1.2.3 with an observed sender, IGMPv2 and IGMPv3 receiver interest on VLAN 110, an explicit forwarding coverage gap, and the IGMP timeline](docs/screenshots/readme/08-multicast-igmp.png)
 
 **Follow the forwarding tree.** This sanitized replay preserves the shape of a verified NX-OS VXLAN underlay tree. Atlas shows four device-supported links across two spine paths and marks both leaf `nve1` next hops as unresolved. The snapshot shows forwarding state at one point in time. Packet delivery and receiver membership require separate evidence.
 

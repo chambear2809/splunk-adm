@@ -415,30 +415,70 @@ class FakeSearchClient implements SearchClient {
         });
       const isIgmp = request.optionalSource === "multicast_igmp";
       // Scope-wide group summaries: one stats row per group plus completion.
+      // Groups mirror the candidate payloads: 239.1.2.4 only has IGMPv3
+      // interest, and a general query from 192.0.2.1 counts as query evidence.
       if (request.search.includes("AS group_count")) {
         const seen = Number(request.earliest) + 1;
-        const record = isIgmp
-          ? {
-              group: "239.1.2.3",
-              reports: 2,
-              leaves: 0,
-              group_queries: 0,
-              reporters: ["192.0.2.10"],
-              reporter_count: 1,
-              query_senders: [],
-              query_sender_count: 0,
-            }
-          : {
-              group: "239.1.2.3",
-              senders: ["192.0.2.20"],
-              sender_count: 1,
-              packets: 10,
-              bytes: 1000,
-            };
+        const records = isIgmp
+          ? [
+              {
+                group: "0.0.0.0",
+                reports: 0,
+                leaves: 0,
+                group_queries: 0,
+                last_general_query: seen + 60,
+                reporters: [],
+                reporter_count: 0,
+                query_senders: [`192.0.2.1|${seen + 60}|${seen + 60}`],
+                query_sender_count: 1,
+                first_seen: seen + 60,
+                last_seen: seen + 60,
+              },
+              {
+                group: "239.1.2.3",
+                reports: 2,
+                leaves: 0,
+                group_queries: 0,
+                reporters: ["192.0.2.10", "192.0.2.11"],
+                reporter_count: 2,
+                query_senders: [],
+                query_sender_count: 0,
+                first_seen: seen,
+                last_seen: seen,
+              },
+              {
+                group: "239.1.2.4",
+                reports: 1,
+                leaves: 0,
+                group_queries: 0,
+                reporters: ["192.0.2.11"],
+                reporter_count: 1,
+                query_senders: [],
+                query_sender_count: 0,
+                first_seen: seen,
+                last_seen: seen,
+              },
+            ]
+          : [
+              {
+                group: "239.1.2.3",
+                senders: ["192.0.2.20"],
+                sender_count: 1,
+                packets: 8,
+                bytes: 1024,
+                first_seen: seen,
+                last_seen: seen,
+              },
+            ];
+        const groups = records.filter((record) => record.group !== "0.0.0.0");
         return {
           rows: [
-            { kind: "record", ...record, first_seen: seen, last_seen: seen },
-            { kind: "completion", returned_count: 1, group_count: 1 },
+            ...records.map((record) => ({ kind: "record", ...record })),
+            {
+              kind: "completion",
+              returned_count: records.length,
+              group_count: groups.length,
+            },
           ],
           warnings: [],
           errors: [],
