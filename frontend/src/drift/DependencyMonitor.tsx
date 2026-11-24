@@ -17,24 +17,82 @@ import {
 import { WatchDependency, WatchStatusSummary } from "./watchPresentation";
 import "./monitor.css";
 
-type Mutation = { requestId: string; run: () => Promise<BaselineReceipt> };
+type Mutation = {
+  requestId: string;
+  run: () => Promise<BaselineReceipt>;
+  descriptor?: PendingDescriptor;
+};
+type PendingDescriptor = {
+  requestId: string;
+  name: string;
+  reference: string;
+  window: Props["window"];
+};
+function readPendingDescriptor(key: string): PendingDescriptor | undefined {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return undefined;
+    const value = JSON.parse(raw) as Partial<PendingDescriptor> | null;
+    if (
+      !value ||
+      !/^[0-9a-f-]{36}$/.test(value.requestId ?? "") ||
+      typeof value.name !== "string" ||
+      !value.name.trim() ||
+      value.name.length > 256 ||
+      typeof value.reference !== "string" ||
+      !value.reference.trim() ||
+      value.reference.length > 4096 ||
+      !value.window ||
+      !Number.isSafeInteger(value.window.start) ||
+      !Number.isSafeInteger(value.window.end) ||
+      value.window.start < 0 ||
+      value.window.end > 99_999_999_999 ||
+      value.window.end <= value.window.start ||
+      value.window.end - value.window.start > 300
+    )
+      return undefined;
+    return value as PendingDescriptor;
+  } catch {
+    return undefined;
+  }
+}
+function clearPendingDescriptor(key: string, requestId: string) {
+  try {
+    if (readPendingDescriptor(key)?.requestId === requestId)
+      sessionStorage.removeItem(key);
+  } catch {
+    // Replaying an acknowledged request is safe if cleanup is blocked.
+  }
+}
 /** The host owns source identity/entitlement. A displayed map never becomes a baseline. */
 type Props = {
   window: { start: number; end: number };
+  contextKey?: string;
   source?: DependencySource;
   repository?: BaselineRepository;
   mapWarnings?: string[];
 };
 export function DependencyMonitor(props: Props) {
-  return <DependencyMonitorContents {...props} />;
+  const context = JSON.stringify([
+    props.contextKey,
+    props.window.start,
+    props.window.end,
+  ]);
+  return (
+    <DependencyMonitorContents key={context} {...props} context={context} />
+  );
 }
 function DependencyMonitorContents({
   window,
+  contextKey,
+  context,
   source,
   repository,
   mapWarnings = [],
-}: Props) {
+}: Props & { context: string }) {
   const field = useId();
+  const storageKey =
+    contextKey && `splunk_adm:baseline-create:v1:${contextKey}`;
   const [current, setCurrent] = useState<CaptureReference>();
   const [items, setItems] = useState<BaselineMetadata[]>([]);
   const [next, setNext] = useState<string | null>(null);
@@ -81,7 +139,21 @@ function DependencyMonitorContents({
     },
     [],
   );
-  const context = JSON.stringify(window);
+  useEffect(() => {
+    if (!storageKey || !repository) return;
+    const descriptor = readPendingDescriptor(storageKey);
+    if (descriptor)
+      setPending({
+        requestId: descriptor.requestId,
+        descriptor,
+        run: () =>
+          repository.create(
+            descriptor.name,
+            descriptor.reference,
+            descriptor.requestId,
+          ),
+      });
+  }, [storageKey, repository]);
   const [capturedContext, setCapturedContext] = useState("");
   const capture = capturedContext === context ? current : undefined;
   useEffect(() => {
@@ -134,6 +206,19 @@ function DependencyMonitorContents({
     }
   };
   const mutate = async (operation: Mutation) => {
+    if (storageKey && operation.descriptor) {
+      try {
+        sessionStorage.setItem(
+          storageKey,
+          JSON.stringify(operation.descriptor),
+        );
+      } catch {
+        setError(
+          "This browser could not keep a recovery record. The baseline request was not sent.",
+        );
+        return;
+      }
+    }
     active.current?.abort();
     mutationInFlight.current = true;
     const serial = ++generation.current;
@@ -143,6 +228,8 @@ function DependencyMonitorContents({
     setError("");
     try {
       const metadata = await operation.run();
+      if (storageKey && operation.descriptor)
+        clearPendingDescriptor(storageKey, operation.requestId);
       if (serial !== generation.current) return;
       setPending(undefined);
       setItems((old) =>
@@ -168,12 +255,12 @@ function DependencyMonitorContents({
             : "Baseline change saved. List baselines and open the record to read its current revision.",
       );
     } catch (reason) {
+      const rejected =
+        reason instanceof BaselineWriteError && !reason.uncertain && !pending;
+      if (rejected && storageKey && operation.descriptor)
+        clearPendingDescriptor(storageKey, operation.requestId);
       if (serial !== generation.current) return;
-      if (
-        reason instanceof BaselineWriteError &&
-        !reason.uncertain &&
-        !pending
-      ) {
+      if (rejected) {
         setPending(undefined);
         setCurrent(undefined);
         setSelected(undefined);
@@ -625,6 +712,7 @@ function DependencyMonitorContents({
                 requestId = crypto.randomUUID();
               void mutate({
                 requestId,
+                descriptor: { requestId, name: title, reference, window },
                 run: () => repository.create(title, reference, requestId),
               });
             }}
@@ -791,10 +879,19 @@ function DependencyMonitorContents({
       )}
       {pending && (
         <>
-          <p>
-            The write outcome is unknown. Keep this view open and retry the same
-            request before starting another change.
-          </p>
+          {pending.descriptor ? (
+            <p>
+              The save outcome for {pending.descriptor.name} is unknown. Retry
+              the original capture from{" "}
+              {new Date(pending.descriptor.window.start * 1000).toISOString()}{" "}
+              to {new Date(pending.descriptor.window.end * 1000).toISOString()}.
+            </p>
+          ) : (
+            <p>
+              The write outcome is unknown. Keep this view open and retry the
+              same request before starting another change.
+            </p>
+          )}
           <button
             type="button"
             disabled={busy}

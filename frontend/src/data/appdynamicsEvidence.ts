@@ -19,7 +19,10 @@ import {
   loadSupplementalEvidence,
   type SupplementalResult,
 } from "./supplementalEvidence";
-import { indexNames } from "./deploymentHealth";
+import {
+  UNCONFIGURED_OPTIONAL_INDEX,
+  validateIndexName,
+} from "./deploymentHealth";
 import type { SearchClient } from "./searchClient";
 
 export const APPDYNAMICS_SCHEMA = "application_atlas.appdynamics_inventory.v1";
@@ -88,31 +91,20 @@ export interface AppDynamicsInventoryContext {
 export type AppDynamicsEvidenceResult =
   SupplementalResult<AppDynamicsInventoryContext>;
 
-function checkedIndexes(config: SupplementalSourceConfiguration): string[] {
+export function checkedAppDynamicsIndexes(
+  config: SupplementalSourceConfiguration,
+): string[] {
   if (
     config.source !== SOURCE ||
     !Array.isArray(config.indexes) ||
     !config.indexes.length ||
-    config.indexes.length > 16
+    config.indexes.length > 16 ||
+    new Set(config.indexes).size !== config.indexes.length ||
+    config.indexes.includes(UNCONFIGURED_OPTIONAL_INDEX) ||
+    config.indexes.some(validateIndexName)
   )
     throw new Error("AppDynamics index configuration is unavailable.");
-  const definition = config.indexes
-    .map((index) => `index=${index}`)
-    .join(" OR ");
-  const indexes = indexNames({
-    name: "adm_index_appdynamics_inventory",
-    definition: indexesDefinition(definition, config.indexes.length),
-  });
-  if (
-    indexes.length !== config.indexes.length ||
-    new Set(indexes).size !== indexes.length
-  )
-    throw new Error("AppDynamics index configuration is invalid.");
-  return indexes;
-}
-
-function indexesDefinition(definition: string, count: number): string {
-  return count === 1 ? definition : `(${definition})`;
+  return config.indexes;
 }
 
 function verifiedMappings(
@@ -192,7 +184,7 @@ export function buildAppDynamicsSearch(
   input: EvidenceSelection,
 ): string {
   const selection = validateSelection(input);
-  const indexes = checkedIndexes(config);
+  const indexes = checkedAppDynamicsIndexes(config);
   const mappings = verifiedMappings(config, selection);
   const indexClause = indexes.map((index) => `index=${index}`).join(" OR ");
   const authorityClause = mappings
@@ -349,7 +341,7 @@ export function normalizeAppDynamicsEvidence(
     ]),
   );
   const selected = new Set(selection.addresses.map(normalizeIp));
-  const indexes = new Set(checkedIndexes(config));
+  const indexes = new Set(checkedAppDynamicsIndexes(config));
   const parsed: ParsedRecord[] = [];
   let rejected = 0;
   for (const row of rows) {

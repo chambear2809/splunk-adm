@@ -977,6 +977,65 @@ assert api.token == 'token'
             path = self._write_journal_file(Path(root))
             self.assertEqual(Journal(path).read()["phase"], "prepared")
 
+    def test_journal_status_refuses_duplicate_keys_and_nonfinite_numbers(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root)
+            for payload in (
+                '{"schema":2,"phase":"prepared","phase":"cutover"}',
+                '{"schema":2,"phase":NaN}',
+                '{"schema":2,"phase":Infinity}',
+                '{"schema":2,"phase":-Infinity}',
+                '{"schema":2,"phase":"prepared","metadata":{"delay":1e999}}',
+            ):
+                path = directory / "journal.json"
+                path.write_text(payload, encoding="utf-8")
+                path.chmod(0o600)
+                with (
+                    self.subTest(payload=payload),
+                    redirect_stdout(io.StringIO()) as out,
+                ):
+                    self.assertEqual(main(["--journal", str(path), "status"]), 2)
+                    self.assertEqual(
+                        json.loads(out.getvalue()),
+                        {
+                            "status": "refused",
+                            "reason": "journal is unreadable or corrupt",
+                        },
+                    )
+
+    def test_cutover_refuses_malformed_journal_before_writing(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "journal.json"
+            payload = '{"schema":2,"phase":"prepared","phase":"cutover"}'
+            path.write_text(payload, encoding="utf-8")
+            path.chmod(0o600)
+            api = FakeApi()
+            migration = Migration(api, Journal(path))
+            with (
+                patch.object(migration, "qualify"),
+                self.assertRaisesRegex(Refused, "journal is unreadable or corrupt"),
+            ):
+                migration.cutover()
+            self.assertEqual(path.read_text(encoding="utf-8"), payload)
+            self.assertTrue(all(call[0] == "GET" for call in api.calls))
+
+    def test_journal_read_keeps_canonical_legacy_shape_compatible(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "journal.json"
+            path.write_text(
+                '{"schema":2,"phase":"prepared","metadata":{"legacy":true}}',
+                encoding="utf-8",
+            )
+            path.chmod(0o600)
+            self.assertEqual(
+                Journal(path).read(),
+                {
+                    "schema": 2,
+                    "phase": "prepared",
+                    "metadata": {"legacy": True},
+                },
+            )
+
     def test_journal_read_refuses_file_owned_by_another_user(self):
         with tempfile.TemporaryDirectory() as root:
             path = self._write_journal_file(Path(root))

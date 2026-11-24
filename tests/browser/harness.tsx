@@ -378,6 +378,21 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (
+      window.__ADM_APPD_ROWS__ &&
+      request.search.includes('sourcetype="adm:appdynamics_inventory"')
+    ) {
+      const indexes = new Set(
+        [...request.search.matchAll(/\bindex=([a-z0-9_-]+)/g)].map(
+          (match) => match[1],
+        ),
+      );
+      return {
+        rows: window.__ADM_APPD_ROWS__.filter((row) => indexes.has(row.index)),
+        warnings: [],
+        errors: [],
+      };
+    }
     if (faultScenario === "device-capped") {
       const token = /adm_device_flows\((192\.0\.2\.[12])\)/.exec(
         request.search,

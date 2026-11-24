@@ -367,7 +367,12 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         signal,
       ),
     });
-    if (indexes.length !== 1 || indexes[0] === "unconfigured_optional")
+    if (
+      indexes.length < 1 ||
+      indexes.length > 16 ||
+      new Set(indexes).size !== indexes.length ||
+      indexes.includes("unconfigured_optional")
+    )
       throw new Error(
         "Controller inventory index is unavailable or ambiguous.",
       );

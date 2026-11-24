@@ -7,11 +7,12 @@ from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
+from math import isfinite
 import os
 from pathlib import Path
 import stat
 import tempfile
-from typing import Any
+from typing import Any, NoReturn
 from .common import (
     JOURNAL_SCHEMA,
     MAX_JOURNAL_BYTES,
@@ -19,6 +20,26 @@ from .common import (
     canonical,
     ensure_state_directory,
 )
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON object key")
+        value[key] = item
+    return value
+
+
+def _reject_nonfinite(value: str) -> NoReturn:
+    raise ValueError(f"non-finite JSON number {value}")
+
+
+def _finite_float(value: str) -> float:
+    number = float(value)
+    if not isfinite(number):
+        _reject_nonfinite(value)
+    return number
 
 
 class Journal:
@@ -92,8 +113,13 @@ class Journal:
                 raw = stream.read(MAX_JOURNAL_BYTES + 1)
             if len(raw) > MAX_JOURNAL_BYTES:
                 raise Refused("journal exceeds the 16 MiB limit")
-            value = json.loads(raw.decode("utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
+            value = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=_reject_duplicate_keys,
+                parse_constant=_reject_nonfinite,
+                parse_float=_finite_float,
+            )
+        except (OSError, ValueError):
             raise Refused("journal is unreadable or corrupt") from None
         if not isinstance(value, dict) or value.get("schema") != JOURNAL_SCHEMA:
             raise Refused("journal schema is unsupported")

@@ -210,46 +210,128 @@ test("native impact uses the returned cohort window for capture and export", asy
   });
 });
 
+const networkCapture = (windowStart: number) => ({
+  id: `synthetic-${windowStart}`,
+  coverage: {
+    requested: { start: windowStart, end: windowStart + 300 },
+    returned: { start: windowStart, end: windowStart + 300 },
+    authority: "synthetic",
+    scope: "synthetic",
+    sourceRevision: "v1",
+    configRevision: "c1",
+    normalizationRevision: "n1",
+    signatureVersion: 1,
+    permission: "allowed",
+    complete: true,
+    capped: false,
+    progressive: false,
+    sampled: false,
+    stale: false,
+    knowledgeHorizon: windowStart + 360,
+    requiredLatenessSeconds: 60,
+  },
+  dependencies: [
+    {
+      authority: "synthetic",
+      scope: "synthetic",
+      source: "service:a",
+      destination: "service:b",
+      protocol: "tcp",
+      port: 443,
+      relation: "calls",
+      direction: "forward",
+      blocked: false,
+    },
+  ],
+});
+
+test("a committed baseline save can replay its original key after reload", async ({
+  page,
+}) => {
+  const pending: { key: string; body: { name: string; reference: string } }[] =
+    [];
+  const records = new Map<
+    string,
+    { id: string; name: string; revision: number; version: number }
+  >();
+  await page.route("**/test-monitor/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith("/capabilities"))
+      return route.fulfill({
+        json: {
+          available: true,
+          sourceAvailable: true,
+          qualificationReasons: [],
+        },
+      });
+    if (path.endsWith("/capture"))
+      return route.fulfill({
+        json: {
+          reference: "captured-source",
+          capture: networkCapture(1791373400),
+        },
+      });
+    if (!path.endsWith("/baselines")) return route.fulfill({ status: 404 });
+    if (request.method() === "GET")
+      return route.fulfill({
+        json: { items: [...records.values()], next: null },
+      });
+    const key = request.headers()["idempotency-key"];
+    const body = request.postDataJSON();
+    pending.push({ key, body });
+    const row = records.get(key) ?? {
+      id: String(records.size + 1),
+      name: body.name,
+      revision: 1,
+      version: 1,
+    };
+    records.set(key, row);
+    return pending.length === 1
+      ? route.abort("failed")
+      : route.fulfill({ status: 201, json: row });
+  });
+  const path = "/tests/browser/planning.html?mode=network";
+  const read = page.getByRole("button", {
+    name: "Read complete dependency evidence",
+  });
+  const retry = page.getByRole("button", {
+    name: "Retry same baseline request",
+  });
+  await page.goto(path);
+  await read.click();
+  await page.getByLabel("Baseline name").fill("Recovered baseline");
+  await page.getByRole("button", { name: "Save new baseline" }).click();
+  await expect(retry).toBeEnabled();
+  expect(records.size).toBe(1);
+
+  await page.goto(path + "&viewer=another-viewer");
+  await expect(read).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  await page.goto(path + "&later=1");
+  await page.reload();
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByText(/retry the original capture from/i),
+  ).toContainText(new Date(1791373400 * 1000).toISOString());
+  await retry.click();
+  await expect(page.getByRole("status")).toContainText("Baseline change saved");
+  expect(pending).toEqual([pending[0], pending[0]]);
+  await page.getByRole("button", { name: "List baselines" }).click();
+  await expect(
+    page.getByRole("button", { name: "Recovered baseline · version 1" }),
+  ).toHaveCount(1);
+  await page.reload();
+  await expect(read).toBeVisible();
+  await expect(retry).toHaveCount(0);
+});
+
 test("network baseline versions and watch evaluation use authorized references and retry withheld receipts", async ({
   page,
 }) => {
   let lost = false;
   const writes: { key: string; body: unknown }[] = [];
   const start = 1791373400;
-  const capture = (windowStart: number) => ({
-    id: `synthetic-${windowStart}`,
-    coverage: {
-      requested: { start: windowStart, end: windowStart + 300 },
-      returned: { start: windowStart, end: windowStart + 300 },
-      authority: "synthetic",
-      scope: "synthetic",
-      sourceRevision: "v1",
-      configRevision: "c1",
-      normalizationRevision: "n1",
-      signatureVersion: 1,
-      permission: "allowed",
-      complete: true,
-      capped: false,
-      progressive: false,
-      sampled: false,
-      stale: false,
-      knowledgeHorizon: windowStart + 360,
-      requiredLatenessSeconds: 60,
-    },
-    dependencies: [
-      {
-        authority: "synthetic",
-        scope: "synthetic",
-        source: "service:a",
-        destination: "service:b",
-        protocol: "tcp",
-        port: 443,
-        relation: "calls",
-        direction: "forward",
-        blocked: false,
-      },
-    ],
-  });
   await page.route("**/test-monitor/**", async (route) => {
     const request = route.request(),
       url = new URL(request.url()),
@@ -264,7 +346,10 @@ test("network baseline versions and watch evaluation use authorized references a
       });
     if (path.endsWith("/capture"))
       return route.fulfill({
-        json: { reference: "synthetic-reference", capture: capture(start) },
+        json: {
+          reference: "synthetic-reference",
+          capture: networkCapture(start),
+        },
       });
     if (path.endsWith("/baselines"))
       return route.fulfill({
@@ -359,7 +444,7 @@ test("network baseline versions and watch evaluation use authorized references a
         name: "Synthetic baseline",
         revision: 3,
         version: path.endsWith("/versions/1") ? 1 : 2,
-        capture: capture(start - 300),
+        capture: networkCapture(start - 300),
       },
     });
   });

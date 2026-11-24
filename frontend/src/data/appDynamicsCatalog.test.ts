@@ -125,6 +125,23 @@ describe("Controller catalog admission", () => {
     late[0]._indextime = "1001";
     expect(() => normalizeControllerCatalog(late, config, 1000)).toThrow();
   });
+  it("deduplicates an exact replay while refusing a conflicting replay", () => {
+    const replay = rows();
+    replay.push({ ...replay[1] });
+    expect(normalizeControllerCatalog(replay, config, 1000)).toMatchObject({
+      snapshotId: "snapshot-1",
+    });
+    const conflict = rows();
+    const altered = JSON.parse(String(conflict[1]._raw));
+    altered.application_name = "changed-after-replay";
+    conflict.push({
+      ...conflict[1],
+      _raw: JSON.stringify(altered),
+    });
+    expect(() => normalizeControllerCatalog(conflict, config, 1000)).toThrow(
+      "conflicting replayed records",
+    );
+  });
   it("rejects unqualified or ambiguous configuration", () => {
     expect(() =>
       normalizeControllerCatalog(
@@ -173,6 +190,37 @@ describe("Controller catalog admission", () => {
       await expect(
         loadControllerCatalog({ search }, signal, configurationClient),
       ).rejects.toThrow("Invalid or stale Controller capture time.");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+  it("searches every approved inventory index", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_500);
+    const multi = { ...config, indexes: ["appd_inventory", "appd_backup"] };
+    const search = vi
+      .fn()
+      .mockResolvedValue({ rows: rows(), warnings: [], errors: [] });
+    const configurationClient = {
+      readAppDynamicsInventory: async () => ({
+        source: multi,
+        fingerprint: "unchanged",
+      }),
+    };
+    try {
+      await expect(
+        loadControllerCatalog(
+          { search },
+          new AbortController().signal,
+          configurationClient,
+        ),
+      ).resolves.toMatchObject({ snapshotId: "snapshot-1" });
+      expect(search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          search: expect.stringContaining(
+            "(index=appd_inventory OR index=appd_backup)",
+          ),
+        }),
+      );
     } finally {
       clock.mockRestore();
     }

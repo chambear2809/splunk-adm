@@ -335,6 +335,7 @@ const networkClient = createDependencyClient({
 });
 function NetworkReplay() {
   const [capability, setCapability] = useState<MonitorCapabilities>();
+  const start = base + (params.has("later") ? 300 : 0);
   useEffect(() => {
     const controller = new AbortController();
     void networkClient.capabilities(controller.signal).then(setCapability);
@@ -350,7 +351,8 @@ function NetworkReplay() {
         <main className="adm atlas-page" data-adm-theme={theme}>
           <h1>Synthetic dependency service replay</h1>
           <DependencyMonitor
-            window={{ start: base, end: base + 300 }}
+            window={{ start, end: start + 300 }}
+            contextKey={params.get("viewer") ?? "synthetic-viewer"}
             source={
               capability?.sourceAvailable ? networkClient.source : undefined
             }

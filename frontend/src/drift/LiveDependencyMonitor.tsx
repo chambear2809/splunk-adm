@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { username } from "@splunk/splunk-utils/config";
 import { DependencyMonitor } from "./DependencyMonitor";
 import {
   splunkDependencyClient,
@@ -21,7 +22,7 @@ export function LiveDependencyMonitor({
   const { service, environment, cluster, namespace } = selection;
   const connection = useMemo(
     () =>
-      nativePersistence
+      nativePersistence && username
         ? splunkDependencyClient({ service, environment, cluster, namespace })
         : undefined,
     [nativePersistence, service, environment, cluster, namespace],
@@ -100,6 +101,13 @@ export function LiveDependencyMonitor({
       )}
       <DependencyMonitor
         window={window}
+        contextKey={JSON.stringify([
+          username,
+          service,
+          environment,
+          cluster,
+          namespace,
+        ])}
         mapWarnings={mapWarnings}
         source={capabilities?.sourceAvailable ? connection?.source : undefined}
         repository={

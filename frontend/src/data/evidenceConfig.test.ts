@@ -31,6 +31,7 @@ function fixture({
   invalidMms = false,
   detector = false,
   appd = false,
+  appdIndexDefinition = "index=atlas_asset",
   thousandeyes = false,
   teBindings = "[]",
   detectorIds = '["detector-1"]',
@@ -195,7 +196,7 @@ function fixture({
           adm_o11y_health_schema_qualified: "1",
           adm_index_o11y_detector_events: "index=atlas_o11y",
           adm_o11y_detector_events_schema_qualified: "0",
-          adm_index_appdynamics_inventory: "index=atlas_asset",
+          adm_index_appdynamics_inventory: appdIndexDefinition,
           adm_appdynamics_inventory_schema_qualified: "0",
           adm_index_thousandeyes: "index=atlas_te",
           adm_thousandeyes_schema_qualified: "0",
@@ -443,6 +444,19 @@ describe("caller-context evidence configuration", () => {
       ).toBeDefined();
       expect(rejected.summaryIndexes).toEqual(["adm_summary"]);
     }
+  });
+  it("accepts an approved multi-index Controller inventory selector", async () => {
+    const config = await fixture({
+      active: false,
+      appd: true,
+      appdIndexDefinition: "(index=atlas_asset OR index=atlas_asset_backup)",
+    }).client.read(undefined, [], "prod");
+    expect(
+      config.supplemental?.find((s) => s.source === "appdynamics_inventory"),
+    ).toMatchObject({
+      indexes: ["atlas_asset", "atlas_asset_backup"],
+      state: "staged",
+    });
   });
   it("changes the configuration fingerprint when a Controller origin or detector binding changes", async () => {
     const first = await fixture({

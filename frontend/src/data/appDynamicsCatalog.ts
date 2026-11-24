@@ -1,6 +1,7 @@
 import {
   APPDYNAMICS_SCHEMA,
   APPDYNAMICS_SOURCETYPE,
+  checkedAppDynamicsIndexes,
 } from "./appdynamicsEvidence";
 import {
   appDynamicsInventoryConfigClient,
@@ -8,7 +9,6 @@ import {
   type SupplementalSourceConfiguration,
 } from "./evidenceConfig";
 import { literal, normalizeIp, routingScope } from "./evidence";
-import { indexNames } from "./deploymentHealth";
 import { requireNoSearchErrors, type SearchClient } from "./searchClient";
 import type { Row } from "../rows";
 
@@ -46,7 +46,6 @@ function configuration(config: SupplementalSourceConfiguration) {
     config.state !== "active" ||
     config.error ||
     !config.schemaQualified ||
-    config.indexes.length !== 1 ||
     config.authorities.length !== 1 ||
     mappings.length !== 1 ||
     mappings[0].observer !== config.authorities[0] ||
@@ -57,14 +56,8 @@ function configuration(config: SupplementalSourceConfiguration) {
     throw new Error(
       "AppDynamics Controller source is not uniquely configured and qualified.",
     );
-  const index = indexNames({
-    name: "adm_index_appdynamics_inventory",
-    definition: `index=${config.indexes[0]}`,
-  });
-  if (index.length !== 1 || index[0] !== config.indexes[0])
-    throw new Error("Invalid AppDynamics index.");
   return {
-    index: index[0],
+    indexes: checkedAppDynamicsIndexes(config),
     authority: literal(mappings[0].observer),
     scope: routingScope(mappings[0].scope),
   };
@@ -91,7 +84,6 @@ const num = (v: unknown): number => {
     throw new Error("Invalid Controller inventory time.");
   return n;
 };
-
 /** Admit only a single, complete latest snapshot. No fallback to an older capture. */
 export function normalizeControllerCatalog(
   rows: readonly Row[],
@@ -102,7 +94,10 @@ export function normalizeControllerCatalog(
   if (!rows.length || rows.length > 10000)
     throw new Error("Controller inventory is empty or exceeds its scan limit.");
   const records = rows.map((row) => {
-    if (String(row.index) !== mapping.index || num(row._indextime) > cutoff)
+    if (
+      !mapping.indexes.includes(String(row.index)) ||
+      num(row._indextime) > cutoff
+    )
       throw new Error("Controller inventory receipt is outside the cutoff.");
     let raw: Record<string, unknown>;
     try {
@@ -159,7 +154,18 @@ export function normalizeControllerCatalog(
   const snapshotId = text(selected[0].snapshot_id);
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(snapshotId))
     throw new Error("Invalid Controller snapshot identity.");
-  const capture = records.filter((r) => r.snapshot_id === snapshotId);
+  // HEC retries can replay an identical event. Deduplicate only exact
+  // fingerprint/payload matches before checking manifest counts.
+  const uniqueByFingerprint = new Map<string, (typeof records)[number]>();
+  for (const record of records) {
+    if (record.snapshot_id !== snapshotId) continue;
+    const fingerprint = String(record.record_fingerprint);
+    const prior = uniqueByFingerprint.get(fingerprint);
+    if (prior && JSON.stringify(prior) !== JSON.stringify(record))
+      throw new Error("Controller snapshot has conflicting replayed records.");
+    uniqueByFingerprint.set(fingerprint, record);
+  }
+  const capture = [...uniqueByFingerprint.values()];
   const first = capture[0];
   if (
     capture.some((r) =>
@@ -179,9 +185,7 @@ export function normalizeControllerCatalog(
     manifests.length !== 1 ||
     !counts ||
     num(counts.total_records) !== capture.length ||
-    new Set(capture.map((r) => text(r.record_id))).size !== capture.length ||
-    new Set(capture.map((r) => text(r.record_fingerprint))).size !==
-      capture.length
+    new Set(capture.map((r) => text(r.record_id))).size !== capture.length
   )
     throw new Error(
       "Controller snapshot is incomplete or has duplicate identities.",
@@ -275,7 +279,11 @@ export async function loadControllerCatalog(
   const cutoff = Date.now() / 1000;
   // Dispatch with whole-second bounds and validate snapshot times at full precision.
   const searchSecond = Math.floor(cutoff);
-  const search = `search index=${mapping.index} sourcetype="${APPDYNAMICS_SOURCETYPE}" source="appdynamics_inventory" schema="${APPDYNAMICS_SCHEMA}" controller_authority="${mapping.authority}" scope="${literal(mapping.scope)}" | eval adm_snapshot_at=tonumber(snapshot_at) | eventstats max(adm_snapshot_at) AS adm_latest_snapshot_at BY controller_authority scope | eval adm_latest_ids=if(adm_snapshot_at=adm_latest_snapshot_at,snapshot_id,null()) | eventstats values(adm_latest_ids) AS adm_latest_ids BY controller_authority scope | eval adm_selected_snapshot=if(isnotnull(mvmap(adm_latest_ids,if(adm_latest_ids==snapshot_id,1,null()))),1,0) | where adm_selected_snapshot=1 OR adm_snapshot_at=adm_latest_snapshot_at OR isnull(adm_snapshot_at) | head 10001 | fields _raw index _indextime`;
+  const indexClause =
+    mapping.indexes.length === 1
+      ? `index=${mapping.indexes[0]}`
+      : `(${mapping.indexes.map((index) => `index=${index}`).join(" OR ")})`;
+  const search = `search ${indexClause} sourcetype="${APPDYNAMICS_SOURCETYPE}" source="appdynamics_inventory" schema="${APPDYNAMICS_SCHEMA}" controller_authority="${mapping.authority}" scope="${literal(mapping.scope)}" | eval adm_snapshot_at=tonumber(snapshot_at) | eventstats max(adm_snapshot_at) AS adm_latest_snapshot_at BY controller_authority scope | eval adm_latest_ids=if(adm_snapshot_at=adm_latest_snapshot_at,snapshot_id,null()) | eventstats values(adm_latest_ids) AS adm_latest_ids BY controller_authority scope | eval adm_selected_snapshot=if(isnotnull(mvmap(adm_latest_ids,if(adm_latest_ids==snapshot_id,1,null()))),1,0) | where adm_selected_snapshot=1 OR adm_snapshot_at=adm_latest_snapshot_at OR isnull(adm_snapshot_at) | head 10001 | fields _raw index _indextime`;
   const result = requireNoSearchErrors(
     await client.search({
       search,
