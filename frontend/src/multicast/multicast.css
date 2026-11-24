@@ -279,6 +279,50 @@
 .atlas .multicast-page .mc-cell.older {
   color: var(--adm-muted);
 }
+.atlas .multicast-page :is(.mc-timeline, .mc-querier-strip) {
+  margin-top: 1rem;
+}
+.atlas .multicast-page .mc-lane h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.atlas .multicast-page .mc-lane svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+}
+.atlas .multicast-page :is(.mc-axis, .mc-detail-empty, .mc-sender-list) {
+  color: var(--adm-muted);
+}
+.atlas .multicast-page .mc-lane-axis {
+  stroke: var(--adm-line);
+}
+.atlas .multicast-page .mc-mark {
+  stroke: var(--adm-link);
+  stroke-width: 2;
+}
+.atlas .multicast-page .mc-mark.report {
+  fill: var(--adm-link);
+}
+.atlas .multicast-page .mc-mark.leave {
+  fill: var(--adm-surface);
+}
+.atlas .multicast-page .mc-mark.general-query {
+  stroke: var(--adm-muted);
+}
+.atlas .multicast-page .mc-sender-bar {
+  fill: var(--adm-link);
+}
+.atlas .multicast-page .mc-sender-label {
+  fill: var(--adm-ink);
+  font-size: 11px;
+}
 @media (max-width: 700px) {
   .atlas .multicast-map {
     grid-template-columns: 1fr;
