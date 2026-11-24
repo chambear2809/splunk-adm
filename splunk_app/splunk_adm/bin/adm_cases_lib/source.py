@@ -158,6 +158,13 @@ def _rows(rows, scope, window):
             }
         ):
             raise SourceError("unknown graph row")
+        if row["row_type"] == "edge":
+            # These fields are the minimum relationship contract consumed by
+            # the graph parser.  A row without an endpoint is not evidence of
+            # a relationship and must not be admitted to a saved capture.
+            for key in ("id", "source", "target", "relationship", "confidence"):
+                if not isinstance(row.get(key), str) or not row[key]:
+                    raise SourceError("invalid graph edge")
         if row["row_type"] == "meta":
             meta.append(row)
         if row["row_type"] == "node" and row.get("id") == root_id:

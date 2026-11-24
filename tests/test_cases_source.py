@@ -3,16 +3,18 @@
 import copy
 import datetime as dt
 import json
+import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/bin")
 )
-from adm_cases_lib.source import ComparisonSource, SourceError  # noqa: E402
-from adm_cases_lib.store import CaseStore  # noqa: E402
+from adm_cases_lib.source import ComparisonSource, SourceError, _digest  # noqa: E402
+from adm_cases_lib.store import CaseStore, SourceUnavailable  # noqa: E402
 
 
 SCOPE = {
@@ -56,6 +58,21 @@ def graph(start, end):
             "warnings": ["partial synthetic"],
         },
     ]
+
+
+def malformed_graph(start, end):
+    rows = graph(start, end)
+    rows.append(
+        {
+            "row_type": "edge",
+            "id": "calls:missing-target",
+            "source": "service:cluster-a/shop/checkout/lab",
+            "relationship": "calls",
+            "confidence": "observed",
+            "count": 1,
+        }
+    )
+    return rows
 
 
 class Tests(unittest.TestCase):
@@ -187,6 +204,98 @@ class Tests(unittest.TestCase):
                 len(store.export("bob", case_id, capture_id=capture_id)["captures"]), 1
             )
 
+    def test_malformed_historical_capture_is_withheld_on_recheck_and_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / "cases.sqlite")
+            store = CaseStore(
+                path,
+                lambda *_: True,
+                capture_resolver=self.source.resolve,
+                source_entitlement=self.source.entitled,
+            )
+            case = store.create(
+                "alice",
+                "create",
+                {
+                    "schema_version": 1,
+                    "title": "Malformed historical evidence",
+                    "window": {
+                        "start": "2026-01-01T00:00:00Z",
+                        "end": "2026-01-01T01:00:00Z",
+                    },
+                },
+            )
+            case_id = case["id"]
+            store.append(
+                "alice",
+                "note",
+                case_id,
+                1,
+                "entry",
+                {"type": "note", "text": "Keep this note"},
+            )
+            saved = store.append_capture("alice", "capture", case_id, 2, reference())
+            capture_id = saved["capture_ids"][0]
+
+            malformed_result = self.source.resolve("alice", reference())
+            for window in malformed_result["data"]["windows"]:
+                window["rows"] = malformed_graph(window["start"], window["end"])
+            digest = _digest(malformed_result["data"]["windows"])
+            malformed_result["data"]["evidence_digest"] = digest
+            malformed_result["source"]["rows_digest"] = digest
+
+            with closing(sqlite3.connect(path)) as db, db:
+                document = json.loads(
+                    db.execute(
+                        "SELECT document FROM cases WHERE id = ?", (case_id,)
+                    ).fetchone()[0]
+                )
+                document["captures"][0]["data"] = malformed_result["data"]
+                document["captures"][0]["source"] = malformed_result["source"]
+                db.execute(
+                    "UPDATE cases SET document = ? WHERE id = ?",
+                    (
+                        json.dumps(document, sort_keys=True, separators=(",", ":")),
+                        case_id,
+                    ),
+                )
+
+            self.rows = malformed_graph
+            for document in (
+                store.get("alice", case_id, capture_id=capture_id),
+                store.export("alice", case_id, capture_id=capture_id),
+            ):
+                self.assertEqual(document["captures"], [])
+                self.assertEqual(document["redactions"]["captures"], 1)
+                self.assertEqual(document["entries"][0]["text"], "Keep this note")
+
+    def test_malformed_new_capture_is_rejected_without_revision_advance(self):
+        self.rows = malformed_graph
+        with tempfile.TemporaryDirectory() as directory:
+            store = CaseStore(
+                str(Path(directory) / "cases.sqlite"),
+                lambda *_: True,
+                capture_resolver=self.source.resolve,
+                source_entitlement=self.source.entitled,
+            )
+            case = store.create(
+                "alice",
+                "create",
+                {
+                    "schema_version": 1,
+                    "title": "Reject malformed evidence",
+                    "window": {
+                        "start": "2026-01-01T00:00:00Z",
+                        "end": "2026-01-01T01:00:00Z",
+                    },
+                },
+            )
+            with self.assertRaises(SourceUnavailable):
+                store.append_capture("alice", "capture", case["id"], 1, reference())
+            current = store.get("alice", case["id"])
+            self.assertEqual(current["revision"], 1)
+            self.assertEqual(current["captures"], [])
+
     def test_reference_validation_and_injection(self):
         cases = [
             reference(scope={**SCOPE, "service": 'x" | delete'}),
@@ -218,6 +327,16 @@ class Tests(unittest.TestCase):
             lambda r: r.append({"row_type": "unexpected"}),
             lambda r: r.pop(),
             lambda r: r.append(copy.deepcopy(r[-1])),
+            lambda r: r.append(
+                {
+                    "row_type": "edge",
+                    "id": "calls:missing-target",
+                    "source": "service:cluster-a/shop/checkout/lab",
+                    "relationship": "calls",
+                    "confidence": "observed",
+                    "count": 1,
+                }
+            ),
             lambda r: r[-1].update(window_start="0"),
             lambda r: r[0].update(namespace="other"),
             lambda r: r.append({"row_type": "edge", "payload": "x" * (512 * 1024)}),
