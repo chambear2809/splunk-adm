@@ -6,7 +6,7 @@ import type {
   ProfileSummary,
   SourceOutcome,
 } from "./contract";
-import { FLAG_LABEL, deriveGroupRows } from "./flags";
+import { FLAG_LABEL, deriveGroupRows, scopeCoverageNotices } from "./flags";
 
 function igmp(
   group: string,
@@ -56,6 +56,7 @@ function profile(
   options: {
     state?: SourceOutcome["state"];
     queries?: Omit<PointQueries, "profile">;
+    source?: SourceOutcome["source"];
   } = {},
 ): ProfileSummary {
   return {
@@ -64,7 +65,10 @@ function profile(
     droppedGroups: 0,
     outcome: {
       source:
-        summaries[0]?.kind === "flow" ? "multicast_netflow" : "multicast_igmp",
+        options.source ??
+        (summaries[0]?.kind === "flow"
+          ? "multicast_netflow"
+          : "multicast_igmp"),
       profile: id,
       state: options.state ?? "complete",
     },
@@ -247,6 +251,7 @@ describe("deriveGroupRows", () => {
           [igmp("239.1.1.1", { profile: "p3", leaves: 1, lastLeave: 141 })],
           { queries, state: "partial" },
         ),
+        profile("p2", [], { source: "multicast_netflow" }),
       ],
       [],
     );
@@ -259,6 +264,54 @@ describe("deriveGroupRows", () => {
       "multiple-query-senders",
       "coverage-partial",
     ]);
+  });
+
+  it("suppresses a structural flag when the scope has no profile of the other kind", () => {
+    const igmpOnly = deriveGroupRows([
+      profile("p1", [igmp("239.1.1.1")]),
+      profile("p3", [igmp("239.1.1.2", { profile: "p3" })]),
+    ]);
+    expect(igmpOnly.flatMap((row) => row.flags)).toEqual([]);
+
+    const flowOnly = deriveGroupRows([profile("p2", [flow("239.1.1.1")])]);
+    expect(flowOnly.flatMap((row) => row.flags)).toEqual([]);
+
+    // A complementary profile that returned nothing still carries the flag:
+    // the kind is covered, so the row says something about this group.
+    const covered = deriveGroupRows([
+      profile("p1", [igmp("239.1.1.1")]),
+      profile("p2", [], { source: "multicast_netflow" }),
+    ]);
+    expect(flagsOf(covered, "239.1.1.1")).toEqual(["interest-no-sender"]);
+    const blocked = deriveGroupRows([
+      profile("p2", [flow("239.1.1.1")]),
+      profile("p1", [], { source: "multicast_igmp", state: "blocked" }),
+    ]);
+    expect(flagsOf(blocked, "239.1.1.1")).toEqual([
+      "sender-no-interest",
+      "coverage-partial",
+    ]);
+  });
+
+  it("states a missing profile kind once at scope level", () => {
+    expect(
+      scopeCoverageNotices([
+        profile("p1", [igmp("239.1.1.1")]),
+        profile("p3", [], { source: "multicast_igmp", state: "blocked" }),
+      ]),
+    ).toEqual([
+      "No NetFlow profile in this scope: sender traffic is not observed here.",
+    ]);
+    expect(scopeCoverageNotices([profile("p2", [flow("239.1.1.1")])])).toEqual([
+      "No Stream IGMP profile in this scope: receiver interest is not observed here.",
+    ]);
+    expect(
+      scopeCoverageNotices([
+        profile("p1", [igmp("239.1.1.1")]),
+        profile("p2", [flow("239.1.1.1")]),
+      ]),
+    ).toEqual([]);
+    expect(scopeCoverageNotices([])).toEqual([]);
   });
 
   it("rows sort problem-first", () => {

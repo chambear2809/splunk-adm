@@ -60,8 +60,17 @@ export async function investigateScope(
     (profile): profile is StreamProfile =>
       profile.source !== "multicast_nxos" && profile.scope === window.scope,
   );
-  if (!profiles.length)
-    throw new Error("Choose a routing scope with a verified multicast source.");
+  if (!profiles.length) {
+    const forwardingOnly = current.profiles.some(
+      (profile) =>
+        profile.source === "multicast_nxos" && profile.scope === window.scope,
+    );
+    throw new Error(
+      forwardingOnly
+        ? "This scope has only a verified forwarding snapshot. Overview and Matrix summarise Stream IGMP and NetFlow; open a group link to inspect the snapshot."
+        : "Choose a routing scope with a verified multicast source.",
+    );
+  }
 
   const deadline = AbortSignal.timeout(45000);
   const searchSignal = AbortSignal.any([signal, deadline]);

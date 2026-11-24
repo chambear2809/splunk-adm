@@ -265,7 +265,9 @@ export function parseProfile(value: unknown): MulticastProfile {
     const endpointReporters = reporterAddresses(value.endpointReporters);
     const proxyReporters = reporterAddresses(value.proxyReporters);
     if (
-      !selector(captureInterface) ||
+      typeof captureInterface !== "string" ||
+      captureInterface.length > 128 ||
+      !selector(captureInterface.replace(/^\//, "")) ||
       !segment ||
       (placement !== "endpoint" && placement !== "transit") ||
       (placement !== "endpoint" && endpointReporters.length > 0) ||
@@ -292,6 +294,7 @@ export function parseProfile(value: unknown): MulticastProfile {
       samplingInterval,
       replication,
       counters,
+      counterFields,
     } = value;
     if (
       !sourceAddress(observer) ||
@@ -305,7 +308,9 @@ export function parseProfile(value: unknown): MulticastProfile {
       (replication !== "before" &&
         replication !== "after" &&
         replication !== "unknown") ||
-      (counters !== "delta" && counters !== "total")
+      (counters !== "delta" && counters !== "total") ||
+      (counterFields !== undefined &&
+        (direction !== "ingress" || counterFields !== "stream-ingress"))
     )
       throw new Error("Invalid multicast NetFlow exporter or counter profile.");
     return {
@@ -317,6 +322,7 @@ export function parseProfile(value: unknown): MulticastProfile {
       samplingInterval,
       replication,
       counters,
+      ...(counterFields === undefined ? {} : { counterFields }),
     };
   }
   throw new Error("Unsupported multicast source profile.");

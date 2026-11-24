@@ -1,8 +1,19 @@
 import { useId } from "react";
 import type { FlowGroupSummary, IgmpGroupSummary } from "./contract";
-import { FLAG_LABEL, type FlagId, type GroupRow } from "./flags";
-import { formatTime } from "./format";
+import {
+  FLAG_LABEL,
+  scopeCoverageNotices,
+  type FlagId,
+  type GroupRow,
+} from "./flags";
+import {
+  cappedNotice,
+  emptyScopeNotice,
+  flowEvidenceLine,
+  formatTime,
+} from "./format";
 import type { ScopeOverviewResult } from "./scopeOverview";
+import { SourceCoverage } from "./SourceCoverage";
 import { MULTICAST_TERMS } from "./terms";
 
 interface Props {
@@ -14,7 +25,6 @@ interface Props {
 }
 
 const LIST_LIMIT = 3;
-const count = new Intl.NumberFormat("en-US");
 
 function limited(values: string[]): string {
   const shown = values.slice(0, LIST_LIMIT).join(", ");
@@ -59,6 +69,17 @@ function ReceiverInterest({ igmp }: { igmp: IgmpGroupSummary[] }) {
     (total, summary) => total + summary.otherReporters,
     0,
   );
+  if (!endpoints.length && !others) {
+    const reports = reporting.reduce(
+      (total, summary) => total + summary.reports,
+      0,
+    );
+    return (
+      <>
+        {reports} {reports === 1 ? "report" : "reports"}, reporters not reported
+      </>
+    );
+  }
   return (
     <>
       {endpoints.length > 0 && <div>{limited(endpoints)}</div>}
@@ -69,33 +90,11 @@ function ReceiverInterest({ igmp }: { igmp: IgmpGroupSummary[] }) {
 
 function FlowEvidence({ flows }: { flows: FlowGroupSummary[] }) {
   if (!flows.length) return <>None observed</>;
-  const counted = flows.every(
-    (summary) => summary.packets !== undefined && summary.bytes !== undefined,
-  );
-  const sum = (key: "packets" | "bytes") =>
-    count.format(flows.reduce((total, summary) => total + summary[key]!, 0));
-  const sampling = [
-    ...new Set(flows.map((summary) => `1:${summary.samplingInterval}`)),
-  ];
-  const replication = [
-    ...new Set(
-      flows.map((summary) =>
-        summary.replication === "unknown"
-          ? "replication unknown"
-          : `${summary.replication} replication`,
-      ),
-    ),
-  ];
   return (
     <>
-      <div>
-        {counted
-          ? `${sum("packets")} packets, ${sum("bytes")} bytes`
-          : "counts not reported"}
-      </div>
-      <small>
-        sampling {sampling.join(", ")}; {replication.join(", ")}
-      </small>
+      {flows.map((flow) => (
+        <div key={flow.profile}>{flowEvidenceLine(flow)}</div>
+      ))}
     </>
   );
 }
@@ -174,17 +173,17 @@ export function OverviewView({
           Comparison unavailable: {result.comparison.reason}
         </p>
       )}
+      <SourceCoverage
+        outcomes={result.profiles.map((profile) => profile.outcome)}
+        notices={scopeCoverageNotices(result.profiles)}
+      />
       {capped.map((profile, index) => (
         <p key={index} className="multicast-notice">
-          {profile.droppedGroups} groups not shown: the group limit was reached
-          for {profile.outcome.profile ?? profile.outcome.source}.
+          {cappedNotice(profile)}
         </p>
       ))}
       {result.rows.length === 0 ? (
-        <p className="multicast-notice">
-          No caller-visible multicast groups in this window. This does not
-          establish that none exist.
-        </p>
+        <p className="multicast-notice">{emptyScopeNotice(result.profiles)}</p>
       ) : (
         <div className="multicast-table-wrap">
           <table>

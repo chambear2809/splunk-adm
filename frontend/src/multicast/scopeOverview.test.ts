@@ -151,6 +151,25 @@ beforeEach(() => {
 });
 
 describe("multicast scope overview", () => {
+  it("names the forwarding snapshot when the scope has no Stream profile", async () => {
+    const configuration = await setup([nxos]);
+    await expect(
+      investigateScope(client, window, configuration, signal()),
+    ).rejects.toThrow(
+      "This scope has only a verified forwarding snapshot. Overview and Matrix summarise Stream IGMP and NetFlow; open a group link to inspect the snapshot.",
+    );
+    expect(stub.runs).toHaveLength(0);
+  });
+
+  it("gives the generic message when the scope has no profile at all", async () => {
+    const configuration = await setup([other]);
+    await expect(
+      investigateScope(client, window, configuration, signal()),
+    ).rejects.toThrow(
+      "Choose a routing scope with a verified multicast source.",
+    );
+  });
+
   it("searches only IGMP and NetFlow profiles of the scope", async () => {
     const configuration = await setup();
     const result = await investigateScope(

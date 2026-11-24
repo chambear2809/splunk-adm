@@ -3,8 +3,10 @@ import type {
   MulticastConfiguration,
   StreamProfile,
 } from "./contract";
-import type { GroupRow } from "./flags";
+import { scopeCoverageNotices, type GroupRow } from "./flags";
+import { emptyScopeNotice } from "./format";
 import type { ScopeOverviewResult } from "./scopeOverview";
+import { SourceCoverage } from "./SourceCoverage";
 
 interface Props {
   result: ScopeOverviewResult;
@@ -73,17 +75,22 @@ function Cell({
     (candidate) => candidate.profile === column.profile.id,
   );
   const state = cellState(column, summary);
-  const recency = summary
-    ? summary.lastSeen >= latest - RECENT_SECONDS
-      ? " recent"
-      : " older"
+  // Recency styling and the accessible recency suffix apply only to states
+  // that carry usable evidence; "None observed" and "Not covered" never
+  // claim a recency they don't have.
+  const hasEvidence =
+    state === "Sender traffic" || state === "Receiver interest";
+  const recent = hasEvidence && summary!.lastSeen >= latest - RECENT_SECONDS;
+  const recencyClass = hasEvidence ? (recent ? " recent" : " older") : "";
+  const recencyLabel = hasEvidence
+    ? ` · ${recent ? "recent" : "older"} evidence`
     : "";
   return (
     <td>
       <button
         type="button"
-        className={`mc-cell${recency}`}
-        aria-label={`${row.group} at ${column.label}: ${state}`}
+        className={`mc-cell${recencyClass}`}
+        aria-label={`${row.group} at ${column.label}: ${state}${recencyLabel}`}
         onClick={() => onSelectCell(row.group, column.profile.id)}
       >
         {state}
@@ -94,43 +101,52 @@ function Cell({
 
 export function MatrixView({ result, configuration, onSelectCell }: Props) {
   const cols = columns(result, configuration);
+  const coverage = (
+    <SourceCoverage
+      outcomes={result.profiles.map((profile) => profile.outcome)}
+      notices={scopeCoverageNotices(result.profiles)}
+    />
+  );
   if (result.rows.length === 0)
     return (
-      <p className="multicast-notice">
-        No caller-visible multicast groups in this window. This does not
-        establish that none exist.
-      </p>
+      <section className="mc-matrix">
+        {coverage}
+        <p className="multicast-notice">{emptyScopeNotice(result.profiles)}</p>
+      </section>
     );
   return (
-    <div className="multicast-table-wrap mc-matrix">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Group</th>
-            {cols.map((column) => (
-              <th scope="col" key={column.profile.id}>
-                {column.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.map((row) => (
-            <tr key={row.group}>
-              <th scope="row">{row.group}</th>
+    <section className="mc-matrix">
+      {coverage}
+      <div className="multicast-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Group</th>
               {cols.map((column) => (
-                <Cell
-                  key={column.profile.id}
-                  row={row}
-                  column={column}
-                  latest={result.window.latest}
-                  onSelectCell={onSelectCell}
-                />
+                <th scope="col" key={column.profile.id}>
+                  {column.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {result.rows.map((row) => (
+              <tr key={row.group}>
+                <th scope="row">{row.group}</th>
+                {cols.map((column) => (
+                  <Cell
+                    key={column.profile.id}
+                    row={row}
+                    column={column}
+                    latest={result.window.latest}
+                    onSelectCell={onSelectCell}
+                  />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

@@ -126,6 +126,31 @@ test("reports blocked caller access", async ({ page }) => {
   await expect(page.getByRole("table")).toHaveCount(0);
 });
 
+test("reports blocked caller access on the scope-wide Overview", async ({
+  page,
+}) => {
+  await profiles(page, configuration.profiles);
+  await page.goto(scopeLink("multicast-blocked"));
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  await expect(page.getByText(/Stream IGMP.*blocked/)).toBeVisible();
+  await expect(page.getByText(/Stream NetFlow.*blocked/)).toBeVisible();
+  await expect(
+    page.getByText("No source in this scope completed its search"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("No caller-visible multicast groups"),
+  ).toHaveCount(0);
+  await expect(page.getByRole("table")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Matrix" }).click();
+  await expect(page.getByText(/Stream IGMP.*blocked/)).toBeVisible();
+  await expect(page.getByText(/Stream NetFlow.*blocked/)).toBeVisible();
+  await expect(
+    page.getByText("No source in this scope completed its search"),
+  ).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(0);
+});
+
 test("discards evidence when the active source verification changes", async ({
   page,
 }) => {

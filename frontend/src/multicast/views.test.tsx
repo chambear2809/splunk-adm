@@ -170,11 +170,65 @@ describe("multicast views", () => {
     expect(html).toContain("+1 more");
     expect(html).toContain("192.0.2.10");
     expect(html).toContain("+3 other reports");
-    expect(html).toContain("10 packets");
-    expect(html).toContain("1,000 bytes");
-    expect(html).toContain("sampling 1:100");
-    expect(html).toContain("before replication");
+    expect(html).toContain(
+      "spine-b · ingress: 10 packets, 1,000 bytes · sampling 1:100 · before replication · delta counters",
+    );
     expect(html).toContain("Compare with previous window");
+  });
+  it("overview keeps each exporter's counters separate", () => {
+    const html = overview(
+      scope([
+        profile("flow-a", "multicast_netflow", [
+          flow("239.1.1.1"),
+          flow("239.1.1.1", {
+            profile: "flow-b",
+            observer: "leaf-c",
+            direction: "egress",
+            packets: 7,
+            bytes: 700,
+            samplingInterval: 1,
+            replication: "after",
+            counters: "total",
+          }),
+        ]),
+      ]),
+    );
+    expect(html).toContain(
+      "spine-b · ingress: 10 packets, 1,000 bytes · sampling 1:100 · before replication · delta counters",
+    );
+    expect(html).toContain(
+      "leaf-c · egress: 7 packets, 700 bytes · sampling 1:1 · after replication · total counters",
+    );
+    // 10 + 7 packets and 1,000 + 700 bytes are not a quantity and never shown.
+    expect(html).not.toContain("17 packets");
+    expect(html).not.toContain("1,700 bytes");
+  });
+  it("overview falls back to the report count when no reporter is reported", () => {
+    const html = overview(
+      scope([
+        profile("igmp-a", "multicast_igmp", [
+          igmp("239.1.1.1", {
+            reports: 1,
+            endpointReporters: [],
+            otherReporters: 0,
+          }),
+        ]),
+      ]),
+    );
+    expect(html).toContain("1 report, reporters not reported");
+    expect(
+      overview(
+        scope([
+          profile("igmp-a", "multicast_igmp", [
+            igmp("239.1.1.1", {
+              reports: 3,
+              endpointReporters: [],
+              otherReporters: 0,
+            }),
+          ]),
+        ]),
+      ),
+    ).toContain("3 reports, reporters not reported");
   });
   it("overview reports missing counts and unavailable comparison", () => {
     const html = overview(
@@ -190,21 +244,46 @@ describe("multicast views", () => {
     expect(html).toContain("counts not reported");
     expect(html).toContain("Comparison unavailable: No earlier source.");
   });
-  it("overview shows the cap notice", () => {
-    const html = overview(
-      scope([
-        profile("igmp-a", "multicast_igmp", [igmp("239.1.1.1")], "partial", 12),
-      ]),
+  it("overview shows the cap notice with the profile's own reason", () => {
+    const capped = profile(
+      "igmp-a",
+      "multicast_igmp",
+      [igmp("239.1.1.1")],
+      "partial",
+      12,
     );
+    capped.outcome.detail = "Group summary was capped or dropped rows.";
+    const html = overview(scope([capped]));
     expect(html).toContain(
-      "12 groups not shown: the group limit was reached for igmp-a.",
+      "12 groups not shown for igmp-a. Group summary was capped or dropped rows.",
     );
+    expect(html).not.toContain("the group limit was reached");
   });
   it("overview empty state does not claim absence", () => {
     const html = overview(scope([profile("igmp-a", "multicast_igmp", [])]));
     expect(html).toContain(
       "No caller-visible multicast groups in this window. This does not establish that none exist.",
     );
+  });
+  it("overview says so when no source completed its search", () => {
+    const html = overview(
+      scope([
+        profile("igmp-a", "multicast_igmp", [], "blocked"),
+        profile("flow-a", "multicast_netflow", [], "unavailable"),
+      ]),
+    );
+    expect(html).toContain("No source in this scope completed its search");
+    expect(html).not.toContain("No caller-visible multicast groups");
+  });
+  it("matrix says so when no source completed its search", () => {
+    const html = matrix(
+      scope([
+        profile("igmp-a", "multicast_igmp", [], "blocked"),
+        profile("flow-a", "multicast_netflow", [], "unavailable"),
+      ]),
+    );
+    expect(html).toContain("No source in this scope completed its search");
+    expect(html).not.toContain("No caller-visible multicast groups");
   });
   it("failed profile column reads not covered", () => {
     const html = matrix(
@@ -233,14 +312,17 @@ describe("multicast views", () => {
     expect(html).toContain(
       'aria-label="239.1.1.1 at vlan 10 · dc1: Not covered"',
     );
+    // A cell that claims no usable evidence is never styled as recent.
+    expect(html).toContain('class="mc-cell"');
+    expect(html).not.toMatch(/class="[^"]*(recent|older)/);
   });
   it("matrix has no both state", () => {
     const html = matrix(mixed);
     expect(html).toContain(
-      'aria-label="239.1.1.1 at vlan 10 · dc1: Receiver interest"',
+      'aria-label="239.1.1.1 at vlan 10 · dc1: Receiver interest · recent evidence"',
     );
     expect(html).toContain(
-      'aria-label="239.1.1.1 at spine-b · ingress: Sender traffic"',
+      'aria-label="239.1.1.1 at spine-b · ingress: Sender traffic · older evidence"',
     );
     expect(html).toContain(
       'aria-label="239.1.1.2 at spine-b · ingress: None observed"',

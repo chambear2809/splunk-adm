@@ -5,6 +5,7 @@ import {
   multicastLink,
   parseMulticastLink,
   parseMulticastView,
+  parseProfile,
   parseProfiles,
   parseScopeLink,
   scopeLink,
@@ -68,6 +69,36 @@ describe("multicast investigation inputs", () => {
     expect(parseProfiles(undefined)).toEqual([]);
     expect(parseProfiles({ version: 1, profiles: [] })).toEqual([]);
     expect(parseProfiles(fixture)).toHaveLength(2);
+  });
+
+  it("accepts Stream's absolute PCAP capture selector and rejects SPL syntax", () => {
+    const igmp = fixture.profiles[0];
+    const captureInterface = "/opt/splunk/capture/igmp.pcap";
+    expect(parseProfile({ ...igmp, captureInterface })).toMatchObject({
+      captureInterface,
+    });
+    expect(() =>
+      parseProfile({ ...igmp, captureInterface: '/opt/capture" OR true()' }),
+    ).toThrow(/Invalid IGMP capture/);
+  });
+
+  it("limits the Stream ingress counter fields to attested ingress profiles", () => {
+    const flow = { ...fixture.profiles[1], direction: "ingress" };
+    expect(
+      parseProfile({ ...flow, counterFields: "stream-ingress" }),
+    ).toMatchObject({
+      counterFields: "stream-ingress",
+    });
+    expect(() =>
+      parseProfile({
+        ...flow,
+        direction: "egress",
+        counterFields: "stream-ingress",
+      }),
+    ).toThrow(/counter profile/);
+    expect(() => parseProfile({ ...flow, counterFields: "arbitrary" })).toThrow(
+      /counter profile/,
+    );
   });
 
   it("rejects overlapping mappings for the same capture or exporter domain", () => {

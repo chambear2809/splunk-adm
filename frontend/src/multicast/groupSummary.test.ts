@@ -74,6 +74,28 @@ const run = (profile: StreamProfile, rows: Row[], overrides?: Row) =>
   );
 
 describe("multicast group summary", () => {
+  it("filters the exact PCAP capture path indexed by Stream", () => {
+    const captureInterface = "/opt/splunk/capture/igmp.pcap";
+    const spl = buildGroupSummarySearch({ ...igmp, captureInterface }, window);
+    expect(spl).toContain(
+      `json_extract(_raw,"network_interface")="${captureInterface}"`,
+    );
+  });
+
+  it("sums the counter fields attested by the flow profile", () => {
+    const ingress = buildGroupSummarySearch(
+      { ...flow, counterFields: "stream-ingress" },
+      window,
+    );
+    expect(ingress).toContain(
+      'packets=tonumber(json_extract(_raw,"packets_in"))',
+    );
+    expect(ingress).toContain('bytes=tonumber(json_extract(_raw,"bytes_in"))');
+    expect(buildGroupSummarySearch(flow, window)).toContain(
+      'packets=tonumber(json_extract(_raw,"packets"))',
+    );
+  });
+
   it("summarises IGMP reports, leaves and group queries per group", async () => {
     const result = await run(igmp, [fixture.igmpV2Group]);
     expect(result.outcome).toMatchObject({ profile: "p1", state: "complete" });

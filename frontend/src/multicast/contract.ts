@@ -51,6 +51,14 @@ export interface FlowProfile extends Profile {
   samplingInterval: number;
   replication: "before" | "after" | "unknown";
   counters: "delta" | "total";
+  /** Exact counter field pair verified for the exporter and template. */
+  counterFields?: "stream-ingress";
+}
+
+export function flowCounterFields(profile: FlowProfile) {
+  return profile.counterFields === "stream-ingress"
+    ? { packets: "packets_in", bytes: "bytes_in" }
+    : { packets: "packets", bytes: "bytes" };
 }
 
 export interface ForwardingProfile extends Profile {

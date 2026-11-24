@@ -26,6 +26,7 @@ import { MatrixView } from "./MatrixView";
 import { OverviewView } from "./OverviewView";
 import { QuerierStrip } from "./QuerierStrip";
 import { investigateScope, type ScopeOverviewResult } from "./scopeOverview";
+import { SourceCoverage, sourceLabel } from "./SourceCoverage";
 import "./multicast.css";
 
 interface Props {
@@ -60,13 +61,6 @@ const message = (error: unknown) =>
 export const utcInput = (seconds: number) =>
   new Date(seconds * 1000).toISOString().slice(0, 19);
 export const utcSeconds = (value: string) => Date.parse(`${value}Z`) / 1000;
-
-const sourceLabel = {
-  multicast_igmp: "Stream IGMP",
-  multicast_netflow: "Stream NetFlow",
-  multicast_nxos: "NX-OS forwarding snapshots",
-  device_state: "Device forwarding state",
-} as const;
 
 function EvidenceDetails({
   evidence,
@@ -305,20 +299,7 @@ export function MulticastResults({
           </div>
         </>
       )}
-      <details open>
-        <summary>Coverage and source status</summary>
-        <ul>
-          {result.outcomes.map((item, index) => (
-            <li key={`${item.source}-${item.profile ?? ""}-${index}`}>
-              <strong>
-                {sourceLabel[item.source]}
-                {item.profile ? ` / ${item.profile}` : ""}: {item.state}
-              </strong>
-              {item.detail ? ` — ${item.detail}` : ""}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <SourceCoverage outcomes={result.outcomes} />
     </section>
   );
 }

@@ -8,6 +8,7 @@ import {
 } from "../data/searchClient";
 import {
   MAX_GROUPS,
+  flowCounterFields,
   type FlowProfile,
   type GroupSummary,
   type IgmpProfile,
@@ -43,7 +44,7 @@ function igmpSearch(profile: IgmpProfile, index: string, observer: string) {
         ? "vxlan_id"
         : undefined;
   const filters = [
-    `${raw("network_interface")}="${literal(profile.captureInterface)}"`,
+    `${raw("network_interface")}="${profile.captureInterface}"`,
     ...(segmentField
       ? [
           `(isnull(${raw(segmentField)}) OR tonumber(${raw(segmentField)})=${Number(segment.id)})`,
@@ -75,6 +76,7 @@ function igmpSearch(profile: IgmpProfile, index: string, observer: string) {
 }
 
 function flowSearch(profile: FlowProfile, index: string, observer: string) {
+  const { packets, bytes } = flowCounterFields(profile);
   const filters = [
     `${raw("exporter_ip")}="${observer}"`,
     `tostring(${raw("observation_domain_id")})="${literal(profile.observationDomain)}"`,
@@ -86,7 +88,7 @@ function flowSearch(profile: FlowProfile, index: string, observer: string) {
   return `search index="${index}" sourcetype="stream:netflow"
 | eval oversized=if(len(_raw)>${MAX_RAW},1,0)
 | where if(oversized=1,false(),${filters.join(" AND ")})
-| eval src=${raw("src_ip")}, g=${raw("dest_ip")}, packets=tonumber(${raw("packets")}), bytes=tonumber(${raw("bytes")})
+| eval src=${raw("src_ip")}, g=${raw("dest_ip")}, packets=tonumber(${raw(packets)}), bytes=tonumber(${raw(bytes)})
 | stats count AS flows count(packets) AS packet_flows count(bytes) AS byte_flows dc(src) AS sender_count values(src) AS senders sum(packets) AS packets sum(bytes) AS bytes min(_time) AS first_seen max(_time) AS last_seen BY g
 | eval group=g
 | fields - g

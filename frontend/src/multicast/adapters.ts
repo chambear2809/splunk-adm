@@ -9,6 +9,7 @@ import {
 import {
   MAX_EVIDENCE_ROWS,
   MAX_INPUT_ROWS,
+  flowCounterFields,
   type IgmpOperation,
   type MulticastEvidence,
   type StreamProfile,
@@ -42,8 +43,6 @@ const igmpFields = [
 const flowFields = [
   "src_ip",
   "dest_ip",
-  "bytes",
-  "packets",
   "exporter_ip",
   "observation_domain_id",
   "template_id",
@@ -69,9 +68,16 @@ export function buildMulticastSearch(
   const observer = literal(profile.observer);
   const group = request.group;
   const isIgmp = profile.source === "multicast_igmp";
-  const projected = (isIgmp ? igmpFields : flowFields)
-    .map((name) => `"${name}",${rawField(name)}`)
-    .join(",");
+  const projected = (isIgmp ? igmpFields : flowFields).map(
+    (name) => `"${name}",${rawField(name)}`,
+  );
+  if (!isIgmp) {
+    const { packets, bytes } = flowCounterFields(profile);
+    projected.push(
+      `"packets",${rawField(packets)}`,
+      `"bytes",${rawField(bytes)}`,
+    );
+  }
   const groupRecords = rawField("group_record_multicast_address");
   const groupRegex = group.replaceAll(".", "[.]");
   const filters = isIgmp
@@ -96,7 +102,7 @@ export function buildMulticastSearch(
 | head ${MAX_INPUT_ROWS + 1}
 | eventstats count AS input_count
 | head ${MAX_INPUT_ROWS}
-| eval payload=json_object(${projected})
+| eval payload=json_object(${projected.join(",")})
 | eval mc_epoch=_time
 | fields mc_epoch index host payload input_count
 | fields - _raw _time

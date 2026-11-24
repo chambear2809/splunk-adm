@@ -88,6 +88,26 @@ const run = (
   );
 
 describe("candidate multicast sources", () => {
+  it("filters the exact PCAP capture path indexed by Stream", () => {
+    const captureInterface = "/opt/splunk/capture/igmp.pcap";
+    const spl = buildMulticastSearch({ ...igmp, captureInterface }, request);
+    expect(spl).toContain(
+      `json_extract(_raw,"network_interface")="${captureInterface}"`,
+    );
+  });
+
+  it("projects only the attested Stream ingress counter fields", () => {
+    const spl = buildMulticastSearch(
+      { ...flow, counterFields: "stream-ingress" },
+      request,
+    );
+    expect(spl).toContain('"packets",json_extract(_raw,"packets_in")');
+    expect(spl).toContain('"bytes",json_extract(_raw,"bytes_in")');
+    expect(buildMulticastSearch(flow, request)).toContain(
+      '"packets",json_extract(_raw,"packets")',
+    );
+  });
+
   it("preserves repeated IGMP reports and distinct v3 records with exact source counts", async () => {
     const result = await run(igmp, [
       row(candidates.igmpV2),
