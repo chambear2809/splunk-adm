@@ -1,11 +1,13 @@
 {
-  "description": "Expected adm_topology rows for fixtures/raw-aci (from scenario.json fabric: 3 leaves, 2 spines, APIC; leaf eth1/49 -> spine-201 and eth1/50 -> spine-202; host LLDP neighbors).",
+  "description": "Expected adm_topology rows for fixtures/raw-aci. The six APIC inventory devices retain their qualified IDs. The three Nexus Dashboard leaves share display names with APIC leaves and remain separate inventory rows.",
   "window": {
     "earliest": 1791366000,
     "latest": 1791374400
   },
   "devices": {
     "leaf-101": {
+      "device_id": "legacy-aci:5adceb360d4f129cc8d5ffa00b15568d89639122309ea4bdddabf8b03f3fa6d0",
+      "sources": "aci",
       "role": "leaf",
       "mgmt_ip": "192.0.2.101",
       "aci_node": "pod-1/node-101",
@@ -13,29 +15,57 @@
       "fabric": "apic:192.0.2.50"
     },
     "leaf-102": {
+      "device_id": "legacy-aci:ef405db29b9d1f604f20af39a492a8798198f746faa1004703a5b7f056b6a561",
+      "sources": "aci",
       "role": "leaf",
       "mgmt_ip": "192.0.2.102",
       "aci_node": "pod-1/node-102"
     },
     "leaf-103": {
+      "device_id": "legacy-aci:b835fbbcc3fb330524eddfed28d3fbb59904845fed30876f778514ab717850f0",
+      "sources": "aci",
       "role": "leaf",
       "mgmt_ip": "192.0.2.103",
       "aci_node": "pod-1/node-103"
     },
     "spine-201": {
+      "device_id": "legacy-aci:d3da6995bd3f50dafed55b006a0638d14d145a723320869ccd441f2294565061",
+      "sources": "aci",
       "role": "spine",
       "mgmt_ip": "192.0.2.201",
       "aci_node": "pod-1/node-201"
     },
     "spine-202": {
+      "device_id": "legacy-aci:abefaa0e60675490743a1c267734b3e36ed0cace6ac005aea29da95e9dfd178c",
+      "sources": "aci",
       "role": "spine",
       "mgmt_ip": "192.0.2.202",
       "aci_node": "pod-1/node-202"
     },
     "apic1": {
+      "device_id": "legacy-aci:d5dc436a754119b3c514f51594fc621ad36ad648e8b869994421fcef3bcab7f1",
+      "sources": "aci",
       "role": "controller",
       "device_kind": "controller",
-      "mgmt_ip": "192.0.2.50"
+      "mgmt_ip": "192.0.2.50",
+      "aci_node": "pod-1/node-1"
+    }
+  },
+  "nd_devices": {
+    "leaf-101": {
+      "sources": "nd",
+      "fabric": "aci-1",
+      "device_kind": "switch"
+    },
+    "leaf-102": {
+      "sources": "nd",
+      "fabric": "aci-1",
+      "device_kind": "switch"
+    },
+    "leaf-103": {
+      "sources": "nd",
+      "fabric": "aci-1",
+      "device_kind": "switch"
     }
   },
   "links": [

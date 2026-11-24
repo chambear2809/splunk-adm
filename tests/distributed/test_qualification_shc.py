@@ -3346,17 +3346,22 @@ class DriverTests(unittest.TestCase):
 
     def topology_fixture(self):
         expected = self.driver.expected_topology
+        aci_devices = expected["devices"]
         rows = [
-            {"row_type": "device", "device_id": name, **attributes}
-            for name, attributes in expected["devices"].items()
+            {"row_type": "device", "name": name, **attributes}
+            for name, attributes in aci_devices.items()
+        ]
+        rows += [
+            {"row_type": "device", "name": name, "device_id": name, **attributes}
+            for name, attributes in expected["nd_devices"].items()
         ]
         rows += [
             {
                 "row_type": "link",
                 "link_source": source,
-                "a_device": a,
+                "a_device": aci_devices[a]["device_id"],
                 "a_interface": ai,
-                "b_device": b,
+                "b_device": aci_devices[b]["device_id"] if source == "aci" else b,
                 "b_interface": bi,
             }
             for source, a, ai, b, bi in expected["links"]
@@ -3390,7 +3395,7 @@ class DriverTests(unittest.TestCase):
             self.assertEqual(recorded.call_count, 3)
             self.assertTrue(
                 all(
-                    value["devices"] == 6 and value["links"] == 11
+                    value["devices"] == 9 and value["links"] == 11
                     for value in result.values()
                 )
             )
@@ -3418,6 +3423,20 @@ class DriverTests(unittest.TestCase):
             runner.semantic_topology(rows[1:], expected)
         rows[-1]["warnings"] = ["inventory incomplete"]
         with self.assertRaises(client.Refused):
+            runner.semantic_topology(rows, expected)
+
+    def test_topology_preserves_qualified_endpoints_with_same_display_name(self):
+        expected = self.driver.expected_topology
+        rows = self.topology_fixture()
+        link = next(row for row in rows if row.get("link_source") == "aci")
+        link["a_device"], link["b_device"] = link["b_device"], link["a_device"]
+        link["a_interface"], link["b_interface"] = (
+            link["b_interface"],
+            link["a_interface"],
+        )
+        self.assertEqual(runner.semantic_topology(rows, expected)["links"], 11)
+        link["b_device"] = "leaf-101"
+        with self.assertRaisesRegex(client.Refused, "topology links differ"):
             runner.semantic_topology(rows, expected)
 
     def v2_graph_fixture(self):

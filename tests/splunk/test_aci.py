@@ -1281,53 +1281,11 @@ class AciDataLayerTest(unittest.TestCase):
     # ---- topology ----
 
     def test_topology(self):
-        names = {
-            r["device_id"]: r.get("name", r["device_id"])
-            for r in self.topology
-            if r["row_type"] == "device"
-        }
-        devices = {
-            r.get("name", r["device_id"]): r
-            for r in self.topology
-            if r["row_type"] == "device" and r["device_id"].startswith("legacy-aci:")
-        }
-        # ND names cannot prove equivalence to native APIC identities.
-        nd_devices = {
-            r["device_id"]
-            for r in self.topology
-            if r["row_type"] == "device" and r.get("sources") == "nd"
-        }
-        self.assertEqual(nd_devices, {"leaf-101", "leaf-102", "leaf-103"})
-        self.assertEqual(set(devices), set(TOPOLOGY["devices"]))
-        for name, attrs in TOPOLOGY["devices"].items():
-            for key, value in attrs.items():
-                self.assertEqual(devices[name].get(key), value, f"{name}.{key}")
-        links = {
-            (
-                r["link_source"],
-                names.get(r["a_device"], r["a_device"]),
-                r.get("a_interface"),
-                names.get(r["b_device"], r["b_device"]),
-                r.get("b_interface") if r["link_source"] != "lldp" else None,
-            )
-            for r in self.topology
-            if r["row_type"] == "link"
-        }
+        sys.path.insert(0, str(ROOT / "tools"))
+        from qualification_shc_run import semantic_topology
 
-        def orient(link):
-            source, a, a_port, b, b_port = link
-            if source == "aci" and a > b:
-                return source, b, b_port, a, a_port
-            return link
-
-        self.assertEqual(
-            {orient(link) for link in links},
-            {orient(tuple(link)) for link in TOPOLOGY["links"]},
-        )
-        (meta,) = [r for r in self.topology if r["row_type"] == "meta"]
-        for key, value in TOPOLOGY["meta"].items():
-            self.assertEqual(meta.get(key), value, key)
-        self.assertNotIn("warnings", meta)
+        result = semantic_topology(self.topology, TOPOLOGY)
+        self.assertEqual((result["devices"], result["links"]), (9, 11))
 
 
 if __name__ == "__main__":
