@@ -26,6 +26,17 @@ class EndpointNetworkTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        deadline = time.monotonic() + 300
+        while time.monotonic() < deadline:
+            try:
+                entries = lab._json("GET", "/services/kvstore/status")["entry"]
+                if entries[0]["content"]["current"]["status"] == "ready":
+                    break
+            except (lab.LabError, OSError, IndexError, KeyError):
+                pass
+            time.sleep(3)
+        else:
+            raise AssertionError("KV Store did not become ready for Endpoint tests")
         cls.scopes = []
         cls.addClassCleanup(cls.cleanup)
 
