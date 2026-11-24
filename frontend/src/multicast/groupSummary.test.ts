@@ -87,13 +87,40 @@ describe("multicast group summary", () => {
       { ...flow, counterFields: "stream-ingress" },
       window,
     );
-    expect(ingress).toContain(
-      'packets=tonumber(json_extract(_raw,"packets_in"))',
-    );
-    expect(ingress).toContain('bytes=tonumber(json_extract(_raw,"bytes_in"))');
+    expect(ingress).toContain('raw_packets=json_extract(_raw,"packets_in")');
+    expect(ingress).toContain('raw_bytes=json_extract(_raw,"bytes_in")');
     expect(buildGroupSummarySearch(flow, window)).toContain(
-      'packets=tonumber(json_extract(_raw,"packets"))',
+      'raw_packets=json_extract(_raw,"packets")',
     );
+    expect(buildGroupSummarySearch(flow, window)).toContain(
+      'invalid_packets=case(isnull(raw_packets),0,match(tostring(raw_packets),"^[0-9]+\\\\z")',
+    );
+    expect(buildGroupSummarySearch(flow, window)).toContain(
+      'invalid_bytes=case(isnull(raw_bytes),0,match(tostring(raw_bytes),"^[0-9]+\\\\z")',
+    );
+  });
+
+  it("withholds invalid counters while retaining group coverage", async () => {
+    const result = await run(
+      flow,
+      [
+        { ...fixture.netflowGroup, invalid_packets: 1 },
+        { ...fixture.netflowGroup, group: "239.1.2.4", packets: 4, bytes: 8 },
+      ],
+      { group_count: 2 },
+    );
+    expect(result.summaries).toHaveLength(2);
+    expect(
+      result.summaries.find((summary) => summary.group === "239.1.2.3"),
+    ).toMatchObject({ senders: ["192.0.2.20", "192.0.2.21"] });
+    expect(
+      result.summaries.find((summary) => summary.group === "239.1.2.3"),
+    ).not.toHaveProperty("packets");
+    expect(
+      result.summaries.find((summary) => summary.group === "239.1.2.4"),
+    ).toMatchObject({ packets: 4, bytes: 8 });
+    expect(result.droppedGroups).toBe(0);
+    expect(result.outcome.state).toBe("partial");
   });
 
   it("summarises IGMP reports, leaves and group queries per group", async () => {
@@ -147,6 +174,13 @@ describe("multicast group summary", () => {
     expect(none).toBeLessThan(search.indexOf('"leave"', classify));
     expect(none).toBeLessThan(search.indexOf('"report"', classify));
     expect(search).toContain('| where class!="none"');
+  });
+
+  it("classifies source updates separately from leaves", () => {
+    const search = buildGroupSummarySearch(igmp, window);
+    expect(search).toContain(
+      't=23 OR (op=3 AND n=0),"leave", op=6,"source-update"',
+    );
   });
 
   it("excludes general queries from group rows", async () => {

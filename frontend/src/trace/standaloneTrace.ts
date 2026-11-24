@@ -319,6 +319,8 @@ export async function resolveTraceAddress(
   );
   if (result.rows.some((r) => r.row_type === "identity_overflow"))
     throw new Error(`${side} lookup exceeded its identity limit.`);
+  if (result.warnings.length || result.truncated)
+    throw new Error(`${side} lookup was incomplete; retry or enter an IP.`);
   const { start, end } = traceWindow(w.earliest, w.latest);
   const candidates = qualifiedEndpointRows(
     result.rows.map((row) => ({ ...row, row_type: "endpoint" })),

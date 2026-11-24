@@ -154,6 +154,39 @@ describe("trace without a built map", () => {
     ).rejects.toThrow('Destination "ghost" not found.');
   });
 
+  it.each([
+    {
+      warnings: ["Splunk truncated this search; results could be incomplete."],
+    },
+    { truncated: { shown: 1, total: 2 } },
+  ])(
+    "stops before tracing if a name lookup is incomplete (%j)",
+    async (completion) => {
+      const requests: SearchRequest[] = [];
+      const client: SearchClient = {
+        async search(request) {
+          requests.push(request);
+          return {
+            rows: [endpointRows[0]],
+            warnings: [],
+            errors: [],
+            ...completion,
+          };
+        },
+      };
+      await expect(
+        loadStandaloneTrace(
+          client,
+          { src: "win-client-01", dst: "10.20.30.40" },
+          w,
+        ),
+      ).rejects.toThrow("Source lookup was incomplete; retry or enter an IP.");
+      expect(requests.map(({ search }) => search)).toEqual([
+        "| `adm_path_trace_resolve(win-client-01,prod)`",
+      ]);
+    },
+  );
+
   it("builds endpoint nodes and keeps bare IPs traceable", () => {
     const g = endpointGraph(endpointRows, ["10.30.40.25", "203.0.113.9"]);
     expect(g.nodes.map((n) => n.id)).toEqual([

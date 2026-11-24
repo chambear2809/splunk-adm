@@ -300,6 +300,10 @@
 .atlas .multicast-page :is(.mc-axis, .mc-detail-empty, .mc-sender-list) {
   color: var(--adm-muted);
 }
+.atlas .multicast-page .mc-timeline-legend {
+  color: var(--adm-muted);
+  font-size: 0.8rem;
+}
 .atlas .multicast-page .mc-lane-axis {
   stroke: var(--adm-line);
 }
@@ -312,6 +316,10 @@
 }
 .atlas .multicast-page .mc-mark.leave {
   fill: var(--adm-surface);
+}
+.atlas .multicast-page .mc-mark.source-update {
+  fill: var(--adm-surface);
+  stroke: var(--adm-warn-icon);
 }
 .atlas .multicast-page .mc-mark.general-query {
   stroke: var(--adm-muted);

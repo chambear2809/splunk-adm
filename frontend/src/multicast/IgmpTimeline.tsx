@@ -11,7 +11,8 @@ export const UNREPORTED_SEGMENT = "Segment not reported";
 export const CHART_WIDTH = 640;
 export const CHART_PAD = 12;
 
-type MarkKind = "report" | "leave" | "group-query" | "general-query";
+type MarkKind =
+  "report" | "leave" | "source-update" | "group-query" | "general-query";
 const MARK_KIND: Record<Exclude<IgmpOperation, "query">, MarkKind> = {
   "report-v1": "report",
   "report-v2": "report",
@@ -20,8 +21,8 @@ const MARK_KIND: Record<Exclude<IgmpOperation, "query">, MarkKind> = {
   "allow-new-sources": "report",
   exclude: "report",
   leave: "leave",
-  "block-old-sources": "leave",
-  "change-to-include": "leave",
+  "block-old-sources": "source-update",
+  "change-to-include": "report",
 };
 const LANE_HEIGHT = 32;
 const MID = LANE_HEIGHT / 2;
@@ -79,7 +80,9 @@ const markKind = (item: IgmpEvidence): MarkKind =>
     ? item.queryScope === "general"
       ? "general-query"
       : "group-query"
-    : MARK_KIND[item.operation];
+    : item.operation === "change-to-include" && item.sources.length === 0
+      ? "leave"
+      : MARK_KIND[item.operation];
 
 const plural = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
@@ -99,6 +102,16 @@ function Mark({ item, x }: { item: IgmpEvidence; x: number }) {
     <title>{`${label} from ${who} at ${utc(item.timestamp)}`}</title>
   );
   const className = `mc-mark ${kind}`;
+  if (kind === "source-update")
+    return (
+      <polygon
+        data-t={item.timestamp}
+        points={`${x},${MID - 6} ${x + 6},${MID} ${x},${MID + 6} ${x - 6},${MID}`}
+        className={className}
+      >
+        {title}
+      </polygon>
+    );
   if (kind === "report" || kind === "leave")
     return (
       <circle
@@ -144,6 +157,10 @@ export function IgmpTimeline({
         {formatTime(result.request.earliest, timezone)} to{" "}
         {formatTime(result.request.latest, timezone)}
       </p>
+      <p className="mc-timeline-legend">
+        Filled circle report · hollow circle leave · diamond source update ·
+        line query
+      </p>
       {lanes.map((lane) => {
         const kinds = lane.evidence.map(markKind);
         const counted = (
@@ -154,6 +171,11 @@ export function IgmpTimeline({
         const summary = [
           counted((kind) => kind === "report", "report", "reports"),
           counted((kind) => kind === "leave", "leave", "leaves"),
+          counted(
+            (kind) => kind === "source-update",
+            "source update",
+            "source updates",
+          ),
           counted((kind) => kind.endsWith("query"), "query", "queries"),
         ].join(", ");
         return (

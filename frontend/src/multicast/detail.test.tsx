@@ -72,7 +72,7 @@ describe("multicast group detail", () => {
         igmp("block-old-sources", 2000),
       ]),
     );
-    const xs = [...html.matchAll(/data-t="(\d+)" (?:cx|x1)="([\d.]+)"/g)]
+    const xs = [...html.matchAll(/data-t="(\d+)" (?:cx|x1|points)="([\d.]+)/g)]
       .map(([, t, x]) => [Number(t), Number(x)] as const)
       .sort((a, b) => a[0] - b[0]);
     expect(xs.map(([t]) => t)).toEqual([1000, 1100, 1500, 1800, 2000]);
@@ -81,7 +81,7 @@ describe("multicast group detail", () => {
     expect(html).toContain("<title>leave from 192.0.2.10 at ");
     expect(html).toContain("1970-01-01T00:18:20Z");
     expect(html).toContain(
-      'aria-label="IGMP evidence for vlan 110 · dc1: 3 reports, 2 leaves, 0 queries"',
+      'aria-label="IGMP evidence for vlan 110 · dc1: 3 reports, 1 leave, 1 source update, 0 queries"',
     );
     expect(html).toContain('role="img"');
     expect(html).not.toMatch(FORBIDDEN);
@@ -103,6 +103,26 @@ describe("multicast group detail", () => {
     expect(html).toContain("<title>general query from unknown sender at ");
     expect(html).toContain("Segment not reported");
     expect(html).not.toMatch(FORBIDDEN);
+  });
+  it("distinguishes source updates from group leaves", () => {
+    const html = timeline(
+      result([
+        igmp("change-to-include", 1100, { sources: ["192.0.2.20"] }),
+        igmp("change-to-include", 1200, { sources: [] }),
+        igmp("block-old-sources", 1300, { sources: ["192.0.2.20"] }),
+      ]),
+    );
+    expect(html).toMatch(/<circle data-t="1100"[^>]+class="mc-mark report"/);
+    expect(html).toMatch(/<circle data-t="1200"[^>]+class="mc-mark leave"/);
+    expect(html).toMatch(
+      /<polygon data-t="1300"[^>]+class="mc-mark source-update"/,
+    );
+    expect(html).toContain(
+      "Filled circle report · hollow circle leave · diamond source update · line",
+    );
+    expect(html).toContain(
+      'aria-label="IGMP evidence for vlan 110 · dc1: 1 report, 1 leave, 1 source update, 0 queries"',
+    );
   });
   it("timeline titles a query without a reported scope", () => {
     const html = timeline(

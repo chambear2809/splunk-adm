@@ -61,7 +61,7 @@ function igmpSearch(profile: IgmpProfile, index: string, observer: string) {
 | mvexpand rec
 | eval g=mvindex(split(rec,"|"),0), op=tonumber(mvindex(split(rec,"|"),1)), n=tonumber(mvindex(split(rec,"|"),2))
 | where match(g,${MULTICAST}) OR (t=17 AND g="${GENERAL}")
-| eval class=case(t=17 AND g="${GENERAL}","general", t=17,"query", t=34 AND op=1 AND n=0,"none", t=23 OR op=6 OR (op=3 AND n=0),"leave", true(),"report")
+| eval class=case(t=17 AND g="${GENERAL}","general", t=17,"query", t=34 AND op=1 AND n=0,"none", t=23 OR (op=3 AND n=0),"leave", op=6,"source-update", true(),"report")
 | where class!="none"
 | eventstats min(_time) AS qf max(_time) AS ql BY src class
 | stats count(eval(class="report")) AS reports count(eval(class="leave")) AS leaves count(eval(class="query")) AS group_queries max(eval(if(class="leave",_time,null()))) AS last_leave max(eval(if(class="query",_time,null()))) AS last_group_query max(eval(if(class="general",_time,null()))) AS last_general_query values(eval(if(class="report",src,null()))) AS reporters values(eval(if(class="query" OR class="general",src."|".qf."|".ql,null()))) AS query_senders min(_time) AS first_seen max(_time) AS last_seen BY g
@@ -77,6 +77,9 @@ function igmpSearch(profile: IgmpProfile, index: string, observer: string) {
 
 function flowSearch(profile: FlowProfile, index: string, observer: string) {
   const { packets, bytes } = flowCounterFields(profile);
+  // Match the per-record contract used by the Detail reader.
+  const invalid = (field: string) =>
+    `case(isnull(${field}),0,match(tostring(${field}),"^[0-9]+\\\\z") AND tonumber(${field})<=${Number.MAX_SAFE_INTEGER},0,true(),1)`;
   const filters = [
     `${raw("exporter_ip")}="${observer}"`,
     `tostring(${raw("observation_domain_id")})="${literal(profile.observationDomain)}"`,
@@ -88,12 +91,14 @@ function flowSearch(profile: FlowProfile, index: string, observer: string) {
   return `search index="${index}" sourcetype="stream:netflow"
 | eval oversized=if(len(_raw)>${MAX_RAW},1,0)
 | where if(oversized=1,false(),${filters.join(" AND ")})
-| eval src=${raw("src_ip")}, g=${raw("dest_ip")}, packets=tonumber(${raw(packets)}), bytes=tonumber(${raw(bytes)})
-| stats count AS flows count(packets) AS packet_flows count(bytes) AS byte_flows dc(src) AS sender_count values(src) AS senders sum(packets) AS packets sum(bytes) AS bytes min(_time) AS first_seen max(_time) AS last_seen BY g
+| eval src=${raw("src_ip")}, g=${raw("dest_ip")}, raw_packets=${raw(packets)}, raw_bytes=${raw(bytes)}
+| eval invalid_packets=${invalid("raw_packets")}, invalid_bytes=${invalid("raw_bytes")}
+| eval packets=if(invalid_packets=0,tonumber(raw_packets),null()), bytes=if(invalid_bytes=0,tonumber(raw_bytes),null())
+| stats count AS flows count(packets) AS packet_flows count(bytes) AS byte_flows sum(invalid_packets) AS invalid_packets sum(invalid_bytes) AS invalid_bytes dc(src) AS sender_count values(src) AS senders sum(packets) AS packets sum(bytes) AS bytes min(_time) AS first_seen max(_time) AS last_seen BY g
 | eval group=g
 | fields - g
-| eval senders=mvindex(senders,0,${MAX_LIST - 1}), packets=if(packet_flows=flows,packets,null()), bytes=if(byte_flows=flows,bytes,null())
-| fields - flows packet_flows byte_flows
+| eval senders=mvindex(senders,0,${MAX_LIST - 1}), packets=if(invalid_packets=0 AND packet_flows=flows,packets,null()), bytes=if(invalid_bytes=0 AND byte_flows=flows,bytes,null())
+| fields - flows packet_flows byte_flows raw_packets raw_bytes
 | eventstats count AS group_count
 | sort 0 -last_seen
 | head ${MAX_GROUPS}`;
@@ -196,15 +201,27 @@ function parseRow(
       !senders.every((sender) => sourceAddress(sender) !== undefined)
     )
       return undefined;
-    const packets = row.packets == null ? undefined : integer(row.packets),
-      bytes = row.bytes == null ? undefined : integer(row.bytes);
+    const invalidPackets =
+        row.invalid_packets == null ? 0 : integer(row.invalid_packets),
+      invalidBytes = row.invalid_bytes == null ? 0 : integer(row.invalid_bytes);
+    if (invalidPackets === undefined || invalidBytes === undefined)
+      return undefined;
+    const packets =
+        invalidPackets === 0 && row.packets != null
+          ? integer(row.packets)
+          : undefined,
+      bytes =
+        invalidBytes === 0 && row.bytes != null
+          ? integer(row.bytes)
+          : undefined;
     if (
-      (row.packets != null && packets === undefined) ||
-      (row.bytes != null && bytes === undefined)
+      (invalidPackets === 0 && row.packets != null && packets === undefined) ||
+      (invalidBytes === 0 && row.bytes != null && bytes === undefined)
     )
       return undefined;
     return {
-      capped: senderCount > senders.length,
+      capped:
+        senderCount > senders.length || invalidPackets > 0 || invalidBytes > 0,
       summary: {
         kind: "flow",
         profile: profile.id,
@@ -408,7 +425,7 @@ export async function loadGroupSummary(
           droppedGroups > 0
             ? `Group summary was capped or contained rows that could not be validated; ${droppedGroups} groups are not shown. Coverage is incomplete.`
             : incomplete
-              ? "Some reporter, sender or query sender lists were capped or could not be validated. Coverage is incomplete."
+              ? "Some reporter, sender, query sender or counter values were capped or could not be validated. Coverage is incomplete."
               : "Caller-visible observations only. Oversized events and unrecognized layouts may be excluded.",
       },
     };
