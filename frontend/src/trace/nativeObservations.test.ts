@@ -104,6 +104,30 @@ describe("nativeObservationHops", () => {
     expect(hops[1].detail).not.toContain(":50123");
   });
 
+  it.each(["1", "2"])(
+    "qualifies %s point-time FTD records in an aggregate",
+    (count) => {
+      const hops = nativeSourceHops(
+        [
+          {
+            ...row,
+            flow_source: "ftd",
+            source_profile: "cisco_secure_firewall_estreamer",
+            point_time_records: count,
+            records: "2",
+            first_seen: "120",
+            last_seen: "121",
+          },
+        ],
+        request,
+      );
+      expect(hops[1].detail).toContain(
+        `${count} of 2 records report only a start time`,
+      );
+      expect(hops[1].detail).toContain("source timestamps");
+    },
+  );
+
   it.each([
     { scope: "other" },
     { src: "10.0.0.9" },

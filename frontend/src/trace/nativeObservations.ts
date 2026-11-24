@@ -181,6 +181,19 @@ export function nativeSourceHops(
     const ingress = interfaces(r.interface_in),
       egress = interfaces(r.interface_out);
     const references = interfaces(r.references);
+    const pointTimes = numeric(r.point_time_records);
+    const pointNote =
+      r.flow_source === "ftd" &&
+      Number.isInteger(pointTimes) &&
+      pointTimes > 0 &&
+      pointTimes <= records
+        ? ` ${pointTimes} of ${records} records report only a start time.`
+        : "";
+    const start = new Date(first * 1000).toISOString();
+    const time =
+      first === last
+        ? `source timestamp ${start}`
+        : `source timestamps ${start}–${new Date(last * 1000).toISOString()}`;
     hops.push({
       kind: "gap",
       label: "Connection to other evidence is unverified",
@@ -197,7 +210,7 @@ export function nativeSourceHops(
       seen: [...ingress, ...egress],
       ...(ingress.length ? { in: ingress.join(", ") } : {}),
       ...(egress.length ? { out: egress.join(", ") } : {}),
-      detail: `${records} ${r.direction} records for IP pair ${request.src} ↔ ${request.dst}; source timestamps ${new Date(first * 1000).toISOString()}–${new Date(last * 1000).toISOString()}. This aggregate may include separate connections. It does not prove NAT, adjacent hops, or ordering with other sources.`,
+      detail: `${records} ${r.direction} records for IP pair ${request.src} ↔ ${request.dst}; ${time}.${pointNote} This aggregate may include separate connections. It does not prove NAT, adjacent hops, or ordering with other sources.`,
       support: [profile, ...references],
     });
   }

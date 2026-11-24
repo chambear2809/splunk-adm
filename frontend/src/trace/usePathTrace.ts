@@ -148,6 +148,7 @@ export function assembleStandaloneResult(
     graph: Graph;
     rows: readonly unknown[];
     evidence: Parameters<typeof assemblePathEvidence>[2];
+    warnings?: readonly string[];
   },
 ) {
   const addresses = { ...result.addresses, scope: request.scope };
@@ -157,6 +158,12 @@ export function assembleStandaloneResult(
     result.rows,
     result.window,
   );
+  if (result.warnings?.length) {
+    scoped.trace.notes = [
+      ...scoped.trace.notes,
+      ...result.warnings.map((warning) => `Trace data quality: ${warning}`),
+    ];
+  }
   if (!result.evidence.length) return scoped;
   const trace = assemblePathEvidence(request, result.graph, result.evidence);
   const nativeHops = scoped.trace.hops.filter(

@@ -53,6 +53,9 @@ class DeviceEvidenceTest(unittest.TestCase):
         cls.authority_a = cls.tag + "-a"
         cls.authority_b = cls.tag + "-b"
         cls.exporter = "198.19." + ".".join(map(str, os.urandom(2)))
+        cls.counter_exporter = "198.18." + ".".join(map(str, os.urandom(2)))
+        cls.firewall = "203.0.113." + str(1 + os.urandom(1)[0] % 254)
+        cls.firewall_scope = cls.tag + "-firewall"
         cls.events = []
         acl = event_line(
             ROOT / "fixtures/raw-aci/aci_class.ndjson",
@@ -146,6 +149,33 @@ class DeviceEvidenceTest(unittest.TestCase):
         flow["event"].pop("src_port", None)
         flow["event"].pop("dest_port", None)
         cls.events.append(flow)
+        for offset, byte_count, packets in ((1, 100, 10), (2, -20, 2)):
+            counter = copy.deepcopy(flow)
+            counter["time"] = cls.at + offset
+            counter["event"].update(
+                exporter_ip=cls.counter_exporter,
+                protoid=6,
+                src_port=51001,
+                dest_port=443,
+                bytes=byte_count,
+                packets=packets,
+            )
+            cls.events.append(counter)
+        firewall = event_line(
+            ROOT / "fixtures/raw/ftd_estreamer.ndjson",
+            lambda row: True,
+        )
+        event = json.loads(firewall["event"])
+        event.update(DeviceIP=cls.firewall, FirstPacketSecond=cls.at)
+        firewall.update(time=cls.at, source=cls.tag, event=json.dumps(event))
+        cls.events.append(firewall)
+        bad_time = event | {
+            "FirstPacketSecond": cls.at + 1,
+            "LastPacketSecond": "malformed",
+        }
+        cls.events.append(
+            firewall | {"time": cls.at + 1, "event": json.dumps(bad_time)}
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "device-evidence.ndjson"
             path.write_text("\n".join(json.dumps(row) for row in cls.events) + "\n")
@@ -153,7 +183,7 @@ class DeviceEvidenceTest(unittest.TestCase):
         deadline = time.time() + 120
         while time.time() < deadline:
             count = lab.search(
-                f'search (index=cisco_dc OR index=netflow) source="{cls.tag}" | stats count',
+                f'search (index=cisco_dc OR index=netflow OR index=cisco_secure_fw) source="{cls.tag}" | stats count',
                 str(cls.earliest - 1),
                 str(cls.latest + 300),
             )
@@ -188,3 +218,62 @@ class DeviceEvidenceTest(unittest.TestCase):
         self.assertEqual(rows[0]["protocol"], "icmp")
         self.assertEqual(rows[0]["flows"], "1")
         self.assertNotIn("dest_port", rows[0])
+
+    def test_device_withholds_mixed_invalid_byte_counters(self):
+        (row,) = lab.search(
+            f"| `adm_device_flows({self.counter_exporter})`",
+            str(self.earliest),
+            str(self.latest),
+        )
+        self.assertEqual(row["flows"], "2", row)
+        self.assertEqual(row["packets"], "12", row)
+        self.assertEqual(row["invalid_bytes"], "1", row)
+        self.assertEqual(row["total_invalid_bytes"], "1", row)
+        self.assertFalse(row.get("bytes"), row)
+        self.assertFalse(row.get("total_bytes"), row)
+
+    def test_scoped_ftd_keeps_valid_point_observations(self):
+        from test_data_layer import DataLayerTest
+
+        DataLayerTest.lab = lab
+        DataLayerTest.wait_for_kvstore()
+        mapping = {
+            "_key": self.firewall_scope,
+            "observer_kind": "firewall",
+            "observer": self.firewall,
+            "scope": self.firewall_scope,
+            "mapping_status": "mapped",
+            "valid_from": self.earliest - 1,
+            "valid_end": self.latest + 1,
+        }
+        lab.search(
+            "| makeresults format=json data="
+            + json.dumps(json.dumps([mapping]))
+            + " | fields - _time | outputlookup append=true key_field=_key adm_observer_scope"
+        )
+        try:
+            for scope, count in ((self.firewall_scope, 1), (self.tag + "-other", 0)):
+                with self.subTest(scope=scope):
+                    observations = [
+                        row
+                        for row in lab.search(
+                            f"| `adm_path_trace(198.51.100.8,203.0.113.10,{scope})`",
+                            str(self.earliest),
+                            str(self.latest),
+                        )
+                        if row.get("flow_source") == "ftd"
+                    ]
+                    self.assertEqual(len(observations), count, observations)
+                    if observations:
+                        (row,) = observations
+                        self.assertEqual(row["records"], "1", row)
+                        self.assertEqual(row["point_time_records"], "1", row)
+                        self.assertEqual(row["first_seen"], str(self.at), row)
+                        self.assertEqual(row["last_seen"], str(self.at), row)
+        finally:
+            path = (
+                "/servicesNS/nobody/splunk_adm/storage/collections/data/"
+                f"adm_observer_scope/{self.firewall_scope}"
+            )
+            with lab._mgmt("DELETE", path):
+                pass

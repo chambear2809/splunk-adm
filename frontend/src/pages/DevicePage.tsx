@@ -228,15 +228,16 @@ export async function loadDevicePage({
             return nameDeviceInterfaces(flows, names, nxos);
           }),
         );
+  const flows = mergeDeviceFlows(device?.id ?? query, parts);
+  if (flows.invalidBytes || flows.invalidPackets)
+    warnings.push(
+      "Invalid flow counters were withheld. Counter coverage is incomplete.",
+    );
   return {
     status: "done",
     device,
     candidates,
-    flows: inferLeafEgress(
-      mergeDeviceFlows(device?.id ?? query, parts),
-      device,
-      indexTopology(topology),
-    ),
+    flows: inferLeafEgress(flows, device, indexTopology(topology)),
     exporters: deviceExporters(parts),
     warnings,
   };

@@ -12,6 +12,32 @@ import {
 import { mergeDeviceFlows } from "../trace/traceModel";
 
 describe("device flows", () => {
+  it("does not restore an invalid counter from another exporter", () => {
+    const tuple = { src: "192.0.2.1", dst: "192.0.2.2", protocol: "tcp" };
+    const valid = rowsToDeviceFlows("a", [
+      { ...tuple, flows: 1, bytes: 100, total_bytes: 100, packets: 10 },
+    ]);
+    const incomplete = rowsToDeviceFlows("b", [
+      {
+        ...tuple,
+        flows: 2,
+        bytes: 80,
+        total_bytes: 80,
+        packets: 12,
+        invalid_bytes: 1,
+      },
+    ]);
+    expect(incomplete.conversations[0].bytes).toBeUndefined();
+    const merged = mergeDeviceFlows("device", [valid, incomplete]);
+    expect(merged.conversations[0]).toMatchObject({
+      flows: 3,
+      packets: 22,
+      invalidBytes: true,
+    });
+    expect(merged.conversations[0].bytes).toBeUndefined();
+    expect(merged.totals.bytes).toBeUndefined();
+  });
+
   it("parses the demo VDS exporter and leaf ACL-log conversations", () => {
     expect(DEMO_FLOW_DEVICES).toEqual(["192.0.2.73", "pod-1/node-103"]);
     const vds = demoDeviceFlows("192.0.2.73");

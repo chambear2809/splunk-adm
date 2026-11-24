@@ -491,12 +491,16 @@ export function mergeDeviceFlows(
       }
       const richer =
         (c.bytes ?? c.flows) > (prior.bytes ?? prior.flows) ? c : prior;
+      const invalidBytes = prior.invalidBytes || c.invalidBytes;
+      const invalidPackets = prior.invalidPackets || c.invalidPackets;
       byKey.set(key, {
         ...richer,
         blocked: prior.blocked || c.blocked,
         flows: prior.flows + c.flows,
-        bytes: sum(prior.bytes, c.bytes),
-        packets: sum(prior.packets, c.packets),
+        invalidBytes,
+        invalidPackets,
+        bytes: invalidBytes ? undefined : sum(prior.bytes, c.bytes),
+        packets: invalidPackets ? undefined : sum(prior.packets, c.packets),
         drops: prior.drops + c.drops,
         permits: prior.permits + c.permits,
         interfaces: union(prior.interfaces, c.interfaces),
@@ -525,6 +529,8 @@ export function mergeDeviceFlows(
     .filter((n): n is number => n !== undefined && n > 0);
   const limit = limits.length ? Math.min(...limits) : undefined;
   const truncated = parts.some((p) => p.truncated);
+  const invalidBytes = parts.some((p) => p.invalidBytes);
+  const invalidPackets = parts.some((p) => p.invalidPackets);
   const sorted = [...byKey.values()].sort(
     (a, b) => (b.bytes ?? -1) - (a.bytes ?? -1) || b.flows - a.flows,
   );
@@ -541,10 +547,14 @@ export function mergeDeviceFlows(
         ? Math.max(byKey.size, ...parts.map((p) => p.totals.conversations))
         : byKey.size,
       flows: parts.reduce((n, p) => n + p.totals.flows, 0),
-      ...(bytes.length ? { bytes: bytes.reduce((n, b) => n + b, 0) } : {}),
+      ...(!invalidBytes && bytes.length
+        ? { bytes: bytes.reduce((n, b) => n + b, 0) }
+        : {}),
     },
     truncated,
     recordsCapped: parts.some((p) => p.recordsCapped),
+    ...(invalidBytes && { invalidBytes }),
+    ...(invalidPackets && { invalidPackets }),
   };
 }
 

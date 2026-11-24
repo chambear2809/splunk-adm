@@ -53,6 +53,40 @@ describe("device navigation window", () => {
 });
 
 describe("loadDevicePage", () => {
+  it("qualifies counter coverage when the search withholds a total", async () => {
+    const client: SearchClient = {
+      async search({ search }) {
+        const rows = search.includes("adm_device_flows")
+          ? [
+              {
+                src: "192.0.2.1",
+                dst: "192.0.2.2",
+                protocol: "tcp",
+                flows: 2,
+                packets: 12,
+                invalid_bytes: 1,
+                total_invalid_bytes: 1,
+              },
+            ]
+          : [];
+        return { rows, warnings: [], errors: [] };
+      },
+    };
+    const result = await loadDevicePage({
+      query: "203.0.113.3",
+      demo: false,
+      earliest: "100",
+      latest: "200",
+      client,
+      signal,
+    });
+    expect(result.warnings.join(" ")).toContain(
+      "Counter coverage is incomplete",
+    );
+    expect(result.flows?.totals).toEqual({ conversations: 1, flows: 2 });
+    expect(result.flows?.conversations[0].packets).toBe(12);
+  });
+
   it("resolves a demo leaf by DN and loads its flows", async () => {
     const r = await loadDevicePage({
       query: "topology/pod-1/node-103",

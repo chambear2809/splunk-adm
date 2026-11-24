@@ -7,6 +7,7 @@ import {
 import { downloadBlob } from "../download";
 import { plural, prettyBytes } from "../glossary";
 import { TimePicker } from "../map/TimePicker";
+import { resolveTime } from "../data/timeBounds";
 import { ExploreTabs, deviceURL, traceURL } from "../pages/ExploreTools";
 import { pageURL } from "../app/urlState";
 import { VirtualTable, type VirtualColumn } from "../scale/VirtualTable";
@@ -38,6 +39,21 @@ import {
 } from "./observedImpact";
 import "./impact.css";
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
+
+/** Resolve a shareable Impact window once before dispatching a live search. */
+export function resolveImpactWindow(
+  earliest: string,
+  latest: string,
+  timezone?: string,
+  now = Date.now() / 1000,
+) {
+  const start = resolveTime(earliest, timezone, now);
+  const end = resolveTime(latest, timezone, now);
+  return {
+    earliest: start === undefined ? earliest : String(Math.floor(start)),
+    latest: end === undefined ? latest : String(Math.floor(end)),
+  };
+}
 
 type Load =
   | { status: "idle" }
@@ -420,6 +436,15 @@ export function ImpactPage({
   const [scope, setScope] = useState(initial.scope ?? "");
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "idle" });
+  // Keep a relative deep-link anchored to the same cohort while the operator
+  // changes elements or retries. A new picker value creates a new window.
+  const evidenceWindow = useMemo(
+    () =>
+      demo
+        ? { earliest, latest }
+        : resolveImpactWindow(earliest, latest, timezone),
+    [demo, earliest, latest, timezone],
+  );
   const qualified = useRef<{
     key: string;
     client: SearchClient;
@@ -431,7 +456,7 @@ export function ImpactPage({
     if (typeof window === "undefined") return;
     const href = impactURL(
       elements,
-      { mode, earliest, latest, scope },
+      { mode, ...evidenceWindow, scope },
       new URLSearchParams(),
     );
     const query = href.slice(href.indexOf("?"));
@@ -441,7 +466,7 @@ export function ImpactPage({
         "",
         `${location.pathname}${query}${location.hash}`,
       );
-  }, [elements, mode, earliest, latest, scope]);
+  }, [elements, mode, scope, evidenceWindow]);
 
   useEffect(() => {
     if (!elements.length) {
@@ -453,7 +478,13 @@ export function ImpactPage({
       return;
     }
     const controller = new AbortController();
-    const key = JSON.stringify([scope, earliest, latest, timezone, nonce]);
+    const key = JSON.stringify([
+      scope,
+      evidenceWindow.earliest,
+      evidenceWindow.latest,
+      timezone,
+      nonce,
+    ]);
     const cached = qualified.current;
     const task: Promise<ImpactData> = demo
       ? loadDemoImpact(elements)
@@ -465,8 +496,7 @@ export function ImpactPage({
           ? loadLiveImpact({
               tokens: elements,
               client,
-              earliest,
-              latest,
+              ...evidenceWindow,
               scope,
               timezone,
               signal: controller.signal,
@@ -490,7 +520,7 @@ export function ImpactPage({
           }),
       );
     return () => controller.abort();
-  }, [elements, demo, client, earliest, latest, timezone, scope, nonce]);
+  }, [elements, demo, client, timezone, scope, nonce, evidenceWindow]);
 
   const data = load.status === "done" ? load.data : undefined;
   const cls = useMemo(
@@ -554,7 +584,7 @@ export function ImpactPage({
         .slice(0, 80)}.csv`,
       "text/csv;charset=utf-8",
       impactCsv(observedHead ? { ...result, headline: observedHead } : result, {
-        window: `${earliest} to ${latest}`,
+        window: `${evidenceWindow.earliest} to ${evidenceWindow.latest}`,
         source: data.source,
         generated: new Date().toISOString(),
       }),
@@ -679,7 +709,7 @@ export function ImpactPage({
                     <a
                       href={impactURL(
                         [...elements.filter((x) => x !== e.token), d.id],
-                        { mode, earliest, latest, scope },
+                        { mode, ...evidenceWindow, scope },
                       )}
                     >
                       {d.name}
@@ -917,7 +947,7 @@ export function ImpactPage({
             kind="maintenance"
             data={data}
             result={result?.mode === "fails" ? result : undefined}
-            selection={{ elements, earliest, latest, scope, demo }}
+            selection={{ elements, ...evidenceWindow, scope, demo }}
             loading={load.status === "loading"}
             denied={load.status === "error" && load.denied}
           />

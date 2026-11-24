@@ -11,6 +11,8 @@ export interface DeviceConversation {
   protocol: string;
   bytes?: number;
   packets?: number;
+  invalidBytes?: boolean;
+  invalidPackets?: boolean;
   flows: number;
   firstSeen?: number;
   lastSeen?: number;
@@ -35,6 +37,8 @@ export interface DeviceFlows {
   limit?: number;
   /** The raw record cap was reached; totals are lower bounds. */
   recordsCapped: boolean;
+  invalidBytes?: boolean;
+  invalidPackets?: boolean;
 }
 
 export const MAX_DEVICE_FLOW_ROWS = 1000;
@@ -94,8 +98,10 @@ export function rowsToDeviceFlows(device: string, rows: unknown): DeviceFlows {
       srcName: str(r.src_name),
       dstName: str(r.dst_name),
       destPort: num(r.dest_port),
-      bytes: num(r.bytes),
-      packets: num(r.packets),
+      invalidBytes: str(r.invalid_bytes) === "1" || undefined,
+      invalidPackets: str(r.invalid_packets) === "1" || undefined,
+      bytes: str(r.invalid_bytes) === "1" ? undefined : num(r.bytes),
+      packets: str(r.invalid_packets) === "1" ? undefined : num(r.packets),
       firstSeen: num(r.first_seen),
       lastSeen: num(r.last_seen),
       app: str(r.app),
@@ -111,6 +117,12 @@ export function rowsToDeviceFlows(device: string, rows: unknown): DeviceFlows {
       a.src.localeCompare(b.src) ||
       a.dst.localeCompare(b.dst),
   );
+  const invalidBytes =
+    str(total?.total_invalid_bytes) === "1" ||
+    conversations.some((c) => c.invalidBytes);
+  const invalidPackets =
+    str(total?.total_invalid_packets) === "1" ||
+    conversations.some((c) => c.invalidPackets);
   return {
     device,
     conversations,
@@ -119,12 +131,14 @@ export function rowsToDeviceFlows(device: string, rows: unknown): DeviceFlows {
       flows:
         num(total?.total_flows) ??
         conversations.reduce((n, c) => n + c.flows, 0),
-      ...(num(total?.total_bytes) !== undefined
+      ...(!invalidBytes && num(total?.total_bytes) !== undefined
         ? { bytes: num(total?.total_bytes) }
         : {}),
     },
     truncated: str(total?.truncated) === "1",
     recordsCapped: str(total?.records_capped) === "1",
+    ...(invalidBytes && { invalidBytes }),
+    ...(invalidPackets && { invalidPackets }),
     ...(num(total?.flows_limit) ? { limit: num(total?.flows_limit) } : {}),
   };
 }

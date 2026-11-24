@@ -1,7 +1,6 @@
 import {
   access,
   chmod,
-  copyFile,
   cp,
   mkdir,
   readFile,
@@ -13,17 +12,28 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import {
+  assertPackableTree,
+  copyPackableFile,
+} from "./package-tree-safety.mjs";
 
 const root = new URL("../", import.meta.url);
 process.chdir(fileURLToPath(root));
 const app = "splunk_app/splunk_adm";
+// Deployment-local state and development artifacts never ship; check_release.py
+// enforces the same set on the finished archive.
+const excludedFromStage = (source) => {
+  const path = source.replaceAll("\\", "/");
+  return (
+    /(^|\/)(\.DS_Store|\._.*|docs|local|local\.meta|\.git|node_modules|__pycache__|.*\.py[co])$/.test(
+      path,
+    ) || /^\/appserver\/static\/demo(?:\/|$)/.test(path)
+  );
+};
+await assertPackableTree(app, { excluded: excludedFromStage });
 await access(`${app}/appserver/static/adm.css`);
 await access(`${app}/appserver/static/pages/atlas.js`);
 await access(`${app}/default/data/ui/views/map.xml`);
-
-// Demo captures are a development-server feature only; the packaged app is
-// live-only and must not carry fixture files.
-await rm(`${app}/appserver/static/demo`, { recursive: true, force: true });
 
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
 const appConf = await readFile(`${app}/default/app.conf`, "utf8");
@@ -47,71 +57,66 @@ const stageRoot = "dist/stage";
 const stage = `${stageRoot}/splunk_adm`;
 await rm(stageRoot, { recursive: true, force: true });
 await mkdir(stageRoot, { recursive: true });
-// Deployment-local state and development artifacts never ship; check_release.py
-// enforces the same set on the finished archive.
-const excludedFromStage =
-  /(^|\/)(\.DS_Store|\._.*|docs|local|local\.meta|\.git|node_modules|__pycache__|.*\.py[co])$/;
 await cp(app, stage, {
   recursive: true,
-  filter: (source) =>
-    !excludedFromStage.test(source.slice(app.length).replaceAll("\\", "/")),
+  filter: (source) => !excludedFromStage(source.slice(app.length)),
 });
 // The endpoint validates against the same source registry as the frontend.
-await copyFile(
+await copyPackableFile(
   "config/deployment-health.json",
   `${stage}/bin/adm_settings_registry.json`,
 );
 await mkdir(`${stage}/docs`, { recursive: true });
-await copyFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
-await copyFile(
+await copyPackableFile("docs/DATA_LAYER.md", `${stage}/docs/DATA_LAYER.md`);
+await copyPackableFile(
   "docs/DEPLOYMENT_HEALTH.md",
   `${stage}/docs/DEPLOYMENT_HEALTH.md`,
 );
-await copyFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
-await copyFile(
+await copyPackableFile("docs/RECOVERY.md", `${stage}/docs/RECOVERY.md`);
+await copyPackableFile(
   "docs/RETENTION_MAINTENANCE.md",
   `${stage}/docs/RETENTION_MAINTENANCE.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/DNS_EVIDENCE_QUALIFICATION.md",
   `${stage}/docs/DNS_EVIDENCE_QUALIFICATION.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/DNS_EVIDENCE_SCENARIOS.md",
   `${stage}/docs/DNS_EVIDENCE_SCENARIOS.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/DNS_EVIDENCE_DESIGN.md",
   `${stage}/docs/DNS_EVIDENCE_DESIGN.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/VSPHERE_SWITCH_DESIGN.md",
   `${stage}/docs/VSPHERE_SWITCH_DESIGN.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/DNS_INGESTION_RESEARCH.md",
   `${stage}/docs/DNS_INGESTION_RESEARCH.md`,
 );
 await mkdir(`${stage}/docs/operators`, { recursive: true });
-await copyFile(
+await copyPackableFile(
   "docs/operators/dns-evidence.md",
   `${stage}/docs/operators/dns-evidence.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/operators/multicast.md",
   `${stage}/docs/operators/multicast.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/multicast-source-qualification.md",
   `${stage}/docs/multicast-source-qualification.md`,
 );
 
-await copyFile(
+await copyPackableFile(
   "docs/LATE_CATALYST_RECEIPTS.md",
   `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
 );
-await copyFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
-await copyFile(
+await copyPackableFile("docs/UPGRADES.md", `${stage}/docs/UPGRADES.md`);
+await copyPackableFile(
   "docs/CONNECTED_JOURNEYS.md",
   `${stage}/docs/CONNECTED_JOURNEYS.md`,
 );
@@ -130,10 +135,10 @@ for (const file of [
   "FEATURE_DELIVERY.md",
   "FEATURE_QUALIFICATION.json",
 ])
-  await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
+  await copyPackableFile(`docs/${file}`, `${stage}/docs/${file}`);
 for (const file of ["THOUSANDEYES_DESIGN.md", "THOUSANDEYES_OPERATIONS.md"])
-  await copyFile(`docs/${file}`, `${stage}/docs/${file}`);
-await copyFile(
+  await copyPackableFile(`docs/${file}`, `${stage}/docs/${file}`);
+await copyPackableFile(
   "docs/operators/thousandeyes.md",
   `${stage}/docs/operators/thousandeyes.md`,
 );
@@ -143,26 +148,29 @@ for (const file of [
   "thousandeyes-capabilities.md",
   "thousandeyes-operating-constraints.md",
 ])
-  await copyFile(`docs/research/${file}`, `${stage}/docs/research/${file}`);
-await copyFile(
+  await copyPackableFile(
+    `docs/research/${file}`,
+    `${stage}/docs/research/${file}`,
+  );
+await copyPackableFile(
   "docs/CISCO_CONTRACT_MIGRATION.md",
   `${stage}/docs/CISCO_CONTRACT_MIGRATION.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/CISCO_NETWORKING_QUALIFICATION.md",
   `${stage}/docs/CISCO_NETWORKING_QUALIFICATION.md`,
 );
 await mkdir(`${stage}/docs/operators`, { recursive: true });
-await copyFile(
+await copyPackableFile(
   "docs/operators/cisco-enterprise-networking.md",
   `${stage}/docs/operators/cisco-enterprise-networking.md`,
 );
-await copyFile(
+await copyPackableFile(
   "docs/operators/qualified-native-network.md",
   `${stage}/docs/operators/qualified-native-network.md`,
 );
-await copyFile("LICENSE", `${stage}/LICENSE`);
-await copyFile("NOTICE", `${stage}/NOTICE`);
+await copyPackableFile("LICENSE", `${stage}/LICENSE`);
+await copyPackableFile("NOTICE", `${stage}/NOTICE`);
 
 // The bundle embeds production dependencies; ship their license texts with it.
 // Include packages with deep JS entry points even when there is no root main.
@@ -234,6 +242,9 @@ async function normalizeModes(dir) {
   await chmod(dir, 0o755);
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
+    if (entry.isSymbolicLink() || (!entry.isDirectory() && !entry.isFile())) {
+      throw new Error(`Refusing linked or non-regular staged input: ${path}`);
+    }
     if (entry.isDirectory()) await normalizeModes(path);
     else await chmod(path, 0o644);
   }

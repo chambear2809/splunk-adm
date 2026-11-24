@@ -66,8 +66,94 @@ const graph = () =>
         ? { ...row, attr_service: lifecycleArgs.service }
         : row,
   );
+const impactWindow = { start: 1699999100, end: 1700000000 };
+const impactTrial = {
+  id: "checkout",
+  app: "Checkout",
+  journey: "Checkout",
+  actor: "browser",
+  outcome: "HTTP 200",
+  src: "198.51.100.1",
+  dst: "203.0.113.1",
+  source_port: 51001,
+  destination_port: 443,
+  start: 1699999600,
+  end: 1699999630,
+};
+const impactHop = { device: "192.0.2.11", segment: "span", hop: "Spine 1" };
+function impactFixture(search: string) {
+  if (search.includes("adm_impact_journeys")) {
+    return [
+      {
+        _raw: JSON.stringify({
+          schema_version: 2,
+          scope: "synthetic",
+          ...impactWindow,
+          devices: ["192.0.2.11", "192.0.2.12"].map((id, i) => ({
+            id,
+            name: `Spine ${i + 1}`,
+            role: "spine",
+            domain: i + 1,
+          })),
+          trials: [
+            {
+              ...impactTrial,
+              captures: { forward: "checkout-forward" },
+              exports: { forward: [] },
+              trace_hops: { forward: [impactHop] },
+            },
+          ],
+        }),
+      },
+    ];
+  }
+  if (search.includes("adm_path_evidence")) {
+    return [
+      {
+        _raw: JSON.stringify({
+          ...impactTrial,
+          schema_version: 1,
+          scope: "synthetic",
+          protocol: "tcp",
+          capture_id: "checkout-forward",
+          collected_at: impactTrial.end,
+          producer: "browser-test-fixture",
+          segments: [
+            {
+              id: impactHop.segment,
+              label: impactHop.hop,
+              source: "stream",
+              reference: "fixture-observation",
+              observed_at: impactTrial.start,
+              hops: [
+                {
+                  kind: "switch",
+                  label: impactHop.hop,
+                  device: impactHop.device,
+                  evidence: "observed",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    ];
+  }
+  return search.includes("adm_impact_stream_tuple") ? [] : undefined;
+}
 const client = (): SearchClient => ({
   search(request) {
+    window.__ADM_REQUESTS__ ??= [];
+    window.__ADM_REQUESTS__.push({
+      spl: request.search,
+      earliest: request.earliest ?? "",
+      latest: request.latest ?? "now",
+    });
+    const impactRows = params.has("impactCohort")
+      ? impactFixture(request.search)
+      : undefined;
+    if (impactRows)
+      return Promise.resolve({ rows: impactRows, warnings: [], errors: [] });
     if (request.search.startsWith("| `adm_application_catalog_read`"))
       return Promise.resolve({
         rows: [
