@@ -424,7 +424,7 @@ export function findDevices(query: string, topo: Topology): Device[] {
   // topology/pod-1/node-103/sys/... → pod-1/node-103
   const dn = /^(?:topology\/)?(pod-\d+\/node-\d+)(?:\/.*)?$/.exec(q)?.[1];
   const exact = topo.devices.filter((d) => lower(d.id) === q);
-  if (exact.length) return exact;
+  if (exact.length && exact.every((d) => q !== lower(d.name))) return exact;
   const hit = (values: (string | undefined)[]) =>
     values.map(lower).some((v) => v && (v === q || (!!dn && v === dn)));
   const named = topo.devices.filter((d) =>

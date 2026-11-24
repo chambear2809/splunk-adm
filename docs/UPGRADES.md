@@ -8,6 +8,27 @@ Apply an app update over the existing `splunk_adm` installation. Do not use `tes
 
 Before updating, back up the KV collections and record effective index and scope macros. Packaged defaults live in `default/`; operator values belong in `local/` and remain deployment-owned. Verify the live `adm_observer_scope` KV mappings, the retained legacy CSV, validity history in `adm_ip_identity`, and the other `adm_*` KV collections after the update.
 
+## ACI inventory identity and Device evidence corrections
+
+The legacy `adm_topology` and `adm_aci_node_inventory` readers now identify ACI
+switches by normalized APIC authority and native pod/node identity. Display names
+remain unchanged; canonical IDs use `legacy-aci:<digest>`. Fabric links and
+fabric LLDP use the same IDs. Existing name-based links still resolve when the
+name is unique; an ambiguous name requires selecting a specific device. Refresh
+previously loaded inventory after updating. No stored identity collection is
+rewritten by this correction, and the V2 selector remains unchanged.
+
+Device conversation summaries aggregate across scopes and now omit endpoint
+names and application labels rather than infer ownership from IP alone. They
+also show nonfatal search warnings and inventory failures. Raw addresses and
+flow counters remain available.
+
+Check effective local overrides for `adm_topology`, `adm_aci_node_inventory`,
+and `adm_device_flows(1)`: an older local definition takes precedence over the
+corrected package default. Review and update those overrides explicitly; do not
+replace an intentional V2 selector with the legacy reader. Rolling back these
+changes restores the earlier attribution and name-collision behavior.
+
 ## One-time CSV-to-KV scope migration
 
 Do this once when upgrading from a CSV-scope version. There is no automatic import or scheduled privileged migration. Pause builders and rollup, back up the current CSV and derived state, and keep viewers off the pipeline until the following verification is complete. The archive does not contain `lookups/adm_observer_scope.csv`. Splunk retains an existing deployment-local copy during the update so an administrator can read it by filename after the named lookup changes to KV; verify it against the pre-upgrade backup.

@@ -27,6 +27,7 @@ import { OverviewView } from "./OverviewView";
 import { QuerierStrip } from "./QuerierStrip";
 import { investigateScope, type ScopeOverviewResult } from "./scopeOverview";
 import { SourceCoverage, sourceLabel } from "./SourceCoverage";
+import { URL_STATE_CHANGED } from "../app/urlState";
 import "./multicast.css";
 
 interface Props {
@@ -427,6 +428,7 @@ export function MulticastPage({
       "",
       `${window.location.pathname}?${params.toString()}${window.location.hash}`,
     );
+    window.dispatchEvent(new Event(URL_STATE_CHANGED));
   };
   const abortGroup = () => {
     active.current?.abort();

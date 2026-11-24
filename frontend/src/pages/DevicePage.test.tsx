@@ -109,6 +109,56 @@ describe("loadDevicePage", () => {
     expect(r.flows?.conversations).toEqual([]);
   });
 
+  it("retains non-fatal topology, inventory, and flow warnings with flows", async () => {
+    const client: SearchClient = {
+      async search(request) {
+        if (request.search === "`adm_topology`")
+          return {
+            rows: [
+              {
+                row_type: "device",
+                device_id: "leaf-103",
+                name: "leaf-103",
+                device_kind: "switch",
+                sources: "aci",
+              },
+            ],
+            warnings: ["topology was capped"],
+            errors: [],
+          };
+        if (request.search === "| `adm_device_inventory`")
+          return { rows: [], warnings: ["inventory was capped"], errors: [] };
+        return {
+          rows: [
+            {
+              device: "leaf-103",
+              src: "192.0.2.1",
+              dst: "198.51.100.2",
+              protocol: "tcp",
+              flows: 1,
+            },
+          ],
+          warnings: ["flow search was capped"],
+          errors: [],
+        };
+      },
+    };
+    const result = await loadDevicePage({
+      query: "leaf-103",
+      demo: false,
+      client,
+      earliest: "-4h",
+      latest: "now",
+      signal,
+    });
+    expect(result.warnings).toEqual([
+      "topology was capped",
+      "inventory was capped",
+      "flow search was capped",
+    ]);
+    expect(result.flows?.conversations).toHaveLength(1);
+  });
+
   it("resolves ACI leaves and ESXi exporters from device inventory and names their interfaces", async () => {
     // adm_topology returned no ACI rows; adm_device_inventory rows mirror
     // topSystem and comp:Hv (named by IP, mgmtIp 0.0.0.0) in a live lab.

@@ -89,6 +89,21 @@ class PathTraceMacroTests(unittest.TestCase):
         self.assertNotIn("total_flows>=`adm_path_trace_limit`", body)
         self.assertEqual(body.count("head `adm_path_trace_limit`"), 0)
 
+    def test_legacy_topology_qualifies_aci_ids_without_changing_nxos_ids(self):
+        body = self.d["adm_topology"]
+        self.assertIn('"legacy-aci:".sha256(json_array("aci_topSystem"', body)
+        self.assertIn('d_group_key=if(adm_kind=="topSystem"', body)
+        self.assertIn("by d_group_key", body)
+        self.assertIn(",name), fabric=", body)
+
+    def test_device_flows_do_not_make_unscoped_ip_identity_joins(self):
+        body = self.d["adm_device_flows(1)"]
+        self.assertNotIn("lookup adm_ip_identity", body)
+        self.assertIn(
+            "Endpoint labels and app attribution are intentionally omitted",
+            self.m["adm_device_flows(1)"],
+        )
+
     def test_resolve_value_is_validated_literal(self):
         body = self.m["adm_path_trace_resolve(1)"]
         rule = re.search(r'^validation = match\(value, "(.*)"\)$', body, re.M)

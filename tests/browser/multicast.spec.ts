@@ -101,6 +101,23 @@ for (const [source, heading, address, absent] of [
   });
 }
 
+test("keeps the shared Multicast navigation link in sync after edits", async ({
+  page,
+}) => {
+  await profiles(page, configuration.profiles);
+  await page.goto(link());
+  await page.getByLabel("Sender (optional)").fill("192.0.2.21");
+  await page.getByRole("button", { name: "Investigate group" }).click();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get("mc_sender"))
+    .toBe("192.0.2.21");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Application Atlas" })
+      .getByRole("link", { name: "Multicast", exact: true }),
+  ).toHaveAttribute("href", /mc_sender=192\.0\.2\.21/);
+});
+
 test("cancels a running investigation and discards late evidence", async ({
   page,
 }) => {
