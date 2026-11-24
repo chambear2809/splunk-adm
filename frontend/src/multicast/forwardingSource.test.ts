@@ -48,7 +48,7 @@ const row = (value: unknown, time = 200) => ({
   kind: "record",
   index: "multicast",
   host: "collector-1",
-  _time: time,
+  mc_epoch: time,
   oversized: 0,
   payload: JSON.stringify(value),
 });

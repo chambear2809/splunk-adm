@@ -97,7 +97,9 @@ export function buildMulticastSearch(
 | eventstats count AS input_count
 | head ${MAX_INPUT_ROWS}
 | eval payload=json_object(${projected})
-| fields _time index host payload input_count
+| eval mc_epoch=_time
+| fields mc_epoch index host payload input_count
+| fields - _raw _time
 | eval kind="record"
 | appendpipe [| stats count AS returned_count max(input_count) AS input_count | eval kind="completion", input_count=coalesce(input_count,0)]`;
 }
@@ -158,7 +160,7 @@ function parseRow(
   } catch {
     return undefined;
   }
-  const timestamp = Number(row._time);
+  const timestamp = Number(row.mc_epoch);
   if (
     !Number.isFinite(timestamp) ||
     timestamp < request.earliest ||

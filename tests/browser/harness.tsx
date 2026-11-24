@@ -384,7 +384,7 @@ class FakeSearchClient implements SearchClient {
             kind: "record",
             index: "netflow",
             host: "atlas-nxos-snapshot",
-            _time: String(nxosCohort.observedAt),
+            mc_epoch: String(nxosCohort.observedAt),
             oversized: 0,
             payload: JSON.stringify(nxosCohort),
           },
@@ -425,7 +425,7 @@ class FakeSearchClient implements SearchClient {
             kind: "record",
             index: "netflow",
             host: "atlas-multicast-fixture",
-            _time: String(Number(request.earliest) + 1),
+            mc_epoch: String(Number(request.earliest) + 1),
             payload: JSON.stringify(payload),
           })),
           {

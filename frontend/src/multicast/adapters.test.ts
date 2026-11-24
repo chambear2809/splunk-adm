@@ -47,7 +47,7 @@ const row = (payload: unknown, host = "sensor1") => ({
   kind: "record",
   index: "multicast",
   host,
-  _time: 150,
+  mc_epoch: 150,
   oversized: 0,
   payload: JSON.stringify({
     ...(payload as object),

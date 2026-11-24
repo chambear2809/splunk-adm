@@ -72,7 +72,9 @@ export function buildForwardingSearch(
 | eventstats count AS input_count
 | head ${MAX_INPUT_ROWS}
 | eval payload=if(oversized=1,"{}",_raw)
-| fields _time index host payload oversized input_count
+| eval mc_epoch=_time
+| fields mc_epoch index host payload oversized input_count
+| fields - _raw _time
 | eval kind="record"
 | appendpipe [| stats count AS returned_count max(input_count) AS input_count | eval kind="completion",input_count=coalesce(input_count,0)]`;
 }
@@ -116,7 +118,7 @@ function parseCohort(
     return;
   const observedAt = uint(value.observedAt),
     validUntil = uint(value.validUntil),
-    indexedTime = Number(row._time);
+    indexedTime = Number(row.mc_epoch);
   if (
     !observedAt ||
     !validUntil ||

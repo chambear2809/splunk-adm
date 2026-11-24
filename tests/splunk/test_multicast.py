@@ -189,6 +189,14 @@ class MulticastRuntimeTest(unittest.TestCase):
         )
         self.assertEqual(count, 1)
         self.assertEqual(payloads, [cohort])
+        exact_rows = self.search(
+            self.build_query(
+                profile, sender=cohort["sender"], group=group, latest=anchor
+            )
+        )
+        record = next(row for row in exact_rows if row["kind"] == "record")
+        self.assertEqual(int(record["mc_epoch"]), anchor)
+        self.assertNotIn("_raw", record)
 
     def test_search_only_viewer_cannot_write_profiles_or_read_unpermitted_index(self):
         payload = self.candidates["igmpV2"] | {"network_interface": "eth0"}
