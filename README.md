@@ -2,7 +2,7 @@
 
 **Network-first application dependency mapping for Splunk:** see which systems talk, over which path, and what breaks when a device fails, built from Cisco, VMware and Kubernetes data you already collect.
 
-> Screenshots below use the repository's synthetic demo dataset (labeled **Demo data**). See [Verified on a live lab](#verified-on-a-live-lab) for real data.
+> The feature screenshots use synthetic data. See [Verified on a live lab](#verified-on-a-live-lab) for real data.
 
 ## What you can do
 
@@ -31,6 +31,18 @@
 ![Map Devices tab grouped into Leaf and Kubernetes node sections with conversation, peer, byte and blocked counts](docs/screenshots/readme/06-devices.png)
 
 See [browser performance and scale](docs/BROWSER_PERFORMANCE.md) for measured timings.
+
+**7. Investigate an IPv4 multicast group.** Open **Multicast**, select a routing scope and time window, and see which senders were observed, which segments reported IGMP interest, and where forwarding visibility ends. Select an observation to inspect its source, capture point, and limits.
+
+![Multicast investigation for group 239.1.2.3 with an observed sender, IGMPv2 and IGMPv3 receiver interest on VLAN 110, and an explicit forwarding coverage gap](docs/screenshots/readme/08-multicast-igmp.png)
+
+The illustrative tree below uses synthetic device state to show how supported links branch and where an unresolved interface ends the visible path. Live forwarding requires a qualified device-state source.
+
+![Illustrative multicast forwarding tree for 192.0.2.20 and 239.1.2.3, with a spine branching to two leaves and unresolved next hops beyond each leaf](docs/screenshots/readme/10-multicast-forwarding-illustration.png)
+
+The setup screen appears when no multicast profiles are active. See the [Multicast operator guide](docs/operators/multicast.md) for capture placement, source verification, and enablement.
+
+![Multicast setup state prompting an administrator to configure verified Stream IGMP or NetFlow profiles](docs/screenshots/readme/09-multicast-setup.png)
 
 ## Verified on a live lab
 

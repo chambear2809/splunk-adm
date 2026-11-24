@@ -40,6 +40,7 @@ export default defineConfig({
             ![
               "/applications",
               "/endpoints",
+              "/multicast",
               "/map",
               "/data_health",
               "/setup",

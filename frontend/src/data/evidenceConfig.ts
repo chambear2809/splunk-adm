@@ -292,6 +292,29 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       );
     return value as Record<string, unknown>[];
   }
+  /** The active document is an administrator attestation for optional multicast reads. */
+  async readMulticastProfileDocument(signal?: AbortSignal): Promise<unknown> {
+    const params = new URLSearchParams({
+      query: JSON.stringify({ _key: "active" }),
+      limit: "2",
+      fields: "_key,configuration",
+    });
+    const value = await this.get(
+      `storage/collections/data/adm_multicast_profiles?${params}`,
+      signal,
+    );
+    if (Array.isArray(value) && value.length === 0) return undefined;
+    if (
+      !Array.isArray(value) ||
+      value.length !== 1 ||
+      !isObject(value[0]) ||
+      value[0]._key !== "active" ||
+      typeof value[0].configuration !== "string" ||
+      value[0].configuration.length > 32768
+    )
+      throw new Error("Shared multicast source configuration is invalid.");
+    return JSON.parse(value[0].configuration) as unknown;
+  }
   async readAppDynamicsInventory(
     signal?: AbortSignal,
   ): Promise<AppDynamicsInventoryConfiguration> {
@@ -867,3 +890,4 @@ export const evidenceConfigClient: EvidenceConfigClient =
   new ToolkitEvidenceConfigClient();
 export const appDynamicsInventoryConfigClient =
   new ToolkitEvidenceConfigClient();
+export const multicastConfigClient = new ToolkitEvidenceConfigClient();

@@ -1,0 +1,212 @@
+.atlas .multicast-page {
+  box-sizing: border-box;
+  padding: clamp(1rem, 3vw, 2rem);
+  max-width: 1600px;
+  width: 100%;
+}
+.atlas .multicast-page h1,
+.atlas .multicast-page h2,
+.atlas .multicast-page h3 {
+  margin-bottom: 0.4rem;
+}
+.atlas .multicast-page p {
+  margin: 0.4rem 0 1rem;
+}
+.atlas .multicast-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: end;
+  padding: 1rem;
+  border: 1px solid var(--adm-line);
+  background: var(--adm-surface);
+  border-radius: 6px;
+}
+.atlas .multicast-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-weight: 600;
+}
+.atlas .multicast-form input,
+.atlas .multicast-form select {
+  box-sizing: border-box;
+  min-height: 2.3rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--adm-page);
+  color: var(--adm-ink);
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+}
+.atlas .multicast-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+.atlas .multicast-page button {
+  min-height: 2.3rem;
+  font: inherit;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: var(--adm-surface);
+  color: var(--adm-ink);
+}
+.atlas .multicast-actions button[type="submit"] {
+  padding-inline: 1rem;
+  border-color: var(--adm-link);
+  color: var(--adm-link);
+  font-weight: 700;
+}
+.atlas .multicast-page :is(button, input, select, summary):focus-visible {
+  outline: 2px solid var(--adm-focus);
+  outline-offset: 2px;
+}
+.atlas .multicast-notice,
+.atlas .multicast-selected {
+  padding: 0.8rem;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  border-inline-start: 3px solid var(--adm-link);
+  border-radius: 4px;
+}
+.atlas .multicast-summary {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.atlas .multicast-summary p {
+  color: var(--adm-muted);
+}
+.atlas .multicast-results details {
+  margin-block: 0.75rem 1.5rem;
+}
+.atlas .multicast-results summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.atlas .multicast-results details ul {
+  margin-block: 0.4rem;
+  padding-inline-start: 1.25rem;
+}
+.atlas .multicast-map-board {
+  margin-block: 1rem 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+  background: var(--adm-surface);
+}
+.atlas .multicast-map-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.atlas .multicast-map-heading h3 {
+  margin: 0;
+}
+.atlas .multicast-map-heading p {
+  margin: 0.25rem 0 0;
+}
+.atlas .multicast-map-heading span,
+.atlas .multicast-map-note {
+  color: var(--adm-muted);
+}
+.atlas .multicast-map {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-block: 0.85rem 0.75rem;
+}
+.atlas .multicast-map > section {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--adm-line);
+  border-radius: 6px;
+  min-width: 0;
+  background: var(--adm-page);
+}
+.atlas .multicast-map h4 {
+  margin: 0 0 0.7rem;
+}
+.atlas .multicast-map button {
+  display: block;
+  background: var(--adm-surface);
+  text-align: left;
+  width: 100%;
+  margin: 0.4rem 0;
+  overflow-wrap: anywhere;
+}
+.atlas .multicast-map small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--adm-muted);
+}
+.atlas .multicast-map :is(h5, small) {
+  font-size: 0.86rem;
+}
+.atlas .multicast-segment h5,
+.atlas .multicast-tree-group h5 {
+  margin: 0.75rem 0 0.3rem;
+  overflow-wrap: anywhere;
+}
+.atlas .multicast-segment h5 span {
+  color: var(--adm-muted);
+  font-weight: 400;
+}
+.atlas .multicast-tree-gap {
+  padding: 0.8rem;
+  border-radius: 4px;
+  border: 1px dashed var(--adm-card-border);
+}
+.atlas .multicast-tree-gap p,
+.atlas .multicast-map-board .multicast-map-note {
+  margin-bottom: 0;
+}
+.atlas .multicast-tree {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.atlas .multicast-tree .multicast-tree {
+  margin-inline-start: 0.5rem;
+  padding-inline-start: 0.5rem;
+  border-inline-start: 2px solid var(--adm-link);
+}
+.atlas .multicast-selected {
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+.atlas .multicast-selected > button {
+  float: right;
+}
+.atlas .multicast-table-wrap {
+  overflow-x: auto;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  border-radius: 6px;
+}
+.atlas .multicast-page table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.atlas .multicast-page th {
+  background: var(--adm-card-head);
+}
+.atlas .multicast-page :is(th, td):first-child {
+  width: 1%;
+  white-space: nowrap;
+}
+.atlas .multicast-page th,
+.atlas .multicast-page td {
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--adm-line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .atlas .multicast-map {
+    grid-template-columns: 1fr;
+  }
+}

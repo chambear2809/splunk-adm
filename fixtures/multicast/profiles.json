@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "profiles": [
+    {
+      "source": "multicast_igmp",
+      "id": "igmp",
+      "index": "netflow",
+      "scope": "lab:media",
+      "observer": "atlas-multicast-fixture",
+      "validFrom": 1700000000,
+      "validUntil": 4102444800,
+      "captureInterface": "eth0",
+      "segment": { "kind": "vlan", "id": "110", "domain": "lab-fabric" },
+      "placement": "endpoint",
+      "endpointReporters": ["192.0.2.10", "192.0.2.11"],
+      "proxyReporters": ["192.0.2.1"],
+      "v3Encoding": "flat-counted"
+    },
+    {
+      "source": "multicast_netflow",
+      "id": "netflow",
+      "index": "netflow",
+      "scope": "lab:media",
+      "observer": "192.0.2.1",
+      "validFrom": 1700000000,
+      "validUntil": 4102444800,
+      "observationDomain": "1",
+      "template": "256",
+      "direction": "ingress",
+      "samplingInterval": 128,
+      "replication": "after",
+      "counters": "delta"
+    }
+  ]
+}

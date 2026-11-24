@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "scope": "lab:media",
+  "group": "239.1.2.3",
+  "sender": "192.0.2.20",
+  "observedAt": 1795284157,
+  "validUntil": 1795284157,
+  "devices": [
+    { "observer": "leaf-a", "input": "lo1", "outputs": ["eth1/49", "eth1/50"] },
+    { "observer": "spine-a", "input": "eth1/2", "outputs": ["eth1/3"] },
+    { "observer": "spine-b", "input": "eth1/2", "outputs": ["eth1/4"] },
+    { "observer": "leaf-b", "input": "eth1/1", "outputs": ["nve1"] },
+    { "observer": "leaf-c", "input": "eth1/2", "outputs": ["nve1"] }
+  ],
+  "adjacencies": [
+    {
+      "from": { "observer": "leaf-a", "interface": "eth1/49" },
+      "to": { "observer": "spine-a", "interface": "eth1/2" }
+    },
+    {
+      "from": { "observer": "leaf-a", "interface": "eth1/50" },
+      "to": { "observer": "spine-b", "interface": "eth1/2" }
+    },
+    {
+      "from": { "observer": "spine-a", "interface": "eth1/3" },
+      "to": { "observer": "leaf-b", "interface": "eth1/1" }
+    },
+    {
+      "from": { "observer": "spine-b", "interface": "eth1/4" },
+      "to": { "observer": "leaf-c", "interface": "eth1/2" }
+    }
+  ]
+}

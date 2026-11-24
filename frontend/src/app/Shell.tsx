@@ -37,6 +37,7 @@ const NAV: [Section, Page, string][] = [
   ["explore", "applications", "Explore"],
   ["cases", "cases", "Cases"],
   ["map", "map", "Map"],
+  ["multicast", "multicast", "Multicast"],
   ["admin", "setup", "Admin"],
 ];
 
@@ -95,6 +96,17 @@ export function Shell({
       window.removeEventListener("popstate", sync);
     };
   }, []);
+  const navigationParams = (target: Page) => {
+    const params = new URLSearchParams(search);
+    if (page !== "multicast" && target !== "multicast") return params;
+    const selected = new URLSearchParams();
+    if (params.has("mode")) selected.set("mode", params.get("mode")!);
+    if (page === "multicast" && target === "multicast")
+      params.forEach((value, key) => {
+        if (key.startsWith("mc_")) selected.append(key, value);
+      });
+    return selected;
+  };
   const t = useSplunkTheme();
   const tokens = {
     fontFamily: t.fontFamily,
@@ -139,7 +151,7 @@ export function Shell({
         {NAV.map(([section, target, label]) => (
           <a
             key={section}
-            href={pageURL(target, new URLSearchParams(search))}
+            href={pageURL(target, navigationParams(target))}
             aria-current={SECTION_OF[page] === section ? "page" : undefined}
           >
             {label}
@@ -148,7 +160,7 @@ export function Shell({
         <span className="atlas-nav-spacer" />
         <a
           className={`health-status health-${indicator}`}
-          href={pageURL("data_health", new URLSearchParams(search))}
+          href={pageURL("data_health", navigationParams("data_health"))}
           title={indicatorLabel}
           aria-label={indicatorLabel}
         >

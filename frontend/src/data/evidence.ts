@@ -1,4 +1,5 @@
 import { strictIp } from "../drilldown";
+import type { MulticastSource } from "../multicast/contract";
 
 export const EVIDENCE_LIMITS = {
   window: 86400,
@@ -22,7 +23,7 @@ export type SupplementalSource =
   | "o11y_detector_events"
   | "appdynamics_inventory"
   | "thousandeyes";
-export type OptionalSource = DnsSource | SupplementalSource;
+export type OptionalSource = DnsSource | SupplementalSource | MulticastSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {
   client: string;

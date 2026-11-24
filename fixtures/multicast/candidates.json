@@ -1,0 +1,27 @@
+{
+  "description": "Synthetic candidates, not captured or qualified producer payloads. Parallel arrays are an explicitly attested hypothetical encoding.",
+  "igmpV2": {
+    "src_ip": "192.0.2.10",
+    "type": 22,
+    "multicast_address": "239.1.2.3"
+  },
+  "igmpV3Flat": {
+    "src_ip": "192.0.2.11",
+    "type": 34,
+    "num_groups": 2,
+    "group_record_type": [1, 2],
+    "group_record_multicast_address": ["239.1.2.3", "239.1.2.4"],
+    "group_record_num_sources": [2, 1],
+    "group_record_source_address": ["192.0.2.20", "192.0.2.21", "192.0.2.22"]
+  },
+  "netflow": {
+    "src_ip": "192.0.2.20",
+    "dest_ip": "239.1.2.3",
+    "exporter_ip": "192.0.2.1",
+    "bytes": 1024,
+    "packets": 8,
+    "observation_domain_id": 1,
+    "template_id": 256,
+    "flow_dir": 0
+  }
+}

@@ -16,6 +16,7 @@ import type {
 import {
   incompleteSearchError,
   SearchResultLimitError,
+  SearchAccessDeniedError,
 } from "../../frontend/src/data/searchClient";
 import type {
   SetupClient,
@@ -38,6 +39,8 @@ import findCapture from "../../fixtures/demo-find.json";
 import aciTopologyRows from "../../fixtures/demo-topology-aci.json";
 import vsphereRows from "../../fixtures/demo-topology-aci-vsphere.json";
 import pathTraceCapture from "../../fixtures/demo-path-trace-aci.json";
+import multicastCandidates from "../../fixtures/multicast/candidates.json";
+import nxosCohort from "../../fixtures/multicast/forwarding-cohort.json";
 
 /** adm_ip_identity rows adm_path_trace appends for the demo pair. */
 const PATH_TRACE_ENDPOINTS = [
@@ -374,6 +377,68 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (request.optionalSource === "multicast_nxos") {
+      return {
+        rows: [
+          {
+            kind: "record",
+            index: "netflow",
+            host: "atlas-nxos-snapshot",
+            _time: String(nxosCohort.observedAt),
+            oversized: 0,
+            payload: JSON.stringify(nxosCohort),
+          },
+          { kind: "completion", input_count: "1", returned_count: "1" },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    }
+    if (
+      request.optionalSource === "multicast_igmp" ||
+      request.optionalSource === "multicast_netflow"
+    ) {
+      if (faultScenario === "multicast-blocked")
+        throw new SearchAccessDeniedError();
+      if (faultScenario === "multicast-slow")
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 5000);
+          request.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(request.signal.reason);
+            },
+            { once: true },
+          );
+        });
+      const isIgmp = request.optionalSource === "multicast_igmp";
+      const payloads = isIgmp
+        ? [
+            { ...multicastCandidates.igmpV2, network_interface: "eth0" },
+            { ...multicastCandidates.igmpV3Flat, network_interface: "eth0" },
+          ]
+        : [{ ...multicastCandidates.netflow }];
+      return {
+        rows: [
+          ...payloads.map((payload) => ({
+            kind: "record",
+            index: "netflow",
+            host: "atlas-multicast-fixture",
+            _time: String(Number(request.earliest) + 1),
+            payload: JSON.stringify(payload),
+          })),
+          {
+            kind: "completion",
+            input_count: String(payloads.length),
+            returned_count: String(payloads.length),
+            oversized_count: "0",
+          },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    }
     const resolve = /adm_path_trace_resolve\(([^)]*)\)/.exec(request.search);
     if (resolve) {
       const ip = PATH_TRACE_NAMES[resolve[1]];

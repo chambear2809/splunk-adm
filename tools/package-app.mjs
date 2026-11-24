@@ -98,6 +98,15 @@ await copyFile(
   `${stage}/docs/operators/dns-evidence.md`,
 );
 await copyFile(
+  "docs/operators/multicast.md",
+  `${stage}/docs/operators/multicast.md`,
+);
+await copyFile(
+  "docs/multicast-source-qualification.md",
+  `${stage}/docs/multicast-source-qualification.md`,
+);
+
+await copyFile(
   "docs/LATE_CATALYST_RECEIPTS.md",
   `${stage}/docs/LATE_CATALYST_RECEIPTS.md`,
 );

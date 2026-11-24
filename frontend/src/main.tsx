@@ -63,8 +63,17 @@ async function mount(node: HTMLElement) {
       location.replace(pageURL("map", params));
       return;
     }
-    const { state, notice } = recoverUrlState(params, __ADM_SPLUNK_BUILD__);
-    if (notice) writeUrlState(state);
+    const graphParams =
+      page === "multicast"
+        ? new URLSearchParams(
+            params.has("mode") ? { mode: params.get("mode")! } : {},
+          )
+        : params;
+    const { state, notice } = recoverUrlState(
+      graphParams,
+      __ADM_SPLUNK_BUILD__,
+    );
+    if (notice && page !== "multicast") writeUrlState(state);
     if (
       !__ADM_SPLUNK_BUILD__ &&
       (page === "map" || page === "applications") &&

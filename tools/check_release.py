@@ -41,6 +41,11 @@ IMPACT_MANIFEST_PATH = "splunk_adm/appserver/static/impact-manifest.json"
 IMPACT_CSS_PATH = "splunk_adm/appserver/static/impact.css"
 MAX_IMPACT_GZIP_BYTES = 64 * 1024
 MAX_IMPACT_CSS_BYTES = 16 * 1024
+MULTICAST_BUNDLE_PATH = "splunk_adm/appserver/static/pages/multicast.js"
+MULTICAST_MANIFEST_PATH = "splunk_adm/appserver/static/multicast-manifest.json"
+MULTICAST_CSS_PATH = "splunk_adm/appserver/static/multicast.css"
+MAX_MULTICAST_GZIP_BYTES = 64 * 1024
+MAX_MULTICAST_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -771,6 +776,9 @@ STATIC_ALLOWLIST = frozenset(
         IMPACT_BUNDLE_PATH,
         IMPACT_MANIFEST_PATH,
         IMPACT_CSS_PATH,
+        MULTICAST_BUNDLE_PATH,
+        MULTICAST_MANIFEST_PATH,
+        MULTICAST_CSS_PATH,
     }
 )
 
@@ -818,6 +826,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "applications",
                 "map",
                 "endpoints",
+                "multicast",
                 "data_health",
                 "setup",
                 "help",
@@ -853,6 +862,8 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/VSPHERE_SWITCH_DESIGN.md",
         "splunk_adm/docs/DNS_INGESTION_RESEARCH.md",
         "splunk_adm/docs/operators/dns-evidence.md",
+        "splunk_adm/docs/operators/multicast.md",
+        "splunk_adm/docs/multicast-source-qualification.md",
         RECOVERY_DOC_PATH,
         RETENTION_DOC_PATH,
         "splunk_adm/docs/operators/qualified-native-network.md",
@@ -1007,6 +1018,49 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(
                 "Impact asset version/hash does not match the main bundle"
+            ) from exc
+    # Multicast is an independently versioned optional page. Once the main bundle
+    # registers its host, or any one asset is present, require the complete set.
+    multicast_files = {
+        MULTICAST_BUNDLE_PATH,
+        MULTICAST_MANIFEST_PATH,
+        MULTICAST_CSS_PATH,
+    }
+    multicast_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasMulticastHost", b"pages/multicast.js")
+    )
+    if multicast_registered or multicast_files.intersection(files):
+        missing = sorted(multicast_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Multicast files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[MULTICAST_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_MULTICAST_GZIP_BYTES
+        ):
+            raise ValueError("Multicast optional bundle exceeds its 64 KiB gzip budget")
+        if len(files[MULTICAST_CSS_PATH]) > MAX_MULTICAST_CSS_BYTES:
+            raise ValueError("Multicast optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[MULTICAST_MANIFEST_PATH])
+            multicast_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(multicast_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", multicast_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[MULTICAST_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[MULTICAST_CSS_PATH]).hexdigest()
+                or multicast_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or multicast_version.encode() not in files[MULTICAST_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Multicast asset version/hash does not match the main bundle"
             ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:

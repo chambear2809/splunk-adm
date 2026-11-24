@@ -957,7 +957,7 @@ try {
 
       stage = "supporting views";
       evidence.routes = {};
-      for (const name of ["applications", "data_health", "help"]) {
+      for (const name of ["applications", "data_health", "multicast", "help"]) {
         stage = `view ${name}`;
         const healthSearchStart = searchDispatches.length;
         const metadataPaths =

@@ -31,6 +31,10 @@ from tools.check_release import (
     IMPACT_MANIFEST_PATH,
     IMPACT_CSS_PATH,
     MAX_IMPACT_GZIP_BYTES,
+    MULTICAST_BUNDLE_PATH,
+    MULTICAST_MANIFEST_PATH,
+    MULTICAST_CSS_PATH,
+    MAX_MULTICAST_GZIP_BYTES,
     SETTINGS_CONFIG_FILES,
     SETTINGS_REGISTRY_PATH,
     SETTINGS_RUNTIME_FILES,
@@ -90,6 +94,26 @@ class ReleaseArchiveTests(unittest.TestCase):
         ).encode()
         return files
 
+    def _multicast_files(self):
+        files = self._files()
+        version = "d" * 24
+        files["splunk_adm/appserver/static/pages/atlas.js"] += (
+            b" __AtlasMulticastHost pages/multicast.js " + version.encode()
+        )
+        files[MULTICAST_BUNDLE_PATH] = b"multicast bundle " + version.encode()
+        files[MULTICAST_CSS_PATH] = b"multicast styles"
+        files[MULTICAST_MANIFEST_PATH] = json.dumps(
+            {
+                "schemaVersion": 1,
+                "assetVersion": version,
+                "javascriptSha256": hashlib.sha256(
+                    files[MULTICAST_BUNDLE_PATH]
+                ).hexdigest(),
+                "cssSha256": hashlib.sha256(files[MULTICAST_CSS_PATH]).hexdigest(),
+            }
+        ).encode()
+        return files
+
     def test_accepts_complete_journey_bundle(self):
         self._write_pair(self._journey_files())
         check_release(self.root / "dist", self.root / "package.json")
@@ -138,6 +162,56 @@ class ReleaseArchiveTests(unittest.TestCase):
         files[IMPACT_BUNDLE_PATH] = _incompressible(MAX_IMPACT_GZIP_BYTES + 1)
         self._write_pair(files)
         with self.assertRaisesRegex(ValueError, "Impact optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_accepts_complete_multicast_bundle(self):
+        self._write_pair(self._multicast_files())
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_multicast_registration_and_partial_assets_require_complete_set(self):
+        for missing in (
+            MULTICAST_BUNDLE_PATH,
+            MULTICAST_MANIFEST_PATH,
+            MULTICAST_CSS_PATH,
+        ):
+            with self.subTest(missing=missing):
+                files = self._multicast_files()
+                del files[missing]
+                self._write_pair(files)
+                with self.assertRaisesRegex(
+                    ValueError, "missing required Multicast files"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files[MULTICAST_CSS_PATH] = b"orphan"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required Multicast files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_multicast_tampering_and_mixed_versions(self):
+        for path in (
+            MULTICAST_BUNDLE_PATH,
+            MULTICAST_CSS_PATH,
+            MULTICAST_MANIFEST_PATH,
+            "splunk_adm/appserver/static/pages/atlas.js",
+        ):
+            with self.subTest(path=path):
+                files = self._multicast_files()
+                if path == MULTICAST_MANIFEST_PATH:
+                    files[path] = b"{}"
+                elif path.endswith("atlas.js"):
+                    files[path] = files[path].replace(b"d" * 24, b"e" * 24)
+                else:
+                    files[path] += b"tampered"
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "Multicast asset version/hash"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_multicast_bundle_has_independent_64k_gzip_budget(self):
+        files = self._multicast_files()
+        files[MULTICAST_BUNDLE_PATH] = _incompressible(MAX_MULTICAST_GZIP_BYTES + 1)
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "Multicast optional bundle exceeds"):
             check_release(self.root / "dist", self.root / "package.json")
 
     def test_journey_registration_and_partial_assets_require_complete_set(self):
@@ -315,6 +389,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "applications",
                     "map",
                     "endpoints",
+                    "multicast",
                     "data_health",
                     "setup",
                     "help",
@@ -358,6 +433,8 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/VSPHERE_SWITCH_DESIGN.md": b"vsphere design docs",
             "splunk_adm/docs/DNS_INGESTION_RESEARCH.md": b"dns research docs",
             "splunk_adm/docs/operators/dns-evidence.md": b"dns operator docs",
+            "splunk_adm/docs/operators/multicast.md": b"multicast operator docs",
+            "splunk_adm/docs/multicast-source-qualification.md": b"multicast source findings",
             "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
             "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
             "splunk_adm/default/macros.conf": (
@@ -758,9 +835,12 @@ class ReleaseArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required files"):
             check_release(self.root / "dist", self.root / "package.json")
 
-    def test_rejects_missing_endpoints_view_or_dns_docs(self):
+    def test_rejects_missing_optional_evidence_views_or_docs(self):
         for name in (
             "splunk_adm/default/data/ui/views/endpoints.xml",
+            "splunk_adm/default/data/ui/views/multicast.xml",
+            "splunk_adm/docs/operators/multicast.md",
+            "splunk_adm/docs/multicast-source-qualification.md",
             "splunk_adm/docs/DNS_EVIDENCE_QUALIFICATION.md",
             "splunk_adm/docs/DNS_EVIDENCE_SCENARIOS.md",
             "splunk_adm/docs/DNS_EVIDENCE_DESIGN.md",
