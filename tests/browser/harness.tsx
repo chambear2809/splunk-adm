@@ -407,12 +407,43 @@ class FakeSearchClient implements SearchClient {
             "abort",
             () => {
               clearTimeout(timer);
+              window.__ADM_ABORTED__ = (window.__ADM_ABORTED__ ?? 0) + 1;
               reject(request.signal.reason);
             },
             { once: true },
           );
         });
       const isIgmp = request.optionalSource === "multicast_igmp";
+      // Scope-wide group summaries: one stats row per group plus completion.
+      if (request.search.includes("AS group_count")) {
+        const seen = Number(request.earliest) + 1;
+        const record = isIgmp
+          ? {
+              group: "239.1.2.3",
+              reports: 2,
+              leaves: 0,
+              group_queries: 0,
+              reporters: ["192.0.2.10"],
+              reporter_count: 1,
+              query_senders: [],
+              query_sender_count: 0,
+            }
+          : {
+              group: "239.1.2.3",
+              senders: ["192.0.2.20"],
+              sender_count: 1,
+              packets: 10,
+              bytes: 1000,
+            };
+        return {
+          rows: [
+            { kind: "record", ...record, first_seen: seen, last_seen: seen },
+            { kind: "completion", returned_count: 1, group_count: 1 },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
       const payloads = isIgmp
         ? [
             { ...multicastCandidates.igmpV2, network_interface: "eth0" },

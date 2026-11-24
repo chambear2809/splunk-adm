@@ -323,6 +323,41 @@
   fill: var(--adm-ink);
   font-size: 11px;
 }
+.atlas .multicast-page .mc-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--adm-line);
+}
+.atlas .multicast-page .mc-tabs [role="tab"] {
+  border-color: transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+}
+.atlas .multicast-page .mc-tabs [aria-selected="true"] {
+  border-bottom-color: var(--adm-link);
+  color: var(--adm-link);
+  font-weight: 700;
+}
+.atlas .multicast-page .mc-tabs [aria-disabled="true"] {
+  color: var(--adm-muted);
+  cursor: not-allowed;
+}
+.atlas .multicast-page .mc-tab-note {
+  margin-inline-start: 0.4rem;
+  font-size: 0.78rem;
+}
+.atlas .multicast-page .mc-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 0.8rem;
+  margin-block: 1rem;
+}
+.atlas .multicast-page .mc-detail-header .multicast-form {
+  flex: 1;
+}
 @media (max-width: 700px) {
   .atlas .multicast-map {
     grid-template-columns: 1fr;

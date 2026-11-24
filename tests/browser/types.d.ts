@@ -6,5 +6,6 @@ declare global {
     __ADM_LAST_EARLIEST__?: unknown;
     __ADM_LAST_GRAPH_SEARCH__?: unknown;
     __ADM_DEPLOYMENT_READS__?: number;
+    __ADM_ABORTED__?: number;
   }
 }
