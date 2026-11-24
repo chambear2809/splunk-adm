@@ -14,6 +14,7 @@ import {
 import { settledFindResults } from "../data/findResults";
 import {
   createScopeCatalogRows,
+  catalogFreshnessWarning,
   parseCatalogRows,
   parseFindRows,
   catalogLimitMessage,
@@ -205,7 +206,11 @@ export function ApplicationsPage({
         const parsed = parseCatalogRows(result.rows);
         if (parsed.length) {
           setCatalog(parsed);
-          setCatalogWarning(result.warnings.join(" ") || undefined);
+          setCatalogWarning(
+            [...result.warnings, catalogFreshnessWarning(parsed)]
+              .filter(Boolean)
+              .join(" ") || undefined,
+          );
           return;
         }
         throw new Error("No application catalog rows were returned.");
@@ -238,11 +243,13 @@ export function ApplicationsPage({
               return;
             requireNoSearchErrors(narrowed, "Narrowed catalog search");
             if (narrowed.rows.length) {
-              setCatalog(parseCatalogRows(narrowed.rows));
+              const parsed = parseCatalogRows(narrowed.rows);
+              setCatalog(parsed);
               setCatalogWarning(
                 [
                   `Catalog narrowed to service “${narrowedService}”; metrics use each row’s last completed hour.`,
                   ...narrowed.warnings,
+                  catalogFreshnessWarning(parsed),
                 ].join(" "),
               );
             } else {

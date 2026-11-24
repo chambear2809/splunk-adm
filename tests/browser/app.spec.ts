@@ -852,6 +852,22 @@ test("catalog bookkeeping marker falls back without rendering the marker", async
   await expect(page.locator("tbody")).toContainText("batch-worker");
 });
 
+test("retained catalog rows identify an overdue writer snapshot", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=catalog-stale",
+  );
+  const stale = page
+    .getByRole("status")
+    .filter({ hasText: /Catalog snapshot is stale/i });
+  await expect(stale).toBeVisible();
+  await expect(page.locator("tbody")).toContainText("checkout");
+  await page.goto("/tests/browser/browser.html?page=applications&mode=live");
+  await expect(page.locator("tbody")).toContainText("checkout");
+  await expect(stale).toHaveCount(0);
+});
+
 test("catalog over-limit is actionable and does not fall back to scopes", async ({
   page,
 }) => {

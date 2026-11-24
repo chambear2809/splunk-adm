@@ -175,6 +175,41 @@ test("impact maintenance retains captures during refresh and clears them on deni
   ).toHaveCount(0);
 });
 
+test("native impact uses the returned cohort window for capture and export", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/planning.html?mode=impact-native");
+  const planner = page.getByRole("region", {
+    name: "Maintenance planning",
+    exact: true,
+  });
+  await expect(planner).toContainText(
+    "Potential exposure from the loaded impact capture",
+  );
+  await expect(planner).toContainText("Readiness cannot be confirmed");
+  await expect(planner).toContainText(
+    new Date(1791373400 * 1000).toISOString(),
+  );
+  await expect(
+    planner.getByRole("button", { name: "Capture before" }),
+  ).toBeEnabled();
+  await planner.getByRole("button", { name: "Capture before" }).click();
+  await expect(
+    planner.getByText("Before capture", { exact: true }),
+  ).toBeVisible();
+  const download = page.waitForEvent("download");
+  await planner
+    .getByRole("button", { name: "Download evidence", exact: true })
+    .click();
+  const exported = JSON.parse(
+    await readFile((await (await download).path())!, "utf8"),
+  );
+  expect(exported.before?.assessment).toMatchObject({
+    window: { start: 1791373400, end: 1791373700 },
+    services: [{ scope: "native-scope", topology: "unknown" }],
+  });
+});
+
 test("network baseline versions and watch evaluation use authorized references and retry withheld receipts", async ({
   page,
 }) => {

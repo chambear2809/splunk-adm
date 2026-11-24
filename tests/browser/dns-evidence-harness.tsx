@@ -6,6 +6,11 @@ import type {
   EvidenceConfigClient,
 } from "../../frontend/src/data/evidenceConfig";
 import type { SearchClient } from "../../frontend/src/data/searchClient";
+import {
+  CLOUD_FLOW_PROJECTION,
+  parseCloudFlowLine,
+} from "../../frontend/src/data/cloudFlowEvidence";
+import flowLogs from "../../fixtures/cloud-flow/records-v5.json";
 import stream from "../../fixtures/dns/stream-transaction.json";
 import "../../frontend/src/styles.css";
 
@@ -56,6 +61,33 @@ const config: EvidenceConfiguration = {
     mappings: [],
   })),
 };
+if (fault === "cloud-cap") {
+  config.supplemental = [
+    ...(config.supplemental ?? []).filter(
+      (item) => item.source !== "aws_vpc_flow",
+    ),
+    {
+      source: "aws_vpc_flow",
+      state: "active",
+      indexes: ["aws_flow"],
+      authorities: ["collector-a"],
+      schemaQualified: true,
+      staleAfterSeconds: 3600,
+      mappings: [
+        {
+          observer_kind: "aws_vpc_flow",
+          observer: "collector-a",
+          scope: "prod",
+          cluster: "",
+          mapping_status: "verified",
+          account_id: "123456789012",
+          region: "us-east-1",
+          vpc_id: "vpc-0abc1234",
+        },
+      ],
+    },
+  ];
+}
 const configClient: EvidenceConfigClient = {
   read: async () => structuredClone(config),
 };
@@ -66,6 +98,50 @@ const client: SearchClient = {
     request.onLifecycle?.({ state: "creating" });
     request.onLifecycle?.({ state: "created", sid: "mock-id" });
     try {
+      if (
+        fault === "cloud-cap" &&
+        request.search.includes('sourcetype="aws:vpcflow:v5"')
+      ) {
+        const status = !request.search.includes("192.0.2.10");
+        const record = flowLogs.records.find(
+          (row) =>
+            row.id === (status ? "skipped-capture-interval" : "accepted-flow"),
+        )!;
+        const fields = parseCloudFlowLine(
+          record.raw.replaceAll("10.0.1.25", "192.0.2.10"),
+        );
+        const projection = Object.fromEntries(
+          CLOUD_FLOW_PROJECTION.map(([field, column]) => [
+            column,
+            fields[field],
+          ]),
+        );
+        const count = status ? 64 : 1;
+        return {
+          rows: [
+            ...Array.from({ length: count }, (_, i) => ({
+              ...projection,
+              kind: "supplemental_record",
+              flow_field_count: 29,
+              host: "collector-a",
+              index: "aws_flow",
+              event_fingerprint: i.toString(16).padStart(64, "0"),
+              event_time_epoch: fields.start,
+              _indextime: "1791373500",
+            })),
+            {
+              kind: "supplemental_completion",
+              schema_version: 1,
+              input_count: status ? 65 : 1,
+              returned_count: count,
+              input_capped: 0,
+              oversized: 0,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
       if (request.search.includes("dns_completion")) {
         if (fault === "denied") throw Error("caller permission denied");
         if (fault === "slow")

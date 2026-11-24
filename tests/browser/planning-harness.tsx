@@ -9,7 +9,12 @@ import { toolkitDefault } from "../../frontend/src/app/interop";
 import { Shell } from "../../frontend/src/app/Shell";
 import { ImpactMaintenancePlanner } from "../../frontend/src/maintenance/ImpactMaintenancePlanner";
 import type { ImpactData } from "../../frontend/src/impact/data";
-import type { FailsResult } from "../../frontend/src/impact/model";
+import { failsImpact, type FailsResult } from "../../frontend/src/impact/model";
+import {
+  observedImpactClassifier,
+  observedImpactData,
+} from "../../frontend/src/impact/observedImpact";
+import type { ObservedImpactEvidence } from "../../frontend/src/impact/observedEvidence";
 import { MaintenancePlanner } from "../../frontend/src/maintenance/MaintenancePlanner";
 import type {
   AssessmentInput,
@@ -222,6 +227,39 @@ const syntheticImpact = (later: boolean): ImpactData =>
       },
     },
   }) as unknown as ImpactData;
+function nativeImpact() {
+  const device = "192.0.2.1";
+  const cohort: ObservedImpactEvidence = {
+    schema_version: 1,
+    scope: "native-scope",
+    start: base,
+    end: base + 300,
+    devices: [{ id: device, name: "native-leaf-a", role: "leaf", domain: 1 }],
+    trials: [
+      {
+        id: "checkout",
+        journey: "Checkout",
+        app: "Synthetic checkout",
+        actor: "browser",
+        outcome: "HTTP response logged",
+        src: "192.0.2.20",
+        dst: "192.0.2.30",
+        source_port: 32002,
+        destination_port: 443,
+        start: base + 20,
+        end: base + 30,
+        captures: { forward: "checkout-forward" },
+        observations: { forward: [device], reverse: [] },
+        exports: { forward: [device], reverse: [] },
+        traceHops: { forward: [], reverse: [] },
+        linkedCaptures: [],
+      },
+    ],
+    receipts: new Map(),
+    native: [],
+  };
+  return observedImpactData(cohort, ["native-leaf-a"]);
+}
 const syntheticFails = {
   rows: [
     {
@@ -232,10 +270,18 @@ const syntheticFails = {
   ],
 } as unknown as FailsResult;
 function ImpactReplay() {
+  const native = mode === "impact-native";
   const [phase, setPhase] = useState<
     "initial" | "loading" | "updated" | "denied"
   >("initial");
-  const [data, setData] = useState(() => syntheticImpact(false));
+  const [data, setData] = useState(() =>
+    native ? nativeImpact() : syntheticImpact(false),
+  );
+  const result = data.observed
+    ? failsImpact(data.elements, data.conversations, data.ctx, {
+        cls: observedImpactClassifier(data.ctx, data.observed),
+      })
+    : syntheticFails;
   return (
     <ThemeProvider
       family="enterprise"
@@ -251,7 +297,7 @@ function ImpactReplay() {
           <button
             type="button"
             onClick={() => {
-              setData(syntheticImpact(true));
+              setData(native ? nativeImpact() : syntheticImpact(true));
               setPhase("updated");
             }}
           >
@@ -262,14 +308,14 @@ function ImpactReplay() {
           </button>
           <ImpactMaintenancePlanner
             data={data}
-            result={syntheticFails}
+            result={result}
             loading={phase === "loading"}
             denied={phase === "denied"}
             selection={{
-              elements: ["synthetic-leaf-a"],
+              elements: [native ? "native-leaf-a" : "synthetic-leaf-a"],
               earliest: "-5m",
-              scope: "synthetic-scope",
-              demo: true,
+              scope: native ? "native-scope" : "synthetic-scope",
+              demo: !native,
             }}
           />
         </main>
@@ -359,7 +405,7 @@ function Replay() {
   );
 }
 createRoot(document.getElementById("root")!).render(
-  mode === "impact" ? (
+  mode === "impact" || mode === "impact-native" ? (
     <ImpactReplay />
   ) : mode === "network" ? (
     <NetworkReplay />

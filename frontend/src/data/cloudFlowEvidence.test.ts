@@ -83,14 +83,14 @@ function projectedRow(
   };
 }
 
-function completion(rows: Record<string, unknown>[]) {
+function completion(rows: Record<string, unknown>[], inputCount = rows.length) {
   return {
     rows: [
       ...rows.map((row) => ({ ...row, kind: "supplemental_record" })),
       {
         kind: "supplemental_completion",
         schema_version: "1",
-        input_count: String(rows.length),
+        input_count: String(inputCount),
         returned_count: String(rows.length),
         input_capped: "0",
         oversized: "0",
@@ -182,7 +182,11 @@ describe("AWS VPC Flow Logs v5 contract", () => {
     }
     expect(search).toContain("flow_pkt_srcaddr");
     expect(search).toContain("flow_pkt_dstaddr");
-    expect(search).toContain('flow_log_status IN ("NODATA","SKIPDATA")');
+    expect(search).toContain('NOT (flow_log_status IN ("NODATA","SKIPDATA"))');
+    const status = buildCloudFlowSearch(source, selection, true);
+    expect(status).toContain('AND flow_log_status IN ("NODATA","SKIPDATA")');
+    expect(status).not.toContain("10.0.1.25");
+    expect(status).toContain("| head 64");
     expect(search).toContain("flow_start<=1791373660 AND flow_end>=1791373340");
     expect(search).toContain("| head 10001");
     expect(search).toContain("| head 64");
@@ -406,8 +410,17 @@ describe("AWS VPC Flow Logs v5 contract", () => {
 
   it("delegates bounded execution and exact completion to the shared loader", async () => {
     const record = projectedRow(raw("accepted-flow"));
+    const statuses = Array.from({ length: 64 }, (_, i) =>
+      projectedRow(raw("skipped-capture-interval"), {
+        event_fingerprint: (i + 1).toString(16).padStart(64, "0"),
+      }),
+    );
+    const bounded = completion(statuses, 65);
     const client: SearchClient = {
-      search: vi.fn(async () => completion([record])),
+      search: vi
+        .fn()
+        .mockResolvedValueOnce(completion([record]))
+        .mockResolvedValueOnce(bounded),
     };
     const result = await loadCloudFlowEvidence(
       client,
@@ -415,16 +428,46 @@ describe("AWS VPC Flow Logs v5 contract", () => {
       new AbortController().signal,
       configurationClient,
     );
-    expect(client.search).toHaveBeenCalledTimes(1);
-    const request = vi.mocked(client.search).mock.calls[0][0];
-    expect(request.optionalSource).toBe("aws_vpc_flow");
-    expect(request.earliest).toBe("1791372740");
-    expect(request.latest).toBe("1791373660");
-    expect(request.maxRows).toBe(65);
+    expect(client.search).toHaveBeenCalledTimes(2);
+    for (const [request] of vi.mocked(client.search).mock.calls) {
+      expect(request.optionalSource).toBe("aws_vpc_flow");
+      expect(request.earliest).toBe("1791372740");
+      expect(request.latest).toBe("1791373660");
+      expect(request.maxRows).toBe(65);
+    }
     expect(result.state).toBe("complete");
     expect(result.inputCount).toBe(1);
+    expect(result.outputCapped).toBe(false);
     expect(result.records).toHaveLength(1);
     expect(result.records[0].attribution).toBe("context_only");
+    expect(result.captureStatus).toMatchObject({
+      state: "complete",
+      inputCount: 65,
+      outputCapped: true,
+      rejected: 0,
+    });
+    expect(result.captureStatus?.records).toHaveLength(64);
+    expect(
+      result.captureStatus?.records.every(
+        (row) => row.recordClass === "capture_status",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps verified endpoint flows when only capture status search fails", async () => {
+    const search = vi
+      .fn()
+      .mockResolvedValueOnce(completion([projectedRow(raw("accepted-flow"))]))
+      .mockRejectedValueOnce(new Error("Capture status search failed."));
+    const result = await loadCloudFlowEvidence(
+      { search },
+      selection,
+      new AbortController().signal,
+      configurationClient,
+    );
+    expect(result.state).toBe("complete");
+    expect(result.records).toHaveLength(1);
+    expect(result.captureStatus?.state).toBe("unavailable");
   });
 
   it("does not dispatch staged or active-but-unqualified sources", async () => {

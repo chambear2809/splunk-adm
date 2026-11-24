@@ -37,9 +37,18 @@ export function ImpactMaintenancePlanner({
       setSnapshot(undefined);
       return;
     }
-    if (!data?.graph || !result) return;
-    const start = Date.parse(data.graph.window.start) / 1000,
-      end = Date.parse(data.graph.window.end) / 1000;
+    if (!data || !result) return;
+    const observed = data.observed;
+    const start = observed
+        ? observed.start
+        : data.graph
+          ? Date.parse(data.graph.window.start) / 1000
+          : NaN,
+      end = observed
+        ? observed.end
+        : data.graph
+          ? Date.parse(data.graph.window.end) / 1000
+          : NaN;
     if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
       return;
     setSnapshot({
@@ -49,7 +58,10 @@ export function ImpactMaintenancePlanner({
         id: `impact:${key}`,
         capturedAt: Date.now() / 1000,
         window: { start, end },
-        scope: selection.scope || (selection.demo ? "synthetic-demo" : ""),
+        scope:
+          observed?.scope ||
+          selection.scope ||
+          (selection.demo ? "synthetic-demo" : ""),
       }),
     });
   }, [data, result, key, denied, selection.demo, selection.scope]);

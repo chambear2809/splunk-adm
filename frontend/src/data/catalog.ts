@@ -21,6 +21,23 @@ export interface CatalogRow extends GraphArgs {
   identity_contract?: "qualified_v2";
   identityContext?: IdentityContext;
 }
+
+/**
+ * The catalog writer deliberately retains the last complete snapshot when an
+ * hourly refresh is incomplete.  Keep showing that snapshot, but make the
+ * retention visible once the writer's update timestamp is outside its normal
+ * one-hour cadence plus a short publication grace window.
+ */
+export function catalogFreshnessWarning(
+  rows: readonly Pick<CatalogRow, "updated">[],
+  now = Math.floor(Date.now() / 1000),
+): string | undefined {
+  if (!rows.length || rows.some(({ updated }) => !Number.isFinite(updated)))
+    return "Catalog freshness is unknown; check the catalog writer.";
+  if (rows.some(({ updated = now }) => now - updated > 75 * 60))
+    return "Catalog snapshot is stale; metrics may reflect an earlier completed hour.";
+  return undefined;
+}
 export type FindRow = Pick<
   CatalogRow,
   "_key" | "service" | "environment" | "cluster" | "namespace"

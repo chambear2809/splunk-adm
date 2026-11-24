@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { loadCloudFlowEvidence } from "./data/cloudFlowEvidence";
+import {
+  loadCloudFlowEvidence,
+  type CloudFlowResult,
+} from "./data/cloudFlowEvidence";
 import {
   evidenceConfigClient,
   type EvidenceConfigClient,
 } from "./data/evidenceConfig";
-import type { CloudFlowObservation } from "./data/cloudFlowEvidence";
 import type { EvidenceSelection } from "./data/evidence";
-import type { SupplementalResult } from "./data/supplementalEvidence";
 import type { SearchClient } from "./data/searchClient";
 
 function timestamp(value: number): string {
@@ -22,8 +23,7 @@ export function CloudFlowEvidencePanel({
   client: SearchClient;
   configurationClient?: EvidenceConfigClient;
 }) {
-  const [result, setResult] =
-    useState<SupplementalResult<CloudFlowObservation>>();
+  const [result, setResult] = useState<CloudFlowResult>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const generation = useRef(0);
@@ -70,7 +70,9 @@ export function CloudFlowEvidencePanel({
     }
   };
 
-  const statusCounts = result?.records.reduce(
+  const capture = result?.captureStatus;
+  const records = [...(result?.records ?? []), ...(capture?.records ?? [])];
+  const statusCounts = capture?.records.reduce(
     (counts, record) => {
       if (record.logStatus === "NODATA") counts.noData++;
       if (record.logStatus === "SKIPDATA") counts.skipData++;
@@ -85,12 +87,6 @@ export function CloudFlowEvidencePanel({
       aria-label="Optional AWS VPC Flow Logs evidence"
     >
       <h3>AWS VPC Flow Logs</h3>
-      <p>
-        On-demand, scoped network observations. Flow records describe an
-        aggregation interval; accepted traffic does not prove application
-        success, and these records do not establish historical resource
-        ownership.
-      </p>
       <button type="button" onClick={() => void load()} disabled={busy}>
         {result ? "Refresh Flow Logs evidence" : "Inspect Flow Logs evidence"}
       </button>{" "}
@@ -105,10 +101,7 @@ export function CloudFlowEvidencePanel({
           : (error ??
             (result
               ? result.state === "complete"
-                ? result.records.length +
-                  " visible source records; " +
-                  result.inputCount +
-                  " matching or capture-status inputs."
+                ? `${result.records.length} visible endpoint flow records; ${result.inputCount} flow inputs.`
                 : "Source state: " + result.state + "."
               : "AWS VPC Flow Logs remain off unless an administrator activates a schema-qualified source."))}
       </p>
@@ -130,9 +123,16 @@ export function CloudFlowEvidencePanel({
             <p>
               Input cap: {result.inputCapped ? "reached" : "not reached"}.
               Display cap: {result.outputCapped ? "reached" : "not reached"}.
-              Rejected rows: {result.rejected}. Oversized rows:{" "}
-              {result.oversized}. NODATA records: {statusCounts?.noData ?? 0}.
-              SKIPDATA records: {statusCounts?.skipData ?? 0}.
+              Rejected flow rows: {result.rejected}. Oversized rows:{" "}
+              {result.oversized}.
+            </p>
+          )}
+          {capture && (
+            <p>
+              Capture-wide status:{" "}
+              {capture.state === "complete"
+                ? `${capture.inputCount} inputs, input cap ${capture.inputCapped ? "reached" : "not reached"}, display cap ${capture.outputCapped ? "reached" : "not reached"}. Visible NODATA: ${statusCounts?.noData ?? 0}. Visible SKIPDATA: ${statusCounts?.skipData ?? 0}. Rejected: ${capture.rejected}.`
+                : "unavailable."}
             </p>
           )}
           <p>
@@ -140,12 +140,10 @@ export function CloudFlowEvidencePanel({
             {timestamp(result.inspectedWindow.end)}. Configuration{" "}
             {result.configurationFingerprint.slice(0, 12)}.
           </p>
-          {result.records.length ? (
+          {records.length ? (
             <div className="dns-table-scroll">
               <table>
-                <caption>
-                  AWS VPC Flow Logs source records. Counters remain per record.
-                </caption>
+                <caption>AWS VPC Flow Logs source records</caption>
                 <thead>
                   <tr>
                     <th>Record / interval</th>
@@ -156,7 +154,7 @@ export function CloudFlowEvidencePanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {result.records.map((record, index) => (
+                  {records.map((record, index) => (
                     <tr
                       key={
                         record.authority +
@@ -197,9 +195,9 @@ export function CloudFlowEvidencePanel({
                         {record.action} · {record.logStatus}
                         <br />
                         {record.action === "ACCEPT"
-                          ? "Allowed at the recorded network policy point; application outcome unknown."
+                          ? "Allowed at this policy point."
                           : record.action === "REJECT"
-                            ? "Rejected at a network policy point; exact cause and application outcome unknown."
+                            ? "Rejected at this policy point."
                             : "No action value reported."}
                       </td>
                       <td>
@@ -219,7 +217,6 @@ export function CloudFlowEvidencePanel({
                         ENI {record.interfaceId ?? "—"} · instance{" "}
                         {record.instanceId ?? "—"}
                         <br />
-                        Context only · historical ENI ownership unavailable
                       </td>
                     </tr>
                   ))}
@@ -227,10 +224,7 @@ export function CloudFlowEvidencePanel({
               </table>
             </div>
           ) : (
-            <p>
-              No visible matching flow or capture-status records. This does not
-              establish that the selected endpoint had no traffic.
-            </p>
+            <p>No endpoint flows or capture status returned.</p>
           )}
           <ul>
             {result.coverage.map((item) => (

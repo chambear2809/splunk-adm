@@ -1,6 +1,33 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("optional DNS and scoped endpoint investigations", () => {
+  test("a capped Flow Logs status search leaves matching endpoint flows visible", async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/dns-evidence.html?fault=cloud-cap");
+    await page
+      .getByRole("button", { name: "Investigate", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Inspect Flow Logs evidence" })
+      .click();
+    const panel = page.getByRole("region", {
+      name: "Optional AWS VPC Flow Logs evidence",
+    });
+    await expect(panel.getByRole("status")).toHaveText(
+      "1 visible endpoint flow records; 1 flow inputs.",
+    );
+    await expect(
+      panel.getByText(/Capture-wide status: 65 inputs.*display cap reached/),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("row").filter({ hasText: "Selected address matched" }),
+    ).toHaveCount(1);
+    await expect(
+      panel.getByRole("row").filter({ hasText: "SKIPDATA" }),
+    ).toHaveCount(64);
+  });
+
   test("keeps optional sources together and isolates an unselected source from traffic", async ({
     page,
   }) => {

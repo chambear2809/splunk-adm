@@ -628,6 +628,17 @@ class FakeSearchClient implements SearchClient {
       };
     }
     if (request.search.startsWith("| `adm_application_catalog_read`")) {
+      const catalogRows = catalogCapture.rows.map((row) => {
+        const now = Math.floor(Date.now() / 1000);
+        const stale = faultScenario === "catalog-stale";
+        if (!stale) return { ...row, updated: now - 60 };
+        return {
+          ...row,
+          updated: now - 4 * 60 * 60,
+          window_start: now - 5 * 60 * 60,
+          window_end: now - 4 * 60 * 60,
+        };
+      });
       if (
         faultScenario === "catalog-overlimit-service-race" &&
         !request.search.includes('| search service="')
@@ -648,7 +659,7 @@ class FakeSearchClient implements SearchClient {
         request.search.includes('| search service="')
       )
         return {
-          rows: catalogCapture.rows,
+          rows: catalogRows,
           warnings: ["narrowed warning"],
           errors: [],
         };
@@ -677,13 +688,13 @@ class FakeSearchClient implements SearchClient {
         throw new Error("Catalog unavailable.");
       if (faultScenario === "stale") {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        return { rows: catalogCapture.rows, warnings: [], errors: [] };
+        return { rows: catalogRows, warnings: [], errors: [] };
       }
       const service = request.search.match(/\| search service="([^"]+)"/)?.[1];
       return {
         rows: service
-          ? catalogCapture.rows.filter((row) => row.service === service)
-          : catalogCapture.rows,
+          ? catalogRows.filter((row) => row.service === service)
+          : catalogRows,
         warnings: [],
         errors: [],
       };

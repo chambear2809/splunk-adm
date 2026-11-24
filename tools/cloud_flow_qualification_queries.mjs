@@ -35,7 +35,11 @@ try {
     "/frontend/src/data/cloudFlowEvidence.ts",
   );
   const result = {
-    search: cloudFlow.buildCloudFlowSearch(input.config, input.selection),
+    search: cloudFlow.buildCloudFlowSearch(
+      input.config,
+      input.selection,
+      input.captureStatus === true,
+    ),
     window: cloudFlow.cloudFlowSearchWindow(input.selection),
     ...(Array.isArray(input.rows)
       ? {
