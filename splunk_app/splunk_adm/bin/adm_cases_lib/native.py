@@ -80,27 +80,20 @@ class NativeComparisonSearch:
         self.principal = None
         self.identity_lock = threading.Lock()
 
-    def _call(self, method, path, data=None, *, cleanup=False, retain_job=False):
-        remaining = self.cleanup_remaining if cleanup else self.deadline - self.clock()
+    def _call(self, method, path, data=None, *, deadline=None, retain_job=False):
+        deadline = self.deadline if deadline is None else deadline
+        remaining = deadline - self.clock()
         if remaining <= 0:
             raise CaptureUnavailable()
-        started = self.clock()
         try:
             value = self.request(method, path, data, min(3, remaining))
-            if cleanup and self.clock() - started >= remaining:
-                raise CaptureUnavailable()
-            if not cleanup and not retain_job and self.clock() >= self.deadline:
+            if not retain_job and self.clock() >= deadline:
                 raise CaptureUnavailable()
             if not isinstance(value, dict):
                 raise CaptureUnavailable()
             return value
         except Exception:
             raise CaptureUnavailable() from None
-        finally:
-            if cleanup:
-                self.cleanup_remaining = max(
-                    0, self.cleanup_remaining - max(0, self.clock() - started)
-                )
 
     def _transition(self, principal, record, state):
         return self.ledger.transition(
@@ -111,7 +104,7 @@ class NativeComparisonSearch:
             expected_revision=record["revision"],
         )
 
-    def _proof(self, principal, record):
+    def _proof(self, principal, record, *, deadline=None):
         if record.get("transport_hash") != self.transport_hash:
             raise CaptureUnavailable()
         if not record.get("server_sid"):
@@ -119,7 +112,7 @@ class NativeComparisonSearch:
         status = self._call(
             "GET",
             "/services/search/jobs/" + quote(record["server_sid"], safe=""),
-            cleanup=True,
+            deadline=deadline,
         )
         self._verify_metadata(principal, record, status, require_complete=False)
 
@@ -160,10 +153,14 @@ class NativeComparisonSearch:
         ):
             raise CaptureUnavailable()
 
-    def _finish(self, principal, record):
+    def _finish(self, principal, record, *, fresh=False):
         started, budget = self.clock(), self.cleanup_remaining
+        # Successful reads include cleanup in their work budget. Recovery has
+        # only the reserve, and results that cross the work deadline are withheld.
+        reserve_start = self.deadline if fresh else started
+        cleanup_deadline = reserve_start + budget
         try:
-            self._proof(principal, record)
+            self._proof(principal, record, deadline=cleanup_deadline)
             if (
                 record["lease_until"] is None
                 or self.ledger.clock() >= record["lease_until"]
@@ -180,7 +177,7 @@ class NativeComparisonSearch:
             self._call(
                 "DELETE",
                 "/services/search/jobs/" + quote(record["server_sid"], safe=""),
-                cleanup=True,
+                deadline=cleanup_deadline,
             )
             self._transition(principal, record, "deleted")
         except Exception:
@@ -193,8 +190,8 @@ class NativeComparisonSearch:
                 pass
             raise CaptureUnavailable() from None
         finally:
-            self.cleanup_remaining = min(
-                self.cleanup_remaining, max(0, budget - max(0, self.clock() - started))
+            self.cleanup_remaining = max(
+                0, budget - max(0, self.clock() - max(started, reserve_start))
             )
 
     def _reconcile(self, principal):
@@ -261,6 +258,7 @@ class NativeComparisonSearch:
             raise CaptureUnavailable()
         record = None
         encoded = None
+        fresh_cleanup = False
         try:
             self._reconcile(principal)
             if self.clock() >= self.deadline or self.cleanup_remaining <= 0:
@@ -361,9 +359,12 @@ class NativeComparisonSearch:
                 encoded = json.dumps(rows, allow_nan=False)
                 if len(encoded.encode()) > 512 * 1024:
                     raise CaptureUnavailable()
+                # Only a complete, metadata- and size-validated result may use
+                # the primary deadline for its final proof and deletion.
+                fresh_cleanup = True
             finally:
                 if record.get("server_sid"):
-                    self._finish(principal, record)
+                    self._finish(principal, record, fresh=fresh_cleanup)
                 elif record["state"] == "creating":
                     self._transition(principal, record, "creation_unknown")
             if self.clock() >= self.deadline or self.cleanup_remaining <= 0:
