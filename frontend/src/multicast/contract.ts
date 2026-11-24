@@ -167,3 +167,53 @@ export interface MulticastResult extends MulticastTopology {
   configurationFingerprint: string;
   outcomes: SourceOutcome[];
 }
+
+export const MAX_GROUPS = 256;
+export interface ScopeWindow {
+  version: 1;
+  scope: string;
+  earliest: number;
+  latest: number;
+}
+export interface IgmpGroupSummary {
+  kind: "igmp";
+  profile: string;
+  group: string;
+  segment: Segment;
+  reports: number;
+  leaves: number;
+  groupQueries: number;
+  endpointReporters: string[];
+  otherReporters: number;
+  firstSeen: number;
+  lastSeen: number;
+  lastLeave?: number;
+  lastGroupQuery?: number;
+}
+export interface FlowGroupSummary {
+  kind: "flow";
+  profile: string;
+  group: string;
+  observer: string;
+  direction: "ingress" | "egress";
+  senders: string[];
+  packets?: number;
+  bytes?: number;
+  samplingInterval: number;
+  replication: "before" | "after" | "unknown";
+  counters: "delta" | "total";
+  firstSeen: number;
+  lastSeen: number;
+}
+export interface PointQueries {
+  profile: string;
+  querySenders: { address: string; first: number; last: number }[];
+  lastGeneralQuery?: number;
+}
+export type GroupSummary = IgmpGroupSummary | FlowGroupSummary;
+export interface ProfileSummary {
+  summaries: GroupSummary[];
+  queries?: PointQueries;
+  droppedGroups: number;
+  outcome: SourceOutcome;
+}

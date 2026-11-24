@@ -6,6 +6,7 @@ import {
   MULTICAST_VERSION,
   type MulticastProfile,
   type MulticastRequest,
+  type ScopeWindow,
   type Segment,
 } from "./contract";
 
@@ -49,6 +50,34 @@ function epoch(value: unknown): value is number {
   );
 }
 
+function pastWindow(
+  value: Record<string, unknown>,
+  now: number,
+): { earliest: number; latest: number } {
+  const { earliest, latest } = value;
+  if (
+    !epoch(earliest) ||
+    !epoch(latest) ||
+    earliest >= latest ||
+    latest > now ||
+    latest - earliest > MAX_WINDOW_SECONDS
+  )
+    throw new Error("Choose a past time window of up to one hour.");
+  return { earliest, latest };
+}
+
+/** The scope-wide equivalent of validateRequest, without group and sender. */
+export function validateScopeWindow(
+  value: unknown,
+  now = Date.now() / 1000,
+): ScopeWindow {
+  if (!isObject(value) || value.version !== MULTICAST_VERSION)
+    throw new Error("Unsupported multicast investigation version.");
+  const scope = scopeName(value.scope);
+  if (!scope) throw new Error("Choose one verified routing scope.");
+  return { version: MULTICAST_VERSION, scope, ...pastWindow(value, now) };
+}
+
 export function validateRequest(
   request: unknown,
   now = Date.now() / 1000,
@@ -62,15 +91,7 @@ export function validateRequest(
   const sender = sourceAddress(request.sender);
   if (request.sender !== undefined && !sender)
     throw new Error("Enter one unicast IPv4 sender address.");
-  const { earliest, latest } = request;
-  if (
-    !epoch(earliest) ||
-    !epoch(latest) ||
-    earliest >= latest ||
-    latest > now ||
-    latest - earliest > MAX_WINDOW_SECONDS
-  )
-    throw new Error("Choose a past time window of up to one hour.");
+  const { earliest, latest } = pastWindow(request, now);
   return {
     version: MULTICAST_VERSION,
     scope,
