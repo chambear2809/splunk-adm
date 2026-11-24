@@ -584,6 +584,87 @@ describe("endpoint investigation contracts", () => {
       ),
     ).toEqual(["0", "0"]);
   });
+  it.each([
+    { transport: "icmp", ports: {}, state: "complete" },
+    {
+      transport: "ipv6-icmp",
+      ports: { source_port: null, destination_port: "" },
+      state: "complete",
+    },
+    { transport: "tcp", ports: {}, state: "unavailable" },
+    {
+      transport: "tcp",
+      ports: { source_port: "garbage", destination_port: 443 },
+      state: "unavailable",
+    },
+  ])(
+    "handles absent and malformed observation ports for $transport ($state)",
+    async ({ transport, ports, state }) => {
+      const completion = {
+        row_type: "completion",
+        schema_version: 1,
+        input_count: 0,
+        output_count: 0,
+        input_capped: 0,
+        output_capped: 0,
+        unprotected_count: 0,
+      };
+      const observation = {
+        row_type: "traffic_observation",
+        scope: selection.scope,
+        source: "stream_ipfix",
+        adm_scope_authority: "router-a",
+        source_ip: selection.address,
+        destination_ip: "10.0.0.2",
+        adm_first: 110,
+        adm_last: 120,
+        records: 1,
+        counter_semantics: "unknown",
+        adm_quality_status: "accepted",
+      };
+      const search = vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [completion],
+          warnings: [],
+          errors: [],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              ...observation,
+              transport: "tcp",
+              source_port: "0",
+              destination_port: "443",
+            },
+            { ...observation, transport, ...ports },
+            { ...completion, input_count: 2, output_count: 2 },
+          ],
+          warnings: [],
+          errors: [],
+        });
+      const result = await runEndpointInvestigation(
+        { search },
+        { read: async () => config },
+        selection,
+        new AbortController().signal,
+      );
+      expect(result.observationState).toBe(state);
+      if (state === "complete") {
+        expect(result.observations).toHaveLength(2);
+        expect(result.observations[0]).toMatchObject({
+          sourcePort: 0,
+          destinationPort: 443,
+        });
+        expect(result.observations[1]).toMatchObject({ transport });
+        expect(result.observations[1].sourcePort).toBeUndefined();
+        expect(result.observations[1].destinationPort).toBeUndefined();
+      } else {
+        expect(result.observations).toEqual([]);
+      }
+    },
+  );
+
   it("retains core conversations when the optional V2 observation query fails", async () => {
     const search: SearchClient = {
       search: vi

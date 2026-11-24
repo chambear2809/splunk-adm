@@ -629,9 +629,21 @@ class FakeSearchClient implements SearchClient {
     }
     if (request.search.startsWith("| `adm_application_catalog_read`")) {
       if (
+        faultScenario === "catalog-overlimit-service-race" &&
+        !request.search.includes('| search service="')
+      ) {
+        const target = window as Window & {
+          __ADM_CATALOG_RELEASE__?: () => void;
+        };
+        await new Promise<void>((resolve) => {
+          target.__ADM_CATALOG_RELEASE__ = resolve;
+        });
+      }
+      if (
         [
           "catalog-overlimit-narrowed",
           "catalog-overlimit-find-warning",
+          "catalog-overlimit-service-race",
         ].includes(faultScenario ?? "") &&
         request.search.includes('| search service="')
       )
@@ -645,6 +657,7 @@ class FakeSearchClient implements SearchClient {
           "catalog-overlimit",
           "catalog-overlimit-narrowed",
           "catalog-overlimit-find-warning",
+          "catalog-overlimit-service-race",
         ].includes(faultScenario ?? "")
       )
         throw new SearchResultLimitError(5000);
@@ -901,10 +914,25 @@ const endpointCompletion = {
   unprotected_count: 0,
 };
 const endpointSearch: SearchClient = {
-  async search({ search }) {
+  async search({ search, signal }) {
     const conversation = search.includes('source="adm:conversation"');
     if (!conversation && !search.includes('source="adm:traffic_observation"'))
       throw new Error("Unexpected Endpoint search");
+    const harnessWindow = globalThis as typeof globalThis & {
+      __ADM_ENDPOINT_NEXT__?: "fail" | "hold";
+    };
+    if (conversation) {
+      const outcome = harnessWindow.__ADM_ENDPOINT_NEXT__;
+      delete harnessWindow.__ADM_ENDPOINT_NEXT__;
+      if (outcome === "fail") throw new Error("Endpoint rerun failed.");
+      if (outcome === "hold") {
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve();
+          else
+            signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      }
+    }
     const evidence = conversation
       ? {
           row_type: "conversation",
@@ -933,7 +961,23 @@ const endpointSearch: SearchClient = {
     return {
       rows: [
         { ...evidence, scope: "prod", adm_first: 110, adm_last: 120 },
-        endpointCompletion,
+        ...(conversation
+          ? []
+          : [
+              {
+                row_type: "traffic_observation",
+                scope: "prod",
+                source_ip: "192.0.2.1",
+                destination_ip: "192.0.2.4",
+                transport: "icmp",
+                adm_quality_status: "accepted",
+                adm_first: 110,
+                adm_last: 120,
+              },
+            ]),
+        conversation
+          ? endpointCompletion
+          : { ...endpointCompletion, input_count: 2, output_count: 2 },
       ],
       warnings: [],
       errors: [],

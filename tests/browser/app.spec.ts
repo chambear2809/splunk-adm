@@ -947,6 +947,52 @@ test("an over-limit catalog narrows again when the service changes", async ({
     .toBe(true);
 });
 
+test("an in-flight catalog cap narrows using the latest service", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-service-race",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof (
+            window as Window & {
+              __ADM_CATALOG_RELEASE__?: () => void;
+            }
+          ).__ADM_CATALOG_RELEASE__ === "function",
+      ),
+    )
+    .toBe(true);
+  await (
+    await scope(page)
+  )
+    .getByRole("combobox", { name: "Service", exact: true })
+    .fill("checkout");
+  await page.evaluate(() => {
+    (
+      window as Window & { __ADM_CATALOG_RELEASE__?: () => void }
+    ).__ADM_CATALOG_RELEASE__?.();
+  });
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Catalog narrowed to service “checkout”" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window.__ADM_REQUESTS__ ?? []).some(
+          (request) =>
+            request.spl ===
+            '| `adm_application_catalog_read` | search service="checkout"',
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("catalog preserves warnings from a narrowed service search", async ({
   page,
 }) => {
@@ -979,9 +1025,7 @@ test("catalog preserves warnings from a narrowed service search", async ({
   ).toBeVisible();
 });
 
-test("Endpoint CSV keeps all row types aligned with the download header", async ({
-  page,
-}) => {
+async function openEndpointInvestigation(page: Page) {
   await page.route("**/en-US/app/splunk_adm/endpoints?*", async (route) => {
     const harness = await route.fetch({
       url: new URL("/tests/browser/browser.html", route.request().url()).href,
@@ -991,6 +1035,12 @@ test("Endpoint CSV keeps all row types aligned with the download header", async 
   await page.goto(
     "/en-US/app/splunk_adm/endpoints?endpoint_ip=192.0.2.1&endpoint_scope=prod&endpoint_start=100&endpoint_end=200",
   );
+}
+
+test("Endpoint CSV keeps all row types aligned with the download header", async ({
+  page,
+}) => {
+  await openEndpointInvestigation(page);
   await page.getByRole("button", { name: "Investigate", exact: true }).click();
   const exportCsv = page.getByRole("button", { name: "Download endpoint CSV" });
   await expect(exportCsv).toBeVisible();
@@ -1007,9 +1057,15 @@ test("Endpoint CSV keeps all row types aligned with the download header", async 
     "metadata",
     "conversation",
     "non_authoritative_observation",
+    "non_authoritative_observation",
     "identity_history",
   ]);
   for (const row of rows) expect(row).toHaveLength(header.length);
+  await expect(
+    page.getByText("192.0.2.1 → 192.0.2.4 / icmp", { exact: true }),
+  ).toBeVisible();
+  expect(rows[3][header.indexOf("transport")]).toBe("icmp");
+  expect(rows[3][header.indexOf("port")]).toBe("");
   const counts = Object.fromEntries(
     header.map((field, i) => [field, rows[1][i]]),
   );
@@ -1021,6 +1077,43 @@ test("Endpoint CSV keeps all row types aligned with the download header", async 
     packets: "12",
   });
 });
+
+for (const outcome of ["fail", "hold"] as const) {
+  test(`${outcome === "fail" ? "failed" : "cancelled"} Endpoint reruns do not export prior evidence`, async ({
+    page,
+  }) => {
+    await openEndpointInvestigation(page);
+    const investigate = page.getByRole("button", {
+      name: "Investigate",
+      exact: true,
+    });
+    const exportCsv = page.getByRole("button", {
+      name: "Download endpoint CSV",
+    });
+    await investigate.click();
+    await expect(exportCsv).toBeVisible();
+    await page.evaluate((next) => {
+      (
+        globalThis as typeof globalThis & {
+          __ADM_ENDPOINT_NEXT__?: "fail" | "hold";
+        }
+      ).__ADM_ENDPOINT_NEXT__ = next;
+    }, outcome);
+    await investigate.click();
+    if (outcome === "fail") {
+      await expect(page.getByRole("alert")).toContainText(
+        "Endpoint rerun failed",
+      );
+    } else {
+      await expect(exportCsv).toHaveCount(0);
+      await page.getByRole("button", { name: "Cancel search" }).click();
+    }
+    await expect(investigate).toBeEnabled();
+    await expect(exportCsv).toHaveCount(0);
+    await investigate.click();
+    await expect(exportCsv).toBeVisible();
+  });
+}
 
 test("catalog uses its captured metric window when the Find/map picker changes", async ({
   page,

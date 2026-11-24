@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import time
 import unittest
 import uuid
@@ -64,7 +66,11 @@ class EndpointNetworkTest(unittest.TestCase):
         query = urllib.parse.urlencode(
             {"query": json.dumps({"scope": {"$in": cls.scopes}})}
         )
-        for collection in ("adm_ip_identity", "adm_observer_scope"):
+        for collection in (
+            "adm_ip_identity",
+            "adm_observer_scope",
+            "adm_network_source_scope",
+        ):
             response = lab._mgmt(
                 "DELETE",
                 f"/servicesNS/nobody/{lab.APP}/storage/collections/data/"
@@ -290,6 +296,138 @@ class EndpointNetworkTest(unittest.TestCase):
                 self.assertIsInstance(observation["interface_index"], str)
             if observation.get("interface_index") is None:
                 self.assertNotIn("interface_index", observation)
+
+    def test_v2_endpoint_retains_portless_icmp_observations(self):
+        exporter = self.exporters[0]
+        profile = {
+            "source": "stream_ipfix",
+            "source_authority": exporter,
+            "domain_kind": "exporter",
+            "observation_domain_present": "0",
+            "scope": self.scope,
+            "cluster": "endpoint-test",
+            "mapping_status": "mapped",
+            "profile": "standard_netflow",
+            "duplicate_count": 1,
+        }
+        profile["mapping_key"] = hashlib.sha256(
+            json.dumps(
+                ["stream_ipfix", exporter, "exporter", "0", "", "", ""],
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        profile["_key"] = profile["mapping_key"]
+        payload = json.dumps(json.dumps([profile]))
+        lab.search(
+            f"| makeresults format=json data={payload} "
+            "| outputlookup append=true key_field=_key adm_network_source_scope"
+        )
+
+        template = self.fixture("stream_netflow.ndjson")[0]
+        tcp, icmp = [
+            self.isolated(template, at=self.start + offset) for offset in (1, 2)
+        ]
+        for record, protocol in ((tcp, 6), (icmp, 1)):
+            event = record["event"]
+            for key in ("observation_domain_id", "vpn_id"):
+                event.pop(key, None)
+            event.update(
+                src_ip="192.0.2.81",
+                dest_ip="192.0.2.82",
+                src_port=50000,
+                dest_port=443,
+                exporter_ip=exporter,
+                protoid=protocol,
+                netflow_version=10,
+                flow_id=str(protocol),
+            )
+        del icmp["event"]["src_port"], icmp["event"]["dest_port"]
+        self.load([tcp, icmp])
+        start, end = self.start, self.start + 30
+        lab.search(
+            f'`adm_traffic_observations_v2` | where scope="{self.scope}" '
+            '| collect index=adm_summary_v2 source="adm:traffic_observation"',
+            start,
+            end,
+        )
+
+        def frontend(payload):
+            result = subprocess.run(
+                ["node", str(ROOT / "tools" / "dns_qualification_queries.mjs")],
+                input=json.dumps(payload),
+                text=True,
+                capture_output=True,
+                cwd=ROOT,
+                check=False,
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return json.loads(result.stdout)
+
+        fingerprint = "a" * 64
+        selection = {
+            "schemaVersion": 1,
+            "id": self.scope,
+            "address": "192.0.2.81",
+            "scope": self.scope,
+            "start": start,
+            "end": end,
+            "configurationFingerprint": fingerprint,
+            "trafficContract": 2,
+        }
+        indexes = ["adm_summary_v2"]
+        queries = frontend(
+            {"dns": [], "endpoint": [{"selection": selection, "indexes": indexes}]}
+        )["endpoint"][0]
+        earliest, latest = start // 300 * 300, end // 300 * 300 + 300
+        deadline = time.monotonic() + 90
+        observation = []
+        while time.monotonic() < deadline:
+            observation = lab.search(queries["observation"], earliest, latest)
+            if (
+                sum(row.get("row_type") == "traffic_observation" for row in observation)
+                == 2
+            ):
+                break
+            time.sleep(1)
+        actual = {row.get("transport"): row for row in observation}
+        self.assertIn("tcp", actual, observation)
+        self.assertIn("icmp", actual, observation)
+        self.assertNotIn("source_port", actual["icmp"])
+        self.assertNotIn("destination_port", actual["icmp"])
+        result = frontend(
+            {
+                "endpointResults": {
+                    "selection": selection,
+                    "configuration": {
+                        "fingerprint": fingerprint,
+                        "trafficContract": 2,
+                        "summaryIndexes": indexes,
+                        "mappings": [
+                            {
+                                "observer_kind": "exporter",
+                                "observer": exporter,
+                                "scope": self.scope,
+                                "mapping_status": "verified",
+                            }
+                        ],
+                        "identities": [],
+                        "identityAvailable": True,
+                    },
+                    "conversation": lab.search(
+                        queries["conversation"], earliest, latest
+                    ),
+                    "observation": observation,
+                }
+            }
+        )
+        self.assertEqual(result["observationState"], "complete", result)
+        by_transport = {row["transport"]: row for row in result["observations"]}
+        self.assertEqual(set(by_transport), {"tcp", "icmp"})
+        self.assertEqual(by_transport["tcp"]["sourcePort"], 50000)
+        self.assertEqual(by_transport["tcp"]["destinationPort"], 443)
+        self.assertNotIn("sourcePort", by_transport["icmp"])
+        self.assertNotIn("destinationPort", by_transport["icmp"])
 
     def test_vlan_merge_bounds_contexts_and_preserves_row_counters(self):
         items = [

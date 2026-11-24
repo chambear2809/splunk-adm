@@ -4,6 +4,7 @@ import {
   normalizeIp,
   routingScope,
   scopedAddressPredicate,
+  validText,
 } from "./evidence";
 import type { EvidenceSelection, TrafficContext } from "./evidence";
 import type { EvidenceConfigClient } from "./evidenceConfig";
@@ -54,8 +55,8 @@ export interface EndpointTrafficObservation {
   observer: string;
   sourceIp: string;
   destinationIp: string;
-  sourcePort: number;
-  destinationPort: number;
+  sourcePort?: number;
+  destinationPort?: number;
   transport: string;
   first: number;
   last: number;
@@ -86,15 +87,6 @@ export interface EndpointInput {
   end: number;
 }
 
-function validText(value: unknown, maxLength: number): value is string {
-  if (typeof value !== "string" || value.length > maxLength) return false;
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    if (code <= 31 || code === 127) return false;
-  }
-  return true;
-}
-
 function envelopeInteger(value: unknown): number | undefined {
   if (typeof value === "number")
     return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
@@ -103,6 +95,12 @@ function envelopeInteger(value: unknown): number | undefined {
     return Number.isSafeInteger(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function observationPort(value: unknown): number | undefined {
+  return value == null || value === ""
+    ? undefined
+    : (envelopeInteger(value) ?? NaN);
 }
 
 function validateEnvelope(
@@ -137,10 +135,9 @@ function validateEnvelope(
     inputCount === undefined ||
     outputCount === undefined ||
     inputCapped !== 0 ||
-    outputCapped !== Number((inputCount ?? 0) > cap) ||
+    outputCapped !== Number(inputCount > cap) ||
     outputCount !== expectedOutput ||
     unprotectedCount === undefined ||
-    inputCount === undefined ||
     unprotectedCount > inputCount ||
     rows.filter((row) => row.row_type === dataType).length !== outputCount
   )
@@ -153,6 +150,36 @@ function validateEnvelope(
   };
 }
 
+function validObservation(
+  o: EndpointTrafficObservation,
+  selection: EndpointInput,
+): boolean {
+  return !(
+    o.scope !== selection.scope ||
+    normalizeIp(o.sourceIp) !== o.sourceIp ||
+    normalizeIp(o.destinationIp) !== o.destinationIp ||
+    (o.sourceIp !== selection.address &&
+      o.destinationIp !== selection.address) ||
+    ![o.source, o.observer, o.transport, o.counterSemantics].every((v) =>
+      validText(v),
+    ) ||
+    // The traffic producer requires both ports for TCP, UDP and SCTP only.
+    ![o.sourcePort, o.destinationPort].every((port) =>
+      port === undefined
+        ? !["tcp", "udp", "sctp"].includes(o.transport.toLowerCase())
+        : Number.isInteger(port) && port >= 0 && port <= 65535,
+    ) ||
+    !Number.isFinite(o.first) ||
+    !Number.isFinite(o.last) ||
+    o.first < 0 ||
+    o.first > 253402300799 ||
+    o.last > 253402300799 ||
+    o.last < o.first ||
+    o.records !== 1 ||
+    o.metricsAuthoritative !== false
+  );
+}
+
 export function validateEndpointResult(value: EndpointResult): EndpointResult {
   if (
     !value ||
@@ -163,8 +190,6 @@ export function validateEndpointResult(value: EndpointResult): EndpointResult {
     !Number.isFinite(value.capturedAt) ||
     value.capturedAt < 0 ||
     value.capturedAt > 253402300799 ||
-    value.selection.end <= value.selection.start ||
-    value.selection.end - value.selection.start > ENDPOINT_LIMITS.window ||
     !Array.isArray(value.conversations) ||
     value.conversations.length > ENDPOINT_LIMITS.relationships ||
     !Array.isArray(value.observations) ||
@@ -182,12 +207,7 @@ export function validateEndpointResult(value: EndpointResult): EndpointResult {
     !Array.isArray(value.warnings)
   )
     throw new Error("Invalid endpoint investigation result.");
-  validateEndpointInput({
-    address: value.selection.address,
-    scope: value.selection.scope,
-    start: value.selection.start,
-    end: value.selection.end,
-  });
+  validateEndpointInput(value.selection);
   for (const c of value.conversations) {
     if (
       c.scope !== value.selection.scope ||
@@ -215,34 +235,13 @@ export function validateEndpointResult(value: EndpointResult): EndpointResult {
       typeof c.contextCapped !== "boolean" ||
       (c.sampled !== undefined && typeof c.sampled !== "boolean") ||
       ![c.transport, c.directionBasis, c.source, c.observer].every((v) =>
-        validText(v, 255),
+        validText(v),
       )
     )
       throw new Error("Invalid endpoint conversation result.");
   }
-  for (const o of value.observations)
-    if (
-      o.scope !== value.selection.scope ||
-      normalizeIp(o.sourceIp) !== o.sourceIp ||
-      normalizeIp(o.destinationIp) !== o.destinationIp ||
-      (o.sourceIp !== value.selection.address &&
-        o.destinationIp !== value.selection.address) ||
-      ![o.sourcePort, o.destinationPort].every(
-        (p) => Number.isInteger(p) && p >= 0 && p <= 65535,
-      ) ||
-      !Number.isFinite(o.first) ||
-      !Number.isFinite(o.last) ||
-      o.first < 0 ||
-      o.first > 253402300799 ||
-      o.last > 253402300799 ||
-      o.last < o.first ||
-      o.records !== 1 ||
-      o.metricsAuthoritative !== false ||
-      ![o.source, o.observer, o.transport, o.counterSemantics].every((v) =>
-        validText(v, 255),
-      )
-    )
-      throw new Error("Invalid non-authoritative traffic observation.");
+  if (value.observations.some((o) => !validObservation(o, value.selection)))
+    throw new Error("Invalid non-authoritative traffic observation.");
   for (const identity of value.identityHistory)
     if (
       identity.ip !== value.selection.address ||
@@ -434,8 +433,8 @@ export async function runEndpointInvestigation(
 ): Promise<EndpointResult> {
   const valid = validateEndpointInput(input);
   const config = await configClient.read(signal, [valid.address], valid.scope);
-  const index = config.summaryIndexes[0];
-  if (!index) throw new Error("No active summary index is configured.");
+  if (!config.summaryIndexes.length)
+    throw new Error("No active summary index is configured.");
   if (
     !config.mappings.some(
       (mapping) =>
@@ -524,12 +523,8 @@ export async function runEndpointInvestigation(
     if (!Number.isFinite(records) || records < 0)
       throw new Error("Endpoint search returned an invalid record counter.");
     const conns = String(row.adm_conns ?? "");
-    if (
-      conns &&
-      conns
-        .split("|")
-        .some((item) => !/^\d+@\d+(?:\.\d+)?@\d+(?:\.\d+)?$/.test(item))
-    )
+    const tuples = conns ? conns.split("|") : [];
+    if (tuples.some((item) => !/^\d+@\d+(?:\.\d+)?@\d+(?:\.\d+)?$/.test(item)))
       throw new Error("Endpoint search returned invalid tuple history.");
     const optionalCounter = (value: unknown, name: string) => {
       if (value === undefined || value === null || value === "")
@@ -560,26 +555,16 @@ export async function runEndpointInvestigation(
         first,
         last,
         records,
-        ...(optionalCounter(row.adm_bcs, "bytes client-to-server") !== undefined
-          ? {
-              bytesClientToServer: optionalCounter(
-                row.adm_bcs,
-                "bytes client-to-server",
-              ),
-            }
-          : {}),
-        ...(optionalCounter(row.adm_bsc, "bytes server-to-client") !== undefined
-          ? {
-              bytesServerToClient: optionalCounter(
-                row.adm_bsc,
-                "bytes server-to-client",
-              ),
-            }
-          : {}),
-        ...(optionalCounter(row.adm_packets, "packet") !== undefined
-          ? { packets: optionalCounter(row.adm_packets, "packet") }
-          : {}),
-        conversations: conns ? conns.split("|").length : 0,
+        bytesClientToServer: optionalCounter(
+          row.adm_bcs,
+          "bytes client-to-server",
+        ),
+        bytesServerToClient: optionalCounter(
+          row.adm_bsc,
+          "bytes server-to-client",
+        ),
+        packets: optionalCounter(row.adm_packets, "packet"),
+        conversations: tuples.length,
         ...(sampled === undefined ? {} : { sampled }),
         contextCapped:
           row.adm_context_capped === 1 || row.adm_context_capped === "1",
@@ -619,27 +604,12 @@ export async function runEndpointInvestigation(
       )) {
         const sourceIp = normalizeIp(String(row.source_ip)),
           destinationIp = normalizeIp(String(row.destination_ip));
-        const sourcePort = Number(row.source_port),
-          destinationPort = Number(row.destination_port),
+        const sourcePort = observationPort(row.source_port),
+          destinationPort = observationPort(row.destination_port),
+          transport = String(row.transport ?? "unknown"),
           first = Number(row.adm_first),
           last = Number(row.adm_last);
-        if (
-          row.scope !== valid.scope ||
-          !["accepted", "accepted_with_warning"].includes(
-            String(row.adm_quality_status),
-          ) ||
-          ![sourcePort, destinationPort].every(
-            (p) => Number.isInteger(p) && p >= 0 && p <= 65535,
-          ) ||
-          !Number.isFinite(first) ||
-          !Number.isFinite(last) ||
-          first < 0 ||
-          last < valid.start ||
-          first >= valid.end ||
-          last < first
-        )
-          throw new Error("Traffic observations could not be validated.");
-        observations.push({
+        const observation: EndpointTrafficObservation = {
           scope: valid.scope,
           source: String(row.source ?? "unknown"),
           observer: String(row.adm_scope_authority ?? "unknown"),
@@ -647,13 +617,24 @@ export async function runEndpointInvestigation(
           destinationIp,
           sourcePort,
           destinationPort,
-          transport: String(row.transport ?? "unknown"),
+          transport,
           first,
           last,
           records: 1,
           counterSemantics: String(row.counter_semantics ?? "unknown"),
           metricsAuthoritative: false,
-        });
+        };
+        if (
+          row.scope !== valid.scope ||
+          !validObservation(observation, valid) ||
+          !["accepted", "accepted_with_warning"].includes(
+            String(row.adm_quality_status),
+          ) ||
+          last < valid.start ||
+          first >= valid.end
+        )
+          throw new Error("Traffic observations could not be validated.");
+        observations.push(observation);
       }
     } catch (reason) {
       if (signal.aborted)
@@ -689,13 +670,7 @@ export async function runEndpointInvestigation(
   );
   return validateEndpointResult({
     schemaVersion: 1,
-    selection: {
-      schemaVersion: 1,
-      id: selection.id,
-      ...valid,
-      configurationFingerprint: config.fingerprint,
-      trafficContract: config.trafficContract,
-    },
+    selection,
     capturedAt: Date.now() / 1000,
     conversations: boundedConversations,
     observations,

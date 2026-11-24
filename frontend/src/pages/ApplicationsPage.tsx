@@ -179,8 +179,7 @@ export function ApplicationsPage({
   const loadCatalog = useCallback(() => {
     if (!client || state.mode !== "live") return;
     catalogController.current?.abort();
-    const selectedService = service.current;
-    catalogService.current = selectedService;
+    catalogService.current = service.current;
     const controller = new AbortController();
     catalogController.current = controller;
     const current = ++revision.current;
@@ -215,12 +214,18 @@ export function ApplicationsPage({
         if (controller.signal.aborted || current !== revision.current) return;
         if (isSearchResultLimitError(reason)) {
           catalogLimited.current = true;
-          if (!selectedService) {
+          // The scope can change while the broad request is in flight. Read
+          // the latest service here rather than retrying the service captured
+          // when that request started; otherwise the fallback can display
+          // evidence for the old scope after the operator changed it.
+          const narrowedService = service.current;
+          catalogService.current = narrowedService;
+          if (!narrowedService) {
             setError(catalogLimitMessage(reason.maxRows));
             return;
           }
           try {
-            const serviceSearch = validatedBuildCatalogSearch(selectedService);
+            const serviceSearch = validatedBuildCatalogSearch(narrowedService);
             const narrowed = await client.search({
               search: serviceSearch,
               earliest: "0",
@@ -236,7 +241,7 @@ export function ApplicationsPage({
               setCatalog(parseCatalogRows(narrowed.rows));
               setCatalogWarning(
                 [
-                  `Catalog narrowed to service “${selectedService}”; metrics use each row’s last completed hour.`,
+                  `Catalog narrowed to service “${narrowedService}”; metrics use each row’s last completed hour.`,
                   ...narrowed.warnings,
                 ].join(" "),
               );
