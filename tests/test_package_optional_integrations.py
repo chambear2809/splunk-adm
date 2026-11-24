@@ -13,6 +13,27 @@ from tools.package_optional_integrations import render_archive, selected_files
 
 
 class OptionalIntegrationPackageTests(unittest.TestCase):
+    def test_packaged_guide_uses_current_version_neutral_archive_names(self):
+        root = Path(__file__).resolve().parents[1]
+        files = selected_files(root)
+        with tarfile.open(
+            fileobj=io.BytesIO(render_archive(files)), mode="r:gz"
+        ) as archive:
+            guide = (
+                archive.extractfile(
+                    "application-atlas-integrations/docs/OPTIONAL_INTEGRATIONS_TOOLKIT.md"
+                )
+                .read()
+                .decode()
+            )
+
+        self.assertIn("application-atlas-integrations-<version>.tar.gz", guide)
+        self.assertIn("splunk_adm-<version>.tar.gz", guide)
+        self.assertNotRegex(
+            guide,
+            r"(?:application-atlas-integrations|splunk_adm)-\d+\.\d+\.\d+\.tar\.gz",
+        )
+
     def test_unpacked_toolkit_runs_without_the_repository(self):
         root = Path(__file__).resolve().parents[1]
         with TemporaryDirectory(prefix="atlas-toolkit-smoke-") as directory:

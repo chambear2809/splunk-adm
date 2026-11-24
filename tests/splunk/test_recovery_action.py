@@ -27,7 +27,7 @@ class RecoveryActionLiveTest(unittest.TestCase):
         sys.path.insert(0, str(root / "splunk_app/splunk_adm/bin"))
         import lab
         from tools.fault_pipeline import wait_kv_ready
-        from adm_recovery_lib.core import Recovery, Settings
+        from adm_recovery_lib.core import Recovery, Settings, Uncertain
         from adm_recovery_lib.rest import ApiError
 
         cls.lab, cls.Recovery, cls.Settings, cls.ApiError = (
@@ -36,6 +36,7 @@ class RecoveryActionLiveTest(unittest.TestCase):
             Settings,
             ApiError,
         )
+        cls.Uncertain = Uncertain
         wait_kv_ready(timeout=180)
         cls.ctx = ssl.create_default_context()
         cls.ctx.check_hostname = False
@@ -207,6 +208,76 @@ class RecoveryActionLiveTest(unittest.TestCase):
         ):
             with self.subTest(target=target):
                 self.assert_single_builder_slot(target, offset)
+
+    def test_restore_conflict_after_durable_intent_keeps_schedule_paused(self):
+        """A macro edit acknowledged after restore_pending must block handback."""
+        target = "ADM - Identity builder"
+        self.enable_target(target)
+        target_path = (
+            "/servicesNS/nobody/splunk_adm/saved/searches/"
+            + urllib.parse.quote(target, safe="")
+        )
+        macro_path = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_index_netflow"
+        )
+        original_macro = self.lab._json("GET", macro_path)["entry"][0]["content"][
+            "definition"
+        ]
+
+        class GuardedRest:
+            def __init__(self, outer):
+                self.outer = outer
+                self.enable_posts = 0
+
+            def request(self, method, path, data=None, **kwargs):
+                if method == "POST" and path == target_path:
+                    self.enable_posts += 1
+                return self.outer.request(method, path, data, **kwargs)
+
+        adapter = GuardedRest(self.rest())
+
+        class BarrierRecovery(self.Recovery):
+            def save(self, record, **changes):
+                super().save(record, **changes)
+                if changes.get("state") == "restore_pending":
+                    self.outer.lab._json(
+                        "POST", macro_path, {"definition": f"({original_macro})"}
+                    )
+                    self.outer.lab._json(
+                        "GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload"
+                    )
+
+        barrier = BarrierRecovery(
+            adapter, settings=self.Settings(enabled=True), sleep=lambda _: None
+        )
+        barrier.outer = self
+        before = barrier.snapshot(barrier.target(target))
+        self.lab._json("POST", target_path, {"is_scheduled": "0"})
+        configuration = barrier.configuration()
+        record = {
+            "_key": "handback-race-" + barrier.owner,
+            "record_type": "target",
+            "name": target,
+            "owner": barrier.owner,
+            "expires_at": barrier.wall() + 600,
+            "state": "paused",
+            "before": before,
+            "changed_fields": ["is_scheduled"],
+            "configuration": configuration,
+            "updated": barrier.wall(),
+        }
+        barrier.insert(record)
+        barrier.lock = record
+        self.addCleanup(self.cleanup_owner, barrier)
+        try:
+            with self.assertRaisesRegex(self.Uncertain, "macro configuration changed"):
+                barrier.restore(target, before)
+        finally:
+            self.lab._json("POST", macro_path, {"definition": original_macro})
+            self.lab._json("GET", "/servicesNS/nobody/splunk_adm/admin/macros/_reload")
+        self.assertEqual(adapter.enable_posts, 0)
+        current = self.lab._json("GET", target_path)["entry"][0]["content"]
+        self.assertIn(current.get("is_scheduled"), (0, "0", False))
 
     def assert_single_builder_slot(self, target, offset):
         slot = self.slot(offset)

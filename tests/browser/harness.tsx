@@ -415,6 +415,29 @@ class FakeSearchClient implements SearchClient {
             : [];
       return { rows, warnings: [], errors: [] };
     }
+    // Minimal VM graph used by deep-link/saved-view regression coverage. Keep
+    // this behind the VM reader macro so ordinary live fixtures remain exact.
+    if (request.search.includes("adm_vm_application_graph_read")) {
+      return {
+        rows: [
+          {
+            row_type: "meta",
+            generated_at: request.latest,
+            window_start: request.earliest,
+            window_end: request.latest,
+          },
+          {
+            row_type: "node",
+            id: "service:vm/validation-invoice-hs2/invoice/validation",
+            label: "Invoice",
+            kind: "service",
+            attr_scope: "validation-invoice-hs2",
+          },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    }
     if (request.optionalSource === "multicast_nxos") {
       return {
         rows: [

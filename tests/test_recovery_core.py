@@ -542,6 +542,43 @@ class RecoverySearchCompletionTest(unittest.TestCase):
         self.assertEqual(recovery.run(TARGET)["status"], "uncertain")
         self.assertLess(events.index("restore"), events.index("cleanup"))
 
+    def test_restore_rechecks_after_durable_intent_before_enabling_schedule(self):
+        before = {"is_scheduled": "1", "search": "| makeresults"}
+        events = []
+
+        class ConcurrentChange(Recovery):
+            def __init__(self):
+                super().__init__(NullApi(), settings=Settings(enabled=True))
+                self.lock = {"configuration": "original"}
+                self.configuration_value = "original"
+
+            def target(self, _name):
+                paused = dict(before)
+                paused["is_scheduled"] = "0"
+                return {"content": paused}
+
+            def configuration(self):
+                return self.configuration_value
+
+            def unchanged(self, _name, _before, paused=True):
+                events.append(("check", paused))
+                if self.configuration_value != "original":
+                    raise Uncertain("conflicting administrator changes")
+
+            def save(self, _record, **changes):
+                events.append(changes["state"])
+                if changes["state"] == "restore_pending":
+                    self.configuration_value = "administrator-edit"
+
+            def request(self, method, path, data=None, **_kwargs):
+                events.append((method, path, data))
+                raise AssertionError("schedule must stay paused after a conflict")
+
+        recovery = ConcurrentChange()
+        with self.assertRaisesRegex(Uncertain, "conflicting administrator changes"):
+            recovery.restore(TARGET, before)
+        self.assertEqual(events, [("check", True), "restore_pending", ("check", True)])
+
     def test_claim_acquisition_transport_uncertainty_carries_key(self):
         class Api:
             def request(self, method, path, **_kwargs):

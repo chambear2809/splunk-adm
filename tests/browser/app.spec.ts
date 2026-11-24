@@ -2437,6 +2437,95 @@ test("saved views persist per user and can be reopened or deleted", async ({
   ).toHaveCount(0);
 });
 
+test("VM saved and copied views preserve scope through investigation rechecks", async ({
+  page,
+}) => {
+  const query =
+    "/tests/browser/browser.html?mode=live&service=invoice&environment=validation&vm_scope=validation-invoice-hs2&earliest=1795283855&latest=1795283861&tab=services";
+  const vmRequests = () =>
+    page.evaluate(() =>
+      (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+        request.spl.includes(
+          'adm_vm_application_graph_read("invoice","validation","validation-invoice-hs2")',
+        ),
+      ),
+    );
+  const expectVmMap = async () => {
+    await expect(
+      page.getByRole("button", { name: "Service Invoice" }),
+    ).toBeVisible();
+    expect(await vmRequests()).toEqual([
+      expect.objectContaining({ earliest: "1795283855", latest: "1795283861" }),
+    ]);
+  };
+  await page.goto(query);
+  await expectVmMap();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          (
+            window as Window & { __ADM_CLIPBOARD__?: string }
+          ).__ADM_CLIPBOARD__ = value;
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await more(page, "Saved views");
+  await page.getByRole("button", { name: "Copy link", exact: true }).click();
+  const copied = await page.evaluate(
+    () => (window as Window & { __ADM_CLIPBOARD__?: string }).__ADM_CLIPBOARD__,
+  );
+  expect(copied).toContain("vm_scope=validation-invoice-hs2");
+  await page.goto(copied!);
+  await expect(page).toHaveURL(/vm_scope=validation-invoice-hs2/);
+  await expectVmMap();
+  await more(page, "Saved views");
+  await page.getByLabel("View name", { exact: true }).fill("VM replay");
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  const saved = page.getByRole("link", { name: "VM replay", exact: true });
+  await expect(saved).toHaveAttribute(
+    "href",
+    /vm_scope=validation-invoice-hs2/,
+  );
+  await saved.click();
+  await expect(page).toHaveURL(/vm_scope=validation-invoice-hs2/);
+  await expectVmMap();
+
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Investigation workspace" }),
+  ).toBeVisible();
+  await page.getByText("Comparison windows", { exact: true }).click();
+  await page.getByLabel("Include recovery window", { exact: false }).check();
+  await page
+    .getByRole("button", { name: "Compare windows", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Compare windows", exact: true }),
+  ).toHaveText("Compare windows");
+  await expect(page.getByText(/Baseline:/)).toBeVisible();
+  await expect(page.getByText(/Recovery:/)).toBeVisible();
+  expect(await vmRequests()).toEqual([
+    expect.objectContaining({ earliest: "1795283855", latest: "1795283861" }),
+    expect.objectContaining({ earliest: "1795283849", latest: "1795283855" }),
+    expect.objectContaining({ earliest: "1795283861", latest: "1795283867" }),
+  ]);
+
+  await page.getByRole("button", { name: "Back to map", exact: true }).click();
+  await page.getByRole("button", { name: "Service Invoice" }).click();
+  const impact = page
+    .locator(".inspector-body")
+    .getByRole("link", { name: "Impact if Invoice fails", exact: true });
+  const impactUrl = new URL((await impact.getAttribute("href"))!, page.url());
+  expect(impactUrl.searchParams.get("scope")).toBe("validation-invoice-hs2");
+  expect(impactUrl.searchParams.get("window")).toBe("1795283855");
+  expect(impactUrl.searchParams.get("latest")).toBe("1795283861");
+});
+
 test("saved views report denied storage and do not render a false save", async ({
   page,
 }) => {

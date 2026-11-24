@@ -87,6 +87,7 @@ const inspector = (
   graph: Graph,
   selection: { kind: "node" | "edge"; id: string },
   topo = indexTopology(emptyTopology()),
+  scope?: string,
 ) =>
   renderToStaticMarkup(
     <Inspector
@@ -103,6 +104,15 @@ const inspector = (
       onClose={noop}
       onShowPath={noop}
       summary={null}
+      impactContext={
+        scope
+          ? {
+              scope,
+              earliest: String(Date.parse(graph.window.start) / 1000),
+              latest: String(Date.parse(graph.window.end) / 1000),
+            }
+          : undefined
+      }
     />,
   );
 
@@ -433,6 +443,23 @@ describe("network evidence inspectors", () => {
       "Routing domain not reported; source scope is meraki-nxos",
     );
     expect(html).not.toContain("not mapped to a unique source scope");
+  });
+
+  it("uses the scoped graph window for Impact even with separate NAT bounds", () => {
+    const graph = {
+      ...demoGraph("nxos"),
+      nat_event_window: { start: 1, end: 2 },
+    };
+    const node = graph.nodes.find((candidate) => candidate.kind === "service")!;
+    const html = inspector(
+      graph,
+      { kind: "node", id: node.id },
+      undefined,
+      "scope-prod",
+    );
+    expect(html).toContain("scope=scope-prod");
+    expect(html).toContain("window=1791373500");
+    expect(html).toContain("latest=1791374400");
   });
 
   it("renders malformed quality metadata safely if a caller bypasses graph validation", () => {
