@@ -178,7 +178,7 @@ describe("device lookup", () => {
     const [vds] = findDevices("vmm-shop", topo);
     expect(flowTokens(vds)).toEqual(["192.0.2.71", "192.0.2.73"]);
   });
-  it("merges flows across tokens without double counting", () => {
+  it("groups flow records from several tokens into one conversation", () => {
     const a = demoDeviceFlows("192.0.2.73");
     const merged = mergeDeviceFlows("vds", [a, a, demoDeviceFlows("none")]);
     expect(merged.conversations).toHaveLength(1);
@@ -186,5 +186,38 @@ describe("device lookup", () => {
     expect(merged.totals.flows).toBe(2);
     expect(epochLabel(1791374220)).toBe("2026-10-07 11:57");
     expect(epochLabel(undefined)).toBeUndefined();
+  });
+  it("keeps blocked evidence when a duplicate token has the richer row", () => {
+    const base = demoDeviceFlows("192.0.2.73");
+    const duplicate = {
+      ...base,
+      conversations: base.conversations.map((conversation) => ({
+        ...conversation,
+        bytes: undefined,
+        blocked: true,
+        drops: 1,
+        sources: ["aci"],
+      })),
+    };
+    const merged = mergeDeviceFlows("vds", [base, duplicate]);
+    expect(merged.conversations[0]).toMatchObject({
+      bytes: base.conversations[0].bytes,
+      flows: base.totals.flows * 2,
+      blocked: true,
+      drops: 1,
+      sources: expect.arrayContaining(["aci"]),
+    });
+  });
+  it("uses a lower bound for capped duplicate token totals", () => {
+    const base = demoDeviceFlows("192.0.2.73");
+    const capped = {
+      ...base,
+      truncated: true,
+      limit: 1,
+      totals: { ...base.totals, conversations: 9 },
+    };
+    const merged = mergeDeviceFlows("vds", [capped, capped]);
+    expect(merged.totals.conversations).toBe(9);
+    expect(merged.truncated).toBe(true);
   });
 });

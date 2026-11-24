@@ -2,13 +2,17 @@
 
 The Splunk production build writes `dist/atlas-bundle-report.json` outside the
 app archive. It reports final gzip bytes at level 9, remaining headroom against
-the existing 670 KiB release gate, and per-module rendered-byte attribution.
+the 671 KiB release gate, and per-module rendered-byte attribution.
 The release checker explicitly uses level 9, preserving its established CI
 calculation across Python versions whose default compression levels differ.
 Module contributions are uncompressed attribution estimates, not additive gzip
 costs. Module identifiers omit absolute workspace paths. CI retains the report
 separately for 90 days; the release checker remains authoritative for the exact
 packaged bundle and its gzip ceiling.
+
+The Device evidence update adds APIC and time validation, preserves evidence
+across exporters, and qualifies capped totals. The main bundle budget increases
+by 1 KiB to accommodate those changes.
 
 The current map changes cache routed-edge membership and pill presentation
 metadata across unrelated renders. Routed-edge focus preserves the first matching

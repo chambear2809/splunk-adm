@@ -478,12 +478,44 @@ export function mergeDeviceFlows(
   parts: readonly DeviceFlows[],
 ): DeviceFlows {
   const byKey = new Map<string, DeviceConversation>();
+  const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+  const sum = (a?: number, b?: number) =>
+    a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
   for (const p of parts)
     for (const c of p.conversations) {
       const key = conversationKey(c);
       const prior = byKey.get(key);
-      if (!prior || (c.bytes ?? c.flows) > (prior.bytes ?? prior.flows))
+      if (!prior) {
         byKey.set(key, c);
+        continue;
+      }
+      const richer =
+        (c.bytes ?? c.flows) > (prior.bytes ?? prior.flows) ? c : prior;
+      byKey.set(key, {
+        ...richer,
+        blocked: prior.blocked || c.blocked,
+        flows: prior.flows + c.flows,
+        bytes: sum(prior.bytes, c.bytes),
+        packets: sum(prior.packets, c.packets),
+        drops: prior.drops + c.drops,
+        permits: prior.permits + c.permits,
+        interfaces: union(prior.interfaces, c.interfaces),
+        vlans: union(prior.vlans, c.vlans),
+        segments: union(prior.segments, c.segments),
+        sources: union(prior.sources, c.sources),
+        firstSeen:
+          prior.firstSeen === undefined
+            ? c.firstSeen
+            : c.firstSeen === undefined
+              ? prior.firstSeen
+              : Math.min(prior.firstSeen, c.firstSeen),
+        lastSeen:
+          prior.lastSeen === undefined
+            ? c.lastSeen
+            : c.lastSeen === undefined
+              ? prior.lastSeen
+              : Math.max(prior.lastSeen, c.lastSeen),
+      });
     }
   const bytes = parts
     .map((p) => p.totals.bytes)
@@ -504,12 +536,9 @@ export function mergeDeviceFlows(
       truncated && limit !== undefined ? sorted.slice(0, limit) : sorted,
     ...(limit !== undefined ? { limit } : {}),
     totals: {
-      // Exporters can report the same conversation; only a cut list needs the sum.
-      conversations: parts.some((p) => p.truncated)
-        ? Math.max(
-            byKey.size,
-            parts.reduce((n, p) => n + p.totals.conversations, 0),
-          )
+      // Hidden rows may overlap across tokens. Each part provides a lower bound.
+      conversations: truncated
+        ? Math.max(byKey.size, ...parts.map((p) => p.totals.conversations))
         : byKey.size,
       flows: parts.reduce((n, p) => n + p.totals.flows, 0),
       ...(bytes.length ? { bytes: bytes.reduce((n, b) => n + b, 0) } : {}),

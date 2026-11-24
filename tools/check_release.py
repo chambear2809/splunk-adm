@@ -21,7 +21,7 @@ MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 # Optional AppDynamics/detector inspection extends the existing single-IIFE page.
 # Same-runtime baseline and measured growth are recorded in the evidence contract.
-MAX_ATLAS_GZIP_BYTES = 670 * 1024
+MAX_ATLAS_GZIP_BYTES = 671 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 THOUSANDEYES_BUNDLE_PATH = "splunk_adm/appserver/static/pages/thousandeyes.js"
 THOUSANDEYES_MANIFEST_PATH = "splunk_adm/appserver/static/thousandeyes-manifest.json"

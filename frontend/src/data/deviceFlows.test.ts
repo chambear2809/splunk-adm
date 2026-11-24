@@ -84,7 +84,7 @@ describe("device flows", () => {
     const merged = mergeDeviceFlows("dev", [one, part("y")]);
     expect(merged.limit).toBe(3);
     expect(merged.conversations.map((c) => c.src)).toEqual(["x2", "y2", "x1"]);
-    expect(merged.totals.conversations).toBe(10);
+    expect(merged.totals.conversations).toBe(6);
   });
 
   it("splits interface pairs into compact In and Out sides", () => {

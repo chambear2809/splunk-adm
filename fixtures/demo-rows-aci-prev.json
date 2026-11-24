@@ -90,15 +90,26 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "ece32f5f67522fcf0ce608b2b596ba50fcd4153a3c866731d6e29f5a3ce8eab5",
+      "reviewed_macro_file_sha256": "a66198aada9addc5d2d8764e1828f0a6ad8cb2cb5ca1aafed12ccaf9661647b7",
       "method": "static review only; no recapture",
-      "reason": "Fabric-qualified legacy ACI topology and inventory IDs, and removal of unsafe IP-only Device flow labels, are outside the captured adm_graph(4) dependency closure. All 38 reachable macro stanzas are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+      "reason": "Authority-qualified Device ACL searches, poll window bounds, and portless Device aggregation change only Device reader stanzas. All 38 macros in the captured adm_graph(4) dependency closure are byte-identical to the prior reviewed checkout. Captured graph rows and hashes are unchanged; no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_topology",
         "adm_device_flows(1)",
-        "adm_aci_node_inventory"
+        "adm_device_flows(4)",
+        "adm_device_flows_aggregate(1)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "ece32f5f67522fcf0ce608b2b596ba50fcd4153a3c866731d6e29f5a3ce8eab5",
+          "method": "static review only; no recapture",
+          "reason": "Fabric-qualified legacy ACI topology and inventory IDs, and removal of unsafe IP-only Device flow labels, are outside the captured adm_graph(4) dependency closure. All 38 reachable macro stanzas are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_topology",
+            "adm_device_flows(1)",
+            "adm_aci_node_inventory"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "c7435f8ed57991a1770ce0d1756f528539af558198546fa6dda4ed14c0e3608a",

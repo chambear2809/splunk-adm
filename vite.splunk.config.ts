@@ -7,8 +7,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { thousandEyesAssetVersion } from "./vite.thousandeyes.shared";
 import { journeysAssetVersion } from "./vite.journeys.shared";
 
-// Uses the same numerical 670 KiB budget as tools/check_release.py's release gate.
-const SPLUNK_BUNDLE_CEILING_GZIP = 670 * 1024;
+// Match the release gate in tools/check_release.py.
+const SPLUNK_BUNDLE_CEILING_GZIP = 671 * 1024;
 type AtlasBundleAsset = {
   type: string;
   fileName: string;

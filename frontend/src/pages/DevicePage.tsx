@@ -15,6 +15,7 @@ import {
 import {
   DEVICE_INVENTORY_SEARCH,
   deviceFlowSummary,
+  aciDeviceFlowsSearch,
   deviceFlowsSearch,
   inferLeafEgress,
   interfaceSides,
@@ -177,9 +178,34 @@ export async function loadDevicePage({
       ? tokens.map(demoDeviceFlows)
       : await Promise.all(
           tokens.map(async (token) => {
+            let search: string;
+            if (
+              token === device?.aci_node ||
+              /^pod-\d+\/node-\d+$/i.test(token)
+            ) {
+              const apic =
+                device?.device_authority ??
+                (device?.fabric?.startsWith("apic:")
+                  ? device.fabric.slice(5)
+                  : "");
+              const now = Date.now() / 1000;
+              const start = resolveTime(earliest, timezone, now);
+              const end = resolveTime(latest ?? "now", timezone, now);
+              const qualified =
+                start === undefined || end === undefined || start >= end
+                  ? undefined
+                  : aciDeviceFlowsSearch(token, apic.trim(), start, end);
+              if (!qualified) {
+                warnings.push(
+                  "ACI ACL coverage requires a known APIC and native node.",
+                );
+                return rowsToDeviceFlows(token, []);
+              }
+              search = qualified;
+            } else search = deviceFlowsSearch(token);
             const [result, names] = await Promise.all([
               client!.search({
-                search: deviceFlowsSearch(token),
+                search,
                 earliest,
                 latest,
                 timezone,
@@ -316,7 +342,7 @@ const columns = (
   },
   {
     key: "flows",
-    header: "Flows",
+    header: "Flow records",
     num: true,
     render: (c) => c.flows.toLocaleString(),
     sortValue: (c) => c.flows,
@@ -636,12 +662,10 @@ export function DevicePage({
           <>
             <div className="kpis atlas-device-kpis" aria-label="Summary">
               <span className="kpi">
-                <b>{flows.totals.flows.toLocaleString()}</b>{" "}
-                {flows.totals.flows === 1 ? "flow" : "flows"}
+                <b>{flows.totals.flows.toLocaleString()}</b> flow records
               </span>
               <span className="kpi">
-                <b>{summary.peers.toLocaleString()}</b>{" "}
-                {summary.peers === 1 ? "peer" : "peers"}
+                <b>{summary.peers.toLocaleString()}</b> peers shown
               </span>
               {flows.totals.bytes !== undefined && (
                 <span className="kpi">
@@ -650,7 +674,7 @@ export function DevicePage({
               )}
               <span className={`kpi ${summary.blocked ? "blocked" : ""}`}>
                 {summary.blocked > 0 && <Ban size={13} aria-hidden />}
-                <b>{summary.blocked}</b> blocked
+                <b>{summary.blocked}</b> blocked shown
               </span>
               {!!done?.exporters?.length && (
                 <span className="kpi" title="Contributing collectors">
@@ -670,7 +694,7 @@ export function DevicePage({
               <VirtualTable
                 caption={
                   flows.truncated
-                    ? `Top ${Math.min(flows.limit ?? Infinity, flows.conversations.length).toLocaleString()} of ${flows.totals.conversations.toLocaleString()} conversations`
+                    ? `Showing ${flows.conversations.length.toLocaleString()} of at least ${flows.totals.conversations.toLocaleString()} conversations`
                     : "Conversations"
                 }
                 rows={flows.conversations}

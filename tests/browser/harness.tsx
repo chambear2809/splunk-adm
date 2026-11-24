@@ -377,6 +377,43 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (faultScenario === "device-capped") {
+      const token = /adm_device_flows\((192\.0\.2\.[12])\)/.exec(
+        request.search,
+      )?.[1];
+      const drop = token === "192.0.2.2";
+      const rows =
+        request.search === "`adm_topology`"
+          ? [
+              {
+                row_type: "device",
+                device_id: "test-vds",
+                name: "Test VDS",
+                device_kind: "virtual_switch",
+                ipfix_observers: ["192.0.2.1", "192.0.2.2"],
+              },
+            ]
+          : token
+            ? [
+                {
+                  device: token,
+                  src: "198.51.100.1",
+                  dst: "198.51.100.2",
+                  protocol: "tcp",
+                  dest_port: 443,
+                  ...(!drop && { bytes: 1000 }),
+                  flows: drop ? 1 : 10,
+                  blocked: drop ? 1 : 0,
+                  drops: drop ? 1 : 0,
+                  sources: drop ? "aci_acllog" : "netflow",
+                  total_conversations: drop ? 3 : 4,
+                  truncated: 1,
+                  flows_limit: 1,
+                },
+              ]
+            : [];
+      return { rows, warnings: [], errors: [] };
+    }
     if (request.optionalSource === "multicast_nxos") {
       return {
         rows: [

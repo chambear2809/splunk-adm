@@ -23,6 +23,15 @@ names and application labels rather than infer ownership from IP alone. They
 also show nonfatal search warnings and inventory failures. Raw addresses and
 flow counters remain available.
 
+The Device page uses `adm_device_flows(node, apic, window_start, window_end)` for ACI ACL
+evidence. It requires a known APIC authority and includes reports received
+within one configured poll interval plus 60 seconds after the window, provided
+the ACL record timestamp is inside the selected window. A recent result can
+gain ACL evidence after a subsequent poll. The original one-argument macro is
+retained for existing searches and does not qualify an ACI node by APIC.
+Device flow counts describe observed records, and capped conversation totals
+are shown as lower bounds. Peer and blocked counts describe the displayed rows.
+
 Check effective local overrides for `adm_topology`, `adm_aci_node_inventory`,
 and `adm_device_flows(1)`: an older local definition takes precedence over the
 corrected package default. Review and update those overrides explicitly; do not

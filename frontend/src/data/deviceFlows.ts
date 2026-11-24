@@ -203,6 +203,19 @@ export function deviceFlowsSearch(device: string): string {
     throw new Error("Invalid device identifier for device flows.");
   return `| \`adm_device_flows(${device})\``;
 }
+
+export function aciDeviceFlowsSearch(
+  node: string,
+  apic: string,
+  start: number,
+  end: number,
+) {
+  if (
+    /^pod-\d{1,10}\/node-\d{1,10}$/.test(node) &&
+    /^[A-Za-z0-9_.:-]{1,128}$/.test(apic)
+  )
+    return `| \`adm_device_flows(${node},${apic},${start.toFixed(6)},${end.toFixed(6)})\``;
+}
 /** The SPL for one address pair; names must be resolved to IPs first. */
 export function pathTraceSearch(
   src: string,
