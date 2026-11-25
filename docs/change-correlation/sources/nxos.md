@@ -129,7 +129,7 @@ installed Splunk replay.
 The coverage register's Track A role remains independent inventory/topology
 context. A NDO policy edit is not attributed to an application unless a
 separately retained, authority-qualified relationship chain and compatible
-time interval exist under the [frozen contract](../CONTRACT.md). A controller
+time interval exist under the [source producer contract](../../SOURCE_PRODUCER_CONTRACT.md). A controller
 state or configured route does not establish switch forwarding, route
 selection, packet traversal, or policy enforcement.
 
