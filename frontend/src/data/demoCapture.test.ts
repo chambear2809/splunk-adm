@@ -99,6 +99,68 @@ describe("offline demo capture contract", () => {
     const resigned = await rehashDemoCapture(bundle);
     const validated = await validateDemoCapture(resigned, scenario, template);
     expect(validated.results["timeline.selected"].rows).toHaveLength(1);
+
+    const pointBundle = (epoch: number) => {
+      const point = structuredClone(bundle);
+      const pointTimeline = point.results["timeline.selected"] as unknown as {
+        rows: Record<string, unknown>[];
+        generation_rows: Record<string, unknown>[];
+        selection: { change_ids: string[] };
+        generation_validation: Record<string, unknown>;
+        readback: { result_count: number };
+      };
+      const source = { ...pointTimeline.generation_rows[0] };
+      delete source.record_id;
+      delete source.generation_id;
+      source.earliest_at = null;
+      source.latest_at = null;
+      source.event_at = epoch;
+      return (async () => {
+        const recordId = await sha256Hex(canonicalJson(source));
+        const rowHash = await sha256Hex(
+          canonicalJson({ ...source, record_id: recordId }),
+        );
+        const generationManifest: Record<string, unknown> = {
+          ...(pointTimeline.generation_validation.manifest as Record<
+            string,
+            unknown
+          >),
+          row_count: 1,
+          rows_sha256: rowHash,
+        };
+        delete generationManifest.generation_id;
+        const generationId = await sha256Hex(canonicalJson(generationManifest));
+        const row = {
+          ...source,
+          record_id: recordId,
+          generation_id: generationId,
+        };
+        pointTimeline.rows = [row];
+        pointTimeline.generation_rows = [row];
+        pointTimeline.selection.change_ids = [recordId];
+        pointTimeline.readback.result_count = 1;
+        pointTimeline.generation_validation = {
+          ...pointTimeline.generation_validation,
+          generation_id: generationId,
+          manifest: { ...generationManifest, generation_id: generationId },
+          complete_row_count: 1,
+          rows_sha256: rowHash,
+        };
+        point.manifest.change_generation_id = generationId;
+        point.manifest.change_generation_sha256 = generationId;
+        return rehashDemoCapture(point);
+      })();
+    };
+    const anchor = bundle.manifest.anchor_epoch as number;
+    await expect(
+      validateDemoCapture(await pointBundle(anchor), scenario, template),
+    ).resolves.toBeDefined();
+    await expect(
+      validateDemoCapture(await pointBundle(anchor - 1), scenario, template),
+    ).rejects.toThrow(/point is outside/);
+    await expect(
+      validateDemoCapture(await pointBundle(anchor + 1200), scenario, template),
+    ).rejects.toThrow(/point is outside/);
   });
 
   it("refuses shallow or foreign captured dependency identities", async () => {
