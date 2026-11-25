@@ -56,18 +56,26 @@ export async function runChangeTimelineInspection({
   | { status: "not_selected" }
   | { status: "loaded"; result: ChangeTimelineResult }
 > {
+  const ensureActive = () => {
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+  };
   validateTimelineView(view);
+  ensureActive();
   onPhase?.("configuration");
   const configuration = await configurationClient.read(signal);
+  ensureActive();
   if (configuration.state === "not_selected") return { status: "not_selected" };
   onPhase?.("activation");
+  ensureActive();
   const activation = await loadChangeActivation(
     client,
     configuration.index,
     configuration.activation_id,
     signal,
   );
+  ensureActive();
   onPhase?.("history");
+  ensureActive();
   const result = await loadChangeTimeline(
     client,
     { activation, ...view },

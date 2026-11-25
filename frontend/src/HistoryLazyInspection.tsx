@@ -35,7 +35,7 @@ export function historyAssetUrl(
   const expectedPath = `/app/splunk_adm/${file}`;
   if (
     value.origin !== new URL(locationHref).origin ||
-    value.pathname !== expectedPath
+    !value.pathname.endsWith(expectedPath)
   )
     throw new Error("History asset origin could not be verified.");
   value.searchParams.set("v", version);

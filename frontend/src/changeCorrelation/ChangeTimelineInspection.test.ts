@@ -97,4 +97,28 @@ describe("runChangeTimelineInspection", () => {
     expect(mocked.activation).not.toHaveBeenCalled();
     expect(mocked.timeline).not.toHaveBeenCalled();
   });
+
+  it("stops before activation when cancellation races configuration", async () => {
+    const controller = new AbortController();
+    const configurationClient = {
+      read: vi.fn(async () => ({
+        state: "selected" as const,
+        index: "atlas_changes",
+        activation_id: "a".repeat(64),
+      })),
+    };
+    await expect(
+      runChangeTimelineInspection({
+        client,
+        view,
+        configurationClient,
+        signal: controller.signal,
+        onPhase: (phase) => {
+          if (phase === "configuration") controller.abort();
+        },
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(mocked.activation).not.toHaveBeenCalled();
+    expect(mocked.timeline).not.toHaveBeenCalled();
+  });
 });
