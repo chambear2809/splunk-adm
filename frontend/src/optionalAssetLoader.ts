@@ -20,21 +20,21 @@ export function loadVersionedAssetPair({
   javascript,
   stylesheet,
   version,
-  timeoutMs = 10_000,
+  validate,
 }: {
   javascript: string;
   stylesheet: string;
   version: string;
-  timeoutMs?: number;
+  validate?: () => boolean;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     const style = document.createElement("link");
-    let scriptReady = false;
-    let styleReady = false;
+    let ready = 0;
     let settled = false;
     const finish = (failed = false) => {
-      if (settled || (!failed && (!scriptReady || !styleReady))) return;
+      if (!failed && ready >= 2 && validate && !validate()) failed = true;
+      if (settled || (!failed && ready < 2)) return;
       settled = true;
       clearTimeout(timer);
       script.onload = script.onerror = style.onload = style.onerror = null;
@@ -44,15 +44,11 @@ export function loadVersionedAssetPair({
         reject(new Error("Optional asset unavailable or stale."));
       } else resolve();
     };
-    const timer = setTimeout(() => finish(true), timeoutMs);
+    const timer = setTimeout(() => finish(true), 10_000);
     script.async = true;
     style.rel = "stylesheet";
-    script.onload = () => {
-      scriptReady = true;
-      finish();
-    };
-    style.onload = () => {
-      styleReady = true;
+    script.onload = style.onload = () => {
+      ready++;
       finish();
     };
     script.onerror = style.onerror = () => finish(true);

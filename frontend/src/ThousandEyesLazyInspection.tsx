@@ -73,19 +73,16 @@ export function loadThousandEyesUi(): Promise<OptionalUi> {
     javascript: "pages/thousandeyes.js",
     stylesheet: "thousandeyes.css",
     version: __ADM_TE_ASSET_VERSION__,
-  })
-    .then(() => {
+    validate: () => {
       const ui = runtime.ApplicationAtlasThousandEyes;
-      if (
-        !ui ||
-        ui.assetVersion !== __ADM_TE_ASSET_VERSION__ ||
-        typeof ui.ThousandEyesEvidenceInspection !== "function"
-      )
-        throw new Error(
-          "ThousandEyes investigation assets are unavailable or from a different app version. Reload and retry.",
-        );
-      return ui;
-    })
+      return Boolean(
+        ui &&
+        ui.assetVersion === __ADM_TE_ASSET_VERSION__ &&
+        typeof ui.ThousandEyesEvidenceInspection === "function",
+      );
+    },
+  })
+    .then(() => runtime.ApplicationAtlasThousandEyes!)
     .catch((error: unknown) => {
       pending = undefined;
       throw error;

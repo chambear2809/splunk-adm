@@ -120,19 +120,16 @@ export function loadJourneyUi(): Promise<OptionalUi> {
     javascript: "pages/journeys.js",
     stylesheet: "journeys.css",
     version: __ADM_JOURNEYS_ASSET_VERSION__,
-  })
-    .then(() => {
+    validate: () => {
       const ui = runtime.ApplicationAtlasJourneys;
-      if (
-        !ui ||
-        ui.assetVersion !== __ADM_JOURNEYS_ASSET_VERSION__ ||
-        typeof ui.JourneyEvidenceInspection !== "function"
-      )
-        throw new Error(
-          "Journey evidence assets are unavailable or from a different app version. Reload and retry.",
-        );
-      return ui;
-    })
+      return Boolean(
+        ui &&
+        ui.assetVersion === __ADM_JOURNEYS_ASSET_VERSION__ &&
+        typeof ui.JourneyEvidenceInspection === "function",
+      );
+    },
+  })
+    .then(() => runtime.ApplicationAtlasJourneys!)
     .catch((error: unknown) => {
       pending = undefined;
       throw error;

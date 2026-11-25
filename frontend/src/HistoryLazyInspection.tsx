@@ -57,17 +57,16 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       javascript: "pages/history.js",
       stylesheet: "history.css",
       version: __ADM_HISTORY_ASSET_VERSION__,
-    })
-      .then(() => {
+      validate: () => {
         const ui = runtime.ApplicationAtlasHistory;
-        if (
-          !ui ||
-          ui.assetVersion !== __ADM_HISTORY_ASSET_VERSION__ ||
-          typeof ui.ChangeTimelineInspection !== "function"
-        ) {
-          reject(new Error("History unavailable or stale."));
-        } else resolve(ui);
-      })
+        return Boolean(
+          ui &&
+          ui.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
+          typeof ui.ChangeTimelineInspection === "function",
+        );
+      },
+    })
+      .then(() => resolve(runtime.ApplicationAtlasHistory!))
       .catch(() => reject(new Error(HISTORY_ASSET_ERROR)));
   }).catch((error): never => {
     pending = undefined;
@@ -89,9 +88,7 @@ export function LazyChangeTimelineInspection(
         (reason) =>
           active &&
           setError(
-            reason instanceof Error
-              ? reason.message
-              : "Configuration history unavailable.",
+            reason instanceof Error ? reason.message : HISTORY_ASSET_ERROR,
           ),
       );
     return () => {
@@ -102,5 +99,15 @@ export function LazyChangeTimelineInspection(
     const Component = ui.ChangeTimelineInspection;
     return <Component {...props} />;
   }
-  return error ? <p role="alert">{error}</p> : null;
+  return (
+    <section
+      className="change-timeline"
+      aria-label="Optional configuration change timeline"
+    >
+      <h3>Configuration change timeline</h3>
+      <p role={error ? "alert" : "status"}>
+        {error ?? "Loading configuration history…"}
+      </p>
+    </section>
+  );
 }
