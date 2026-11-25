@@ -1,0 +1,52 @@
+{
+  "fixture_status": "documentation_shaped_synthetic_not_native_sample",
+  "source_shape": "Catalyst Center API 2.3.7.5 audit response as emitted by TA 4.0.60 after source-to-src rename",
+  "collection_metadata": {
+    "capture_id": "catalyst-audit-doc-fixture-001",
+    "authority": "https://catalyst-synthetic.example.invalid",
+    "source_version": "Catalyst Center API 2.3.7.5 documentation-shaped synthetic",
+    "family": "audit_log",
+    "partition": "controller-audit",
+    "scope": "change-b",
+    "started_at": 1793102399,
+    "completed_at": 1793102401,
+    "received_at": 1793102402,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-audit-read",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "catalyst-audit-api-2.3.7.5",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "instanceId": "audit-instance-synthetic-001",
+      "eventId": "audit-event-type-synthetic-001",
+      "parentInstanceId": "audit-parent-synthetic-001",
+      "name": "updateConfigurationTemplate",
+      "type": "USER_EVENT",
+      "category": "INFO",
+      "domain": "Configuration",
+      "subDomain": "Template",
+      "severity": 2,
+      "src": "template-service",
+      "timestamp": 1793102400123,
+      "userId": "synthetic-admin-01",
+      "eventHierarchy": "US.CA.Synthetic",
+      "network": "synthetic-network-label-not-an-id",
+      "childCount": 1,
+      "description": "SYNTHETIC_DESCRIPTION_CANARY",
+      "tags": [{"secret": "SYNTHETIC_TAG_CANARY"}],
+      "details": {"password": "SYNTHETIC_DETAIL_CANARY"},
+      "ciscoDnaEventLink": "https://catalyst.example.invalid/audit?token=SYNTHETIC_LINK_CANARY",
+      "note": "SYNTHETIC_NOTE_CANARY",
+      "tntId": "SYNTHETIC_TNT_CANARY",
+      "context": "SYNTHETIC_CONTEXT_CANARY",
+      "message": "SYNTHETIC_MESSAGE_CANARY",
+      "messageParams": "SYNTHETIC_MESSAGE_PARAMS_CANARY",
+      "additionalDetails": {"credential": "SYNTHETIC_ADDITIONAL_CANARY"},
+      "tenantId": "SYNTHETIC_TENANT_CANARY"
+    }
+  ]
+}

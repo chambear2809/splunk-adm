@@ -1,0 +1,45 @@
+{
+  "source_shape": "Documentation-shaped synthetic ControllerAuditHistory JSON based on the AppDynamics SaaS 26.4.0 audit report example; not captured Controller output.",
+  "collection_metadata": {
+    "capture_id": "appd-audit-doc-fixture-001",
+    "authority": "controller-synthetic",
+    "source_version": "ControllerAuditHistory SaaS schema 26.4.0; tenant version unknown",
+    "family": "audit_log",
+    "partition": "controller-synthetic",
+    "scope": "change-a",
+    "started_at": 1793102399,
+    "completed_at": 1793102401,
+    "received_at": 1793102402,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-audit-read",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "ControllerAuditHistory",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "timeStamp": 1793102400250,
+      "auditDateTime": "2026-10-27T12:00:00.250+0000",
+      "accountName": "account-synthetic",
+      "securityProviderType": "INTERNAL",
+      "userName": "synthetic-user-01",
+      "action": "LOGIN"
+    },
+    {
+      "timeStamp": 1793102460000,
+      "auditDateTime": "2026-10-27T12:01:00.000+0000",
+      "accountName": "account-synthetic",
+      "securityProviderType": "INTERNAL",
+      "userName": "synthetic-user-02",
+      "action": "APP_CONFIGURATION",
+      "objectType": "APPLICATION",
+      "objectName": "Synthetic Application",
+      "objectId": 0,
+      "applicationName": "Synthetic Application",
+      "objectChanges": "synthetic diff omitted by adapter",
+      "controller_url": "https://controller.example.invalid"
+    }
+  ]
+}
