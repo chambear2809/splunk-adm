@@ -550,6 +550,10 @@ def collect_detector_events(
     captured = int(time.time()) if captured_at is None else captured_at
     if isinstance(captured, bool) or not isinstance(captured, int) or captured < 0:
         raise ValueError("capture time is invalid")
+    if captured < request.end:
+        raise DetectorExportError(
+            "capture time must be at or after the requested interval end"
+        )
     event_batches: dict[str, list[dict[str, Any]]] = {}
     total = 0
     capture_deadline = time.monotonic() + MAX_CAPTURE_SECONDS
@@ -619,8 +623,15 @@ def render_hec_ndjson(
     captured_at: int,
     capture_id: str | None = None,
 ) -> str:
+    request.validate()
     if len(events) > MAX_EVENTS_PER_CAPTURE:
         raise ValueError("capture exceeds its event cap")
+    if isinstance(captured_at, bool) or not isinstance(captured_at, int):
+        raise ValueError("capture time is invalid")
+    if captured_at < request.end:
+        raise DetectorExportError(
+            "capture time must be at or after the requested interval end"
+        )
     if capture_id is None:
         capture_id = str(uuid.uuid4())
     completion = {

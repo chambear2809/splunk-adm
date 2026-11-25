@@ -90,18 +90,27 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "405678f10eaa45e19378c5f59fe0173c9b149575334f57d34b9a901a2419577e",
+      "reviewed_macro_file_sha256": "fa059ea74eae0367d1ed1942ae6609a8535b7b479cc601d507daeefc31f45c1b",
       "method": "static review only; no recapture",
-      "reason": "The graph retains an optional APIC-and-leaf ACL policy-point field for newly written rollups. Counts and prior graph fields are unchanged. The immutable capture remains valid as a legacy graph without policy-point provenance, which Incident treats as unqualified for a supported policy change.",
+      "reason": "Only the V2 graph input macro changes. It now applies the shared half-open NAT evidence window. The captured legacy adm_graph path uses its original macro and filter.",
       "modified_macro_stanzas": [
-        "adm_conversation_rollup",
-        "adm_conversation_rollup_v2",
-        "adm_graph_inputs(4)",
-        "adm_graph_inputs_v2(4)",
-        "adm_graph_edges(4)",
-        "adm_graph_output(4)"
+        "adm_graph_inputs_v2(4)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "405678f10eaa45e19378c5f59fe0173c9b149575334f57d34b9a901a2419577e",
+          "method": "static review only; no recapture",
+          "reason": "The graph retains an optional APIC-and-leaf ACL policy-point field for newly written rollups. Counts and prior graph fields are unchanged. The immutable capture remains valid as a legacy graph without policy-point provenance, which Incident treats as unqualified for a supported policy change.",
+          "modified_macro_stanzas": [
+            "adm_conversation_rollup",
+            "adm_conversation_rollup_v2",
+            "adm_graph_inputs(4)",
+            "adm_graph_inputs_v2(4)",
+            "adm_graph_edges(4)",
+            "adm_graph_output(4)"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "14d3905feebc1f8680bbf13709d36a1efadfd8231b6e921f216d3ca68717ea28",

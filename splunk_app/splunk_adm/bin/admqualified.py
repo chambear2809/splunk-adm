@@ -2,6 +2,7 @@
 from __future__ import annotations
 import configparser
 import json
+import math
 import sys
 import time
 from urllib.parse import parse_qsl, urlsplit
@@ -137,6 +138,9 @@ class AdmQualified(GeneratingCommand):
         )
         profile = dict(config["profile"]) if config.has_section("profile") else {}
         if profile.get("enabled", "false").lower() not in ("true", "1"):
+            if self.mode == "summary_health":
+                yield {"status": "disabled"}
+                return
             raise SearchError("Qualified identity is disabled.")
         profile["enabled"] = True
         profile["namespaces"] = [
@@ -148,7 +152,19 @@ class AdmQualified(GeneratingCommand):
                 yield row
             return
         if self.mode == "summary_health":
-            yield self._summary_health(profile, config, now)
+            # Relative search bounds resolve against Splunk's dispatch clock;
+            # using the worker wall clock makes historical health checks report
+            # the current day's summaries instead of the selected window.
+            info = self.metadata.searchinfo
+            try:
+                summary_now = float(
+                    getattr(info, "latest_time", None) or now
+                )
+            except (TypeError, ValueError, OverflowError):
+                raise SearchError("Summary health search clock is invalid.") from None
+            if not math.isfinite(summary_now):
+                raise SearchError("Summary health search clock is invalid.")
+            yield self._summary_health(profile, config, summary_now)
             return
         try:
             if self.mode == "graph":
@@ -168,8 +184,6 @@ class AdmQualified(GeneratingCommand):
             raise SearchError("Identity search bounds must be finite.") from None
         # Catalog URLs must replay the exact same exclusive search bounds.
         # Reject nonfinite values before conversion and preserve integer epochs.
-        import math
-
         if not math.isfinite(start) or not math.isfinite(as_of):
             raise SearchError("Identity search bounds must be finite.")
         start, as_of = int(start), int(as_of)

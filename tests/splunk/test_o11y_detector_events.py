@@ -158,3 +158,12 @@ class DetectorEventsRuntimeTest(unittest.TestCase):
         self.assertEqual(
             normalized["capture"]["detectorIds"], ["detector_checkout_latency"]
         )
+
+    def test_completion_before_interval_end_is_rejected(self):
+        completion = copy.deepcopy(self.events[-1])
+        completion["event"]["expected_record_count"] = 0
+        completion["event"]["captured_at"] = self.end - 1
+        completion["time"] = self.end - 1
+        normalized = self.inspect([completion])
+        self.assertNotIn("capture", normalized)
+        self.assertGreater(normalized["rejected"], 0)

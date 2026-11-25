@@ -1,5 +1,6 @@
 import capture from "../../fixtures/demo-networking-aci.json" with { type: "json" };
 import inventory from "../../fixtures/demo-networking-topology.json" with { type: "json" };
+import mapCapture from "../../fixtures/demo-rows.json" with { type: "json" };
 import type { Row } from "../../frontend/src/rows";
 
 // Controlled mutations of the captured normalized search output. These names
@@ -28,6 +29,43 @@ export const CLIENT_EDGE =
 export const CLIENT_BACKEND =
   "pod:cilium-aci-east/999151a5-7418-5939-b573-6de8631b4ffc";
 const cloneRows = (rows: unknown): Row[] => structuredClone(rows) as Row[];
+
+export const natExportArgs = mapCapture.args;
+export function natExportRows(kind: string): Row[] {
+  const rows = cloneRows(mapCapture.rows);
+  const meta = rows.find((row) => row.row_type === "meta")!;
+  const edge = rows.find((row) => row.relationship === "communicates_with")!;
+  if (kind === "none") return rows;
+  meta.nat_window_start = meta.window_start;
+  meta.nat_window_end = meta.window_end;
+  if (kind === "cap") {
+    edge.nat_observations_truncated = "1";
+  } else {
+    edge.nat_observations = JSON.stringify([
+      {
+        source_authority: "cisco:sfw:estreamer",
+        event_type: "ConnectionEvent",
+        scope: "prod",
+        scope_mapping_verified: true,
+        device_ip: "192.0.2.1",
+        event_fingerprint: "a".repeat(64),
+        event_time: 1791373808,
+        received_time: 1791373810,
+        protocol: "tcp",
+        direction: "initiator_to_responder",
+        reported_initiator_ip: "198.51.100.8",
+        reported_initiator_port: 51400,
+        reported_responder_ip: "203.0.113.10",
+        reported_responder_port: 443,
+        translated_initiator_ip: "192.0.2.44",
+        translated_initiator_port: 35000,
+        translated_responder_ip: "203.0.113.10",
+        translated_responder_port: 443,
+      },
+    ]);
+  }
+  return rows;
+}
 
 export function lifecycleGraphRows(
   version: number,

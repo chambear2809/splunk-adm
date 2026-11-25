@@ -919,7 +919,9 @@ function StandardMapPage({
             hasContextEvidence={graph.edges.some(
               (edge) =>
                 (edge.attachment_evidence?.length ?? 0) > 0 ||
-                (edge.traffic_observations?.length ?? 0) > 0,
+                (edge.traffic_observations?.length ?? 0) > 0 ||
+                (edge.nat_observations?.length ?? 0) > 0 ||
+                edge.nat_observations_truncated === true,
             )}
             onJson={exportJson}
             onPng={exportPng}

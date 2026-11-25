@@ -569,16 +569,7 @@ class BaselineStore:
         ).fetchall()
         if len(keys) > self.MAX_HISTORY_PROOFS or any(key[0] is None for key in keys):
             raise Forbidden("history proof unavailable")
-        proofs = []
-        for (key,) in keys:
-            evidence = db.execute(
-                "SELECT reference,capture FROM evidence WHERE baseline_id=? AND evidence_key=?",
-                (baseline_id, key),
-            ).fetchone()
-            if evidence is None:
-                raise Forbidden("history proof unavailable")
-            proofs.append(evidence)
-        return proofs
+        return self._page_evidence(db, baseline_id, {key[0] for key in keys})
 
     def _authorize_proofs(self, principal, proofs):
         for reference, capture in proofs:
@@ -1185,7 +1176,7 @@ class BaselineStore:
         if watch[1] != baseline_version:
             raise Conflict("watch version changed")
         baseline = self.get(principal, baseline_id, baseline_version)["capture"]
-        self._authorize_proofs(principal, proofs)
+        self._authorize_proofs(principal, proofs.values())
         capture = self._prepare_capture(principal, reference)
         if (
             expected_capture_digest is not None
@@ -1343,30 +1334,7 @@ class BaselineStore:
             result[key] = proof
         return result
 
-    def occurrences(self, principal, baseline_id, watch_id, *, after=0, limit=50):
-        _text(watch_id, "watch id", 128)
-        if (
-            type(after) is not int
-            or after < 0
-            or type(limit) is not int
-            or not 1 <= limit <= 100
-        ):
-            raise Invalid("invalid pagination")
-        with closing(self._connect()) as db:
-            row = self._row(db, principal, "read", baseline_id)
-            watch = db.execute(
-                "SELECT baseline_version FROM watches WHERE baseline_id=? AND id=?",
-                (baseline_id, watch_id),
-            ).fetchone()
-            if not watch:
-                raise NotFound("watch not found")
-            rows = db.execute(
-                "SELECT seq,signature,start,end,observed,evidence_key FROM occurrences WHERE baseline_id=? AND watch_id=? AND seq>? ORDER BY seq LIMIT ?",
-                (baseline_id, watch_id, after, min(limit + 1, self.MAX_HISTORY_PROOFS)),
-            ).fetchall()
-            proofs = self._page_evidence(db, baseline_id, {r[5] for r in rows})
-        baseline = self.get(principal, baseline_id, watch[0])["capture"]
-        self._authorize_proofs(principal, proofs.values())
+    def _validate_history_findings(self, baseline, rows, proofs):
         # Classify only retained proof, including lookahead. A legacy or corrupt
         # occurrence that no longer represents a finding must fail closed.
         classifications = {}
@@ -1393,6 +1361,33 @@ class BaselineStore:
             window, findings = classifications[r[5]]
             if window != {"start": r[2], "end": r[3]} or r[1] not in findings:
                 raise Forbidden("history proof unavailable")
+        return classifications
+
+    def occurrences(self, principal, baseline_id, watch_id, *, after=0, limit=50):
+        _text(watch_id, "watch id", 128)
+        if (
+            type(after) is not int
+            or after < 0
+            or type(limit) is not int
+            or not 1 <= limit <= 100
+        ):
+            raise Invalid("invalid pagination")
+        with closing(self._connect()) as db:
+            row = self._row(db, principal, "read", baseline_id)
+            watch = db.execute(
+                "SELECT baseline_version FROM watches WHERE baseline_id=? AND id=?",
+                (baseline_id, watch_id),
+            ).fetchone()
+            if not watch:
+                raise NotFound("watch not found")
+            rows = db.execute(
+                "SELECT seq,signature,start,end,observed,evidence_key FROM occurrences WHERE baseline_id=? AND watch_id=? AND seq>? ORDER BY seq LIMIT ?",
+                (baseline_id, watch_id, after, min(limit + 1, self.MAX_HISTORY_PROOFS)),
+            ).fetchall()
+            proofs = self._page_evidence(db, baseline_id, {r[5] for r in rows})
+        baseline = self.get(principal, baseline_id, watch[0])["capture"]
+        self._authorize_proofs(principal, proofs.values())
+        classifications = self._validate_history_findings(baseline, rows, proofs)
         items = [
             {
                 "seq": r[0],
@@ -1424,16 +1419,18 @@ class BaselineStore:
             if not watch:
                 raise NotFound("watch not found")
             proofs = self._history_proofs(db, baseline_id, watch_id)
-            count = db.execute(
-                "SELECT count(*) FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=? AND observed<=?",
+            rows = db.execute(
+                "SELECT seq,signature,start,end,observed,evidence_key FROM occurrences WHERE baseline_id=? AND watch_id=? AND signature=? AND observed<=?",
                 (baseline_id, watch_id, signature_value, now),
-            ).fetchone()[0]
+            ).fetchall()
             last_row = db.execute(
                 "SELECT surfaced_at FROM surfaced WHERE baseline_id=? AND watch_id=? AND signature=?",
                 (baseline_id, watch_id, signature_value),
             ).fetchone()
-        self.get(principal, baseline_id, watch[1])
-        self._authorize_proofs(principal, proofs)
+        baseline = self.get(principal, baseline_id, watch[1])["capture"]
+        self._authorize_proofs(principal, proofs.values())
+        self._validate_history_findings(baseline, rows, proofs)
+        count = len(rows)
         self._recheck_revision(principal, baseline_id, row[2])
         definition = json.loads(watch[0])
         last = last_row[0] if last_row else None
