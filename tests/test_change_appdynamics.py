@@ -154,18 +154,19 @@ class AppDynamicsAuditAdapterTests(unittest.TestCase):
         self.assertEqual(replay["partition"], normalized["partition"])
         self.assertEqual(replay["objects"], normalized["objects"])
 
-    def test_iso_timezone_conversion_overflow_is_structured(self) -> None:
+    def test_iso_timezone_bounds_are_structured_errors(self) -> None:
         native_records, metadata = audit_fixture()
-        native = copy.deepcopy(native_records[0])
-        native.pop("timeStamp")
-
-        with patch(
-            "tools.change_correlation.adapters.appdynamics._iso_to_epoch",
-            side_effect=OverflowError,
+        for timestamp in (
+            "0001-01-01T00:00:00+14:00",
+            "9999-12-31T23:59:59-14:00",
         ):
-            with self.assertRaises(ContractError) as caught:
-                adapt_appdynamics_audits([native], metadata)
-        self.assertEqual(caught.exception.code, "invalid_time")
+            with self.subTest(timestamp=timestamp):
+                native = copy.deepcopy(native_records[0])
+                native.pop("timeStamp")
+                native["auditDateTime"] = timestamp
+                with self.assertRaises(ContractError) as caught:
+                    adapt_appdynamics_audits([native], metadata)
+                self.assertEqual(caught.exception.code, "invalid_time")
 
     def test_bad_native_time_shapes_are_rejected(self) -> None:
         native_records, metadata = audit_fixture()
