@@ -21,6 +21,7 @@ type Runtime = typeof globalThis & {
     ChangeTimelineInspection: React.ComponentType<ChangeTimelineInspectionProps>;
   };
   __AtlasHistoryHost?: unknown;
+  __ADM_FORCE_SPLUNK_BUILD__?: boolean;
 };
 type HistoryUi = NonNullable<Runtime["ApplicationAtlasHistory"]>;
 let pending: Promise<HistoryUi> | undefined;
@@ -43,13 +44,13 @@ export function historyAssetUrl(
 }
 
 export function loadHistoryUi(): Promise<HistoryUi> {
-  if (!__ADM_SPLUNK_BUILD__)
+  const runtime = globalThis as Runtime;
+  if (!__ADM_SPLUNK_BUILD__ && !runtime.__ADM_FORCE_SPLUNK_BUILD__)
     return import("./history-entry").then((module): HistoryUi => ({
       assetVersion: "development",
       ChangeTimelineInspection: module.ChangeTimelineInspection,
     }));
   if (pending) return pending;
-  const runtime = globalThis as Runtime;
   if (!runtime.__AtlasHistoryHost)
     Object.defineProperty(runtime, "__AtlasHistoryHost", {
       value: Object.freeze({
