@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { validateDemoCapture } from "./demoCapture";
+import { validateDemoCapture, type DemoCaptureReadback } from "./demoCapture";
 import type { DemoScenario } from "./demoRegistry";
 import { demoCaptureBundle, rehashDemoCapture } from "./demoCapture.testUtils";
+import { canonicalJson, sha256Hex } from "../changeCorrelation/canonicalJson";
 
 describe("offline demo capture contract", () => {
   it("round-trips the synthetic blocked bundle without enabling runtime capture", async () => {
@@ -56,5 +57,65 @@ describe("offline demo capture contract", () => {
     await expect(
       validateDemoCapture(resigned, scenario, template),
     ).rejects.toThrow(/dependency/);
+  });
+
+  it("accepts a Python-compatible dependency binding tied to graph evidence", async () => {
+    const scenario: DemoScenario = "track-a-firewall";
+    const { template, bundle } = await demoCaptureBundle(scenario);
+    const graph = bundle.results["graph.impact"] as unknown as {
+      rows: Record<string, unknown>[];
+      readback: DemoCaptureReadback;
+      query: { sha256: string };
+      window: { earliest: number; latest: number };
+    };
+    const receipt = graph.readback.receipt_fingerprints[0];
+    graph.rows.push({ row_type: "edge", id: "edge-1" });
+    graph.readback.result_count = graph.rows.length;
+    const coverage = {
+      schema_version: 1,
+      basis: "query_level_input_coverage",
+      qualification: "eligible_input_superset_not_per_edge_lineage",
+      execution_id: bundle.manifest.execution_id,
+      query_sha256: graph.query.sha256,
+      scope: "change-a",
+      graph_window: {
+        earliest: graph.window.earliest,
+        latest: graph.window.latest,
+      },
+      summary_readback: {
+        receipt_fingerprints: [receipt],
+        index_window: graph.readback.index_time_bounds,
+      },
+    };
+    graph.readback.query_job = { sid: "sid-python" };
+    graph.readback.query_input_coverage = coverage;
+    const binding = {
+      authority: "atlas:observed_dependency",
+      identity_type: "captured_dependency",
+      scenario_id: scenario,
+      execution_id: bundle.manifest.execution_id,
+      graph_result_key: "graph.impact",
+      graph_result_sha256: await sha256Hex(canonicalJson(graph)),
+      edge_id: "edge-1",
+      scope: "change-a",
+      window: coverage.graph_window,
+      query_sha256: graph.query.sha256,
+      receipt_basis: "query_input_coverage_v1",
+      query_input_coverage_sha256: await sha256Hex(canonicalJson(coverage)),
+      active_traffic_contract_sha256:
+        bundle.manifest.active_traffic_contract_sha256,
+      receipt_fingerprints: [receipt],
+    };
+    bundle.manifest.captured_dependencies = [
+      {
+        authority: "atlas:observed_dependency",
+        type: "captured_dependency",
+        id: `captured_dependency:${await sha256Hex(canonicalJson(binding))}`,
+        binding,
+      },
+    ];
+    const resigned = await rehashDemoCapture(bundle);
+    const validated = await validateDemoCapture(resigned, scenario, template);
+    expect(validated.manifest.captured_dependencies).toHaveLength(1);
   });
 });

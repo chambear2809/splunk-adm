@@ -287,6 +287,92 @@ async function parseCapturedDependencies(
   return dependencies;
 }
 
+async function validateDependencyEvidence(
+  dependencies: unknown[],
+  rawResults: Record<string, unknown>,
+  manifest: DemoCaptureManifest,
+): Promise<void> {
+  for (const candidate of dependencies) {
+    const binding = (candidate as Record<string, unknown>).binding as Record<
+      string,
+      unknown
+    >;
+    const graphKey = String(binding.graph_result_key);
+    const graph = rawResults[graphKey];
+    if (!object(graph) || graph.status !== "complete")
+      throw new Error("Demo capture dependency graph evidence is incomplete.");
+    if (
+      binding.execution_id !== manifest.execution_id ||
+      binding.scope !== manifest.selection.change_scope ||
+      binding.active_traffic_contract_sha256 !==
+        manifest.active_traffic_contract_sha256 ||
+      binding.query_sha256 !== (graph.query as Record<string, unknown>)?.sha256
+    )
+      throw new Error(
+        "Demo capture dependency binding is not tied to its graph.",
+      );
+    const graphWindow = graph.window;
+    if (!object(graphWindow) || graphWindow.basis !== "source_time")
+      throw new Error("Demo capture dependency graph window is invalid.");
+    const expectedWindow = {
+      earliest: graphWindow.earliest,
+      latest: graphWindow.latest,
+    };
+    if (canonicalJson(binding.window) !== canonicalJson(expectedWindow))
+      throw new Error("Demo capture dependency window differs from graph.");
+    const graphHash = await sha256Hex(canonicalJson(graph));
+    if (binding.graph_result_sha256 !== graphHash)
+      throw new Error("Demo capture dependency graph hash differs from graph.");
+    const readback = graph.readback;
+    const coverage = object(readback)
+      ? readback.query_input_coverage
+      : undefined;
+    if (!object(coverage) || !object(coverage.summary_readback))
+      throw new Error("Demo capture dependency lacks input coverage.");
+    const summary = coverage.summary_readback;
+    if (
+      coverage.schema_version !== 1 ||
+      coverage.basis !== "query_level_input_coverage" ||
+      coverage.qualification !==
+        "eligible_input_superset_not_per_edge_lineage" ||
+      coverage.execution_id !== manifest.execution_id ||
+      coverage.query_sha256 !== binding.query_sha256 ||
+      coverage.scope !== binding.scope ||
+      canonicalJson(coverage.graph_window) !== canonicalJson(expectedWindow) ||
+      canonicalJson(summary.receipt_fingerprints) !==
+        canonicalJson(
+          (readback as Record<string, unknown>).receipt_fingerprints,
+        ) ||
+      canonicalJson((readback as Record<string, unknown>).index_time_bounds) !==
+        canonicalJson(summary.index_window)
+    )
+      throw new Error(
+        "Demo capture dependency input coverage differs from graph.",
+      );
+    const coverageHash = await sha256Hex(canonicalJson(coverage));
+    if (binding.query_input_coverage_sha256 !== coverageHash)
+      throw new Error(
+        "Demo capture dependency coverage hash differs from graph.",
+      );
+    const rows = Array.isArray(graph.rows) ? graph.rows : [];
+    if (
+      !rows.some(
+        (row) =>
+          object(row) && row.id === binding.edge_id && row.row_type === "edge",
+      )
+    )
+      throw new Error("Demo capture dependency edge is absent from graph.");
+    if (
+      !Array.isArray(binding.receipt_fingerprints) ||
+      canonicalJson(binding.receipt_fingerprints) !==
+        canonicalJson(
+          (readback as Record<string, unknown>).receipt_fingerprints,
+        )
+    )
+      throw new Error("Demo capture dependency receipts differ from graph.");
+  }
+}
+
 function validEpoch(value: unknown): value is number {
   return (
     typeof value === "number" &&
@@ -1433,6 +1519,11 @@ export async function validateDemoCapture(
       ),
     ]),
   ) as Record<DemoCaptureKey, DemoCaptureResult>;
+  await validateDependencyEvidence(
+    manifest.captured_dependencies,
+    rawResults,
+    manifest,
+  );
   const requiredKeys = [
     "graph.baseline",
     "graph.change",
@@ -1670,6 +1761,21 @@ export async function validateDemoCapture(
         throw new Error(
           "Demo capture timeline selected row is outside its window.",
         );
+      if (
+        start !== null &&
+        start !== undefined &&
+        end !== null &&
+        end !== undefined &&
+        start > end
+      )
+        throw new Error("Demo capture timeline interval is reversed.");
+      if (
+        start !== null &&
+        start !== undefined &&
+        (end === null || end === undefined) &&
+        (start < manifest.anchor_epoch || start >= manifest.anchor_epoch + 1200)
+      )
+        throw new Error("Demo capture timeline point is outside its window.");
     }
   }
   const queryLiterals = new Map<string, string>();
