@@ -129,9 +129,11 @@ export function loadJourneyUi(): Promise<OptionalUi> {
     },
   })
     .then(() => runtime.ApplicationAtlasJourneys!)
-    .catch((error: unknown) => {
+    .catch(() => {
       pending = undefined;
-      throw error;
+      throw new Error(
+        "Journey assets are unavailable or from a different app version. Reload and retry.",
+      );
     });
   return pending;
 }

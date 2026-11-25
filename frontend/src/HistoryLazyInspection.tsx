@@ -85,12 +85,9 @@ export function LazyChangeTimelineInspection(
       active = false;
     };
   }, []);
-  if (ui) {
-    const Component = ui.ChangeTimelineInspection;
-    return <Component {...props} />;
-  }
+  if (ui) return <ui.ChangeTimelineInspection {...props} />;
   return (
-    <section className="change-timeline" aria-label="History">
+    <section aria-label="History">
       <h3>History</h3>
       <p role={error ? "alert" : "status"}>{error ?? "Loading…"}</p>
     </section>
