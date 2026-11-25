@@ -841,6 +841,49 @@ def _validate_timeline(
         or len(change_ids) != len(set(change_ids))
     ):
         raise ScenarioError("Timeline selection change IDs must be text.")
+    if change_ids != sorted(row["record_id"] for row in display_rows):
+        raise ScenarioError("Timeline selection change IDs do not match selected rows.")
+    selected_change_ids = set(change_ids)
+    for row in display_rows:
+        if row.get("scope") != selection["scope"]:
+            raise ScenarioError("Timeline selected row scope differs from selection.")
+        row_change_id = row.get("change_id")
+        if row_change_id is not None and row_change_id not in selected_change_ids:
+            raise ScenarioError("Timeline selected row is outside selected changes.")
+        earliest = row.get("earliest_at")
+        latest = row.get("latest_at")
+        if earliest is not None or latest is not None:
+            row_earliest = _time(earliest, "timeline selected row earliest_at")
+            row_latest = _time(latest, "timeline selected row latest_at")
+            if row_earliest > row_latest or (
+                row_latest < selection_bounds["earliest"]
+                or row_earliest > selection_bounds["latest"]
+            ):
+                raise ScenarioError(
+                    "Timeline selected row is outside selection window."
+                )
+        else:
+            row_time = next(
+                (
+                    row.get(field)
+                    for field in (
+                        "event_at",
+                        "effective_at",
+                        "observed_at",
+                        "received_at",
+                    )
+                    if row.get(field) is not None
+                ),
+                None,
+            )
+            if row_time is None or not (
+                selection_bounds["earliest"]
+                <= _time(row_time, "timeline selected row time")
+                <= selection_bounds["latest"]
+            ):
+                raise ScenarioError(
+                    "Timeline selected row is outside selection window."
+                )
     return generation_id, generation_sha
 
 
@@ -1044,7 +1087,18 @@ def build_capture_bundle(
             raise ScenarioError("Captured dependency graph result is not complete.")
         query_sha = graph_result["query"]["sha256"]
         receipts = graph_result["readback"]["receipt_fingerprints"]
-        expected_window = graph_result["window"]
+        graph_window = graph_result["window"]
+        if (
+            not isinstance(graph_window, dict)
+            or graph_window.get("basis") != "source_time"
+        ):
+            raise ScenarioError(
+                "Captured dependency graph evidence must use a source-time window."
+            )
+        expected_window = {
+            "earliest": graph_window["earliest"],
+            "latest": graph_window["latest"],
+        }
         if (
             binding_body.get("scenario_id") != scenario["scenario_id"]
             or binding_body.get("execution_id") != plan["execution_id"]
