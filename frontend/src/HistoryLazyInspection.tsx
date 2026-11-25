@@ -64,9 +64,9 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     },
   })
     .then(() => runtime.ApplicationAtlasHistory!)
-    .catch(() => {
+    .catch((error: unknown) => {
       pending = undefined;
-      throw new Error("History unavailable.");
+      throw error;
     }) as Promise<HistoryUi>;
   return pending;
 }
