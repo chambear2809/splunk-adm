@@ -676,6 +676,32 @@ def captured_dependency_binding(
     receipts = sorted(
         set(_digest(item, "receipt_fingerprint") for item in receipt_fingerprints)
     )
+    readback = graph_result.get("readback")
+    coverage = (
+        readback.get("query_input_coverage") if isinstance(readback, dict) else None
+    )
+    summary = coverage.get("summary_readback") if isinstance(coverage, dict) else None
+    expected_window = _bounds(window, "captured dependency window")
+    if (
+        not isinstance(coverage, dict)
+        or not isinstance(summary, dict)
+        or coverage.get("schema_version") != 1
+        or coverage.get("basis") != "query_level_input_coverage"
+        or coverage.get("qualification")
+        != "eligible_input_superset_not_per_edge_lineage"
+        or coverage.get("execution_id") != execution_id
+        or coverage.get("query_sha256") != query_sha256
+        or coverage.get("scope") != scope
+        or coverage.get("graph_window") != expected_window
+        or summary.get("receipt_fingerprints") != receipts
+        or readback.get("receipt_fingerprints") != receipts
+        or readback.get("index_time_bounds") != summary.get("index_window")
+        or not isinstance(readback.get("query_job"), dict)
+    ):
+        raise ScenarioError(
+            "Captured dependency lacks matching complete query-input coverage."
+        )
+    coverage_sha256 = _sha256(canonical_json(coverage))
     rows = graph_result.get("rows")
     if not isinstance(rows, list) or not any(
         isinstance(row, dict)
@@ -694,8 +720,10 @@ def captured_dependency_binding(
         "graph_result_sha256": result_hash,
         "edge_id": edge_id,
         "scope": scope,
-        "window": _bounds(window, "captured dependency window"),
+        "window": expected_window,
         "query_sha256": query_sha256,
+        "receipt_basis": "query_input_coverage_v1",
+        "query_input_coverage_sha256": coverage_sha256,
         "active_traffic_contract_sha256": active_traffic_contract_sha256,
         "receipt_fingerprints": receipts,
     }
@@ -777,11 +805,13 @@ def _validate_timeline(
         raise ScenarioError(
             "Timeline full row set does not match the immutable manifest hash."
         )
+    generation_by_id = dict(zip(generation_ids, generation_rows))
     display_rows = result.get("rows")
     if not isinstance(display_rows, list) or any(
         not isinstance(row, dict)
         or row.get("generation_id") != generation_id
         or row.get("record_id") not in set(generation_ids)
+        or canonical_json(row) != canonical_json(generation_by_id[row["record_id"]])
         for row in display_rows
     ):
         raise ScenarioError(
@@ -1132,6 +1162,27 @@ def verify_capture_bundle(bundle: Any) -> dict[str, Any]:
         or manifest.get("services_contacted") is not True
     ):
         raise ScenarioError("Capture bundle is not bound to an approved template.")
+    required = set(DIRECT_RESULT_KEYS | PRIMARY_ENDPOINT_RESULT_KEYS)
+    if scenario["scenario_id"] == "track-a-firewall":
+        required.add("endpoint.control.impact")
+    if (
+        any(
+            not isinstance(results.get(key), dict)
+            or results[key].get("status") != "complete"
+            for key in required
+        )
+        and manifest.get("capture_status") == "complete"
+    ):
+        raise ScenarioError(
+            "A capture marked complete has unavailable required results."
+        )
+    expected_capture_status = (
+        "complete"
+        if all(results[key].get("status") == "complete" for key in required)
+        else "partial"
+    )
+    if manifest.get("capture_status") != expected_capture_status:
+        raise ScenarioError("Capture status does not match required result statuses.")
     anchor = _time(manifest.get("anchor_epoch"), "anchor_epoch")
     expected_windows = {
         phase["id"]: {

@@ -12,6 +12,8 @@ from tools.capture_change_scenario import (
     ENDPOINT_RESULT_KEYS,
     MONITORING_RESULT_KEYS,
     RESULT_KEYS,
+    _validate_timeline,
+    captured_dependency_binding,
     _validate_result,
     verify_capture_bundle,
 )
@@ -82,6 +84,113 @@ def _plan(scenario_id: str = "track-a-firewall") -> dict:
 
 
 class ChangeScenarioTests(unittest.TestCase):
+    def test_captured_dependency_requires_matching_query_input_coverage(self) -> None:
+        query_hash = "b" * 64
+        receipt = "c" * 64
+        window = {"earliest": 1_800_000_300, "latest": 1_800_000_600}
+        coverage = {
+            "schema_version": 1,
+            "basis": "query_level_input_coverage",
+            "qualification": "eligible_input_superset_not_per_edge_lineage",
+            "execution_id": "execution-1",
+            "query_sha256": query_hash,
+            "scope": "change-a",
+            "graph_window": window,
+            "summary_readback": {
+                "receipt_fingerprints": [receipt],
+                "index_window": {"earliest": 1_800_000_301, "latest": 1_800_000_601},
+            },
+        }
+        graph = {
+            "rows": [{"row_type": "edge", "id": "edge-1"}],
+            "readback": {
+                "query_input_coverage": coverage,
+                "receipt_fingerprints": [receipt],
+                "index_time_bounds": coverage["summary_readback"]["index_window"],
+                "query_job": {"sid": "sid-1"},
+            },
+        }
+        identity = captured_dependency_binding(
+            scenario_id="track-a-firewall",
+            execution_id="execution-1",
+            graph_result_key="graph.baseline",
+            edge_id="edge-1",
+            scope="change-a",
+            window=window,
+            query_sha256=query_hash,
+            active_traffic_contract_sha256="d" * 64,
+            receipt_fingerprints=[receipt],
+            graph_result=graph,
+        )
+        self.assertEqual(
+            identity["binding"]["receipt_basis"], "query_input_coverage_v1"
+        )
+        self.assertEqual(
+            identity["binding"]["query_input_coverage_sha256"],
+            hashlib.sha256(canonical_json(coverage)).hexdigest(),
+        )
+        del graph["readback"]["query_input_coverage"]
+        with self.assertRaisesRegex(ScenarioError, "query-input coverage"):
+            captured_dependency_binding(
+                scenario_id="track-a-firewall",
+                execution_id="execution-1",
+                graph_result_key="graph.baseline",
+                edge_id="edge-1",
+                scope="change-a",
+                window=window,
+                query_sha256=query_hash,
+                active_traffic_contract_sha256="d" * 64,
+                receipt_fingerprints=[receipt],
+                graph_result=graph,
+            )
+
+    def test_timeline_rejects_selected_row_content_tampering(self) -> None:
+        plan = _plan()
+        record_id = "e" * 64
+        row = {
+            "record_id": record_id,
+            "generation_id": "placeholder",
+            "scope": "change-a",
+            "value": "original",
+        }
+        rows_sha = hashlib.sha256(
+            canonical_json(
+                {key: value for key, value in row.items() if key != "generation_id"}
+            )
+        ).hexdigest()
+        manifest_body = {
+            "row_count": 1,
+            "rows_sha256": rows_sha,
+            "source": "offline-test",
+        }
+        generation_id = hashlib.sha256(canonical_json(manifest_body)).hexdigest()
+        row["generation_id"] = generation_id
+        result = {
+            "generation_validation": {
+                "generation_id": generation_id,
+                "manifest": {**manifest_body, "generation_id": generation_id},
+                "complete_row_count": 1,
+                "rows_sha256": rows_sha,
+                "validated_before_filter": True,
+                "ingest_bounds": {
+                    "earliest": plan["anchor_t_epoch"],
+                    "latest": plan["planned_run_end_epoch"],
+                },
+            },
+            "generation_rows": [row],
+            "rows": [dict(row, value="tampered")],
+            "selection": {
+                "scope": "change-a",
+                "window": {
+                    "start": plan["anchor_t_epoch"],
+                    "end": plan["planned_run_end_epoch"],
+                },
+                "change_ids": [],
+            },
+        }
+        with self.assertRaisesRegex(ScenarioError, "subset"):
+            _validate_timeline(result, load_scenario(plan["scenario_id"]), plan)
+
     def test_only_two_offline_scenarios_are_exposed_without_assigning_t(self) -> None:
         self.assertEqual(SCENARIO_IDS, ("track-a-firewall", "track-b-fabric"))
         for scenario_id in SCENARIO_IDS:
@@ -285,6 +394,22 @@ class ChangeScenarioTests(unittest.TestCase):
         ).hexdigest()
         with self.assertRaisesRegex(ScenarioError, "bundle_sha256"):
             verify_capture_bundle(wrong_domain)
+
+        falsely_complete = copy.deepcopy(bundle)
+        falsely_complete["manifest"]["capture_status"] = "complete"
+        falsely_complete["manifest"]["capture_sha256"] = hashlib.sha256(
+            canonical_json(falsely_complete["results"])
+        ).hexdigest()
+        falsely_complete["bundle_sha256"] = hashlib.sha256(
+            canonical_json(
+                {
+                    "manifest": falsely_complete["manifest"],
+                    "results": falsely_complete["results"],
+                }
+            )
+        ).hexdigest()
+        with self.assertRaisesRegex(ScenarioError, "required results"):
+            verify_capture_bundle(falsely_complete)
 
     def test_result_key_allowlist_contains_only_the_frozen_evidence_surfaces(
         self,
