@@ -1748,7 +1748,8 @@ export async function validateDemoCapture(
           "Demo capture timeline selected row has a foreign scope.",
         );
       const hasInterval =
-        Object.hasOwn(row, "earliest_at") || Object.hasOwn(row, "latest_at");
+        (row.earliest_at !== null && row.earliest_at !== undefined) ||
+        (row.latest_at !== null && row.latest_at !== undefined);
       const start = hasInterval
         ? row.earliest_at
         : (row.event_at ??
