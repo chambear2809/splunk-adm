@@ -1,0 +1,75 @@
+{
+  "apiVersion": "discovery.k8s.io/v1",
+  "kind": "EndpointSliceList",
+  "metadata": {
+    "resourceVersion": "k8s-list-rv-200"
+  },
+  "items": [
+    {
+      "apiVersion": "discovery.k8s.io/v1",
+      "kind": "EndpointSlice",
+      "metadata": {
+        "name": "payments-api-abcde",
+        "namespace": "payments",
+        "uid": "slice-uid-01",
+        "resourceVersion": "k8s-rv-201",
+        "labels": {
+          "kubernetes.io/service-name": "payments-api",
+          "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io"
+        }
+      },
+      "addressType": "IPv4",
+      "ports": [
+        {
+          "name": "metrics",
+          "protocol": "UDP",
+          "port": 9090
+        },
+        {
+          "name": "https",
+          "protocol": "TCP",
+          "port": 8443
+        }
+      ],
+      "endpoints": [
+        {
+          "addresses": ["192.0.2.10"],
+          "conditions": {"ready": true},
+          "targetRef": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "payments-api-7c49d",
+            "namespace": "payments",
+            "uid": "pod-uid-ready"
+          }
+        },
+        {
+          "addresses": ["192.0.2.11"],
+          "conditions": {"ready": false},
+          "targetRef": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "payments-api-8f53c",
+            "namespace": "payments",
+            "uid": "pod-uid-not-ready"
+          }
+        },
+        {
+          "addresses": ["192.0.2.12"],
+          "conditions": {"ready": true}
+        },
+        {
+          "addresses": ["192.0.2.13"],
+          "conditions": {},
+          "targetRef": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "payments-api-unknown",
+            "namespace": "payments",
+            "uid": "pod-uid-readiness-unknown"
+          }
+        }
+      ]
+    }
+  ]
+}
