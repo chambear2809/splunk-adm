@@ -853,11 +853,19 @@ def _validate_timeline(
         earliest = row.get("earliest_at")
         latest = row.get("latest_at")
         if earliest is not None or latest is not None:
-            row_earliest = _time(earliest, "timeline selected row earliest_at")
-            row_latest = _time(latest, "timeline selected row latest_at")
+            row_earliest = (
+                _time(earliest, "timeline selected row earliest_at")
+                if earliest is not None
+                else float("-inf")
+            )
+            row_latest = (
+                _time(latest, "timeline selected row latest_at")
+                if latest is not None
+                else float("inf")
+            )
             if row_earliest > row_latest or (
-                row_latest < selection_bounds["earliest"]
-                or row_earliest > selection_bounds["latest"]
+                row_latest <= selection_bounds["earliest"]
+                or row_earliest >= selection_bounds["latest"]
             ):
                 raise ScenarioError(
                     "Timeline selected row is outside selection window."
@@ -879,7 +887,7 @@ def _validate_timeline(
             if row_time is None or not (
                 selection_bounds["earliest"]
                 <= _time(row_time, "timeline selected row time")
-                <= selection_bounds["latest"]
+                < selection_bounds["latest"]
             ):
                 raise ScenarioError(
                     "Timeline selected row is outside selection window."

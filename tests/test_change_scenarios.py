@@ -152,7 +152,7 @@ class ChangeScenarioTests(unittest.TestCase):
             "generation_id": "placeholder",
             "scope": "change-a",
             "earliest_at": plan["anchor_t_epoch"],
-            "latest_at": plan["planned_run_end_epoch"],
+            "latest_at": None,
             "value": "original",
         }
         rows_sha = hashlib.sha256(
@@ -193,15 +193,17 @@ class ChangeScenarioTests(unittest.TestCase):
         with self.assertRaisesRegex(ScenarioError, "subset"):
             _validate_timeline(result, load_scenario(plan["scenario_id"]), plan)
 
-        outside_scope = copy.deepcopy(result)
-        outside_scope["rows"][0]["scope"] = "foreign-scope"
-        with self.assertRaisesRegex(ScenarioError, "subset|scope"):
+        authentic = copy.deepcopy(result)
+        authentic["rows"] = [dict(row)]
+
+        outside_scope = copy.deepcopy(authentic)
+        outside_scope["selection"]["scope"] = "foreign-scope"
+        with self.assertRaisesRegex(ScenarioError, "scope"):
             _validate_timeline(outside_scope, load_scenario(plan["scenario_id"]), plan)
 
-        outside_window = copy.deepcopy(result)
-        outside_window["rows"][0]["earliest_at"] = plan["planned_run_end_epoch"] + 1
-        outside_window["rows"][0]["latest_at"] = plan["planned_run_end_epoch"] + 2
-        with self.assertRaisesRegex(ScenarioError, "subset|selection window"):
+        outside_window = copy.deepcopy(authentic)
+        outside_window["selection"]["window"]["start"] += 1
+        with self.assertRaisesRegex(ScenarioError, "full incident window"):
             _validate_timeline(outside_window, load_scenario(plan["scenario_id"]), plan)
 
     def test_only_two_offline_scenarios_are_exposed_without_assigning_t(self) -> None:
