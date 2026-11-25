@@ -1,0 +1,104 @@
+{
+  "fixture_note": "Synthetic, documentation-shaped input for Cisco Security Cloud TA 3.7.2 and eStreamer FQE 7.4. It is not a native sample, Splunk capture, or live qualification.",
+  "collection_metadata": {
+    "schema_version": 1,
+    "capture_id": "synthetic-ftd-fqe74-1",
+    "product": "ftd",
+    "authority": "fmc-synthetic.example.invalid",
+    "source_version": "Cisco Security Cloud TA 3.7.2; FQE 7.4 documentation shape; synthetic",
+    "family": "connection_observation",
+    "partition": "cisco_secure_fw/cisco:sfw:estreamer",
+    "scope": "synthetic-ftd-device",
+    "started_at": 1791373800,
+    "completed_at": 1791373900,
+    "received_at": 1791373910,
+    "status": "partial",
+    "permissions_fingerprint": "synthetic-query-permissions-v1",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "synthetic-fqe74-doc-shape",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "records": [
+    {
+      "event_fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "_indextime": 1791373812.25,
+      "native_event": {
+        "EventType": "ConnectionEvent",
+        "SourceHost": "fmc-synthetic.example.invalid",
+        "DeviceIP": "192.0.2.10",
+        "DeviceUUID": "550e8400-e29b-41d4-a716-446655440000",
+        "DeviceSerialNumber": "FTD-SYNTHETIC-001",
+        "InstanceID": 2,
+        "ConnectionID": 101,
+        "FirstPacketSecond": 1791373808,
+        "EventSecond": 1791373810,
+        "InitiatorIP": "198.51.100.8",
+        "InitiatorPort": 51400,
+        "ResponderIP": "203.0.113.10",
+        "ResponderPort": 443,
+        "Protocol": "TCP",
+        "AC_RuleAction": "Block",
+        "FirewallPolicy": "Synthetic Edge Policy",
+        "FirewallRule": "Synthetic Access Rule"
+      }
+    },
+    {
+      "event_fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "_indextime": 1791373845.5,
+      "native_event": {
+        "EventType": "ConnectionEvent",
+        "SourceHost": "fmc-synthetic.example.invalid",
+        "DeviceIP": "192.0.2.10",
+        "DeviceUUID": "550e8400-e29b-41d4-a716-446655440000",
+        "DeviceSerialNumber": "FTD-SYNTHETIC-001",
+        "InstanceID": 2,
+        "ConnectionID": 102,
+        "FirstPacketSecond": 1791373838,
+        "InitiatorIP": "10.42.0.40",
+        "InitiatorPort": 43200,
+        "ResponderIP": "203.0.113.40",
+        "ResponderPort": 443,
+        "Protocol": "TCP",
+        "AC_RuleAction": "Allow",
+        "FirewallPolicy": "Synthetic Edge Policy",
+        "FirewallRule": "Synthetic Access Rule"
+      }
+    },
+    {
+      "event_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "_indextime": 1791373862,
+      "native_event": {
+        "EventType": "ConnectionEvent",
+        "SourceHost": "fmc-synthetic.example.invalid",
+        "DeviceIP": "192.0.2.10",
+        "DeviceUUID": "550e8400-e29b-41d4-a716-446655440000",
+        "InstanceID": 2,
+        "ConnectionID": 103,
+        "FirstPacketSecond": 1791373854,
+        "EventSecond": 1791373855,
+        "InitiatorIP": "2001:db8::8",
+        "InitiatorPort": 51401,
+        "ResponderIP": "2001:db8::10",
+        "ResponderPort": 443,
+        "Protocol": "TCP",
+        "AC_RuleAction": "Interactive Block with reset",
+        "FirewallPolicy": "Synthetic Edge Policy",
+        "FirewallRule": "Synthetic Interactive Rule"
+      }
+    },
+    {
+      "event_fingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "_indextime": 1791373890,
+      "native_event": {
+        "EventType": "ConnectionEvent",
+        "SourceHost": "fmc-synthetic.example.invalid",
+        "DeviceIP": "192.0.2.10",
+        "FirstPacketSecond": 1791373882,
+        "Protocol": "TCP",
+        "AC_RuleAction": "Fastpath"
+      }
+    }
+  ]
+}
