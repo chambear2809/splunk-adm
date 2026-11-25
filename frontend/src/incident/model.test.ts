@@ -115,20 +115,35 @@ describe("incident interpretation", () => {
   it("ranks direct permit-to-drop above previously blocked observations without inferring a cause", () => {
     const prior = before();
     prior.edges = [
-      edge("already", { acl_action: "drop", acl_drops: 2 }),
-      edge("changed", { acl_action: "permit" }),
+      edge("already", {
+        acl_action: "drop",
+        acl_drops: 2,
+        acl_policy_point: "a".repeat(64),
+      }),
+      edge("changed", {
+        acl_action: "permit",
+        acl_policy_point: "a".repeat(64),
+      }),
     ];
     const current = during();
     current.edges = [
-      edge("already", { acl_action: "drop", acl_drops: 2 }),
-      edge("changed", { acl_action: "drop", acl_drops: 1 }),
+      edge("already", {
+        acl_action: "drop",
+        acl_drops: 2,
+        acl_policy_point: "a".repeat(64),
+      }),
+      edge("changed", {
+        acl_action: "drop",
+        acl_drops: 1,
+        acl_policy_point: "a".repeat(64),
+      }),
     ];
     const findings = buildFindings(prior, current);
     expect(findings[0]).toMatchObject({
       id: "drops_changed",
       status: "Supported",
     });
-    expect(findings[0].rankReason).toContain("same connection");
+    expect(findings[0].rankReason).toContain("same policy point");
     const priorBlocked = findings.find((item) => item.id === "drops_previous")!;
     expect(findings.indexOf(priorBlocked)).toBeGreaterThan(0);
     expect(priorBlocked.contradicts.join(" ")).toContain(
@@ -157,6 +172,60 @@ describe("incident interpretation", () => {
       buildFindings(prior, current).some((item) => item.id === "drops_changed"),
     ).toBe(false);
   });
+  it.each([
+    ["different leaf", "b".repeat(64), "pod-1/node-102", false],
+    ["same leaf ID in another fabric", "c".repeat(64), "pod-1/node-101", false],
+    ["mixed ACL observers", undefined, "pod-1/node-101", false],
+    ["same qualified policy point", "a".repeat(64), "pod-1/node-101", true],
+  ] as const)(
+    "qualifies ACL comparisons with %s",
+    (_, point, leaf, supported) => {
+      const prior = before();
+      prior.edges = [
+        edge("same-connection", {
+          acl_action: "permit",
+          acl_permits: 1,
+          acl_leaf: "pod-1/node-101",
+          acl_policy_point: "a".repeat(64),
+        }),
+      ];
+      const current = during();
+      current.edges = [
+        edge("same-connection", {
+          acl_action: "drop",
+          acl_drops: 1,
+          acl_leaf: leaf,
+          acl_policy_point: point,
+        }),
+      ];
+      const findings = buildFindings(prior, current);
+      expect(findings[0]).toMatchObject(
+        supported
+          ? { id: "drops_changed", status: "Supported" }
+          : { id: "drops_unknown", status: "Needs evidence" },
+      );
+      if (!supported)
+        expect(findings[0].supports[0]).toContain(
+          "incident drop reported; baseline permit reported; a shared policy point is unverified",
+        );
+    },
+  );
+
+  it("keeps legacy ACL comparisons as unqualified observations", () => {
+    const prior = before(),
+      current = during();
+    prior.edges = [
+      edge("legacy", { acl_action: "permit", acl_leaf: "pod-1/node-101" }),
+    ];
+    current.edges = [
+      edge("legacy", { acl_action: "drop", acl_leaf: "pod-1/node-101" }),
+    ];
+    expect(buildFindings(prior, current)[0]).toMatchObject({
+      id: "drops_unknown",
+      status: "Needs evidence",
+    });
+  });
+
   it("orders ranks and capped evidence deterministically when graph records are reordered", () => {
     const prior = before();
     prior.edges = Array.from({ length: 12 }, (_, i) =>

@@ -164,20 +164,29 @@ export function buildFindings(
   const permitted = (edge: GraphEdge) =>
     !blocked(edge) &&
     (edge.acl_action === "permit" || (edge.acl_permits ?? 0) > 0);
+  const sameAclPolicyPoint = (before: GraphEdge, after: GraphEdge) =>
+    !!before.acl_policy_point &&
+    before.acl_policy_point === after.acl_policy_point;
   const drops = incident.edges
     .filter(blocked)
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const changed = drops.filter((edge) => {
     const prior = edgesById.get(edge.id);
-    return prior !== undefined && permitted(prior);
+    return (
+      prior !== undefined && permitted(prior) && sameAclPolicyPoint(prior, edge)
+    );
   });
   const previous = drops.filter((edge) => {
     const prior = edgesById.get(edge.id);
-    return prior !== undefined && blocked(prior);
+    return !!prior && blocked(prior) && sameAclPolicyPoint(prior, edge);
   });
   const unknown = drops.filter((edge) => {
     const prior = edgesById.get(edge.id);
-    return !prior || (!blocked(prior) && !permitted(prior));
+    return (
+      !prior ||
+      !sameAclPolicyPoint(prior, edge) ||
+      (!blocked(prior) && !permitted(prior))
+    );
   });
   const dropLabels = (items: GraphEdge[]) =>
     ordered(items.map((edge) => label(edge, incident))).slice(0, 10);
@@ -190,7 +199,7 @@ export function buildFindings(
       title: "Policy blocking may have changed",
       status: "Supported",
       rankReason:
-        "Prioritized because the same connection was reported permitted before and blocked during the incident.",
+        "Prioritized because the dependency had a baseline permit and an incident drop at the same policy point.",
       supports: dropLabels(changed).map(
         (name) => `${name}: baseline permit and incident drop reported.`,
       ),
@@ -214,15 +223,17 @@ export function buildFindings(
         unknown.map((edge) => {
           const prior = edgesById.get(edge.id);
           const baseline =
-            prior?.acl_drops === 0
-              ? "baseline reports zero drops; a permit is not established"
-              : "baseline policy state is unknown";
+            prior && (blocked(prior) || permitted(prior))
+              ? `baseline ${blocked(prior) ? "drop" : "permit"} reported; a shared policy point is unverified`
+              : prior?.acl_drops === 0
+                ? "baseline reports zero drops; a permit is not established"
+                : "baseline policy state is unknown";
           return `${label(edge, incident)}: incident drop reported; ${baseline}.`;
         }),
       ).slice(0, 10),
       contradicts: [],
       missing: [
-        "A baseline permit or drop is not established for these connections.",
+        "Comparable baseline ACL evidence at the incident policy point is missing.",
         "An authoritative policy change or deployment record is not included.",
       ],
       next: "Inspect ACL evidence and the policy audit for these connections.",

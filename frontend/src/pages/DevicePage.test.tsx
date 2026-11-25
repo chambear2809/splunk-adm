@@ -53,6 +53,40 @@ describe("device navigation window", () => {
 });
 
 describe("loadDevicePage", () => {
+  it("qualifies counter coverage when the search withholds a total", async () => {
+    const client: SearchClient = {
+      async search({ search }) {
+        const rows = search.includes("adm_device_flows")
+          ? [
+              {
+                src: "192.0.2.1",
+                dst: "192.0.2.2",
+                protocol: "tcp",
+                flows: 2,
+                packets: 12,
+                invalid_bytes: 1,
+                total_invalid_bytes: 1,
+              },
+            ]
+          : [];
+        return { rows, warnings: [], errors: [] };
+      },
+    };
+    const result = await loadDevicePage({
+      query: "203.0.113.3",
+      demo: false,
+      earliest: "100",
+      latest: "200",
+      client,
+      signal,
+    });
+    expect(result.warnings.join(" ")).toContain(
+      "Counter coverage is incomplete",
+    );
+    expect(result.flows?.totals).toEqual({ conversations: 1, flows: 2 });
+    expect(result.flows?.conversations[0].packets).toBe(12);
+  });
+
   it("resolves a demo leaf by DN and loads its flows", async () => {
     const r = await loadDevicePage({
       query: "topology/pod-1/node-103",
@@ -82,6 +116,7 @@ describe("loadDevicePage", () => {
                 name: "leaf-103",
                 device_kind: "switch",
                 aci_node: "pod-1/node-103",
+                fabric: "apic:192.0.2.50",
                 sources: "aci",
               },
             ],
@@ -95,18 +130,129 @@ describe("loadDevicePage", () => {
       query: "leaf-103",
       demo: false,
       client,
-      earliest: "-4h",
-      latest: "now",
+      earliest: "1791370800",
+      latest: "1791374400",
       signal,
     });
     expect(r.device?.id).toBe("leaf-103");
     expect(requests.map((q) => q.search)).toEqual([
       "`adm_topology`",
       "| `adm_device_inventory`",
-      "| `adm_device_flows(pod-1/node-103)`",
+      "| `adm_device_flows(pod-1/node-103,192.0.2.50,1791370800.000000,1791374400.000000)`",
     ]);
-    expect(requests[2]).toMatchObject({ earliest: "-4h", latest: "now" });
+    expect(requests[2]).toMatchObject({
+      earliest: "1791370800",
+      latest: "1791374400",
+    });
     expect(r.flows?.conversations).toEqual([]);
+  });
+
+  it("retains non-fatal topology, inventory, and flow warnings with flows", async () => {
+    const client: SearchClient = {
+      async search(request) {
+        if (request.search === "`adm_topology`")
+          return {
+            rows: [
+              {
+                row_type: "device",
+                device_id: "leaf-103",
+                name: "leaf-103",
+                device_kind: "switch",
+                sources: "aci",
+              },
+            ],
+            warnings: ["topology was capped"],
+            errors: [],
+          };
+        if (request.search === "| `adm_device_inventory`")
+          return { rows: [], warnings: ["inventory was capped"], errors: [] };
+        return {
+          rows: [
+            {
+              device: "leaf-103",
+              src: "192.0.2.1",
+              dst: "198.51.100.2",
+              protocol: "tcp",
+              flows: 1,
+            },
+          ],
+          warnings: ["flow search was capped"],
+          errors: [],
+        };
+      },
+    };
+    const result = await loadDevicePage({
+      query: "leaf-103",
+      demo: false,
+      client,
+      earliest: "1791370800",
+      latest: "now",
+      signal,
+    });
+    expect(result.warnings).toEqual([
+      "topology was capped",
+      "inventory was capped",
+      "flow search was capped",
+    ]);
+    expect(result.flows?.conversations).toHaveLength(1);
+  });
+
+  it("selects ACL evidence by the canonical device's APIC, and withholds an unresolved node", async () => {
+    const devices = ["apic-a", "apic-b"].map((apic, i) => ({
+      row_type: "device",
+      device_id: `legacy-aci:${String(i).repeat(64)}`,
+      name: "leaf-101",
+      aci_node: "pod-1/node-101",
+      fabric: `apic:${apic}`,
+      sources: "aci",
+    }));
+    const searches: string[] = [];
+    const client: SearchClient = {
+      async search({ search }) {
+        searches.push(search);
+        const apic =
+          /adm_device_flows\(pod-1\/node-101,(apic-[ab]),1791370800\.000000,1791374400\.000000\)/.exec(
+            search,
+          )?.[1];
+        return {
+          rows:
+            search === "`adm_topology`"
+              ? devices
+              : apic
+                ? [
+                    {
+                      src: apic === "apic-a" ? "192.0.2.1" : "192.0.2.2",
+                      dst: "192.0.2.3",
+                      protocol: "tcp",
+                      flows: 1,
+                    },
+                  ]
+                : [],
+          warnings: [],
+          errors: [],
+        };
+      },
+    };
+    const open = (query: string) =>
+      loadDevicePage({
+        query,
+        client,
+        demo: false,
+        earliest: "1791370800",
+        latest: "1791374400",
+        signal,
+      });
+    for (const [i, device] of devices.entries()) {
+      const result = await open(device.device_id);
+      expect(result.flows?.conversations.map((c) => c.src)).toEqual([
+        `192.0.2.${i + 1}`,
+      ]);
+    }
+    const missing = await open("pod-1/node-999");
+    expect(missing.warnings.join(" ")).toContain("requires a known APIC");
+    expect(
+      searches.filter((s) => s.includes("adm_device_flows(")),
+    ).toHaveLength(2);
   });
 
   it("resolves ACI leaves and ESXi exporters from device inventory and names their interfaces", async () => {

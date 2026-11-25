@@ -93,17 +93,22 @@ class O11yHealthRuntimeTest(unittest.TestCase):
         )
 
     def capture(
-        self, *, suffix: str = "", service_namespace: str | None = None
+        self,
+        *,
+        suffix: str = "",
+        service_namespace: str | None = None,
+        capture_time: int | None = None,
     ) -> list[dict]:
         events = []
         capture_id = f"{self.observer}{suffix}"
         selected_service_namespace = service_namespace or self.service_namespace
+        selected_capture_time = capture_time or self.capture_time
         for item in self.template:
             event = copy.deepcopy(item["event"])
             event.update(
                 {
                     "capture_id": capture_id,
-                    "captured_at": self.capture_time,
+                    "captured_at": selected_capture_time,
                     "capture_window_start": self.start,
                     "capture_window_end": self.end,
                     "observer_id": self.observer,
@@ -130,7 +135,7 @@ class O11yHealthRuntimeTest(unittest.TestCase):
                 )
             events.append(
                 {
-                    "time": self.capture_time,
+                    "time": selected_capture_time,
                     "host": self.observer,
                     "source": "atlas:o11y_health/export",
                     "sourcetype": SOURCETYPE,
@@ -285,7 +290,11 @@ class O11yHealthRuntimeTest(unittest.TestCase):
     def test_same_graph_identity_with_multiple_otel_namespaces_is_ambiguous(self):
         events = self.capture()
         events.extend(
-            self.capture(suffix="-other-namespace", service_namespace="other-payments")
+            self.capture(
+                suffix="-other-namespace",
+                service_namespace="other-payments",
+                capture_time=self.capture_time + 1,
+            )
         )
         lab._hec_post(
             b"\n".join(
@@ -298,6 +307,36 @@ class O11yHealthRuntimeTest(unittest.TestCase):
         self.assertEqual(len(records), len(events))
         self.assertEqual(normalized["records"], [])
         self.assertGreater(normalized["rejected"], 0)
+
+        self.selection["service"]["serviceNamespace"] = self.service_namespace
+        records, normalized, _ = self.search_and_normalize()
+        self.assertEqual(len(records), len(events) // 2)
+        self.assertEqual(normalized["rejected"], 0)
+        self.assertEqual(
+            {record["captureId"] for record in normalized["records"]},
+            {self.observer},
+        )
+
+    def test_newest_capture_retains_namespace_less_completion(self):
+        older = self.capture()
+        latest = self.capture(suffix="-latest", capture_time=self.capture_time + 1)
+        for capture in (older, latest):
+            capture[-1]["event"]["service_namespace"] = None
+        lab._hec_post(
+            b"\n".join(
+                json.dumps(event, separators=(",", ":")).encode()
+                for event in older + latest
+            )
+        )
+        self.wait_for_indexed(len(older) + len(latest))
+
+        records, normalized, _ = self.search_and_normalize()
+        self.assertEqual(len(records), len(latest))
+        self.assertEqual(normalized["rejected"], 0)
+        self.assertEqual(
+            {record["captureId"] for record in normalized["records"]},
+            {self.observer + "-latest"},
+        )
 
 
 if __name__ == "__main__":

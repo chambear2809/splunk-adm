@@ -385,6 +385,7 @@ function toEdge(row: Row): GraphEdge {
     "contract_filter",
     "contract_entry",
     "acl_leaf",
+    "acl_policy_point",
   ] as const) {
     const v = one(row, key);
     if (v !== undefined) edge[key] = v;

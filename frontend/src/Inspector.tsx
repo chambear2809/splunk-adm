@@ -1,6 +1,7 @@
 import { JourneyLazyEvidence } from "./JourneyLazyEvidence";
 import type { EvidenceWindow } from "./data/evidence";
 import { ImpactButton } from "./impact/ImpactButton";
+import type { ImpactRequest } from "./impact/url";
 import { InfoTip } from "./InfoTip";
 import { InspectorTitle } from "./InspectorTitle";
 import { Fragment, useId, useState } from "react";
@@ -645,6 +646,10 @@ function BundleMembers({
   );
 }
 
+type ImpactLinkContext = Partial<
+  Pick<ImpactRequest, "scope" | "earliest" | "latest">
+>;
+
 export function Inspector({
   selection,
   index,
@@ -656,6 +661,7 @@ export function Inspector({
   pathOpen = false,
   bundle,
   evidenceWindow,
+  impactContext,
 }: {
   selection: Selection | null;
   index: GraphIndex;
@@ -666,6 +672,7 @@ export function Inspector({
   summary: React.ReactNode;
   pathOpen?: boolean;
   evidenceWindow?: EvidenceWindow;
+  impactContext?: ImpactLinkContext;
   /** The card-pair line the selected edge is drawn in, when it groups several. */
   bundle?: { title: string; edgeIds: string[] };
 }) {
@@ -690,6 +697,7 @@ export function Inspector({
         topo={topo}
         onSelect={onSelect}
         close={close}
+        impactContext={impactContext}
       />
     );
   if (!edge) return <div className="inspector-body">{summary}</div>;
@@ -1078,12 +1086,14 @@ function NodeDetails({
   topo,
   onSelect,
   close,
+  impactContext,
 }: {
   node: GraphNode;
   index: GraphIndex;
   topo: TopologyIndex;
   onSelect: (s: Selection | null) => void;
   close: React.ReactNode;
+  impactContext?: ImpactLinkContext;
 }) {
   const incident = index.incident.get(node.id) ?? [];
   const links = incident.filter(
@@ -1150,7 +1160,12 @@ function NodeDetails({
           </span>
           <InspectorTitle key={node.id} name={node.label} />
         </div>
-        <ImpactButton compact token={node.id} label={node.label} />
+        <ImpactButton
+          compact
+          token={node.id}
+          label={node.label}
+          {...impactContext}
+        />
         {close}
       </div>
       <DetailTabs

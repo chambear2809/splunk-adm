@@ -16,6 +16,20 @@ const searches = (page: import("@playwright/test").Page) =>
     () => (window as HealthTestWindow).__O11Y_HEALTH_TEST__?.searches ?? [],
   );
 
+test("the health panel surfaces ambiguous service namespaces as unavailable", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/o11y-health.html?ambiguous");
+  await page.getByRole("button", { name: "Inspect service health" }).click();
+  await expect(page.getByText(/Health source: unavailable/)).toBeVisible();
+  await expect(page.getByText("Health source: complete")).toHaveCount(0);
+  await expect(
+    page.getByRole("table", {
+      name: "Measured Observability Cloud service health",
+    }),
+  ).toHaveCount(0);
+});
+
 test("cancelling an Observability health search leaves the panel retryable", async ({
   page,
 }) => {

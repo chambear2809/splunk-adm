@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "fixtures/multicast"
 NAMESPACE = "/servicesNS/nobody/splunk_adm"
 COLLECTION = f"{NAMESPACE}/storage/collections/data/adm_multicast_profiles"
-QUERY_BUILDER = """
+FRONTEND_RUNNER = """
 import { createServer } from 'vite';
 import { readFileSync } from 'node:fs';
 const input = JSON.parse(readFileSync(0, 'utf8'));
@@ -31,10 +31,29 @@ const vite = await createServer({
   server: { middlewareMode: true },
 });
 try {
-  const { buildMulticastSearch } = await vite.ssrLoadModule('/frontend/src/multicast/adapters.ts');
-  const { buildForwardingSearch } = await vite.ssrLoadModule('/frontend/src/multicast/forwardingSource.ts');
-  const build = input.profile.source === "multicast_nxos" ? buildForwardingSearch : buildMulticastSearch;
-  console.log(JSON.stringify(build(input.profile, input.request)));
+  const { buildMulticastSearch, loadMulticastSource } = await vite.ssrLoadModule('/frontend/src/multicast/adapters.ts');
+  if (input.summary || input.results) {
+    const { buildGroupSummarySearch, loadGroupSummary } = await vite.ssrLoadModule('/frontend/src/multicast/groupSummary.ts');
+    const { group, sender, ...window } = input.request;
+    if (!input.results) {
+      console.log(JSON.stringify(buildGroupSummarySearch(input.profile, window)));
+    } else {
+      const read = ({ search, rows }) => ({
+        async search(request) {
+          if (request.search !== search) throw new Error("Unexpected multicast search");
+          return { rows, warnings: [], errors: [] };
+        }
+      });
+      const signal = new AbortController().signal;
+      const overview = await loadGroupSummary(read(input.results.overview), input.profile, window, signal);
+      const detail = await loadMulticastSource(read(input.results.detail), input.profile, input.request, signal);
+      console.log(JSON.stringify({ overview, detail }));
+    }
+  } else {
+    const { buildForwardingSearch } = await vite.ssrLoadModule('/frontend/src/multicast/forwardingSource.ts');
+    const build = input.profile.source === "multicast_nxos" ? buildForwardingSearch : buildMulticastSearch;
+    console.log(JSON.stringify(build(input.profile, input.request)));
+  }
 } finally {
   await vite.close();
 }
@@ -80,10 +99,13 @@ class MulticastRuntimeTest(unittest.TestCase):
         return lab.search(spl, self.earliest, self.latest)
 
     def build_query(self, profile, **overrides):
+        return self.frontend(profile, self.request | overrides)
+
+    def frontend(self, profile, request, **options):
         command = subprocess.run(
-            ["node", "--input-type=module", "-e", QUERY_BUILDER],
+            ["node", "--input-type=module", "-e", FRONTEND_RUNNER],
             cwd=ROOT,
-            input=json.dumps({"profile": profile, "request": self.request | overrides}),
+            input=json.dumps({"profile": profile, "request": request, **options}),
             text=True,
             capture_output=True,
             check=False,
@@ -173,6 +195,59 @@ class MulticastRuntimeTest(unittest.TestCase):
         self.assertEqual(count, 1)
         self.assertEqual(payloads[0]["bytes"], flow["bytes"])
         self.assertEqual(payloads[0]["packets"], flow["packets"])
+
+    def test_a_negative_counter_is_not_hidden_by_the_group_sum(self):
+        self.flow["observer"] = "198.18." + ".".join(map(str, os.urandom(2)))
+        flow = self.candidates["netflow"] | {"exporter_ip": self.flow["observer"]}
+        self.write(
+            [
+                (flow | {"bytes": 100, "packets": 10}, self.earliest + 1),
+                (flow | {"bytes": -20, "packets": 2}, self.earliest + 2),
+            ],
+            "stream:netflow",
+        )
+        overview = self.frontend(self.flow, self.request, summary=True)
+        detail = self.build_query(self.flow)
+        overview_rows = self.search(overview)
+        (group,) = [row for row in overview_rows if row["kind"] == "record"]
+        self.assertIn(group.get("bytes"), (None, ""), group)
+        result = self.frontend(
+            self.flow,
+            self.request,
+            results={
+                "overview": {"search": overview, "rows": overview_rows},
+                "detail": {"search": detail, "rows": self.search(detail)},
+            },
+        )
+        self.assertEqual(result["overview"]["outcome"]["state"], "partial", result)
+        self.assertEqual(result["detail"]["outcome"]["state"], "partial", result)
+        (summary,) = result["overview"]["summaries"]
+        (observation,) = result["detail"]["evidence"]
+        self.assertNotIn("bytes", summary)
+        self.assertEqual(summary["packets"], 12)
+        self.assertEqual(observation["bytes"], 100)
+
+    def test_blocking_a_source_does_not_count_as_a_group_leave(self):
+        transition = self.candidates["igmpV3Flat"] | {
+            "network_interface": "eth0",
+            "num_groups": 1,
+            "group_record_multicast_address": [self.request["group"]],
+            "group_record_type": [3],
+            "group_record_num_sources": [1],
+            "group_record_source_address": ["192.0.2.20"],
+        }
+        self.write(
+            [
+                (transition, self.earliest + 1),
+                (transition | {"group_record_type": [6]}, self.earliest + 2),
+            ],
+            "stream:igmp",
+        )
+        search = self.frontend(self.igmp, self.request, summary=True)
+        (summary,) = [row for row in self.search(search) if row["kind"] == "record"]
+        self.assertEqual(summary["group"], self.request["group"])
+        self.assertEqual(int(summary["reports"]), 1)
+        self.assertEqual(int(summary["leaves"]), 0)
 
     def test_indexed_point_forwarding_cohort_uses_exact_tuple(self):
         group = self.request["group"]

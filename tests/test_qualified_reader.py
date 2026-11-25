@@ -13,6 +13,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1] / "splunk_app/splunk_adm/bin"
 sys.path.insert(0, str(ROOT))
@@ -253,6 +254,35 @@ class SummaryLatenessTests(unittest.TestCase):
         macros = (ROOT.parent / "default/macros.conf").read_text()
         self.assertIn("[adm_qualified_rollup(1)]", macros)
         self.assertIn("admqualified mode=rollup lateness=$lateness$", macros)
+
+
+class SummaryHealthTests(unittest.TestCase):
+    def test_disabled_profile_reports_structured_status(self):
+        cmd = admqualified.AdmQualified()
+        cmd.mode = "summary_health"
+        with patch.object(admqualified.configparser.ConfigParser, "read"):
+            self.assertEqual(list(cmd.generate()), [{"status": "disabled"}])
+
+    def test_health_uses_splunk_dispatch_clock_for_historical_searches(self):
+        import configparser
+
+        cmd = admqualified.AdmQualified()
+        cmd.mode = "summary_health"
+        cmd._metadata = SimpleNamespace(searchinfo=SimpleNamespace(latest_time="1000"))
+        observed = []
+        cmd._summary_health = lambda _profile, _config, now: (
+            observed.append(now) or {"status": "disabled"}
+        )
+
+        def read(conf, *_paths):
+            conf.read_dict({"profile": {"enabled": "true"}})
+
+        with (
+            patch.object(configparser.ConfigParser, "read", read),
+            patch.object(admqualified.time, "time", return_value=2000),
+        ):
+            self.assertEqual(list(cmd.generate()), [{"status": "disabled"}])
+        self.assertEqual(observed, [1000.0])
 
 
 if __name__ == "__main__":

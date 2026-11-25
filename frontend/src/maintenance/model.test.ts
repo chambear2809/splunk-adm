@@ -137,6 +137,23 @@ describe("comparison boundaries", () => {
       compareAssessments(before, assessMaintenance(source)).comparable,
     ).toBe(false);
   });
+
+  it("rejects reversed evidence windows and accepts a forward shift with overlap", () => {
+    const source = input();
+    const before = assessMaintenance(source);
+    source.id = "later";
+    source.capturedAt = 400;
+    source.window = { start: 50, end: 150 };
+    expect(compareAssessments(before, assessMaintenance(source))).toEqual({
+      comparable: false,
+      changed: [],
+    });
+
+    source.window = { start: 150, end: 250 };
+    expect(
+      compareAssessments(before, assessMaintenance(source)).comparable,
+    ).toBe(true);
+  });
 });
 
 describe("measurement timing", () => {

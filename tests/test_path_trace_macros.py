@@ -66,18 +66,18 @@ class PathTraceMacroTests(unittest.TestCase):
         body = self.d["adm_device_flows(1)"]
         self.assertLess(
             body.index("`adm_path_flow_normalize`"),
-            body.index("head (adm_seq<=`adm_path_trace_limit`+1)"),
+            body.index("`adm_device_flows_aggregate($device$)`"),
         )
         self.assertIn("`adm_index_hubble` `adm_hubble_sourcetypes`", body)
-        self.assertIn("drop_reasons", body)
+        self.assertIn("drop_reasons", self.d["adm_device_flows_aggregate(1)"])
 
     def test_device_flows_cap_applies_after_the_device_filter(self):
         # Free-text Hubble/ND matches for other devices must not consume the
         # cap; records_capped comes from the device records actually read.
-        body = self.d["adm_device_flows(1)"]
+        body = self.d["adm_device_flows(1)"] + self.d["adm_device_flows_aggregate(1)"]
         order = [
             "| where adm_hit==1",
-            "| streamstats count AS adm_seq",
+            "streamstats count AS adm_seq",
             "| head (adm_seq<=`adm_path_trace_limit`+1)",
             "| eventstats max(adm_seq) AS adm_read",
             "| where adm_seq<=`adm_path_trace_limit`",
@@ -88,6 +88,25 @@ class PathTraceMacroTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertNotIn("total_flows>=`adm_path_trace_limit`", body)
         self.assertEqual(body.count("head `adm_path_trace_limit`"), 0)
+
+    def test_legacy_topology_qualifies_aci_ids_without_changing_nxos_ids(self):
+        body = self.d["adm_topology"]
+        self.assertIn('"legacy-aci:".sha256(json_array("aci_topSystem"', body)
+        self.assertIn('d_group_key=if(adm_kind=="topSystem"', body)
+        self.assertIn("by d_group_key", body)
+        self.assertIn(",name), fabric=", body)
+
+    def test_device_flows_do_not_make_unscoped_ip_identity_joins(self):
+        for name in (
+            "adm_device_flows(1)",
+            "adm_device_flows(4)",
+            "adm_device_flows_aggregate(1)",
+        ):
+            self.assertNotIn("lookup adm_ip_identity", self.d[name])
+        self.assertIn(
+            "Endpoint labels and app attribution are intentionally omitted",
+            self.m["adm_device_flows(1)"],
+        )
 
     def test_resolve_value_is_validated_literal(self):
         body = self.m["adm_path_trace_resolve(1)"]
@@ -183,6 +202,7 @@ class PathTraceMacroTests(unittest.TestCase):
             "adm_path_pod_nodes(2)",
             "adm_path_trace_resolve(1)",
             "adm_device_flows(1)",
+            "adm_device_flows(4)",
             "adm_qualified_rollup(1)",
         ):
             rule = re.search(r"^validation = (.*)$", self.m[name], re.M).group(1)

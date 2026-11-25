@@ -67,14 +67,18 @@ function CaseRecordsContents({
   const [selected, setSelected] = useState<CaseRecord>();
   const [selectedCaptureId, setSelectedCaptureId] = useState<string>();
   const [title, setTitle] = useState("");
-  const [note, setNote] = useState("");
-  const [entryType, setEntryType] = useState<CaseEntry["type"]>("note");
+  const [noteDrafts, setNoteDrafts] = useState<
+    Record<string, { type: CaseEntry["type"]; text: string }>
+  >({});
   const [editing, setEditing] = useState<{
     caseId: string;
     entry: CaseEntry;
     text: string;
   }>();
   const activeEdit = editing?.caseId === selected?.id ? editing : undefined;
+  const draft = selected ? noteDrafts[selected.id] : undefined;
+  const entryType = activeEdit?.entry.type ?? draft?.type ?? "note";
+  const entryText = activeEdit?.text ?? draft?.text ?? "";
   const editHistory =
     activeEdit && selected
       ? entryHistories(selected.entries)?.find((history) =>
@@ -270,14 +274,11 @@ function CaseRecordsContents({
       } else {
         setSelected(value);
         setSelectedCaptureId((previous) =>
-          selected?.id === value.id &&
           previous &&
           value.capture_ids?.includes(previous) &&
           value.captures.some((capture) => capture.id === previous)
             ? previous
-            : value.captures.find((capture) =>
-                value.capture_ids?.includes(capture.id),
-              )?.id,
+            : undefined,
         );
         setCases((previous) => [
           value,
@@ -293,7 +294,13 @@ function CaseRecordsContents({
               : previous,
           );
         } else {
-          setNote((previous) => (previous === submittedNote ? "" : previous));
+          setNoteDrafts((previous) => {
+            if (previous[value.id]?.text !== submittedNote) return previous;
+            return {
+              ...previous,
+              [value.id]: { ...previous[value.id], text: "" },
+            };
+          });
         }
       }
       setStatus("Shared case saved.");
@@ -301,7 +308,11 @@ function CaseRecordsContents({
     } catch (reason) {
       if (current !== serial.current) return;
       if (reason instanceof CaseError && reason.uncertain)
-        setPending({ operation, submittedNote, submittedEditId });
+        setPending({
+          operation,
+          submittedNote,
+          submittedEditId,
+        });
       else if (
         pending &&
         reason instanceof CaseError &&
@@ -801,11 +812,15 @@ function CaseRecordsContents({
           <label htmlFor={`${field}-type`}>Entry type</label>
           <select
             id={`${field}-type`}
-            value={activeEdit?.entry.type ?? entryType}
+            value={entryType}
             disabled={busy || !!pending || !!activeEdit}
-            onChange={(event) =>
-              setEntryType(event.target.value as CaseEntry["type"])
-            }
+            onChange={(event) => {
+              const type = event.target.value as CaseEntry["type"];
+              setNoteDrafts((previous) => ({
+                ...previous,
+                [selected.id]: { type, text: entryText },
+              }));
+            }}
           >
             <option value="note">Note</option>
             <option value="hypothesis">Hypothesis</option>
@@ -819,32 +834,30 @@ function CaseRecordsContents({
             id={`${field}-note`}
             maxLength={10000}
             disabled={busy || !!pending}
-            value={activeEdit ? activeEdit.text : note}
-            onChange={(event) =>
-              activeEdit
-                ? setEditing({ ...activeEdit, text: event.target.value })
-                : setNote(event.target.value)
-            }
+            value={entryText}
+            onChange={(event) => {
+              const text = event.target.value;
+              if (activeEdit) setEditing({ ...activeEdit, text });
+              else
+                setNoteDrafts((previous) => ({
+                  ...previous,
+                  [selected.id]: { type: entryType, text },
+                }));
+            }}
           />
           <button
             type="button"
-            disabled={
-              busy ||
-              !!pending ||
-              editNeedsRebase ||
-              !(activeEdit ? activeEdit.text : note).trim()
-            }
+            disabled={busy || !!pending || editNeedsRebase || !entryText.trim()}
             onClick={() => {
-              const text = activeEdit ? activeEdit.text : note;
               void save(
                 client.append(
                   selected.id,
                   selected.revision,
-                  activeEdit?.entry.type ?? entryType,
-                  text,
+                  entryType,
+                  entryText,
                   activeEdit?.entry.id,
                 ),
-                text,
+                entryText,
                 activeEdit?.entry.id,
               );
             }}

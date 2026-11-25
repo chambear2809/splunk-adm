@@ -316,13 +316,24 @@ def validate_snapshot(
         manifest = json.loads(data)
     except (ValueError, UnicodeDecodeError) as exc:
         raise SnapshotError("invalid manifest") from exc
+    # The manifest must be an object before validating its members.
+    if not isinstance(manifest, dict):
+        raise SnapshotError("invalid manifest")
+    files = manifest.get("files")
+    provenance = manifest.get("provenance")
+    absent = manifest.get("absent")
     if (
         manifest.get("format") != 1
-        or manifest.get("provenance") != expected_provenance
-        or set(manifest.get("files", {})) != set(expected_schemas)
-        or manifest.get("absent") != [n for n in ALLOWLIST if n not in expected_schemas]
+        or not isinstance(files, dict)
+        or not isinstance(provenance, dict)
+        or not isinstance(absent, list)
+        or provenance != expected_provenance
+        or set(files) != set(expected_schemas)
+        or absent != [n for n in ALLOWLIST if n not in expected_schemas]
     ):
         raise SnapshotError("manifest does not match expected provenance or file set")
+    if any(not isinstance(record, dict) for record in files.values()):
+        raise SnapshotError("manifest contains a malformed database record")
     total = len(data)
     for name, expected in expected_schemas.items():
         path = bundle / name
@@ -331,23 +342,23 @@ def validate_snapshot(
         total += size
         if total > MAX_TOTAL_BYTES:
             raise SnapshotError("database bundle exceeds size limit")
-        record = manifest["files"][name]
+        record = files[name]
         if record.get("size") != size or record.get("sha256") != _file_digest(path):
             raise SnapshotError("database bytes differ from manifest")
         if {k: record.get(k) for k in ("schema", "tables")} != _inspect(path, expected):
             raise SnapshotError("database contents differ from manifest or schema")
     return {
         "manifest_sha256": expected_manifest_sha256,
-        "provenance": manifest["provenance"],
+        "provenance": provenance,
         "files": {
             n: {
-                "size": manifest["files"][n]["size"],
-                "sha256": manifest["files"][n]["sha256"],
-                "tables": manifest["files"][n]["tables"],
+                "size": files[n]["size"],
+                "sha256": files[n]["sha256"],
+                "tables": files[n]["tables"],
             }
             for n in expected_schemas
         },
-        "absent": manifest["absent"],
+        "absent": absent,
     }
 
 

@@ -23,5 +23,78 @@
     "observation_domain_id": 1,
     "template_id": 256,
     "flow_dir": 0
+  },
+  "groupSummary": {
+    "description": "Synthetic stats output rows of buildGroupSummarySearch (one row per group), not raw events.",
+    "igmpV2Group": {
+      "group": "239.1.2.3",
+      "reports": 1,
+      "leaves": 1,
+      "group_queries": 1,
+      "last_leave": 160,
+      "last_group_query": 161,
+      "reporters": "192.0.2.10",
+      "reporter_count": 1,
+      "query_senders": "192.0.2.1|161|161",
+      "first_seen": 150,
+      "last_seen": 161,
+      "query_sender_count": 1
+    },
+    "igmpV3Groups": [
+      {
+        "group": "239.1.2.3",
+        "reports": 1,
+        "leaves": 0,
+        "group_queries": 0,
+        "reporters": "192.0.2.11",
+        "reporter_count": 1,
+        "first_seen": 155,
+        "last_seen": 155,
+        "query_sender_count": 0
+      },
+      {
+        "group": "239.1.2.4",
+        "reports": 1,
+        "leaves": 0,
+        "group_queries": 0,
+        "reporters": "192.0.2.11",
+        "reporter_count": 1,
+        "first_seen": 155,
+        "last_seen": 155,
+        "query_sender_count": 0
+      }
+    ],
+    "igmpGeneral": {
+      "group": "0.0.0.0",
+      "reports": 0,
+      "leaves": 0,
+      "group_queries": 0,
+      "last_general_query": 170,
+      "query_senders": "192.0.2.1|170|170",
+      "reporter_count": 0,
+      "first_seen": 170,
+      "last_seen": 170,
+      "query_sender_count": 1
+    },
+    "igmpMixedReporters": {
+      "group": "239.1.2.3",
+      "reports": 2,
+      "leaves": 0,
+      "group_queries": 0,
+      "reporters": ["192.0.2.10", "192.0.2.11"],
+      "reporter_count": 2,
+      "first_seen": 150,
+      "last_seen": 152,
+      "query_sender_count": 0
+    },
+    "netflowGroup": {
+      "group": "239.1.2.3",
+      "senders": ["192.0.2.21", "192.0.2.20"],
+      "sender_count": 2,
+      "packets": 16,
+      "bytes": 2048,
+      "first_seen": 150,
+      "last_seen": 160
+    }
   }
 }

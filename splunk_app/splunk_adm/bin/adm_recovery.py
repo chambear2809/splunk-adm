@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import configparser
+from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 import sys
@@ -25,6 +26,7 @@ DETECTOR_QUERY = (
     + ", ".join(_spl_string(name) for name in sorted(TARGET_WINDOWS))
     + ") | sort 0 scheduled_time"
 )
+MAX_DETECTOR_TIMESTAMP = 253402300799
 
 
 def earliest_replayable(rows):
@@ -35,8 +37,15 @@ def earliest_replayable(rows):
         if name not in TARGET_WINDOWS:
             continue
         try:
-            scheduled = float(row.get("scheduled_time"))
-        except (TypeError, ValueError):
+            scheduled = Decimal(str(row.get("scheduled_time")))
+        except InvalidOperation:
+            continue
+        if (
+            not scheduled.is_finite()
+            or scheduled <= 0
+            or scheduled > MAX_DETECTOR_TIMESTAMP
+            or scheduled != scheduled.to_integral_value()
+        ):
             continue
         candidates.append((scheduled, name))
     return min(candidates)[1] if candidates else None

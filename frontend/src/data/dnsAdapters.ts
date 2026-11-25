@@ -287,20 +287,26 @@ function parseOne(
   const l7 = isObject(flow.l7) ? flow.l7 : {};
   const hubDns = isObject(l7.dns) ? l7.dns : isObject(raw.dns) ? raw.dns : raw;
   const ipData = isObject(flow.IP) ? flow.IP : isObject(flow.ip) ? flow.ip : {};
-  const authorityValue = stream
-    ? row.host
-    : (pick(raw, "cluster_name") ??
-      scalar(pick(raw, "node_name") ?? pick(flow, "node_name"))?.split(
-        "/",
-      )[0] ??
-      pick(raw, "observer", "host") ??
-      row.host);
-  const authority = scalar(authorityValue);
-  if (!authority || !config.authorities.includes(authority)) return;
-  const authorityNode = !stream
-    ? scalar(pick(raw, "node_name") ?? pick(flow, "node_name"))
-    : undefined;
+  const projectedNode = stream ? undefined : pick(raw, "node_name");
+  const flowNode = stream ? undefined : pick(flow, "node_name");
+  // The two Hubble projections describe the same producer.
+  if (
+    projectedNode !== undefined &&
+    flowNode !== undefined &&
+    projectedNode !== flowNode
+  )
+    return;
+  const authorityNode = scalar(projectedNode ?? flowNode);
   if (authorityNode !== undefined && !text(authorityNode, 1024)) return;
+  const authority = scalar(
+    stream
+      ? row.host
+      : (pick(raw, "cluster_name") ??
+          authorityNode?.split("/")[0] ??
+          pick(raw, "observer", "host") ??
+          row.host),
+  );
+  if (!authority || !config.authorities.includes(authority)) return;
   const queryValue =
     pick(hubDns, "query", "query_name", "question") ??
     (stream ? raw.query : undefined);

@@ -205,6 +205,167 @@
   vertical-align: top;
   overflow-wrap: anywhere;
 }
+.atlas .multicast-page .mc-overview .multicast-actions {
+  margin-bottom: 0.75rem;
+}
+.atlas .multicast-page .mc-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.atlas .multicast-page .mc-flag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.25rem 0.1rem 0.5rem;
+  border: 1px solid var(--adm-warn-icon);
+  border-radius: 999px;
+  background: var(--adm-warn-bg);
+  color: var(--adm-warn-ink);
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+.atlas .multicast-page .mc-hint {
+  min-height: 1.4rem;
+  min-width: 1.4rem;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.atlas .multicast-page .mc-hint-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: normal;
+}
+.atlas .multicast-page .mc-flag:is(:hover, :focus-within) .mc-hint-text {
+  z-index: 2;
+  inset-block-start: calc(100% + 0.3rem);
+  inset-inline-start: 0;
+  width: max-content;
+  max-width: 20rem;
+  height: auto;
+  padding: 0.5rem 0.65rem;
+  overflow: visible;
+  clip-path: none;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: var(--adm-surface);
+  color: var(--adm-ink);
+  box-shadow: var(--adm-shadow);
+}
+.atlas .multicast-page .mc-matrix td {
+  padding: 0.3rem;
+}
+.atlas .multicast-page .mc-cell {
+  width: 100%;
+  min-width: 8rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.atlas .multicast-page .mc-cell.recent {
+  border-color: var(--adm-link);
+  border-inline-start-width: 3px;
+  font-weight: 600;
+}
+.atlas .multicast-page .mc-cell.older {
+  color: var(--adm-muted);
+}
+.atlas .multicast-page :is(.mc-timeline, .mc-querier-strip) {
+  margin-top: 1rem;
+}
+.atlas .multicast-page .mc-lane h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.atlas .multicast-page .mc-lane svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+}
+.atlas .multicast-page :is(.mc-axis, .mc-detail-empty, .mc-sender-list) {
+  color: var(--adm-muted);
+}
+.atlas .multicast-page .mc-timeline-legend {
+  color: var(--adm-muted);
+  font-size: 0.8rem;
+}
+.atlas .multicast-page .mc-lane-axis {
+  stroke: var(--adm-line);
+}
+.atlas .multicast-page .mc-mark {
+  stroke: var(--adm-link);
+  stroke-width: 2;
+}
+.atlas .multicast-page .mc-mark.report {
+  fill: var(--adm-link);
+}
+.atlas .multicast-page .mc-mark.leave {
+  fill: var(--adm-surface);
+}
+.atlas .multicast-page .mc-mark.source-update {
+  fill: var(--adm-surface);
+  stroke: var(--adm-warn-icon);
+}
+.atlas .multicast-page .mc-mark.general-query {
+  stroke: var(--adm-muted);
+}
+.atlas .multicast-page .mc-sender-bar {
+  fill: var(--adm-link);
+}
+.atlas .multicast-page .mc-sender-label {
+  fill: var(--adm-ink);
+  font-size: 11px;
+}
+.atlas .multicast-page .mc-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--adm-line);
+}
+.atlas .multicast-page .mc-tabs [role="tab"] {
+  border-color: transparent;
+  border-bottom: 3px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+}
+.atlas .multicast-page .mc-tabs [aria-selected="true"] {
+  border-bottom-color: var(--adm-link);
+  color: var(--adm-link);
+  font-weight: 700;
+}
+.atlas .multicast-page .mc-tabs [aria-disabled="true"] {
+  color: var(--adm-muted);
+  cursor: not-allowed;
+}
+.atlas .multicast-page .mc-tab-note {
+  margin-inline-start: 0.4rem;
+  font-size: 0.78rem;
+}
+.atlas .multicast-page .mc-detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  gap: 0.8rem;
+  margin-block: 1rem;
+}
+.atlas .multicast-page .mc-detail-header .multicast-form {
+  flex: 1;
+}
 @media (max-width: 700px) {
   .atlas .multicast-map {
     grid-template-columns: 1fr;

@@ -347,7 +347,7 @@ class NativeTests(unittest.TestCase):
                 )
                 self.assertEqual(runner.memo, {})
 
-    def test_shared_cleanup_budget_refuses_late_delete_receipt(self):
+    def test_fresh_two_window_cleanup_uses_primary_deadline_before_reserve(self):
         original = self.fake.request
         proof_phase = [False]
 
@@ -367,12 +367,74 @@ class NativeTests(unittest.TestCase):
         query = QUERY.replace("start=100", "start=200").replace(
             "as_of=200", "as_of=300"
         )
+        self.assertEqual(
+            self.runner.run("alice", query, 200, 300), [{"row_type": "meta"}]
+        )
+        self.assertEqual(self.fake.ledger.outstanding("alice"), [])
+        self.assertEqual(len(self.runner.memo), 2)
+
+    def test_fresh_cleanup_crossing_deadline_is_limited_to_emergency_reserve(self):
+        original = self.fake.request
+        result_seen = [False]
+
+        def late_delete(method, path, data, timeout):
+            response = original(method, path, data, timeout)
+            if "/results?" in path:
+                result_seen[0] = True
+                self.fake.time = 24
+            elif method == "GET" and result_seen[0]:
+                self.fake.time += 1.1
+            elif method == "DELETE":
+                self.fake.time += 3
+            return response
+
+        self.runner.request = late_delete
         with self.assertRaises(native.CaptureUnavailable):
-            self.runner.run("alice", query, 200, 300)
+            self.run_query()
         self.assertEqual(
             self.fake.ledger.outstanding("alice")[0]["state"], "cleanup_unknown"
         )
-        self.assertEqual(len(self.runner.memo), 1)
+        self.assertEqual(self.runner.memo, {})
+
+    def test_acknowledged_cleanup_after_deadline_still_withholds_rows(self):
+        original = self.fake.request
+
+        def slow(method, path, data, timeout):
+            response = original(method, path, data, timeout)
+            if "/results?" in path:
+                self.fake.time = 24.5
+            elif method == "DELETE":
+                self.fake.time += 1
+            return response
+
+        self.runner.request = slow
+        with self.assertRaises(native.CaptureUnavailable):
+            self.run_query()
+        self.assertEqual(self.fake.ledger.outstanding("alice"), [])
+        self.assertEqual(self.runner.memo, {})
+
+    def test_incomplete_search_cleanup_only_uses_the_reserve(self):
+        original = self.fake.request
+        self.fake.status["eventIsTruncated"] = True
+        delete_timeouts = []
+
+        def slow(method, path, data, timeout):
+            response = original(method, path, data, timeout)
+            if method == "GET":
+                self.fake.time += 2
+            elif method == "DELETE":
+                delete_timeouts.append(timeout)
+                self.fake.time += 1.1
+            return response
+
+        self.runner.request = slow
+        with self.assertRaises(native.CaptureUnavailable):
+            self.run_query()
+        self.assertEqual(delete_timeouts, [1])
+        self.assertEqual(
+            self.fake.ledger.outstanding("alice")[0]["state"], "cleanup_unknown"
+        )
+        self.assertEqual(self.runner.memo, {})
 
     def test_executed_search_must_match_request_before_results_or_cleanup(self):
         original = self.fake.request

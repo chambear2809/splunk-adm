@@ -108,6 +108,12 @@ describe("Observability Cloud health evidence", () => {
   it("builds an exact, projected and bounded search for one verified org and realm", () => {
     const search = buildO11yHealthSearch(config, selection);
     expect(search).toContain('index=atlas_o11y sourcetype="atlas:o11y_health"');
+    expect(search).toContain(
+      "dc(adm_service_namespace) AS adm_namespace_count",
+    );
+    expect(search).toContain(
+      "| where adm_capture_time=adm_latest_capture OR adm_namespace_count>1",
+    );
     expect(search).toContain(`host="${observer}"`);
     expect(search).toContain('"organization_id")="org-demo-01"');
     expect(search).toContain('"realm")="us0"');
@@ -305,6 +311,16 @@ describe("Observability Cloud health evidence", () => {
     });
   });
 
+  it("rejects a completion namespace that disagrees with its metrics", () => {
+    const rows = withEventChanges(fixture.events.length - 1, {
+      service_namespace: "other-payments",
+    });
+    expect(normalizeO11yHealthEvidence(rows, selection, config)).toMatchObject({
+      records: [],
+      rejected: 1,
+    });
+  });
+
   it("treats a missing indexed metric as an unavailable partial capture", async () => {
     const rows = indexedRows().slice(1);
     expect(normalizeO11yHealthEvidence(rows, selection, config)).toMatchObject({
@@ -355,9 +371,9 @@ describe("Observability Cloud health evidence", () => {
       ...selection,
       service: { ...selection.service, serviceNamespace: "payments" },
     };
-    expect(buildO11yHealthSearch(config, qualified)).toContain(
-      '"service_namespace")="payments"',
-    );
+    const search = buildO11yHealthSearch(config, qualified);
+    expect(search).toContain('"service_namespace")="payments"');
+    expect(search).not.toContain("adm_namespace_count");
     expect(
       normalizeO11yHealthEvidence(indexedRows(), qualified, config).rejected,
     ).toBe(0);

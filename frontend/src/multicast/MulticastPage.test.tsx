@@ -7,6 +7,11 @@ import {
   utcSeconds,
 } from "./MulticastPage";
 import type { MulticastResult } from "./contract";
+import type { SearchClient } from "../data/searchClient";
+
+const client = {} as SearchClient;
+const tab = (html: string, name: string) =>
+  new RegExp(`<button[^>]*role="tab"[^>]*>${name}`).exec(html)?.[0] ?? "";
 
 const result: MulticastResult = {
   version: 1,
@@ -60,6 +65,47 @@ describe("Multicast page", () => {
     const html = renderToStaticMarkup(<MulticastPage live={false} />);
     expect(html).toContain("live Splunk connection");
     expect(html).not.toContain("Investigate</button>");
+  });
+  it("defaults to the overview tab", () => {
+    const html = renderToStaticMarkup(
+      <MulticastPage
+        live
+        client={client}
+        initialParams={new URLSearchParams()}
+      />,
+    );
+    expect(html).toContain('role="tablist"');
+    expect(tab(html, "Overview")).toContain('aria-selected="true"');
+    expect(tab(html, "Matrix")).toContain('aria-selected="false"');
+  });
+  it("restores the matrix tab from a scope link", () => {
+    const html = renderToStaticMarkup(
+      <MulticastPage
+        live
+        client={client}
+        initialParams={
+          new URLSearchParams(
+            "mode=live&mc_v=1&mc_scope=fabric-a&mc_earliest=1000&mc_latest=2000&mc_view=matrix",
+          )
+        }
+      />,
+    );
+    expect(tab(html, "Matrix")).toContain('aria-selected="true"');
+    expect(tab(html, "Overview")).toContain('aria-selected="false"');
+  });
+  it("topology tab is disabled with a reason", () => {
+    const html = renderToStaticMarkup(
+      <MulticastPage
+        live
+        client={client}
+        initialParams={new URLSearchParams()}
+      />,
+    );
+    const topology = tab(html, "Topology");
+    expect(topology).toContain('aria-disabled="true"');
+    expect(topology).toContain('aria-selected="false"');
+    expect(topology).toContain('title="Not yet available"');
+    expect(html).toMatch(/Topology<small[^>]*>Not yet available<\/small>/);
   });
   it("shows coverage, provenance and limitations alongside evidence", () => {
     const html = renderToStaticMarkup(

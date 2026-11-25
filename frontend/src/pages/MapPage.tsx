@@ -304,6 +304,11 @@ function StandardMapPage({
     (selection?.kind === "node"
       ? index.node.get(selection.id)?.attributes?.scope
       : undefined);
+  const impactContext = {
+    scope: selectedRoutingScope,
+    earliest: graphWindowParams?.get("earliest") ?? undefined,
+    latest: graphWindowParams?.get("latest") ?? undefined,
+  };
   const impact = useImpactOverlay(graph, topo);
   const openNode = (id: string) => {
     const n = index.node.get(id);
@@ -914,7 +919,9 @@ function StandardMapPage({
             hasContextEvidence={graph.edges.some(
               (edge) =>
                 (edge.attachment_evidence?.length ?? 0) > 0 ||
-                (edge.traffic_observations?.length ?? 0) > 0,
+                (edge.traffic_observations?.length ?? 0) > 0 ||
+                (edge.nat_observations?.length ?? 0) > 0 ||
+                edge.nat_observations_truncated === true,
             )}
             onJson={exportJson}
             onPng={exportPng}
@@ -959,12 +966,7 @@ function StandardMapPage({
               state={
                 visible
                   ? {
-                      args: {
-                        service: graph.boundary.service,
-                        environment: graph.boundary.environment,
-                        cluster: graph.boundary.cluster,
-                        namespace: graph.boundary.namespace,
-                      },
+                      args: graph.boundary,
                       earliest: pickerBound(graph.window.start),
                       latest: pickerBound(graph.window.end),
                       mode,
@@ -1171,10 +1173,7 @@ function StandardMapPage({
                 return loadLive(
                   source,
                   {
-                    service: graph.boundary.service,
-                    environment: graph.boundary.environment,
-                    cluster: graph.boundary.cluster,
-                    namespace: graph.boundary.namespace,
+                    ...graph.boundary,
                     earliest: String(start),
                     latest: String(end),
                     timezone,
@@ -1284,9 +1283,7 @@ function StandardMapPage({
               <ImpactButton
                 compact
                 token={selection?.kind === "node" ? selection.id : undefined}
-                scope={selectedRoutingScope}
-                earliest={graphWindowParams?.get("earliest") ?? undefined}
-                latest={graphWindowParams?.get("latest") ?? undefined}
+                {...impactContext}
                 label={
                   selection?.kind === "node" ? label(selection.id) : undefined
                 }
@@ -1554,6 +1551,7 @@ function StandardMapPage({
                     end: Date.parse(graph.window.end) / 1000,
                   }
                 }
+                impactContext={impactContext}
                 selection={selection}
                 index={index}
                 topo={topo}

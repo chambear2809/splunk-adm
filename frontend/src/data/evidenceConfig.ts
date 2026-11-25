@@ -313,7 +313,11 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       value[0].configuration.length > 32768
     )
       throw new Error("Shared multicast source configuration is invalid.");
-    return JSON.parse(value[0].configuration) as unknown;
+    try {
+      return JSON.parse(value[0].configuration) as unknown;
+    } catch {
+      throw new Error("Shared multicast source configuration is invalid.");
+    }
   }
   async readAppDynamicsInventory(
     signal?: AbortSignal,
@@ -363,7 +367,12 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         signal,
       ),
     });
-    if (indexes.length !== 1 || indexes[0] === "unconfigured_optional")
+    if (
+      indexes.length < 1 ||
+      indexes.length > 16 ||
+      new Set(indexes).size !== indexes.length ||
+      indexes.includes("unconfigured_optional")
+    )
       throw new Error(
         "Controller inventory index is unavailable or ambiguous.",
       );

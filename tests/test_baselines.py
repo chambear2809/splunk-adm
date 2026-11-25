@@ -756,10 +756,16 @@ class BaselineTests(unittest.TestCase):
         self.sources["b"]["dependencies"][0]["blocked"] = True
         sig = signature(self.sources["b"]["dependencies"][0])
         self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b")
-        for alter in ("scope", "missing-finding"):
+        self.assertTrue(
+            self.store.evaluate("alice", ident, "w", sig, self.now)["thresholdMet"]
+        )
+        for alter in ("scope", "missing-finding", "window"):
             evidence = copy.deepcopy(self.sources["b"])
             if alter == "scope":
                 evidence["coverage"]["configRevision"] = "other"
+            elif alter == "window":
+                evidence["coverage"]["requested"]["start"] += 1
+                evidence["coverage"]["returned"]["start"] += 1
             else:
                 evidence["dependencies"][0]["blocked"] = False
             with closing(sqlite3.connect(self.store.path)) as db, db:
@@ -769,6 +775,11 @@ class BaselineTests(unittest.TestCase):
                 )
             with self.subTest(alter=alter), self.assertRaises(Forbidden):
                 self.store.occurrences("alice", ident, "w")
+            with (
+                self.subTest(alter=alter, view="evaluate"),
+                self.assertRaises(Forbidden),
+            ):
+                self.store.evaluate("alice", ident, "w", sig, self.now)
         self.assertEqual(
             self.store.append_occurrence("alice", "occ", ident, 2, "w", sig, "b"),
             {"id": ident, "revision": 3, "resultWithheld": True},
@@ -840,7 +851,7 @@ class BaselineTests(unittest.TestCase):
         base = capture()
         template = base["dependencies"][0]
         base["dependencies"] = [
-            {**template, "destination": f"endpoint-{i}"} for i in range(100)
+            {**template, "destination": f"endpoint-{i}"} for i in range(101)
         ]
         self.sources["a"] = base
         evidence = capture(10)
@@ -909,6 +920,10 @@ class BaselineTests(unittest.TestCase):
         self.assertTrue(
             all(item["changeKinds"] == ["newly_blocked"] for item in page["items"])
         )
+        selected = signature(base["dependencies"][-1])
+        status = self.store.evaluate("alice", ident, "w", selected, self.now)
+        self.assertEqual(status["count"], 1)
+        self.assertTrue(status["thresholdMet"])
         self.source_denied.add(("alice", "b"))
         with self.assertRaises(Forbidden):
             self.store.occurrences("alice", ident, "w", limit=99)

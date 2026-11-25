@@ -156,6 +156,48 @@ describe("DNS inspection isolation and explicit exports", () => {
       expect(result.records[0].source).toBe("dns_stream");
     },
   );
+  it("counts conflicting Hubble producers as rejected and excludes them from both downloads", async () => {
+    const raw = JSON.parse(hubble._raw);
+    raw.node_name = "worker-b/node-b";
+    raw.flow.l7.dns.query = "conflicting.example.test";
+    const hubbleSource = {
+      ...config.dns[1],
+      state: "active" as const,
+      indexes: [hubble.index],
+      authorities: ["worker-a", "worker-b"],
+      schemaQualified: true,
+    };
+    const result = await loadDnsEvidence(
+      {
+        search: async () =>
+          envelope([
+            hubble,
+            {
+              ...hubble,
+              event_fingerprint: "c".repeat(64),
+              _raw: JSON.stringify(raw),
+            },
+          ]),
+      },
+      { ...selection, addresses: ["192.0.2.11"] },
+      new AbortController().signal,
+      {
+        read: async () => ({
+          ...config,
+          dns: [{ ...config.dns[0], state: "not_selected" }, hubbleSource],
+        }),
+      },
+    );
+    expect(
+      result.sources.find((source) => source.source === "dns_hubble"),
+    ).toMatchObject({ inputCount: 2, rejected: 1 });
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].authority).toBe("worker-a");
+    for (const exported of [dnsEvidenceJSON(result), dnsEvidenceCSV(result)]) {
+      expect(exported).toContain("api.example.test");
+      expect(exported).not.toContain("conflicting.example.test");
+    }
+  });
   it("dispatches staged sources only for explicit scoped diagnostics and suppresses association", async () => {
     const staged = {
       ...config,

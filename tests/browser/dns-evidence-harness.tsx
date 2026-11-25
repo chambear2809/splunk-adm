@@ -6,12 +6,19 @@ import type {
   EvidenceConfigClient,
 } from "../../frontend/src/data/evidenceConfig";
 import type { SearchClient } from "../../frontend/src/data/searchClient";
+import {
+  CLOUD_FLOW_PROJECTION,
+  parseCloudFlowLine,
+} from "../../frontend/src/data/cloudFlowEvidence";
+import flowLogs from "../../fixtures/cloud-flow/records-v5.json";
 import stream from "../../fixtures/dns/stream-transaction.json";
 import "../../frontend/src/styles.css";
 
 const params = new URLSearchParams(location.search),
   fault = params.get("fault");
 const now = 1791373600;
+let assetSearches = 0;
+let assetPending = false;
 const config: EvidenceConfiguration = {
   fingerprint: "a".repeat(64),
   trafficContract: 1,
@@ -56,8 +63,78 @@ const config: EvidenceConfiguration = {
     mappings: [],
   })),
 };
+if (fault === "cloud-cap") {
+  config.supplemental = [
+    ...(config.supplemental ?? []).filter(
+      (item) => item.source !== "aws_vpc_flow",
+    ),
+    {
+      source: "aws_vpc_flow",
+      state: "active",
+      indexes: ["aws_flow"],
+      authorities: ["collector-a"],
+      schemaQualified: true,
+      staleAfterSeconds: 3600,
+      mappings: [
+        {
+          observer_kind: "aws_vpc_flow",
+          observer: "collector-a",
+          scope: "prod",
+          cluster: "",
+          mapping_status: "verified",
+          account_id: "123456789012",
+          region: "us-east-1",
+          vpc_id: "vpc-0abc1234",
+        },
+      ],
+    },
+  ];
+}
+if (fault === "asset-race") {
+  config.supplemental = [
+    ...(config.supplemental ?? []).filter(
+      (item) => item.source !== "asset_history",
+    ),
+    {
+      source: "asset_history",
+      state: "active",
+      indexes: ["asset_history_idx"],
+      authorities: ["cmdb-prod"],
+      schemaQualified: true,
+      staleAfterSeconds: 3600,
+      mappings: [
+        {
+          observer_kind: "asset_authority",
+          observer: "cmdb-prod",
+          scope: "prod",
+          cluster: "",
+          mapping_status: "verified",
+        },
+      ],
+    },
+  ];
+}
 const configClient: EvidenceConfigClient = {
-  read: async () => structuredClone(config),
+  read: async (signal) => {
+    if (fault === "asset-race" && assetPending) {
+      assetPending = false;
+      document.body.dataset.assetRecheck = "pending";
+      await new Promise<void>((resolve, reject) => {
+        (
+          window as Window & { __RELEASE_ASSET__?: () => void }
+        ).__RELEASE_ASSET__ = () => {
+          if (params.has("reject") && signal?.aborted)
+            reject(new DOMException("Cancelled", "AbortError"));
+          else resolve();
+        };
+      }).finally(() => {
+        setTimeout(() => {
+          document.body.dataset.assetRecheck = "settled";
+        }, 0);
+      });
+    }
+    return structuredClone(config);
+  },
 };
 const client: SearchClient = {
   search: async (request) => {
@@ -66,6 +143,95 @@ const client: SearchClient = {
     request.onLifecycle?.({ state: "creating" });
     request.onLifecycle?.({ state: "created", sid: "mock-id" });
     try {
+      if (
+        fault === "asset-race" &&
+        request.search.includes('sourcetype="adm:asset_history"')
+      ) {
+        const asset = ++assetSearches === 1 ? "asset-old" : "asset-new";
+        assetPending = asset === "asset-old";
+        return {
+          rows: [
+            {
+              kind: "supplemental_record",
+              schema_version: 1,
+              index: "asset_history_idx",
+              event_time_epoch: String(now - 60),
+              indexed_at: String(now),
+              asset_authority: "cmdb-prod",
+              scope: "prod",
+              ip: "192.0.2.10",
+              record_id: asset,
+              revision: 1,
+              asset_id: asset,
+              validity_basis: "source_interval",
+              valid_from: String(now - 60),
+              valid_to: String(now + 300),
+              snapshot_id: "snapshot-asset",
+              snapshot_at: String(now + 300),
+              snapshot_complete: 1,
+              revision_conflict: 0,
+              record_fingerprint: "a".repeat(64),
+            },
+            {
+              kind: "supplemental_completion",
+              schema_version: 1,
+              input_count: 1,
+              returned_count: 1,
+              input_capped: 0,
+              oversized: 0,
+              source_scan_count: 1,
+              source_scan_capped: 0,
+              source_scan_invalid_count: 0,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
+      if (
+        fault === "cloud-cap" &&
+        request.search.includes('sourcetype="aws:vpcflow:v5"')
+      ) {
+        const status = !request.search.includes("192.0.2.10");
+        const record = flowLogs.records.find(
+          (row) =>
+            row.id === (status ? "skipped-capture-interval" : "accepted-flow"),
+        )!;
+        const fields = parseCloudFlowLine(
+          record.raw.replaceAll("10.0.1.25", "192.0.2.10"),
+        );
+        const projection = Object.fromEntries(
+          CLOUD_FLOW_PROJECTION.map(([field, column]) => [
+            column,
+            fields[field],
+          ]),
+        );
+        const count = status ? 64 : 1;
+        return {
+          rows: [
+            ...Array.from({ length: count }, (_, i) => ({
+              ...projection,
+              kind: "supplemental_record",
+              flow_field_count: 29,
+              host: "collector-a",
+              index: "aws_flow",
+              event_fingerprint: i.toString(16).padStart(64, "0"),
+              event_time_epoch: fields.start,
+              _indextime: "1791373500",
+            })),
+            {
+              kind: "supplemental_completion",
+              schema_version: 1,
+              input_count: status ? 65 : 1,
+              returned_count: count,
+              input_capped: 0,
+              oversized: 0,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
       if (request.search.includes("dns_completion")) {
         if (fault === "denied") throw Error("caller permission denied");
         if (fault === "slow")

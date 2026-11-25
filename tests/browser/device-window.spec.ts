@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+test("capped Device results keep drop evidence and qualify the summary", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=device&mode=live&id=test-vds&fault=device-capped",
+  );
+  const summary = page.getByLabel("Summary", { exact: true });
+  await expect(summary).toContainText("11 flow records");
+  await expect(summary).toContainText("2 peers shown");
+  await expect(summary).toContainText("1 blocked shown");
+  const table = page.getByRole("region", {
+    name: "Showing 1 of at least 4 conversations",
+  });
+  await expect(table.getByLabel("Blocked", { exact: true })).toBeVisible();
+});
+
 test("a device conversation carries its historical window into a trace", async ({
   page,
 }) => {

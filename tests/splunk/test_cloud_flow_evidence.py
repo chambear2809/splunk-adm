@@ -76,7 +76,14 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(completed.stdout)
 
-    def flow(self, *, vpc: str | None = None) -> str:
+    def flow(
+        self,
+        *,
+        vpc: str | None = None,
+        start: int | None = None,
+        end: int | None = None,
+        packets: int = 4,
+    ) -> str:
         return " ".join(
             [
                 "5",
@@ -85,10 +92,10 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
                 "49152",
                 "443",
                 "6",
-                str(self.flow_start),
-                str(self.flow_end),
+                str(self.flow_start if start is None else start),
+                str(self.flow_end if end is None else end),
                 "IPv4",
-                "4",
+                str(packets),
                 "1500",
                 self.account,
                 vpc or self.vpc,
@@ -111,7 +118,7 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
             ]
         )
 
-    def status(self) -> str:
+    def status(self, *, start: int | None = None, eni="eni-0def1234") -> str:
         return " ".join(
             [
                 "5",
@@ -120,7 +127,7 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
                 "-",
                 "-",
                 "-",
-                str(self.flow_start),
+                str(self.flow_start if start is None else start),
                 str(self.flow_end),
                 "-",
                 "-",
@@ -129,7 +136,7 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
                 self.vpc,
                 "subnet-0def1234",
                 "-",
-                "eni-0def1234",
+                eni,
                 self.region,
                 "use1-az1",
                 "-",
@@ -166,6 +173,9 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
                 "time": self.flow_start + 5,
             },
         ]
+        self.post(events)
+
+    def post(self, events) -> None:
         batch = []
         for event in events:
             batch.append(
@@ -181,16 +191,18 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
             )
         lab._hec_post(b"\n".join(batch))
 
-    def test_v5_search_completion_status_time_and_scope(self):
-        built = self.helper({"config": self.config, "selection": self.selection})
+    def read(self, *, capture_status=False, count):
+        built = self.helper(
+            {
+                "config": self.config,
+                "selection": self.selection,
+                "captureStatus": capture_status,
+            }
+        )
         self.assertNotRegex(built["search"], r"(?i)`|\|\s*(lookup|join|map)\b")
         self.assertEqual(
-            built["window"],
-            {"start": self.start - 660, "end": self.end + 60},
+            built["window"], {"start": self.start - 780, "end": self.end + 60}
         )
-        self.post_events()
-
-        rows = []
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             rows = lab.search(
@@ -202,24 +214,23 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
             completions = [
                 row for row in rows if row.get("kind") == "supplemental_completion"
             ]
-            if len(records) == 3 and len(completions) == 1:
-                break
+            if len(completions) == 1 and int(completions[0]["input_count"]) == count:
+                return records, completions[0]
             time.sleep(0.5)
+        self.fail(f"Flow Logs did not return the expected {count} inputs")
 
-        records = [row for row in rows if row.get("kind") == "supplemental_record"]
-        completions = [
-            row for row in rows if row.get("kind") == "supplemental_completion"
-        ]
-        self.assertEqual(
-            len(completions), 1, "query must return its completion envelope"
-        )
+    def test_v5_search_completion_status_time_and_scope(self):
+        self.post_events()
+        flows, completion = self.read(count=3)
+        statuses, status_completion = self.read(capture_status=True, count=1)
+        records = flows + statuses
         self.assertEqual(
             len(records), 4, "only the configured capture host is searched"
         )
-        self.assertEqual(int(completions[0]["input_count"]), 4)
-        self.assertEqual(int(completions[0]["returned_count"]), 4)
-        self.assertEqual(int(completions[0]["input_capped"]), 0)
-        self.assertEqual(int(completions[0]["oversized"]), 0)
+        self.assertEqual(int(completion["returned_count"]), 3)
+        self.assertEqual(int(status_completion["returned_count"]), 1)
+        self.assertEqual(int(completion["input_capped"]), 0)
+        self.assertEqual(int(completion["oversized"]), 0)
         self.assertCountEqual(
             [int(float(record["event_time_epoch"])) for record in records],
             [self.flow_start, self.flow_start, self.flow_start, self.flow_start + 5],
@@ -254,3 +265,65 @@ class CloudFlowEvidenceRuntimeTest(unittest.TestCase):
         self.assertEqual(status["logStatus"], "SKIPDATA")
         self.assertEqual(status["matchedAddressFields"], [])
         self.assertEqual(status["attribution"], "context_only")
+
+    def test_oversized_aggregation_interval_is_rejected_after_search(self):
+        # The valid interval starts at the extended dispatch boundary and ends
+        # at the inclusive overlap boundary.
+        boundary_start = self.start - 780
+        self.post(
+            [
+                {
+                    "host": self.authority,
+                    "event": self.flow(
+                        start=start, end=start + duration, packets=packets
+                    ),
+                    "time": start,
+                }
+                for start, duration, packets in [
+                    (boundary_start, 720, 4),
+                    (self.flow_start, 3600, 999),
+                ]
+            ]
+        )
+        flows, completion = self.read(count=2)
+        self.assertEqual(int(completion["returned_count"]), 2)
+        normalized = self.helper(
+            {"config": self.config, "selection": self.selection, "rows": flows}
+        )["normalized"]
+        self.assertEqual(normalized["rejected"], 1)
+        self.assertEqual(len(normalized["records"]), 1)
+        control = normalized["records"][0]
+        self.assertEqual(
+            control["interval"], {"start": boundary_start, "end": self.start - 60}
+        )
+        self.assertEqual(control["packets"], 4)
+
+    def test_capture_status_cap_does_not_displace_endpoint_flows(self):
+        status_start = self.flow_start + 5
+        self.post(
+            [{"host": self.authority, "event": self.flow(), "time": self.flow_start}]
+            + [
+                {
+                    "host": self.authority,
+                    "event": self.status(start=status_start, eni=f"eni-{i:08x}"),
+                    "time": status_start,
+                }
+                for i in range(65)
+            ]
+        )
+        flows, flow_completion = self.read(count=1)
+        statuses, status_completion = self.read(capture_status=True, count=65)
+        self.assertEqual(int(flow_completion["returned_count"]), 1)
+        self.assertEqual(int(status_completion["returned_count"]), 64)
+        normalized = self.helper(
+            {
+                "config": self.config,
+                "selection": self.selection,
+                "rows": flows + statuses,
+            }
+        )["normalized"]
+        self.assertEqual(normalized["rejected"], 0)
+        self.assertCountEqual(
+            [record["recordClass"] for record in normalized["records"]],
+            ["flow"] + ["capture_status"] * 64,
+        )

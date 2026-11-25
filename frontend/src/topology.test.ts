@@ -7,6 +7,7 @@ import {
   type GraphNode,
 } from "./graph";
 import { demoGraph, demoTopology } from "./provider";
+import { findDevices } from "./trace/traceModel";
 import {
   buildPath,
   choiceExplanation,
@@ -14,6 +15,7 @@ import {
   deviceSummaries,
   edgeDeviceContext,
   emptyTopology,
+  fabricLayersMulti,
   indexTopology,
   interfaceKey,
   interfaceLabel,
@@ -43,6 +45,58 @@ const titles = (edge: GraphEdge, t = topo) =>
   );
 
 describe("rowsToTopology", () => {
+  it("keeps same-named ACI switches in disconnected fabrics separate", () => {
+    const id = (n: string) => `legacy-aci:${n.repeat(64)}`;
+    const devices = [
+      [id("a"), "leaf-1", "apic:A", "pod-1/node-101"],
+      [id("b"), "leaf-1", "apic:B", "pod-1/node-101"],
+      [id("c"), "spine-A", "apic:A", "pod-1/node-201"],
+      [id("d"), "spine-B", "apic:B", "pod-1/node-201"],
+    ].map(([device_id, name, fabric, aci_node]) => ({
+      row_type: "device",
+      device_id,
+      name,
+      fabric,
+      aci_node,
+      device_kind: "switch",
+      sources: ["aci"],
+    }));
+    const links = [
+      [id("a"), id("c")],
+      [id("b"), id("d")],
+    ].map(([a_device, b_device]) => ({
+      row_type: "link",
+      a_device,
+      b_device,
+      a_interface: "Ethernet1/1",
+      b_interface: "Ethernet1/1",
+      link_source: "aci",
+    }));
+    const indexed = indexTopology(rowsToTopology([...devices, ...links]));
+    expect(indexed.byId.size).toBe(4);
+    expect(resolveDevice("leaf-1", indexed)).toBeUndefined();
+    expect(resolveDevice("pod-1/node-101", indexed)).toBeUndefined();
+    expect(fabricLayersMulti(indexed, [id("c")], [id("d")])).toBeUndefined();
+    expect(fabricLayersMulti(indexed, [id("a")], [id("c")])).toEqual([
+      { ids: [id("a")] },
+      { ids: [id("c")] },
+    ]);
+    const mixedRows = rowsToTopology([
+      ...devices,
+      ...links,
+      {
+        row_type: "device",
+        device_id: "leaf-1",
+        name: "leaf-1",
+        sources: ["nd"],
+      },
+    ]);
+    const mixed = indexTopology(mixedRows);
+    expect(resolveDevice("leaf-1", mixed)).toBeUndefined();
+    expect(resolveDevice(id("a"), mixed)?.id).toBe(id("a"));
+    expect(findDevices("leaf-1", mixedRows)).toHaveLength(3);
+  });
+
   it("parses the captured adm_topology rows", () => {
     const t = rowsToTopology(topologyRows);
     expect(t.devices.map((d) => d.id).sort()).toEqual([

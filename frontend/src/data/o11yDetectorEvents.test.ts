@@ -229,6 +229,20 @@ describe("detector event history", () => {
       normalizeDetectorEvents(input, detectorSelection, detectorSource).capture,
     ).toMatchObject({ events: [], detectorIds: first.configured_detector_ids });
   });
+  it("rejects a capture completed before the selected interval end", () => {
+    const input = change(rows().slice(2), 0, {
+      expected_record_count: 0,
+      captured_at: detectorSelection.window.end - 1,
+    });
+    input[0].event_time_epoch = detectorSelection.window.end - 1;
+    const result = normalizeDetectorEvents(
+      input,
+      detectorSelection,
+      detectorSource,
+    );
+    expect(result.capture).toBeUndefined();
+    expect(result.rejected).toBeGreaterThan(0);
+  });
   it("keeps event time and source identity literal, independent of service/MMS dimensions", () => {
     const search = buildDetectorEventsSearch(detectorSource, detectorSelection);
     expect(search).toContain('sourcetype="atlas:o11y_detector_event"');

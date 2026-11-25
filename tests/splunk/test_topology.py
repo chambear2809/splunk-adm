@@ -58,7 +58,7 @@ class TopologyTest(unittest.TestCase):
         return [r for r in self.rows if r.get("row_type") == kind]
 
     def test_devices(self):
-        devices = {r["device_id"]: r for r in self.of("device")}
+        devices = {r.get("name", r["device_id"]): r for r in self.of("device")}
         self.assertEqual(set(devices), set(EXPECTED["devices"]))
         for name, want in EXPECTED["devices"].items():
             got = devices[name]
@@ -69,8 +69,16 @@ class TopologyTest(unittest.TestCase):
                     self.assertEqual(got.get(key), value, f"{name}.{key}")
 
     def test_links_merge_both_cdp_directions(self):
+        names = {
+            r["device_id"]: r.get("name", r["device_id"]) for r in self.of("device")
+        }
         links = [
-            (r["a_device"], r["a_interface"], r["b_device"], r["b_interface"])
+            (
+                names.get(r["a_device"], r["a_device"]),
+                r["a_interface"],
+                names.get(r["b_device"], r["b_device"]),
+                r["b_interface"],
+            )
             for r in self.of("link")
         ]
         self.assertEqual(sorted(links), sorted(tuple(x) for x in EXPECTED["links"]))
@@ -78,7 +86,13 @@ class TopologyTest(unittest.TestCase):
         self.assertTrue(all(r.get("last_seen") for r in self.of("link")))
 
     def test_interfaces(self):
-        got = {f"{r['device_id']}|{r['interface']}": r for r in self.of("interface")}
+        names = {
+            r["device_id"]: r.get("name", r["device_id"]) for r in self.of("device")
+        }
+        got = {
+            f"{names.get(r['device_id'], r['device_id'])}|{r['interface']}": r
+            for r in self.of("interface")
+        }
         self.assertEqual(set(got), set(EXPECTED["interfaces"]))
         for key, want in EXPECTED["interfaces"].items():
             for field, value in want.items():

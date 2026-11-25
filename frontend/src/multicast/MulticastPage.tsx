@@ -1,17 +1,33 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { SearchClient } from "../data/searchClient";
 import type {
   MulticastConfiguration,
   MulticastEvidence,
   MulticastResult,
 } from "./contract";
-import { multicastLink, parseMulticastLink, validateRequest } from "./inputs";
+import {
+  multicastLink,
+  parseMulticastLink,
+  parseMulticastView,
+  parseScopeLink,
+  scopeLink,
+  validateRequest,
+  validateScopeWindow,
+} from "./inputs";
 import {
   investigateMulticast,
   MulticastConfigurationChangedError,
   readMulticastConfiguration,
 } from "./investigation";
+import { formatTime } from "./format";
 import { ForwardingTree } from "./ForwardingTree";
+import { IgmpTimeline } from "./IgmpTimeline";
+import { MatrixView } from "./MatrixView";
+import { OverviewView } from "./OverviewView";
+import { QuerierStrip } from "./QuerierStrip";
+import { investigateScope, type ScopeOverviewResult } from "./scopeOverview";
+import { SourceCoverage, sourceLabel } from "./SourceCoverage";
+import { URL_STATE_CHANGED } from "../app/urlState";
 import "./multicast.css";
 
 interface Props {
@@ -29,6 +45,15 @@ type InvestigationState =
   | { status: "idle" | "loading" | "cancelled" | "stale" }
   | { status: "error"; message: string }
   | { status: "done"; value: MulticastResult };
+type ScopeState =
+  | { status: "idle" | "loading" | "cancelled" | "stale" }
+  | { status: "error"; message: string }
+  | { status: "done"; value: ScopeOverviewResult; comparing: boolean };
+type View = "overview" | "matrix";
+const VIEW_LABEL: Record<View, string> = {
+  overview: "Overview",
+  matrix: "Matrix",
+};
 
 const message = (error: unknown) =>
   error instanceof Error
@@ -37,24 +62,6 @@ const message = (error: unknown) =>
 export const utcInput = (seconds: number) =>
   new Date(seconds * 1000).toISOString().slice(0, 19);
 export const utcSeconds = (value: string) => Date.parse(`${value}Z`) / 1000;
-const formatTime = (seconds: number, timezone?: string) => {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "medium",
-      timeZone: timezone,
-    }).format(new Date(seconds * 1000));
-  } catch {
-    return new Date(seconds * 1000).toISOString();
-  }
-};
-
-const sourceLabel = {
-  multicast_igmp: "Stream IGMP",
-  multicast_netflow: "Stream NetFlow",
-  multicast_nxos: "NX-OS forwarding snapshots",
-  device_state: "Device forwarding state",
-} as const;
 
 function EvidenceDetails({
   evidence,
@@ -293,21 +300,53 @@ export function MulticastResults({
           </div>
         </>
       )}
-      <details open>
-        <summary>Coverage and source status</summary>
-        <ul>
-          {result.outcomes.map((item, index) => (
-            <li key={`${item.source}-${item.profile ?? ""}-${index}`}>
-              <strong>
-                {sourceLabel[item.source]}
-                {item.profile ? ` / ${item.profile}` : ""}: {item.state}
-              </strong>
-              {item.detail ? ` — ${item.detail}` : ""}
-            </li>
-          ))}
-        </ul>
-      </details>
+      <SourceCoverage outcomes={result.outcomes} />
     </section>
+  );
+}
+
+function readInitial(params: URLSearchParams) {
+  try {
+    const view: View =
+      parseMulticastView(params) === "matrix" ? "matrix" : "overview";
+    if (params.has("mc_group"))
+      return { view, request: parseMulticastLink(params), detail: true };
+    return { view, window: parseScopeLink(params), detail: false };
+  } catch (error) {
+    return { view: "overview" as View, detail: false, error: message(error) };
+  }
+}
+
+function StatusNotices({
+  state,
+  refreshSources,
+}: {
+  state: { status: string; message?: string };
+  refreshSources(): void;
+}) {
+  return (
+    <>
+      {state.status === "loading" && (
+        <p role="status">Investigating multicast evidence…</p>
+      )}
+      {state.status === "cancelled" && (
+        <p role="status">
+          Investigation cancelled. Run it again for the current selection.
+        </p>
+      )}
+      {state.status === "stale" && (
+        <div className="multicast-notice" role="alert">
+          Source verification changed during the investigation. Refresh sources
+          and investigate again.
+          <button type="button" onClick={refreshSources}>
+            Refresh sources
+          </button>
+        </div>
+      )}
+      {state.status === "error" && (
+        <p role="alert">Investigation unavailable: {state.message}</p>
+      )}
+    </>
   );
 }
 
@@ -317,41 +356,39 @@ export function MulticastPage({
   timezone,
   initialParams,
 }: Props) {
-  const [initial] = useState(() => {
-    try {
-      return {
-        request: parseMulticastLink(
-          initialParams ??
-            new URLSearchParams(
-              typeof window === "undefined" ? "" : window.location.search,
-            ),
+  const [initial] = useState(() =>
+    readInitial(
+      initialParams ??
+        new URLSearchParams(
+          typeof window === "undefined" ? "" : window.location.search,
         ),
-      };
-    } catch (error) {
-      return { error: message(error) };
-    }
-  });
+    ),
+  );
   const now = Math.floor(Date.now() / 1000);
-  const [scope, setScope] = useState(initial.request?.scope ?? "");
+  const start = initial.request ?? initial.window;
+  const [scope, setScope] = useState(start?.scope ?? "");
   const [group, setGroup] = useState(initial.request?.group ?? "");
   const [sender, setSender] = useState(initial.request?.sender ?? "");
   const [earliest, setEarliest] = useState(
-    utcInput(initial.request?.earliest ?? now - 900),
+    utcInput(start?.earliest ?? now - 900),
   );
-  const [latest, setLatest] = useState(
-    utcInput(initial.request?.latest ?? now),
-  );
+  const [latest, setLatest] = useState(utcInput(start?.latest ?? now));
+  const [view, setView] = useState<View>(initial.view);
+  const [detail, setDetail] = useState(initial.detail);
   const [configuration, setConfiguration] = useState<ConfigurationState>({
     status: "loading",
   });
+  const [overview, setOverview] = useState<ScopeState>({ status: "idle" });
   const [investigation, setInvestigation] = useState<InvestigationState>({
     status: "idle",
   });
   const [error, setError] = useState(initial.error ?? "");
+  const activeScope = useRef<AbortController>();
   const active = useRef<AbortController>();
   const [configurationRevision, setConfigurationRevision] = useState(0);
   const [revision, setRevision] = useState(0);
   const [resultRevision, setResultRevision] = useState(0);
+  const tabsId = useId();
   useEffect(() => {
     if (!live) return;
     const controller = new AbortController();
@@ -366,7 +403,13 @@ export function MulticastPage({
       });
     return () => controller.abort();
   }, [live, configurationRevision]);
-  useEffect(() => () => active.current?.abort(), []);
+  useEffect(
+    () => () => {
+      activeScope.current?.abort();
+      active.current?.abort();
+    },
+    [],
+  );
   const scopes =
     configuration.status === "ready"
       ? [
@@ -375,45 +418,123 @@ export function MulticastPage({
           ),
         ].sort()
       : [];
-  const edit = (setter: (value: string) => void, value: string) => {
+  const writeLink = (params: URLSearchParams) => {
+    const mode = (
+      initialParams ?? new URLSearchParams(window.location.search)
+    ).get("mode");
+    if (mode) params.set("mode", mode);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}?${params.toString()}${window.location.hash}`,
+    );
+    window.dispatchEvent(new Event(URL_STATE_CHANGED));
+  };
+  const abortGroup = () => {
     active.current?.abort();
     active.current = undefined;
+  };
+  const abortScope = () => {
+    activeScope.current?.abort();
+    activeScope.current = undefined;
+  };
+  /** Scope and window edits invalidate both searches and their results. */
+  const editWindow = (setter: (value: string) => void, value: string) => {
+    abortScope();
+    abortGroup();
+    setOverview((current) =>
+      current.status === "loading" ||
+      (current.status === "done" && current.comparing)
+        ? { status: "cancelled" }
+        : { status: "idle" },
+    );
+    setInvestigation((current) =>
+      current.status === "loading"
+        ? { status: "cancelled" }
+        : { status: "idle" },
+    );
+    setter(value);
+    setRevision((current) => current + 1);
+  };
+  const editGroup = (setter: (value: string) => void, value: string) => {
+    abortGroup();
     setInvestigation((current) =>
       current.status === "loading" ? { status: "cancelled" } : current,
     );
     setter(value);
     setRevision((current) => current + 1);
   };
-  const run = async (event: React.FormEvent) => {
+  const searchScope = async (
+    target: ReturnType<typeof validateScopeWindow>,
+    comparePrevious: boolean,
+  ) => {
+    if (!client || configuration.status !== "ready") return;
+    abortScope();
+    const controller = new AbortController();
+    activeScope.current = controller;
+    try {
+      const value = await investigateScope(
+        client,
+        target,
+        configuration.value,
+        controller.signal,
+        { comparePrevious },
+      );
+      if (!controller.signal.aborted)
+        setOverview({ status: "done", value, comparing: false });
+    } catch (err) {
+      if (!controller.signal.aborted)
+        setOverview(
+          err instanceof MulticastConfigurationChangedError
+            ? { status: "stale" }
+            : { status: "error", message: message(err) },
+        );
+    }
+  };
+  const run = (event: React.FormEvent) => {
     event.preventDefault();
     if (!client || configuration.status !== "ready") return;
     try {
-      const request = validateRequest({
+      const target = validateScopeWindow({
         version: 1,
         scope,
-        group,
-        ...(sender.trim() ? { sender: sender.trim() } : {}),
         earliest: utcSeconds(earliest),
         latest: utcSeconds(latest),
       });
+      if (!scopes.includes(target.scope))
+        throw new Error("Choose a scope with a verified multicast profile.");
+      abortGroup();
+      setError("");
+      setDetail(false);
+      setInvestigation({ status: "idle" });
+      setOverview({ status: "loading" });
+      writeLink(scopeLink(target, view));
+      void searchScope(target, false);
+    } catch (err) {
+      setError(message(err));
+    }
+  };
+  const compare = () => {
+    if (overview.status !== "done") return;
+    setOverview({ ...overview, comparing: true });
+    void searchScope(overview.value.window, true);
+  };
+  const investigateGroup = async (input: unknown) => {
+    if (!client || configuration.status !== "ready") return;
+    try {
+      const request = validateRequest(input);
       if (!scopes.includes(request.scope))
         throw new Error("Choose a scope with a verified multicast profile.");
-      active.current?.abort();
+      abortGroup();
       const controller = new AbortController();
       active.current = controller;
       setError("");
+      setDetail(true);
       setInvestigation({ status: "loading" });
       setResultRevision(revision);
       const params = multicastLink(request);
-      const mode = (
-        initialParams ?? new URLSearchParams(window.location.search)
-      ).get("mode");
-      if (mode) params.set("mode", mode);
-      window.history.replaceState(
-        window.history.state,
-        "",
-        `${window.location.pathname}?${params.toString()}${window.location.hash}`,
-      );
+      params.set("mc_view", view);
+      writeLink(params);
       try {
         const value = await investigateMulticast(
           client,
@@ -435,15 +556,65 @@ export function MulticastPage({
       setError(message(err));
     }
   };
+  const runGroup = (event: React.FormEvent) => {
+    event.preventDefault();
+    void investigateGroup({
+      version: 1,
+      scope,
+      group,
+      ...(sender.trim() ? { sender: sender.trim() } : {}),
+      earliest: utcSeconds(earliest),
+      latest: utcSeconds(latest),
+    });
+  };
+  const openGroup = (selected: string) => {
+    if (overview.status !== "done") return;
+    const { scope: chosen, earliest: from, latest: to } = overview.value.window;
+    setGroup(selected);
+    setSender("");
+    void investigateGroup({
+      version: 1,
+      scope: chosen,
+      group: selected,
+      earliest: from,
+      latest: to,
+    });
+  };
+  /** Leaves the group detail for a view, keeping the last scope result. */
+  const showView = (next: View) => {
+    abortGroup();
+    setInvestigation({ status: "idle" });
+    setDetail(false);
+    setView(next);
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("mc_v")) {
+      params.delete("mc_group");
+      params.delete("mc_sender");
+      params.delete("mode");
+      params.set("mc_view", next);
+      writeLink(params);
+    }
+  };
   const refreshSources = () => {
+    abortScope();
+    abortGroup();
     setConfiguration({ status: "loading" });
+    setOverview({ status: "idle" });
     setInvestigation({ status: "idle" });
     setConfigurationRevision((current) => current + 1);
   };
-  const cancel = () => {
-    active.current?.abort();
+  const cancelScope = () => {
+    abortScope();
+    setOverview({ status: "cancelled" });
+  };
+  const cancelGroup = () => {
+    abortGroup();
     setInvestigation({ status: "cancelled" });
   };
+  const staleConfiguration = (fingerprint: string) =>
+    configuration.status === "ready" &&
+    fingerprint !== configuration.value.fingerprint;
+  const connected = live && client;
   return (
     <main className="multicast-page">
       <header>
@@ -453,7 +624,33 @@ export function MulticastPage({
           visibility.
         </p>
       </header>
-      {!live || !client ? (
+      {connected && (
+        <div className="mc-tabs" role="tablist" aria-label="Multicast views">
+          {(["overview", "matrix"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              id={`${tabsId}-${value}`}
+              aria-selected={view === value}
+              aria-controls={`${tabsId}-panel`}
+              onClick={() => (view !== value || detail) && showView(value)}
+            >
+              {VIEW_LABEL[value]}
+            </button>
+          ))}
+          <button
+            type="button"
+            role="tab"
+            aria-selected={false}
+            aria-disabled="true"
+            title="Not yet available"
+          >
+            Topology<small className="mc-tab-note">Not yet available</small>
+          </button>
+        </div>
+      )}
+      {!connected ? (
         <p className="multicast-notice">
           Multicast investigation is available with a live Splunk connection.
         </p>
@@ -483,7 +680,7 @@ export function MulticastPage({
               Scope
               <select
                 value={scope}
-                onChange={(event) => edit(setScope, event.target.value)}
+                onChange={(event) => editWindow(setScope, event.target.value)}
                 required
               >
                 <option value="">Select a scope</option>
@@ -495,29 +692,14 @@ export function MulticastPage({
               </select>
             </label>
             <label>
-              Multicast group
-              <input
-                value={group}
-                onChange={(event) => edit(setGroup, event.target.value)}
-                placeholder="239.1.2.3"
-                required
-              />
-            </label>
-            <label>
-              Sender (optional)
-              <input
-                value={sender}
-                onChange={(event) => edit(setSender, event.target.value)}
-                placeholder="192.0.2.1"
-              />
-            </label>
-            <label>
               From (UTC)
               <input
                 type="datetime-local"
                 step="1"
                 value={earliest}
-                onChange={(event) => edit(setEarliest, event.target.value)}
+                onChange={(event) =>
+                  editWindow(setEarliest, event.target.value)
+                }
                 required
               />
             </label>
@@ -527,7 +709,7 @@ export function MulticastPage({
                 type="datetime-local"
                 step="1"
                 value={latest}
-                onChange={(event) => edit(setLatest, event.target.value)}
+                onChange={(event) => editWindow(setLatest, event.target.value)}
                 required
               />
             </label>
@@ -535,14 +717,13 @@ export function MulticastPage({
               <button
                 type="submit"
                 disabled={
-                  investigation.status === "loading" ||
-                  investigation.status === "stale"
+                  overview.status === "loading" || overview.status === "stale"
                 }
               >
                 Investigate
               </button>
-              {investigation.status === "loading" && (
-                <button type="button" onClick={cancel}>
+              {overview.status === "loading" && (
+                <button type="button" onClick={cancelScope}>
                   Cancel
                 </button>
               )}
@@ -550,44 +731,123 @@ export function MulticastPage({
           </form>
           <p>Times are entered in UTC. Maximum window: one hour.</p>
           {error && <p role="alert">{error}</p>}
-          {investigation.status === "loading" && (
-            <p role="status">Investigating multicast evidence…</p>
-          )}
-          {investigation.status === "cancelled" && (
-            <p role="status">
-              Investigation cancelled. Run it again for the current selection.
-            </p>
-          )}
-          {investigation.status === "stale" && (
-            <div className="multicast-notice" role="alert">
-              Source verification changed during the investigation. Refresh
-              sources and investigate again.
-              <button type="button" onClick={refreshSources}>
-                Refresh sources
-              </button>
-            </div>
-          )}
-          {investigation.status === "error" && (
-            <p role="alert">
-              Investigation unavailable: {investigation.message}
-            </p>
-          )}
-          {investigation.status === "done" && (
-            <>
-              {(revision !== resultRevision ||
-                investigation.value.configurationFingerprint !==
-                  configuration.value.fingerprint) && (
-                <p className="multicast-notice" role="status">
-                  These results are stale for the current selection or
-                  configuration. Run the investigation again.
-                </p>
-              )}
-              <MulticastResults
-                result={investigation.value}
-                timezone={timezone}
-              />
-            </>
-          )}
+          <section
+            id={`${tabsId}-panel`}
+            role="tabpanel"
+            aria-labelledby={`${tabsId}-${view}`}
+          >
+            {detail ? (
+              <section className="mc-detail" aria-label="Group detail">
+                <div className="mc-detail-header">
+                  <button type="button" onClick={() => showView(view)}>
+                    Back to {VIEW_LABEL[view]}
+                  </button>
+                  <form onSubmit={runGroup} className="multicast-form">
+                    <label>
+                      Multicast group
+                      <input
+                        value={group}
+                        onChange={(event) =>
+                          editGroup(setGroup, event.target.value)
+                        }
+                        placeholder="239.1.2.3"
+                        required
+                      />
+                    </label>
+                    <label>
+                      Sender (optional)
+                      <input
+                        value={sender}
+                        onChange={(event) =>
+                          editGroup(setSender, event.target.value)
+                        }
+                        placeholder="192.0.2.1"
+                      />
+                    </label>
+                    <div className="multicast-actions">
+                      <button
+                        type="submit"
+                        disabled={
+                          investigation.status === "loading" ||
+                          investigation.status === "stale"
+                        }
+                      >
+                        Investigate group
+                      </button>
+                      {investigation.status === "loading" && (
+                        <button type="button" onClick={cancelGroup}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+                <StatusNotices
+                  state={investigation}
+                  refreshSources={refreshSources}
+                />
+                {investigation.status === "done" && (
+                  <>
+                    {(revision !== resultRevision ||
+                      staleConfiguration(
+                        investigation.value.configurationFingerprint,
+                      )) && (
+                      <p className="multicast-notice" role="status">
+                        These results are stale for the current selection or
+                        configuration. Run the investigation again.
+                      </p>
+                    )}
+                    <MulticastResults
+                      result={investigation.value}
+                      timezone={timezone}
+                    />
+                    <IgmpTimeline
+                      result={investigation.value}
+                      timezone={timezone ?? "UTC"}
+                    />
+                    <QuerierStrip
+                      result={investigation.value}
+                      timezone={timezone ?? "UTC"}
+                    />
+                  </>
+                )}
+              </section>
+            ) : (
+              <>
+                <StatusNotices
+                  state={overview}
+                  refreshSources={refreshSources}
+                />
+                {overview.status === "done" && (
+                  <>
+                    {staleConfiguration(
+                      overview.value.configurationFingerprint,
+                    ) && (
+                      <p className="multicast-notice" role="status">
+                        These results are stale for the current configuration.
+                        Run the investigation again.
+                      </p>
+                    )}
+                    {view === "overview" ? (
+                      <OverviewView
+                        result={overview.value}
+                        onSelectGroup={openGroup}
+                        onCompare={compare}
+                        comparing={overview.comparing}
+                        timezone={timezone}
+                      />
+                    ) : (
+                      <MatrixView
+                        result={overview.value}
+                        configuration={configuration.value}
+                        onSelectCell={openGroup}
+                      />
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </section>
         </>
       )}
     </main>

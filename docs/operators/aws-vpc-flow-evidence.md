@@ -51,7 +51,7 @@ The account, Region, and VPC fields describe the interface being observed, not n
 
 ## Time, action, status, and counters
 
-Each record represents a flow over an aggregation interval on a network interface. AWS allows a maximum interval of 60 or 600 seconds; interfaces attached to Nitro instances always use 60 seconds or less. The start and end values are Unix seconds, and AWS documents up to 60 seconds of timestamp uncertainty around packet receipt/transmission. Atlas dispatches with up to 660 seconds of lookback (600-second interval plus 60-second timestamp uncertainty) and 60 seconds of future allowance, then checks interval overlap with the selected window using the same timestamp tolerance. The query returns source records; it does not merge or sum records.
+Each record represents a flow over an aggregation interval on a network interface. AWS allows a maximum interval of 60 or 600 seconds; interfaces attached to Nitro instances always use 60 seconds or less. The start and end values are Unix seconds, and AWS documents up to 60 seconds of timestamp uncertainty around packet receipt/transmission. Atlas dispatches with up to 780 seconds of lookback (720-second maximum reported interval plus 60 seconds of overlap tolerance) and 60 seconds of future allowance, then checks interval overlap with the selected window using the same timestamp tolerance. The query returns source records; it does not merge or sum records.
 
 The packets and bytes fields are counters from one record. Opposite directions, different ENIs, multiple subscriptions, re-deliveries, and overlapping flow-log resources can produce distinct or duplicate observations. Atlas presents each record separately and never sums these values into a connection total.
 

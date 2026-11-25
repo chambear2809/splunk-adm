@@ -21,9 +21,10 @@ import type { SearchClient } from "./searchClient";
 export const CLOUD_FLOW_SOURCE = "aws_vpc_flow" as const;
 export const CLOUD_FLOW_SOURCETYPE = "aws:vpcflow:v5";
 export const CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS = 60;
-export const CLOUD_FLOW_MAX_AGGREGATION_SECONDS = 600;
+const CLOUD_FLOW_MAX_REPORTED_INTERVAL =
+  600 + 2 * CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
 export const CLOUD_FLOW_LOOKBACK_SECONDS =
-  CLOUD_FLOW_MAX_AGGREGATION_SECONDS + CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
+  CLOUD_FLOW_MAX_REPORTED_INTERVAL + CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
 export const CLOUD_FLOW_RECORD_LIMIT = 64;
 export const CLOUD_FLOW_INPUT_LIMIT = 10000;
 export const CLOUD_FLOW_RECORD_BYTES = 1048576;
@@ -120,13 +121,12 @@ export interface CloudFlowObservation {
 }
 
 const COVERAGE = [
-  "AWS VPC Flow Logs are best-effort, per-network-interface observations over an aggregation interval; a quiet result does not prove no traffic.",
-  "ACCEPT is a network-policy observation, not proof of application success; REJECT does not identify a specific rule or application outcome.",
-  "NODATA and SKIPDATA are capture-scope status records, not evidence that the selected endpoint was absent.",
-  "Packets and bytes remain per-record counters. Records are not summed or deduplicated across interfaces, subscriptions, directions or re-deliveries.",
-  "Interface and packet addresses are kept separate. NAT, secondary addresses, proxies and service paths can make them differ.",
-  "ENI and instance IDs are producer facts. This source does not infer historical resource ownership from current AWS state or an IP-only binding.",
-  "Flow Logs omit documented classes of traffic and can arrive late; the result is independent of the application graph snapshot.",
+  "Flow Logs may arrive late or omit traffic. This search is separate from the graph.",
+  "ACCEPT and REJECT do not identify the rule or application outcome.",
+  "NODATA and SKIPDATA describe the capture, not endpoint presence.",
+  "Counters are per record, without deduplication across interfaces, subscriptions, directions or replays.",
+  "Interface and packet addresses can differ after NAT, secondary addressing or proxying.",
+  "ENI and instance IDs do not establish historical ownership.",
 ];
 
 function selector(indexes: readonly string[]): string {
@@ -246,17 +246,17 @@ function addressPredicate(addresses: readonly string[]): string {
     .join(" OR ");
 }
 
-/** Search for selected address matches plus capture-scope NODATA/SKIPDATA status. */
+/** Address matches and capture-wide status use separate bounded searches. */
 export function buildCloudFlowSearch(
   config: SupplementalSourceConfiguration,
   input: EvidenceSelection,
+  captureStatus = false,
 ): string {
   const selection = validateSelection(input);
   const authorities = authoritiesFor(config, selection);
   const hostTerms = authorities
     .map((mapping) => '"' + literal(mapping.observer) + '"')
     .join(",");
-  const matchingAddress = addressPredicate(selection.addresses);
   const statusPredicate = 'flow_log_status IN ("NODATA","SKIPDATA")';
   const intervalPredicate =
     "flow_start<=" +
@@ -295,13 +295,9 @@ export function buildCloudFlowSearch(
       ',1,0), _cloud_line=if(oversized=1,"",replace(trim(_raw),"\\s+"," ")), _cloud_fields=split(_cloud_line," "), flow_field_count=coalesce(mvcount(_cloud_fields),0)',
     "| eval " + projection,
     "| eval event_time_epoch=tonumber(_time), event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null())",
-    "| where flow_field_count!=29 OR ((" +
-      intervalPredicate +
-      ") AND ((" +
-      matchingAddress +
-      ") OR (" +
-      statusPredicate +
-      ")))",
+    captureStatus
+      ? `| where flow_field_count=29 AND (${intervalPredicate}) AND ${statusPredicate}`
+      : `| where flow_field_count!=29 OR ((${intervalPredicate}) AND (${addressPredicate(selection.addresses)}) AND (isnull(flow_log_status) OR NOT (${statusPredicate})))`,
     "| head " + (CLOUD_FLOW_INPUT_LIMIT + 1),
     "| eventstats count AS input_count sum(oversized) AS oversized_count",
     "| sort 0 - _time index host event_fingerprint",
@@ -503,8 +499,12 @@ export function normalizeCloudFlowEvidence(
         throw new Error(
           "Indexed event time does not match the producer start.",
         );
-      if (end < start || !countInWindow({ start, end }, selection))
-        throw new Error("Record interval does not overlap the selection.");
+      if (
+        end < start ||
+        end - start > CLOUD_FLOW_MAX_REPORTED_INTERVAL ||
+        !countInWindow({ start, end }, selection)
+      )
+        throw new Error("Invalid AWS VPC Flow Logs interval.");
       if (
         fields.type !== "-" &&
         fields.type !== "IPv4" &&
@@ -568,61 +568,36 @@ export function normalizeCloudFlowEvidence(
         source: CLOUD_FLOW_SOURCE,
         authority,
         scope: mapping.scope,
-        ...(fields["account-id"] !== "-"
-          ? { accountId: fields["account-id"] }
-          : {}),
-        ...(fields.region !== "-" ? { region: fields.region } : {}),
-        ...(fields["vpc-id"] !== "-" ? { vpcId: fields["vpc-id"] } : {}),
-        ...(optionalText(fields["subnet-id"]) !== undefined
-          ? { subnetId: optionalText(fields["subnet-id"]) }
-          : {}),
-        ...(optionalText(fields["instance-id"]) !== undefined
-          ? { instanceId: optionalText(fields["instance-id"]) }
-          : {}),
-        ...(optionalText(fields["interface-id"]) !== undefined
-          ? { interfaceId: optionalText(fields["interface-id"]) }
-          : {}),
-        ...(optionalText(fields["az-id"]) !== undefined
-          ? { availabilityZoneId: optionalText(fields["az-id"]) }
-          : {}),
-        ...(optionalText(fields["sublocation-type"]) !== undefined
-          ? { sublocationType: optionalText(fields["sublocation-type"]) }
-          : {}),
-        ...(optionalText(fields["sublocation-id"]) !== undefined
-          ? { sublocationId: optionalText(fields["sublocation-id"]) }
-          : {}),
+        accountId:
+          fields["account-id"] === "-" ? undefined : fields["account-id"],
+        region: fields.region === "-" ? undefined : fields.region,
+        vpcId: fields["vpc-id"] === "-" ? undefined : fields["vpc-id"],
+        subnetId: optionalText(fields["subnet-id"]),
+        instanceId: optionalText(fields["instance-id"]),
+        interfaceId: optionalText(fields["interface-id"]),
+        availabilityZoneId: optionalText(fields["az-id"]),
+        sublocationType: optionalText(fields["sublocation-type"]),
+        sublocationId: optionalText(fields["sublocation-id"]),
         recordType,
         interfaceAddresses: {
-          ...(interfaceSource ? { source: interfaceSource } : {}),
-          ...(interfaceDestination
-            ? { destination: interfaceDestination }
-            : {}),
+          source: interfaceSource,
+          destination: interfaceDestination,
         },
         packetAddresses: {
-          ...(packetSource ? { source: packetSource } : {}),
-          ...(packetDestination ? { destination: packetDestination } : {}),
+          source: packetSource,
+          destination: packetDestination,
         },
-        ...(sourcePort !== undefined ? { sourcePort } : {}),
-        ...(destinationPort !== undefined ? { destinationPort } : {}),
-        ...(protocol !== undefined ? { protocol } : {}),
-        ...(packets !== undefined ? { packets } : {}),
-        ...(bytes !== undefined ? { bytes } : {}),
-        ...(tcpFlags !== undefined ? { tcpFlags } : {}),
-        ...(optionalText(fields["pkt-src-aws-service"]) !== undefined
-          ? {
-              packetSourceAwsService: optionalText(
-                fields["pkt-src-aws-service"],
-              ),
-            }
-          : {}),
-        ...(optionalText(fields["pkt-dst-aws-service"]) !== undefined
-          ? {
-              packetDestinationAwsService: optionalText(
-                fields["pkt-dst-aws-service"],
-              ),
-            }
-          : {}),
-        ...(trafficPath !== undefined ? { trafficPath } : {}),
+        sourcePort,
+        destinationPort,
+        protocol,
+        packets,
+        bytes,
+        tcpFlags,
+        packetSourceAwsService: optionalText(fields["pkt-src-aws-service"]),
+        packetDestinationAwsService: optionalText(
+          fields["pkt-dst-aws-service"],
+        ),
+        trafficPath,
         flowDirection:
           directionValue === "ingress" || directionValue === "egress"
             ? directionValue
@@ -653,22 +628,32 @@ export function normalizeCloudFlowEvidence(
   return { records, rejected };
 }
 
-export function loadCloudFlowEvidence(
+export type CloudFlowResult = SupplementalResult<CloudFlowObservation> & {
+  captureStatus?: SupplementalResult<CloudFlowObservation>;
+};
+
+export async function loadCloudFlowEvidence(
   client: SearchClient,
   selection: EvidenceSelection,
   signal: AbortSignal,
   configurationClient: EvidenceConfigClient = evidenceConfigClient,
-): Promise<SupplementalResult<CloudFlowObservation>> {
-  return loadSupplementalEvidence(
-    client,
-    selection,
-    signal,
-    CLOUD_FLOW_SOURCE,
-    buildCloudFlowSearch,
-    normalizeCloudFlowEvidence,
-    configurationClient,
-    false,
-    cloudFlowSearchWindow,
-    COVERAGE,
-  );
+): Promise<CloudFlowResult> {
+  const load = (captureStatus: boolean) =>
+    loadSupplementalEvidence(
+      client,
+      selection,
+      signal,
+      CLOUD_FLOW_SOURCE,
+      (config, input) => buildCloudFlowSearch(config, input, captureStatus),
+      normalizeCloudFlowEvidence,
+      configurationClient,
+      false,
+      cloudFlowSearchWindow,
+      COVERAGE,
+    );
+  const flows = await load(false);
+  if (flows.state !== "complete") return flows;
+  const captureStatus = await load(true);
+  if (captureStatus.configurationChanged) return captureStatus;
+  return { ...flows, captureStatus };
 }

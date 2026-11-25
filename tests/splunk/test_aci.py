@@ -585,6 +585,7 @@ class AciDataLayerTest(unittest.TestCase):
             "communicates_with", "vm:prod/10.30.40.25", "vm:prod/10.20.30.40"
         )
         self.assertEqual(edge["acl_action"], "drop")
+        self.assertRegex(edge["acl_policy_point"], r"^[a-f0-9]{64}$")
         self.assertEqual(edge["contract_basis"], "not_evaluated")
         self.assertEqual(as_list(edge["sources"]), ["aci_acllog"])
 
@@ -1281,29 +1282,61 @@ class AciDataLayerTest(unittest.TestCase):
     # ---- topology ----
 
     def test_topology(self):
-        devices = {
-            r["device_id"]: r for r in self.topology if r["row_type"] == "device"
-        }
-        self.assertEqual(set(devices), set(TOPOLOGY["devices"]))
-        for name, attrs in TOPOLOGY["devices"].items():
-            for key, value in attrs.items():
-                self.assertEqual(devices[name].get(key), value, f"{name}.{key}")
-        links = {
-            (
-                r["link_source"],
-                r["a_device"],
-                r.get("a_interface"),
-                r["b_device"],
-                r.get("b_interface") if r["link_source"] != "lldp" else None,
-            )
-            for r in self.topology
-            if r["row_type"] == "link"
-        }
-        self.assertEqual(links, {tuple(x) for x in TOPOLOGY["links"]})
-        (meta,) = [r for r in self.topology if r["row_type"] == "meta"]
-        for key, value in TOPOLOGY["meta"].items():
-            self.assertEqual(meta.get(key), value, key)
-        self.assertNotIn("warnings", meta)
+        sys.path.insert(0, str(ROOT / "tools"))
+        from qualification_shc_run import semantic_topology
+
+        result = semantic_topology(self.topology, TOPOLOGY)
+        self.assertEqual((result["devices"], result["links"]), (9, 11))
+
+
+@unittest.skipUnless(os.environ.get("ADM_LAB") == "1", "requires disposable Splunk lab")
+class IncidentAclGraphTest(unittest.TestCase):
+    def test_policy_point_survives_only_uniform_acl_observations(self):
+        import lab
+
+        first, second = "a" * 64, "b" * 64
+        rows = [
+            {
+                "adm_row": "conv",
+                "adm_keep": 1,
+                "adm_c_id": "ip:prod/192.0.2.1",
+                "adm_s_id": "ip:prod/192.0.2.2",
+                "server_port": port,
+                "transport": "tcp",
+                "flow_source": "aci_acllog",
+                "observer": f"aci_acllog:pod-1/node-{leaf}",
+                "adm_acl_point": point,
+                "acl_permits": int(permit),
+                "acl_drops": int(not permit),
+                "records": 1,
+            }
+            for port, leaf, point, permit in [
+                (443, 101, first, True),
+                (444, 102, second, False),
+                (445, 101, first, False),
+                (446, 101, first, True),
+                (446, 102, second, False),
+                (447, 101, first, True),
+                (447, 101, "-", False),
+            ]
+        ]
+        data = json.dumps(json.dumps(rows))
+        result = lab.search(
+            f"| makeresults format=json data={data} | `adm_graph_edges({CALL})`"
+            ' | where relationship="communicates_with"'
+            " | fields server_port acl_policy_point acl_action acl_permits acl_drops",
+            "-5m",
+            "now",
+        )
+        by_port = {row["server_port"]: row for row in result}
+        self.assertEqual(set(by_port), {"443", "444", "445", "446", "447"})
+        self.assertEqual(by_port["443"]["acl_policy_point"], first)
+        self.assertEqual(by_port["444"]["acl_policy_point"], second)
+        self.assertEqual(by_port["445"]["acl_policy_point"], first)
+        for port in ("446", "447"):
+            self.assertNotIn("acl_policy_point", by_port[port])
+            self.assertEqual(by_port[port]["acl_permits"], "1")
+            self.assertEqual(by_port[port]["acl_drops"], "1")
 
 
 if __name__ == "__main__":

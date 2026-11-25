@@ -37,16 +37,12 @@ export function ExportMenu({
       <button className="menu-item" onClick={onPng} disabled={pngDisabled}>
         <span>
           <b>{busy ? "Preparing image…" : "Map image (PNG)"}</b>
-          <small>
-            Current Network or Services map, including visible filters and
-            focus.
-          </small>
+          <small>Current map with filters and focus.</small>
         </span>
       </button>
       <button className="menu-item" onClick={onPrint} disabled={pngDisabled}>
         <span>
           <b>Print / PDF</b>
-          <small>Open the browser print dialog to print or save as PDF.</small>
         </span>
       </button>
       {error && <p role="alert">{error}</p>}
@@ -54,10 +50,7 @@ export function ExportMenu({
         <FileSpreadsheet size={17} aria-hidden />
         <span>
           <b>Required flows (CSV)</b>
-          <small>
-            One row per conversation: client, server, EPG, namespace, port,
-            identity and seen-by. For firewall rule and ACI contract requests.
-          </small>
+          <small>One row per conversation for firewall and ACI requests.</small>
         </span>
       </button>
       {hasContextEvidence && (
@@ -65,10 +58,7 @@ export function ExportMenu({
           <FileSpreadsheet size={17} aria-hidden />
           <span>
             <b>Context evidence (CSV)</b>
-            <small>
-              Original per-edge attachment and traffic observation records, kept
-              separate from merged client summaries.
-            </small>
+            <small>Per-edge attachment, traffic, and NAT evidence.</small>
           </span>
         </button>
       )}
@@ -76,7 +66,7 @@ export function ExportMenu({
         <FileJson size={17} aria-hidden />
         <span>
           <b>Map data (JSON)</b>
-          <small>The full loaded graph, before filters and focus.</small>
+          <small>Full graph before filters.</small>
         </span>
       </button>
     </section>

@@ -1,5 +1,9 @@
 import { pathTraceSearch } from "../data/deviceFlows";
-import { requireNoSearchErrors, type SearchClient } from "../data/searchClient";
+import {
+  requireNoSearchErrors,
+  SearchAccessDeniedError,
+  type SearchClient,
+} from "../data/searchClient";
 import type { EndpointKind, Graph, GraphNode } from "../graph";
 import { emptyTopology } from "../topology";
 import { isSafeIdentifier } from "../app/urlState";
@@ -319,6 +323,8 @@ export async function resolveTraceAddress(
   );
   if (result.rows.some((r) => r.row_type === "identity_overflow"))
     throw new Error(`${side} lookup exceeded its identity limit.`);
+  if (result.warnings.length || result.truncated)
+    throw new Error(`${side} lookup was incomplete; retry or enter an IP.`);
   const { start, end } = traceWindow(w.earliest, w.latest);
   const candidates = qualifiedEndpointRows(
     result.rows.map((row) => ({ ...row, row_type: "endpoint" })),
@@ -361,6 +367,15 @@ export async function loadStandaloneTrace(
     signal: w.signal,
   });
   const rows = requireNoSearchErrors(trace, "Path trace").rows;
+  const warnings: string[] = [];
+  const warnIfPartial = (source: string, result: typeof trace) => {
+    if (!result.warnings.length && !result.truncated) return false;
+    warnings.push(
+      `${source} search was incomplete: ${result.warnings[0] || "results were truncated"}`,
+    );
+    return true;
+  };
+  const partialTrace = warnIfPartial("Path trace", trace);
   if (
     rows.some(
       (r) =>
@@ -372,7 +387,11 @@ export async function loadStandaloneTrace(
     throw new Error(
       "Endpoint identity results exceeded the limit; narrow the selection.",
     );
-  const identities = qualifiedEndpointRows(rows, w.scope!, start, end);
+  // A partial identity result is not safe to use for enrichment: showing one
+  // surviving name can imply that the omitted identities were disproved.
+  const identities = partialTrace
+    ? []
+    : qualifiedEndpointRows(rows, w.scope!, start, end);
   const evidenceResult = requireNoSearchErrors(
     await client.search({
       search: `| \`adm_path_evidence(${src},${dst},${w.scope})\``,
@@ -386,15 +405,16 @@ export async function loadStandaloneTrace(
     }),
     "Path evidence",
   );
+  const partialEvidence = warnIfPartial("Path evidence", evidenceResult);
   const evidence: PathEvidence[] = parsePathEvidenceRows(
-    evidenceResult.rows,
+    partialEvidence ? [] : evidenceResult.rows,
     { src, dst, scope: w.scope! },
     { start, end },
   );
   // Optional, observation-only gNMI context. The default macro is inert; a
   // deployment may opt in by replacing it with a TA-backed query. It can
   // enrich an existing observed exporter hop but never adds route hops.
-  let gnmiRows: readonly unknown[];
+  let gnmiRows: readonly unknown[] = [];
   try {
     const gnmiResult = requireNoSearchErrors(
       await client.search({
@@ -409,10 +429,18 @@ export async function loadStandaloneTrace(
       }),
       "gNMI interface context",
     );
-    gnmiRows = gnmiResult.rows;
-  } catch {
-    // Optional telemetry must not hide the core Trace result.
-    gnmiRows = [];
+    if (!warnIfPartial("gNMI interface context", gnmiResult))
+      gnmiRows = gnmiResult.rows;
+  } catch (error) {
+    // Optional telemetry must not hide the core Trace result, but its absence
+    // must remain visible to the operator. Cancellation is not an optional
+    // telemetry failure and must propagate to the stale-result guard.
+    w.signal.throwIfAborted();
+    warnings.push(
+      error instanceof SearchAccessDeniedError
+        ? "gNMI interface context access denied; interface context is unavailable."
+        : "gNMI interface context unavailable; interface context is incomplete.",
+    );
   }
   return {
     addresses: { src, dst },
@@ -430,5 +458,6 @@ export async function loadStandaloneTrace(
     graph: endpointGraph(identities, [src, dst]),
     topology: emptyTopology(),
     evidence,
+    warnings,
   };
 }

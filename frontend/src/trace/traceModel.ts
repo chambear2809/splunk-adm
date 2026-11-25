@@ -424,7 +424,7 @@ export function findDevices(query: string, topo: Topology): Device[] {
   // topology/pod-1/node-103/sys/... → pod-1/node-103
   const dn = /^(?:topology\/)?(pod-\d+\/node-\d+)(?:\/.*)?$/.exec(q)?.[1];
   const exact = topo.devices.filter((d) => lower(d.id) === q);
-  if (exact.length) return exact;
+  if (exact.length && exact.every((d) => q !== lower(d.name))) return exact;
   const hit = (values: (string | undefined)[]) =>
     values.map(lower).some((v) => v && (v === q || (!!dn && v === dn)));
   const named = topo.devices.filter((d) =>
@@ -478,12 +478,48 @@ export function mergeDeviceFlows(
   parts: readonly DeviceFlows[],
 ): DeviceFlows {
   const byKey = new Map<string, DeviceConversation>();
+  const union = (a: string[], b: string[]) => [...new Set([...a, ...b])];
+  const sum = (a?: number, b?: number) =>
+    a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
   for (const p of parts)
     for (const c of p.conversations) {
       const key = conversationKey(c);
       const prior = byKey.get(key);
-      if (!prior || (c.bytes ?? c.flows) > (prior.bytes ?? prior.flows))
+      if (!prior) {
         byKey.set(key, c);
+        continue;
+      }
+      const richer =
+        (c.bytes ?? c.flows) > (prior.bytes ?? prior.flows) ? c : prior;
+      const invalidBytes = prior.invalidBytes || c.invalidBytes;
+      const invalidPackets = prior.invalidPackets || c.invalidPackets;
+      byKey.set(key, {
+        ...richer,
+        blocked: prior.blocked || c.blocked,
+        flows: prior.flows + c.flows,
+        invalidBytes,
+        invalidPackets,
+        bytes: invalidBytes ? undefined : sum(prior.bytes, c.bytes),
+        packets: invalidPackets ? undefined : sum(prior.packets, c.packets),
+        drops: prior.drops + c.drops,
+        permits: prior.permits + c.permits,
+        interfaces: union(prior.interfaces, c.interfaces),
+        vlans: union(prior.vlans, c.vlans),
+        segments: union(prior.segments, c.segments),
+        sources: union(prior.sources, c.sources),
+        firstSeen:
+          prior.firstSeen === undefined
+            ? c.firstSeen
+            : c.firstSeen === undefined
+              ? prior.firstSeen
+              : Math.min(prior.firstSeen, c.firstSeen),
+        lastSeen:
+          prior.lastSeen === undefined
+            ? c.lastSeen
+            : c.lastSeen === undefined
+              ? prior.lastSeen
+              : Math.max(prior.lastSeen, c.lastSeen),
+      });
     }
   const bytes = parts
     .map((p) => p.totals.bytes)
@@ -493,6 +529,8 @@ export function mergeDeviceFlows(
     .filter((n): n is number => n !== undefined && n > 0);
   const limit = limits.length ? Math.min(...limits) : undefined;
   const truncated = parts.some((p) => p.truncated);
+  const invalidBytes = parts.some((p) => p.invalidBytes);
+  const invalidPackets = parts.some((p) => p.invalidPackets);
   const sorted = [...byKey.values()].sort(
     (a, b) => (b.bytes ?? -1) - (a.bytes ?? -1) || b.flows - a.flows,
   );
@@ -504,18 +542,19 @@ export function mergeDeviceFlows(
       truncated && limit !== undefined ? sorted.slice(0, limit) : sorted,
     ...(limit !== undefined ? { limit } : {}),
     totals: {
-      // Exporters can report the same conversation; only a cut list needs the sum.
-      conversations: parts.some((p) => p.truncated)
-        ? Math.max(
-            byKey.size,
-            parts.reduce((n, p) => n + p.totals.conversations, 0),
-          )
+      // Hidden rows may overlap across tokens. Each part provides a lower bound.
+      conversations: truncated
+        ? Math.max(byKey.size, ...parts.map((p) => p.totals.conversations))
         : byKey.size,
       flows: parts.reduce((n, p) => n + p.totals.flows, 0),
-      ...(bytes.length ? { bytes: bytes.reduce((n, b) => n + b, 0) } : {}),
+      ...(!invalidBytes && bytes.length
+        ? { bytes: bytes.reduce((n, b) => n + b, 0) }
+        : {}),
     },
     truncated,
     recordsCapped: parts.some((p) => p.recordsCapped),
+    ...(invalidBytes && { invalidBytes }),
+    ...(invalidPackets && { invalidPackets }),
   };
 }
 

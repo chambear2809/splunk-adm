@@ -117,27 +117,16 @@ function SummaryHealthSection({
   refresh: unknown;
   asOf?: number;
 }) {
-  const [state, setState] = useState<
-    { health?: SummaryHealth; error?: string } | undefined
-  >();
+  const [h, setHealth] = useState<SummaryHealth | null>();
   useEffect(() => {
     if (!client) return;
     const controller = new AbortController();
     loadSummaryHealth(client, controller.signal, asOf)
-      .then((health) => !controller.signal.aborted && setState({ health }))
-      .catch(
-        (e: unknown) =>
-          !controller.signal.aborted &&
-          setState({
-            error: /disabled/i.test(String(e))
-              ? "Not enabled"
-              : "Unavailable (requires qualified identity and summaries)",
-          }),
-      );
+      .then((health) => !controller.signal.aborted && setHealth(health))
+      .catch(() => !controller.signal.aborted && setHealth(null));
     return () => controller.abort();
   }, [client, refresh, asOf]);
-  if (!state) return null;
-  const h = state.health;
+  if (h === undefined) return null;
   return (
     <section aria-labelledby="summary-health-title">
       <h3 id="summary-health-title">Graph summaries</h3>
@@ -147,7 +136,7 @@ function SummaryHealthSection({
           h && h.status !== "ok" && h.status !== "disabled" ? "warn" : ""
         }
       >
-        {h ? summaryHealthText(h) : state.error}
+        {h ? summaryHealthText(h) : "Unavailable"}
       </p>
       {h?.newestEnd !== undefined && (
         <p className="muted small">

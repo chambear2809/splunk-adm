@@ -4,6 +4,7 @@ import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
 import { DeepLinkNotice } from "../../frontend/src/app/DeepLinkNotice";
 import { AtlasApp } from "../../frontend/src/app/AtlasApp";
+import { EndpointsPage } from "../../frontend/src/pages/EndpointsPage";
 import {
   recoverUrlState,
   writeUrlState,
@@ -377,6 +378,81 @@ class FakeSearchClient implements SearchClient {
       earliest: request.earliest,
       latest: request.latest ?? "now",
     });
+    if (
+      window.__ADM_APPD_ROWS__ &&
+      request.search.includes('sourcetype="adm:appdynamics_inventory"')
+    ) {
+      const indexes = new Set(
+        [...request.search.matchAll(/\bindex=([a-z0-9_-]+)/g)].map(
+          (match) => match[1],
+        ),
+      );
+      return {
+        rows: window.__ADM_APPD_ROWS__.filter((row) => indexes.has(row.index)),
+        warnings: [],
+        errors: [],
+      };
+    }
+    if (faultScenario === "device-capped") {
+      const token = /adm_device_flows\((192\.0\.2\.[12])\)/.exec(
+        request.search,
+      )?.[1];
+      const drop = token === "192.0.2.2";
+      const rows =
+        request.search === "`adm_topology`"
+          ? [
+              {
+                row_type: "device",
+                device_id: "test-vds",
+                name: "Test VDS",
+                device_kind: "virtual_switch",
+                ipfix_observers: ["192.0.2.1", "192.0.2.2"],
+              },
+            ]
+          : token
+            ? [
+                {
+                  device: token,
+                  src: "198.51.100.1",
+                  dst: "198.51.100.2",
+                  protocol: "tcp",
+                  dest_port: 443,
+                  ...(!drop && { bytes: 1000 }),
+                  flows: drop ? 1 : 10,
+                  blocked: drop ? 1 : 0,
+                  drops: drop ? 1 : 0,
+                  sources: drop ? "aci_acllog" : "netflow",
+                  total_conversations: drop ? 3 : 4,
+                  truncated: 1,
+                  flows_limit: 1,
+                },
+              ]
+            : [];
+      return { rows, warnings: [], errors: [] };
+    }
+    // Minimal VM graph used by deep-link/saved-view regression coverage. Keep
+    // this behind the VM reader macro so ordinary live fixtures remain exact.
+    if (request.search.includes("adm_vm_application_graph_read")) {
+      return {
+        rows: [
+          {
+            row_type: "meta",
+            generated_at: request.latest,
+            window_start: request.earliest,
+            window_end: request.latest,
+          },
+          {
+            row_type: "node",
+            id: "service:vm/validation-invoice-hs2/invoice/validation",
+            label: "Invoice",
+            kind: "service",
+            attr_scope: "validation-invoice-hs2",
+          },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    }
     if (request.optionalSource === "multicast_nxos") {
       return {
         rows: [
@@ -407,12 +483,83 @@ class FakeSearchClient implements SearchClient {
             "abort",
             () => {
               clearTimeout(timer);
+              window.__ADM_ABORTED__ = (window.__ADM_ABORTED__ ?? 0) + 1;
               reject(request.signal.reason);
             },
             { once: true },
           );
         });
       const isIgmp = request.optionalSource === "multicast_igmp";
+      // Scope-wide group summaries: one stats row per group plus completion.
+      // Groups mirror the candidate payloads: 239.1.2.4 only has IGMPv3
+      // interest, and a general query from 192.0.2.1 counts as query evidence.
+      if (request.search.includes("AS group_count")) {
+        const seen = Number(request.earliest) + 1;
+        const records = isIgmp
+          ? [
+              {
+                group: "0.0.0.0",
+                reports: 0,
+                leaves: 0,
+                group_queries: 0,
+                last_general_query: seen + 60,
+                reporters: [],
+                reporter_count: 0,
+                query_senders: [`192.0.2.1|${seen + 60}|${seen + 60}`],
+                query_sender_count: 1,
+                first_seen: seen + 60,
+                last_seen: seen + 60,
+              },
+              {
+                group: "239.1.2.3",
+                reports: 2,
+                leaves: 0,
+                group_queries: 0,
+                reporters: ["192.0.2.10", "192.0.2.11"],
+                reporter_count: 2,
+                query_senders: [],
+                query_sender_count: 0,
+                first_seen: seen,
+                last_seen: seen,
+              },
+              {
+                group: "239.1.2.4",
+                reports: 1,
+                leaves: 0,
+                group_queries: 0,
+                reporters: ["192.0.2.11"],
+                reporter_count: 1,
+                query_senders: [],
+                query_sender_count: 0,
+                first_seen: seen,
+                last_seen: seen,
+              },
+            ]
+          : [
+              {
+                group: "239.1.2.3",
+                senders: ["192.0.2.20"],
+                sender_count: 1,
+                packets: 8,
+                bytes: 1024,
+                first_seen: seen,
+                last_seen: seen,
+              },
+            ];
+        const groups = records.filter((record) => record.group !== "0.0.0.0");
+        return {
+          rows: [
+            ...records.map((record) => ({ kind: "record", ...record })),
+            {
+              kind: "completion",
+              returned_count: records.length,
+              group_count: groups.length,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
       const payloads = isIgmp
         ? [
             { ...multicastCandidates.igmpV2, network_interface: "eth0" },
@@ -519,19 +666,48 @@ class FakeSearchClient implements SearchClient {
       };
     }
     if (request.search.startsWith("| `adm_application_catalog_read`")) {
+      const catalogRows = catalogCapture.rows.map((row) => {
+        const now = Math.floor(Date.now() / 1000);
+        const stale = faultScenario === "catalog-stale";
+        if (!stale) return { ...row, updated: now - 60 };
+        return {
+          ...row,
+          updated: now - 4 * 60 * 60,
+          window_start: now - 5 * 60 * 60,
+          window_end: now - 4 * 60 * 60,
+        };
+      });
       if (
-        faultScenario === "catalog-overlimit-narrowed" &&
+        faultScenario === "catalog-overlimit-service-race" &&
+        !request.search.includes('| search service="')
+      ) {
+        const target = window as Window & {
+          __ADM_CATALOG_RELEASE__?: () => void;
+        };
+        await new Promise<void>((resolve) => {
+          target.__ADM_CATALOG_RELEASE__ = resolve;
+        });
+      }
+      if (
+        [
+          "catalog-overlimit-narrowed",
+          "catalog-overlimit-find-warning",
+          "catalog-overlimit-service-race",
+        ].includes(faultScenario ?? "") &&
         request.search.includes('| search service="')
       )
         return {
-          rows: catalogCapture.rows,
+          rows: catalogRows,
           warnings: ["narrowed warning"],
           errors: [],
         };
       if (
-        ["catalog-overlimit", "catalog-overlimit-narrowed"].includes(
-          faultScenario ?? "",
-        )
+        [
+          "catalog-overlimit",
+          "catalog-overlimit-narrowed",
+          "catalog-overlimit-find-warning",
+          "catalog-overlimit-service-race",
+        ].includes(faultScenario ?? "")
       )
         throw new SearchResultLimitError(5000);
       if (
@@ -550,13 +726,13 @@ class FakeSearchClient implements SearchClient {
         throw new Error("Catalog unavailable.");
       if (faultScenario === "stale") {
         await new Promise((resolve) => setTimeout(resolve, 250));
-        return { rows: catalogCapture.rows, warnings: [], errors: [] };
+        return { rows: catalogRows, warnings: [], errors: [] };
       }
       const service = request.search.match(/\| search service="([^"]+)"/)?.[1];
       return {
         rows: service
-          ? catalogCapture.rows.filter((row) => row.service === service)
-          : catalogCapture.rows,
+          ? catalogRows.filter((row) => row.service === service)
+          : catalogRows,
         warnings: [],
         errors: [],
       };
@@ -599,7 +775,14 @@ class FakeSearchClient implements SearchClient {
           warnings: [],
           errors: [],
         };
-      return { rows: capture?.rows ?? [], warnings: [], errors: [] };
+      return {
+        rows: capture?.rows ?? [],
+        warnings:
+          faultScenario === "catalog-overlimit-find-warning"
+            ? ["Find evidence is partial."]
+            : [],
+        errors: [],
+      };
     }
     if (request.search.startsWith('| `adm_find_network_client("')) {
       if (faultScenario === "find-client-fails")
@@ -770,6 +953,86 @@ if (
   stateParams.delete("scenario");
 const root = document.getElementById("adm-root");
 if (!root) throw new Error("Missing browser test root");
+const endpointCompletion = {
+  row_type: "completion",
+  schema_version: 1,
+  input_count: 1,
+  output_count: 1,
+  input_capped: 0,
+  output_capped: 0,
+  unprotected_count: 0,
+};
+const endpointSearch: SearchClient = {
+  async search({ search, signal }) {
+    const conversation = search.includes('source="adm:conversation"');
+    if (!conversation && !search.includes('source="adm:traffic_observation"'))
+      throw new Error("Unexpected Endpoint search");
+    const harnessWindow = globalThis as typeof globalThis & {
+      __ADM_ENDPOINT_NEXT__?: "fail" | "hold";
+    };
+    if (conversation) {
+      const outcome = harnessWindow.__ADM_ENDPOINT_NEXT__;
+      delete harnessWindow.__ADM_ENDPOINT_NEXT__;
+      if (outcome === "fail") throw new Error("Endpoint rerun failed.");
+      if (outcome === "hold") {
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve();
+          else
+            signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      }
+    }
+    const evidence = conversation
+      ? {
+          row_type: "conversation",
+          adm_root: "192.0.2.1",
+          adm_client: "192.0.2.1",
+          adm_server: "192.0.2.2",
+          adm_peer: "192.0.2.2",
+          adm_port: 443,
+          adm_transport: "tcp",
+          adm_records: 3,
+          adm_conns: "50000@110@120",
+          adm_bcs: 2048,
+          adm_bsc: 1024,
+          adm_packets: 12,
+        }
+      : {
+          row_type: "traffic_observation",
+          source_ip: "192.0.2.1",
+          destination_ip: "192.0.2.3",
+          source_port: 50001,
+          destination_port: 443,
+          transport: "tcp",
+          adm_quality_status: "accepted",
+          counter_semantics: "unknown",
+        };
+    return {
+      rows: [
+        { ...evidence, scope: "prod", adm_first: 110, adm_last: 120 },
+        ...(conversation
+          ? []
+          : [
+              {
+                row_type: "traffic_observation",
+                scope: "prod",
+                source_ip: "192.0.2.1",
+                destination_ip: "192.0.2.4",
+                transport: "icmp",
+                adm_quality_status: "accepted",
+                adm_first: 110,
+                adm_last: 120,
+              },
+            ]),
+        conversation
+          ? endpointCompletion
+          : { ...endpointCompletion, input_count: 2, output_count: 2 },
+      ],
+      warnings: [],
+      errors: [],
+    };
+  },
+};
 try {
   const { state, notice } = recoverUrlState(stateParams);
   if (notice) writeUrlState(state);
@@ -777,16 +1040,53 @@ try {
   createRoot(root).render(
     <ThemeProvider family="enterprise" colorScheme={dark ? "dark" : "light"}>
       <DeepLinkNotice message={notice} />
-      <AtlasApp
-        user="browser-viewer"
-        usePersonaDefault={!queryParams.has("tab")}
-        page={page as Page}
-        state={state}
-        client={new FakeSearchClient()}
-        setupClient={new FakeSetupClient()}
-        deploymentClient={new FakeDeploymentClient()}
-        theme={dark ? "dark" : "light"}
-      />
+      {location.pathname === "/en-US/app/splunk_adm/endpoints" ? (
+        <EndpointsPage
+          live
+          client={endpointSearch}
+          configurationClient={{
+            async read() {
+              return {
+                trafficContract: 2,
+                summaryIndexes: ["adm_summary_v2"],
+                fingerprint: "a".repeat(64),
+                mappings: [
+                  {
+                    observer_kind: "exporter",
+                    observer: "router-a",
+                    scope: "prod",
+                    cluster: "",
+                    mapping_status: "verified",
+                  },
+                ],
+                identities: [
+                  {
+                    ip: "192.0.2.1",
+                    scope: "prod",
+                    entity_id: "checkout",
+                    entity_kind: "workload",
+                    valid_from: 100,
+                  },
+                ],
+                identityAvailable: true,
+                dns: [],
+                maxAgeSeconds: 3600,
+              };
+            },
+          }}
+        />
+      ) : (
+        <AtlasApp
+          user="browser-viewer"
+          usePersonaDefault={!queryParams.has("tab")}
+          page={page as Page}
+          state={state}
+          client={new FakeSearchClient()}
+          setupClient={new FakeSetupClient()}
+          deploymentClient={new FakeDeploymentClient()}
+          theme={dark ? "dark" : "light"}
+        />
+      )}
     </ThemeProvider>,
   );
 } catch (error) {

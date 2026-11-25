@@ -25,6 +25,7 @@ AUDIT_PATH = "/servicesNS/nobody/splunk_adm/storage/collections/data/adm_recover
 SERVER_CONF = "/opt/splunk/etc/system/local/server.conf"
 SERVER_CERT = "/opt/splunk/etc/auth/adm_recovery_test_server.pem"
 SERVER_CA = "/opt/splunk/etc/auth/adm_recovery_test_ca.pem"
+TASK_CA = "/opt/splunk/etc/auth/adm_lab_tls/ca.pem"
 LOCAL_FILES = (
     f"{APP_DIR}/local/adm_recovery.conf",
     f"{APP_DIR}/local/savedsearches.conf",
@@ -50,17 +51,23 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
         cls.lab = lab
         cls.wait_kv_ready = wait_kv_ready
         cls.password = lab.read_secrets()["SPLUNK_PASSWORD"]
-        cls.original_server = cls._docker_read(SERVER_CONF)
-        cls.original_cert = cls._docker_read(SERVER_CERT)
-        cls.original_ca = cls._docker_read(SERVER_CA)
+        cls.task_tls = lab.task_identity() is not None
+        cls.ca_file = TASK_CA if cls.task_tls else SERVER_CA
+        if cls.task_tls:
+            lab.verify_target()
+        else:
+            cls.original_server = cls._docker_read(SERVER_CONF)
+            cls.original_cert = cls._docker_read(SERVER_CERT)
+            cls.original_ca = cls._docker_read(SERVER_CA)
         cls.original_local = {path: cls._docker_read(path) for path in LOCAL_FILES}
         cls.tempdir = tempfile.TemporaryDirectory(prefix="adm-recovery-tls-")
         cls.addClassCleanup(cls._cleanup)
         cls.cert = Path(cls.tempdir.name) / "localhost.crt"
         cls.key = Path(cls.tempdir.name) / "localhost.key"
         cls.ca = Path(cls.tempdir.name) / "localhost-ca.crt"
-        cls._make_certificate(cls.cert, cls.key, cls.ca)
-        cls._install_tls()
+        if not cls.task_tls:
+            cls._make_certificate(cls.cert, cls.key, cls.ca)
+            cls._install_tls()
         cls._install_local_overrides()
         cls.configured_saved = cls._docker_read(LOCAL_FILES[1])
         cls._restart()
@@ -187,7 +194,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
             {
                 "enabled": "1",
                 "management_uri": MGMT,
-                "ca_file": SERVER_CA,
+                "ca_file": cls.ca_file,
             },
         )
         saved = cls._set_stanza(
@@ -244,9 +251,10 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
     @classmethod
     def _cleanup(cls):
         try:
-            cls._docker_write(SERVER_CONF, cls.original_server)
-            cls._docker_write(SERVER_CERT, cls.original_cert)
-            cls._docker_write(SERVER_CA, cls.original_ca)
+            if not cls.task_tls:
+                cls._docker_write(SERVER_CONF, cls.original_server)
+                cls._docker_write(SERVER_CERT, cls.original_cert)
+                cls._docker_write(SERVER_CA, cls.original_ca)
             for path, content in cls.original_local.items():
                 cls._docker_write(path, content)
             cls._restart()
@@ -309,6 +317,51 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
         self.assertEqual(output["status"], "noop", output)
         self.assertEqual(output["name"], "ADM - Identity builder")
 
+    def test_packaged_fallback_ignores_malformed_detector_times(self):
+        macro = (
+            "/servicesNS/nobody/splunk_adm/configs/conf-macros/adm_health_missed_slots"
+        )
+        reload_macros = "/servicesNS/nobody/splunk_adm/admin/macros/_reload"
+        original = self.lab._json("GET", macro)["entry"][0]["content"]["definition"]
+        token = self._session_key()
+        try:
+            self.lab._json(
+                "POST",
+                macro,
+                {
+                    "definition": "makeresults count=3 | streamstats count as n "
+                    '| eval name=if(n=3,"ADM - Identity builder","ADM - Service binding"), '
+                    'scheduled_time=case(n=1,"-1",n=2,"NaN",n=3,tostring(floor(now()))), '
+                    'reason="missed_slot" | fields name scheduled_time reason'
+                },
+            )
+            self.lab._json("GET", reload_macros)
+            result = self._run_entrypoint(token, "ADM - Conversation rollup v2")
+            self.assertEqual(result.returncode, 0, result.stdout.decode())
+            self.assertEqual(
+                json.loads(result.stdout)["name"], "ADM - Identity builder"
+            )
+
+            self.lab._json(
+                "POST",
+                macro,
+                {
+                    "definition": 'makeresults | eval name="ADM - Service binding", '
+                    'scheduled_time="NaN", reason="missed_slot" '
+                    "| fields name scheduled_time reason"
+                },
+            )
+            self.lab._json("GET", reload_macros)
+            result = self._run_entrypoint(token, "ADM - Conversation rollup v2")
+            self.assertEqual(result.returncode, 0, result.stdout.decode())
+            self.assertEqual(
+                json.loads(result.stdout),
+                {"status": "noop", "reason": "no replayable detector rows"},
+            )
+        finally:
+            self.lab._json("POST", macro, {"definition": original})
+            self.lab._json("GET", reload_macros)
+
     def test_packaged_entrypoint_refuses_when_local_action_is_disabled(self):
         disabled = self._set_stanza(
             "",
@@ -316,7 +369,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
             {
                 "enabled": "0",
                 "management_uri": MGMT,
-                "ca_file": SERVER_CA,
+                "ca_file": self.ca_file,
             },
         )
         self._docker_write(LOCAL_FILES[0], disabled.encode())
@@ -331,7 +384,7 @@ class RecoveryEntrypointIntegrationTest(unittest.TestCase):
                 {
                     "enabled": "1",
                     "management_uri": MGMT,
-                    "ca_file": SERVER_CA,
+                    "ca_file": self.ca_file,
                 },
             )
             self._docker_write(LOCAL_FILES[0], enabled.encode())

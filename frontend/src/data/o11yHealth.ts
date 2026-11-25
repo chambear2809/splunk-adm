@@ -341,11 +341,18 @@ export function buildO11yHealthSearch(
   const runtimeFilter = `${jsonField("event_type")}="metric" AND (${runtimeLabelFilter}) AND isnull(${jsonField("apm_mms_id")}) AND isnull(${jsonField("sf_mms_id")}) AND isnull(${jsonField("sf_dimensionalized")})`;
   const streamContractFilter = `(${completionFilter} OR ${redFilter} OR ${runtimeFilter})`;
   const projected = projectedRecord();
+  // Keep competing captures visible to the bounded parser when the service
+  // namespace is ambiguous. Otherwise retain only the newest capture.
+  const latestCapture = service.serviceNamespace
+    ? `| eventstats max(adm_capture_time) AS adm_latest_capture
+| where adm_capture_time=adm_latest_capture`
+    : `| eval adm_service_namespace=${jsonField("service_namespace")}
+| eventstats max(adm_capture_time) AS adm_latest_capture dc(adm_service_namespace) AS adm_namespace_count
+| where adm_capture_time=adm_latest_capture OR adm_namespace_count>1`;
   return `search ${index} sourcetype="${O11Y_HEALTH_SOURCETYPE}" host="${authority.observer}" earliest=-${config.staleAfterSeconds}s latest=now
 | where ${jsonField("schema")}="${O11Y_HEALTH_SCHEMA}" AND ${streamContractFilter} AND ${jsonField("observer_id")} = host AND ${jsonField("observer_id")}="${authority.observer}" AND ${jsonField("organization_id")}="${authority.organizationId}" AND ${jsonField("realm")}="${authority.realm}" AND ${jsonField("routing_scope")}="${literal(selection.scope)}" AND ${identityFilter} AND tonumber(${jsonField("capture_window_start")})=${selection.window.start} AND tonumber(${jsonField("capture_window_end")})=${selection.window.end}${serviceNamespaceFilter}
 | eval adm_capture_time=tonumber(${jsonField("captured_at")})
-| eventstats max(adm_capture_time) AS adm_latest_capture
-| where adm_capture_time=adm_latest_capture
+${latestCapture}
 | head ${O11Y_HEALTH_INPUT_LIMIT + 1}
 | eval event_time_epoch=tonumber(_time),indexed_time_epoch=tonumber(_indextime),event_fingerprint=if(isnotnull(_bkt) AND isnotnull(_cd),sha256(json_array(index,_bkt,_cd)),null()),oversized=if(len(_raw)>${O11Y_HEALTH_RECORD_BYTES},1,0)
 | eventstats count AS input_count sum(oversized) AS oversized_count
@@ -539,6 +546,7 @@ export function normalizeO11yHealthEvidence(
   >();
   const metrics: O11yHealthObservation[] = [];
   let completion: O11yHealthObservation | undefined;
+  let completionNamespace: string | undefined;
   for (const row of rows) {
     const raw = rawObject(row);
     const index = text(row.index, 128);
@@ -653,6 +661,7 @@ export function normalizeO11yHealthEvidence(
       }
       expectedRecords = count;
       signalsWithData = signals;
+      completionNamespace = text(raw.service_namespace, 255);
       completion = {
         ...common,
         kind: "export_completion",
@@ -749,7 +758,10 @@ export function normalizeO11yHealthEvidence(
   if (
     observedLabels.size !== signalsWithData ||
     serviceNamespaces.size > 1 ||
-    serviceNamespaces.has(undefined)
+    serviceNamespaces.has(undefined) ||
+    (completionNamespace !== undefined &&
+      serviceNamespaces.size > 0 &&
+      !serviceNamespaces.has(completionNamespace))
   )
     return { records: [], rejected: 1, replayDuplicates };
   return { records: [...metrics, completion], rejected: 0, replayDuplicates };

@@ -107,6 +107,11 @@ classifications, including lookahead. It does not
 retain every baseline finding for every comparison capture. The bounded-work
 regression covers a 10,000-dependency baseline and 100 distinct comparisons.
 
+A new baseline save keeps a retry record in the current browser tab. After a
+lost response or reload, reopen the same service as the same Splunk user and
+select **Retry same baseline request**. The retry uses the original capture
+window and request key even if the displayed time range has advanced.
+
 A successful initial manual evaluation returns inserted and surfaced counts.
 A retry using the same request key acknowledges the committed revision with
 `resultWithheld: true`, without replaying source-derived counts. Legacy

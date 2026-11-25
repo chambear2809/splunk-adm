@@ -311,6 +311,7 @@ class DetectorEventExportTest(unittest.TestCase):
                 request(detector_ids=("detector_A",)),
                 "token",
                 get_json=lambda *args: export._HTTPResponse(200, b'{"events":[]}'),
+                captured_at=1_800_000_901,
             )
 
     def test_event_larger_than_the_app_truncate_boundary_fails_before_publish(self):
@@ -412,6 +413,7 @@ class DetectorEventExportTest(unittest.TestCase):
                             else [source_event("two", timestamp=1_800_000_200_000)]
                         ).encode(),
                     ),
+                    captured_at=1_800_000_901,
                 )
 
     def test_short_page_is_not_treated_as_end_of_history(self):
@@ -510,8 +512,23 @@ class DetectorEventExportTest(unittest.TestCase):
         envelope = json.loads(content)
         self.assertEqual(envelope["event"]["event_type"], "export_completion")
         self.assertEqual(envelope["event"]["expected_record_count"], 0)
+        self.assertEqual(envelope["event"]["captured_at"], 1_800_000_901)
         self.assertEqual(envelope["event"]["capture_window_start"], req.start)
         self.assertEqual(envelope["event"]["configured_detector_ids"], ["detector_A"])
+
+    def test_capture_time_must_follow_closed_interval_end(self):
+        req = request()
+        with self.assertRaisesRegex(export.DetectorExportError, "at or after"):
+            export.collect_detector_events(
+                req,
+                "token",
+                get_json=lambda *args: self.fail("request must not be made"),
+                captured_at=int(req.end) - 1,
+            )
+        with self.assertRaisesRegex(export.DetectorExportError, "at or after"):
+            export.render_hec_ndjson(
+                req, [], captured_at=int(req.end) - 1, capture_id="capture-early"
+            )
 
     def test_atomic_output_is_private_and_never_overwrites(self):
         req = request(detector_ids=("detector_A",))

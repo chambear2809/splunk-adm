@@ -1,6 +1,33 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("optional DNS and scoped endpoint investigations", () => {
+  test("a capped Flow Logs status search leaves matching endpoint flows visible", async ({
+    page,
+  }) => {
+    await page.goto("/tests/browser/dns-evidence.html?fault=cloud-cap");
+    await page
+      .getByRole("button", { name: "Investigate", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Inspect Flow Logs evidence" })
+      .click();
+    const panel = page.getByRole("region", {
+      name: "Optional AWS VPC Flow Logs evidence",
+    });
+    await expect(panel.getByRole("status")).toHaveText(
+      "1 visible endpoint flow records; 1 flow inputs.",
+    );
+    await expect(
+      panel.getByText(/Capture-wide status: 65 inputs.*display cap reached/),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("row").filter({ hasText: "Selected address matched" }),
+    ).toHaveCount(1);
+    await expect(
+      panel.getByRole("row").filter({ hasText: "SKIPDATA" }),
+    ).toHaveCount(64);
+  });
+
   test("keeps optional sources together and isolates an unselected source from traffic", async ({
     page,
   }) => {
@@ -53,6 +80,48 @@ test.describe("optional DNS and scoped endpoint investigations", () => {
       page.getByRole("table", { name: "Observed one-hop conversations" }),
     ).toContainText("198.51.100.20");
   });
+  for (const finish of ["resolve", "reject"]) {
+    test(`does not publish a cancelled asset-history recheck that will ${finish} after retry`, async ({
+      page,
+    }) => {
+      await page.goto(
+        "/tests/browser/dns-evidence.html?fault=asset-race" +
+          (finish === "reject" ? "&reject=1" : ""),
+      );
+      await page
+        .getByRole("button", { name: "Investigate", exact: true })
+        .click();
+      const panel = page.locator(
+        'section[aria-labelledby="inventory-evidence-title"]',
+      );
+      await panel
+        .getByRole("button", { name: "Inspect asset history" })
+        .click();
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-asset-recheck",
+        "pending",
+      );
+      await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+      await panel
+        .getByRole("button", { name: "Inspect asset history" })
+        .click();
+      await expect(panel.getByRole("row", { name: /asset-new/ })).toBeVisible();
+      await page.evaluate(() =>
+        (
+          window as Window & { __RELEASE_ASSET__?: () => void }
+        ).__RELEASE_ASSET__?.(),
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-asset-recheck",
+        "settled",
+      );
+      await expect(panel.getByRole("row", { name: /asset-old/ })).toHaveCount(
+        0,
+      );
+      await expect(panel.getByRole("row", { name: /asset-new/ })).toBeVisible();
+      await expect(panel).not.toContainText("Source configuration changed");
+    });
+  }
   test("keeps traffic visible after optional permission failure", async ({
     page,
   }) => {

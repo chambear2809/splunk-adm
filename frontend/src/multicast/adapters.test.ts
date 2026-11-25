@@ -88,6 +88,26 @@ const run = (
   );
 
 describe("candidate multicast sources", () => {
+  it("filters the exact PCAP capture path indexed by Stream", () => {
+    const captureInterface = "/opt/splunk/capture/igmp.pcap";
+    const spl = buildMulticastSearch({ ...igmp, captureInterface }, request);
+    expect(spl).toContain(
+      `json_extract(_raw,"network_interface")="${captureInterface}"`,
+    );
+  });
+
+  it("projects only the attested Stream ingress counter fields", () => {
+    const spl = buildMulticastSearch(
+      { ...flow, counterFields: "stream-ingress" },
+      request,
+    );
+    expect(spl).toContain('"packets",json_extract(_raw,"packets_in")');
+    expect(spl).toContain('"bytes",json_extract(_raw,"bytes_in")');
+    expect(buildMulticastSearch(flow, request)).toContain(
+      '"packets",json_extract(_raw,"packets")',
+    );
+  });
+
   it("preserves repeated IGMP reports and distinct v3 records with exact source counts", async () => {
     const result = await run(igmp, [
       row(candidates.igmpV2),
@@ -183,6 +203,40 @@ describe("candidate multicast sources", () => {
     await expect(
       loadMulticastSource(denied, igmp, request, controller.signal),
     ).rejects.toThrow(/cancelled/);
+  });
+  it("keeps general queries as query evidence", async () => {
+    const result = await run(igmp, [
+      row({
+        type: 17,
+        multicast_address: "0.0.0.0",
+        num_sources: 0,
+        src_ip: "192.0.2.1",
+      }),
+      row({
+        type: 17,
+        multicast_address: request.group,
+        num_sources: 0,
+        src_ip: "192.0.2.1",
+      }),
+    ]);
+    expect(result.outcome.state).toBe("complete");
+    expect(result.evidence).toHaveLength(2);
+    expect(result.evidence[0]).toMatchObject({
+      kind: "igmp",
+      operation: "query",
+      queryScope: "general",
+      reporter: "192.0.2.1",
+    });
+    expect(result.evidence[1]).toMatchObject({
+      operation: "query",
+      queryScope: "group",
+    });
+    const report = await run(igmp, [row(candidates.igmpV2)]);
+    expect(report.evidence[0]).not.toHaveProperty("queryScope");
+    const search = buildMulticastSearch(igmp, request);
+    expect(search).toContain(
+      ' OR (tonumber(json_extract(_raw,"type"))=17 AND json_extract(_raw,"multicast_address")="0.0.0.0"))',
+    );
   });
   it("uses fixed literal selectors and bounded projection", () => {
     const search = buildMulticastSearch(igmp, request);

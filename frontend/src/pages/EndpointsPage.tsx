@@ -25,6 +25,8 @@ const localDate = (seconds: number) => {
     .replace(/Z$/, "");
 };
 const fromLocalDate = (value: string) => new Date(value).getTime() / 1000;
+const addressWithPort = (address: string, port?: number) =>
+  port === undefined ? address : `${address}:${port}`;
 export function returnApplicationURL(
   referrer: string,
   origin: string,
@@ -131,6 +133,7 @@ export function EndpointsPage({
       }
       controllerRef.current?.abort();
       const revision = ++revisionRef.current;
+      setResult(undefined);
       setLoading(true);
       setError("");
       const controller = new AbortController();
@@ -281,6 +284,7 @@ export function EndpointsPage({
               "",
               "",
               "",
+              "",
             ]),
             ...result.observations.map((o) => [
               "non_authoritative_observation",
@@ -289,7 +293,9 @@ export function EndpointsPage({
               o.sourceIp,
               o.destinationIp,
               "",
-              `${o.sourcePort}>${o.destinationPort}`,
+              o.sourcePort === undefined && o.destinationPort === undefined
+                ? ""
+                : `${o.sourcePort ?? ""}>${o.destinationPort ?? ""}`,
               o.transport,
               "",
               o.source,
@@ -626,13 +632,9 @@ export function EndpointsPage({
           {result.observations.length > 0 && (
             <section aria-label="Non-authoritative V2 traffic observations">
               <h2>Additional traffic observations (non-authoritative)</h2>
-              <p>
-                These source observations are separate from conversation totals
-                and do not create extra conversation counts.
-                {result.observationCapped
-                  ? " The observation list reached its 100-row cap."
-                  : ""}
-              </p>
+              {result.observationCapped && (
+                <p>The observation list reached its 100-row cap.</p>
+              )}
               <div
                 className="endpoint-table-scroll"
                 role="region"
@@ -655,8 +657,9 @@ export function EndpointsPage({
                         <td>{o.source}</td>
                         <td>{o.observer}</td>
                         <td>
-                          {o.sourceIp}:{o.sourcePort} → {o.destinationIp}:
-                          {o.destinationPort} / {o.transport}
+                          {addressWithPort(o.sourceIp, o.sourcePort)} →{" "}
+                          {addressWithPort(o.destinationIp, o.destinationPort)}{" "}
+                          / {o.transport}
                         </td>
                         <td>
                           <a

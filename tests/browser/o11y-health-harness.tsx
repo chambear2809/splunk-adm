@@ -26,6 +26,7 @@ declare global {
 }
 
 const observer = "o11y-observer-prod";
+const ambiguous = new URLSearchParams(location.search).has("ambiguous");
 const selection: ServiceHealthSelection = {
   schemaVersion: 1,
   workflow: "service",
@@ -37,7 +38,7 @@ const selection: ServiceHealthSelection = {
     environment: "production",
     cluster: "eks-prod-east",
     namespace: "commerce",
-    serviceNamespace: "payments",
+    ...(ambiguous ? {} : { serviceNamespace: "payments" }),
   },
   identityBasis: "exact graph-boundary service dimensions",
   configurationFingerprint: "a".repeat(64),
@@ -86,21 +87,32 @@ const metricRows = fixture.events.map((event, index) => ({
   index: "atlas_o11y",
   event_fingerprint: String(index + 1).padStart(64, "0"),
 }));
-const result = {
+const competingRows = fixture.events.map((envelope, index) => ({
+  ...metricRows[index],
+  _raw: JSON.stringify({
+    ...envelope.event,
+    capture_id: "competing-capture",
+    captured_at: envelope.time - 1,
+    service_namespace: "other-payments",
+  }),
+  event_time_epoch: String(envelope.time - 1),
+  event_fingerprint: String(metricRows.length + index + 1).padStart(64, "0"),
+}));
+const result = (records = metricRows) => ({
   rows: [
-    ...metricRows,
+    ...records,
     {
       kind: "supplemental_completion",
       schema_version: "1",
-      input_count: String(metricRows.length),
-      returned_count: String(metricRows.length),
+      input_count: String(records.length),
+      returned_count: String(records.length),
       input_capped: "0",
       oversized: "0",
     },
   ],
   warnings: [],
   errors: [],
-};
+});
 const searches: LoggedSearch[] = [];
 let attempts = 0;
 const client: SearchClient = {
@@ -118,7 +130,7 @@ const client: SearchClient = {
     request.onLifecycle?.({ state: "creating" });
     request.onLifecycle?.({ state: "created", sid });
 
-    if (current === 1) {
+    if (current === 1 && !ambiguous) {
       return new Promise((_, reject) => {
         const onAbort = () => {
           log.aborted = true;
@@ -136,7 +148,15 @@ const client: SearchClient = {
 
     request.onLifecycle?.({ state: "released", sid });
     log.released = true;
-    return Promise.resolve(result);
+    // The installed Splunk test verifies the selection rule against indexed
+    // captures. Here it drives the panel from the corresponding result rows.
+    return Promise.resolve(
+      result(
+        ambiguous && request.search.includes("OR adm_namespace_count>1")
+          ? [...metricRows, ...competingRows]
+          : metricRows,
+      ),
+    );
   },
 };
 

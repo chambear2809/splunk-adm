@@ -90,13 +90,68 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "c7435f8ed57991a1770ce0d1756f528539af558198546fa6dda4ed14c0e3608a",
+      "reviewed_macro_file_sha256": "fa059ea74eae0367d1ed1942ae6609a8535b7b479cc601d507daeefc31f45c1b",
       "method": "static review only; no recapture",
-      "reason": "Outside the captured graph only: adm_health_source_nd now counts cisco:dc:nd:flows and cisco:dc:nd:endpoints separately (flow_records, endpoint_records) and returns a warning when endpoint records are visible without flow records, so endpoint inventory alone is not reported as flow-telemetry health. Status values and the remaining fields are unchanged. adm_health_source_nd is not expanded by adm_graph(4); the 38-stanza closure is byte-identical to origin/main, so the captured rows are not re-derived and no recapture is claimed.",
+      "reason": "Only the V2 graph input macro changes. It now applies the shared half-open NAT evidence window. The captured legacy adm_graph path uses its original macro and filter.",
       "modified_macro_stanzas": [
-        "adm_health_source_nd"
+        "adm_graph_inputs_v2(4)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "405678f10eaa45e19378c5f59fe0173c9b149575334f57d34b9a901a2419577e",
+          "method": "static review only; no recapture",
+          "reason": "The graph retains an optional APIC-and-leaf ACL policy-point field for newly written rollups. Counts and prior graph fields are unchanged. The immutable capture remains valid as a legacy graph without policy-point provenance, which Incident treats as unqualified for a supported policy change.",
+          "modified_macro_stanzas": [
+            "adm_conversation_rollup",
+            "adm_conversation_rollup_v2",
+            "adm_graph_inputs(4)",
+            "adm_graph_inputs_v2(4)",
+            "adm_graph_edges(4)",
+            "adm_graph_output(4)"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "14d3905feebc1f8680bbf13709d36a1efadfd8231b6e921f216d3ca68717ea28",
+          "method": "static review only; no recapture",
+          "reason": "FTD point timing and Device counter validation modify only Trace and Device readers. All 38 macros in the captured adm_graph(4) dependency closure are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_path_trace(3)",
+            "adm_device_flows_aggregate(1)"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "a66198aada9addc5d2d8764e1828f0a6ad8cb2cb5ca1aafed12ccaf9661647b7",
+          "method": "static review only; no recapture",
+          "reason": "Authority-qualified Device ACL searches, poll window bounds, and portless Device aggregation change only Device reader stanzas. All 38 macros in the captured adm_graph(4) dependency closure are byte-identical to the prior reviewed checkout. Captured graph rows and hashes are unchanged; no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_device_flows(1)",
+            "adm_device_flows(4)",
+            "adm_device_flows_aggregate(1)"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "ece32f5f67522fcf0ce608b2b596ba50fcd4153a3c866731d6e29f5a3ce8eab5",
+          "method": "static review only; no recapture",
+          "reason": "Fabric-qualified legacy ACI topology and inventory IDs, and removal of unsafe IP-only Device flow labels, are outside the captured adm_graph(4) dependency closure. All 38 reachable macro stanzas are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_topology",
+            "adm_device_flows(1)",
+            "adm_aci_node_inventory"
+          ]
+        },
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "c7435f8ed57991a1770ce0d1756f528539af558198546fa6dda4ed14c0e3608a",
+          "method": "static review only; no recapture",
+          "reason": "Outside the captured graph only: adm_health_source_nd now counts cisco:dc:nd:flows and cisco:dc:nd:endpoints separately (flow_records, endpoint_records) and returns a warning when endpoint records are visible without flow records, so endpoint inventory alone is not reported as flow-telemetry health. Status values and the remaining fields are unchanged. adm_health_source_nd is not expanded by adm_graph(4); the 38-stanza closure is byte-identical to origin/main, so the captured rows are not re-derived and no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_health_source_nd"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "46c8d97aa1ec1600f95d6cc5f64ef1988348db8049339630365288dff85bf8d4",

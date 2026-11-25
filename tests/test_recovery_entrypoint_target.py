@@ -64,6 +64,34 @@ class EarliestReplayableTest(unittest.TestCase):
         self.assertIsNone(entry.earliest_replayable(rows))
         self.assertIsNone(entry.earliest_replayable([]))
 
+    def test_nonfinite_nonpositive_fractional_and_out_of_range_times_are_ignored(self):
+        invalid = [
+            "NaN",
+            "Infinity",
+            "-Infinity",
+            "0",
+            "-1",
+            "1.5",
+            "1700000000.00000001",
+            "253402300800",
+        ]
+        rows = [
+            {"name": "ADM - Identity builder", "scheduled_time": value}
+            for value in invalid
+        ]
+        rows.append(
+            {"name": "ADM - Service backends", "scheduled_time": "1700000000.0"}
+        )
+        self.assertEqual(entry.earliest_replayable(rows), "ADM - Service backends")
+
+    def test_nonfinite_rows_do_not_beat_the_earliest_finite_target(self):
+        rows = [
+            {"name": "ADM - Identity builder", "scheduled_time": "NaN"},
+            {"name": "ADM - Service backends", "scheduled_time": "200"},
+            {"name": "ADM - Service binding", "scheduled_time": "300"},
+        ]
+        self.assertEqual(entry.earliest_replayable(rows), "ADM - Service backends")
+
     def test_detector_query_restricts_to_every_recoverable_target(self):
         for name in entry.TARGET_WINDOWS:
             self.assertIn(json.dumps(name), entry.DETECTOR_QUERY)

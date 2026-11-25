@@ -6,6 +6,7 @@ import {
   MULTICAST_VERSION,
   type MulticastProfile,
   type MulticastRequest,
+  type ScopeWindow,
   type Segment,
 } from "./contract";
 
@@ -49,6 +50,34 @@ function epoch(value: unknown): value is number {
   );
 }
 
+function pastWindow(
+  value: Record<string, unknown>,
+  now: number,
+): { earliest: number; latest: number } {
+  const { earliest, latest } = value;
+  if (
+    !epoch(earliest) ||
+    !epoch(latest) ||
+    earliest >= latest ||
+    latest > now ||
+    latest - earliest > MAX_WINDOW_SECONDS
+  )
+    throw new Error("Choose a past time window of up to one hour.");
+  return { earliest, latest };
+}
+
+/** The scope-wide equivalent of validateRequest, without group and sender. */
+export function validateScopeWindow(
+  value: unknown,
+  now = Date.now() / 1000,
+): ScopeWindow {
+  if (!isObject(value) || value.version !== MULTICAST_VERSION)
+    throw new Error("Unsupported multicast investigation version.");
+  const scope = scopeName(value.scope);
+  if (!scope) throw new Error("Choose one verified routing scope.");
+  return { version: MULTICAST_VERSION, scope, ...pastWindow(value, now) };
+}
+
 export function validateRequest(
   request: unknown,
   now = Date.now() / 1000,
@@ -62,15 +91,7 @@ export function validateRequest(
   const sender = sourceAddress(request.sender);
   if (request.sender !== undefined && !sender)
     throw new Error("Enter one unicast IPv4 sender address.");
-  const { earliest, latest } = request;
-  if (
-    !epoch(earliest) ||
-    !epoch(latest) ||
-    earliest >= latest ||
-    latest > now ||
-    latest - earliest > MAX_WINDOW_SECONDS
-  )
-    throw new Error("Choose a past time window of up to one hour.");
+  const { earliest, latest } = pastWindow(request, now);
   return {
     version: MULTICAST_VERSION,
     scope,
@@ -88,13 +109,16 @@ const LINK_KEYS = [
   "mc_sender",
   "mc_earliest",
   "mc_latest",
+  "mc_view",
 ] as const;
 
-export function parseMulticastLink(
-  params: URLSearchParams,
-  now?: number,
-): MulticastRequest | undefined {
-  if (![...params.keys()].some((key) => key.startsWith("mc_"))) return;
+export type MulticastView = "overview" | "matrix" | "topology";
+const VIEWS: readonly MulticastView[] = ["overview", "matrix", "topology"];
+const UNSUPPORTED = "The multicast link contains unsupported parameters.";
+
+/** True when the link carries multicast parameters, which are then all checked. */
+function checkLink(params: URLSearchParams): boolean {
+  if (![...params.keys()].some((key) => key.startsWith("mc_"))) return false;
   if (
     LINK_KEYS.some((key) => params.getAll(key).length > 1) ||
     [...params.keys()].some(
@@ -102,24 +126,71 @@ export function parseMulticastLink(
         key.startsWith("mc_") && !LINK_KEYS.some((known) => known === key),
     )
   )
-    throw new Error("The multicast link contains unsupported parameters.");
+    throw new Error(UNSUPPORTED);
+  parseMulticastView(params);
+  return true;
+}
+
+function linkFields(params: URLSearchParams) {
   const time = (key: string) => {
     const value = params.get(key) ?? "";
     return /^[1-9][0-9]{0,11}$/.exec(value)?.[0] === value
       ? Number(value)
       : NaN;
   };
+  return {
+    version: params.get("mc_v") === "1" ? MULTICAST_VERSION : undefined,
+    scope: params.get("mc_scope"),
+    earliest: time("mc_earliest"),
+    latest: time("mc_latest"),
+  };
+}
+
+export function parseMulticastView(params: URLSearchParams): MulticastView {
+  const values = params.getAll("mc_view");
+  if (!values.length) return "overview";
+  const view = VIEWS.find((known) => known === values[0]);
+  if (values.length > 1 || !view) throw new Error(UNSUPPORTED);
+  return view;
+}
+
+export function parseMulticastLink(
+  params: URLSearchParams,
+  now?: number,
+): MulticastRequest | undefined {
+  if (!checkLink(params)) return;
   return validateRequest(
     {
-      version: params.get("mc_v") === "1" ? MULTICAST_VERSION : undefined,
-      scope: params.get("mc_scope"),
+      ...linkFields(params),
       group: params.get("mc_group"),
       sender: params.get("mc_sender") ?? undefined,
-      earliest: time("mc_earliest"),
-      latest: time("mc_latest"),
     },
     now,
   );
+}
+
+/** The scope-wide link; a group, when present, is left to parseMulticastLink. */
+export function parseScopeLink(
+  params: URLSearchParams,
+  now?: number,
+): ScopeWindow | undefined {
+  if (!checkLink(params)) return;
+  return validateScopeWindow(linkFields(params), now);
+}
+
+export function scopeLink(
+  window: ScopeWindow,
+  view: MulticastView,
+): URLSearchParams {
+  const value = validateScopeWindow(window);
+  if (!VIEWS.includes(view)) throw new Error(UNSUPPORTED);
+  return new URLSearchParams({
+    mc_v: String(value.version),
+    mc_scope: value.scope,
+    mc_earliest: String(value.earliest),
+    mc_latest: String(value.latest),
+    mc_view: view,
+  });
 }
 
 export function multicastLink(request: MulticastRequest): URLSearchParams {
@@ -194,7 +265,9 @@ export function parseProfile(value: unknown): MulticastProfile {
     const endpointReporters = reporterAddresses(value.endpointReporters);
     const proxyReporters = reporterAddresses(value.proxyReporters);
     if (
-      !selector(captureInterface) ||
+      typeof captureInterface !== "string" ||
+      captureInterface.length > 128 ||
+      !selector(captureInterface.replace(/^\//, "")) ||
       !segment ||
       (placement !== "endpoint" && placement !== "transit") ||
       (placement !== "endpoint" && endpointReporters.length > 0) ||
@@ -221,6 +294,7 @@ export function parseProfile(value: unknown): MulticastProfile {
       samplingInterval,
       replication,
       counters,
+      counterFields,
     } = value;
     if (
       !sourceAddress(observer) ||
@@ -234,7 +308,9 @@ export function parseProfile(value: unknown): MulticastProfile {
       (replication !== "before" &&
         replication !== "after" &&
         replication !== "unknown") ||
-      (counters !== "delta" && counters !== "total")
+      (counters !== "delta" && counters !== "total") ||
+      (counterFields !== undefined &&
+        (direction !== "ingress" || counterFields !== "stream-ingress"))
     )
       throw new Error("Invalid multicast NetFlow exporter or counter profile.");
     return {
@@ -246,6 +322,7 @@ export function parseProfile(value: unknown): MulticastProfile {
       samplingInterval,
       replication,
       counters,
+      ...(counterFields === undefined ? {} : { counterFields }),
     };
   }
   throw new Error("Unsupported multicast source profile.");

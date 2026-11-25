@@ -157,13 +157,15 @@ Limits are three source jobs per request, 2,000 rows and 512 KiB per window,
 five seconds of server search runtime per job, short expiry and native
 completion/truncation checks. The supervised local transport uses a separate
 worker, bounds request and response buffers, and checks per-call deadlines. The
-source reader targets a 25-second elapsed budget and a shared three-second
-cleanup budget; successful known jobs are deleted before their results are
-accepted. Ordinary process scheduling and operating-system behavior are not
-hard real-time guarantees. Case authentication, configuration and other
-ordinary Splunk SDK calls remain outside the source deadline. Staged native
-Linux/x86_64 tests now pass token-free preflight and 12 transport component checks on Enterprise 10.6.0.5/Python 3.13.11 with real resource limits;
-see the latest delivery/qualification record. These staged synthetic checks do
+source reader targets a 25-second elapsed budget, including proof and deletion
+for successful jobs. A shared three-second reserve covers recovery cleanup and
+retirement after the deadline. The reader accepts results only after an
+acknowledged deletion within the 25-second budget. Process scheduling and
+operating-system behavior can affect these timings. Case authentication,
+configuration and other ordinary Splunk SDK calls remain outside the source
+deadline. Staged native Linux/x86_64 tests pass token-free preflight and 12
+transport component checks on Enterprise 10.6.0.5/Python 3.13.11 with real
+resource limits. See the latest delivery/qualification record. These staged synthetic checks do
 not qualify current installed endpoints or the end-to-end Splunk capture
 lifecycle. The local Rosetta runtime failed the
 unchanged 256 MiB address-space contract; its token-free preflight keeps capture

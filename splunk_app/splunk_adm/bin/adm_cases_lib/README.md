@@ -58,10 +58,11 @@ supplied in a case request.
 
 The supervised source transport uses a short-lived subprocess with bounded
 request/response buffers and configured CPU, address-space and core-dump
-limits. The source reader targets a 25-second request budget with a shared
-three-second cleanup budget; these are not hard real-time guarantees. Case
-authentication, configuration and other ordinary Splunk SDK calls are outside
-that source deadline. Linux-specific resource behavior and the complete
+limits. The source reader targets a 25-second request budget that includes
+proof and deletion for successful jobs. A shared three-second reserve covers
+recovery cleanup and retirement after the deadline. Case authentication,
+configuration and other ordinary Splunk SDK calls are outside that source
+deadline. Linux-specific resource behavior and the complete
 transport lifecycle require separate installed qualification. The local Rosetta
 runtime failed the unchanged 256 MiB address-space contract; token-free readiness
 preflight refuses capture before allocating a job intent. Native Linux/amd64

@@ -1,6 +1,41 @@
 # Investigate IPv4 multicast
 
-Open **Multicast** in Application Atlas or go to `/en-US/app/splunk_adm/multicast` on your search head. Select one verified routing scope, an absolute window of up to one hour, and one IPv4 multicast group. The optional sender narrows traffic and source-specific receiver interest. Copy the page URL after investigating to share those inputs. The recipient runs the investigation under their own Splunk session.
+Open **Multicast** in Application Atlas or go to `/en-US/app/splunk_adm/multicast` on your search head. Select one verified routing scope and an absolute window of up to one hour, then select **Investigate**. Atlas lists the groups observed in that scope and window, and you can open any group to see its evidence. Copy the page URL to share the scope, window, view and any open group. The recipient runs the searches under their own Splunk session. Older links that name a group open that group's detail directly.
+
+## Read the views
+
+**Investigate** runs one bounded group summary search per active Stream IGMP and NetFlow profile in the scope. Overview and Matrix both use those results, so switching tabs does not search again. **Topology** is not yet available.
+
+- **Overview** lists one row per observed group. It shows the senders seen in flow records, the receiver interest seen in IGMP reports, packet and byte totals with the profile's sampling and replication position, any flags, and when the group was first and last seen. Rows with more flags sort first.
+- **Matrix** shows a grid with one row per group and one column per profile. IGMP columns are labelled by segment and NetFlow columns by exporter and direction. Each cell reads **Receiver interest**, **Sender traffic**, **None observed** or **Not covered**. **Not covered** means that profile's search did not complete, so its evidence for the group is unknown. Cells with evidence in the last five minutes of the window are styled differently from cells with only older evidence.
+- **Group detail** opens when you select a group in Overview or a cell in Matrix. It runs the per-group investigation and shows the multicast tree, the evidence records, an IGMP timeline of reports, leaves and queries for each segment, and the observed query senders. Enter a sender to narrow the investigation. **Back to Overview** or **Back to Matrix** returns to the summary without searching again.
+
+The summary counts each IGMPv3 group record under its own group. General IGMP queries (group `0.0.0.0`) count as query evidence for the capture. They clear **Leave without query** and contribute to **Multiple query senders**, but they never appear as a group row.
+
+Each profile returns at most 256 groups. If a profile observes more, its coverage is partial and Overview reports how many groups are not shown for that profile. Atlas never drops groups silently.
+
+### Flags
+
+Flags describe what the evidence shows, not faults. Select **?** next to a flag in Overview to see its rule.
+
+| Flag | Meaning |
+| --- | --- |
+| Interest, no sender seen | IGMP reports for this group were observed, but no flow summary in this scope showed sender traffic in this window. Uncovered paths or sampling can hide senders; it is an evidence gap, not a fault. |
+| Sender, no interest seen | Flow records showed sender traffic for this group, but no IGMP capture in this scope observed receiver interest in this window. Receivers may sit beyond the captured segments; it is an evidence gap, not a fault. |
+| New since previous window | This group was observed in this window but not in the previous window of equal length, which was searched completely. |
+| Leave without query | A leave was observed with no later query from that capture in this window. It may be normal; it is an evidence gap, not a fault. |
+| Multiple query senders | A capture covering this group observed IGMP queries from more than one source address in this window. It may be normal; it is an evidence gap, not a fault. |
+| Source coverage partial | At least one stream source in this scope did not complete its search, so evidence for this group may be missing. |
+
+### Compare with the previous window
+
+**Compare with previous window** reruns the summary and also searches the window of equal length that ends where the selected window starts. It costs a second group summary search per profile, so it runs only when you select it. **New since previous window** appears only when every previous-window search completed. If profile validity does not cover the previous window, or a previous-window search does not complete, Overview shows "Comparison unavailable" with the reason and flags no group as new.
+
+Editing the scope or window cancels a running search, and results from the earlier inputs are discarded.
+
+![Multicast Overview listing groups 239.1.2.4 and 239.1.2.3, with 239.1.2.4 flagged Interest, no sender seen](../screenshots/readme/12-multicast-overview.png)
+
+![Multicast Matrix with a VLAN 110 IGMP column and a NetFlow exporter column showing receiver interest and sender traffic per group](../screenshots/readme/13-multicast-matrix.png)
 
 ## Qualify the capture and export
 
@@ -9,6 +44,8 @@ Qualify each feed with sanitized, genuine indexed events from the deployed versi
 - **IGMP.** Use a capture point where the sensor and observed interface can be mapped to one routing scope and segment. Keep overlapping address spaces on separate capture interfaces or sensors. Validate local VLAN or VNI context against the actual capture, including tag stripping, mirror configuration and inner/outer VLAN handling. Verify that the indexed `host` identifies the sensor and that `network_interface` identifies the capture interface. The Stream reference stream disables `network_interface` by default. Verify `_time`, `src_ip`, `type` and `multicast_address` for IGMPv1/v2. For IGMPv3, verify `num_groups`, the ordered `group_record_multicast_address`, `group_record_type` and `group_record_num_sources` arrays, and the serialized `group_record_source_address` list. Compare a report with multiple groups and different source counts against its wire decode before attesting to `flat-counted`. Select `single-record` when only single-record messages have been verified.
 - **Endpoint attribution.** Use `placement: "endpoint"` only when direct host reports can be validated. Attest each address in `endpointReporters` against that interface, segment and validity interval. Keep known proxy addresses in `proxyReporters`. Revalidate bindings after address reuse, VLAN changes or changes to proxying. Use `placement: "transit"` and an empty endpoint list for routed or proxy-facing captures. The tab retains query, proxy, anonymous and unverified reports as evidence. A join, leave or quiet capture does not establish current membership or delivery.
 - **NetFlow/IPFIX.** Verify the actual multicast `src_ip`/`dest_ip` tuple, `exporter_ip`, `observation_domain_id`, `template_id`, `flow_dir` and interface identifiers emitted by one monitor. Confirm direction encoding with the indexed event (0 for ingress, 1 for egress). Establish whether exported `packets` and `bytes` are delta or total counters, the sampling interval (1 for unsampled), and the monitor position relative to replication. Retest after exporter or template changes. Counters are shown per observation with their declared meaning. Keep pre- and post-replication and different exporters separate.
+
+For a Stream PCAP replay, use the exact indexed `network_interface` value as `captureInterface`. Stream can emit an absolute path. For an ingress profile whose verified exporter and template emit `packets_in` and `bytes_in`, set `"counterFields": "stream-ingress"`. Profiles that omit `counterFields` read `packets` and `bytes`.
 - **Forwarding.** Atlas accepts a versioned, administrator-attested NX-OS IPv4 forwarding snapshot. Capture the same `(S,G)` route on the participating devices twice around the adjacency reads. Match outgoing and incoming interfaces, reciprocal CDP and PIM, and the downstream RPF neighbor. Keep route state in one VRF and distinguish VXLAN underlay from tenant traffic. A route through `nve1` may end at an unresolved overlay boundary.
 
 ## Enable profiles
@@ -81,7 +118,17 @@ python3 tools/prepare_multicast_cohort.py /protected/path/read-only-replay.json 
     --index atlas_multicast --host atlas-nxos-snapshot > forwarding-cohort.ndjson
 ```
 
-After an operator approves deployment and indexing, submit the envelope through the dedicated input and enable the profile. In Atlas, select the scope, group and exact sender from the receipt. Set **To (UTC)** to the snapshot anchor and **From (UTC)** before it. A replay snapshot is valid only at its anchor. For a later time, the UI retains the record and marks its branches stale. Device snapshots establish forwarding state. They do not establish packet delivery, endpoint membership or a VNI-specific overlay path.
+After an operator approves deployment and indexing, submit the envelope through the dedicated input and enable the profile.
+
+Overview and Matrix summarise Stream IGMP and NetFlow. If a scope has only a verified forwarding snapshot, **Investigate** directs you to a group link. Build that link from the receipt against your own search head:
+
+```
+/en-US/app/splunk_adm/multicast?mc_v=1&mc_scope=<scope>&mc_group=<group>&mc_sender=<sender>&mc_earliest=<from>&mc_latest=<anchor>
+```
+
+`mc_v` is always `1`. `mc_scope`, `mc_group` and `mc_sender` carry the scope, group and exact sender from the receipt; percent-encode a scope that contains a colon. `mc_earliest` and `mc_latest` are whole-second epoch times: set `mc_latest` to the snapshot anchor and `mc_earliest` before it, within one hour. `mc_view` is optional and only chooses which summary the **Back** control names; a forwarding-only scope cannot populate either summary. The link opens the group detail with those inputs filled in and searches nothing until you select **Investigate group**.
+
+A replay snapshot is valid only at its anchor. For a later time, the UI retains the record and marks its branches stale. Device snapshots establish forwarding state. They do not establish packet delivery, endpoint membership or a VNI-specific overlay path.
 
 ## Disable and roll back
 

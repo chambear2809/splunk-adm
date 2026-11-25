@@ -557,7 +557,8 @@ export function resolveDevice(
     }
     return true;
   };
-  if (exact)
+  // Plain legacy names must pass the ambiguity checks below.
+  if (exact && (isV2Device(exact) || normalized !== key(exact.name)))
     return (!hasV2Devices || isV2Device(exact)) && contextMatches(exact)
       ? exact
       : undefined;

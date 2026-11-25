@@ -31,6 +31,7 @@ function fixture({
   invalidMms = false,
   detector = false,
   appd = false,
+  appdIndexDefinition = "index=atlas_asset",
   thousandeyes = false,
   teBindings = "[]",
   detectorIds = '["detector-1"]',
@@ -195,7 +196,7 @@ function fixture({
           adm_o11y_health_schema_qualified: "1",
           adm_index_o11y_detector_events: "index=atlas_o11y",
           adm_o11y_detector_events_schema_qualified: "0",
-          adm_index_appdynamics_inventory: "index=atlas_asset",
+          adm_index_appdynamics_inventory: appdIndexDefinition,
           adm_appdynamics_inventory_schema_qualified: "0",
           adm_index_thousandeyes: "index=atlas_te",
           adm_thousandeyes_schema_qualified: "0",
@@ -444,6 +445,29 @@ describe("caller-context evidence configuration", () => {
       expect(rejected.summaryIndexes).toEqual(["adm_summary"]);
     }
   });
+  it("accepts an approved multi-index Controller inventory selector", async () => {
+    const config = await fixture({
+      active: false,
+      appd: true,
+      appdIndexDefinition: "(index=atlas_asset OR index=atlas_asset_backup)",
+    }).client.read(undefined, [], "prod");
+    expect(
+      config.supplemental?.find((s) => s.source === "appdynamics_inventory"),
+    ).toMatchObject({
+      indexes: ["atlas_asset", "atlas_asset_backup"],
+      state: "staged",
+    });
+  });
+  it("refuses a Controller selector that mixes a real index with the placeholder", async () => {
+    const { client } = fixture({
+      active: false,
+      appd: true,
+      appdIndexDefinition: "(index=unconfigured_optional OR index=atlas_asset)",
+    });
+    await expect(client.readAppDynamicsInventory()).rejects.toThrow(
+      "Controller inventory index is unavailable or ambiguous.",
+    );
+  });
   it("changes the configuration fingerprint when a Controller origin or detector binding changes", async () => {
     const first = await fixture({
       active: false,
@@ -627,5 +651,29 @@ describe("caller-context evidence configuration", () => {
       "2001:db8::1",
     ]);
     expect(config.identities.map((o) => o.entity_id)).toEqual(["old", "new"]);
+  });
+});
+
+describe("readMulticastProfileDocument", () => {
+  const read = (configuration: string) => {
+    const fetcher = (async () =>
+      new Response(JSON.stringify([{ _key: "active", configuration }]), {
+        status: 200,
+      })) as unknown as typeof fetch;
+    return new ToolkitEvidenceConfigClient(
+      fetcher,
+      {} as DeploymentClient,
+    ).readMulticastProfileDocument();
+  };
+  it("parses the active document", async () => {
+    await expect(read('{"version":1,"profiles":[]}')).resolves.toEqual({
+      version: 1,
+      profiles: [],
+    });
+  });
+  it("reports corrupted JSON without leaking parser details", async () => {
+    await expect(read('{"version":1,')).rejects.toThrow(
+      "Shared multicast source configuration is invalid.",
+    );
   });
 });

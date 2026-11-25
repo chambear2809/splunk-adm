@@ -244,6 +244,43 @@ const exportText = async (page: Page, name: RegExp): Promise<string> => {
 };
 const exportedGraph = async (page: Page): Promise<Graph> =>
   JSON.parse(await exportText(page, /Map data \(JSON\)/)) as Graph;
+
+for (const [fixture, rowKind] of [
+  ["record", "nat_observation"],
+  ["cap", "nat_observations_truncated"],
+  ["none", undefined],
+] as const) {
+  test(`shows the Context evidence CSV action for NAT evidence only when available (${fixture})`, async ({
+    page,
+  }) => {
+    await page.goto(`${url}?surface=map&nat=${fixture}`);
+    await count(page, 2);
+    await resolve(page, 0);
+    await resolve(page, 1);
+    await expect(
+      page.getByRole("button", { name: "Investigate", exact: true }),
+    ).toBeVisible();
+    if (!rowKind) {
+      await more(page, "Export");
+      await expect(
+        page.getByRole("button", { name: /Context evidence \(CSV\)/ }),
+      ).toHaveCount(0);
+      return;
+    }
+    const csv = await exportText(page, /Context evidence \(CSV\)/);
+    expect(csv.trimEnd().split("\r\n")).toHaveLength(2);
+    expect(csv).toContain(`,${rowKind},`);
+    expect(csv).toContain(
+      '""nat_event_window"":{""start"":1791373500,""end"":1791374400}',
+    );
+    expect(csv).toContain('""nat_event_window_basis"":""native-addinfo""');
+    expect(csv).toContain(
+      fixture === "cap"
+        ? '""truncated"":true'
+        : '""translated_initiator_ip"":""192.0.2.44""',
+    );
+  });
+}
 const loadMapSurface = async (page: Page) => {
   await page.goto(mapSurfaceURL);
   await count(page, 2);

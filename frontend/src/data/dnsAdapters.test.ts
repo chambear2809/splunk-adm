@@ -632,6 +632,61 @@ describe("normalizeDns", () => {
     ]);
   });
 
+  it("rejects conflicting projected Hubble producer identities", async () => {
+    const conflicting = JSON.parse(hubbleFixture._raw);
+    conflicting.cluster_name = "worker-a";
+    conflicting.node_name = "worker-a/worker-a-01";
+    conflicting.flow.node_name = "worker-a/worker-a-02";
+    const matching = JSON.parse(hubbleFixture._raw);
+    matching.cluster_name = "worker-a";
+    matching.node_name = "worker-a/worker-a-01";
+    matching.flow.node_name = "worker-a/worker-a-01";
+
+    const result = await normalizeDns(
+      "dns_hubble",
+      [
+        { ...hubbleFixture, _raw: JSON.stringify(conflicting) } as Row,
+        {
+          ...hubbleFixture,
+          event_fingerprint: "2".repeat(64),
+          _raw: JSON.stringify(matching),
+        } as Row,
+      ],
+      config(),
+      selection([flow("192.0.2.11", "198.51.100.20", 1791390310)]),
+      [],
+    );
+
+    expect(result.rejected).toBe(1);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]).toMatchObject({
+      authority: "worker-a",
+      authorityNode: "worker-a/worker-a-01",
+    });
+  });
+
+  it("accepts a Hubble row with only the projected flow producer identity", async () => {
+    const raw = JSON.parse(hubbleFixture._raw);
+    delete raw.node_name;
+    delete raw.cluster_name;
+    raw.flow.node_name = "worker-a/worker-a-01";
+
+    const result = await normalizeDns(
+      "dns_hubble",
+      [{ ...hubbleFixture, _raw: JSON.stringify(raw) } as Row],
+      config(),
+      selection([flow("192.0.2.11", "198.51.100.20", 1791390310)]),
+      [],
+    );
+
+    expect(result.rejected).toBe(0);
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0]).toMatchObject({
+      authority: "worker-a",
+      authorityNode: "worker-a/worker-a-01",
+    });
+  });
+
   it("rejects malformed Hubble authority metadata without invalidating another source", async () => {
     const raw = JSON.parse(hubbleFixture._raw);
     raw.node_name = `worker-a/${"x".repeat(1025)}`;

@@ -828,6 +828,15 @@ test("empty catalog falls back to scopes without invented metrics", async ({
   const batch = page.locator("tbody tr").filter({ hasText: "batch-worker" });
   await expect(batch).toBeVisible();
   await expect(batch).toContainText("—");
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("db");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.locator('[aria-label="Find results"]')).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: /metrics are unavailable/i }),
+  ).toBeVisible();
 });
 
 test("catalog bookkeeping marker falls back without rendering the marker", async ({
@@ -841,6 +850,22 @@ test("catalog bookkeeping marker falls back without rendering the marker", async
   ).toBeVisible();
   await expect(page.locator("tbody")).not.toContainText("adm-catalog-empty");
   await expect(page.locator("tbody")).toContainText("batch-worker");
+});
+
+test("retained catalog rows identify an overdue writer snapshot", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&fault=catalog-stale",
+  );
+  const stale = page
+    .getByRole("status")
+    .filter({ hasText: /Catalog snapshot is stale/i });
+  await expect(stale).toBeVisible();
+  await expect(page.locator("tbody")).toContainText("checkout");
+  await page.goto("/tests/browser/browser.html?page=applications&mode=live");
+  await expect(page.locator("tbody")).toContainText("checkout");
+  await expect(stale).toHaveCount(0);
 });
 
 test("catalog over-limit is actionable and does not fall back to scopes", async ({
@@ -938,16 +963,173 @@ test("an over-limit catalog narrows again when the service changes", async ({
     .toBe(true);
 });
 
+test("an in-flight catalog cap narrows using the latest service", async ({
+  page,
+}) => {
+  await page.goto(
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-service-race",
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          typeof (
+            window as Window & {
+              __ADM_CATALOG_RELEASE__?: () => void;
+            }
+          ).__ADM_CATALOG_RELEASE__ === "function",
+      ),
+    )
+    .toBe(true);
+  await (
+    await scope(page)
+  )
+    .getByRole("combobox", { name: "Service", exact: true })
+    .fill("checkout");
+  await page.evaluate(() => {
+    (
+      window as Window & { __ADM_CATALOG_RELEASE__?: () => void }
+    ).__ADM_CATALOG_RELEASE__?.();
+  });
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Catalog narrowed to service “checkout”" }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        (window.__ADM_REQUESTS__ ?? []).some(
+          (request) =>
+            request.spl ===
+            '| `adm_application_catalog_read` | search service="checkout"',
+        ),
+      ),
+    )
+    .toBe(true);
+});
+
 test("catalog preserves warnings from a narrowed service search", async ({
   page,
 }) => {
   await page.goto(
-    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-narrowed",
+    "/tests/browser/browser.html?page=applications&mode=live&service=frontend&environment=demo&cluster=demo-cluster&namespace=shop&fault=catalog-overlimit-find-warning",
   );
   await expect(
     page.getByRole("status").filter({ hasText: "narrowed warning" }),
   ).toBeVisible();
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("db");
+  await page.getByRole("button", { name: "Find", exact: true }).click();
+  await expect(page.locator('[aria-label="Find results"]')).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
+  const findWarning = page.getByRole("status").filter({
+    hasText: "Find evidence is partial.",
+  });
+  await expect(findWarning).toBeVisible();
+  await page
+    .getByLabel(/Find an address, EPG, or device/)
+    .first()
+    .fill("");
+  await expect(findWarning).toHaveCount(0);
+  await expect(
+    page.getByRole("status").filter({ hasText: "narrowed warning" }),
+  ).toBeVisible();
 });
+
+async function openEndpointInvestigation(page: Page) {
+  await page.route("**/en-US/app/splunk_adm/endpoints?*", async (route) => {
+    const harness = await route.fetch({
+      url: new URL("/tests/browser/browser.html", route.request().url()).href,
+    });
+    await route.fulfill({ response: harness });
+  });
+  await page.goto(
+    "/en-US/app/splunk_adm/endpoints?endpoint_ip=192.0.2.1&endpoint_scope=prod&endpoint_start=100&endpoint_end=200",
+  );
+}
+
+test("Endpoint CSV keeps all row types aligned with the download header", async ({
+  page,
+}) => {
+  await openEndpointInvestigation(page);
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  const exportCsv = page.getByRole("button", { name: "Download endpoint CSV" });
+  await expect(exportCsv).toBeVisible();
+  const downloading = page.waitForEvent("download");
+  await exportCsv.click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe("endpoint-investigation.csv");
+  const csv = await readFile((await download.path())!, "utf8");
+  // The fixture contains only unquoted fields. Reject malformed record widths.
+  expect(csv).not.toContain('"');
+  const [header, ...rows] = csv.split("\r\n").map((row) => row.split(","));
+  expect(header).toHaveLength(27);
+  expect(rows.map(([kind]) => kind)).toEqual([
+    "metadata",
+    "conversation",
+    "non_authoritative_observation",
+    "non_authoritative_observation",
+    "identity_history",
+  ]);
+  for (const row of rows) expect(row).toHaveLength(header.length);
+  await expect(
+    page.getByText("192.0.2.1 → 192.0.2.4 / icmp", { exact: true }),
+  ).toBeVisible();
+  expect(rows[3][header.indexOf("transport")]).toBe("icmp");
+  expect(rows[3][header.indexOf("port")]).toBe("");
+  const counts = Object.fromEntries(
+    header.map((field, i) => [field, rows[1][i]]),
+  );
+  expect(counts).toMatchObject({
+    records: "3",
+    connections_represented: "1",
+    bytes_client_to_server: "2048",
+    bytes_server_to_client: "1024",
+    packets: "12",
+  });
+});
+
+for (const outcome of ["fail", "hold"] as const) {
+  test(`${outcome === "fail" ? "failed" : "cancelled"} Endpoint reruns do not export prior evidence`, async ({
+    page,
+  }) => {
+    await openEndpointInvestigation(page);
+    const investigate = page.getByRole("button", {
+      name: "Investigate",
+      exact: true,
+    });
+    const exportCsv = page.getByRole("button", {
+      name: "Download endpoint CSV",
+    });
+    await investigate.click();
+    await expect(exportCsv).toBeVisible();
+    await page.evaluate((next) => {
+      (
+        globalThis as typeof globalThis & {
+          __ADM_ENDPOINT_NEXT__?: "fail" | "hold";
+        }
+      ).__ADM_ENDPOINT_NEXT__ = next;
+    }, outcome);
+    await investigate.click();
+    if (outcome === "fail") {
+      await expect(page.getByRole("alert")).toContainText(
+        "Endpoint rerun failed",
+      );
+    } else {
+      await expect(exportCsv).toHaveCount(0);
+      await page.getByRole("button", { name: "Cancel search" }).click();
+    }
+    await expect(investigate).toBeEnabled();
+    await expect(exportCsv).toHaveCount(0);
+    await investigate.click();
+    await expect(exportCsv).toBeVisible();
+  });
+}
 
 test("catalog uses its captured metric window when the Find/map picker changes", async ({
   page,
@@ -2253,6 +2435,95 @@ test("saved views persist per user and can be reopened or deleted", async ({
   await expect(
     page.getByRole("link", { name: "Checkout demo", exact: true }),
   ).toHaveCount(0);
+});
+
+test("VM saved and copied views preserve scope through investigation rechecks", async ({
+  page,
+}) => {
+  const query =
+    "/tests/browser/browser.html?mode=live&service=invoice&environment=validation&vm_scope=validation-invoice-hs2&earliest=1795283855&latest=1795283861&tab=services";
+  const vmRequests = () =>
+    page.evaluate(() =>
+      (window.__ADM_REQUESTS__ ?? []).filter((request) =>
+        request.spl.includes(
+          'adm_vm_application_graph_read("invoice","validation","validation-invoice-hs2")',
+        ),
+      ),
+    );
+  const expectVmMap = async () => {
+    await expect(
+      page.getByRole("button", { name: "Service Invoice" }),
+    ).toBeVisible();
+    expect(await vmRequests()).toEqual([
+      expect.objectContaining({ earliest: "1795283855", latest: "1795283861" }),
+    ]);
+  };
+  await page.goto(query);
+  await expectVmMap();
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (value: string) => {
+          (
+            window as Window & { __ADM_CLIPBOARD__?: string }
+          ).__ADM_CLIPBOARD__ = value;
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await more(page, "Saved views");
+  await page.getByRole("button", { name: "Copy link", exact: true }).click();
+  const copied = await page.evaluate(
+    () => (window as Window & { __ADM_CLIPBOARD__?: string }).__ADM_CLIPBOARD__,
+  );
+  expect(copied).toContain("vm_scope=validation-invoice-hs2");
+  await page.goto(copied!);
+  await expect(page).toHaveURL(/vm_scope=validation-invoice-hs2/);
+  await expectVmMap();
+  await more(page, "Saved views");
+  await page.getByLabel("View name", { exact: true }).fill("VM replay");
+  await page.getByRole("button", { name: "Save view", exact: true }).click();
+  const saved = page.getByRole("link", { name: "VM replay", exact: true });
+  await expect(saved).toHaveAttribute(
+    "href",
+    /vm_scope=validation-invoice-hs2/,
+  );
+  await saved.click();
+  await expect(page).toHaveURL(/vm_scope=validation-invoice-hs2/);
+  await expectVmMap();
+
+  await page.getByRole("button", { name: "Investigate", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Investigation workspace" }),
+  ).toBeVisible();
+  await page.getByText("Comparison windows", { exact: true }).click();
+  await page.getByLabel("Include recovery window", { exact: false }).check();
+  await page
+    .getByRole("button", { name: "Compare windows", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Compare windows", exact: true }),
+  ).toHaveText("Compare windows");
+  await expect(page.getByText(/Baseline:/)).toBeVisible();
+  await expect(page.getByText(/Recovery:/)).toBeVisible();
+  expect(await vmRequests()).toEqual([
+    expect.objectContaining({ earliest: "1795283855", latest: "1795283861" }),
+    expect.objectContaining({ earliest: "1795283849", latest: "1795283855" }),
+    expect.objectContaining({ earliest: "1795283861", latest: "1795283867" }),
+  ]);
+
+  await page.getByRole("button", { name: "Back to map", exact: true }).click();
+  await page.getByRole("button", { name: "Service Invoice" }).click();
+  const impact = page
+    .locator(".inspector-body")
+    .getByRole("link", { name: "Impact if Invoice fails", exact: true });
+  const impactUrl = new URL((await impact.getAttribute("href"))!, page.url());
+  expect(impactUrl.searchParams.get("scope")).toBe("validation-invoice-hs2");
+  expect(impactUrl.searchParams.get("window")).toBe("1795283855");
+  expect(impactUrl.searchParams.get("latest")).toBe("1795283861");
 });
 
 test("saved views report denied storage and do not render a false save", async ({

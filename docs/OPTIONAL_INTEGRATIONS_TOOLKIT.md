@@ -1,8 +1,8 @@
 # External optional integration toolkit
 
-The `application-atlas-integrations-0.5.0.tar.gz` archive contains external
+The `application-atlas-integrations-<version>.tar.gz` archive contains external
 collection/delivery tools, processor contract artifacts and operator guides.
-It is separate from `splunk_adm-0.5.0.tar.gz`. Installing the Splunk app does
+It is separate from `splunk_adm-<version>.tar.gz`. Installing the Splunk app does
 not install these tools, dependencies, credentials, schedules or pipelines.
 All new sources start unselected and unqualified.
 

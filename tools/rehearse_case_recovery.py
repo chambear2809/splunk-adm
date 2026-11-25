@@ -538,7 +538,7 @@ class Rehearsal:
     def negative_bundles(self, schemas, provenance, digest):
         import sqlite3
 
-        for label in ("corrupt", "future"):
+        for label in ("corrupt", "future", "malformed-manifest"):
             path = self.out / (label + "-bundle")
             shutil.copytree(self.out / "snapshot", path)
             database = path / "cases.sqlite"
@@ -546,7 +546,7 @@ class Rehearsal:
             if label == "corrupt":
                 data = database.read_bytes()
                 database.write_bytes(b"X" + data[1:])
-            else:
+            elif label == "future":
                 with closing(sqlite3.connect(database)) as db:
                     db.execute("PRAGMA user_version=999")
                     db.commit()
@@ -559,6 +559,10 @@ class Rehearsal:
                 data = canonical(manifest)
                 (path / "manifest.json").write_bytes(data)
                 candidate_digest = hashlib.sha256(data).hexdigest()
+            else:
+                manifest = path / "manifest.json"
+                manifest.write_bytes(b"[]")
+                candidate_digest = sha(manifest)
             destination = self.out / (label + "-must-not-be-created")
             try:
                 prepare_restore(

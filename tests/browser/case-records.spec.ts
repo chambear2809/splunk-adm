@@ -176,7 +176,18 @@ test("shared notes preserve a draft across case creation and retry lost response
   expect(requestCount).toBe(beforeResize);
   await page.getByLabel("New case title").fill("Second investigation");
   await page.getByRole("button", { name: "Create shared case" }).click();
+  await expect(page.getByLabel("Add note")).toHaveValue("");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page
+    .getByRole("button", { name: "First investigation", exact: true })
+    .click();
   await expect(page.getByLabel("Add note")).toHaveValue("Preserve this draft");
+  await page.getByRole("button", { name: "List shared cases" }).click();
+  await page
+    .getByRole("button", { name: "Second investigation", exact: true })
+    .click();
+  await expect(page.getByLabel("Add note")).toHaveValue("");
+  await page.getByLabel("Add note").fill("Preserve this draft");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Retry same request" }),

@@ -3,7 +3,11 @@ import aciTopologyRows from "../../../fixtures/demo-topology-aci.json";
 import vsphereRows from "../../../fixtures/demo-topology-aci-vsphere.json";
 import vdsFiVpc from "../../../fixtures/path-trace-vds-fi-vpc.json";
 import { demoPathTraceRows } from "../data/demoClient";
-import type { SearchClient, SearchRequest } from "../data/searchClient";
+import {
+  SearchAccessDeniedError,
+  type SearchClient,
+  type SearchRequest,
+} from "../data/searchClient";
 import {
   endpointGraph,
   loadStandaloneTrace,
@@ -13,7 +17,11 @@ import {
   traceWindow,
 } from "./standaloneTrace";
 import { emptyTopology } from "../topology";
-import { assembleScopedTrace, assembleTrace } from "./usePathTrace";
+import {
+  assembleScopedTrace,
+  assembleStandaloneResult,
+  assembleTrace,
+} from "./usePathTrace";
 
 /** adm_ip_identity rows the trace search appends for the demo pair. */
 const endpointRows = [
@@ -108,6 +116,90 @@ const w = {
 };
 
 describe("trace without a built map", () => {
+  it("surfaces main-search warnings in the operator trace notes", async () => {
+    const client = fakeClient([]);
+    const warningClient: SearchClient = {
+      search: async (request) => {
+        const result = await client.search(request);
+        return request.search.includes("adm_path_trace(")
+          ? { ...result, warnings: ["search peer did not respond"] }
+          : result;
+      },
+    };
+    const result = await loadStandaloneTrace(
+      warningClient,
+      { src: "win-client-01", dst: "10.20.30.40" },
+      w,
+    );
+    expect(result.warnings).toContain(
+      "Path trace search was incomplete: search peer did not respond",
+    );
+    expect(result.graph.nodes.map((node) => node.label)).toEqual([
+      "10.30.40.25",
+      "10.20.30.40",
+    ]);
+    const trace = assembleStandaloneResult(
+      { ...result.addresses, scope: "prod" },
+      result,
+    ).trace;
+    expect(trace.notes).toContain(
+      "Trace data quality: Path trace search was incomplete: search peer did not respond",
+    );
+  });
+
+  it("distinguishes gNMI access denial from empty optional context", async () => {
+    const base = fakeClient([]);
+    const client: SearchClient = {
+      search: async (request) => {
+        if (request.search.includes("adm_path_trace_gnmi_context"))
+          throw new SearchAccessDeniedError();
+        return base.search(request);
+      },
+    };
+    const result = await loadStandaloneTrace(
+      client,
+      { src: "win-client-01", dst: "10.20.30.40" },
+      w,
+    );
+    expect(result.warnings).toContain(
+      "gNMI interface context access denied; interface context is unavailable.",
+    );
+  });
+
+  it("withholds supplemental evidence from incomplete searches", async () => {
+    const base = fakeClient([]);
+    const client: SearchClient = {
+      async search(request) {
+        if (request.search.includes("adm_path_evidence("))
+          return {
+            rows: [{ _raw: "unfinished" }],
+            warnings: ["partial capture"],
+            errors: [],
+          };
+        if (request.search.includes("adm_path_trace_gnmi_context"))
+          return {
+            rows: [{ row_type: "gnmi_context" }],
+            warnings: ["partial context"],
+            errors: [],
+          };
+        return base.search(request);
+      },
+    };
+    const result = await loadStandaloneTrace(
+      client,
+      { src: "10.30.40.25", dst: "10.20.30.40" },
+      w,
+    );
+    expect(result.evidence).toEqual([]);
+    expect(
+      result.rows.map((row) => (row as { row_type: string }).row_type),
+    ).toEqual(["observation"]);
+    expect(result.warnings).toEqual([
+      "Path evidence search was incomplete: partial capture",
+      "gNMI interface context search was incomplete: partial context",
+    ]);
+  });
+
   it("returns only scoped observations and qualified identity", async () => {
     const requests: SearchRequest[] = [];
     const result = await loadStandaloneTrace(
@@ -153,6 +245,39 @@ describe("trace without a built map", () => {
       loadStandaloneTrace(client, { src: "10.1.1.1", dst: "ghost" }, w),
     ).rejects.toThrow('Destination "ghost" not found.');
   });
+
+  it.each([
+    {
+      warnings: ["Splunk truncated this search; results could be incomplete."],
+    },
+    { truncated: { shown: 1, total: 2 } },
+  ])(
+    "stops before tracing if a name lookup is incomplete (%j)",
+    async (completion) => {
+      const requests: SearchRequest[] = [];
+      const client: SearchClient = {
+        async search(request) {
+          requests.push(request);
+          return {
+            rows: [endpointRows[0]],
+            warnings: [],
+            errors: [],
+            ...completion,
+          };
+        },
+      };
+      await expect(
+        loadStandaloneTrace(
+          client,
+          { src: "win-client-01", dst: "10.20.30.40" },
+          w,
+        ),
+      ).rejects.toThrow("Source lookup was incomplete; retry or enter an IP.");
+      expect(requests.map(({ search }) => search)).toEqual([
+        "| `adm_path_trace_resolve(win-client-01,prod)`",
+      ]);
+    },
+  );
 
   it("builds endpoint nodes and keeps bare IPs traceable", () => {
     const g = endpointGraph(endpointRows, ["10.30.40.25", "203.0.113.9"]);

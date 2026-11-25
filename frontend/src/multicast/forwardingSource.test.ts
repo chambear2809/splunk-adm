@@ -136,6 +136,12 @@ describe("indexed forwarding cohort", () => {
       (await run([row({ ...cohort, observedAt: 180, validUntil: 199 }, 180)]))
         .outcome.state,
     ).toBe("partial");
+    const late = await run([
+      row({ ...cohort, observedAt: 180, validUntil: 199 }, 180),
+    ]);
+    expect(late.outcome.detail ?? JSON.stringify(late.outcome)).toContain(
+      "valid only at its anchor",
+    );
   });
   it("rejects capped and incomplete envelopes and requires an exact sender", async () => {
     const capped = client([row(cohort)], { input_count: 257 });

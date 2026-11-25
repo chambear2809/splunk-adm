@@ -1,6 +1,67 @@
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 const base = "/tests/browser/ownership-integration.html";
+test("live Impact deep links dispatch one exact fixed window", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Date.now = () => 1_700_000_000_000;
+  });
+  await page.goto(
+    `${base}?view=impact&element=192.0.2.11&scope=synthetic&impactCohort=1`,
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__ADM_REQUESTS__ ?? []))
+    .toContainEqual(
+      expect.objectContaining({
+        earliest: "1699999100",
+        latest: "1700000000",
+      }),
+    );
+  await expect(page).toHaveURL(/window=1699999100&latest=1700000000/);
+  const headline = page.locator(".atlas-impact-headline");
+  await expect(headline).toContainText("Spine 1 what-if");
+  const requests = await page.evaluate(() => window.__ADM_REQUESTS__ ?? []);
+  const impactRequests = requests.filter((request) =>
+    request.spl.includes("adm_impact_journeys"),
+  );
+  expect(impactRequests.length).toBeGreaterThan(0);
+  expect(
+    new Set(
+      impactRequests.map(({ earliest, latest }) => `${earliest}:${latest}`),
+    ),
+  ).toEqual(new Set(["1699999100:1700000000"]));
+  await page.evaluate(() => {
+    Date.now = () => 1_700_000_060_000;
+  });
+  await page.getByLabel("Add element").fill("192.0.2.12");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(headline).toContainText("Spine 1 + Spine 2 what-if");
+  await expect
+    .poll(() => page.evaluate(() => window.__ADM_REQUESTS__ ?? []))
+    .toContainEqual(
+      expect.objectContaining({
+        earliest: "1699999100",
+        latest: "1700000000",
+      }),
+    );
+  const afterElementChange = await page.evaluate(
+    () => window.__ADM_REQUESTS__ ?? [],
+  );
+  expect(
+    new Set(
+      afterElementChange
+        .filter((request) => request.spl.includes("adm_impact_journeys"))
+        .map(({ earliest, latest }) => `${earliest}:${latest}`),
+    ),
+  ).toEqual(new Set(["1699999100:1700000000"]));
+  expect(
+    afterElementChange.filter((request) =>
+      request.spl.includes("adm_impact_journeys"),
+    ),
+  ).toHaveLength(1);
+});
+
 test("catalog resolves explicit business binding and exports native references only", async ({
   page,
 }) => {

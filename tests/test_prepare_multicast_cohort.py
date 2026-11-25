@@ -73,3 +73,20 @@ class PrepareMulticastCohortTest(unittest.TestCase):
         receipt["evidence"][0]["timestamp"] = 199
         with self.assertRaises(ValueError):
             build_event(receipt, "atlas_multicast", "nxos-snapshot")
+
+    def test_rejects_non_object_receipt_rows_without_a_traceback(self):
+        for section in ("evidence", "comparisons", "adjacency"):
+            receipt = self.receipt()
+            receipt[section] = ["x"]
+            with self.assertRaises(ValueError):
+                build_event(receipt, "atlas_multicast", "nxos-snapshot")
+        receipt = self.receipt()
+        receipt["adjacency"][0]["from"] = "leaf-a"
+        with self.assertRaises(ValueError):
+            build_event(receipt, "atlas_multicast", "nxos-snapshot")
+
+    def test_rejects_more_adjacencies_than_the_atlas_parser_accepts(self):
+        receipt = self.receipt()
+        receipt["adjacency"] = receipt["adjacency"] * 257
+        with self.assertRaises(ValueError):
+            build_event(receipt, "atlas_multicast", "nxos-snapshot")

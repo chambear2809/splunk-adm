@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import secrets
+import subprocess
 import sys
 import time
 import unittest
@@ -475,6 +476,83 @@ class CatalogTest(unittest.TestCase):
             *CATALOG_WINDOW,
         )
         self.assertEqual(len(stored), 1)
+
+    def test_viewer_freshness_after_failed_catalog_refresh_and_recovery(self):
+        from test_data_layer import DataLayerTest
+
+        def dispatch():
+            DataLayerTest.dispatch(
+                "ADM - Application catalog",
+                earliest=str(CATALOG_WINDOW[0]),
+                latest=str(CATALOG_WINDOW[1]),
+            )
+
+        case = self.RestrictedViewerTest("runTest")
+        self.addCleanup(case.doCleanups)
+
+        def read():
+            return case._viewer_search(
+                "| `adm_application_catalog_read`", 0, int(time.time()) + 60
+            )
+
+        def freshness(rows):
+            check = subprocess.run(
+                [
+                    "node",
+                    "--input-type=module",
+                    "-e",
+                    """
+import {createServer} from "vite";
+const server = await createServer({
+  configFile:false, appType:"custom", logLevel:"silent",
+  define:{__ADM_SPLUNK_BUILD__:"false"}, server:{middlewareMode:true}
+});
+try {
+  const {parseCatalogRows,catalogFreshnessWarning} =
+    await server.ssrLoadModule("/frontend/src/data/catalog.ts");
+  let input = "";
+  for await (const chunk of process.stdin) input += chunk;
+  const rows = parseCatalogRows(JSON.parse(input));
+  process.stdout.write(JSON.stringify({count:rows.length, warning:catalogFreshnessWarning(rows)}));
+} finally { await server.close(); }
+""",
+                ],
+                cwd=HERE.parents[1],
+                input=json.dumps(rows),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            self.assertEqual(check.returncode, 0, check.stderr)
+            return json.loads(check.stdout)
+
+        dispatch()
+        fresh = freshness(read())
+        self.assertGreater(fresh["count"], 0)
+        self.assertNotIn("warning", fresh)
+
+        # Simulate the passage of a missed hourly publication without waiting.
+        self.lab.search(
+            "| inputlookup adm_app_catalog | eval updated=updated-4560 "
+            "| outputlookup override_if_empty=false adm_app_catalog",
+            *CATALOG_WINDOW,
+        )
+        previous = read()
+        path = f"/servicesNS/nobody/{APP}/configs/conf-transforms/adm_service_workload"
+        original = self.lab._json("GET", path)["entry"][0]["content"]["collection"]
+        try:
+            self.lab._json("POST", path, {"collection": "adm_nonexistent_binding_test"})
+            with self.assertRaises(self.lab.LabError):
+                dispatch()
+            retained = read()
+            self.assertCountEqual(retained, previous)
+            self.assertIn("stale", freshness(retained)["warning"])
+        finally:
+            self.lab._json("POST", path, {"collection": original})
+
+        dispatch()
+        self.assertEqual(freshness(read()), fresh)
 
     def test_incomplete_old_catalog_read_preserves_existing_snapshot(self):
         """A capped prior-catalog read must never overwrite its stored snapshot."""

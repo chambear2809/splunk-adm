@@ -9,6 +9,7 @@ import {
   windowHours,
 } from "./data";
 import { loadDemoImpact } from "./demo";
+import { resolveImpactWindow } from "./ImpactPage";
 import { failsImpact } from "./model";
 import { DEFAULT_IMPACT_WINDOW, impactURL, parseImpactParams } from "./url";
 
@@ -122,6 +123,13 @@ describe("impact search and rows", () => {
 });
 
 describe("impact URL", () => {
+  it("resolves relative live windows against one fixed clock", () => {
+    expect(resolveImpactWindow("-15m", "now", "UTC", 1_700_000_000)).toEqual({
+      earliest: "1699999100",
+      latest: "1700000000",
+    });
+  });
+
   it("round-trips elements, mode and window", () => {
     const href = impactURL(
       ["leaf101", "FI-B"],

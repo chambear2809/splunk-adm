@@ -15,6 +15,7 @@ import {
 import {
   DEVICE_INVENTORY_SEARCH,
   deviceFlowSummary,
+  aciDeviceFlowsSearch,
   deviceFlowsSearch,
   inferLeafEgress,
   interfaceSides,
@@ -110,6 +111,8 @@ type Load =
       flows?: DeviceFlows;
       /** Contributing collectors, e.g. "Stream NetFlow · 192.0.2.73". */
       exporters?: string[];
+      /** Non-fatal search messages retained for result qualification. */
+      warnings: string[];
     };
 
 /** Device page data: inventory lookup, then adm_device_flows per token. */
@@ -131,6 +134,7 @@ export async function loadDevicePage({
   signal: AbortSignal;
 }): Promise<Extract<Load, { status: "done" }>> {
   let topology: Topology;
+  const warnings: string[] = [];
   if (!__ADM_SPLUNK_BUILD__ && demo) {
     await prepareDemo();
     topology = demoVsphereTopology();
@@ -139,7 +143,7 @@ export async function loadDevicePage({
     // adm_topology can return no ACI or vSphere rows (they are not part of
     // it, or ACI topology is withheld); device identities come from
     // adm_device_inventory as well, merged by device ID.
-    const [base, identities] = await Promise.all([
+    const [base, inventory] = await Promise.all([
       loadTopology(client, earliest, signal, latest, timezone),
       client
         .search({
@@ -151,25 +155,57 @@ export async function loadDevicePage({
           allowEmpty: true,
           signal,
         })
-        .then((r) => requireNoSearchErrors(r, "Device inventory").rows)
-        .catch(() => [] as unknown[]),
+        .then((r) => requireNoSearchErrors(r, "Device inventory"))
+        .catch((error: unknown) => {
+          signal.throwIfAborted();
+          return {
+            rows: [] as unknown[],
+            warnings: [`Inventory error: ${error}`],
+          };
+        }),
     ]);
-    topology = traceTopology(base, identities);
+    warnings.push(...base.warnings, ...inventory.warnings);
+    topology = traceTopology(base, inventory.rows);
   }
   const candidates = findDevices(query, topology);
-  if (candidates.length > 1) return { status: "done", candidates };
+  if (candidates.length > 1) return { status: "done", candidates, warnings };
   const device = candidates[0];
   const tokens = device ? flowTokens(device) : TOKEN.test(query) ? [query] : [];
-  if (!tokens.length) return { status: "done", device, candidates };
+  if (!tokens.length) return { status: "done", device, candidates, warnings };
   const nxos = isNxosDevice(device);
   const parts =
     !__ADM_SPLUNK_BUILD__ && demo
       ? tokens.map(demoDeviceFlows)
       : await Promise.all(
           tokens.map(async (token) => {
+            let search: string;
+            if (
+              token === device?.aci_node ||
+              /^pod-\d+\/node-\d+$/i.test(token)
+            ) {
+              const apic =
+                device?.device_authority ??
+                (device?.fabric?.startsWith("apic:")
+                  ? device.fabric.slice(5)
+                  : "");
+              const now = Date.now() / 1000;
+              const start = resolveTime(earliest, timezone, now);
+              const end = resolveTime(latest ?? "now", timezone, now);
+              const qualified =
+                start === undefined || end === undefined || start >= end
+                  ? undefined
+                  : aciDeviceFlowsSearch(token, apic.trim(), start, end);
+              if (!qualified) {
+                warnings.push(
+                  "ACI ACL coverage requires a known APIC and native node.",
+                );
+                return rowsToDeviceFlows(token, []);
+              }
+              search = qualified;
+            } else search = deviceFlowsSearch(token);
             const [result, names] = await Promise.all([
               client!.search({
-                search: deviceFlowsSearch(token),
+                search,
                 earliest,
                 latest,
                 timezone,
@@ -184,6 +220,7 @@ export async function loadDevicePage({
                 signal,
               }),
             ]);
+            warnings.push(...result.warnings);
             const flows = rowsToDeviceFlows(
               token,
               requireNoSearchErrors(result, "Device flows").rows,
@@ -191,16 +228,18 @@ export async function loadDevicePage({
             return nameDeviceInterfaces(flows, names, nxos);
           }),
         );
+  const flows = mergeDeviceFlows(device?.id ?? query, parts);
+  if (flows.invalidBytes || flows.invalidPackets)
+    warnings.push(
+      "Invalid flow counters were withheld. Counter coverage is incomplete.",
+    );
   return {
     status: "done",
     device,
     candidates,
-    flows: inferLeafEgress(
-      mergeDeviceFlows(device?.id ?? query, parts),
-      device,
-      indexTopology(topology),
-    ),
+    flows: inferLeafEgress(flows, device, indexTopology(topology)),
     exporters: deviceExporters(parts),
+    warnings,
   };
 }
 
@@ -304,7 +343,7 @@ const columns = (
   },
   {
     key: "flows",
-    header: "Flows",
+    header: "Flow records",
     num: true,
     render: (c) => c.flows.toLocaleString(),
     sortValue: (c) => c.flows,
@@ -599,6 +638,7 @@ export function DevicePage({
             </button>
           </p>
         )}
+        {done && done.warnings.length > 0 && <p>{done.warnings.join(" ")}</p>}
         {done && done.candidates.length > 1 && (
           <section aria-label="Matching devices">
             <p>{plural(done.candidates.length, "match", "matches")}</p>
@@ -623,12 +663,10 @@ export function DevicePage({
           <>
             <div className="kpis atlas-device-kpis" aria-label="Summary">
               <span className="kpi">
-                <b>{flows.totals.flows.toLocaleString()}</b>{" "}
-                {flows.totals.flows === 1 ? "flow" : "flows"}
+                <b>{flows.totals.flows.toLocaleString()}</b> flow records
               </span>
               <span className="kpi">
-                <b>{summary.peers.toLocaleString()}</b>{" "}
-                {summary.peers === 1 ? "peer" : "peers"}
+                <b>{summary.peers.toLocaleString()}</b> peers shown
               </span>
               {flows.totals.bytes !== undefined && (
                 <span className="kpi">
@@ -637,7 +675,7 @@ export function DevicePage({
               )}
               <span className={`kpi ${summary.blocked ? "blocked" : ""}`}>
                 {summary.blocked > 0 && <Ban size={13} aria-hidden />}
-                <b>{summary.blocked}</b> blocked
+                <b>{summary.blocked}</b> blocked shown
               </span>
               {!!done?.exporters?.length && (
                 <span className="kpi" title="Contributing collectors">
@@ -657,7 +695,7 @@ export function DevicePage({
               <VirtualTable
                 caption={
                   flows.truncated
-                    ? `Top ${Math.min(flows.limit ?? Infinity, flows.conversations.length).toLocaleString()} of ${flows.totals.conversations.toLocaleString()} conversations`
+                    ? `Showing ${flows.conversations.length.toLocaleString()} of at least ${flows.totals.conversations.toLocaleString()} conversations`
                     : "Conversations"
                 }
                 rows={flows.conversations}

@@ -734,6 +734,8 @@ class Recovery:
     def restore(self, name, before):
         self.unchanged(name, before)
         self.save(self.lock, state="restore_pending")
+        # The durable intent write leaves time for an administrator edit.
+        self.unchanged(name, before)
         self.request(
             "POST",
             APP + "/saved/searches/" + quote(name, safe=""),

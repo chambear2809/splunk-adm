@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { pageFromPath, pageURL, SECTION_OF } from "../app/urlState";
 import fixture from "../../../fixtures/multicast/profiles.json";
-import { multicastLink, parseMulticastLink, parseProfiles } from "./inputs";
+import {
+  multicastLink,
+  parseMulticastLink,
+  parseMulticastView,
+  parseProfile,
+  parseProfiles,
+  parseScopeLink,
+  scopeLink,
+} from "./inputs";
 
 const request = {
   version: 1,
@@ -63,6 +71,36 @@ describe("multicast investigation inputs", () => {
     expect(parseProfiles(fixture)).toHaveLength(2);
   });
 
+  it("accepts Stream's absolute PCAP capture selector and rejects SPL syntax", () => {
+    const igmp = fixture.profiles[0];
+    const captureInterface = "/opt/splunk/capture/igmp.pcap";
+    expect(parseProfile({ ...igmp, captureInterface })).toMatchObject({
+      captureInterface,
+    });
+    expect(() =>
+      parseProfile({ ...igmp, captureInterface: '/opt/capture" OR true()' }),
+    ).toThrow(/Invalid IGMP capture/);
+  });
+
+  it("limits the Stream ingress counter fields to attested ingress profiles", () => {
+    const flow = { ...fixture.profiles[1], direction: "ingress" };
+    expect(
+      parseProfile({ ...flow, counterFields: "stream-ingress" }),
+    ).toMatchObject({
+      counterFields: "stream-ingress",
+    });
+    expect(() =>
+      parseProfile({
+        ...flow,
+        direction: "egress",
+        counterFields: "stream-ingress",
+      }),
+    ).toThrow(/counter profile/);
+    expect(() => parseProfile({ ...flow, counterFields: "arbitrary" })).toThrow(
+      /counter profile/,
+    );
+  });
+
   it("rejects overlapping mappings for the same capture or exporter domain", () => {
     const [igmp, flow] = fixture.profiles;
     for (const first of [igmp, flow])
@@ -95,5 +133,60 @@ describe("multicast investigation inputs", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("round-trips scope link and view", () => {
+    const window = {
+      version: 1,
+      scope: request.scope,
+      earliest: request.earliest,
+      latest: request.latest,
+    } as const;
+    for (const view of ["overview", "matrix", "topology"] as const) {
+      const params = scopeLink(window, view);
+      expect(params.get("mc_view")).toBe(view);
+      expect(params.has("mc_group")).toBe(false);
+      expect(parseScopeLink(params)).toEqual(window);
+      expect(parseMulticastView(params)).toBe(view);
+    }
+    expect(parseMulticastView(new URLSearchParams())).toBe("overview");
+    expect(
+      parseScopeLink(new URLSearchParams("namespace=shop")),
+    ).toBeUndefined();
+    const group = multicastLink(request);
+    group.set("mc_view", "topology");
+    expect(parseMulticastLink(group)).toEqual(request);
+    expect(parseScopeLink(group)).toEqual(window);
+  });
+
+  it("rejects unknown mc_view", () => {
+    const params = multicastLink(request);
+    params.set("mc_view", "graph");
+    expect(() => parseMulticastView(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    expect(() => parseMulticastLink(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    expect(() => parseScopeLink(params)).toThrow(
+      "The multicast link contains unsupported parameters.",
+    );
+    const repeated = multicastLink(request);
+    repeated.append("mc_view", "matrix");
+    repeated.append("mc_view", "matrix");
+    expect(() => parseMulticastView(repeated)).toThrow();
+  });
+
+  it("group link still requires mc_group", () => {
+    const params = scopeLink(
+      {
+        version: 1,
+        scope: request.scope,
+        earliest: request.earliest,
+        latest: request.latest,
+      },
+      "overview",
+    );
+    expect(() => parseMulticastLink(params)).toThrow(/multicast group/);
   });
 });

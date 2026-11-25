@@ -205,6 +205,10 @@ after restoration leaves the schedule restored. Neither fact resolves an
 orphaned target claim. A replay deadline with an active SID leaves the schedule
 paused because the writer may still be running. An administrator's concurrent
 saved-search or macro change prevents automatic restoration over that change.
+The handback check is repeated after the durable `restore_pending` record is
+written and before the schedule-enable request. The REST reads and write are
+not an atomic provider compare-and-set, so an edit after that final read
+remains an external race requiring reconciliation.
 
 For an alert, inspect the original target snapshot, slot bounds, audit events,
 SID and live job status. Establish whether any writer remains and reconcile

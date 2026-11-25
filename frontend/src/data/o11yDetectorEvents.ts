@@ -26,7 +26,7 @@ export const DETECTOR_COVERAGE = [
   "Observed events for explicitly configured detectors in this cluster and routing scope do not establish a service or custom MMS association.",
   "Trigger, clear, stop and manual-resolution values remain source values. An incident may begin before the interval or remain unresolved afterward. These events do not reconstruct interval incident state; alert silence is not service health.",
   "The API retains at most 12 months. Complete capture means the selected pages were read within exporter limits. UI-created, API-created and AutoDetect coverage need separate qualification.",
-  "Exact replayed rows are deduplicated. Conflicting identities, missing completion, truncated scans or multiple latest captures suppress the capture. Missing and completed empty evidence are not healthy states.",
+  "Exact replays are deduplicated. Conflicts, early or missing completion, truncated scans and tied latest captures invalidate evidence.",
 ] as const;
 export interface DetectorEvent {
   recordId: string;
@@ -226,6 +226,7 @@ export function normalizeDetectorEvents(
       !/^[a-f0-9]{64}$/.test(recordId) ||
       capturedAt === undefined ||
       capturedAt > 253402300799 ||
+      capturedAt < selection.window.end ||
       eventTime === undefined ||
       indexedTime === undefined ||
       Math.abs(eventTime - capturedAt) > 1 ||

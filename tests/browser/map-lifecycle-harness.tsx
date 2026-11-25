@@ -7,6 +7,8 @@ import {
   lifecycleWindow,
   lifecycleGraphRows,
   lifecycleTopologyRows,
+  natExportArgs,
+  natExportRows,
 } from "./map-lifecycle-fixtures";
 import "../../frontend/src/styles.css";
 import { createRoot } from "react-dom/client";
@@ -29,6 +31,7 @@ interface Pending {
 }
 const pending: Pending[] = [];
 const surface = new URLSearchParams(location.search).get("surface");
+const natExport = new URLSearchParams(location.search).get("nat");
 const ThemeProvider = toolkitDefault(ThemeProviderExport);
 const requestList = () =>
   pending.map(({ client, request }) => ({
@@ -50,7 +53,9 @@ const complete = (index: number, version = 1) => {
       : undefined;
   item.resolve({
     rows: graph
-      ? lifecycleGraphRows(version, previous)
+      ? natExport
+        ? natExportRows(natExport)
+        : lifecycleGraphRows(version, previous)
       : lifecycleTopologyRows(version),
     warnings: [],
     errors: [],
@@ -84,12 +89,16 @@ const clients = [clientFor("a"), clientFor("b")];
 let demoVersion = 1;
 const initialState = parseUrlState(
   new URLSearchParams({
-    ...(surface === "map" ? lifecycleArgs : rows.args),
+    ...(natExport
+      ? natExportArgs
+      : surface === "map"
+        ? lifecycleArgs
+        : rows.args),
     mode: new URLSearchParams(location.search).get("mode") ?? "live",
     // The captured graph windows, so the inventory pinned beside the graph
     // read is the exact window the graph returns (relative bounds are
     // covered by useGraphQuery.test.ts).
-    ...(surface === "map"
+    ...(surface === "map" && !natExport
       ? lifecycleWindow
       : { earliest: "1791373500", latest: "1791374400" }),
   }),

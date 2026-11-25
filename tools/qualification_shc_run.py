@@ -617,28 +617,54 @@ def semantic_topology(rows, expected):
     device_rows = [row for row in rows if row.get("row_type") == "device"]
     devices = {row["device_id"]: row for row in device_rows}
     links = [row for row in rows if row.get("row_type") == "link"]
+    aci_devices = expected["devices"]
+    wanted_devices = {
+        attributes["device_id"]: {"name": name, **attributes}
+        for name, attributes in aci_devices.items()
+    }
+    wanted_devices.update(
+        {
+            name: {"name": name, **attributes}
+            for name, attributes in expected["nd_devices"].items()
+        }
+    )
     client.require(bool(devices) and bool(links), "topology inventory is empty")
     client.require(
-        len(devices) == len(device_rows) and set(devices) == set(expected["devices"]),
+        len(devices) == len(device_rows) and set(devices) == set(wanted_devices),
         "topology device identity set differs or is duplicated",
     )
-    for name, attributes in expected["devices"].items():
+    for device_id, attributes in wanted_devices.items():
         for key, value in attributes.items():
             client.require(
-                devices[name].get(key) == value,
+                devices[device_id].get(key) == value,
                 "topology device attribute differs: " + key,
             )
+
+    def link_key(source, a, a_port, b, b_port):
+        if source == "aci" and (a, a_port or "") > (b, b_port or ""):
+            a, a_port, b, b_port = b, b_port, a, a_port
+        return source, a, a_port, b, None if source == "lldp" else b_port
+
     actual_links = {
-        (
+        link_key(
             row["link_source"],
             row["a_device"],
             row.get("a_interface"),
             row["b_device"],
-            None if row["link_source"] == "lldp" else row.get("b_interface"),
+            row.get("b_interface"),
         )
         for row in links
     }
-    wanted_links = {tuple(row) for row in expected["links"]}
+    wanted_links = {
+        link_key(
+            source,
+            aci_devices[a]["device_id"],
+            a_port,
+            aci_devices[b]["device_id"] if source == "aci" else b,
+            b_port,
+        )
+        for source, a, a_port, b, b_port in expected["links"]
+    }
     client.require(
         actual_links == wanted_links and len(links) == len(wanted_links),
         "topology links differ or are duplicated",
