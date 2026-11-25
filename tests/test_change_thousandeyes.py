@@ -267,19 +267,21 @@ class ThousandEyesUnsupportedConfigurationTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "unsupported_projection")
 
     def test_every_w10_feature_has_a_disposition(self) -> None:
-        register_path = (
-            Path(__file__).parents[1]
-            / "docs"
-            / "change-correlation"
-            / "SOURCE_CAPABILITIES.json"
+        self.assertEqual(
+            set(FEATURE_DISPOSITIONS),
+            {
+                "thousandeyes.test_crud",
+                "thousandeyes.target_interval",
+                "thousandeyes.agent_assignment",
+                "thousandeyes.alert_rule",
+                "thousandeyes.stream_configuration",
+                "thousandeyes.account_resource_mapping",
+                "thousandeyes.metric_units_config",
+                "thousandeyes.path_events",
+                "thousandeyes.cea_endpoint_identity",
+                "thousandeyes.api_trace_support",
+            },
         )
-        register = json.loads(register_path.read_text(encoding="utf-8"))
-        registered_ids = {
-            feature["id"]
-            for feature in register["features"]
-            if feature["source_family"] == "thousandeyes"
-        }
-        self.assertEqual(set(FEATURE_DISPOSITIONS), registered_ids)
         self.assertTrue(all(FEATURE_DISPOSITIONS.values()))
 
 

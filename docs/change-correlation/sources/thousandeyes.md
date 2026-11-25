@@ -173,19 +173,18 @@ coverage-register stage or establish live qualification.
 | `package_verified` | v0.9.0 helper statically calls the endpoint; no input calls it | v0.9.0 input/sourcetype statically selects the push stream; callback does no polling |
 | `sample_verified` | No; fixture is documentation-shaped synthetic | No; fixture is documentation-shaped synthetic, not received HEC |
 | `adapter_tested` | Yes, offline unit tests | Yes, for published OTel JSON envelope only |
-| `local_pipeline_tested` | Passed in the authorized isolated local lab with the documentation-shaped synthetic API fixture; confirms local HEC/history projection only, not native collection | Not tested against installed HEC flattening |
+| `local_pipeline_tested` | Not run in this adapter slice; the installed replay remains gated on an explicitly allocated task lab and confirms only local HEC/history projection, never native collection | Not tested against installed HEC flattening |
 | `live_qualified` | No | No |
 
 Unit tests cover field allowlisting, actor and account identity, page
 completeness metadata, timestamp precision, duplicate handling, resource
 cardinality, OTel partial completeness, mixed stream/account rejection,
 history observations, and explicit blocked configuration disposition. The
-installed replay test used only the synthetic API fixture, wrote to the task
-lab's `atlas_changes` index, and never contacted ThousandEyes. Both installed
-assertions passed; the task container, network, volumes, and credentials were
-purged afterward. This reports a local HEC replay result only: the shared
-coverage-register feature stages remain unchanged and no live qualification is
-claimed.
+installed replay test is present but was not run for this adapter slice; when
+run, it must use only the synthetic API fixture, write to a task lab's
+`atlas_changes` index, and never contact ThousandEyes. This source note does
+not promote shared coverage-register feature stages and makes no live
+qualification claim.
 
 ## Primary references
 
