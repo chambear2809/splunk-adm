@@ -1493,6 +1493,11 @@ export async function validateDemoCapture(
   if ((await sha256Hex(canonicalJson(partialBundle))) !== bundleHash)
     throw new Error("Demo capture bundle hash is invalid.");
   if (manifest.capture_status === "partial") {
+    await validateDependencyEvidence(
+      manifest.captured_dependencies,
+      rawResults,
+      manifest,
+    );
     for (const key of CAPTURE_KEYS) {
       const result = rawResults[key];
       if (!object(result))

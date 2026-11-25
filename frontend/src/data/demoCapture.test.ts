@@ -8,6 +8,7 @@ import pythonTemplate from "../../../fixtures/change-correlation/scenarios/track
 
 describe("offline demo capture contract", () => {
   it("consumes the exact Python-built partial bundle and keeps it unavailable", async () => {
+    expect(pythonBundle.manifest.captured_dependencies).toHaveLength(1);
     await expect(
       validateDemoCapture(pythonBundle, "track-a-firewall", pythonTemplate),
     ).rejects.toThrow(/not been accepted yet/);
