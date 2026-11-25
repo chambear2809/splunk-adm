@@ -32,7 +32,7 @@ TAS=(
 OPTIONAL_TAS=("cisco-thousandeyes-app-for-splunk_090/ta_cisco_thousandeyes")
 VENDOR_APP="cisco-enterprise-networking-app-for-splunk_4020/cisco-catalyst-app"
 SEARCH_TIME_CONFS=(props transforms eventtypes tags fields macros collections ipfixmap)
-LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y atlas_proxy atlas_cloud atlas_asset atlas_o11y atlas_te)
+LAB_INDEXES=(netflow cisco_dc cisco_secure_fw cisco_isovalent cisco_catalyst cisco_meraki k8s otel_traces cilium_hubble adm_summary adm_summary_v2 adm adm_alt_nf adm_alt_nd adm_alt_x adm_alt_y atlas_proxy atlas_cloud atlas_asset atlas_o11y atlas_te atlas_changes)
 
 py() { python3 "$HERE/lab.py" "$@"; }
 
