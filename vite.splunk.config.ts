@@ -6,6 +6,7 @@ import { gzipSync } from "node:zlib";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { thousandEyesAssetVersion } from "./vite.thousandeyes.shared";
 import { journeysAssetVersion } from "./vite.journeys.shared";
+import { historyAssetVersion } from "./vite.history.shared";
 
 // Match the release gate in tools/check_release.py.
 const SPLUNK_BUNDLE_CEILING_GZIP = 671 * 1024;
@@ -120,6 +121,7 @@ export default defineConfig({
     "process.env.NODE_ENV": JSON.stringify("production"),
     __ADM_SPLUNK_BUILD__: "true",
     __ADM_MULTICAST_ASSET_VERSION__: JSON.stringify(multicastAssetVersion()),
+    __ADM_HISTORY_ASSET_VERSION__: JSON.stringify(historyAssetVersion()),
     __ADM_IMPACT_ASSET_VERSION__: JSON.stringify(impactAssetVersion()),
     __ADM_TE_ASSET_VERSION__: JSON.stringify(thousandEyesAssetVersion()),
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify(journeysAssetVersion()),

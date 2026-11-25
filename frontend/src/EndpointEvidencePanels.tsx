@@ -7,6 +7,7 @@ import { CloudFlowEvidencePanel } from "./CloudFlowEvidencePanel";
 import { InventoryEvidencePanel } from "./InventoryEvidencePanel";
 import { AppDynamicsEvidenceInspection } from "./AppDynamicsEvidencePanel";
 import { ThousandEyesLazyInspection } from "./ThousandEyesLazyInspection";
+import { LazyChangeTimelineInspection } from "./HistoryLazyInspection";
 
 /** The existing scoped endpoint and map investigation owns all optional evidence. */
 export function EndpointEvidencePanels({
@@ -20,6 +21,11 @@ export function EndpointEvidencePanels({
 }) {
   return (
     <div aria-label="Scoped endpoint evidence">
+      <LazyChangeTimelineInspection
+        client={client}
+        view={{ scope: selection.scope, window: selection.window }}
+        context={{ application: selection.application }}
+      />
       <DnsEvidencePanel
         selection={selection}
         client={client}

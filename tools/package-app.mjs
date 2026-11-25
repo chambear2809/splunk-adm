@@ -33,6 +33,8 @@ const excludedFromStage = (source) => {
 await assertPackableTree(app, { excluded: excludedFromStage });
 await access(`${app}/appserver/static/adm.css`);
 await access(`${app}/appserver/static/pages/atlas.js`);
+for (const file of ["pages/history.js", "history.css", "history-manifest.json"])
+  await access(`${app}/appserver/static/${file}`);
 await access(`${app}/default/data/ui/views/map.xml`);
 
 const { version } = JSON.parse(await readFile("package.json", "utf8"));
