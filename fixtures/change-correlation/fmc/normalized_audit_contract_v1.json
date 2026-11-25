@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "collections": [
+    {
+      "schema_version": 1,
+      "capture_id": "fixture-fmc-normalized-audit-1",
+      "product": "fmc",
+      "authority": "fmc-contract-fixture",
+      "source_version": "normalized-contract-fixture-v1",
+      "family": "audit_record",
+      "partition": "domain-contract-fixture",
+      "scope": "domain-contract-fixture",
+      "started_at": 1793059200,
+      "completed_at": 1793059210,
+      "received_at": 1793059211,
+      "status": "complete",
+      "permissions_fingerprint": "fixture-permissions-v1",
+      "pages_expected": 1,
+      "pages_received": 1,
+      "source_reference": "contract-fixture-reference-1",
+      "enumeration": "incremental",
+      "deletions_authoritative": false,
+      "objects": [
+        {
+          "object_id": "contract-fixture-audit-1",
+          "revision": null,
+          "observed_at": 1793059210,
+          "event_at": 1793059205,
+          "effective_at": null,
+          "kind": "audit",
+          "actor": "fixture-actor-1",
+          "fields": {
+            "action": "modified",
+            "subsystem": "access_policy",
+            "source": "api",
+            "domain_id": "domain-contract-fixture"
+          }
+        }
+      ]
+    }
+  ]
+}
