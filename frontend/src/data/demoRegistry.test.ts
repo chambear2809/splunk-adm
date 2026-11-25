@@ -16,9 +16,9 @@ describe("demo registry", () => {
       "track-a-firewall",
       "track-b-fabric",
     ]);
-    expect(DEMO_TRACKS.every((track) => track.args.service === "checkout")).toBe(
-      true,
-    );
+    expect(
+      DEMO_TRACKS.every((track) => track.args.service === "checkout"),
+    ).toBe(true);
   });
 
   it("validates scenarios and phases without enabling capture", () => {
