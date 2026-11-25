@@ -1,0 +1,40 @@
+{
+  "fixture_status": "documentation_shaped_synthetic_not_native_sample",
+  "schema_basis": "Cisco Catalyst SD-WAN Manager API Release 26.1 AuditLogEntry field names and types; values are synthetic or published schema examples.",
+  "native_records": [
+    {
+      "auditdetails": ["synthetic details; intentionally discarded"],
+      "entry_time": 1659003590292,
+      "id": "synthetic-storage-id",
+      "logdeviceid": "172.16.255.22",
+      "logfeature": "user",
+      "logid": "918c6d64-729c-4304-b2c7-955a7c0e6a61",
+      "logmessage": "synthetic documentation-shaped audit message",
+      "logmodule": "user",
+      "loguser": "7b0e784d-daa9-4a93-8748-14aa94ec8c0d",
+      "logusersrcip": "172.16.255.19",
+      "statcycletime": 1659003590292,
+      "tenant": "default"
+    }
+  ],
+  "collection_metadata": {
+    "schema_version": 1,
+    "capture_id": "sdwan-documentation-shaped-capture",
+    "product": "sdwan",
+    "authority": "https://manager-synthetic.example.invalid",
+    "source_version": "26.1-doc-schema",
+    "family": "audit_log",
+    "partition": "manager-tenant:synthetic-default",
+    "scope": "change-b",
+    "started_at": 1659003590,
+    "completed_at": 1659003591,
+    "received_at": 1659003592,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-docs-only",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "Cisco-DevNet-26.1-AuditLogEntry-schema-example",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  }
+}

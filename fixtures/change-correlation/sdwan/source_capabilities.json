@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "source_family": "sdwan",
+  "provenance": {
+    "source_document": "docs/change-correlation/sources/sdwan.md",
+    "adapter": "tools/change_correlation/adapters/sdwan.py",
+    "fixture_status": "documentation_shaped_synthetic_not_native_sample"
+  },
+  "features": {
+    "sdwan.template_changes": "adapter_tested_context_only",
+    "sdwan.policy_changes": "adapter_tested_context_only",
+    "sdwan.device_template_revisions": "blocked_native_object_revision_missing",
+    "sdwan.deployment_action_status": "unsupported_in_audit_family",
+    "sdwan.site_vpn_device": "blocked_native_site_vpn_binding_missing",
+    "sdwan.routing_transport_aar_qos": "blocked_native_semantics_missing",
+    "sdwan.tunnel_health": "unsupported_operational_family",
+    "sdwan.exporter_sampling": "unsupported_history_not_verified",
+    "sdwan.detail_completeness_retention": "blocked_source_sample_and_retention_missing"
+  }
+}
