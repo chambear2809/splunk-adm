@@ -32,11 +32,8 @@ export function loadVersionedAssetPair({
     const script = document.createElement("script");
     const style = document.createElement("link");
     let ready = 0;
-    let settled = false;
     const finish = (failed = false) => {
-      if (settled) return;
       if (!failed && !validate()) failed = true;
-      settled = true;
       clearTimeout(timer);
       script.onload = script.onerror = style.onload = style.onerror = null;
       if (failed) {

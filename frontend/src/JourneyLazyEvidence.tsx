@@ -122,10 +122,9 @@ export function loadJourneyUi(): Promise<OptionalUi> {
     version: __ADM_JOURNEYS_ASSET_VERSION__,
     validate: () => {
       const ui = runtime.ApplicationAtlasJourneys;
-      return Boolean(
-        ui &&
-        ui.assetVersion === __ADM_JOURNEYS_ASSET_VERSION__ &&
-        typeof ui.JourneyEvidenceInspection === "function",
+      return (
+        ui?.assetVersion === __ADM_JOURNEYS_ASSET_VERSION__ &&
+        typeof ui.JourneyEvidenceInspection === "function"
       );
     },
   })

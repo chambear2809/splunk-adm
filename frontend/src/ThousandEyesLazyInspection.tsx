@@ -75,10 +75,9 @@ export function loadThousandEyesUi(): Promise<OptionalUi> {
     version: __ADM_TE_ASSET_VERSION__,
     validate: () => {
       const ui = runtime.ApplicationAtlasThousandEyes;
-      return Boolean(
-        ui &&
-        ui.assetVersion === __ADM_TE_ASSET_VERSION__ &&
-        typeof ui.ThousandEyesEvidenceInspection === "function",
+      return (
+        ui?.assetVersion === __ADM_TE_ASSET_VERSION__ &&
+        typeof ui.ThousandEyesEvidenceInspection === "function"
       );
     },
   })

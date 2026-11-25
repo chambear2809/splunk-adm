@@ -57,10 +57,9 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     version: __ADM_HISTORY_ASSET_VERSION__,
     validate: () => {
       const ui = runtime.ApplicationAtlasHistory;
-      return Boolean(
-        ui &&
-        ui.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
-        typeof ui.ChangeTimelineInspection === "function",
+      return (
+        ui?.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
+        typeof ui.ChangeTimelineInspection === "function"
       );
     },
   })
