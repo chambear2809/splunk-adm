@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
-import { createStaticURL } from "@splunk/splunk-utils/url";
+import { loadVersionedAssetPair } from "./optionalAssetLoader";
 import {
   validNatObservation,
   type GraphIndex,
@@ -82,16 +82,6 @@ type OptionalRuntime = typeof globalThis & {
   __AtlasJourneysHost?: unknown;
 };
 let pending: Promise<OptionalUi> | undefined;
-function assetUrl(file: "pages/journeys.js" | "journeys.css"): string {
-  const url = new URL(createStaticURL(`app/splunk_adm/${file}`), location.href);
-  if (
-    url.origin !== location.origin ||
-    !url.pathname.endsWith(`/app/splunk_adm/${file}`)
-  )
-    throw new Error("The journey packaged asset origin could not be verified.");
-  url.searchParams.set("v", __ADM_JOURNEYS_ASSET_VERSION__);
-  return url.href;
-}
 export function loadJourneyUi(): Promise<OptionalUi> {
   if (!__ADM_SPLUNK_BUILD__) return import("./journeys-entry");
   if (pending) return pending;
@@ -126,56 +116,27 @@ export function loadJourneyUi(): Promise<OptionalUi> {
         caseClient: Object.freeze({ CaseError }),
       }),
     });
-  pending = new Promise<OptionalUi>((resolve, reject) => {
-    const script = document.createElement("script"),
-      style = document.createElement("link");
-    let scriptReady = false,
-      styleReady = false,
-      settled = false;
-    const finish = (failed = false) => {
-      if (settled || (!failed && (!scriptReady || !styleReady))) return;
-      settled = true;
-      clearTimeout(timer);
-      script.onload = script.onerror = style.onload = style.onerror = null;
+  pending = loadVersionedAssetPair({
+    javascript: "pages/journeys.js",
+    stylesheet: "journeys.css",
+    version: __ADM_JOURNEYS_ASSET_VERSION__,
+  })
+    .then(() => {
       const ui = runtime.ApplicationAtlasJourneys;
       if (
-        failed ||
         !ui ||
         ui.assetVersion !== __ADM_JOURNEYS_ASSET_VERSION__ ||
         typeof ui.JourneyEvidenceInspection !== "function"
-      ) {
-        script.remove();
-        style.remove();
-        reject(
-          new Error(
-            "Journey evidence assets are unavailable or from a different app version. Reload and retry.",
-          ),
+      )
+        throw new Error(
+          "Journey evidence assets are unavailable or from a different app version. Reload and retry.",
         );
-      } else resolve(ui);
-    };
-    const timer = setTimeout(() => finish(true), 10000);
-    script.async = true;
-    style.rel = "stylesheet";
-    script.onload = () => {
-      scriptReady = true;
-      finish();
-    };
-    style.onload = () => {
-      styleReady = true;
-      finish();
-    };
-    script.onerror = style.onerror = () => finish(true);
-    try {
-      script.src = assetUrl("pages/journeys.js");
-      style.href = assetUrl("journeys.css");
-      document.head.append(style, script);
-    } catch {
-      finish(true);
-    }
-  }).catch((error: unknown) => {
-    pending = undefined;
-    throw error;
-  });
+      return ui;
+    })
+    .catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
   return pending;
 }
 export function JourneyLazyEvidence(props: JourneyEvidenceProps) {

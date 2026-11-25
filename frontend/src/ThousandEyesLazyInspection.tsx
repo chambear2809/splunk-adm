@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
-import { createStaticURL } from "@splunk/splunk-utils/url";
+import { loadVersionedAssetPair } from "./optionalAssetLoader";
 import * as evidence from "./data/evidence";
 import {
   configuredHttpsOrigin,
@@ -34,18 +34,6 @@ type OptionalRuntime = typeof globalThis & {
 let pending: Promise<OptionalUi> | undefined;
 
 /** Only fixed packaged same-origin assets enter this script-loading boundary. */
-function assetUrl(file: "pages/thousandeyes.js" | "thousandeyes.css"): string {
-  const url = new URL(createStaticURL(`app/splunk_adm/${file}`), location.href);
-  if (
-    url.origin !== location.origin ||
-    !url.pathname.endsWith(`/app/splunk_adm/${file}`)
-  )
-    throw new Error(
-      "The ThousandEyes packaged asset origin could not be verified.",
-    );
-  url.searchParams.set("v", __ADM_TE_ASSET_VERSION__);
-  return url.href;
-}
 
 export function loadThousandEyesUi(): Promise<OptionalUi> {
   if (!__ADM_SPLUNK_BUILD__) return import("./thousandeyes-entry");
@@ -81,56 +69,27 @@ export function loadThousandEyesUi(): Promise<OptionalUi> {
         }),
       }),
     });
-  pending = new Promise<OptionalUi>((resolve, reject) => {
-    const script = document.createElement("script");
-    const style = document.createElement("link");
-    let scriptReady = false,
-      styleReady = false,
-      settled = false;
-    const finish = (failed = false) => {
-      if (settled || (!failed && (!scriptReady || !styleReady))) return;
-      settled = true;
-      clearTimeout(timer);
-      script.onload = script.onerror = style.onload = style.onerror = null;
+  pending = loadVersionedAssetPair({
+    javascript: "pages/thousandeyes.js",
+    stylesheet: "thousandeyes.css",
+    version: __ADM_TE_ASSET_VERSION__,
+  })
+    .then(() => {
       const ui = runtime.ApplicationAtlasThousandEyes;
       if (
-        failed ||
         !ui ||
         ui.assetVersion !== __ADM_TE_ASSET_VERSION__ ||
         typeof ui.ThousandEyesEvidenceInspection !== "function"
-      ) {
-        script.remove();
-        style.remove();
-        reject(
-          new Error(
-            "ThousandEyes investigation assets are unavailable or from a different app version. Reload and retry.",
-          ),
+      )
+        throw new Error(
+          "ThousandEyes investigation assets are unavailable or from a different app version. Reload and retry.",
         );
-      } else resolve(ui);
-    };
-    const timer = setTimeout(() => finish(true), 10000);
-    script.async = true;
-    style.rel = "stylesheet";
-    script.onload = () => {
-      scriptReady = true;
-      finish();
-    };
-    style.onload = () => {
-      styleReady = true;
-      finish();
-    };
-    script.onerror = style.onerror = () => finish(true);
-    try {
-      script.src = assetUrl("pages/thousandeyes.js");
-      style.href = assetUrl("thousandeyes.css");
-      document.head.append(style, script);
-    } catch {
-      finish(true);
-    }
-  }).catch((error: unknown) => {
-    pending = undefined;
-    throw error;
-  });
+      return ui;
+    })
+    .catch((error: unknown) => {
+      pending = undefined;
+      throw error;
+    });
   return pending;
 }
 

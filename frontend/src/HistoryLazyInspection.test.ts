@@ -4,7 +4,7 @@ vi.mock("@splunk/splunk-utils/url", () => ({
   createStaticURL: (path: string) => `/${path}`,
 }));
 
-import { historyAssetUrl } from "./HistoryLazyInspection";
+import { versionedAssetUrl as historyAssetUrl } from "./optionalAssetLoader";
 
 describe("history optional asset URL verification", () => {
   it("pins both origin/path and cache-busting version", () => {
