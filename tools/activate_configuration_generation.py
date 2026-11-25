@@ -209,6 +209,9 @@ def owned_lab():
         raise ActivationError(
             "activation requires an explicitly allocated local task lab"
         )
+    lab_root = ROOT / "tests" / "splunk"
+    if str(lab_root) not in sys.path:
+        sys.path.insert(0, str(lab_root))
     spec = importlib.util.spec_from_file_location(
         "change_activation_lab", ROOT / "tests/splunk/lab.py"
     )
