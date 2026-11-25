@@ -54,8 +54,8 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     });
   pending = new Promise((resolve, reject) => {
     loadVersionedAssetPair({
-      javascript: "pages/history.js",
-      stylesheet: "history.css",
+      js: "pages/history.js",
+      css: "history.css",
       version: __ADM_HISTORY_ASSET_VERSION__,
       validate: () => {
         const ui = runtime.ApplicationAtlasHistory;

@@ -117,8 +117,8 @@ export function loadJourneyUi(): Promise<OptionalUi> {
       }),
     });
   pending = loadVersionedAssetPair({
-    javascript: "pages/journeys.js",
-    stylesheet: "journeys.css",
+    js: "pages/journeys.js",
+    css: "journeys.css",
     version: __ADM_JOURNEYS_ASSET_VERSION__,
     validate: () => {
       const ui = runtime.ApplicationAtlasJourneys;

@@ -17,13 +17,13 @@ export function versionedAssetUrl(
 }
 
 export function loadVersionedAssetPair({
-  javascript,
-  stylesheet,
+  js,
+  css,
   version,
   validate,
 }: {
-  javascript: string;
-  stylesheet: string;
+  js: string;
+  css: string;
   version: string;
   validate?: () => boolean;
 }): Promise<void> {
@@ -41,11 +41,11 @@ export function loadVersionedAssetPair({
       if (failed) {
         script.remove();
         style.remove();
-        reject(new Error("Optional asset unavailable or stale."));
+        reject(new Error("Optional asset unavailable."));
       } else resolve();
     };
-    const timer = setTimeout(() => finish(true), 10_000);
     script.async = true;
+    const timer = setTimeout(() => finish(true), 10_000);
     style.rel = "stylesheet";
     script.onload = style.onload = () => {
       ready++;
@@ -53,8 +53,8 @@ export function loadVersionedAssetPair({
     };
     script.onerror = style.onerror = () => finish(true);
     try {
-      script.src = versionedAssetUrl(javascript, version, location.href);
-      style.href = versionedAssetUrl(stylesheet, version, location.href);
+      script.src = versionedAssetUrl(js, version, location.href);
+      style.href = versionedAssetUrl(css, version, location.href);
       document.head.append(style, script);
     } catch {
       finish(true);

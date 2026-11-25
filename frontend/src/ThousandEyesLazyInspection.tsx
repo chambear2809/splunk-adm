@@ -70,8 +70,8 @@ export function loadThousandEyesUi(): Promise<OptionalUi> {
       }),
     });
   pending = loadVersionedAssetPair({
-    javascript: "pages/thousandeyes.js",
-    stylesheet: "thousandeyes.css",
+    js: "pages/thousandeyes.js",
+    css: "thousandeyes.css",
     version: __ADM_TE_ASSET_VERSION__,
     validate: () => {
       const ui = runtime.ApplicationAtlasThousandEyes;
