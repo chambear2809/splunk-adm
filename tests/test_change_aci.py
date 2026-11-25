@@ -518,12 +518,12 @@ class AciPolicySnapshotAdapterTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "incomplete_native_record")
 
         generation = build_generation([first])
-        self.assertFalse(any(row["record_type"] == "change" for row in generation["rows"]))
+        self.assertFalse(
+            any(row["record_type"] == "change" for row in generation["rows"])
+        )
 
     def test_nested_flattened_child_authority_is_checked(self) -> None:
-        native_records, metadata = policy_documentation_fixture(
-            "filter_entry_snapshot"
-        )
+        native_records, metadata = policy_documentation_fixture("filter_entry_snapshot")
         native_records[0]["vzFilter"]["children"][0] = {
             "component": "vzEntry",
             "dn": "uni/tn-Synthetic/flt-filter/e-entry",

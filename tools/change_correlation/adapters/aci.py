@@ -499,8 +499,8 @@ def _adapt_policy_records(
             elif native_class == "vzFilter":
                 filter_dn = _policy_dn(attributes.get("dn"))
                 for child in children:
-                    child_class, child_attributes, child_children, child_host = _policy_node(
-                        child, node_budget
+                    child_class, child_attributes, child_children, child_host = (
+                        _policy_node(child, node_budget)
                     )
                     if child_host is not None:
                         native_hosts.append(child_host)
@@ -528,8 +528,8 @@ def _adapt_policy_records(
             if native_class == "vzBrCP":
                 contract_dn = _policy_dn(attributes.get("dn"))
                 for child in children:
-                    child_class, child_attributes, child_children, child_host = _policy_node(
-                        child, node_budget
+                    child_class, child_attributes, child_children, child_host = (
+                        _policy_node(child, node_budget)
                     )
                     if child_host is not None:
                         native_hosts.append(child_host)
@@ -582,8 +582,8 @@ def _adapt_policy_records(
             if native_class == "fvAEPg":
                 epg_dn = _policy_dn(attributes.get("dn"))
                 for child in children:
-                    child_class, child_attributes, child_children, child_host = _policy_node(
-                        child, node_budget
+                    child_class, child_attributes, child_children, child_host = (
+                        _policy_node(child, node_budget)
                     )
                     if child_host is not None:
                         native_hosts.append(child_host)
