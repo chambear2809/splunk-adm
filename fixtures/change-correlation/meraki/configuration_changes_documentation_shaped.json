@@ -1,0 +1,53 @@
+{
+  "source_shape": "Cisco Meraki Dashboard API v1.75.1 configurationChanges response; synthetic documentation-shaped fixture, not a captured controller sample",
+  "collection_metadata": {
+    "capture_id": "meraki-audit-doc-fixture-001",
+    "authority": "org-synthetic",
+    "source_version": "Dashboard API v1.75.1",
+    "partition": "org-synthetic",
+    "scope": "change-a",
+    "started_at": 1793102399,
+    "completed_at": 1793102401,
+    "received_at": 1793102402,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-config-read",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "getOrganizationConfigurationChanges",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "organizationId": "org-synthetic",
+      "ts": "2026-10-27T12:00:00.250Z",
+      "adminId": "admin-synthetic-01",
+      "adminName": "Synthetic Operator",
+      "adminEmail": "operator@example.invalid",
+      "networkId": "network-synthetic-01",
+      "networkName": "Synthetic Office",
+      "networkUrl": "https://dashboard.example.invalid/networks/network-synthetic-01",
+      "ssidName": "Synthetic Guest",
+      "ssidNumber": 0,
+      "page": "Wireless > SSIDs",
+      "label": "Updated a wireless SSID setting",
+      "oldValue": "{\"value\":\"synthetic prior state\"}",
+      "newValue": "{\"value\":\"synthetic next state\"}",
+      "client": {
+        "id": "synthetic-client-id",
+        "type": "oauth"
+      }
+    },
+    {
+      "organizationId": "org-synthetic",
+      "ts": "2026-10-27T12:00:01Z",
+      "adminId": null,
+      "networkId": null,
+      "ssidNumber": 2,
+      "page": "Organization > Settings",
+      "label": "Changed an organization setting",
+      "oldValue": "synthetic prior config",
+      "newValue": "synthetic next config"
+    }
+  ]
+}

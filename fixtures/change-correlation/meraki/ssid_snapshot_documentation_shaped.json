@@ -1,0 +1,31 @@
+{
+  "source_shape": "Cisco Meraki Dashboard API v1.75.1 GET /networks/{networkId}/wireless/ssids response; synthetic documentation-shaped fixture, not a captured controller sample",
+  "collection_metadata": {
+    "capture_id": "meraki-ssid-doc-fixture-001",
+    "authority": "org-synthetic",
+    "source_version": "Dashboard API v1.75.1",
+    "partition": "network:network-synthetic-01",
+    "scope": "change-a",
+    "started_at": 1793102280,
+    "completed_at": 1793102285,
+    "received_at": 1793102290,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-wireless-config-read",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "getNetworkWirelessSsids",
+    "enumeration": "full",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "number": 0,
+      "name": "Synthetic Guest",
+      "enabled": true,
+      "authMode": "open",
+      "ipAssignmentMode": "Bridge mode",
+      "defaultVlanId": 71,
+      "useVlanTagging": true
+    }
+  ]
+}
