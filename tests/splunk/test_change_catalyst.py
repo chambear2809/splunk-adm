@@ -35,22 +35,29 @@ def read_fixture() -> dict:
 
 @unittest.skipUnless(
     os.environ.get("ADM_LAB") == "1"
-    and os.environ.get("ADM_LAB_TASK") == "change-20261027-catalyst",
-    "requires the explicitly allocated Catalyst task lab",
+    and os.environ.get("ADM_LAB_TASK")
+    and os.environ.get("ADM_LAB_NAME")
+    and os.environ.get("ADM_LAB_WEB_PORT")
+    and os.environ.get("ADM_LAB_MGMT_PORT")
+    and os.environ.get("ADM_LAB_HEC_PORT"),
+    "requires an explicitly allocated Catalyst task lab",
 )
 class CatalystAuditInstalledTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        expected = {
-            "ADM_LAB_NAME": "adm-change-20261027-catalyst",
-            "ADM_LAB_WEB_PORT": "28260",
-            "ADM_LAB_MGMT_PORT": "28261",
-            "ADM_LAB_HEC_PORT": "28262",
-        }
-        if any(os.environ.get(key) != value for key, value in expected.items()):
+        task = os.environ.get("ADM_LAB_TASK", "")
+        name = os.environ.get("ADM_LAB_NAME", "")
+        ports = [
+            os.environ.get("ADM_LAB_WEB_PORT"),
+            os.environ.get("ADM_LAB_MGMT_PORT"),
+            os.environ.get("ADM_LAB_HEC_PORT"),
+        ]
+        if not task.startswith("catalyst-") or name == "adm-splunk-lab":
             raise RuntimeError(
-                "Catalyst qualification requires its exact task allocation"
+                "Catalyst qualification requires a uniquely named Catalyst task lab"
             )
+        if len(set(ports)) != len(ports):
+            raise RuntimeError("Catalyst qualification requires distinct lab ports")
         lab.verify_target()
         cls.evidence_directory = os.environ.get("ADM_LAB_EVIDENCE_DIRECTORY")
         if not cls.evidence_directory:
