@@ -37,7 +37,11 @@ export interface ConnectedQueryBuilder {
   }): Promise<{ literal: string; sha256: string }>;
 }
 
-/** Build bounded child query metadata only; this never dispatches or fabricates receipts. */
+/**
+ * Build bounded child query metadata only; this never dispatches or fabricates
+ * receipts. The injected builder is trusted to use approved public factories;
+ * this function does not authorize arbitrary SPL or prove source execution.
+ */
 export async function buildConnectedQueryPlan(
   scopes: readonly GraphArgs[],
   windows: Readonly<Record<string, ConnectedQueryWindow>>,
@@ -52,6 +56,8 @@ export async function buildConnectedQueryPlan(
       "Connected query plan requires ordered inventory and pricing scopes.",
     );
   const phases = ["baseline", "change", "impact", "recovery"];
+  if (Object.keys(windows).sort().join(",") !== phases.slice().sort().join(","))
+    throw new Error("Connected query plan has unexpected phase windows.");
   for (const phase of phases) {
     const window = windows[phase];
     if (
@@ -66,8 +72,11 @@ export async function buildConnectedQueryPlan(
   for (const application of scopes) {
     const namespace = `connected.${application.service}`;
     for (const key of CONNECTED_QUERY_KEYS) {
-      const phase = key.split(".")[1];
-      const window = windows[phase] ?? windows.impact;
+      const phase =
+        key.startsWith("graph.") || key.startsWith("topology.")
+          ? key.split(".")[1]
+          : "impact";
+      const window = windows[phase];
       const query = await build({
         application,
         key,

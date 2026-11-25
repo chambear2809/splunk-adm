@@ -49,5 +49,25 @@ describe("connected query plan", () => {
         sha256: await sha256Hex("| makeresults"),
       })),
     ).rejects.toThrow(/ordered/);
+    await expect(
+      buildConnectedQueryPlan(
+        scopes,
+        { ...windows, selected: { earliest: 0, latest: 1 } } as never,
+        async ({ key }) => {
+          const literal = `| makeresults | eval key="${key}"`;
+          return { literal, sha256: await sha256Hex(literal) };
+        },
+      ),
+    ).rejects.toThrow(/unexpected phase/);
+    await expect(
+      buildConnectedQueryPlan(
+        scopes,
+        { ...windows, impact: { earliest: 400, latest: 300 } },
+        async ({ key }) => {
+          const literal = `| makeresults | eval key="${key}"`;
+          return { literal, sha256: await sha256Hex(literal) };
+        },
+      ),
+    ).rejects.toThrow(/impact window/);
   });
 });
