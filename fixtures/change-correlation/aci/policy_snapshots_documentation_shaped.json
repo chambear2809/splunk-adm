@@ -1,0 +1,167 @@
+{
+  "fixture_status": "documentation_shaped_synthetic_not_a_live_sample",
+  "schema_reference": "Cisco APIC REST API Configuration Guide, Release 4.1(x)",
+  "snapshots": {
+    "filter_entry_snapshot": {
+      "collection_metadata": {
+        "capture_id": "aci-filter-synthetic-001",
+        "product": "aci",
+        "family": "filter_entry_snapshot",
+        "authority": "https://apic.example.invalid",
+        "source_version": "APIC 4.1(x) documentation-shaped synthetic metadata",
+        "partition": "fabric:synthetic",
+        "scope": "fabric:synthetic/filter-policy",
+        "started_at": 1793102399,
+        "completed_at": 1793102402,
+        "received_at": 1793102403,
+        "status": "complete",
+        "permissions_fingerprint": "synthetic-permissions-fingerprint",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "test-fixture:aci-policy-filter",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "native_records": [
+        {
+          "vzFilter": {
+            "attributes": {
+              "dn": "uni/tn-synthetic/flt-Http",
+              "name": "Http"
+            },
+            "children": [
+              {
+                "vzEntry": {
+                  "attributes": {
+                    "dn": "uni/tn-synthetic/flt-Http/e-e1",
+                    "name": "e1",
+                    "etherT": "ipv4",
+                    "prot": "tcp",
+                    "dFromPort": "80",
+                    "dToPort": "80",
+                    "sFromPort": "unspecified",
+                    "sToPort": "unspecified",
+                    "descr": "SYNTHETIC_UNREVIEWED_ATTRIBUTE"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "contract_subject_snapshot": {
+      "collection_metadata": {
+        "capture_id": "aci-contract-synthetic-001",
+        "product": "aci",
+        "family": "contract_subject_snapshot",
+        "authority": "https://apic.example.invalid",
+        "source_version": "APIC 4.1(x) documentation-shaped synthetic metadata",
+        "partition": "fabric:synthetic",
+        "scope": "fabric:synthetic/contract-policy",
+        "started_at": 1793102399,
+        "completed_at": 1793102402,
+        "received_at": 1793102403,
+        "status": "complete",
+        "permissions_fingerprint": "synthetic-permissions-fingerprint",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "test-fixture:aci-policy-contract",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "native_records": [
+        {
+          "vzBrCP": {
+            "attributes": {
+              "dn": "uni/tn-synthetic/brc-web",
+              "name": "web"
+            },
+            "children": [
+              {
+                "vzSubj": {
+                  "attributes": {
+                    "dn": "uni/tn-synthetic/brc-web/subj-http",
+                    "name": "http",
+                    "revFltPorts": "true",
+                    "provmatchT": "All"
+                  },
+                  "children": [
+                    {
+                      "vzRsSubjFiltAtt": {
+                        "attributes": {
+                          "dn": "uni/tn-synthetic/brc-web/subj-http/rssubjFiltAtt-Http",
+                          "tnVzFilterName": "Http",
+                          "tDn": "uni/tn-synthetic/flt-Http"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "epg_contract_attachment_snapshot": {
+      "collection_metadata": {
+        "capture_id": "aci-attachment-synthetic-001",
+        "product": "aci",
+        "family": "epg_contract_attachment_snapshot",
+        "authority": "https://apic.example.invalid",
+        "source_version": "APIC 4.1(x) documentation-shaped synthetic metadata",
+        "partition": "fabric:synthetic",
+        "scope": "fabric:synthetic/epg-policy",
+        "started_at": 1793102399,
+        "completed_at": 1793102402,
+        "received_at": 1793102403,
+        "status": "complete",
+        "permissions_fingerprint": "synthetic-permissions-fingerprint",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "test-fixture:aci-policy-attachment",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "native_records": [
+        {
+          "fvAEPg": {
+            "attributes": {
+              "dn": "uni/tn-synthetic/ap-web/epg-app",
+              "name": "app"
+            },
+            "children": [
+              {
+                "fvRsBd": {
+                  "attributes": {
+                    "dn": "uni/tn-synthetic/ap-web/epg-app/rsbd",
+                    "tnFvBDName": "app-bd"
+                  }
+                }
+              },
+              {
+                "fvRsCons": {
+                  "attributes": {
+                    "dn": "uni/tn-synthetic/ap-web/epg-app/rscons-web",
+                    "tnVzBrCPName": "web",
+                    "tDn": "uni/tn-synthetic/brc-web"
+                  },
+                  "children": [
+                    {
+                      "vzConsSubjLbl": {
+                        "attributes": {
+                          "name": "openCons"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
