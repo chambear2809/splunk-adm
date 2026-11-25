@@ -1,0 +1,54 @@
+{
+  "fixture_status": "documentation_shaped_synthetic_not_a_live_sample",
+  "collection_metadata": {
+    "capture_id": "aci-audit-synthetic-001",
+    "authority": "https://apic.example.invalid",
+    "source_version": "APIC 6.2(x) documentation-shaped synthetic metadata",
+    "partition": "fabric:synthetic",
+    "scope": "fabric:synthetic/aaaModLR",
+    "started_at": 1793102399,
+    "completed_at": 1793102402,
+    "received_at": 1793102403,
+    "status": "complete",
+    "permissions_fingerprint": "synthetic-permissions-fingerprint",
+    "pages_expected": 1,
+    "pages_received": 1,
+    "source_reference": "test-fixture:aci-documentation-shaped",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_records": [
+    {
+      "aaaModLR": {
+        "attributes": {
+          "id": "9000000000000001",
+          "affected": "uni/tn-synthetic/ap-web",
+          "code": "E4205000",
+          "created": "2026-10-27T12:00:00.123+00:00",
+          "ind": "modification",
+          "trig": "config",
+          "txId": "9007199254740993",
+          "user": "synthetic-admin",
+          "dn": "subj-[uni/tn-synthetic/ap-web]/mod-9000000000000001",
+          "descr": "Synthetic documentation-shaped audit event",
+          "changeSet": "synthetic omitted payload"
+        }
+      }
+    },
+    {
+      "component": "aaaModLR",
+      "apic_host": "apic.example.invalid",
+      "actual_host": "apic-member.example.invalid",
+      "id": "9000000000000002",
+      "affected": "uni/tn-synthetic/ap-web/epg-web",
+      "code": "E4205001",
+      "created": "2026-10-27T12:00:01.000+00:00",
+      "ind": "creation",
+      "trig": "config",
+      "txId": "9007199254740994",
+      "user": "synthetic-operator",
+      "sessionId": "synthetic-session-omitted",
+      "rawdetails": "synthetic unreviewed detail omitted"
+    }
+  ]
+}
