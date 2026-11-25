@@ -1,0 +1,12 @@
+{
+  "type": "ERROR",
+  "object": {
+    "apiVersion": "v1",
+    "kind": "Status",
+    "metadata": {},
+    "status": "Failure",
+    "message": "Synthetic resource version expired.",
+    "reason": "Expired",
+    "code": 410
+  }
+}

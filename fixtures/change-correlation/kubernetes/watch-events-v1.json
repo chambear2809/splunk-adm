@@ -1,0 +1,46 @@
+[
+  {
+    "type": "MODIFIED",
+    "object": {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "payments-api",
+        "namespace": "payments",
+        "uid": "service-uid-01",
+        "resourceVersion": "k8s-rv-501",
+        "generation": 3
+      },
+      "spec": {
+        "selector": {"app.kubernetes.io/name": "payments-api-v2"}
+      }
+    }
+  },
+  {
+    "type": "DELETED",
+    "object": {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "payments-api",
+        "namespace": "payments",
+        "uid": "service-uid-old",
+        "resourceVersion": "k8s-rv-502",
+        "generation": 2
+      },
+      "spec": {
+        "selector": {"app.kubernetes.io/name": "payments-api-old"}
+      }
+    }
+  },
+  {
+    "type": "BOOKMARK",
+    "object": {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "resourceVersion": "k8s-watch-cursor-503"
+      }
+    }
+  }
+]

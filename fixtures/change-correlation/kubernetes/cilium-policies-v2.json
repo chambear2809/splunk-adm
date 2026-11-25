@@ -1,0 +1,36 @@
+{
+  "apiVersion": "cilium.io/v2",
+  "kind": "CiliumNetworkPolicyList",
+  "metadata": {
+    "resourceVersion": "k8s-list-rv-400"
+  },
+  "items": [
+    {
+      "apiVersion": "cilium.io/v2",
+      "kind": "CiliumNetworkPolicy",
+      "metadata": {
+        "name": "allow-payments-ingress",
+        "namespace": "payments",
+        "uid": "cilium-policy-uid-01",
+        "resourceVersion": "k8s-rv-401",
+        "generation": 3,
+        "labels": {
+          "app.kubernetes.io/name": "payments-policy",
+          "io.cilium.k8s.policy.name": "allow-payments-ingress",
+          "private.example.invalid/contact": "ignore-me"
+        },
+        "annotations": {
+          "example.invalid/note": "not projected"
+        }
+      },
+      "spec": {
+        "endpointSelector": {
+          "matchLabels": {"app.kubernetes.io/name": "payments-api"}
+        },
+        "ingress": [
+          {"fromEndpoints": [{"matchLabels": {"role": "frontend"}}]}
+        ]
+      }
+    }
+  ]
+}

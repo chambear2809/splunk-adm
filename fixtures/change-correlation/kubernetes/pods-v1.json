@@ -1,0 +1,49 @@
+{
+  "apiVersion": "v1",
+  "kind": "PodList",
+  "metadata": {
+    "resourceVersion": "k8s-list-rv-300"
+  },
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "name": "payments-api-7c49d",
+        "namespace": "payments",
+        "uid": "pod-uid-ready",
+        "resourceVersion": "k8s-rv-301",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/name": "payments-api",
+          "app.kubernetes.io/version": "2.4.1",
+          "private.example.invalid/contact": "ignore-me"
+        },
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "payments-api-7c49d",
+            "uid": "replicaset-uid-01",
+            "controller": true
+          }
+        ],
+        "annotations": {
+          "example.invalid/note": "not projected"
+        }
+      },
+      "spec": {
+        "nodeName": "worker-a",
+        "containers": [
+          {"name": "api", "image": "example.invalid/payments:2.4.1"}
+        ]
+      },
+      "status": {
+        "phase": "Running",
+        "containerStatuses": [
+          {"name": "api", "ready": true, "restartCount": 0}
+        ]
+      }
+    }
+  ]
+}
