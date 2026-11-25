@@ -864,7 +864,7 @@ def _validate_timeline(
                 else float("inf")
             )
             if row_earliest > row_latest or (
-                row_latest <= selection_bounds["earliest"]
+                row_latest < selection_bounds["earliest"]
                 or row_earliest >= selection_bounds["latest"]
             ):
                 raise ScenarioError(

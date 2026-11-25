@@ -195,15 +195,55 @@ class ChangeScenarioTests(unittest.TestCase):
 
         authentic = copy.deepcopy(result)
         authentic["rows"] = [dict(row)]
+        self.assertEqual(
+            _validate_timeline(authentic, load_scenario(plan["scenario_id"]), plan)[0],
+            generation_id,
+        )
 
-        outside_scope = copy.deepcopy(authentic)
-        outside_scope["selection"]["scope"] = "foreign-scope"
+        def rebuilt(**changes: object) -> dict:
+            candidate = copy.deepcopy(authentic)
+            candidate_row = dict(candidate["generation_rows"][0], **changes)
+            candidate["generation_rows"] = [candidate_row]
+            candidate["rows"] = [dict(candidate_row)]
+            row_hash = hashlib.sha256(
+                canonical_json(
+                    {
+                        key: value
+                        for key, value in candidate_row.items()
+                        if key != "generation_id"
+                    }
+                )
+            ).hexdigest()
+            manifest_body = {
+                key: value
+                for key, value in candidate["generation_validation"]["manifest"].items()
+                if key != "generation_id"
+            }
+            manifest_body["rows_sha256"] = row_hash
+            candidate_generation_id = hashlib.sha256(
+                canonical_json(manifest_body)
+            ).hexdigest()
+            candidate_row["generation_id"] = candidate_generation_id
+            candidate["rows"][0]["generation_id"] = candidate_generation_id
+            candidate["generation_validation"]["manifest"] = {
+                **manifest_body,
+                "generation_id": candidate_generation_id,
+            }
+            candidate["generation_validation"]["generation_id"] = (
+                candidate_generation_id
+            )
+            candidate["generation_validation"]["rows_sha256"] = row_hash
+            return candidate
+
+        outside_scope = rebuilt(scope="foreign-scope")
         with self.assertRaisesRegex(ScenarioError, "scope"):
             _validate_timeline(outside_scope, load_scenario(plan["scenario_id"]), plan)
 
-        outside_window = copy.deepcopy(authentic)
-        outside_window["selection"]["window"]["start"] += 1
-        with self.assertRaisesRegex(ScenarioError, "full incident window"):
+        outside_window = rebuilt(
+            earliest_at=plan["planned_run_end_epoch"] + 1,
+            latest_at=plan["planned_run_end_epoch"] + 2,
+        )
+        with self.assertRaisesRegex(ScenarioError, "selection window"):
             _validate_timeline(outside_window, load_scenario(plan["scenario_id"]), plan)
 
     def test_only_two_offline_scenarios_are_exposed_without_assigning_t(self) -> None:
