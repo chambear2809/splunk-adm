@@ -3,8 +3,16 @@ import { validateDemoCapture, type DemoCaptureReadback } from "./demoCapture";
 import type { DemoScenario } from "./demoRegistry";
 import { demoCaptureBundle, rehashDemoCapture } from "./demoCapture.testUtils";
 import { canonicalJson, sha256Hex } from "../changeCorrelation/canonicalJson";
+import pythonBundle from "../../../fixtures/change-correlation/shared/python_capture_bundle.json";
+import pythonTemplate from "../../../fixtures/change-correlation/scenarios/track-a-firewall-capture-template.json";
 
 describe("offline demo capture contract", () => {
+  it("consumes the exact Python-built partial bundle and keeps it unavailable", async () => {
+    await expect(
+      validateDemoCapture(pythonBundle, "track-a-firewall", pythonTemplate),
+    ).rejects.toThrow(/not been accepted yet/);
+  });
+
   it("round-trips the synthetic blocked bundle without enabling runtime capture", async () => {
     const scenario: DemoScenario = "track-a-firewall";
     const { template, bundle } = await demoCaptureBundle(scenario);
