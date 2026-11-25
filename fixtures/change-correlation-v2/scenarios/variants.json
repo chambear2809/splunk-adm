@@ -1,0 +1,371 @@
+{
+  "schema_version": 1,
+  "tracks": {
+    "track-a-firewall": {
+      "default_variant_id": "a-meraki-ssid",
+      "variants": [
+        {
+          "id": "a-meraki-ssid",
+          "label": "Wireless checkout",
+          "products": [
+            "cilium",
+            "ftd",
+            "kubernetes",
+            "meraki"
+          ],
+          "purpose": "Review the SSID state change beside independent FTD action and application dependency observations without assigning cause.",
+          "status": "runnable",
+          "template_asset": "track-a-firewall.json",
+          "template_sha256": "381d1875a3c7a44cc1b648682d8f1d10be2266e7419c7ac3a0122a7731e269bc",
+          "capture_asset": "captures/track-a-firewall.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Meraki SSID state, FTD action, and application dependency are independent observations.",
+            "Administrator relationships show potential relevance only; they do not prove ownership or cause.",
+            "No native FMC policy edit or deployment success is represented."
+          ]
+        },
+        {
+          "id": "a-backend-rollout",
+          "label": "Backend rollout",
+          "products": [
+            "cilium",
+            "ftd",
+            "kubernetes",
+            "stream_ipfix"
+          ],
+          "purpose": "Review stable Service identity with a new Pod UID and EndpointSlice membership.",
+          "status": "runnable",
+          "template_asset": "variants/track-a-firewall/a-backend-rollout.json",
+          "template_sha256": "0231cfa6932a741660dd22803fab82851a6e966d53135ade58bbb0da4cda3430",
+          "capture_asset": "captures/track-a-firewall/a-backend-rollout.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Service identity and selector stay constant while a distinct native Pod UID and EndpointSlice target are observed.",
+            "Traffic and INTERNAL spans are independent observations; no failed request, deployment actor, or exact apply time is asserted."
+          ]
+        },
+        {
+          "id": "a-nat-boundary",
+          "label": "NAT boundary",
+          "products": [
+            "ftd",
+            "stream_ipfix"
+          ],
+          "purpose": "Inspect the native same-event translated tuple beside independent downstream evidence.",
+          "status": "runnable",
+          "template_asset": "variants/track-a-firewall/a-nat-boundary.json",
+          "template_sha256": "13d09cfb30be24acf07ee4b023f01e20fefa871fa3ff05625ca8997d2d6fa8b3",
+          "capture_asset": "captures/track-a-firewall/a-nat-boundary.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "NAT values are retained as same-event source context only if the reviewed normal projection exposes them.",
+            "The independent downstream flow is not joined across events to the translated tuple or a backend."
+          ]
+        },
+        {
+          "id": "a-wireless-reuse",
+          "label": "Wireless IP reuse",
+          "products": [
+            "cilium",
+            "ftd",
+            "meraki",
+            "stream_ipfix"
+          ],
+          "purpose": "Retain IP-level flow while withholding a unique station assignment across two MACs.",
+          "status": "runnable",
+          "template_asset": "variants/track-a-firewall/a-wireless-reuse.json",
+          "template_sha256": "c86a8c0c8b92e8680081a6bf550b146c1007d427ca1ccaa8b3412601560cac00",
+          "capture_asset": "captures/track-a-firewall/a-wireless-reuse.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Two valid association observations claim the same IP; traffic remains IP-level.",
+            "Do not assign a unique client station or combine the two station identities."
+          ]
+        },
+        {
+          "id": "both-gap",
+          "label": "Partial source collection",
+          "products": [
+            "cilium",
+            "ftd",
+            "meraki",
+            "stream_ipfix"
+          ],
+          "purpose": "Show a partial SSID collection and later complete observation without converting missing coverage into deletion.",
+          "status": "runnable",
+          "template_asset": "variants/track-a-firewall/both-gap.json",
+          "template_sha256": "58f8010d0f67097227e2d8477e24fa1e380232150805785718ba1787902c5e60",
+          "capture_asset": "captures/track-a-firewall/both-gap.json",
+          "expectation": "source_gap",
+          "claim_limits": [
+            "The change poll is an explicitly partial synthetic local collection; no absence-derived deletion or carry-forward through the gap is permitted.",
+            "The later complete poll is a later observation and does not retroactively close the gap."
+          ]
+        },
+        {
+          "id": "both-permissions",
+          "label": "Restricted history visibility",
+          "products": [
+            "cilium",
+            "splunk",
+            "stream_ipfix"
+          ],
+          "purpose": "Continue permitted traffic investigation while verifying that this caller cannot validate selected history.",
+          "status": "runnable",
+          "template_asset": "variants/track-a-firewall/both-permissions.json",
+          "template_sha256": "266a8443f3dba309848070f547342c8c1b29070c8b359550c6916d2257a98c80",
+          "capture_asset": "captures/track-a-firewall/both-permissions.json",
+          "expectation": "restricted_visibility",
+          "claim_limits": [
+            "A clean empty activation lookup means the selected history is not visible to this tested caller; it does not mean no changes or complete history.",
+            "Administrator history access is limited to proof that this run\u2019s exact activation exists; graph and endpoint traffic use the same restricted caller."
+          ]
+        },
+        {
+          "id": "a-fmc-policy-deploy",
+          "label": "FMC policy deployment",
+          "products": [
+            "fmc",
+            "ftd"
+          ],
+          "purpose": "Native FMC policy history and per-device deployment evidence.",
+          "status": "blocked",
+          "reason_code": "native-fmc-schema-unqualified",
+          "reason": "FMC policy detail, audit and per-device deployment schemas remain unqualified.",
+          "current_evidence": "FTD action records and normalized exports do not establish a native FMC edit or deployment.",
+          "unblock_evidence": "Version-matched sanitized native responses, safe allowlisted projection, immutable ordered rule history and actual per-device deployment linkage.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "a-nxos-interface",
+          "label": "NX-OS interface configuration",
+          "products": [
+            "nxos"
+          ],
+          "purpose": "A qualified interface configuration transition.",
+          "status": "blocked",
+          "reason_code": "nxos-configuration-schema-unqualified",
+          "reason": "The current source adapter refuses configuration inputs pending versioned command/DME samples and stable interface identity.",
+          "current_evidence": "Device inventory is context only and no configuration transition was collected.",
+          "unblock_evidence": "Versioned native before/after records, stable chassis/interface mapping and complete polling bounds.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "both-appdynamics-control",
+          "label": "AppDynamics control",
+          "products": [
+            "appdynamics"
+          ],
+          "purpose": "A typed monitoring configuration and measurement control.",
+          "status": "blocked",
+          "reason_code": "monitoring-configuration-unqualified",
+          "reason": "Controller audits do not provide qualified typed targets or historical application-model bindings.",
+          "current_evidence": "No monitoring change or successful measurement is asserted.",
+          "unblock_evidence": "Sanitized versioned resource schema, stable Controller/app/tier/node links, retained revisions and measurement compatibility rules.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "both-thousandeyes-control",
+          "label": "ThousandEyes control",
+          "products": [
+            "thousandeyes"
+          ],
+          "purpose": "A qualified test configuration and measurement control.",
+          "status": "blocked",
+          "reason_code": "thousandeyes-test-binding-unqualified",
+          "reason": "Activity names do not prove test IDs, historical agent assignments or frozen test configuration.",
+          "current_evidence": "No successful probe or configuration comparison is asserted.",
+          "unblock_evidence": "Native resource/account crosswalk, versioned target/protocol/port/agent bindings and measurement units/coverage.",
+          "run_status": "not_run"
+        }
+      ]
+    },
+    "track-b-fabric": {
+      "default_variant_id": "b-aci-policy",
+      "variants": [
+        {
+          "id": "b-aci-policy",
+          "label": "Branch checkout",
+          "products": [
+            "aci",
+            "cilium",
+            "kubernetes",
+            "stream_ipfix"
+          ],
+          "purpose": "Review the ACI database ACL observation separately from frontend traffic and unresolved network audit context.",
+          "status": "runnable",
+          "template_asset": "track-b-fabric.json",
+          "template_sha256": "512963d1d4c217a0fe7a0601beb8306a3fa214764cf8b1d6441ce97c3b25c36b",
+          "capture_asset": "captures/track-b-fabric.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Campus and SD-WAN records are distinct observations and are not summed as unique connections or ordered path.",
+            "ACI database ACL action is observed separately from frontend traffic.",
+            "Administrator relationships show potential relevance only; they do not prove ownership or cause."
+          ]
+        },
+        {
+          "id": "b-service-backend",
+          "label": "Service backend change",
+          "products": [
+            "cilium",
+            "kubernetes",
+            "stream_ipfix"
+          ],
+          "purpose": "Review a stable Service selector with a distinct Pod UID and EndpointSlice member.",
+          "status": "runnable",
+          "template_asset": "variants/track-b-fabric/b-service-backend.json",
+          "template_sha256": "a90f7ff874276d24531a811f36b4afb9584141b95e1d8c993d3f397c69eaee32",
+          "capture_asset": "captures/track-b-fabric/b-service-backend.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Service identity and selector remain stable while native Pod UID and EndpointSlice membership change.",
+            "Traffic and INTERNAL spans are independent observations; no enforcement or request-success claim."
+          ]
+        },
+        {
+          "id": "b-aci-attachment",
+          "label": "ACI endpoint attachment",
+          "products": [
+            "aci",
+            "cilium",
+            "stream_ipfix"
+          ],
+          "purpose": "Compare two receipt-bounded operational attachment observations for the same native endpoint DN.",
+          "status": "runnable",
+          "template_asset": "variants/track-b-fabric/b-aci-attachment.json",
+          "template_sha256": "486f95d7f17d6fc15b7e9a2a0607ed0a61e8f27449f0587de631afbc3b16300b",
+          "capture_asset": "captures/track-b-fabric/b-aci-attachment.json",
+          "expectation": "observed",
+          "claim_limits": [
+            "Only same-authority, same-DN attachment fields are compared; observations are receipt-bounded operational state.",
+            "No EPG move, deletion, VRF relationship, configured intent, apply time, or causal path is inferred."
+          ]
+        },
+        {
+          "id": "both-gap",
+          "label": "Partial source collection",
+          "products": [
+            "aci",
+            "cilium",
+            "stream_ipfix"
+          ],
+          "purpose": "Show a partial ACI policy collection and later complete observation without absence-derived removal.",
+          "status": "runnable",
+          "template_asset": "variants/track-b-fabric/both-gap.json",
+          "template_sha256": "826939d2de6e7e671e4c4d8c2b2a8948acc2aebd1f05e0deb2c34dc83aa90c2d",
+          "capture_asset": "captures/track-b-fabric/both-gap.json",
+          "expectation": "source_gap",
+          "claim_limits": [
+            "The policy change poll is an explicitly partial synthetic local collection; no absence-derived deletion or carry-forward through the gap is permitted.",
+            "The later complete poll is a later observation and does not retroactively close the gap."
+          ]
+        },
+        {
+          "id": "both-permissions",
+          "label": "Restricted history visibility",
+          "products": [
+            "cilium",
+            "splunk",
+            "stream_ipfix"
+          ],
+          "purpose": "Continue permitted traffic investigation while verifying that this caller cannot validate selected history.",
+          "status": "runnable",
+          "template_asset": "variants/track-b-fabric/both-permissions.json",
+          "template_sha256": "da53c0fcff0020b182f261fb14d8a0ae2e91eb8a63a8f506deb5b3e037fc4a58",
+          "capture_asset": "captures/track-b-fabric/both-permissions.json",
+          "expectation": "restricted_visibility",
+          "claim_limits": [
+            "A clean empty activation lookup means the selected history is not visible to this tested caller; it does not mean no changes or complete history.",
+            "Administrator history access is limited to proof that this run\u2019s exact activation exists; graph and endpoint traffic use the same restricted caller."
+          ]
+        },
+        {
+          "id": "b-wan-deploy",
+          "label": "SD-WAN deployment",
+          "products": [
+            "sdwan"
+          ],
+          "purpose": "Native site/VPN/policy target and completed deployment evidence.",
+          "status": "blocked",
+          "reason_code": "sdwan-target-deployment-unqualified",
+          "reason": "The native audit record has no proven site, VPN, policy target or per-device deployment status.",
+          "current_evidence": "Audit activity remains unresolved context.",
+          "unblock_evidence": "Qualified target schemas, stable device/site/VPN relation and separate per-device deployment completion/time evidence.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "b-campus-provision",
+          "label": "Campus provisioning",
+          "products": [
+            "catalyst_center"
+          ],
+          "purpose": "A task/resource/device-linked campus configuration action.",
+          "status": "blocked",
+          "reason_code": "campus-deployment-link-unqualified",
+          "reason": "Generic Catalyst audit IDs do not identify affected configuration or completed deployment.",
+          "current_evidence": "Current client snapshots and generic audit pass do not supply the required target/action chain.",
+          "unblock_evidence": "Version-matched task/resource/device linkage, completion and historical interface/client binding with receipt.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "b-cilium-policy",
+          "label": "Cilium policy enforcement",
+          "products": [
+            "cilium"
+          ],
+          "purpose": "Native policy configuration and compatible enforcement evidence.",
+          "status": "blocked",
+          "reason_code": "cilium-policy-semantics-unqualified",
+          "reason": "The admitted Cilium adapter retains metadata/generation only, not policy specification or enforcement semantics.",
+          "current_evidence": "Metadata and traffic timestamps do not establish policy application or verdict.",
+          "unblock_evidence": "Versioned CRD schema and sanitized policy instances, reviewed safe projection and compatible native applied/verdict evidence.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "b-epg-move",
+          "label": "Cross-EPG endpoint movement",
+          "products": [
+            "aci"
+          ],
+          "purpose": "Durable native identity continuity across an EPG move.",
+          "status": "blocked",
+          "reason_code": "aci-endpoint-relation-unqualified",
+          "reason": "The endpoint DN is EPG-scoped and available examples do not prove a stable cross-EPG relation.",
+          "current_evidence": "Same-DN attachment observations remain operational only; no movement is inferred.",
+          "unblock_evidence": "Version-matched fvRsVm.tDn relation targeting the same compVm.dn across the change with parent/child receipts and separate native VRF chain.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "both-appdynamics-control",
+          "label": "AppDynamics control",
+          "products": [
+            "appdynamics"
+          ],
+          "purpose": "A typed monitoring configuration and measurement control.",
+          "status": "blocked",
+          "reason_code": "monitoring-configuration-unqualified",
+          "reason": "Controller audits do not provide qualified typed targets or historical application-model bindings.",
+          "current_evidence": "No monitoring change or successful measurement is asserted.",
+          "unblock_evidence": "Sanitized versioned resource schema, stable Controller/app/tier/node links, retained revisions and measurement compatibility rules.",
+          "run_status": "not_run"
+        },
+        {
+          "id": "both-thousandeyes-control",
+          "label": "ThousandEyes control",
+          "products": [
+            "thousandeyes"
+          ],
+          "purpose": "A qualified test configuration and measurement control.",
+          "status": "blocked",
+          "reason_code": "thousandeyes-test-binding-unqualified",
+          "reason": "Activity names do not prove test IDs, historical agent assignments or frozen test configuration.",
+          "current_evidence": "No successful probe or configuration comparison is asserted.",
+          "unblock_evidence": "Native resource/account crosswalk, versioned target/protocol/port/agent bindings and measurement units/coverage.",
+          "run_status": "not_run"
+        }
+      ]
+    }
+  }
+}
