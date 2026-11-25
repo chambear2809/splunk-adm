@@ -86,7 +86,9 @@ class ReleaseArchiveTests(unittest.TestCase):
                 files = self._history_files()
                 del files[missing]
                 self._write_pair(files)
-                with self.assertRaisesRegex(ValueError, "missing required History files"):
+                with self.assertRaisesRegex(
+                    ValueError, "missing required History files"
+                ):
                     check_release(self.root / "dist", self.root / "package.json")
         files = self._files()
         files[HISTORY_CSS_PATH] = b"orphan"
