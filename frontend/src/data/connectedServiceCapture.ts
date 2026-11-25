@@ -204,7 +204,18 @@ export async function validateConnectedServiceCapture(
       );
       if (!isObject(result) || result.status !== "complete")
         throw new Error(`Connected service ${key} is not complete.`);
-      if (
+      if (key === "find.service") {
+        if (result.args !== undefined || !isObject(result.input))
+          throw new Error("Connected service Find result has invalid input.");
+        exactKeys(result.input, ["field", "value"], "connected Find input");
+        if (
+          result.input.field !== "service" ||
+          result.input.value !== validatedApplication.service
+        )
+          throw new Error(
+            "Connected service Find input is not service-scoped.",
+          );
+      } else if (
         !result.args ||
         !sameArgs(graphArgs(result.args, `${key} args`), validatedApplication)
       )

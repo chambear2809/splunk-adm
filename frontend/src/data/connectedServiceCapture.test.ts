@@ -19,10 +19,16 @@ const scopes: GraphArgs[] = [
   { ...primary, service: "pricing" },
 ];
 
-function result(application: GraphArgs, rows: Record<string, unknown>[] = []) {
+function result(
+  application: GraphArgs,
+  rows: Record<string, unknown>[] = [],
+  find = false,
+) {
   return {
     status: "complete" as const,
-    args: application,
+    ...(find
+      ? { input: { field: "service", value: application.service } }
+      : { args: application }),
     window: { earliest: 1, latest: 2, basis: "source_time" as const },
     query: { literal: "| makeresults", sha256: "a".repeat(64) },
     readback: {
@@ -47,6 +53,7 @@ function fixture(
       key === "catalog.selected" || key === "find.service"
         ? [{ ...application }]
         : [],
+      key === "find.service",
     ),
   );
   return {
@@ -164,6 +171,7 @@ describe("connected service capture validation", () => {
                   key === "catalog.selected" || key === "find.service"
                     ? [{ ...application }]
                     : [],
+                  key === "find.service",
                 ),
           ),
         }),
@@ -181,6 +189,7 @@ describe("connected service capture validation", () => {
               key === "catalog.selected" || key === "find.service"
                 ? [{ ...application }]
                 : [],
+              key === "find.service",
             ),
           ),
         }),
