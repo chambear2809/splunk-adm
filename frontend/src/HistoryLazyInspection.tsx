@@ -24,7 +24,6 @@ type Runtime = typeof globalThis & {
 };
 type HistoryUi = NonNullable<Runtime["ApplicationAtlasHistory"]>;
 let pending: Promise<HistoryUi> | undefined;
-const HISTORY_ASSET_ERROR = "History unavailable.";
 
 export function loadHistoryUi(): Promise<HistoryUi> {
   const runtime = globalThis as Runtime;
@@ -68,7 +67,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     .then(() => runtime.ApplicationAtlasHistory!)
     .catch(() => {
       pending = undefined;
-      throw new Error(HISTORY_ASSET_ERROR);
+      throw new Error("History unavailable.");
     }) as Promise<HistoryUi>;
   return pending;
 }
@@ -82,13 +81,7 @@ export function LazyChangeTimelineInspection(
     let active = true;
     void loadHistoryUi()
       .then((next) => active && setUi(next))
-      .catch(
-        (reason) =>
-          active &&
-          setError(
-            reason instanceof Error ? reason.message : HISTORY_ASSET_ERROR,
-          ),
-      );
+      .catch(() => active && setError("History unavailable."));
     return () => {
       active = false;
     };
@@ -98,14 +91,9 @@ export function LazyChangeTimelineInspection(
     return <Component {...props} />;
   }
   return (
-    <section
-      className="change-timeline"
-      aria-label="Optional configuration change timeline"
-    >
-      <h3>Configuration change timeline</h3>
-      <p role={error ? "alert" : "status"}>
-        {error ?? "Loading configuration history…"}
-      </p>
+    <section className="change-timeline" aria-label="History">
+      <h3>History</h3>
+      <p role={error ? "alert" : "status"}>{error ?? "Loading…"}</p>
     </section>
   );
 }

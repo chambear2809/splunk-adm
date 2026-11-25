@@ -7,6 +7,7 @@ async function setup(
   page: import("@playwright/test").Page,
   failure?: "js" | "css" | "version",
 ) {
+  let currentFailure = failure;
   const javascript = await readFile(`${staticRoot}/pages/history.js`, "utf8");
   const css = await readFile(`${staticRoot}/history.css`, "utf8");
   const manifest = JSON.parse(
@@ -17,23 +18,29 @@ async function setup(
     const url = new URL(route.request().url());
     requests.push(url.pathname);
     if (url.pathname.endsWith("/pages/history.js")) {
-      if (failure === "js") return route.fulfill({ status: 404 });
+      if (currentFailure === "js") return route.fulfill({ status: 404 });
       return route.fulfill({
         contentType: "text/javascript",
         body:
-          failure === "version"
+          currentFailure === "version"
             ? javascript.replaceAll(manifest.assetVersion, "0".repeat(24))
             : javascript,
       });
     }
     if (url.pathname.endsWith("/history.css")) {
-      if (failure === "css") return route.fulfill({ status: 404 });
+      if (currentFailure === "css") return route.fulfill({ status: 404 });
       return route.fulfill({ contentType: "text/css", body: css });
     }
     return route.continue();
   });
   await page.goto("/tests/browser/history-loader.html");
-  return { manifest, requests };
+  return {
+    manifest,
+    requests,
+    repair: () => {
+      currentFailure = undefined;
+    },
+  };
 }
 
 test("production history loader requests versioned JS/CSS and preserves other evidence", async ({
@@ -77,3 +84,26 @@ for (const failure of ["js", "css", "version"] as const) {
     ).toHaveCount(0);
   });
 }
+
+test("failed version load cleans up assets and can retry successfully", async ({
+  page,
+}) => {
+  const { requests, repair } = await setup(page, "version");
+  await expect(page.getByRole("alert")).toContainText(
+    "History assets unavailable",
+  );
+  await expect(page.locator('link[href*="history.css"]')).toHaveCount(0);
+
+  repair();
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Inspect configuration history" }),
+  ).toBeVisible();
+  expect(
+    requests.filter((path) => path.endsWith("/pages/history.js")),
+  ).toHaveLength(2);
+  expect(requests.filter((path) => path.endsWith("/history.css"))).toHaveLength(
+    2,
+  );
+  await expect(page.locator('link[href*="history.css"]')).toHaveCount(1);
+});

@@ -6,12 +6,13 @@ export function versionedAssetUrl(
   locationHref: string,
   staticPath = createStaticURL(`app/splunk_adm/${file}`),
 ): string {
-  const url = new URL(staticPath, locationHref);
+  const page = new URL(locationHref);
+  const url = new URL(staticPath, page);
   if (
-    url.origin !== new URL(locationHref).origin ||
+    url.origin !== page.origin ||
     !url.pathname.endsWith(`/app/splunk_adm/${file}`)
   )
-    throw new Error("Optional asset origin could not be verified.");
+    throw new Error("origin could not be verified");
   url.searchParams.set("v", version);
   return url.href;
 }
@@ -25,7 +26,7 @@ export function loadVersionedAssetPair({
   js: string;
   css: string;
   version: string;
-  validate?: () => boolean;
+  validate: () => boolean;
 }): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
@@ -33,24 +34,20 @@ export function loadVersionedAssetPair({
     let ready = 0;
     let settled = false;
     const finish = (failed = false) => {
-      if (!failed && ready >= 2 && validate && !validate()) failed = true;
-      if (settled || (!failed && ready < 2)) return;
+      if (settled) return;
+      if (!failed && !validate()) failed = true;
       settled = true;
       clearTimeout(timer);
       script.onload = script.onerror = style.onload = style.onerror = null;
       if (failed) {
         script.remove();
         style.remove();
-        reject(new Error("Optional asset unavailable."));
+        reject(new Error("asset unavailable"));
       } else resolve();
     };
-    script.async = true;
     const timer = setTimeout(() => finish(true), 10_000);
     style.rel = "stylesheet";
-    script.onload = style.onload = () => {
-      ready++;
-      finish();
-    };
+    script.onload = style.onload = () => ready++ === 1 && finish();
     script.onerror = style.onerror = () => finish(true);
     try {
       script.src = versionedAssetUrl(js, version, location.href);
