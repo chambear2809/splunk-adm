@@ -195,7 +195,7 @@ describe("AWS VPC Flow Logs v5 contract", () => {
     expect(search).not.toMatch(/\blookup\b|\bjoin\b|\bmap\b/);
     expect(search).not.toMatch(/\|\s*fields[^\n]*\b_raw\b/);
     expect(cloudFlowSearchWindow(selection)).toEqual({
-      start: 1791372740,
+      start: 1791372620,
       end: 1791373660,
     });
   });
@@ -364,6 +364,21 @@ describe("AWS VPC Flow Logs v5 contract", () => {
     expect(result.rejected).toBe(2);
   });
 
+  it("rejects intervals beyond maximum aggregation and timestamp uncertainty", () => {
+    const start = selection.window.start;
+    const rows = [600, 720, 721, 3600].map((duration) => {
+      const values = raw("accepted-flow").split(" ");
+      values[6] = String(start);
+      values[7] = String(start + duration);
+      return projectedRow(values.join(" "));
+    });
+    const result = normalizeCloudFlowEvidence(rows, selection, source);
+    expect(
+      result.records.map(({ interval }) => interval.end - interval.start),
+    ).toEqual([600, 720]);
+    expect(result.rejected).toBe(2);
+  });
+
   it("requires the installed v5 timestamp configuration for captured event time", () => {
     const file = readFileSync(
       new URL(
@@ -431,7 +446,7 @@ describe("AWS VPC Flow Logs v5 contract", () => {
     expect(client.search).toHaveBeenCalledTimes(2);
     for (const [request] of vi.mocked(client.search).mock.calls) {
       expect(request.optionalSource).toBe("aws_vpc_flow");
-      expect(request.earliest).toBe("1791372740");
+      expect(request.earliest).toBe("1791372620");
       expect(request.latest).toBe("1791373660");
       expect(request.maxRows).toBe(65);
     }

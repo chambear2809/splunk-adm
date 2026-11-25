@@ -65,8 +65,8 @@ const MAX_TEXT = 512;
 const MAX_TIME = 253_402_300_799;
 
 export const ASSET_HISTORY_COVERAGE = [
-  "Asset history is supplemental inventory context. It does not create traffic, graph edges, or counters.",
-  "The search reads the configured asset-history indexes from epoch zero through the later of the selected window end and capture time. It scans each verified authority across scopes and addresses, resolves revisions, then applies selected identity and time filters. Index retention, permissions, the 30-second search deadline, and the 10,001-row source-scan cap bound actual coverage.",
+  "Asset history provides inventory context only.",
+  "The search resolves revisions across scopes and addresses before filtering to the selection. Its window runs from epoch zero through capture time or the selection end, whichever is later. Coverage depends on index retention, permissions, a 30-second deadline and a 10,001-row scan cap.",
   "A timeout or source/result cap makes history incomplete; overlapping asset IDs remain ambiguous, and a current-only snapshot never attributes earlier traffic.",
   "Only source-provided half-open validity intervals support historical attribution. Snapshot freshness reports feed age; it does not extend an assignment interval or imply retirement.",
 ] as const;

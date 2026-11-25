@@ -185,6 +185,7 @@ export interface GraphEdge {
   contract_basis?: ContractBasis;
   acl_action?: AclAction;
   acl_leaf?: string;
+  acl_policy_point?: string;
   acl_permits?: number;
   acl_drops?: number;
   /** NetFlow VLAN observations, serialized as one JSON array in Splunk rows. */
@@ -1014,6 +1015,9 @@ export function parseGraph(value: unknown): Graph {
       !optionalText(e.contract_filter) ||
       !optionalText(e.contract_entry) ||
       !optionalText(e.acl_leaf) ||
+      (e.acl_policy_point !== undefined &&
+        (typeof e.acl_policy_point !== "string" ||
+          !/^[a-f0-9]{64}$/.test(e.acl_policy_point))) ||
       !optionalCount(e.acl_permits) ||
       !optionalCount(e.acl_drops) ||
       (e.contract_basis !== undefined &&
@@ -1039,6 +1043,7 @@ export function parseGraph(value: unknown): Graph {
           "contract_basis",
           "acl_action",
           "acl_leaf",
+          "acl_policy_point",
           "acl_permits",
           "acl_drops",
         ].some((k) => e[k] !== undefined)) ||

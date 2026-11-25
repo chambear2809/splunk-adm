@@ -10,6 +10,27 @@ import { createCaseClient } from "../../frontend/src/investigations/caseClient";
 
 // Synthetic window adapter exercises UI behavior; it is not real-source qualification.
 const incident = demoGraph();
+const acl = new URLSearchParams(location.search).get("acl");
+const aclEdge = incident.edges.find(
+  (edge) => edge.relationship === "communicates_with",
+)!;
+const policyPoint = "a".repeat(64);
+if (acl) {
+  incident.edges = [
+    {
+      ...aclEdge,
+      acl_action: "drop",
+      acl_drops: 1,
+      acl_permits: acl === "mixed" ? 1 : undefined,
+      acl_policy_point:
+        acl === "same"
+          ? policyPoint
+          : acl === "cross"
+            ? "b".repeat(64)
+            : undefined,
+    },
+  ];
+}
 const ThemeProvider = toolkitDefault(SplunkThemeProviderExport);
 const theme =
   new URLSearchParams(location.search).get("theme") === "dark"
@@ -70,7 +91,17 @@ createRoot(document.getElementById("root")!).render(
             ...incident,
             snapshot_id: "synthetic-baseline",
             window,
-            edges: [],
+            edges: acl
+              ? [
+                  {
+                    ...aclEdge,
+                    acl_action: "permit",
+                    acl_permits: 1,
+                    acl_drops: undefined,
+                    acl_policy_point: policyPoint,
+                  },
+                ]
+              : [],
           })}
         />
         <BusinessServiceImport />

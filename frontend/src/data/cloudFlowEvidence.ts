@@ -21,9 +21,10 @@ import type { SearchClient } from "./searchClient";
 export const CLOUD_FLOW_SOURCE = "aws_vpc_flow" as const;
 export const CLOUD_FLOW_SOURCETYPE = "aws:vpcflow:v5";
 export const CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS = 60;
-export const CLOUD_FLOW_MAX_AGGREGATION_SECONDS = 600;
+const CLOUD_FLOW_MAX_REPORTED_INTERVAL =
+  600 + 2 * CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
 export const CLOUD_FLOW_LOOKBACK_SECONDS =
-  CLOUD_FLOW_MAX_AGGREGATION_SECONDS + CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
+  CLOUD_FLOW_MAX_REPORTED_INTERVAL + CLOUD_FLOW_TIME_UNCERTAINTY_SECONDS;
 export const CLOUD_FLOW_RECORD_LIMIT = 64;
 export const CLOUD_FLOW_INPUT_LIMIT = 10000;
 export const CLOUD_FLOW_RECORD_BYTES = 1048576;
@@ -120,13 +121,12 @@ export interface CloudFlowObservation {
 }
 
 const COVERAGE = [
-  "Flow Logs report best-effort interface intervals. Missing data does not prove no traffic.",
-  "ACCEPT and REJECT leave application success and the exact policy rule unknown.",
-  "NODATA and SKIPDATA describe capture scope. Endpoint presence remains unknown.",
-  "Counters are per record. Interfaces, subscriptions, directions and replays are not deduplicated.",
+  "Flow Logs may arrive late or omit traffic. This search is separate from the graph.",
+  "ACCEPT and REJECT do not identify the rule or application outcome.",
+  "NODATA and SKIPDATA describe the capture, not endpoint presence.",
+  "Counters are per record, without deduplication across interfaces, subscriptions, directions or replays.",
   "Interface and packet addresses can differ after NAT, secondary addressing or proxying.",
   "ENI and instance IDs do not establish historical ownership.",
-  "Flow Logs may omit traffic or arrive late. This search is separate from the graph snapshot.",
 ];
 
 function selector(indexes: readonly string[]): string {
@@ -499,8 +499,12 @@ export function normalizeCloudFlowEvidence(
         throw new Error(
           "Indexed event time does not match the producer start.",
         );
-      if (end < start || !countInWindow({ start, end }, selection))
-        throw new Error("Record interval does not overlap the selection.");
+      if (
+        end < start ||
+        end - start > CLOUD_FLOW_MAX_REPORTED_INTERVAL ||
+        !countInWindow({ start, end }, selection)
+      )
+        throw new Error("Invalid AWS VPC Flow Logs interval.");
       if (
         fields.type !== "-" &&
         fields.type !== "IPv4" &&

@@ -1,5 +1,28 @@
 import { expect, test } from "@playwright/test";
 
+for (const acl of ["cross", "same", "mixed"]) {
+  test(`qualifies the ${acl} ACL comparison in the incident workspace`, async ({
+    page,
+  }) => {
+    await page.goto(`/tests/browser/investigation.html?acl=${acl}`);
+    await page
+      .getByRole("button", { name: "Compare windows", exact: true })
+      .click();
+    const lead = page.locator("details.atlas-incident-finding");
+    await expect(lead.locator("summary")).toHaveText(
+      acl === "same"
+        ? "Policy blocking may have changed · Supported"
+        : "Policy blocking may be relevant · Needs evidence",
+    );
+    await lead.locator("summary").click();
+    await expect(lead).toContainText(
+      acl === "same"
+        ? "baseline permit and incident drop reported"
+        : "incident drop reported; baseline permit reported; a shared policy point is unverified",
+    );
+  });
+}
+
 test("incident leads disclose ranked evidence and uncertainty", async ({
   page,
 }) => {

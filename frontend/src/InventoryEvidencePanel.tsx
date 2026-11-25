@@ -54,19 +54,14 @@ export function InventoryEvidencePanel({
     selection.selectionId + ":" + selection.configurationFingerprint;
 
   useEffect(() => {
-    controller.current?.abort();
-    controller.current = undefined;
     setResult(undefined);
     setError(undefined);
     setBusy(false);
-  }, [selectionKey]);
-
-  useEffect(
-    () => () => {
+    return () => {
       controller.current?.abort();
-    },
-    [],
-  );
+      controller.current = undefined;
+    };
+  }, [selectionKey, client, configurationClient]);
 
   const inspect = async () => {
     controller.current?.abort();
@@ -76,23 +71,22 @@ export function InventoryEvidencePanel({
     setError(undefined);
     setResult(undefined);
     try {
-      setResult(
-        await loadAssetHistoryEvidence(
-          client,
-          selection,
-          active.signal,
-          configurationClient,
-        ),
+      const next = await loadAssetHistoryEvidence(
+        client,
+        selection,
+        active.signal,
+        configurationClient,
       );
+      if (controller.current === active) setResult(next);
     } catch (cause) {
-      if (!active.signal.aborted)
+      if (controller.current === active)
         setError(
           cause instanceof Error
             ? cause.message
             : "Asset history could not be inspected.",
         );
     } finally {
-      if (!active.signal.aborted) setBusy(false);
+      if (controller.current === active) setBusy(false);
     }
   };
 
@@ -114,10 +108,6 @@ export function InventoryEvidencePanel({
   return (
     <section aria-labelledby="inventory-evidence-title">
       <h2 id="inventory-evidence-title">Asset history</h2>
-      <p>
-        Optional inventory evidence for the selected scoped addresses and time
-        window. It does not create traffic relationships or application edges.
-      </p>
       <button type="button" onClick={() => void inspect()} disabled={busy}>
         {busy ? "Inspecting asset history…" : "Inspect asset history"}
       </button>{" "}
@@ -130,26 +120,18 @@ export function InventoryEvidencePanel({
       {result && (
         <div aria-live="polite">
           <p>
-            Capture: {time(result.capturedAt)} · state: {result.state} · history
-            is independent of the traffic capture.
+            Capture: {time(result.capturedAt)} · state: {result.state}
           </p>
           {!complete && (
-            <p role="status">
-              History completeness or configuration could not be verified. No
-              unique asset attribution is available.
-            </p>
+            <p role="status">History could not establish a unique asset.</p>
           )}
           {result.inputCapped && (
             <p role="status">
-              More than 10,000 matching history rows were present; the result is
-              incomplete.
+              More than 10,000 matching history rows. Results are incomplete.
             </p>
           )}
           {result.outputCapped && (
-            <p role="status">
-              The display is capped at 64 rows; the result cannot establish a
-              unique owner.
-            </p>
+            <p role="status">The display is capped at 64 rows.</p>
           )}
           {result.rejected > 0 && (
             <p role="status">
@@ -164,10 +146,7 @@ export function InventoryEvidencePanel({
             </p>
           )}
           {result.records.length === 0 ? (
-            <p>
-              No matching asset-history records were visible. This does not
-              prove that the source has no records or complete coverage.
-            </p>
+            <p>No matching records were visible. Source coverage is unknown.</p>
           ) : (
             <div className="dns-table-scroll">
               <table>

@@ -80,6 +80,48 @@ test.describe("optional DNS and scoped endpoint investigations", () => {
       page.getByRole("table", { name: "Observed one-hop conversations" }),
     ).toContainText("198.51.100.20");
   });
+  for (const finish of ["resolve", "reject"]) {
+    test(`does not publish a cancelled asset-history recheck that will ${finish} after retry`, async ({
+      page,
+    }) => {
+      await page.goto(
+        "/tests/browser/dns-evidence.html?fault=asset-race" +
+          (finish === "reject" ? "&reject=1" : ""),
+      );
+      await page
+        .getByRole("button", { name: "Investigate", exact: true })
+        .click();
+      const panel = page.locator(
+        'section[aria-labelledby="inventory-evidence-title"]',
+      );
+      await panel
+        .getByRole("button", { name: "Inspect asset history" })
+        .click();
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-asset-recheck",
+        "pending",
+      );
+      await panel.getByRole("button", { name: "Cancel", exact: true }).click();
+      await panel
+        .getByRole("button", { name: "Inspect asset history" })
+        .click();
+      await expect(panel.getByRole("row", { name: /asset-new/ })).toBeVisible();
+      await page.evaluate(() =>
+        (
+          window as Window & { __RELEASE_ASSET__?: () => void }
+        ).__RELEASE_ASSET__?.(),
+      );
+      await expect(page.locator("body")).toHaveAttribute(
+        "data-asset-recheck",
+        "settled",
+      );
+      await expect(panel.getByRole("row", { name: /asset-old/ })).toHaveCount(
+        0,
+      );
+      await expect(panel.getByRole("row", { name: /asset-new/ })).toBeVisible();
+      await expect(panel).not.toContainText("Source configuration changed");
+    });
+  }
   test("keeps traffic visible after optional permission failure", async ({
     page,
   }) => {

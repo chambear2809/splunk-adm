@@ -17,6 +17,8 @@ import "../../frontend/src/styles.css";
 const params = new URLSearchParams(location.search),
   fault = params.get("fault");
 const now = 1791373600;
+let assetSearches = 0;
+let assetPending = false;
 const config: EvidenceConfiguration = {
   fingerprint: "a".repeat(64),
   trafficContract: 1,
@@ -88,8 +90,51 @@ if (fault === "cloud-cap") {
     },
   ];
 }
+if (fault === "asset-race") {
+  config.supplemental = [
+    ...(config.supplemental ?? []).filter(
+      (item) => item.source !== "asset_history",
+    ),
+    {
+      source: "asset_history",
+      state: "active",
+      indexes: ["asset_history_idx"],
+      authorities: ["cmdb-prod"],
+      schemaQualified: true,
+      staleAfterSeconds: 3600,
+      mappings: [
+        {
+          observer_kind: "asset_authority",
+          observer: "cmdb-prod",
+          scope: "prod",
+          cluster: "",
+          mapping_status: "verified",
+        },
+      ],
+    },
+  ];
+}
 const configClient: EvidenceConfigClient = {
-  read: async () => structuredClone(config),
+  read: async (signal) => {
+    if (fault === "asset-race" && assetPending) {
+      assetPending = false;
+      document.body.dataset.assetRecheck = "pending";
+      await new Promise<void>((resolve, reject) => {
+        (
+          window as Window & { __RELEASE_ASSET__?: () => void }
+        ).__RELEASE_ASSET__ = () => {
+          if (params.has("reject") && signal?.aborted)
+            reject(new DOMException("Cancelled", "AbortError"));
+          else resolve();
+        };
+      }).finally(() => {
+        setTimeout(() => {
+          document.body.dataset.assetRecheck = "settled";
+        }, 0);
+      });
+    }
+    return structuredClone(config);
+  },
 };
 const client: SearchClient = {
   search: async (request) => {
@@ -98,6 +143,51 @@ const client: SearchClient = {
     request.onLifecycle?.({ state: "creating" });
     request.onLifecycle?.({ state: "created", sid: "mock-id" });
     try {
+      if (
+        fault === "asset-race" &&
+        request.search.includes('sourcetype="adm:asset_history"')
+      ) {
+        const asset = ++assetSearches === 1 ? "asset-old" : "asset-new";
+        assetPending = asset === "asset-old";
+        return {
+          rows: [
+            {
+              kind: "supplemental_record",
+              schema_version: 1,
+              index: "asset_history_idx",
+              event_time_epoch: String(now - 60),
+              indexed_at: String(now),
+              asset_authority: "cmdb-prod",
+              scope: "prod",
+              ip: "192.0.2.10",
+              record_id: asset,
+              revision: 1,
+              asset_id: asset,
+              validity_basis: "source_interval",
+              valid_from: String(now - 60),
+              valid_to: String(now + 300),
+              snapshot_id: "snapshot-asset",
+              snapshot_at: String(now + 300),
+              snapshot_complete: 1,
+              revision_conflict: 0,
+              record_fingerprint: "a".repeat(64),
+            },
+            {
+              kind: "supplemental_completion",
+              schema_version: 1,
+              input_count: 1,
+              returned_count: 1,
+              input_capped: 0,
+              oversized: 0,
+              source_scan_count: 1,
+              source_scan_capped: 0,
+              source_scan_invalid_count: 0,
+            },
+          ],
+          warnings: [],
+          errors: [],
+        };
+      }
       if (
         fault === "cloud-cap" &&
         request.search.includes('sourcetype="aws:vpcflow:v5"')

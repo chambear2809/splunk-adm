@@ -300,6 +300,11 @@ A direct pod-IP connection needs no hand-off: the server resolves to the pod, an
   - `not_evaluated`: everything else: an unclassified side, sides in different tenants, a tenant with collected vzAny relations, taboos, ESGs, service graphs or an unenforced VRF (`fvCtx pcEnfPref=unenforced`), a preferred-group member, a matching entry with source ports or `tcpRules` or in a subject with `vzInTerm`/`vzOutTerm`, permit and deny entries matching together (precedence not evaluated), or no match while `adm_aci_policy_complete` is 0.
 - No contract fields when the two sides are on the same Kubernetes node (the traffic never reaches the fabric) or when no ACI policy is collected.
 - **ACL-log records** add `acl_action` (`drop` when any drop was logged, else `permit`), `acl_leaf`, `acl_permits` and `acl_drops`. Logging exists only where a subject uses `directives=log`. A conversation seen only in drop records is an edge with `acl_action=drop`. A flow that simply matches no contract is not logged, so the absence of a drop record proves nothing.
+  The rollups and graph also carry an opaque `acl_policy_point` when all
+  contributing ACL observations identify one APIC authority and leaf. Incident
+  comparisons require the same identifier in both windows to rank a
+  permit-to-drop change as supported. Mixed observations and older summaries
+  without this field still show the observed ACL counts.
 
 ## Saved searches
 

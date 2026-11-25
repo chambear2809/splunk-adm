@@ -90,14 +90,28 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "14d3905feebc1f8680bbf13709d36a1efadfd8231b6e921f216d3ca68717ea28",
+      "reviewed_macro_file_sha256": "405678f10eaa45e19378c5f59fe0173c9b149575334f57d34b9a901a2419577e",
       "method": "static review only; no recapture",
-      "reason": "FTD point timing and Device counter validation modify only Trace and Device readers. All 38 macros in the captured adm_graph(4) dependency closure are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+      "reason": "The graph retains an optional APIC-and-leaf ACL policy-point field for newly written rollups. Counts and prior graph fields are unchanged. The immutable capture remains valid as a legacy graph without policy-point provenance, which Incident treats as unqualified for a supported policy change.",
       "modified_macro_stanzas": [
-        "adm_path_trace(3)",
-        "adm_device_flows_aggregate(1)"
+        "adm_conversation_rollup",
+        "adm_conversation_rollup_v2",
+        "adm_graph_inputs(4)",
+        "adm_graph_inputs_v2(4)",
+        "adm_graph_edges(4)",
+        "adm_graph_output(4)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "14d3905feebc1f8680bbf13709d36a1efadfd8231b6e921f216d3ca68717ea28",
+          "method": "static review only; no recapture",
+          "reason": "FTD point timing and Device counter validation modify only Trace and Device readers. All 38 macros in the captured adm_graph(4) dependency closure are byte-identical to the preceding reviewed checkout. Captured graph rows and capture hashes are unchanged; no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_path_trace(3)",
+            "adm_device_flows_aggregate(1)"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "a66198aada9addc5d2d8764e1828f0a6ad8cb2cb5ca1aafed12ccaf9661647b7",
