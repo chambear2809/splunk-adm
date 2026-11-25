@@ -20,6 +20,7 @@ from typing import Any
 
 from tools.change_correlation.contracts import canonical_json
 from tools.raw_fixtures.common import NS, envelope, epoch
+from tools.raw_fixtures.nxos import aci_event
 
 
 def aci_endpoint_snapshot_event(*, event_host: str, emitted_at: datetime,
@@ -31,15 +32,14 @@ def aci_endpoint_snapshot_event(*, event_host: str, emitted_at: datetime,
               learning_classification, ownership)
     if emitted_at.tzinfo is None or any(not isinstance(v, str) or not v.strip() for v in values):
         raise ValueError("ACI endpoint fixture inputs are invalid.")
-    attributes = {
-        "dn": endpoint_dn, "fabricPathDn": fabric_path_dn,
-        "encap": encapsulation, "lcC": learning_classification,
-        "lcOwn": ownership,
-    }
+    attributes = sorted([
+        ("dn", endpoint_dn), ("fabricPathDn", fabric_path_dn),
+        ("encap", encapsulation), ("lcC", learning_classification),
+        ("lcOwn", ownership),
+    ])
     return envelope(epoch(emitted_at), event_host,
                     "cisco_nexus_aci://classInfo_faultInst", "cisco:dc:aci:class",
-                    "cisco_dc", {"class": "fvCEp", "apic_host": apic_host,
-                                  "attributes": attributes})
+                    "cisco_dc", aci_event(emitted_at, attributes, apic_host, "fvCEp"))
 
 
 SOURCE_PROVENANCE = "documentation_shaped_synthetic"

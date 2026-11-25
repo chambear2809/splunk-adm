@@ -49,3 +49,18 @@ class ScenarioV2Tests(unittest.TestCase):
         text = repr(inputs)
         self.assertNotIn("indexed_receipt_epoch", text)
         self.assertNotIn("event_fingerprint", text)
+
+    def test_track_b_aci_readback_uses_flattened_ta_event(self):
+        scenario = load_scenario("track-b-fabric", "b-aci-attachment")
+        inputs = prepare_source_inputs(
+            scenario,
+            execution_id="00000000-0000-4000-8000-000000000071",
+            anchor_epoch=1_900_000_200,
+        )
+        event = next(item for item in inputs["events"] if item["id"] == "b-aci-endpoint-prelude")
+        payload = event["raw_events"][0]["event"]
+        self.assertIsInstance(payload, str)
+        self.assertIn('\tdn="', payload)
+        self.assertIn('\tcomponent="fvCEp"', payload)
+        self.assertIn('\tfabricPathDn="', payload)
+        self.assertNotIn('"attributes"', payload)
