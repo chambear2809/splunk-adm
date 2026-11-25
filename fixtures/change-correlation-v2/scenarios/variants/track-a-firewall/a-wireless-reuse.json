@@ -1,0 +1,705 @@
+{
+  "schema_version": 1,
+  "scenario_id": "track-a-firewall",
+  "template_revision": 2,
+  "presentation_status": "blocked",
+  "title": "Wireless checkout",
+  "application": {
+    "service": "checkout",
+    "environment": "demo",
+    "cluster": "cc-a-cilium",
+    "namespace": "shop"
+  },
+  "connected_services": [
+    {
+      "application": {
+        "service": "inventory",
+        "environment": "demo",
+        "cluster": "cc-a-cilium",
+        "namespace": "shop"
+      },
+      "registry_key": "inventory",
+      "role": "availability_lookup"
+    },
+    {
+      "application": {
+        "service": "pricing",
+        "environment": "demo",
+        "cluster": "cc-a-cilium",
+        "namespace": "shop"
+      },
+      "registry_key": "pricing",
+      "role": "price_lookup"
+    }
+  ],
+  "selection": {
+    "change_scope": "change-a",
+    "client_ip": "10.71.0.20",
+    "client_mac": "02:71:00:00:00:20",
+    "frontend_ip": "10.50.0.20",
+    "frontend_port": 8080,
+    "database_ip": "10.20.30.40",
+    "database_port": 5432,
+    "control_scope": "change-a-control",
+    "control_cluster": "cc-a-control",
+    "control_namespace": "shop-control",
+    "control_service": "checkout-control",
+    "control_client_ip": "10.71.0.30",
+    "control_client_mac": "02:71:00:00:00:30",
+    "control_frontend_ip": "10.50.0.30",
+    "control_backend_ip": "10.42.2.30",
+    "unrelated_scope": "change-a-other",
+    "unrelated_cluster": "cc-a-other"
+  },
+  "clock": {
+    "basis": "utc_epoch_seconds_with_monotonic_waits",
+    "prelude_offset_seconds": -120,
+    "minimum_t_lead_seconds": 180,
+    "duration_seconds": 1200,
+    "phases": [
+      {
+        "id": "baseline",
+        "start_offset_seconds": 0,
+        "end_offset_seconds": 300
+      },
+      {
+        "id": "change",
+        "start_offset_seconds": 300,
+        "end_offset_seconds": 420
+      },
+      {
+        "id": "impact",
+        "start_offset_seconds": 420,
+        "end_offset_seconds": 900
+      },
+      {
+        "id": "recovery",
+        "start_offset_seconds": 900,
+        "end_offset_seconds": 1200
+      }
+    ]
+  },
+  "authorities": [
+    {
+      "product": "meraki",
+      "authority": "cc-a-meraki",
+      "organization": "cc-a-org",
+      "network": "cc-a-network"
+    },
+    {
+      "product": "fmc",
+      "authority": "cc-a-fmc.example.invalid",
+      "domain": "cc-a-domain",
+      "device_alias": "cc-a-ftd"
+    },
+    {
+      "product": "nxos",
+      "authority": "https://cc-a-nd.example.invalid",
+      "fabric": "cc-a-nxos",
+      "chassis_alias": "cc-a-leaf"
+    },
+    {
+      "product": "kubernetes",
+      "authority": "cluster:cc-a-cilium",
+      "cluster": "cc-a-cilium"
+    }
+  ],
+  "identity_registry": {
+    "meraki": {
+      "organization_alias": "cc-a-org",
+      "organization_id": {
+        "strategy": "synthetic_numeric_sha256_v1",
+        "logical_key": "meraki.organization"
+      },
+      "primary_network_alias": "cc-a-network",
+      "primary_network_id": {
+        "strategy": "meraki_N_decimal_sha256_v1",
+        "logical_key": "meraki.primary_network"
+      },
+      "control_network_alias": "cc-a-control-network",
+      "control_network_id": {
+        "strategy": "meraki_N_decimal_sha256_v1",
+        "logical_key": "meraki.control_network"
+      },
+      "primary_ssid": {
+        "number": 0,
+        "name": "Wireless checkout",
+        "authMode": "open",
+        "ipAssignmentMode": "Bridge mode",
+        "useVlanTagging": true,
+        "defaultVlanId_baseline": 71,
+        "defaultVlanId_impact": 72,
+        "defaultVlanId_restored": 71
+      },
+      "primary_access_point": {
+        "logical_key": "meraki.primary_access_point",
+        "name": "cc-a-mr-01",
+        "serial_strategy": "meraki_Q2XX_serial_sha256_v1",
+        "mac": "02:71:00:00:10:01",
+        "model": "MR46",
+        "lan_ip": "10.71.0.11"
+      },
+      "ms390": {
+        "logical_key": "meraki.ms390",
+        "name": "cc-a-ms390-01",
+        "mac": "02:71:00:00:39:00",
+        "model": "MS390",
+        "lan_ip": "10.71.0.2",
+        "serial": {
+          "strategy": "meraki_Q2XX_serial_sha256_v1",
+          "logical_key": "meraki.ms390.serial"
+        }
+      },
+      "control_access_point": {
+        "logical_key": "meraki.control_access_point",
+        "name": "cc-a-mr-control-01",
+        "serial_strategy": "meraki_Q2XX_serial_sha256_v1",
+        "mac": "02:71:00:00:10:02",
+        "model": "MR46",
+        "lan_ip": "10.71.1.12"
+      },
+      "unrelated_network_alias": "cc-a-other-network",
+      "unrelated_network_id": {
+        "strategy": "meraki_N_decimal_sha256_v1",
+        "logical_key": "meraki.unrelated_network"
+      }
+    },
+    "firewall": {
+      "logical_key": "ftd.primary_device",
+      "authority": "cc-a-fmc.example.invalid",
+      "source_host": "cc-a-fmc.example.invalid",
+      "device_alias": "cc-a-ftd",
+      "device_ip": "10.71.255.10"
+    },
+    "fabric": {
+      "logical_key": "nxos.primary_leaf",
+      "authority": "https://cc-a-nd.example.invalid",
+      "fabric": "cc-a-nxos",
+      "chassis_alias": "cc-a-leaf",
+      "nd_host": "10.71.255.60",
+      "chassis_serial": {
+        "strategy": "nxos_FDO_serial_sha256_v1",
+        "logical_key": "nxos.primary_leaf"
+      },
+      "management_ip": "10.71.255.61",
+      "node_id": 101,
+      "model": "N9K-C93180YC-FX3",
+      "nxos_version": "10.6(1)",
+      "interface": "Ethernet1/24"
+    },
+    "primary": {
+      "routing_scope": "change-a",
+      "cluster": "cc-a-cilium",
+      "namespace": "shop",
+      "application_service": "checkout",
+      "client": {
+        "logical_key": "client.primary",
+        "ip": "10.71.0.20",
+        "mac": "02:71:00:00:00:20"
+      },
+      "frontend": {
+        "logical_key": "service.frontend",
+        "name": "checkout-api",
+        "ip": "10.50.0.20",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "backend": {
+        "logical_key": "workload.checkout-v1",
+        "name": "checkout-v1",
+        "ip": "10.42.1.20",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-a-cilium-node-1",
+        "ip": "10.71.255.101",
+        "mac": "02:71:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "control": {
+      "routing_scope": "change-a-control",
+      "cluster": "cc-a-control",
+      "namespace": "shop-control",
+      "application_service": "checkout-control",
+      "client": {
+        "logical_key": "client.control",
+        "ip": "10.71.0.30",
+        "mac": "02:71:00:00:00:30"
+      },
+      "frontend": {
+        "logical_key": "service.control_frontend",
+        "name": "checkout-control",
+        "ip": "10.50.0.30",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "backend": {
+        "logical_key": "workload.control-v1",
+        "name": "checkout-control-v1",
+        "ip": "10.42.2.30",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "node": {
+        "logical_key": "node.control",
+        "name": "cc-a-control-node-1",
+        "ip": "10.71.255.201",
+        "mac": "02:71:FF:00:02:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "inventory": {
+      "routing_scope": "change-a",
+      "cluster": "cc-a-cilium",
+      "namespace": "shop",
+      "application_service": "inventory",
+      "backend": {
+        "logical_key": "workload.inventory-v1",
+        "name": "inventory-v1",
+        "ip": "10.42.1.40",
+        "port": 8081,
+        "protocol": "TCP"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-a-cilium-node-1",
+        "ip": "10.71.255.101",
+        "mac": "02:71:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "pricing": {
+      "routing_scope": "change-a",
+      "cluster": "cc-a-cilium",
+      "namespace": "shop",
+      "application_service": "pricing",
+      "backend": {
+        "logical_key": "workload.pricing-v1",
+        "name": "pricing-v1",
+        "ip": "10.42.1.50",
+        "port": 8082,
+        "protocol": "TCP"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-a-cilium-node-1",
+        "ip": "10.71.255.101",
+        "mac": "02:71:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "stream_exporters": [
+      {
+        "logical_key": "exporter.primary_ms390",
+        "address": "10.71.0.2",
+        "observation_domain_id": 390,
+        "scope": "change-a",
+        "cluster": "cc-a-cilium",
+        "profile": "meraki_ms390_ipfix"
+      },
+      {
+        "logical_key": "exporter.control_ms390",
+        "address": "10.71.1.2",
+        "observation_domain_id": 391,
+        "scope": "change-a-control",
+        "cluster": "cc-a-control",
+        "profile": "meraki_ms390_ipfix"
+      }
+    ],
+    "cilium_observers": [
+      {
+        "observer_kind": "cluster",
+        "observer": "cc-a-cilium",
+        "scope": "change-a",
+        "cluster": "cc-a-cilium"
+      },
+      {
+        "observer_kind": "cluster",
+        "observer": "cc-a-control",
+        "scope": "change-a-control",
+        "cluster": "cc-a-control"
+      }
+    ],
+    "cilium_settings": [
+      {
+        "cluster": "cc-a-cilium",
+        "lb_mode": "snat",
+        "ingress_mode": "dedicated",
+        "l2announcements_enabled": 0,
+        "mapping_status": "mapped",
+        "qualification": "synthetic_administrator_configuration_unqualified"
+      },
+      {
+        "cluster": "cc-a-control",
+        "lb_mode": "snat",
+        "ingress_mode": "dedicated",
+        "l2announcements_enabled": 0,
+        "mapping_status": "mapped",
+        "qualification": "synthetic_administrator_configuration_unqualified"
+      }
+    ],
+    "client_reused": {
+      "client": {
+        "logical_key": "client.reused",
+        "ip": "10.71.0.20",
+        "mac": "02:71:00:00:00:21"
+      }
+    }
+  },
+  "identity_keys": [
+    "meraki.primary_network",
+    "meraki.primary_ssid",
+    "meraki.primary_client",
+    "ftd.primary_device",
+    "nxos.primary_attachment",
+    "kubernetes.checkout_service",
+    "kubernetes.checkout_backend_v1",
+    "control.client",
+    "control.service",
+    "kubernetes.inventory_backend_v1",
+    "kubernetes.pricing_backend_v1"
+  ],
+  "evidence_schedule": [
+    {
+      "id": "a-connected-k8s-prelude",
+      "product": "kubernetes",
+      "family": "pod_snapshot",
+      "kind": "configuration",
+      "offset_seconds": -108,
+      "required": true,
+      "status": "planned",
+      "purpose": "Retain native inventory and pricing Pods before independent application bindings."
+    },
+    {
+      "id": "a-inventory-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "a-inventory-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "a-inventory-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "a-inventory-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "a-inventory-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "a-pricing-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "a-pricing-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "a-pricing-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "a-pricing-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "a-pricing-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "a-inventory-baseline-flow",
+      "product": "cilium",
+      "family": "hubble_pod_tuple",
+      "kind": "operational",
+      "offset_seconds": 150,
+      "required": true,
+      "status": "planned",
+      "purpose": "Native checkout Pod to inventory Pod baseline flow.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "a-pricing-baseline-flow",
+      "product": "cilium",
+      "family": "hubble_pod_tuple",
+      "kind": "operational",
+      "offset_seconds": 151,
+      "required": true,
+      "status": "planned",
+      "purpose": "Native checkout Pod to pricing Pod baseline flow.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "a-ssid-prelude",
+      "product": "meraki",
+      "family": "ssid_snapshot",
+      "kind": "configuration",
+      "offset_seconds": -120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Complete SSID context before client observations."
+    },
+    {
+      "id": "a-k8s-primary-prelude",
+      "product": "kubernetes",
+      "family": "object_snapshot",
+      "kind": "configuration",
+      "offset_seconds": -120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Stable application object context."
+    },
+    {
+      "id": "a-ssid-baseline",
+      "product": "meraki",
+      "family": "ssid_snapshot",
+      "kind": "configuration",
+      "offset_seconds": 0,
+      "required": true,
+      "status": "planned",
+      "purpose": "Complete unchanged SSID state."
+    },
+    {
+      "id": "a-baseline-association",
+      "product": "meraki",
+      "family": "client_association",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "First source-valid MAC-to-SSID/AP association for the retained IP."
+    },
+    {
+      "id": "a-reused-association",
+      "product": "meraki",
+      "family": "client_association",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Second distinct MAC reports the same IP in a compatible association window."
+    },
+    {
+      "id": "a-baseline-connection",
+      "product": "ftd",
+      "family": "connection_observation",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent FTD Allow observation for the retained client IP.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "a-baseline-flow",
+      "product": "stream_ipfix",
+      "family": "ms390_client_flow",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent IP-level flow; unique station identity is withheld.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "a-baseline-handoff",
+      "product": "cilium",
+      "family": "hubble_client_tuple",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent compatible handoff using the IP tuple only.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "a-recovery-connection",
+      "product": "ftd",
+      "family": "connection_observation",
+      "kind": "operational",
+      "offset_seconds": 930,
+      "required": true,
+      "status": "planned",
+      "purpose": "Later independent Allow observation.",
+      "summary_bucket_phase": "recovery"
+    },
+    {
+      "id": "a-recovery-flow",
+      "product": "stream_ipfix",
+      "family": "ms390_client_flow",
+      "kind": "operational",
+      "offset_seconds": 930,
+      "required": true,
+      "status": "planned",
+      "purpose": "Later IP-level flow; no unique-station attribution.",
+      "summary_bucket_phase": "recovery"
+    },
+    {
+      "id": "a-recovery-handoff",
+      "product": "cilium",
+      "family": "hubble_client_tuple",
+      "kind": "operational",
+      "offset_seconds": 930,
+      "required": true,
+      "status": "planned",
+      "purpose": "Later compatible IP-level handoff.",
+      "summary_bucket_phase": "recovery"
+    },
+    {
+      "id": "a-primary-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "a-primary-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "a-primary-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "a-primary-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "a-primary-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    }
+  ],
+  "assertion_requirements": [
+    "The retained SSID snapshots remain unchanged; this branch has no SSID change or restoration poll.",
+    "Both native client MAC claims are retained for the reused IP; no unique station ownership is inferred from an IP-level observation.",
+    "Independent identity-only INTERNAL spans bind checkout/demo/cc-a-cilium/shop to the same retained workload.checkout-v1 Pod UID in each phase; they contain no request, peer, client, success or health evidence.",
+    "Baseline and recovery FTD/frontend/Hubble observations retain their own tuples and source times; a compatible IP-level handoff does not identify which wireless station produced it.",
+    "Change and impact have no demonstrated traffic or handoff; identity bindings do not establish traffic continuity or recovery.",
+    "Native FMC policy-edit and deployment evidence remain blocked; do not emit synthetic FMC audit or deployment records.",
+    "Cilium settings and routed VIP reachability remain declared synthetic prerequisites, not observed network-path evidence."
+  ],
+  "blocked_gates": [
+    "source_fact_and_relationship_readiness",
+    "installed_replay_and_capture",
+    "lifecycle_authorization"
+  ],
+  "blocked_variants": [
+    "fmc_native_policy_edit_and_deployment"
+  ],
+  "variant_id": "a-wireless-reuse",
+  "variant_contract_version": 2,
+  "variant_expectation": "observed",
+  "variant_claim_limits": [
+    "Two valid association observations claim the same IP; traffic remains IP-level.",
+    "Do not assign a unique client station or combine the two station identities."
+  ],
+  "variant_expectations": {
+    "required_schedule_ids": [
+      "a-baseline-association",
+      "a-reused-association",
+      "a-baseline-flow"
+    ],
+    "same_ip_multiple_macs": true,
+    "must_not_claim": [
+      "unique_station",
+      "station_owns_all_ip_traffic"
+    ]
+  }
+}

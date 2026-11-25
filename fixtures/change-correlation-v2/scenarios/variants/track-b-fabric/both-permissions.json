@@ -1,0 +1,603 @@
+{
+  "schema_version": 1,
+  "scenario_id": "track-b-fabric",
+  "template_revision": 2,
+  "presentation_status": "blocked",
+  "title": "Wired checkout database dependency",
+  "application": {
+    "service": "checkout",
+    "environment": "demo",
+    "cluster": "cc-b-cilium",
+    "namespace": "shop"
+  },
+  "connected_services": [
+    {
+      "application": {
+        "service": "inventory",
+        "environment": "demo",
+        "cluster": "cc-b-cilium",
+        "namespace": "shop"
+      },
+      "registry_key": "inventory",
+      "role": "availability_lookup"
+    },
+    {
+      "application": {
+        "service": "pricing",
+        "environment": "demo",
+        "cluster": "cc-b-cilium",
+        "namespace": "shop"
+      },
+      "registry_key": "pricing",
+      "role": "price_lookup"
+    }
+  ],
+  "selection": {
+    "change_scope": "change-b",
+    "client_ip": "10.61.0.20",
+    "client_mac": "02:61:00:00:00:20",
+    "frontend_ip": "10.50.0.20",
+    "frontend_port": 8080,
+    "backend_ip": "10.42.1.20",
+    "database_ip": "10.20.30.40",
+    "database_port": 5432
+  },
+  "clock": {
+    "basis": "utc_epoch_seconds_with_monotonic_waits",
+    "prelude_offset_seconds": -120,
+    "minimum_t_lead_seconds": 180,
+    "duration_seconds": 1200,
+    "phases": [
+      {
+        "id": "baseline",
+        "start_offset_seconds": 0,
+        "end_offset_seconds": 300
+      },
+      {
+        "id": "change",
+        "start_offset_seconds": 300,
+        "end_offset_seconds": 420
+      },
+      {
+        "id": "impact",
+        "start_offset_seconds": 420,
+        "end_offset_seconds": 900
+      },
+      {
+        "id": "recovery",
+        "start_offset_seconds": 900,
+        "end_offset_seconds": 1200
+      }
+    ]
+  },
+  "authorities": [
+    {
+      "product": "catalyst_center",
+      "authority": "https://cc-b-catalyst.example.invalid",
+      "site": "cc-b-site"
+    },
+    {
+      "product": "sdwan",
+      "authority": "https://cc-b-sdwan.example.invalid",
+      "device_alias": "cc-b-edge"
+    },
+    {
+      "product": "aci",
+      "authority": "https://cc-b-apic.example.invalid",
+      "fabric": "cc-b-aci",
+      "tenant": "cc-b-shop"
+    },
+    {
+      "product": "kubernetes",
+      "authority": "cluster:cc-b-cilium",
+      "cluster": "cc-b-cilium"
+    }
+  ],
+  "identity_keys": [
+    "catalyst.primary_client",
+    "sdwan.unrelated_edge",
+    "aci.checkout_consumer_epg",
+    "aci.database_provider_epg",
+    "aci.filter_entry",
+    "kubernetes.checkout_service",
+    "kubernetes.checkout_backend_v1",
+    "database.vm"
+  ],
+  "identity_registry": {
+    "primary": {
+      "routing_scope": "change-b",
+      "cluster": "cc-b-cilium",
+      "namespace": "shop",
+      "application_service": "checkout",
+      "client": {
+        "logical_key": "client.primary",
+        "ip": "10.61.0.20",
+        "mac": "02:61:00:00:00:20"
+      },
+      "frontend": {
+        "logical_key": "service.frontend",
+        "name": "checkout-api",
+        "ip": "10.50.0.20",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "backend": {
+        "logical_key": "workload.checkout-v1",
+        "name": "checkout-v1",
+        "ip": "10.42.1.20",
+        "port": 8080,
+        "protocol": "TCP",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      },
+      "database": {
+        "logical_key": "database.orders",
+        "name": "orders-db",
+        "ip": "10.20.30.40",
+        "port": 5432,
+        "protocol": "TCP"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-b-cilium-node-1",
+        "ip": "10.61.255.101",
+        "mac": "02:61:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "catalyst": {
+      "authority": "https://cc-b-catalyst.example.invalid",
+      "site": "cc-b-site",
+      "client_alias": "cc-b-client-primary",
+      "device_alias": "cc-b-campus-leaf",
+      "device_management_ip": "10.61.255.3",
+      "device_mac": "02:61:FF:00:00:03",
+      "interface": "GigabitEthernet1/0/24",
+      "client_updated_offset_seconds": -120
+    },
+    "sdwan": {
+      "authority": "https://cc-b-sdwan.example.invalid",
+      "primary_device": "cc-b-edge",
+      "primary_site": 201,
+      "primary_vpn": 20,
+      "unrelated_device": "cc-b-other-edge",
+      "unrelated_site": 202,
+      "unrelated_vpn": 30,
+      "primary_native_id": {
+        "strategy": "uuid5_scenario_logical_key_v1",
+        "logical_key": "sdwan.primary_edge"
+      },
+      "unrelated_native_id": {
+        "strategy": "uuid5_scenario_logical_key_v1",
+        "logical_key": "sdwan.unrelated_edge"
+      }
+    },
+    "aci": {
+      "authority": "https://cc-b-apic.example.invalid",
+      "fabric": "cc-b-aci",
+      "tenant": "cc-b-shop",
+      "consumer_epg_dn": "uni/tn-cc-b-shop/ap-checkout/epg-checkout",
+      "provider_epg_dn": "uni/tn-cc-b-shop/ap-data/epg-orders-db",
+      "filter_entry_dn": "uni/tn-cc-b-shop/flt-checkout-db/e-database-5432",
+      "contract_dn": "uni/tn-cc-b-shop/brc-checkout-db",
+      "subject_dn": "uni/tn-cc-b-shop/brc-checkout-db/subj-checkout-db",
+      "filter_dn": "uni/tn-cc-b-shop/flt-checkout-db",
+      "database_endpoint_mac": "02:20:30:40:00:01",
+      "source_endpoint_mac": "02:42:01:20:00:01",
+      "leaf_alias": "cc-b-leaf-101",
+      "leaf_node_id": 101,
+      "vrf": "cc-b-vrf",
+      "pod_id": 1,
+      "filter_from_port_baseline": "1",
+      "filter_to_port_baseline": "65535",
+      "filter_from_port_impact": "1",
+      "filter_to_port_impact": "5000",
+      "consumer_pc_tag": 10001,
+      "provider_pc_tag": 10002,
+      "consumer_encap": "vlan-1171",
+      "provider_encap": "vlan-1172",
+      "leaf_interface": "eth1/24",
+      "audit_user": "synthetic-operator",
+      "vrf_vnid": 50001
+    },
+    "inventory": {
+      "routing_scope": "change-b",
+      "cluster": "cc-b-cilium",
+      "namespace": "shop",
+      "application_service": "inventory",
+      "backend": {
+        "logical_key": "workload.inventory-v1",
+        "name": "inventory-v1",
+        "ip": "10.42.1.40",
+        "port": 8081,
+        "protocol": "TCP"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-b-cilium-node-1",
+        "ip": "10.61.255.101",
+        "mac": "02:61:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "pricing": {
+      "routing_scope": "change-b",
+      "cluster": "cc-b-cilium",
+      "namespace": "shop",
+      "application_service": "pricing",
+      "backend": {
+        "logical_key": "workload.pricing-v1",
+        "name": "pricing-v1",
+        "ip": "10.42.1.50",
+        "port": 8082,
+        "protocol": "TCP"
+      },
+      "node": {
+        "logical_key": "node.primary",
+        "name": "cc-b-cilium-node-1",
+        "ip": "10.61.255.101",
+        "mac": "02:61:FF:00:01:01",
+        "uid_strategy": "uuid5_scenario_logical_key_v1"
+      }
+    },
+    "stream_exporters": [
+      {
+        "logical_key": "exporter.campus_fnf",
+        "address": "10.61.255.2",
+        "observation_domain_id": 601,
+        "scope": "change-b",
+        "cluster": "cc-b-cilium",
+        "profile": "catalyst_campus_fnf"
+      },
+      {
+        "logical_key": "exporter.sdwan",
+        "address": "10.61.255.1",
+        "observation_domain_id": 701,
+        "vpn_id": "20",
+        "routing_domain": "20",
+        "scope": "change-b",
+        "cluster": "cc-b-cilium",
+        "profile": "catalyst_sdwan_ipfix"
+      }
+    ],
+    "cilium_observers": [
+      {
+        "observer_kind": "cluster",
+        "observer": "cc-b-cilium",
+        "scope": "change-b",
+        "cluster": "cc-b-cilium"
+      }
+    ],
+    "cilium_settings": [
+      {
+        "cluster": "cc-b-cilium",
+        "lb_mode": "snat",
+        "ingress_mode": "dedicated",
+        "l2announcements_enabled": 0,
+        "mapping_status": "mapped",
+        "qualification": "synthetic_administrator_configuration_unqualified"
+      }
+    ],
+    "nd": {
+      "authority": "cc-b-nd.example.invalid",
+      "fabric": "cc-b-aci",
+      "leaf": "cc-b-leaf-101"
+    }
+  },
+  "evidence_schedule": [
+    {
+      "id": "b-connected-k8s-prelude",
+      "product": "kubernetes",
+      "family": "pod_snapshot",
+      "kind": "configuration",
+      "offset_seconds": -108,
+      "required": true,
+      "status": "planned",
+      "purpose": "Retain native inventory and pricing Pods before independent application bindings."
+    },
+    {
+      "id": "b-inventory-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "b-inventory-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "b-inventory-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "b-inventory-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "b-inventory-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the inventory application Pod."
+    },
+    {
+      "id": "b-pricing-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "b-pricing-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "b-pricing-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "b-pricing-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "b-pricing-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent INTERNAL binding for the pricing application Pod."
+    },
+    {
+      "id": "b-inventory-baseline-flow",
+      "product": "cilium",
+      "family": "hubble_pod_tuple",
+      "kind": "operational",
+      "offset_seconds": 150,
+      "required": true,
+      "status": "planned",
+      "purpose": "Native checkout Pod to inventory Pod baseline flow.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "b-pricing-baseline-flow",
+      "product": "cilium",
+      "family": "hubble_pod_tuple",
+      "kind": "operational",
+      "offset_seconds": 151,
+      "required": true,
+      "status": "planned",
+      "purpose": "Native checkout Pod to pricing Pod baseline flow.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "b-k8s-prelude",
+      "product": "kubernetes",
+      "family": "object_snapshot",
+      "kind": "configuration",
+      "offset_seconds": -120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Stable application object context."
+    },
+    {
+      "id": "b-baseline-client-flow",
+      "product": "stream_ipfix",
+      "family": "catalyst_client_flow",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Permitted frontend traffic query control under the same restricted caller.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "b-baseline-client-handoff",
+      "product": "cilium",
+      "family": "hubble_client_tuple",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent permitted traffic handoff control.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "b-nd-baseline-flow",
+      "product": "nd",
+      "family": "flow_observation",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent Nexus Dashboard observation of the exact client-to-frontend tuple.",
+      "summary_bucket_phase": "baseline"
+    },
+    {
+      "id": "b-recovery-client-handoff",
+      "product": "cilium",
+      "family": "hubble_client_tuple",
+      "kind": "operational",
+      "offset_seconds": 930,
+      "required": true,
+      "status": "planned",
+      "purpose": "Later permitted traffic handoff control.",
+      "summary_bucket_phase": "recovery"
+    },
+    {
+      "id": "b-primary-binding-prelude",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": -60,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "b-primary-binding-baseline",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 120,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "b-primary-binding-change",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 360,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "b-primary-binding-impact",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "b-primary-binding-recovery",
+      "product": "otel",
+      "family": "internal_service_workload",
+      "kind": "operational",
+      "offset_seconds": 960,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent internal-only local work span; no client/request linkage."
+    },
+    {
+      "id": "b-permission-impact-flow",
+      "product": "stream_ipfix",
+      "family": "catalyst_client_flow",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Permitted impact-phase client flow for the same restricted caller control.",
+      "summary_bucket_phase": "impact"
+    },
+    {
+      "id": "b-permission-impact-handoff",
+      "product": "cilium",
+      "family": "hubble_client_tuple",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Compatible impact-phase handoff for the same restricted caller control.",
+      "summary_bucket_phase": "impact"
+    },
+    {
+      "id": "b-nd-impact-flow",
+      "product": "nd",
+      "family": "flow_observation",
+      "kind": "operational",
+      "offset_seconds": 600,
+      "required": true,
+      "status": "planned",
+      "purpose": "Independent Nexus Dashboard observation of the distinct impact tuple.",
+      "summary_bucket_phase": "impact"
+    }
+  ],
+  "assertion_requirements": [
+    "Catalyst snapshot receipt must precede dependent client evidence; lastUpdatedTime is freshness only.",
+    "ACI audit and observed policy snapshot are linked evidence, not two independent changes.",
+    "Native SD-WAN AuditLogEntry is context only; it does not prove site/VPN targeting or a disjoint change.",
+    "The direct ACI drop is on the backend dependency, not the user-to-Service leg.",
+    "A later permit is a new observation and does not remove the earlier drop interval.",
+    "Cilium service settings are synthetic administrator configuration; routed VIP reachability is an explicit test precondition and provides no observed network-path evidence."
+  ],
+  "blocked_gates": [
+    "aci_and_catalyst_source_projection_readiness",
+    "source_fact_and_relationship_readiness",
+    "installed_replay_and_capture",
+    "lifecycle_authorization"
+  ],
+  "blocked_variants": [],
+  "variant_id": "both-permissions",
+  "variant_contract_version": 2,
+  "variant_expectation": "restricted_visibility",
+  "variant_claim_limits": [
+    "A clean empty activation lookup means the selected history is not visible to this tested caller; it does not mean no changes or complete history.",
+    "Administrator history access is limited to proof that this run\u2019s exact activation exists; graph and endpoint traffic use the same restricted caller."
+  ],
+  "variant_expectations": {
+    "positive_control_result_key": "graph.impact",
+    "must_not_claim": [
+      "vendor_object_acl",
+      "admin_history_fallback",
+      "database_drop"
+    ],
+    "required_schedule_ids": [
+      "b-baseline-client-flow",
+      "b-baseline-client-handoff",
+      "b-recovery-client-handoff"
+    ],
+    "selected_history_index": "atlas_changes"
+  },
+  "permission_case": {
+    "caller_profile": "history_denied",
+    "visibility_surface": "timeline_activation",
+    "selected_history_index": "atlas_changes",
+    "positive_control_result_keys": [
+      "graph.impact",
+      "endpoint.primary.impact"
+    ]
+  }
+}
