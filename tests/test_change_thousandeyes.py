@@ -131,16 +131,42 @@ class ThousandEyesActivityApiTests(unittest.TestCase):
 
         self.assertEqual(replay["objects"], normalized["objects"])
 
-    def test_iso_query_bounds_at_datetime_limits_are_structured_errors(self) -> None:
+    def test_iso_query_start_bounds_at_datetime_limits_are_structured_errors(
+        self,
+    ) -> None:
         native_records, metadata = api_fixture()
-        for start, end in (
-            ("0001-01-01T00:00:00+14:00", "0001-01-01T00:00:01+14:00"),
-            ("9999-12-31T23:59:57-14:00", "9999-12-31T23:59:59-14:00"),
-        ):
-            with self.subTest(start=start, end=end):
-                bounded = {**metadata, "query_start": start, "query_end": end}
+        for start in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
+            with self.subTest(start=start):
+                bounded = {
+                    **metadata,
+                    "query_start": start,
+                    "query_end": "2026-10-27T12:01:00Z",
+                }
                 with self.assertRaises(ContractError):
                     adapt_thousandeyes_activity_events(native_records, bounded)
+
+    def test_iso_query_end_bounds_at_datetime_limits_are_structured_errors(
+        self,
+    ) -> None:
+        native_records, metadata = api_fixture()
+        for end in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
+            with self.subTest(end=end):
+                bounded = {
+                    **metadata,
+                    "query_start": "2026-10-27T11:59:59Z",
+                    "query_end": end,
+                }
+                with self.assertRaises(ContractError):
+                    adapt_thousandeyes_activity_events(native_records, bounded)
+
+    def test_iso_activity_date_bounds_are_structured_errors(self) -> None:
+        native_records, metadata = api_fixture()
+        for date in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
+            with self.subTest(date=date):
+                native = copy.deepcopy(native_records[0])
+                native["date"] = date
+                with self.assertRaises(ContractError):
+                    adapt_thousandeyes_activity_events([native], metadata)
 
     def test_wrong_account_group_partition_is_rejected(self) -> None:
         native_records, metadata = api_fixture()
