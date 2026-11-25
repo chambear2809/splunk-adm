@@ -4,6 +4,7 @@ This is deliberately distinct from the installed v1 capture bundle. It carries
 source-shaped facts and phase proof only; indexed receipts and activation are
 added by the installed capture path after independent readback.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -52,9 +53,13 @@ def _assert_safe(value: Any) -> None:
             _assert_safe(item)
 
 
-def _body(scenario_id: str, variant_id: str | None, execution_id: str, anchor_epoch: int) -> dict[str, Any]:
+def _body(
+    scenario_id: str, variant_id: str | None, execution_id: str, anchor_epoch: int
+) -> dict[str, Any]:
     scenario = load_scenario(scenario_id, variant_id)
-    inputs = prepare_source_inputs(scenario, execution_id=execution_id, anchor_epoch=anchor_epoch)
+    inputs = prepare_source_inputs(
+        scenario, execution_id=execution_id, anchor_epoch=anchor_epoch
+    )
     portable_events = _portable(inputs["events"])
     for item in portable_events:
         raw_events = item.get("raw_events", [])
@@ -108,8 +113,10 @@ def verify_connected_bundle(bundle: Any) -> dict[str, Any]:
         raise ConnectedBundleError("Connected bundle shape is invalid.")
     _assert_safe(body)
     expected = _body(
-        bundle["scenario_id"], bundle["variant_id"],
-        bundle["execution_id"], bundle["anchor_epoch"],
+        bundle["scenario_id"],
+        bundle["variant_id"],
+        bundle["execution_id"],
+        bundle["anchor_epoch"],
     )
     if canonical_json(body) != canonical_json(expected):
         raise ConnectedBundleError("Connected bundle content is not deterministic.")
