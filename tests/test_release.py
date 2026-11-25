@@ -35,6 +35,10 @@ from tools.check_release import (
     MULTICAST_MANIFEST_PATH,
     MULTICAST_CSS_PATH,
     MAX_MULTICAST_GZIP_BYTES,
+    HISTORY_BUNDLE_PATH,
+    HISTORY_MANIFEST_PATH,
+    HISTORY_CSS_PATH,
+    MAX_HISTORY_GZIP_BYTES,
     SETTINGS_CONFIG_FILES,
     SETTINGS_REGISTRY_PATH,
     SETTINGS_RUNTIME_FILES,
@@ -53,6 +57,68 @@ def _incompressible(size: int) -> bytes:
 
 
 class ReleaseArchiveTests(unittest.TestCase):
+    def _history_files(self):
+        files = self._files()
+        version = "e" * 24
+        files["splunk_adm/appserver/static/pages/atlas.js"] += (
+            b" __AtlasHistoryHost pages/history.js " + version.encode()
+        )
+        files[HISTORY_BUNDLE_PATH] = b"history bundle " + version.encode()
+        files[HISTORY_CSS_PATH] = b"history styles"
+        files[HISTORY_MANIFEST_PATH] = json.dumps(
+            {
+                "schemaVersion": 1,
+                "assetVersion": version,
+                "javascriptSha256": hashlib.sha256(
+                    files[HISTORY_BUNDLE_PATH]
+                ).hexdigest(),
+            }
+        ).encode()
+        return files
+
+    def test_accepts_complete_history_bundle(self):
+        self._write_pair(self._history_files())
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_history_registration_and_partial_assets_require_complete_set(self):
+        for missing in (HISTORY_BUNDLE_PATH, HISTORY_MANIFEST_PATH, HISTORY_CSS_PATH):
+            with self.subTest(missing=missing):
+                files = self._history_files()
+                del files[missing]
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "missing required History files"):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files[HISTORY_CSS_PATH] = b"orphan"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required History files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_history_tampering_and_mixed_versions(self):
+        for path in (
+            HISTORY_BUNDLE_PATH,
+            HISTORY_MANIFEST_PATH,
+            "splunk_adm/appserver/static/pages/atlas.js",
+        ):
+            with self.subTest(path=path):
+                files = self._history_files()
+                if path == HISTORY_MANIFEST_PATH:
+                    files[path] = b"{}"
+                elif path.endswith("atlas.js"):
+                    files[path] = files[path].replace(b"e" * 24, b"f" * 24)
+                else:
+                    files[path] += b"tampered"
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "History asset version/hash"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_history_bundle_has_independent_48k_gzip_budget(self):
+        files = self._history_files()
+        files[HISTORY_BUNDLE_PATH] = _incompressible(MAX_HISTORY_GZIP_BYTES + 1)
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "History optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
     def _journey_files(self):
         files = self._files()
         version = "b" * 24
