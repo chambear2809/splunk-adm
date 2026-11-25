@@ -46,6 +46,11 @@ MULTICAST_MANIFEST_PATH = "splunk_adm/appserver/static/multicast-manifest.json"
 MULTICAST_CSS_PATH = "splunk_adm/appserver/static/multicast.css"
 MAX_MULTICAST_GZIP_BYTES = 64 * 1024
 MAX_MULTICAST_CSS_BYTES = 16 * 1024
+HISTORY_BUNDLE_PATH = "splunk_adm/appserver/static/pages/history.js"
+HISTORY_MANIFEST_PATH = "splunk_adm/appserver/static/history-manifest.json"
+HISTORY_CSS_PATH = "splunk_adm/appserver/static/history.css"
+MAX_HISTORY_GZIP_BYTES = 48 * 1024
+MAX_HISTORY_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -779,6 +784,9 @@ STATIC_ALLOWLIST = frozenset(
         MULTICAST_BUNDLE_PATH,
         MULTICAST_MANIFEST_PATH,
         MULTICAST_CSS_PATH,
+        HISTORY_BUNDLE_PATH,
+        HISTORY_MANIFEST_PATH,
+        HISTORY_CSS_PATH,
     }
 )
 
@@ -1061,6 +1069,44 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(
                 "Multicast asset version/hash does not match the main bundle"
+            ) from exc
+    # Configuration history is an independently versioned, live-only asset.
+    # Once the main bundle registers its host, or any one asset is present,
+    # require and validate the complete set.
+    history_files = {HISTORY_BUNDLE_PATH, HISTORY_MANIFEST_PATH, HISTORY_CSS_PATH}
+    history_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasHistoryHost", b"pages/history.js")
+    )
+    if history_registered or history_files.intersection(files):
+        missing = sorted(history_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required History files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[HISTORY_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_HISTORY_GZIP_BYTES
+        ):
+            raise ValueError("History optional bundle exceeds its 48 KiB gzip budget")
+        if len(files[HISTORY_CSS_PATH]) > MAX_HISTORY_CSS_BYTES:
+            raise ValueError("History optional CSS exceeds its 16 KiB gzip budget")
+        try:
+            manifest = json.loads(files[HISTORY_MANIFEST_PATH])
+            history_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(history_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", history_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[HISTORY_BUNDLE_PATH]).hexdigest()
+                or history_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or history_version.encode() not in files[HISTORY_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "History asset version/hash does not match the main bundle"
             ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:

@@ -20,6 +20,7 @@ export default defineConfig({
       "tests/browser/investigation-harness.tsx",
       "tests/browser/cases-harness.tsx",
       "tests/browser/journeys-harness.tsx",
+      "tests/browser/history-loader-harness.tsx",
       "tests/browser/planning-harness.tsx",
       "tests/browser/ownership-integration-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
@@ -66,6 +67,14 @@ export default defineConfig({
   define: {
     __ADM_SPLUNK_BUILD__: "false",
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify("development"),
+    __ADM_HISTORY_ASSET_VERSION__: JSON.stringify(
+      JSON.parse(
+        readFileSync(
+          "splunk_app/splunk_adm/appserver/static/history-manifest.json",
+          "utf8",
+        ),
+      ).assetVersion ?? "development",
+    ),
   },
   resolve: { preserveSymlinks: true },
 });

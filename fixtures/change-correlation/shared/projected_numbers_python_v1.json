@@ -1,0 +1,858 @@
+{
+  "schema_version": 1,
+  "qualification": "Synthetic Python Kubernetes adapter/history contract vectors; signed safe integers are projected data, not timestamps. No live qualification.",
+  "vectors": [
+    {
+      "value": -9007199254740991,
+      "native_payload": {
+        "apiVersion": "v1",
+        "kind": "PodList",
+        "metadata": {
+          "resourceVersion": "k8s-list-rv-300"
+        },
+        "items": [
+          {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+              "name": "payments-api-7c49d",
+              "namespace": "payments",
+              "uid": "pod-uid-ready",
+              "resourceVersion": "k8s-rv-301",
+              "generation": -9007199254740991,
+              "labels": {
+                "app.kubernetes.io/name": "payments-api",
+                "app.kubernetes.io/version": "2.4.1",
+                "private.example.invalid/contact": "ignore-me"
+              },
+              "ownerReferences": [
+                {
+                  "apiVersion": "apps/v1",
+                  "kind": "ReplicaSet",
+                  "name": "payments-api-7c49d",
+                  "uid": "replicaset-uid-01",
+                  "controller": true
+                }
+              ],
+              "annotations": {
+                "example.invalid/note": "not projected"
+              }
+            },
+            "spec": {
+              "nodeName": "worker-a",
+              "containers": [
+                {
+                  "name": "api",
+                  "image": "example.invalid/payments:2.4.1"
+                }
+              ]
+            },
+            "status": {
+              "phase": "Running",
+              "containerStatuses": [
+                {
+                  "name": "api",
+                  "ready": true,
+                  "restartCount": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "collection_metadata": {
+        "schema_version": 1,
+        "capture_id": "numeric-golden--9007199254740991",
+        "authority": "cluster:synthetic-east",
+        "source_version": "Kubernetes 1.34.0",
+        "partition": "cluster:synthetic-east",
+        "scope": "change-a",
+        "started_at": 1792400000,
+        "completed_at": 1792400005,
+        "received_at": 1792400006,
+        "status": "complete",
+        "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "capture:numeric-golden--9007199254740991",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "receipts": [
+        {
+          "schema_version": 1,
+          "capture_id": "numeric-golden--9007199254740991",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "started_at": 1792400000,
+          "completed_at": 1792400005,
+          "received_at": 1792400006,
+          "status": "complete",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "pages_expected": 1,
+          "pages_received": 1,
+          "source_reference": "capture:numeric-golden--9007199254740991",
+          "enumeration": "full",
+          "deletions_authoritative": true,
+          "record_type": "receipt",
+          "receipt_hash": "cae52823fa0f2f60edf16a176367befbad7bc3e3bbd68557e14b08ebd38e3f3e",
+          "object_count": 1,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "1d314cb02bbb1680598c773422cc9c17261500375a104876963ea36e4376a495"
+        }
+      ],
+      "observations": [
+        {
+          "schema_version": 1,
+          "record_type": "object_observation",
+          "receipt_hash": "cae52823fa0f2f60edf16a176367befbad7bc3e3bbd68557e14b08ebd38e3f3e",
+          "capture_id": "numeric-golden--9007199254740991",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "source_reference": "capture:numeric-golden--9007199254740991",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "observed_at": 1792400005,
+          "event_at": null,
+          "effective_at": null,
+          "kind": "operational",
+          "actor": null,
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": -9007199254740991,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "88aff09aec84a591f6b427e7b957926c6179295413f0a04aac4fa4623fb826ac"
+        }
+      ],
+      "rows": [
+        {
+          "schema_version": 1,
+          "record_type": "observation",
+          "change_type": "observation",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "kind": "operational",
+          "actor": null,
+          "event_at": null,
+          "effective_at": null,
+          "observed_at": 1792400005,
+          "received_at": 1792400006,
+          "earliest_at": null,
+          "latest_at": null,
+          "source_refs": [
+            "capture:numeric-golden--9007199254740991"
+          ],
+          "field_diffs": [],
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": -9007199254740991,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "coverage_complete": true,
+          "gap": false,
+          "qualification": "native_observation",
+          "time_qualification": "unknown_source_time",
+          "clock_uncertainty_unknown": true,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "record_id": "6c921186acc42c577bee00d6d207b785dd23b04d98b57b2a3ddfc941de3337ee",
+          "generation_id": "d2ed506f6875e0472204973825b4e7df241e48c851df6e60e5aa6232a06d6b3c"
+        }
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "record_type": "generation_manifest",
+        "algorithm_version": "configuration-history-v1",
+        "canonicalization": "bounded-decimal-json-v1",
+        "row_order": "record_id-asc-v1",
+        "record_id_hash_excludes": [
+          "record_id",
+          "generation_id"
+        ],
+        "row_hash_excludes": [
+          "generation_id"
+        ],
+        "source_receipt_hashes": [
+          "cae52823fa0f2f60edf16a176367befbad7bc3e3bbd68557e14b08ebd38e3f3e"
+        ],
+        "row_count": 1,
+        "rows_sha256": "fb532e2e3af8ec15af03bdf7bc6c600d0316099662f69e601d86d6112d937a26",
+        "source_earliest": 1792400005,
+        "source_latest": 1792400005,
+        "generation_id": "d2ed506f6875e0472204973825b4e7df241e48c851df6e60e5aa6232a06d6b3c"
+      }
+    },
+    {
+      "value": -1,
+      "native_payload": {
+        "apiVersion": "v1",
+        "kind": "PodList",
+        "metadata": {
+          "resourceVersion": "k8s-list-rv-300"
+        },
+        "items": [
+          {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+              "name": "payments-api-7c49d",
+              "namespace": "payments",
+              "uid": "pod-uid-ready",
+              "resourceVersion": "k8s-rv-301",
+              "generation": -1,
+              "labels": {
+                "app.kubernetes.io/name": "payments-api",
+                "app.kubernetes.io/version": "2.4.1",
+                "private.example.invalid/contact": "ignore-me"
+              },
+              "ownerReferences": [
+                {
+                  "apiVersion": "apps/v1",
+                  "kind": "ReplicaSet",
+                  "name": "payments-api-7c49d",
+                  "uid": "replicaset-uid-01",
+                  "controller": true
+                }
+              ],
+              "annotations": {
+                "example.invalid/note": "not projected"
+              }
+            },
+            "spec": {
+              "nodeName": "worker-a",
+              "containers": [
+                {
+                  "name": "api",
+                  "image": "example.invalid/payments:2.4.1"
+                }
+              ]
+            },
+            "status": {
+              "phase": "Running",
+              "containerStatuses": [
+                {
+                  "name": "api",
+                  "ready": true,
+                  "restartCount": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "collection_metadata": {
+        "schema_version": 1,
+        "capture_id": "numeric-golden--1",
+        "authority": "cluster:synthetic-east",
+        "source_version": "Kubernetes 1.34.0",
+        "partition": "cluster:synthetic-east",
+        "scope": "change-a",
+        "started_at": 1792400000,
+        "completed_at": 1792400005,
+        "received_at": 1792400006,
+        "status": "complete",
+        "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "capture:numeric-golden--1",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "receipts": [
+        {
+          "schema_version": 1,
+          "capture_id": "numeric-golden--1",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "started_at": 1792400000,
+          "completed_at": 1792400005,
+          "received_at": 1792400006,
+          "status": "complete",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "pages_expected": 1,
+          "pages_received": 1,
+          "source_reference": "capture:numeric-golden--1",
+          "enumeration": "full",
+          "deletions_authoritative": true,
+          "record_type": "receipt",
+          "receipt_hash": "0c2bb38eb0e04f0f8f58412b821dfdeffa14ce3d51ad6cb17705fb35aea9ab79",
+          "object_count": 1,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "e517427ee45a5f30d60e328fb2e2668b408e22aeb925636abfa51d4b1b218746"
+        }
+      ],
+      "observations": [
+        {
+          "schema_version": 1,
+          "record_type": "object_observation",
+          "receipt_hash": "0c2bb38eb0e04f0f8f58412b821dfdeffa14ce3d51ad6cb17705fb35aea9ab79",
+          "capture_id": "numeric-golden--1",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "source_reference": "capture:numeric-golden--1",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "observed_at": 1792400005,
+          "event_at": null,
+          "effective_at": null,
+          "kind": "operational",
+          "actor": null,
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": -1,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "610ad755c03ad9b728333a74de09dadfbe2da89215b594e465c614f8efc18a03"
+        }
+      ],
+      "rows": [
+        {
+          "schema_version": 1,
+          "record_type": "observation",
+          "change_type": "observation",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "kind": "operational",
+          "actor": null,
+          "event_at": null,
+          "effective_at": null,
+          "observed_at": 1792400005,
+          "received_at": 1792400006,
+          "earliest_at": null,
+          "latest_at": null,
+          "source_refs": [
+            "capture:numeric-golden--1"
+          ],
+          "field_diffs": [],
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": -1,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "coverage_complete": true,
+          "gap": false,
+          "qualification": "native_observation",
+          "time_qualification": "unknown_source_time",
+          "clock_uncertainty_unknown": true,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "record_id": "710c5aa0c271c026868e9ce4a0ada68104b4f05e18f18ab72651b2a1275c3e00",
+          "generation_id": "4a634f2cf8abde446f933db07a2a11244a9b3b5111702321f5d9ed5ad9691cf3"
+        }
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "record_type": "generation_manifest",
+        "algorithm_version": "configuration-history-v1",
+        "canonicalization": "bounded-decimal-json-v1",
+        "row_order": "record_id-asc-v1",
+        "record_id_hash_excludes": [
+          "record_id",
+          "generation_id"
+        ],
+        "row_hash_excludes": [
+          "generation_id"
+        ],
+        "source_receipt_hashes": [
+          "0c2bb38eb0e04f0f8f58412b821dfdeffa14ce3d51ad6cb17705fb35aea9ab79"
+        ],
+        "row_count": 1,
+        "rows_sha256": "c66a1071999f240eafa3a4ab44d8d9c31af1d446a9693af1a7d947036c325513",
+        "source_earliest": 1792400005,
+        "source_latest": 1792400005,
+        "generation_id": "4a634f2cf8abde446f933db07a2a11244a9b3b5111702321f5d9ed5ad9691cf3"
+      }
+    },
+    {
+      "value": 253402300800,
+      "native_payload": {
+        "apiVersion": "v1",
+        "kind": "PodList",
+        "metadata": {
+          "resourceVersion": "k8s-list-rv-300"
+        },
+        "items": [
+          {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+              "name": "payments-api-7c49d",
+              "namespace": "payments",
+              "uid": "pod-uid-ready",
+              "resourceVersion": "k8s-rv-301",
+              "generation": 253402300800,
+              "labels": {
+                "app.kubernetes.io/name": "payments-api",
+                "app.kubernetes.io/version": "2.4.1",
+                "private.example.invalid/contact": "ignore-me"
+              },
+              "ownerReferences": [
+                {
+                  "apiVersion": "apps/v1",
+                  "kind": "ReplicaSet",
+                  "name": "payments-api-7c49d",
+                  "uid": "replicaset-uid-01",
+                  "controller": true
+                }
+              ],
+              "annotations": {
+                "example.invalid/note": "not projected"
+              }
+            },
+            "spec": {
+              "nodeName": "worker-a",
+              "containers": [
+                {
+                  "name": "api",
+                  "image": "example.invalid/payments:2.4.1"
+                }
+              ]
+            },
+            "status": {
+              "phase": "Running",
+              "containerStatuses": [
+                {
+                  "name": "api",
+                  "ready": true,
+                  "restartCount": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "collection_metadata": {
+        "schema_version": 1,
+        "capture_id": "numeric-golden-253402300800",
+        "authority": "cluster:synthetic-east",
+        "source_version": "Kubernetes 1.34.0",
+        "partition": "cluster:synthetic-east",
+        "scope": "change-a",
+        "started_at": 1792400000,
+        "completed_at": 1792400005,
+        "received_at": 1792400006,
+        "status": "complete",
+        "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "capture:numeric-golden-253402300800",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "receipts": [
+        {
+          "schema_version": 1,
+          "capture_id": "numeric-golden-253402300800",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "started_at": 1792400000,
+          "completed_at": 1792400005,
+          "received_at": 1792400006,
+          "status": "complete",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "pages_expected": 1,
+          "pages_received": 1,
+          "source_reference": "capture:numeric-golden-253402300800",
+          "enumeration": "full",
+          "deletions_authoritative": true,
+          "record_type": "receipt",
+          "receipt_hash": "0f925c307015ca2a8044991e9f6b5d94e96b8847972ace3be0cf6fa209ed084d",
+          "object_count": 1,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "59ae0b3ced071b40271f783bc0954feece1c38238d1b0f5d0ca640c8ed538761"
+        }
+      ],
+      "observations": [
+        {
+          "schema_version": 1,
+          "record_type": "object_observation",
+          "receipt_hash": "0f925c307015ca2a8044991e9f6b5d94e96b8847972ace3be0cf6fa209ed084d",
+          "capture_id": "numeric-golden-253402300800",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "source_reference": "capture:numeric-golden-253402300800",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "observed_at": 1792400005,
+          "event_at": null,
+          "effective_at": null,
+          "kind": "operational",
+          "actor": null,
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": 253402300800,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "a4eefb285715f8742b189dfb231bace848d1f34934af2c79db229aa8b802d35d"
+        }
+      ],
+      "rows": [
+        {
+          "schema_version": 1,
+          "record_type": "observation",
+          "change_type": "observation",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "kind": "operational",
+          "actor": null,
+          "event_at": null,
+          "effective_at": null,
+          "observed_at": 1792400005,
+          "received_at": 1792400006,
+          "earliest_at": null,
+          "latest_at": null,
+          "source_refs": [
+            "capture:numeric-golden-253402300800"
+          ],
+          "field_diffs": [],
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": 253402300800,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "coverage_complete": true,
+          "gap": false,
+          "qualification": "native_observation",
+          "time_qualification": "unknown_source_time",
+          "clock_uncertainty_unknown": true,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "record_id": "52e56e4f68681f9571d3e753a8a146952b8037f99680157227b50cc89d7ac9b4",
+          "generation_id": "1899852b1930b2d4343dbe9dc9a8060ffaba2b867177ace9f6d3c846f3fddb33"
+        }
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "record_type": "generation_manifest",
+        "algorithm_version": "configuration-history-v1",
+        "canonicalization": "bounded-decimal-json-v1",
+        "row_order": "record_id-asc-v1",
+        "record_id_hash_excludes": [
+          "record_id",
+          "generation_id"
+        ],
+        "row_hash_excludes": [
+          "generation_id"
+        ],
+        "source_receipt_hashes": [
+          "0f925c307015ca2a8044991e9f6b5d94e96b8847972ace3be0cf6fa209ed084d"
+        ],
+        "row_count": 1,
+        "rows_sha256": "fdfdc08051e182c7407ff1264c7a8359902faa1fd3d9e577cb775883c5974167",
+        "source_earliest": 1792400005,
+        "source_latest": 1792400005,
+        "generation_id": "1899852b1930b2d4343dbe9dc9a8060ffaba2b867177ace9f6d3c846f3fddb33"
+      }
+    },
+    {
+      "value": 9007199254740991,
+      "native_payload": {
+        "apiVersion": "v1",
+        "kind": "PodList",
+        "metadata": {
+          "resourceVersion": "k8s-list-rv-300"
+        },
+        "items": [
+          {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+              "name": "payments-api-7c49d",
+              "namespace": "payments",
+              "uid": "pod-uid-ready",
+              "resourceVersion": "k8s-rv-301",
+              "generation": 9007199254740991,
+              "labels": {
+                "app.kubernetes.io/name": "payments-api",
+                "app.kubernetes.io/version": "2.4.1",
+                "private.example.invalid/contact": "ignore-me"
+              },
+              "ownerReferences": [
+                {
+                  "apiVersion": "apps/v1",
+                  "kind": "ReplicaSet",
+                  "name": "payments-api-7c49d",
+                  "uid": "replicaset-uid-01",
+                  "controller": true
+                }
+              ],
+              "annotations": {
+                "example.invalid/note": "not projected"
+              }
+            },
+            "spec": {
+              "nodeName": "worker-a",
+              "containers": [
+                {
+                  "name": "api",
+                  "image": "example.invalid/payments:2.4.1"
+                }
+              ]
+            },
+            "status": {
+              "phase": "Running",
+              "containerStatuses": [
+                {
+                  "name": "api",
+                  "ready": true,
+                  "restartCount": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "collection_metadata": {
+        "schema_version": 1,
+        "capture_id": "numeric-golden-9007199254740991",
+        "authority": "cluster:synthetic-east",
+        "source_version": "Kubernetes 1.34.0",
+        "partition": "cluster:synthetic-east",
+        "scope": "change-a",
+        "started_at": 1792400000,
+        "completed_at": 1792400005,
+        "received_at": 1792400006,
+        "status": "complete",
+        "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+        "pages_expected": 1,
+        "pages_received": 1,
+        "source_reference": "capture:numeric-golden-9007199254740991",
+        "enumeration": "full",
+        "deletions_authoritative": true
+      },
+      "receipts": [
+        {
+          "schema_version": 1,
+          "capture_id": "numeric-golden-9007199254740991",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "started_at": 1792400000,
+          "completed_at": 1792400005,
+          "received_at": 1792400006,
+          "status": "complete",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "pages_expected": 1,
+          "pages_received": 1,
+          "source_reference": "capture:numeric-golden-9007199254740991",
+          "enumeration": "full",
+          "deletions_authoritative": true,
+          "record_type": "receipt",
+          "receipt_hash": "cb23cd58549aa142b272d8b0632e50e0ec8665f0fd780722259a1fb6927b9e1a",
+          "object_count": 1,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "0f49c94bc5b451fff0505466664fdaaa55fed4789930de28a67d654061a7c9e4"
+        }
+      ],
+      "observations": [
+        {
+          "schema_version": 1,
+          "record_type": "object_observation",
+          "receipt_hash": "cb23cd58549aa142b272d8b0632e50e0ec8665f0fd780722259a1fb6927b9e1a",
+          "capture_id": "numeric-golden-9007199254740991",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "source_reference": "capture:numeric-golden-9007199254740991",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "observed_at": 1792400005,
+          "event_at": null,
+          "effective_at": null,
+          "kind": "operational",
+          "actor": null,
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": 9007199254740991,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "evidence_id": "c3bac2a542e1112ca3c84dda2e296c17173fb371530d36bf214c1557007e8329"
+        }
+      ],
+      "rows": [
+        {
+          "schema_version": 1,
+          "record_type": "observation",
+          "change_type": "observation",
+          "product": "kubernetes",
+          "authority": "cluster:synthetic-east",
+          "source_version": "Kubernetes 1.34.0",
+          "family": "pod_snapshot",
+          "partition": "cluster:synthetic-east",
+          "scope": "change-a",
+          "permissions_fingerprint": "rbac:reviewed-fixture-v1",
+          "object_id": "pod-uid-ready",
+          "revision": "k8s-rv-301",
+          "kind": "operational",
+          "actor": null,
+          "event_at": null,
+          "effective_at": null,
+          "observed_at": 1792400005,
+          "received_at": 1792400006,
+          "earliest_at": null,
+          "latest_at": null,
+          "source_refs": [
+            "capture:numeric-golden-9007199254740991"
+          ],
+          "field_diffs": [],
+          "attributes": {
+            "app_version_label_digest": "a60152e5126b6a34e1afd21141a54539ac43e3cad6d0dd9ef9817b3ce75eaf02",
+            "generation": 9007199254740991,
+            "namespace": "payments",
+            "node_name": "worker-a",
+            "owner_kind": "ReplicaSet",
+            "owner_uid": "replicaset-uid-01",
+            "phase": "Running",
+            "pod_name": "payments-api-7c49d"
+          },
+          "coverage_complete": true,
+          "gap": false,
+          "qualification": "native_observation",
+          "time_qualification": "unknown_source_time",
+          "clock_uncertainty_unknown": true,
+          "projection_qualification": "normalized_export_only",
+          "native_sample_unqualified": true,
+          "context_only": false,
+          "record_id": "1cd3ec0b01d72a58e453170628bb0f7e3dd47c3f7a70e33eec15334f7b5e0d11",
+          "generation_id": "8135f1e202dd3a0b0bea3c350db0e997b1f313f220e93aca2c9e667453413cf9"
+        }
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "record_type": "generation_manifest",
+        "algorithm_version": "configuration-history-v1",
+        "canonicalization": "bounded-decimal-json-v1",
+        "row_order": "record_id-asc-v1",
+        "record_id_hash_excludes": [
+          "record_id",
+          "generation_id"
+        ],
+        "row_hash_excludes": [
+          "generation_id"
+        ],
+        "source_receipt_hashes": [
+          "cb23cd58549aa142b272d8b0632e50e0ec8665f0fd780722259a1fb6927b9e1a"
+        ],
+        "row_count": 1,
+        "rows_sha256": "6d50669df0b70274c3535b6df25f89d7233711aded2ebd305df2aabffaef7165",
+        "source_earliest": 1792400005,
+        "source_latest": 1792400005,
+        "generation_id": "8135f1e202dd3a0b0bea3c350db0e997b1f313f220e93aca2c9e667453413cf9"
+      }
+    }
+  ]
+}
