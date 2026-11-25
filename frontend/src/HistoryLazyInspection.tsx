@@ -52,26 +52,24 @@ export function loadHistoryUi(): Promise<HistoryUi> {
         optionalJobs: Object.freeze({ optionalJobs }),
       }),
     });
-  pending = new Promise((resolve, reject) => {
-    loadVersionedAssetPair({
-      js: "pages/history.js",
-      css: "history.css",
-      version: __ADM_HISTORY_ASSET_VERSION__,
-      validate: () => {
-        const ui = runtime.ApplicationAtlasHistory;
-        return Boolean(
-          ui &&
-          ui.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
-          typeof ui.ChangeTimelineInspection === "function",
-        );
-      },
-    })
-      .then(() => resolve(runtime.ApplicationAtlasHistory!))
-      .catch(() => reject(new Error(HISTORY_ASSET_ERROR)));
-  }).catch((error): never => {
-    pending = undefined;
-    throw error;
-  }) as Promise<HistoryUi>;
+  pending = loadVersionedAssetPair({
+    js: "pages/history.js",
+    css: "history.css",
+    version: __ADM_HISTORY_ASSET_VERSION__,
+    validate: () => {
+      const ui = runtime.ApplicationAtlasHistory;
+      return Boolean(
+        ui &&
+        ui.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
+        typeof ui.ChangeTimelineInspection === "function",
+      );
+    },
+  })
+    .then(() => runtime.ApplicationAtlasHistory!)
+    .catch(() => {
+      pending = undefined;
+      throw new Error(HISTORY_ASSET_ERROR);
+    }) as Promise<HistoryUi>;
   return pending;
 }
 
