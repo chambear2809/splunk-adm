@@ -245,7 +245,7 @@ export function assessMaintenance(input: AssessmentInput): Assessment {
   };
 }
 
-/** Comparisons require the same selection, service scope and equal-duration windows. */
+/** Comparisons require the same selection, service scope and chronological, equal-duration windows. */
 export function compareAssessments(
   before: Assessment,
   after: Assessment,
@@ -274,6 +274,7 @@ export function compareAssessments(
     !validIdentity(after) ||
     before.id === after.id ||
     before.capturedAt >= after.capturedAt ||
+    before.window.start > after.window.start ||
     before.window.end - before.window.start !==
       after.window.end - after.window.start ||
     !same(before.selectedElements, after.selectedElements) ||

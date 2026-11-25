@@ -221,6 +221,33 @@ class SnapshotTests(unittest.TestCase):
                 expected_provenance={"app": "other"},
             )
 
+    def test_malformed_manifest_shapes_fail_as_snapshot_errors(self):
+        manifest_path = self.bundle / "manifest.json"
+        original = json.loads(manifest_path.read_text())
+        malformed = [
+            [],
+            None,
+            {**original, "files": None},
+            {**original, "files": {name: [] for name in self.schemas}},
+        ]
+        for index, value in enumerate(malformed):
+            manifest_path.write_bytes(
+                json.dumps(value, separators=(",", ":"), sort_keys=True).encode()
+            )
+            manifest_path.chmod(0o600)
+            digest = snapshots._sha(manifest_path.read_bytes())
+            destination = self.root / f"malformed-restore-{index}"
+            with self.subTest(shape=type(value).__name__, index=index):
+                with self.assertRaises(SnapshotError):
+                    prepare_restore(
+                        self.bundle,
+                        destination,
+                        expected_manifest_sha256=digest,
+                        expected_schemas=self.schemas,
+                        expected_provenance=PROVENANCE,
+                    )
+                self.assertFalse(destination.exists())
+
     def test_existing_destination_and_unexpected_files_are_rejected(self):
         occupied = self.root / "occupied"
         occupied.mkdir(mode=0o700)

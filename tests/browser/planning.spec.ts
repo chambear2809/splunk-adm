@@ -175,6 +175,53 @@ test("impact maintenance retains captures during refresh and clears them on deni
   ).toHaveCount(0);
 });
 
+test("maintenance exports standalone captures while refusing reversed evidence windows", async ({
+  page,
+}) => {
+  await page.goto("/tests/browser/planning.html?mode=impact");
+  const planner = page.getByRole("region", {
+    name: "Maintenance planning",
+    exact: true,
+  });
+  const before = planner.getByRole("button", { name: "Capture before" });
+  const after = planner.getByRole("button", { name: "Capture after" });
+  const earlier = page.getByRole("button", {
+    name: "Load earlier synthetic evidence",
+  });
+  const later = page.getByRole("button", {
+    name: "Complete synthetic refresh",
+  });
+  const comparison = planner.getByRole("region", {
+    name: "Capture comparison",
+  });
+  const download = async () => {
+    const downloaded = page.waitForEvent("download");
+    await planner.getByRole("button", { name: "Download evidence" }).click();
+    return JSON.parse(
+      await readFile((await (await downloaded).path())!, "utf8"),
+    );
+  };
+
+  await later.click();
+  await before.click();
+  await earlier.click();
+  await after.click();
+  await expect(comparison).toContainText("These captures cannot be compared");
+  const reversed = await download();
+  expect(reversed.before.assessment.window.start).toBe(1791373700);
+  expect(reversed.after.assessment.window.start).toBe(1791373400);
+  expect(reversed.comparison).toEqual({ comparable: false, changed: [] });
+
+  await before.click();
+  await later.click();
+  await after.click();
+  await expect(comparison).toContainText("No assessment changes identified");
+  const chronological = await download();
+  expect(chronological.before.assessment.window.start).toBe(1791373400);
+  expect(chronological.after.assessment.window.start).toBe(1791373700);
+  expect(chronological.comparison).toEqual({ comparable: true, changed: [] });
+});
+
 test("native impact uses the returned cohort window for capture and export", async ({
   page,
 }) => {

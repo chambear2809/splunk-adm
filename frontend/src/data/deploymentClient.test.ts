@@ -55,7 +55,13 @@ function fixture({
         const name = decodeURIComponent(
           path.split("conf-macros/")[1].split("?")[0],
         );
-        if (name === "adm_index_netflow" || name === "adm_index_dns_stream")
+        if (
+          [
+            "adm_index_netflow",
+            "adm_index_dns_stream",
+            "adm_index_appdynamics_inventory",
+          ].includes(name)
+        )
           return unreadableIndex
             ? response({}, 403)
             : response(entry({ definition: indexDefinition }));
@@ -188,6 +194,26 @@ describe("administrator deployment settings persistence", () => {
       expect(saved.sourceConfiguration?.dns_stream).toBe(expected);
     }
   });
+  it.each([
+    ["index=unconfigured_optional", "not_configured"],
+    ["(index=unconfigured_optional OR index=atlas_asset)", "not_configured"],
+    ["(index=atlas_asset OR index=unconfigured_optional)", "not_configured"],
+    ["(index=atlas_asset OR index=atlas_asset_previous)", "configured"],
+  ])(
+    "reports the AppDynamics selector %s as %s",
+    async (indexDefinition, expected) => {
+      const { client } = fixture({ indexDefinition });
+      const settings = defaultExpectations();
+      settings.sources.appdynamics_inventory.state = "active";
+      const saved = await client.write(settings);
+      expect(saved.sourceConfiguration?.appdynamics_inventory).toBe(expected);
+      expect(
+        selectedHealthProbes(saved).some((probe) =>
+          probe.macro.includes("appdynamics"),
+        ),
+      ).toBe(false);
+    },
+  );
   it("verifies public selector coherence instead of trusting the version marker", async () => {
     expect((await fixture({ contract: 2 }).client.read()).activeContract).toBe(
       2,

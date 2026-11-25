@@ -303,6 +303,14 @@ function ImpactReplay() {
           >
             Complete synthetic refresh
           </button>
+          {!native && (
+            <button
+              type="button"
+              onClick={() => setData(syntheticImpact(false))}
+            >
+              Load earlier synthetic evidence
+            </button>
+          )}
           <button type="button" onClick={() => setPhase("denied")}>
             Deny synthetic impact access
           </button>

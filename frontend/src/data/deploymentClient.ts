@@ -316,10 +316,8 @@ export class ToolkitDeploymentClient implements DeploymentClient {
               throw new Error("Macro definition unavailable");
             const listed = indexNames({ name, definition });
             const parsed =
-              listed.length === 1 &&
-              [UNCONFIGURED_DNS_INDEX, UNCONFIGURED_OPTIONAL_INDEX].includes(
-                listed[0],
-              )
+              listed.includes(UNCONFIGURED_DNS_INDEX) ||
+              listed.includes(UNCONFIGURED_OPTIONAL_INDEX)
                 ? []
                 : listed;
             indexes.push(parsed);

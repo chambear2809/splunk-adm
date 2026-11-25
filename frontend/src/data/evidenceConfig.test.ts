@@ -458,6 +458,16 @@ describe("caller-context evidence configuration", () => {
       state: "staged",
     });
   });
+  it("refuses a Controller selector that mixes a real index with the placeholder", async () => {
+    const { client } = fixture({
+      active: false,
+      appd: true,
+      appdIndexDefinition: "(index=unconfigured_optional OR index=atlas_asset)",
+    });
+    await expect(client.readAppDynamicsInventory()).rejects.toThrow(
+      "Controller inventory index is unavailable or ambiguous.",
+    );
+  });
   it("changes the configuration fingerprint when a Controller origin or detector binding changes", async () => {
     const first = await fixture({
       active: false,
