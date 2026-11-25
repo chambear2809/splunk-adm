@@ -88,7 +88,12 @@ def _event_time(record: Mapping[str, Any]) -> float | int | None:
     if audit_datetime is not None and audit_datetime != "":
         if not isinstance(audit_datetime, str):
             _fail("invalid_time", "Native auditDateTime must be offset-qualified text.")
-        from_datetime = _iso_to_epoch(audit_datetime)
+        try:
+            from_datetime = _iso_to_epoch(audit_datetime)
+        except (OverflowError, OSError):
+            _fail(
+                "invalid_time", "Native auditDateTime is outside the supported range."
+            )
 
     if from_milliseconds is not None and from_datetime is not None:
         if round(from_datetime * 1000) != round(from_milliseconds * 1000):
@@ -166,6 +171,21 @@ def adapt_appdynamics_audits(
             "missing_native_partition",
             "AppDynamics receipts require an explicit partition.",
         )
+    # Normalize inert identity metadata before deriving object IDs so replay
+    # receipts that differ only in surrounding whitespace remain equivalent.
+    authority = authority.strip()
+    partition = partition.strip()
+    if not authority:
+        _fail(
+            "missing_native_authority",
+            "AppDynamics receipts require a Controller authority.",
+        )
+    if not partition:
+        _fail(
+            "missing_native_partition",
+            "AppDynamics receipts require an explicit partition.",
+        )
+    metadata = {**metadata, "authority": authority, "partition": partition}
 
     normalized_by_id: dict[str, tuple[bytes, dict[str, Any]]] = {}
     for record in records:

@@ -137,6 +137,36 @@ class AppDynamicsAuditAdapterTests(unittest.TestCase):
             adapt_appdynamics_audits([native], metadata)
         self.assertEqual(caught.exception.code, "conflicting_native_time")
 
+    def test_authority_and_partition_whitespace_is_normalized_before_identity(
+        self,
+    ) -> None:
+        native_records, metadata = audit_fixture()
+        padded = {
+            **metadata,
+            "authority": "  controller-synthetic  ",
+            "partition": " controller-synthetic ",
+        }
+
+        normalized = adapt_appdynamics_audits(native_records, metadata)
+        replay = adapt_appdynamics_audits(native_records, padded)
+
+        self.assertEqual(replay["authority"], normalized["authority"])
+        self.assertEqual(replay["partition"], normalized["partition"])
+        self.assertEqual(replay["objects"], normalized["objects"])
+
+    def test_iso_timezone_conversion_overflow_is_structured(self) -> None:
+        native_records, metadata = audit_fixture()
+        native = copy.deepcopy(native_records[0])
+        native.pop("timeStamp")
+
+        with patch(
+            "tools.change_correlation.adapters.appdynamics._iso_to_epoch",
+            side_effect=OverflowError,
+        ):
+            with self.assertRaises(ContractError) as caught:
+                adapt_appdynamics_audits([native], metadata)
+        self.assertEqual(caught.exception.code, "invalid_time")
+
     def test_bad_native_time_shapes_are_rejected(self) -> None:
         native_records, metadata = audit_fixture()
         for invalid in (True, "1793102400250", -1, 253402300800000):
