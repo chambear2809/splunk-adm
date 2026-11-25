@@ -3,14 +3,10 @@ import * as jsxRuntime from "react/jsx-runtime";
 import { loadVersionedAssetPair } from "./optionalAssetLoader";
 import { routingScope } from "./data/evidence";
 import {
-  configuredHttpsOrigin,
-  evidenceConfigClient,
-} from "./data/evidenceConfig";
-import {
   requireNoSearchErrors,
   SearchAccessDeniedError,
 } from "./data/searchClient";
-import { indexNames, validateIndexName } from "./data/deploymentHealth";
+import { validateIndexName } from "./data/deploymentHealth";
 import { optionalJobs } from "./data/optionalJobs";
 import type { ChangeTimelineInspectionProps } from "./changeCorrelation/ChangeTimelineInspection";
 
@@ -39,15 +35,11 @@ export function loadHistoryUi(): Promise<HistoryUi> {
         react: React,
         jsxRuntime,
         evidence: Object.freeze({ routingScope }),
-        evidenceConfig: Object.freeze({
-          configuredHttpsOrigin,
-          evidenceConfigClient,
-        }),
         searchClient: Object.freeze({
           requireNoSearchErrors,
           SearchAccessDeniedError,
         }),
-        deploymentHealth: Object.freeze({ indexNames, validateIndexName }),
+        deploymentHealth: Object.freeze({ validateIndexName }),
         optionalJobs: Object.freeze({ optionalJobs }),
       }),
     });
