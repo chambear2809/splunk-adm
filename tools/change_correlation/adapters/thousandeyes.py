@@ -91,6 +91,10 @@ def _metadata(
     if not isinstance(value, Mapping):
         _fail("invalid_collection", "Collection metadata must be an object.")
     metadata = dict(value)
+    for identity_field in ("authority", "partition"):
+        identity_value = metadata.get(identity_field)
+        if isinstance(identity_value, str):
+            metadata[identity_field] = identity_value.strip()
     if "objects" in metadata:
         _fail("invalid_collection", "Collection metadata must not supply objects.")
     if metadata.get("product", PRODUCT) != PRODUCT:
@@ -220,6 +224,8 @@ def adapt_thousandeyes_activity_events(
         try:
             start_at = _iso_to_epoch(start_text)
             end_at = _iso_to_epoch(end_text)
+        except (OverflowError, OSError):
+            _fail("invalid_time", "API query window is outside the supported range.")
         except ContractError as exc:
             if exc.code == "invalid_number":
                 _fail(
@@ -255,6 +261,10 @@ def adapt_thousandeyes_activity_events(
         try:
             event_at = _iso_to_epoch(
                 _native_text(record.get("date"), "date", required=True)
+            )
+        except (OverflowError, OSError):
+            _fail(
+                "invalid_time", "Native activity date is outside the supported range."
             )
         except ContractError as exc:
             if exc.code == "invalid_number":
@@ -341,10 +351,15 @@ def _attribute_map(value: Any, label: str) -> dict[str, str]:
         if not isinstance(text_value, str):
             _fail("invalid_native_field", f"Native {key} must use stringValue.")
         text_value = _native_text(text_value, key)
+        previous = result.get(key)
         if text_value is None:
+            if previous is not None:
+                _fail(
+                    "conflicting_native_field",
+                    f"Native {label} contains conflicting {key} values.",
+                )
             result[key] = ""
             continue
-        previous = result.get(key)
         if previous is not None and previous != text_value:
             _fail(
                 "conflicting_native_field",

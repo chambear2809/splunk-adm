@@ -116,6 +116,32 @@ class ThousandEyesActivityApiTests(unittest.TestCase):
         self.assertEqual(len(forward["objects"]), 1)
         self.assertEqual(forward["objects"], reverse["objects"])
 
+    def test_authority_and_partition_whitespace_is_normalized_before_identity(
+        self,
+    ) -> None:
+        native_records, metadata = api_fixture()
+        padded = {
+            **metadata,
+            "authority": "  te-org-synthetic-01  ",
+            "partition": " aid-synthetic-01 ",
+        }
+
+        normalized = adapt_thousandeyes_activity_events(native_records, metadata)
+        replay = adapt_thousandeyes_activity_events(native_records, padded)
+
+        self.assertEqual(replay["objects"], normalized["objects"])
+
+    def test_iso_query_bounds_at_datetime_limits_are_structured_errors(self) -> None:
+        native_records, metadata = api_fixture()
+        for start, end in (
+            ("0001-01-01T00:00:00+14:00", "0001-01-01T00:00:01+14:00"),
+            ("9999-12-31T23:59:57-14:00", "9999-12-31T23:59:59-14:00"),
+        ):
+            with self.subTest(start=start, end=end):
+                bounded = {**metadata, "query_start": start, "query_end": end}
+                with self.assertRaises(ContractError):
+                    adapt_thousandeyes_activity_events(native_records, bounded)
+
     def test_wrong_account_group_partition_is_rejected(self) -> None:
         native_records, metadata = api_fixture()
         native_records[0]["aid"] = "different-aid"
@@ -184,6 +210,40 @@ class ThousandEyesActivityApiTests(unittest.TestCase):
 
 
 class ThousandEyesOtelActivityTests(unittest.TestCase):
+    def test_authority_and_partition_whitespace_is_normalized_before_identity(
+        self,
+    ) -> None:
+        payload, metadata = otel_fixture()
+        padded = {
+            **metadata,
+            "authority": "  te-org-synthetic-01  ",
+            "partition": " stream:stream-synthetic-01 ",
+        }
+
+        normalized = adapt_thousandeyes_otel_activity(payload, metadata)
+        replay = adapt_thousandeyes_otel_activity(payload, padded)
+
+        self.assertEqual(replay["objects"], normalized["objects"])
+
+    def test_conflicting_empty_otel_attributes_fail_in_both_orders(self) -> None:
+        payload, metadata = otel_fixture()
+        attributes = payload["resourceLogs"][0]["resource"]["attributes"]
+        stream = next(
+            item for item in attributes if item["key"] == "thousandeyes.stream.id"
+        )
+        empty = {"key": stream["key"], "value": {"stringValue": ""}}
+        for duplicate_pair in ((stream, empty), (empty, stream)):
+            with self.subTest(duplicate_pair=duplicate_pair):
+                candidate = copy.deepcopy(payload)
+                current = candidate["resourceLogs"][0]["resource"]["attributes"]
+                index = next(
+                    i for i, item in enumerate(current) if item["key"] == stream["key"]
+                )
+                current[index : index + 1] = list(duplicate_pair)
+                with self.assertRaises(ContractError) as caught:
+                    adapt_thousandeyes_otel_activity(candidate, metadata)
+                self.assertEqual(caught.exception.code, "conflicting_native_field")
+
     def test_official_v2_log_shape_stays_separate_and_partial(self) -> None:
         payload, metadata = otel_fixture()
 
