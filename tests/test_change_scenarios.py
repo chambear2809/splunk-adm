@@ -235,6 +235,14 @@ class ChangeScenarioTests(unittest.TestCase):
             candidate["generation_validation"]["rows_sha256"] = row_hash
             return candidate
 
+        starts_at_boundary = rebuilt(latest_at=plan["anchor_t_epoch"])
+        self.assertEqual(
+            _validate_timeline(
+                starts_at_boundary, load_scenario(plan["scenario_id"]), plan
+            )[0],
+            starts_at_boundary["generation_validation"]["generation_id"],
+        )
+
         outside_scope = rebuilt(scope="foreign-scope")
         with self.assertRaisesRegex(ScenarioError, "scope"):
             _validate_timeline(outside_scope, load_scenario(plan["scenario_id"]), plan)
@@ -245,6 +253,15 @@ class ChangeScenarioTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ScenarioError, "selection window"):
             _validate_timeline(outside_window, load_scenario(plan["scenario_id"]), plan)
+
+        ends_at_boundary = rebuilt(
+            earliest_at=plan["planned_run_end_epoch"],
+            latest_at=plan["planned_run_end_epoch"] + 1,
+        )
+        with self.assertRaisesRegex(ScenarioError, "selection window"):
+            _validate_timeline(
+                ends_at_boundary, load_scenario(plan["scenario_id"]), plan
+            )
 
     def test_only_two_offline_scenarios_are_exposed_without_assigning_t(self) -> None:
         self.assertEqual(SCENARIO_IDS, ("track-a-firewall", "track-b-fabric"))
