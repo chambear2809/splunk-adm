@@ -70,7 +70,7 @@ for (const failure of ["js", "css", "version"] as const) {
       page.getByRole("main", { name: "Other evidence" }),
     ).toContainText("Evidence remains available");
     await expect(page.getByRole("alert")).toContainText(
-      "Configuration history assets are unavailable",
+      "History assets unavailable",
     );
     await expect(
       page.getByRole("button", { name: "Inspect configuration history" }),

@@ -12,7 +12,6 @@ import {
 } from "./data/searchClient";
 import { indexNames, validateIndexName } from "./data/deploymentHealth";
 import { optionalJobs } from "./data/optionalJobs";
-import * as canonicalJson from "./changeCorrelation/canonicalJson";
 import type { ChangeTimelineInspectionProps } from "./changeCorrelation/ChangeTimelineInspection";
 
 type Runtime = typeof globalThis & {
@@ -25,6 +24,7 @@ type Runtime = typeof globalThis & {
 };
 type HistoryUi = NonNullable<Runtime["ApplicationAtlasHistory"]>;
 let pending: Promise<HistoryUi> | undefined;
+const HISTORY_ASSET_ERROR = "History assets unavailable.";
 
 export function historyAssetUrl(
   file: "pages/history.js" | "history.css",
@@ -54,7 +54,6 @@ export function loadHistoryUi(): Promise<HistoryUi> {
   if (!runtime.__AtlasHistoryHost)
     Object.defineProperty(runtime, "__AtlasHistoryHost", {
       value: Object.freeze({
-        assetVersion: __ADM_HISTORY_ASSET_VERSION__,
         react: React,
         jsxRuntime,
         evidence: Object.freeze({ routingScope }),
@@ -68,7 +67,6 @@ export function loadHistoryUi(): Promise<HistoryUi> {
         }),
         deploymentHealth: Object.freeze({ indexNames, validateIndexName }),
         optionalJobs: Object.freeze({ optionalJobs }),
-        canonicalJson,
       }),
     });
   pending = new Promise((resolve, reject) => {
@@ -77,7 +75,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     let scriptReady = false;
     let styleReady = false;
     const timer = setTimeout(
-      () => reject(new Error("Configuration history assets are unavailable.")),
+      () => reject(new Error(HISTORY_ASSET_ERROR)),
       10_000,
     );
     const finish = () => {
@@ -91,7 +89,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       ) {
         reject(
           new Error(
-            "Configuration history assets are unavailable or from another app version.",
+            "History assets unavailable or stale.",
           ),
         );
       } else resolve(ui);
@@ -106,8 +104,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       styleReady = true;
       finish();
     };
-    script.onerror = style.onerror = () =>
-      reject(new Error("Configuration history assets are unavailable."));
+    script.onerror = style.onerror = () => reject(new Error(HISTORY_ASSET_ERROR));
     try {
       script.src = historyAssetUrl(
         "pages/history.js",
@@ -121,7 +118,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       );
       document.head.append(style, script);
     } catch {
-      reject(new Error("Configuration history assets are unavailable."));
+      reject(new Error(HISTORY_ASSET_ERROR));
     }
   }).catch((error): never => {
     pending = undefined;

@@ -98,7 +98,6 @@ const HOST = new Map([
   [resolve("frontend/src/data/searchClient"), "searchClient"],
   [resolve("frontend/src/data/deploymentHealth"), "deploymentHealth"],
   [resolve("frontend/src/data/optionalJobs"), "optionalJobs"],
-  [resolve("frontend/src/changeCorrelation/canonicalJson"), "canonicalJson"],
 ]);
 export function historyHostModule(id: string) {
   return HOST.get(id.replace(/\.tsx?$/, ""));
