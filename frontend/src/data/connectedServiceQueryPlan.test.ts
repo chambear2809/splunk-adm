@@ -34,6 +34,11 @@ describe("connected query plan", () => {
       new Set(["connected.inventory", "connected.pricing"]),
     );
     expect(plan.every((item) => !Object.hasOwn(item, "receipt"))).toBe(true);
+    for (const item of plan.filter(
+      ({ key }) => key === "catalog.selected" || key === "find.service",
+    )) {
+      expect(item.window).toEqual(windows.impact);
+    }
   });
 
   it("rejects bad builder hashes and scope/order drift", async () => {
