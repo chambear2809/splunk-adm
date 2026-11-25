@@ -134,7 +134,7 @@ shared contract or bounded event classifier; no source-specific guess is made.
 `tests/test_change_appdynamics.py` exercises the documentation-shaped input,
 timestamp validation, replay identity, discarded fields, and audit-only history
 rows. These are offline unit tests; they do not establish native-sample
-compatibility. `tests/splunk/test_change_appdynamics.py` prepares an installed
+compatibility. `tests/splunk/test_installed_change_appdynamics.py` prepares an installed
 HEC/history replay against a task-owned Splunk lab and does not contact a
 Controller. It is not run until the orchestrator grants the lab lifecycle gate
 for this workstream. No AppDynamics package or collector is installed by that
