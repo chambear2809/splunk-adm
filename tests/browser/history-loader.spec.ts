@@ -76,9 +76,7 @@ for (const failure of ["js", "css", "version"] as const) {
     await expect(
       page.getByRole("main", { name: "Other evidence" }),
     ).toContainText("Evidence remains available");
-    await expect(page.getByRole("alert")).toContainText(
-      "History assets unavailable",
-    );
+    await expect(page.getByRole("alert")).toContainText("History unavailable.");
     await expect(
       page.getByRole("button", { name: "Inspect configuration history" }),
     ).toHaveCount(0);
@@ -89,13 +87,11 @@ test("failed version load cleans up assets and can retry successfully", async ({
   page,
 }) => {
   const { requests, repair } = await setup(page, "version");
-  await expect(page.getByRole("alert")).toContainText(
-    "History assets unavailable",
-  );
+  await expect(page.getByRole("alert")).toContainText("History unavailable.");
   await expect(page.locator('link[href*="history.css"]')).toHaveCount(0);
 
   repair();
-  await page.reload();
+  await page.getByRole("button", { name: "Retry history" }).click();
   await expect(
     page.getByRole("button", { name: "Inspect configuration history" }),
   ).toBeVisible();

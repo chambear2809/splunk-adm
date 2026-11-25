@@ -93,7 +93,7 @@ export function LazyChangeTimelineInspection(
   return (
     <section className="change-timeline" aria-label="History">
       <h3>History</h3>
-      <p role={error ? "alert" : "status"}>{error ?? "Loading…"}</p>
+      <p role={error ? "alert" : "status"}>{error ?? "Loading"}</p>
     </section>
   );
 }
