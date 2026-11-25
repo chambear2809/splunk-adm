@@ -41,6 +41,57 @@ describe("offline demo capture contract", () => {
     ).rejects.toThrow(/selection is not bound/);
   });
 
+  it("accepts an open-ended retained coverage row", async () => {
+    const scenario: DemoScenario = "track-a-firewall";
+    const { template, bundle } = await demoCaptureBundle(scenario);
+    const timeline = bundle.results["timeline.selected"] as unknown as {
+      rows: Record<string, unknown>[];
+      generation_rows: Record<string, unknown>[];
+      selection: {
+        change_ids: string[];
+        scope: string;
+        window: { start: number; end: number };
+      };
+      generation_validation: Record<string, unknown>;
+    };
+    const body = {
+      schema_version: 1,
+      record_type: "coverage",
+      scope: "change-a",
+      earliest_at: bundle.manifest.anchor_epoch,
+      latest_at: null,
+    };
+    const recordId = await sha256Hex(canonicalJson(body));
+    const manifest: Record<string, unknown> = {
+      ...(timeline.generation_validation.manifest as Record<string, unknown>),
+      row_count: 1,
+      rows_sha256: "",
+    };
+    delete manifest.generation_id;
+    const provisionalRow = { ...body, record_id: recordId };
+    manifest.rows_sha256 = await sha256Hex(canonicalJson(provisionalRow));
+    const generationId = await sha256Hex(canonicalJson(manifest));
+    const row = { ...provisionalRow, generation_id: generationId };
+    timeline.rows = [row];
+    timeline.generation_rows = [row];
+    (
+      timeline as unknown as { readback: { result_count: number } }
+    ).readback.result_count = 1;
+    timeline.selection.change_ids = [recordId];
+    timeline.generation_validation = {
+      ...timeline.generation_validation,
+      generation_id: generationId,
+      manifest: { ...manifest, generation_id: generationId },
+      complete_row_count: 1,
+      rows_sha256: manifest.rows_sha256,
+    };
+    bundle.manifest.change_generation_id = generationId;
+    bundle.manifest.change_generation_sha256 = generationId;
+    const resigned = await rehashDemoCapture(bundle);
+    const validated = await validateDemoCapture(resigned, scenario, template);
+    expect(validated.results["timeline.selected"].rows).toHaveLength(1);
+  });
+
   it("refuses shallow or foreign captured dependency identities", async () => {
     const scenario: DemoScenario = "track-a-firewall";
     const { template, bundle } = await demoCaptureBundle(scenario);

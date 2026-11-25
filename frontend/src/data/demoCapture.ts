@@ -327,7 +327,12 @@ async function validateDependencyEvidence(
     const coverage = object(readback)
       ? readback.query_input_coverage
       : undefined;
-    if (!object(coverage) || !object(coverage.summary_readback))
+    if (
+      !object(readback) ||
+      !object(readback.query_job) ||
+      !object(coverage) ||
+      !object(coverage.summary_readback)
+    )
       throw new Error("Demo capture dependency lacks input coverage.");
     const summary = coverage.summary_readback;
     if (
@@ -1737,45 +1742,46 @@ export async function validateDemoCapture(
         throw new Error(
           "Demo capture timeline selected row has a foreign scope.",
         );
-      const start =
-        row.earliest_at ??
-        row.event_at ??
-        row.effective_at ??
-        row.observed_at ??
-        row.received_at;
-      const end = row.latest_at;
-      if (end !== null && end !== undefined && !validTimestamp(end))
-        throw new Error(
-          "Demo capture timeline selected row has an invalid end.",
-        );
+      const hasInterval =
+        Object.hasOwn(row, "earliest_at") || Object.hasOwn(row, "latest_at");
+      const start = hasInterval
+        ? row.earliest_at
+        : (row.event_at ??
+          row.effective_at ??
+          row.observed_at ??
+          row.received_at);
+      const end = hasInterval ? row.latest_at : undefined;
       if (start !== null && start !== undefined && !validTimestamp(start))
         throw new Error(
           "Demo capture timeline selected row has an invalid start.",
         );
-      if (
-        (end !== null && end !== undefined && end < manifest.anchor_epoch) ||
-        (start !== null &&
-          start !== undefined &&
-          start >= manifest.anchor_epoch + 1200)
-      )
+      if (end !== null && end !== undefined && !validTimestamp(end))
         throw new Error(
-          "Demo capture timeline selected row is outside its window.",
+          "Demo capture timeline selected row has an invalid end.",
         );
-      if (
-        start !== null &&
-        start !== undefined &&
-        end !== null &&
-        end !== undefined &&
-        start > end
-      )
-        throw new Error("Demo capture timeline interval is reversed.");
-      if (
-        start !== null &&
-        start !== undefined &&
-        (end === null || end === undefined) &&
-        (start < manifest.anchor_epoch || start >= manifest.anchor_epoch + 1200)
-      )
+      if (hasInterval) {
+        if (
+          (start !== null &&
+            start !== undefined &&
+            end !== null &&
+            end !== undefined &&
+            start > end) ||
+          (end !== null && end !== undefined && end < manifest.anchor_epoch) ||
+          (start !== null &&
+            start !== undefined &&
+            start >= manifest.anchor_epoch + 1200)
+        )
+          throw new Error(
+            "Demo capture timeline selected row is outside its window.",
+          );
+      } else if (
+        start === null ||
+        start === undefined ||
+        start < manifest.anchor_epoch ||
+        start >= manifest.anchor_epoch + 1200
+      ) {
         throw new Error("Demo capture timeline point is outside its window.");
+      }
     }
   }
   const queryLiterals = new Map<string, string>();
