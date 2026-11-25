@@ -22,7 +22,9 @@ class ScenarioV2Tests(unittest.TestCase):
 
     def test_v2_registry_is_separate_and_bound(self):
         registry = load_variant_registry()
-        self.assertEqual(set(registry["tracks"]), {"track-a-firewall", "track-b-fabric"})
+        self.assertEqual(
+            set(registry["tracks"]), {"track-a-firewall", "track-b-fabric"}
+        )
         for scenario_id in registry["tracks"]:
             scenario = load_scenario(scenario_id)
             self.assertIs(validate_scenario(scenario), scenario)
@@ -32,7 +34,11 @@ class ScenarioV2Tests(unittest.TestCase):
         scenario = load_scenario("track-a-firewall")
         bad = dict(scenario)
         bad["connected_services"] = [
-            {"application": scenario["application"], "registry_key": "inventory", "role": "x"},
+            {
+                "application": scenario["application"],
+                "registry_key": "inventory",
+                "role": "x",
+            },
             scenario["connected_services"][1],
         ]
         with self.assertRaises(ScenarioError):
@@ -45,7 +51,9 @@ class ScenarioV2Tests(unittest.TestCase):
             execution_id="00000000-0000-4000-8000-000000000071",
             anchor_epoch=1_900_000_200,
         )
-        self.assertTrue(assert_source_phase_buckets(scenario, inputs, anchor_epoch=1_900_000_200))
+        self.assertTrue(
+            assert_source_phase_buckets(scenario, inputs, anchor_epoch=1_900_000_200)
+        )
         text = repr(inputs)
         self.assertNotIn("indexed_receipt_epoch", text)
         self.assertNotIn("event_fingerprint", text)
@@ -57,7 +65,9 @@ class ScenarioV2Tests(unittest.TestCase):
             execution_id="00000000-0000-4000-8000-000000000071",
             anchor_epoch=1_900_000_200,
         )
-        event = next(item for item in inputs["events"] if item["id"] == "b-aci-endpoint-prelude")
+        event = next(
+            item for item in inputs["events"] if item["id"] == "b-aci-endpoint-prelude"
+        )
         payload = event["raw_events"][0]["event"]
         self.assertIsInstance(payload, str)
         self.assertIn('\tdn="', payload)

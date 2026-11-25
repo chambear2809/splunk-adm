@@ -23,23 +23,48 @@ from tools.raw_fixtures.common import NS, envelope, epoch
 from tools.raw_fixtures.nxos import aci_event
 
 
-def aci_endpoint_snapshot_event(*, event_host: str, emitted_at: datetime,
-                                apic_host: str, endpoint_dn: str,
-                                fabric_path_dn: str, encapsulation: str,
-                                learning_classification: str, ownership: str) -> dict:
+def aci_endpoint_snapshot_event(
+    *,
+    event_host: str,
+    emitted_at: datetime,
+    apic_host: str,
+    endpoint_dn: str,
+    fabric_path_dn: str,
+    encapsulation: str,
+    learning_classification: str,
+    ownership: str,
+) -> dict:
     """Build the v2 offline ACI endpoint fact without changing v1 fixtures."""
-    values = (event_host, apic_host, endpoint_dn, fabric_path_dn, encapsulation,
-              learning_classification, ownership)
-    if emitted_at.tzinfo is None or any(not isinstance(v, str) or not v.strip() for v in values):
+    values = (
+        event_host,
+        apic_host,
+        endpoint_dn,
+        fabric_path_dn,
+        encapsulation,
+        learning_classification,
+        ownership,
+    )
+    if emitted_at.tzinfo is None or any(
+        not isinstance(v, str) or not v.strip() for v in values
+    ):
         raise ValueError("ACI endpoint fixture inputs are invalid.")
-    attributes = sorted([
-        ("dn", endpoint_dn), ("fabricPathDn", fabric_path_dn),
-        ("encap", encapsulation), ("lcC", learning_classification),
-        ("lcOwn", ownership),
-    ])
-    return envelope(epoch(emitted_at), event_host,
-                    "cisco_nexus_aci://classInfo_faultInst", "cisco:dc:aci:class",
-                    "cisco_dc", aci_event(emitted_at, attributes, apic_host, "fvCEp"))
+    attributes = sorted(
+        [
+            ("dn", endpoint_dn),
+            ("fabricPathDn", fabric_path_dn),
+            ("encap", encapsulation),
+            ("lcC", learning_classification),
+            ("lcOwn", ownership),
+        ]
+    )
+    return envelope(
+        epoch(emitted_at),
+        event_host,
+        "cisco_nexus_aci://classInfo_faultInst",
+        "cisco:dc:aci:class",
+        "cisco_dc",
+        aci_event(emitted_at, attributes, apic_host, "fvCEp"),
+    )
 
 
 SOURCE_PROVENANCE = "documentation_shaped_synthetic"
