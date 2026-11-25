@@ -90,13 +90,30 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "fa059ea74eae0367d1ed1942ae6609a8535b7b479cc601d507daeefc31f45c1b",
+      "reviewed_macro_file_sha256": "71f8971b8f0b9f50f54ffdaeb844a65b55c3d3b8932f12122a241d0b3c4fedfd",
       "method": "static review only; no recapture",
-      "reason": "Only the V2 graph input macro changes. It now applies the shared half-open NAT evidence window. The captured legacy adm_graph path uses its original macro and filter.",
+      "reason": "The opt-in service-scoped graph adds service-only preparation, handoff scoping and output fields. The legacy adm_graph(4) body hash and all 38 stanzas reachable from its expansion remain byte-identical; service fields are null or bypassed when service mode is absent. Captured legacy rows remain valid and no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_graph_inputs_v2(4)"
+        "adm_service_binding_freshness",
+        "adm_graph_service_prepare(4)",
+        "adm_graph_service_handoff_scope",
+        "adm_graph_service_scope(4)",
+        "adm_graph_service(4)",
+        "adm_graph_service_v2(4)",
+        "adm_graph_handoffs(4)",
+        "adm_graph_edges(4)",
+        "adm_graph_output(4)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "fa059ea74eae0367d1ed1942ae6609a8535b7b479cc601d507daeefc31f45c1b",
+          "method": "static review only; no recapture",
+          "reason": "Only the V2 graph input macro changes. It now applies the shared half-open NAT evidence window. The captured legacy adm_graph path uses its original macro and filter.",
+          "modified_macro_stanzas": [
+            "adm_graph_inputs_v2(4)"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "405678f10eaa45e19378c5f59fe0173c9b149575334f57d34b9a901a2419577e",
