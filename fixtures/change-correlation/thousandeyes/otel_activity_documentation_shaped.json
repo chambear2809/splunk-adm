@@ -1,0 +1,109 @@
+{
+  "fixture_kind": "documentation_shaped_synthetic",
+  "documentation_source": "ThousandEyes OpenTelemetry Data Model v2 Logs example",
+  "collection_metadata": {
+    "schema_version": 1,
+    "capture_id": "te-otel-synthetic-capture-01",
+    "product": "thousandeyes",
+    "authority": "te-org-synthetic-01",
+    "source_version": "thousandeyes-otel-v2",
+    "family": "activity_log",
+    "partition": "stream:stream-synthetic-01",
+    "stream_id": "stream-synthetic-01",
+    "scope": "change-a",
+    "started_at": 1793102399,
+    "received_at": 1793102403,
+    "status": "partial",
+    "permissions_fingerprint": "permissions-synthetic-01",
+    "enumeration": "incremental",
+    "deletions_authoritative": false
+  },
+  "native_payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "thousandeyes.data.version",
+              "value": {
+                "stringValue": "v2"
+              }
+            },
+            {
+              "key": "thousandeyes.stream.id",
+              "value": {
+                "stringValue": "stream-synthetic-01"
+              }
+            },
+            {
+              "key": "thousandeyes.stream.name",
+              "value": {
+                "stringValue": "Synthetic activity stream"
+              }
+            },
+            {
+              "key": "thousandeyes.account.id",
+              "value": {
+                "stringValue": "account-synthetic-01"
+              }
+            },
+            {
+              "key": "thousandeyes.account.name",
+              "value": {
+                "stringValue": "Synthetic Account"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "scope": {},
+            "logRecords": [
+              {
+                "timeUnixNano": "1793102400000000000",
+                "observedTimeUnixNano": "1793102402000000000",
+                "severityNumber": 9,
+                "severityText": "Info",
+                "body": {
+                  "stringValue": "Login"
+                },
+                "attributes": [
+                  {
+                    "key": "thousandeyes.user.id",
+                    "value": {
+                      "stringValue": "user-synthetic-01"
+                    }
+                  },
+                  {
+                    "key": "thousandeyes.user.name",
+                    "value": {
+                      "stringValue": "Synthetic User"
+                    }
+                  },
+                  {
+                    "key": "thousandeyes.user.address",
+                    "value": {
+                      "stringValue": "192.0.2.21"
+                    }
+                  },
+                  {
+                    "key": "thousandeyes.user.email",
+                    "value": {
+                      "stringValue": "synthetic@example.invalid"
+                    }
+                  },
+                  {
+                    "key": "thousandeyes.activitylog.resources",
+                    "value": {
+                      "stringValue": "name:synthetic-user"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
