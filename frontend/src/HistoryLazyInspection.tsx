@@ -25,6 +25,23 @@ type Runtime = typeof globalThis & {
 type HistoryUi = NonNullable<Runtime["ApplicationAtlasHistory"]>;
 let pending: Promise<HistoryUi> | undefined;
 
+export function historyAssetUrl(
+  file: "pages/history.js" | "history.css",
+  version: string,
+  locationHref: string,
+  staticPath = createStaticURL(`app/splunk_adm/${file}`),
+): string {
+  const value = new URL(staticPath, locationHref);
+  const expectedPath = `/app/splunk_adm/${file}`;
+  if (
+    value.origin !== new URL(locationHref).origin ||
+    value.pathname !== expectedPath
+  )
+    throw new Error("History asset origin could not be verified.");
+  value.searchParams.set("v", version);
+  return value.href;
+}
+
 export function loadHistoryUi(): Promise<HistoryUi> {
   if (!__ADM_SPLUNK_BUILD__)
     return import("./history-entry").then((module): HistoryUi => ({
@@ -90,22 +107,17 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     };
     script.onerror = style.onerror = () =>
       reject(new Error("Configuration history assets are unavailable."));
-    const assetUrl = (file: string) => {
-      const value = new URL(
-        createStaticURL(`app/splunk_adm/${file}`),
+    try {
+      script.src = historyAssetUrl(
+        "pages/history.js",
+        __ADM_HISTORY_ASSET_VERSION__,
         location.href,
       );
-      if (
-        value.origin !== location.origin ||
-        !value.pathname.endsWith(`/app/splunk_adm/${file}`)
-      )
-        throw new Error("History asset origin could not be verified.");
-      value.searchParams.set("v", __ADM_HISTORY_ASSET_VERSION__);
-      return value.href;
-    };
-    try {
-      script.src = assetUrl("pages/history.js");
-      style.href = assetUrl("history.css");
+      style.href = historyAssetUrl(
+        "history.css",
+        __ADM_HISTORY_ASSET_VERSION__,
+        location.href,
+      );
       document.head.append(style, script);
     } catch {
       reject(new Error("Configuration history assets are unavailable."));

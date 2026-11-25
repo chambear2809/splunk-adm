@@ -40,6 +40,42 @@ interface InspectionState {
   value: InspectionValue;
 }
 
+export async function runChangeTimelineInspection({
+  client,
+  view,
+  configurationClient,
+  signal,
+  onPhase,
+}: {
+  client: SearchClient;
+  view: ChangeTimelineInspectionProps["view"];
+  configurationClient: ChangeTimelineConfigurationClient;
+  signal: AbortSignal;
+  onPhase?: (phase: "configuration" | "activation" | "history") => void;
+}): Promise<
+  | { status: "not_selected" }
+  | { status: "loaded"; result: ChangeTimelineResult }
+> {
+  validateTimelineView(view);
+  onPhase?.("configuration");
+  const configuration = await configurationClient.read(signal);
+  if (configuration.state === "not_selected") return { status: "not_selected" };
+  onPhase?.("activation");
+  const activation = await loadChangeActivation(
+    client,
+    configuration.index,
+    configuration.activation_id,
+    signal,
+  );
+  onPhase?.("history");
+  const result = await loadChangeTimeline(
+    client,
+    { activation, ...view },
+    signal,
+  );
+  return { status: "loaded", result };
+}
+
 function selectionKey(view: ChangeTimelineInspectionProps["view"]): string {
   return JSON.stringify([view.scope, view.window.start, view.window.end]);
 }
@@ -123,30 +159,30 @@ export function ChangeTimelineInspection({
     updateState({ status: "loading_configuration" });
     let phase: "configuration" | "activation" | "history" = "configuration";
     try {
-      const configuration = await configurationClient.read(controller.signal);
+      const outcome = await runChangeTimelineInspection({
+        client,
+        view,
+        configurationClient,
+        signal: controller.signal,
+        onPhase: (next) => {
+          phase = next;
+          updateState({
+            status:
+              next === "configuration"
+                ? "loading_configuration"
+                : next === "activation"
+                  ? "loading_activation"
+                  : "loading_history",
+          });
+        },
+      });
       if (activeToken.current !== token || controller.signal.aborted) return;
-      if (configuration.state === "not_selected") {
+      if (outcome.status === "not_selected") {
         updateState({ status: "not_selected" });
         return;
       }
-      phase = "activation";
-      updateState({ status: "loading_activation" });
-      const activation = await loadChangeActivation(
-        client,
-        configuration.index,
-        configuration.activation_id,
-        controller.signal,
-      );
-      if (activeToken.current !== token || controller.signal.aborted) return;
-      phase = "history";
-      updateState({ status: "loading_history" });
-      const result = await loadChangeTimeline(
-        client,
-        { activation, ...view },
-        controller.signal,
-      );
       if (activeToken.current === token && !controller.signal.aborted)
-        updateState({ status: "loaded", result });
+        updateState({ status: "loaded", result: outcome.result });
     } catch (cause) {
       if (activeToken.current === token && !controller.signal.aborted) {
         updateState({
