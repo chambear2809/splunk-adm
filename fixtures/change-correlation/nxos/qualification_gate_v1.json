@@ -1,0 +1,31 @@
+{
+  "fixture_type": "qualification_gate",
+  "provenance": "synthetic gate control; not NX-OS, Nexus Dashboard, or NDO source output",
+  "projection": {
+    "product": "nxos",
+    "family": "device_snapshot",
+    "qualification": "normalized_export_only",
+    "native_sample_unqualified": true,
+    "adapter_disposition": "native_adapter_blocked_pending_versioned_command_sample",
+    "kind": "operational",
+    "fields": [
+      "hostname",
+      "serial",
+      "model",
+      "software_version",
+      "interface_name",
+      "if_index",
+      "admin_state",
+      "oper_state"
+    ]
+  },
+  "native_records_included": false,
+  "required_evidence": [
+    "exact NX-OS release and device model",
+    "sanitized version-matched responses for each selected command",
+    "stable chassis and interface identity across replacement and renumbering",
+    "complete command, pagination, permission, and collection-boundary evidence",
+    "current Nexus Dashboard and NDO release-specific payloads for ND/NDO features",
+    "separate controller-intent, deployment, APIC/device-state, and enforcement evidence"
+  ]
+}
