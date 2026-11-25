@@ -53,6 +53,8 @@ export interface DemoCaptureReadback {
   source: "splunk_rest";
   execution_id: string;
   plan_sha256: string;
+  query_job?: Record<string, unknown>;
+  query_input_coverage?: Record<string, unknown>;
 }
 
 export interface DemoCaptureQuery {
@@ -207,6 +209,82 @@ function hash(value: unknown, label: string): string {
   const result = requiredText(value, label, 64);
   if (!HASH.test(result)) throw new Error(`Demo capture ${label} is invalid.`);
   return result;
+}
+
+async function parseCapturedDependencies(
+  value: unknown,
+  scenario: DemoScenario,
+  executionId: string,
+): Promise<Record<string, unknown>[]> {
+  if (!Array.isArray(value) || value.length > 500 || !value.every(object))
+    throw new Error("Demo capture dependency bindings are invalid.");
+  const track = demoTrack(scenario);
+  const dependencies: Record<string, unknown>[] = [];
+  for (const candidate of value) {
+    exactKeys(candidate, ["authority", "type", "id", "binding"], "dependency");
+    if (
+      candidate.authority !== "atlas:observed_dependency" ||
+      candidate.type !== "captured_dependency" ||
+      !object(candidate.binding)
+    )
+      throw new Error("Demo capture dependency authority is invalid.");
+    const binding = candidate.binding;
+    exactKeys(
+      binding,
+      [
+        "authority",
+        "identity_type",
+        "scenario_id",
+        "execution_id",
+        "graph_result_key",
+        "graph_result_sha256",
+        "edge_id",
+        "scope",
+        "window",
+        "query_sha256",
+        "receipt_basis",
+        "query_input_coverage_sha256",
+        "active_traffic_contract_sha256",
+        "receipt_fingerprints",
+      ],
+      "dependency binding",
+    );
+    if (
+      binding.authority !== candidate.authority ||
+      binding.identity_type !== candidate.type ||
+      binding.scenario_id !== scenario ||
+      binding.execution_id !== executionId ||
+      binding.scope !== track.scope ||
+      ![
+        "graph.baseline",
+        "graph.change",
+        "graph.impact",
+        "graph.recovery",
+      ].includes(String(binding.graph_result_key)) ||
+      binding.receipt_basis !== "query_input_coverage_v1"
+    )
+      throw new Error("Demo capture dependency binding is foreign.");
+    hash(binding.graph_result_sha256, "dependency graph hash");
+    hash(binding.query_sha256, "dependency query hash");
+    hash(binding.query_input_coverage_sha256, "dependency input coverage hash");
+    hash(binding.active_traffic_contract_sha256, "dependency traffic hash");
+    if (
+      !Array.isArray(binding.receipt_fingerprints) ||
+      binding.receipt_fingerprints.length === 0 ||
+      !binding.receipt_fingerprints.every((item) => HASH.test(String(item)))
+    )
+      throw new Error("Demo capture dependency receipts are invalid.");
+    if (!object(binding.window))
+      throw new Error("Dependency window is invalid.");
+    bounds(binding.window, "dependency window");
+    const expectedId = `captured_dependency:${await sha256Hex(canonicalJson(binding))}`;
+    if (candidate.id !== expectedId)
+      throw new Error(
+        "Demo capture dependency identity is not bound to its body.",
+      );
+    dependencies.push(candidate);
+  }
+  return dependencies;
 }
 
 function validEpoch(value: unknown): value is number {
@@ -420,6 +498,8 @@ function parseReadback(
       "source",
       "execution_id",
       "plan_sha256",
+      "query_job",
+      "query_input_coverage",
     ],
     "readback",
   );
@@ -454,6 +534,12 @@ function parseReadback(
     throw new Error("Demo capture readback contradicts its result status.");
   if (status === "complete" && value.receipt_fingerprints.length === 0)
     throw new Error("Demo capture has no indexed receipt fingerprints.");
+  const queryJob = value.query_job;
+  const queryInputCoverage = value.query_input_coverage;
+  if (queryJob !== undefined && !object(queryJob))
+    throw new Error("Demo capture query job is invalid.");
+  if (queryInputCoverage !== undefined && !object(queryInputCoverage))
+    throw new Error("Demo capture query-input coverage is invalid.");
   return {
     complete: value.complete,
     result_count: value.result_count as number,
@@ -462,6 +548,8 @@ function parseReadback(
     source: "splunk_rest" as const,
     execution_id: manifest.execution_id,
     plan_sha256: manifest.plan_sha256,
+    ...(queryJob ? { query_job: queryJob } : {}),
+    ...(queryInputCoverage ? { query_input_coverage: queryInputCoverage } : {}),
   };
 }
 
@@ -1205,15 +1293,11 @@ async function parseManifest(
   const fixtureHash = hash(value.fixture_sha256, "fixture hash");
   if ((await sha256Hex(canonicalJson(fixtureFiles))) !== fixtureHash)
     throw new Error("Demo capture aggregate fixture hash is invalid.");
-  if (
-    !Array.isArray(value.captured_dependencies) ||
-    value.captured_dependencies.length > 500 ||
-    !value.captured_dependencies.every(object) ||
-    new TextEncoder().encode(canonicalJson(value.captured_dependencies))
-      .byteLength >
-      512 * 1024
-  )
-    throw new Error("Demo capture dependency bindings are invalid.");
+  const capturedDependencies = await parseCapturedDependencies(
+    value.captured_dependencies,
+    scenario,
+    requiredText(value.execution_id, "execution ID", 128),
+  );
   const changeGenerationId =
     value.change_generation_id === null
       ? null
@@ -1261,7 +1345,7 @@ async function parseManifest(
     ),
     change_generation_id: changeGenerationId,
     change_generation_sha256: changeGenerationHash,
-    captured_dependencies: value.captured_dependencies,
+    captured_dependencies: capturedDependencies,
     capture_status: value.capture_status,
     services_contacted: value.services_contacted,
     capture_sha256: hash(value.capture_sha256, "capture hash"),
@@ -1539,6 +1623,53 @@ export async function validateDemoCapture(
       );
       if (recordId !== row.record_id)
         throw new Error("Demo capture timeline row identity is invalid.");
+    }
+    const selectedRows = timeline.rows;
+    const selectedIds = selectedRows.map((row) => String(row.record_id)).sort();
+    if (
+      !timeline.selection ||
+      timeline.selection.scope !== manifest.selection.change_scope ||
+      canonicalJson(selectedIds) !==
+        canonicalJson([...(timeline.selection.change_ids ?? [])].sort())
+    )
+      throw new Error(
+        "Demo capture timeline selection is not bound to its rows.",
+      );
+    const generationById = new Map(
+      generationRows.map((row) => [String(row.record_id), row]),
+    );
+    for (const row of selectedRows) {
+      const retained = generationById.get(String(row.record_id));
+      if (!retained || canonicalJson(row) !== canonicalJson(retained))
+        throw new Error("Demo capture timeline selected row is not retained.");
+      if (row.scope !== timeline.selection.scope)
+        throw new Error(
+          "Demo capture timeline selected row has a foreign scope.",
+        );
+      const start =
+        row.earliest_at ??
+        row.event_at ??
+        row.effective_at ??
+        row.observed_at ??
+        row.received_at;
+      const end = row.latest_at;
+      if (end !== null && end !== undefined && !validTimestamp(end))
+        throw new Error(
+          "Demo capture timeline selected row has an invalid end.",
+        );
+      if (start !== null && start !== undefined && !validTimestamp(start))
+        throw new Error(
+          "Demo capture timeline selected row has an invalid start.",
+        );
+      if (
+        (end !== null && end !== undefined && end < manifest.anchor_epoch) ||
+        (start !== null &&
+          start !== undefined &&
+          start >= manifest.anchor_epoch + 1200)
+      )
+        throw new Error(
+          "Demo capture timeline selected row is outside its window.",
+        );
     }
   }
   const queryLiterals = new Map<string, string>();
