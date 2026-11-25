@@ -41,6 +41,9 @@ export interface ConnectedServiceCaptureValidationContext {
   ) => Promise<CompleteDemoCaptureResult>;
 }
 
+// The caller owns full query/hash/readback authenticity validation. This module
+// only binds already-validated child results to their declared service scopes.
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
 

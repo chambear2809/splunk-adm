@@ -207,4 +207,51 @@ describe("connected service capture validation", () => {
       }),
     ).toThrow();
   });
+
+  it("rejects malformed Find input metadata", async () => {
+    for (const malformed of [
+      { field: "client_ip", value: "10.0.0.1" },
+      { field: "service", value: "checkout" },
+    ]) {
+      await expect(
+        validateConnectedServiceCapture(
+          rawCapture(),
+          fixture({
+            validateResult: vi.fn(async (key, _raw, application) => {
+              const value = result(
+                application,
+                key === "catalog.selected" || key === "find.service"
+                  ? [{ ...application }]
+                  : [],
+                key === "find.service",
+              );
+              if (key === "find.service")
+                (value as Record<string, unknown>).input = malformed;
+              return value;
+            }),
+          }),
+        ),
+      ).rejects.toThrow(/Find input/);
+    }
+
+    await expect(
+      validateConnectedServiceCapture(
+        rawCapture(),
+        fixture({
+          validateResult: vi.fn(async (key, _raw, application) => {
+            const value = result(
+              application,
+              key === "catalog.selected" || key === "find.service"
+                ? [{ ...application }]
+                : [],
+              key === "find.service",
+            );
+            if (key === "find.service")
+              (value as Record<string, unknown>).args = application;
+            return value;
+          }),
+        }),
+      ),
+    ).rejects.toThrow(/Find result has invalid input/);
+  });
 });
