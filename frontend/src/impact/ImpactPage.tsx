@@ -42,6 +42,17 @@ import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { resiliencePosture } from "../ops/spof";
 import { cabPack } from "../ops/cab";
 import { URL_STATE_CHANGED } from "../app/urlState";
+import { useRoutingScopes } from "../data/routingScopes";
+import { RoutingScopeSelect } from "../RoutingScopeSelect";
+import {
+  SuggestCombobox,
+  filterSuggestOptions,
+  type SuggestOption,
+} from "../SuggestCombobox";
+import {
+  ChangeVerification,
+  type AssertionCandidate,
+} from "../changeVerification/ChangeVerification";
 
 /** Resolve a shareable Impact window once before dispatching a live search. */
 export function resolveImpactWindow(
@@ -335,18 +346,50 @@ function Kpi({
   );
 }
 
+export const MAX_ELEMENT_SUGGESTIONS = 200;
+
+/**
+ * "Add element" suggestions from loaded impact data: observed devices first,
+ * then topology inventory. No search is issued.
+ */
+export function impactElementSuggestions(
+  data: Pick<ImpactData, "topology" | "observed">,
+  limit = MAX_ELEMENT_SUGGESTIONS,
+): SuggestOption[] {
+  const seen = new Set<string>();
+  const out: SuggestOption[] = [];
+  for (const device of [
+    ...(data.observed?.devices ?? []),
+    ...data.topology.devices,
+  ]) {
+    if (out.length >= limit) break;
+    if (seen.has(device.id) || !isImpactToken(device.id)) continue;
+    seen.add(device.id);
+    out.push({
+      value: device.id,
+      ...(device.name && device.name !== device.id
+        ? { label: device.name }
+        : {}),
+    });
+  }
+  return out;
+}
+
 function ElementPicker({
   elements,
   onChange,
-  devices,
+  suggestions,
 }: {
   elements: string[];
   onChange: (e: string[]) => void;
-  devices?: NonNullable<ImpactData["observed"]>["devices"];
+  suggestions: readonly SuggestOption[];
 }) {
   const id = useId();
-  const choices = devices?.filter((device) => !elements.includes(device.id));
   const [value, setValue] = useState("");
+  const choices = filterSuggestOptions(
+    suggestions.filter((option) => !elements.includes(option.value)),
+    value,
+  );
   const v = value.trim();
   const full = elements.length >= MAX_IMPACT_ELEMENTS;
   const valid = isImpactToken(v) && !elements.includes(v) && !full;
@@ -377,7 +420,7 @@ function ElementPicker({
           </button>
         </span>
       ))}
-      <input
+      <SuggestCombobox
         id={id}
         className="atlas-input"
         aria-label="Add element"
@@ -386,22 +429,12 @@ function ElementPicker({
             ? "+ element (what-if)"
             : "Device, IP, VM, app, interface"
         }
-        autoComplete="off"
-        list={choices?.length ? `${id}-choices` : undefined}
         spellCheck={false}
         disabled={full}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
+        options={choices}
       />
-      {!!choices?.length && (
-        <datalist id={`${id}-choices`}>
-          {choices.map((device) => (
-            <option key={device.id} value={device.id}>
-              {device.name}
-            </option>
-          ))}
-        </datalist>
-      )}
       <button className="atlas-button" type="submit" disabled={!valid}>
         {elements.length ? "Add" : "Go"}
       </button>
@@ -437,8 +470,11 @@ export function ImpactPage({
   const [earliest, setEarliest] = useState(initial.earliest);
   const [latest, setLatest] = useState(initial.latest);
   const [scope, setScope] = useState(initial.scope ?? "");
+  const scopes = useRoutingScopes(!demo);
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "idle" });
+  const [elementOptions, setElementOptions] = useState<SuggestOption[]>([]);
+  const [verifyOpen, setVerifyOpen] = useState(false);
   // Keep a relative deep-link anchored to the same cohort while the operator
   // changes elements or retries. A new picker value creates a new window.
   const evidenceWindow = useMemo(
@@ -512,6 +548,7 @@ export function ImpactPage({
     task
       .then((data) => {
         if (controller.signal.aborted) return;
+        setElementOptions(impactElementSuggestions(data));
         if (client && data.observed)
           qualified.current = { key, client, cohort: data.observed };
         setLoad({ status: "done", data });
@@ -557,6 +594,29 @@ export function ImpactPage({
         })
       : dependsImpact(resolved, data.conversations, data.ctx, { cls });
   }, [data, cls, resolved, mode]);
+  const verifyCandidates = useMemo(
+    (): AssertionCandidate[] =>
+      result?.mode === "fails"
+        ? result.rows.flatMap((c) => {
+            const { src, dst, protocol, port } = c.conv;
+            return src.ip &&
+              dst.ip &&
+              port !== undefined &&
+              (protocol === "tcp" || protocol === "udp" || protocol === "sctp")
+              ? [
+                  {
+                    name: `${endName(src)} → ${endName(dst)} ${protocol}/${port}`,
+                    src: src.ip,
+                    dst: dst.ip,
+                    transport: protocol,
+                    port,
+                  },
+                ]
+              : [];
+          })
+        : [],
+    [result],
+  );
   const blast = useMemo(
     () =>
       result?.mode === "fails" && cls
@@ -612,17 +672,17 @@ export function ImpactPage({
         <ElementPicker
           elements={elements}
           onChange={setElements}
-          devices={observed?.devices}
+          suggestions={elementOptions}
         />
         {!demo && (
-          <label>
-            Routing scope
-            <input
-              value={scope}
-              onChange={(event) => setScope(event.target.value)}
-              autoComplete="off"
-            />
-          </label>
+          <RoutingScopeSelect
+            showLabel
+            commitOnBlur
+            value={scope}
+            onChange={setScope}
+            state={scopes}
+            onRetry={scopes.retry}
+          />
         )}
         <div
           className="atlas-impact-mode"
@@ -676,7 +736,7 @@ export function ImpactPage({
       <div className="adm atlas-impact" data-adm-theme={theme}>
         {!demo && elements.length > 0 && !isImpactScope(scope) && (
           <p role="status">
-            Enter a mapped routing scope to assess live impact.
+            Choose a mapped routing scope to assess live impact.
           </p>
         )}
         {!elements.length && (
@@ -893,6 +953,7 @@ export function ImpactPage({
                     start: evidenceWindow.earliest,
                     end: evidenceWindow.latest,
                   }}
+                  onVerify={() => setVerifyOpen(true)}
                 />
               </>
             )}
@@ -967,6 +1028,15 @@ export function ImpactPage({
             denied={load.status === "error" && load.denied}
           />
         )}
+        <ChangeVerification
+          client={client}
+          live={!demo}
+          scope={scope}
+          editableScope={demo}
+          candidates={verifyCandidates}
+          open={verifyOpen}
+          onToggle={setVerifyOpen}
+        />
       </div>
     </main>
   );
@@ -975,9 +1045,11 @@ export function ImpactPage({
 function ResilienceOps({
   result,
   window: win,
+  onVerify,
 }: {
   result: DependsResult;
   window: { start: string; end: string };
+  onVerify: () => void;
 }) {
   const posture = resiliencePosture(result);
   const rawId = `${result.label || "impact"}-window`.trim();
@@ -1000,6 +1072,13 @@ function ResilienceOps({
           <li key={item}>{item}</li>
         ))}
       </ol>
+      <a
+        className="secondary-button"
+        href="#atlas-verify-change"
+        onClick={onVerify}
+      >
+        Verify change
+      </a>
     </section>
   );
 }

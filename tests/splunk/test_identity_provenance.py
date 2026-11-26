@@ -332,7 +332,7 @@ class IdentityProvenanceTest(unittest.TestCase):
         )
         self.assertEqual(expired[0]["count"], "0")
 
-    def test_identity_acl_metadata_keeps_public_readers_and_raw_alias_admin_only(self):
+    def test_identity_acl_metadata_keeps_viewer_readers_and_raw_alias_admin_only(self):
         from pathlib import Path
 
         metadata = (
@@ -340,7 +340,7 @@ class IdentityProvenanceTest(unittest.TestCase):
             / "splunk_app/splunk_adm/metadata/default.meta"
         ).read_text()
         app_default = metadata.split("[]", 1)[1].split("\n[", 1)[0]
-        public_access = "access = read : [ * ], write : [ admin, sc_admin ]"
+        viewer_access = "access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]"
         for stanza in ("adm_ip_identity", "adm_ip_identity_service"):
             marker = f"[transforms/{stanza}]"
             if marker in metadata:
@@ -348,7 +348,7 @@ class IdentityProvenanceTest(unittest.TestCase):
                 effective = section if "access =" in section else app_default
             else:
                 effective = app_default
-            self.assertIn(public_access, effective)
+            self.assertIn(viewer_access, effective)
         raw = metadata.split("[transforms/adm_ip_identity_all]", 1)[1].split("\n[", 1)[
             0
         ]

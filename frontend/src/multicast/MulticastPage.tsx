@@ -19,6 +19,7 @@ import {
   MulticastConfigurationChangedError,
   readMulticastConfiguration,
 } from "./investigation";
+import type { GroupRow } from "./flags";
 import { formatTime } from "./format";
 import { ForwardingTree } from "./ForwardingTree";
 import { IgmpTimeline } from "./IgmpTimeline";
@@ -54,6 +55,24 @@ const VIEW_LABEL: Record<View, string> = {
   overview: "Overview",
   matrix: "Matrix",
 };
+
+/** Groups and flow senders already returned by the scope overview. */
+export function observedGroupSuggestions(
+  rows: readonly GroupRow[],
+  group: string,
+  limit = 64,
+): { groups: string[]; senders: string[] } {
+  const senders = new Set<string>();
+  for (const row of rows)
+    if (row.group === group.trim())
+      for (const summary of row.summaries)
+        if (summary.kind === "flow")
+          for (const sender of summary.senders) senders.add(sender);
+  return {
+    groups: [...new Set(rows.map((row) => row.group))].slice(0, limit),
+    senders: [...senders].sort().slice(0, limit),
+  };
+}
 
 const message = (error: unknown) =>
   error instanceof Error
@@ -394,8 +413,10 @@ export function MulticastPage({
     const controller = new AbortController();
     readMulticastConfiguration(controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted)
-          setConfiguration({ status: "ready", value });
+        if (controller.signal.aborted) return;
+        setConfiguration({ status: "ready", value });
+        const only = new Set(value.profiles.map((profile) => profile.scope));
+        if (only.size === 1) setScope((current) => current || [...only][0]);
       })
       .catch((err: unknown) => {
         if (!controller.signal.aborted)
@@ -418,6 +439,10 @@ export function MulticastPage({
           ),
         ].sort()
       : [];
+  const observed = observedGroupSuggestions(
+    overview.status === "done" ? overview.value.rows : [],
+    group,
+  );
   const writeLink = (params: URLSearchParams) => {
     const mode = (
       initialParams ?? new URLSearchParams(window.location.search)
@@ -751,6 +776,12 @@ export function MulticastPage({
                           editGroup(setGroup, event.target.value)
                         }
                         placeholder="239.1.2.3"
+                        list={
+                          observed.groups.length
+                            ? `${tabsId}-groups`
+                            : undefined
+                        }
+                        autoComplete="off"
                         required
                       />
                     </label>
@@ -762,8 +793,28 @@ export function MulticastPage({
                           editGroup(setSender, event.target.value)
                         }
                         placeholder="192.0.2.1"
+                        list={
+                          observed.senders.length
+                            ? `${tabsId}-senders`
+                            : undefined
+                        }
+                        autoComplete="off"
                       />
                     </label>
+                    {observed.groups.length > 0 && (
+                      <datalist id={`${tabsId}-groups`}>
+                        {observed.groups.map((value) => (
+                          <option key={value} value={value} />
+                        ))}
+                      </datalist>
+                    )}
+                    {observed.senders.length > 0 && (
+                      <datalist id={`${tabsId}-senders`}>
+                        {observed.senders.map((value) => (
+                          <option key={value} value={value} />
+                        ))}
+                      </datalist>
+                    )}
                     <div className="multicast-actions">
                       <button
                         type="submit"

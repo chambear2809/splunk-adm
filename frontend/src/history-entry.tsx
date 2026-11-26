@@ -6,3 +6,4 @@ export const assetVersion =
     : __ADM_HISTORY_ASSET_VERSION__;
 
 export { ChangeTimelineInspection };
+export { CmdbWorkspace } from "./cmdb/CmdbWorkspace";

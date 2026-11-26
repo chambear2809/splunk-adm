@@ -1,5 +1,5 @@
 import { DeploymentWriteError } from "../data/deploymentClient";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
 import Table from "../SimpleTable";
 import TextExport from "@splunk/react-ui/Text";
@@ -19,6 +19,7 @@ import {
   indexNames,
   setupReadiness,
   validateIndexName,
+  type IndexList,
   type SetupClient,
   type SetupMacro,
   type SetupSnapshot,
@@ -32,6 +33,71 @@ const acsURL =
   "https://help.splunk.com/en/splunk-cloud-platform/administer/admin-config-service-manual/10.2.2510/administer-splunk-cloud-platform-using-the-admin-config-service-acs-api/manage-indexes-in-splunk-cloud-platform";
 const DRAFT_CONFLICT =
   "Deployment settings changed since this draft began. Discard the draft and reload before saving.";
+/** Splunk Text exposes no `list` prop; attach a datalist to its input. */
+function useInputList(listId: string | undefined) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const input = ref.current;
+    if (!input) return;
+    if (listId) input.setAttribute("list", listId);
+    else input.removeAttribute("list");
+  });
+  return ref;
+}
+function SuggestionList({
+  id,
+  values,
+}: {
+  id: string;
+  values: readonly string[];
+}) {
+  return (
+    <datalist id={id}>
+      {values.map((value) => (
+        <option key={value} value={value} />
+      ))}
+    </datalist>
+  );
+}
+export const MAX_MAPPING_SUGGESTIONS = 100;
+const distinct = (values: Iterable<string | undefined>, limit: number) => {
+  const out = new Set<string>();
+  for (const value of values) {
+    const next = value?.trim();
+    if (next) out.add(next);
+  }
+  return [...out].sort().slice(0, limit);
+};
+/**
+ * Observer kind and scope suggestions: registry observer kinds plus values in
+ * stored mappings. Scopes exclude reserved placeholders.
+ */
+export function mappingSuggestions(
+  rows: readonly { observer_kind?: string; scope?: string }[],
+  limit = MAX_MAPPING_SUGGESTIONS,
+): { kinds: string[]; scopes: string[] } {
+  const registry = SOURCE_DEFINITIONS.flatMap((source) => [
+    ...source.observerKinds,
+    ...Object.values(source.observerKindsByJob ?? {}).flat(),
+  ]);
+  return {
+    kinds: distinct(
+      [...registry, ...rows.map((row) => row.observer_kind?.toLowerCase())],
+      limit,
+    ),
+    scopes: distinct(
+      rows
+        .map((row) => row.scope)
+        .filter(
+          (scope) =>
+            !!scope &&
+            !/^unmapped:/i.test(scope.trim()) &&
+            !/^(unknown|reserved)$/i.test(scope.trim()),
+        ),
+      limit,
+    ),
+  };
+}
 const editableExpectations = (
   saved?: DeploymentExpectations,
 ): DeploymentExpectations => {
@@ -46,11 +112,15 @@ function MacroEditor({
   macro,
   disabled,
   save,
+  listId,
 }: {
   macro: SetupMacro;
   disabled: boolean;
   save: (name: string, value: string) => void;
+  /** Datalist of caller-visible indexes, when loaded. */
+  listId?: string;
 }) {
+  const inputRef = useInputList(listId);
   const currentNames = indexNames(macro);
   const currentValue =
     indexName(macro) ??
@@ -73,6 +143,7 @@ function MacroEditor({
         <Text
           className="atlas-index-input"
           aria-label={`Index for ${macro.name}`}
+          inputRef={inputRef}
           value={value}
           disabled={disabled || !macro.canWrite}
           onChange={(_, { value: next }) => setValue(next)}
@@ -104,6 +175,8 @@ export function SetupPage({
   deploymentClient?: DeploymentClient;
 }) {
   const [snapshot, setSnapshot] = useState<SetupSnapshot>();
+  const [indexes, setIndexes] = useState<IndexList>();
+  const indexListId = `${useId()}-indexes`;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -202,6 +275,21 @@ export function SetupPage({
       });
     return () => request.abort();
   }, [client, live, revision, deploymentClient, healthMissing]);
+  const canListIndexes = !!snapshot?.authorized;
+  useEffect(() => {
+    setIndexes(undefined);
+    if (!client?.listIndexes || !live || !canListIndexes) return;
+    const request = new AbortController();
+    client
+      .listIndexes(request.signal)
+      .then((result) => {
+        if (!request.signal.aborted) setIndexes(result);
+      })
+      .catch(() => {
+        // Suggestions are optional; the field stays free text.
+      });
+    return () => request.abort();
+  }, [client, live, canListIndexes]);
   const perform = async (
     action: () => Promise<void>,
     verified: (state: SetupSnapshot) => boolean,
@@ -557,7 +645,13 @@ export function SetupPage({
               <h2>Index macros</h2>
               <p className="muted">
                 One lowercase index per macro · summary reader = writer
+                {indexes?.names.length
+                  ? ` · suggestions list ${indexes.names.length}${indexes.truncated ? "+" : ""} indexes visible to you`
+                  : ""}
               </p>
+              {!!indexes?.names.length && (
+                <SuggestionList id={indexListId} values={indexes.names} />
+              )}
               <Table horizontalOverflow="scroll" aria-label="Index macros">
                 <Table.Head>
                   <Table.HeadCell>Macro</Table.HeadCell>
@@ -570,6 +664,7 @@ export function SetupPage({
                     <MacroEditor
                       key={macro.name}
                       macro={macro}
+                      listId={indexes?.names.length ? indexListId : undefined}
                       disabled={busy || !snapshot.authorized}
                       save={(name, value) =>
                         void perform(
@@ -632,6 +727,7 @@ export function SetupPage({
                 this checklist reads the stored keys without changing them.
               </p>
               <ObserverMappingForm
+                suggestions={mappingSuggestions(scopes?.rows ?? [])}
                 disabled={busy || !snapshot.authorized}
                 onMapped={() => {
                   if (!mutation.current) setRevision((value) => value + 1);
@@ -1036,7 +1132,9 @@ function ObserverMappingForm({
   onMapped,
   onError,
   onNotice,
+  suggestions,
 }: {
+  suggestions: { kinds: readonly string[]; scopes: readonly string[] };
   disabled: boolean;
   onMapped: () => void;
   onError: (message: string) => void;
@@ -1047,6 +1145,13 @@ function ObserverMappingForm({
   const [scope, setScope] = useState("");
   const [cluster, setCluster] = useState("");
   const [busy, setBusy] = useState(false);
+  const listId = useId();
+  const kindListId = suggestions.kinds.length ? `${listId}-kinds` : undefined;
+  const scopeListId = suggestions.scopes.length
+    ? `${listId}-scopes`
+    : undefined;
+  const kindRef = useInputList(kindListId);
+  const scopeRef = useInputList(scopeListId);
   const submitController = useRef<AbortController | null>(null);
   useEffect(() => () => submitController.current?.abort(), []);
   const canSubmit =
@@ -1109,6 +1214,7 @@ function ObserverMappingForm({
         Observer kind
         <Text
           aria-label="Observer kind"
+          inputRef={kindRef}
           value={kind}
           disabled={disabled || busy}
           onChange={(_, { value }) => setKind(value)}
@@ -1127,6 +1233,7 @@ function ObserverMappingForm({
         Scope
         <Text
           aria-label="Mapped scope"
+          inputRef={scopeRef}
           value={scope}
           disabled={disabled || busy}
           onChange={(_, { value }) => setScope(value)}
@@ -1141,6 +1248,12 @@ function ObserverMappingForm({
           onChange={(_, { value }) => setCluster(value)}
         />
       </label>
+      {kindListId && (
+        <SuggestionList id={kindListId} values={suggestions.kinds} />
+      )}
+      {scopeListId && (
+        <SuggestionList id={scopeListId} values={suggestions.scopes} />
+      )}
       <button
         type="submit"
         className="secondary-button"

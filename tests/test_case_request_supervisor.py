@@ -59,7 +59,8 @@ for raw in spec['requests']:
     start=time.monotonic()
     result=s.supervise(json.dumps(raw),_worker_path=spec['worker'],_timeout=spec.get('timeout',2),_env=s._worker_environment())
     results.append({'result':result,'elapsed':time.monotonic()-start,'leaked':s.leaked_count()})
-print(json.dumps({'results':results,'leaked':s.leaked_count()}))
+print(json.dumps({'results':results,'leaked':s.leaked_count()}),flush=True)
+time.sleep(spec.get('linger',0))
 """
 
 
@@ -67,26 +68,50 @@ class CaseRequestSupervisorTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.worker = self.root / "worker.py"
         self.worker.write_text(WORKER)
         self.marker = self.root / "worker-state.json"
+        self.home = self.root / "splunk"
+        self.home.joinpath("var/run/splunk").mkdir(parents=True, mode=0o755)
+        self.env = {**os.environ, "SPLUNK_HOME": str(self.home)}
+
+    def spec(self, requests, **options):
+        return json.dumps(
+            {
+                "bin": str(BIN),
+                "worker": str(self.worker),
+                "requests": requests,
+                **options,
+            }
+        ).encode()
 
     def run_requests(self, requests, **options):
-        spec = {
-            "bin": str(BIN),
-            "worker": str(self.worker),
-            "requests": requests,
-            **options,
-        }
         result = subprocess.run(
             [sys.executable, "-c", RUNNER],
-            input=json.dumps(spec).encode(),
+            input=self.spec(requests, **options),
             capture_output=True,
             timeout=10,
             check=True,
+            env=self.env,
         )
-        return json.loads(result.stdout)
+        return json.loads(result.stdout.splitlines()[0])
+
+    def start_handler(self, requests, **options):
+        """A lingering handler process; returns it once its requests finished."""
+        handler = subprocess.Popen(
+            [sys.executable, "-c", RUNNER],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            env=self.env,
+        )
+        self.addCleanup(handler.wait, 5)
+        self.addCleanup(handler.kill)
+        self.addCleanup(handler.stdout.close)
+        handler.stdin.write(self.spec(requests, **options))
+        handler.stdin.close()
+        return handler, json.loads(handler.stdout.readline())
 
     def assert_group_gone(self, pid):
         with self.assertRaises(ProcessLookupError):
@@ -278,10 +303,82 @@ results=[]""",
             capture_output=True,
             timeout=10,
             check=True,
+            env=self.env,
         )
         self.assertEqual(
             json.loads(result.stdout)["results"][0]["result"]["status"], 200
         )
+
+    @unittest.skipUnless(
+        sys.platform == "linux", "requires Linux child-subreaper semantics"
+    )
+    def test_admission_is_shared_across_handler_processes_and_freed_on_death(self):
+        holders = []
+        for _ in range(3):
+            handler, value = self.start_handler(
+                [{}], uncertain_retirements=1, linger=30
+            )
+            self.assertEqual(value["leaked"], 1)
+            holders.append(handler)
+        busy = self.run_requests([{}])
+        self.assertEqual(busy["results"][0]["result"]["status"], 503)
+        self.assertEqual(busy["leaked"], 0)
+        holders[0].kill()
+        holders[0].wait(timeout=5)
+        freed = self.run_requests([{}])
+        self.assertEqual(freed["results"][0]["result"]["status"], 200)
+
+    def test_slots_are_exclusive_per_descriptor_and_released_on_close(self):
+        sys.path.insert(0, str(BIN))
+        from adm_cases_lib import request_supervisor as supervisor
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"SPLUNK_HOME": str(self.home)}):
+            held = [
+                supervisor._acquire_slot() for _ in range(supervisor.MAX_CONCURRENT)
+            ]
+            self.assertNotIn(None, held)
+            self.assertIsNone(supervisor._acquire_slot())
+            supervisor._release_slot(held.pop())
+            held.append(supervisor._acquire_slot())
+            self.assertNotIn(None, held)
+            for slot in held:
+                supervisor._release_slot(slot)
+        directory = self.home / "var/run/splunk/splunk_adm_request_slots"
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+
+    def test_unsafe_slot_locations_fail_closed(self):
+        sys.path.insert(0, str(BIN))
+        from adm_cases_lib import request_supervisor as supervisor
+        from unittest.mock import patch
+
+        runtime = self.home / "var/run/splunk"
+        directory = runtime / "splunk_adm_request_slots"
+        target = self.root / "elsewhere"
+        target.mkdir(mode=0o700)
+
+        def refuses():
+            with patch.dict(os.environ, {"SPLUNK_HOME": str(self.home)}):
+                with self.assertRaises((OSError, RuntimeError)):
+                    supervisor._acquire_slot()
+
+        directory.symlink_to(target)
+        refuses()
+        directory.unlink()
+        directory.mkdir(mode=0o700)
+        (directory / "slot_0.lock").symlink_to(target / "slot")
+        refuses()
+        self.assertFalse((target / "slot").exists())
+        (directory / "slot_0.lock").unlink()
+        (directory / "slot_0.lock").touch(mode=0o644)
+        os.chmod(directory / "slot_0.lock", 0o644)
+        refuses()
+        os.chmod(directory / "slot_0.lock", 0o600)
+        os.chmod(directory, 0o755)
+        refuses()
+        os.chmod(directory, 0o700)
+        os.chmod(runtime, 0o777)
+        refuses()
 
     def test_actual_worker_watchdog_covers_stalled_input_in_its_own_session(self):
         code = (

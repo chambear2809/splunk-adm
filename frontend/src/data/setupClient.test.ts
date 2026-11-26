@@ -23,6 +23,8 @@ import {
   validateIndexName,
   indexName,
   indexNames,
+  MAX_INDEX_SUGGESTIONS,
+  parseIndexList,
   setupReadiness,
 } from "./setupClient";
 
@@ -1166,3 +1168,57 @@ it.each([
     );
   },
 );
+
+describe("index suggestions", () => {
+  it("keeps enabled, valid index names in order and reports truncation", () => {
+    expect(
+      parseIndexList({
+        paging: { total: 5 },
+        entry: [
+          { name: "netflow", content: { disabled: false } },
+          { name: "_internal", content: { disabled: false } },
+          { name: "dcn", content: { disabled: "0" } },
+          { name: "old", content: { disabled: true } },
+          { name: "Mixed", content: {} },
+        ],
+      }),
+    ).toEqual({ names: ["dcn", "netflow"], truncated: false });
+    expect(
+      parseIndexList({
+        paging: { total: 900 },
+        entry: [{ name: "dcn", content: {} }],
+      }).truncated,
+    ).toBe(true);
+    const many = parseIndexList({
+      entry: Array.from({ length: MAX_INDEX_SUGGESTIONS + 5 }, (_, i) => ({
+        name: `idx${String(i).padStart(4, "0")}`,
+        content: {},
+      })),
+    });
+    expect(many.names).toHaveLength(MAX_INDEX_SUGGESTIONS);
+    expect(many.truncated).toBe(true);
+    expect(() => parseIndexList({})).toThrow(/incomplete/);
+  });
+
+  it("reads one bounded data/indexes page as the caller", async () => {
+    const request = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            paging: { total: 1 },
+            entry: [{ name: "dcn", content: { disabled: false } }],
+          }),
+        ),
+    );
+    const list = await new ToolkitSetupClient(request).listIndexes();
+    expect(list).toEqual({ names: ["dcn"], truncated: false });
+    expect(request).toHaveBeenCalledTimes(1);
+    const [[url, init]] = request.mock.calls as unknown as [
+      [string, RequestInit],
+    ];
+    expect(url).toBe(
+      `/rest/data/indexes?count=${MAX_INDEX_SUGGESTIONS}&datatype=all&f=disabled&output_mode=json`,
+    );
+    expect(init.method).toBe("GET");
+  });
+});

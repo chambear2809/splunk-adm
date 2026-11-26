@@ -22,9 +22,9 @@ exercises the absolute-slice procedure and records replay jobs separately from
 native scheduler activity. The shipped action is **automated assisted
 recovery**: it is administrator-only and separately opt-in. The accepted KV
 claim gate covers standalone Splunk only. The [core milestone live tests](https://github.com/chambear2809/splunk-adm/blob/main/docs/benchmarks/2026-10-14-recovery-core.md)
-passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts only that exact release. The separate abandoned-lease supervisor
+passed on standalone Splunk 10.6.0.5, the only patch release tested live; the gate accepts that release and standalone 10.6.1.1 build `b2ae2962645c`, which is admitted but not yet qualified (see the [support matrix](operators/SUPPORT_MATRIX.md)). The separate abandoned-lease supervisor
 adds detection; it never takes over a recovery. SHC and failover behavior are not qualified. The action
-refuses versions other than 10.6.0.5, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
+refuses other versions and builds, Cloud, SHC, remote search peers, indexer clustering, and unknown deployment evidence. It requires the qualified standalone Enterprise roles (indexer, KV Store, and local licensing) before changing any writer, and remains disabled until local
 overrides explicitly enable both the saved-search action and
 `local/adm_recovery.conf`. Native scheduler catch-up remains a failed
 qualification; the manual absolute-slice fallback remains required when the

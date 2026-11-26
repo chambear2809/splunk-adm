@@ -12,6 +12,7 @@ import { formatUtc } from "../time";
 import { TimePicker } from "../map/TimePicker";
 import { isSafeTime, resolveTime, timeError } from "../data/timeBounds";
 import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
+import { LazyEcosystemReceiptPanel } from "../ecosystem/EcosystemLazyEvidence";
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -109,6 +110,7 @@ export function HealthPage({
             asOf={range.asOf}
           />
           <UnmappedObserversCallout refresh={report} />
+          <LazyEcosystemReceiptPanel client={client} />
         </>
       )}
     </section>

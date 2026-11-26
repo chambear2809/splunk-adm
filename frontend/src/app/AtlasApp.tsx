@@ -20,6 +20,7 @@ import { ExploreTabs } from "../pages/ExploreTools";
 import { ImpactLazyPage } from "../impact/ImpactLazyPage";
 import { CasesPage } from "../pages/CasesPage";
 import { MulticastLazyPage } from "../multicast/MulticastLazyPage";
+import { MigrationLazyPage } from "../migration/MigrationLazyPage";
 import type { SearchClient } from "../data/searchClient";
 import type { Page, UrlState } from "./urlState";
 import type { Theme } from "../theme";
@@ -88,6 +89,16 @@ export function AtlasApp({
                   />
                 ) : null
               }
+            />
+          </main>
+        ) : page === "migration" ? (
+          <main className="atlas-page atlas-page-wide atlas-explore">
+            <h1 className="atlas-visually-hidden">Explore</h1>
+            <ExploreTabs active="migration" />
+            <MigrationLazyPage
+              key={`${user ?? "anonymous"}:${mode}`}
+              client={client}
+              live={live}
             />
           </main>
         ) : page === "multicast" ? (

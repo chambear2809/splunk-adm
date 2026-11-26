@@ -71,7 +71,18 @@ jobs:
             python3 -m unittest tests.test_atlas_build
       - name: AppInspect Cloud precert gate
         run: |
-          python3 -m pip install --disable-pip-version-check 'splunk-appinspect==4.3.1'
+          python3 -m pip install --disable-pip-version-check 'splunk-appinspect==4.4.0'
+          # Splunk Cloud vetting runs private_victoria; cloud and private_classic
+          # cover the remaining Cloud experiences. A missing tag fails the gate.
+          available_tags="$(splunk-appinspect list tags)"
+          tag_args=()
+          for tag in cloud private_victoria private_classic; do
+            if ! grep -Eq "^${tag}[[:space:]]" <<<"$available_tags"; then
+              echo "Pinned AppInspect does not provide the ${tag} tag." >&2
+              exit 1
+            fi
+            tag_args+=(--included-tags "$tag")
+          done
           archives=(dist/splunk_adm-*.tar.gz)
           test "${#archives[@]}" -eq 1
           report=dist/appinspect-cloud.json
@@ -79,7 +90,7 @@ jobs:
           python3 tools/qualification_evidence.py run \
             --directory dist/qualification/offline --check appinspect -- \
             splunk-appinspect inspect "${archives[0]}" \
-            --mode precert --included-tags cloud --output-file "$report"
+            --mode precert "${tag_args[@]}" --output-file "$report"
           appinspect_status=$?
           set -e
           python3 tools/check_appinspect.py "$report"
@@ -154,6 +165,76 @@ jobs:
       - run: python -m unittest discover -s tests -p 'test_*.py'
       - run: python -m unittest discover -s tests/distributed -p 'test_*.py'
       - run: python -m unittest discover -s tests/splunk -p test_upgrade.py
+
+  go:
+    name: Go receiver checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: integrations/otel_atlas_receiver
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: integrations/otel_atlas_receiver/go.mod
+          cache-dependency-path: integrations/otel_atlas_receiver/go.sum
+      - run: go mod verify
+      - run: go vet ./...
+      - run: go test ./...
+
+  dependency-audit:
+    name: Dependency audits
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.13.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Audit shipped npm dependencies
+        run: npm audit --omit=dev --audit-level=high --registry=https://registry.npmjs.org
+      - name: Audit Python tool requirements
+        run: |
+          python -m pip install --disable-pip-version-check 'pip-audit==2.10.1'
+          requirements=(tools/requirements*.txt)
+          test -f "${requirements[0]}"
+          audit_args=()
+          for file in "${requirements[@]}"; do
+            audit_args+=(--requirement "$file")
+          done
+          python -m pip_audit --strict --progress-spinner off "${audit_args[@]}"
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      # SHA-256 of gitleaks_8.30.1_linux_x64.tar.gz from the release checksums file.
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install verified gitleaks
+        run: |
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan full git history
+        run: |
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --exit-code 1 .
 
   splunk-lab:
     name: Splunk integration suite

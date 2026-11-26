@@ -1,14 +1,6 @@
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { ControllerMap } from "../AppDynamicsCatalog";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Ban,
   ChevronDown,
@@ -36,7 +28,7 @@ import { TraceView } from "../trace/TraceView";
 import { usePathTrace } from "../trace/usePathTrace";
 import { splunkCaseClient } from "../investigations/caseClient";
 import { traceHighlight } from "../trace/traceModel";
-import { deviceURL, TracePathForm } from "./ExploreTools";
+import { deviceURL, TracePathForm, traceSuggestions } from "./ExploreTools";
 import { DevicesView } from "../DevicesView";
 import { formatUtc, formatInZone, graphWindowLabel } from "../time";
 import { argError } from "../provider";
@@ -73,7 +65,9 @@ import { resolveDevice, type Topology } from "../topology";
 import { ImpactButton } from "../impact/ImpactButton";
 import { useImpactOverlay } from "../impact/useImpactOverlay";
 import type { Window as IncidentWindow } from "../incident/model";
+import { IncidentLazyWorkspace } from "../incident/IncidentLazyWorkspace";
 import { loadLive } from "../provider";
+import { SegmentationLazyWorkbench } from "../segmentation/SegmentationLazyWorkbench";
 
 const ARG_FIELDS: [keyof GraphArgs, string, string][] = [
   ["service", "Entry service", "OTel service.name"],
@@ -115,12 +109,6 @@ const themeOverride = (): Theme | undefined => {
       : null;
   return t === "dark" || t === "light" ? t : undefined;
 };
-
-const IncidentWorkspace = lazy(() =>
-  import("../incident/IncidentWorkspace").then((module) => ({
-    default: module.IncidentWorkspace,
-  })),
-);
 
 export function MapPage(props: Parameters<typeof StandardMapPage>[0]) {
   const state =
@@ -307,6 +295,11 @@ function StandardMapPage({
     (selection?.kind === "node"
       ? index.node.get(selection.id)?.attributes?.scope
       : undefined);
+  const selectedNodeId = selection?.kind === "node" ? selection.id : undefined;
+  const endpointSuggestions = useMemo(
+    () => (visible ? traceSuggestions(graph.nodes, selectedNodeId) : []),
+    [visible, graph.nodes, selectedNodeId],
+  );
   const impactContext = {
     scope: selectedRoutingScope,
     earliest: graphWindowParams?.get("earliest") ?? undefined,
@@ -378,13 +371,16 @@ function StandardMapPage({
   const [ownershipOpen, setOwnershipOpen] = useState(false);
   const moreTrigger = useRef<HTMLButtonElement>(null);
   const [incidentOpen, setIncidentOpen] = useState(false);
+  const [segmentationOpen, setSegmentationOpen] = useState(false);
   const incidentTrigger = useRef<HTMLButtonElement>(null);
   const incidentDialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!incidentOpen) return;
+    if (!incidentOpen && !segmentationOpen) return;
     const container = root.current;
     const dialog = incidentDialog.current;
-    const trigger = incidentTrigger.current;
+    const trigger = segmentationOpen
+      ? moreTrigger.current
+      : incidentTrigger.current;
     if (!container || !dialog) return;
     const backgrounds = new Set<HTMLElement>();
     let branch: HTMLElement = container;
@@ -447,7 +443,7 @@ function StandardMapPage({
       });
       trigger?.focus();
     };
-  }, [incidentOpen]);
+  }, [incidentOpen, segmentationOpen]);
   const filterCount = activeFacetCount(facets);
   const root = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -609,7 +605,8 @@ function StandardMapPage({
         if (incidentOpen) {
           setIncidentOpen(false);
           incidentTrigger.current?.focus();
-        } else if (panel) setPanel(null);
+        } else if (segmentationOpen) setSegmentationOpen(false);
+        else if (panel) setPanel(null);
         else if (selection) clearSelection();
       }}
     >
@@ -878,6 +875,16 @@ function StandardMapPage({
               }}
             >
               Business ownership
+            </button>
+            <button
+              className="menu-item"
+              disabled={!visible || empty}
+              onClick={() => {
+                setSegmentationOpen(true);
+                setPanel(null);
+              }}
+            >
+              Segmentation policy (draft)
             </button>
             <button className="menu-item" onClick={() => setPanel("saved")}>
               Saved views
@@ -1169,41 +1176,79 @@ function StandardMapPage({
           aria-modal="true"
           aria-label="Investigation workspace"
         >
-          <Suspense fallback={<p role="status">Opening investigation…</p>}>
-            <IncidentWorkspace
-              incident={graph}
-              sourceUnavailableReason={ownershipUnavailable}
-              caseClient={caseClient}
-              nativePersistence={inSplunk}
-              timezone={timezone}
-              onBack={() => {
-                setIncidentOpen(false);
-                incidentTrigger.current?.focus();
-              }}
-              loadWindow={async (window: IncidentWindow, signal) => {
-                const source = snapshot.client ?? client;
-                if (!source) throw new Error("Splunk search is unavailable.");
-                const start = Date.parse(window.start) / 1000;
-                const end = Date.parse(window.end) / 1000;
-                if (
-                  !Number.isFinite(start) ||
-                  !Number.isFinite(end) ||
-                  start >= end
-                )
-                  throw new Error("Choose a valid absolute comparison window.");
-                return loadLive(
-                  source,
-                  {
-                    ...graph.boundary,
-                    earliest: String(start),
-                    latest: String(end),
-                    timezone,
+          <IncidentLazyWorkspace
+            incident={graph}
+            sourceUnavailableReason={ownershipUnavailable}
+            caseClient={caseClient}
+            nativePersistence={inSplunk}
+            timezone={timezone}
+            onBack={() => {
+              setIncidentOpen(false);
+              incidentTrigger.current?.focus();
+            }}
+            loadWindow={async (window: IncidentWindow, signal) => {
+              const source = snapshot.client ?? client;
+              if (!source) throw new Error("Splunk search is unavailable.");
+              const start = Date.parse(window.start) / 1000;
+              const end = Date.parse(window.end) / 1000;
+              if (
+                !Number.isFinite(start) ||
+                !Number.isFinite(end) ||
+                start >= end
+              )
+                throw new Error("Choose a valid absolute comparison window.");
+              return loadLive(
+                source,
+                {
+                  ...graph.boundary,
+                  earliest: String(start),
+                  latest: String(end),
+                  timezone,
+                },
+                signal,
+              );
+            }}
+          />
+        </div>
+      )}
+      {segmentationOpen && visible && !empty && (
+        <div
+          ref={incidentDialog}
+          tabIndex={-1}
+          className="atlas-incident-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Segmentation policy workbench"
+        >
+          <SegmentationLazyWorkbench
+            graph={graph}
+            onClose={() => setSegmentationOpen(false)}
+            onShowEdge={(id) => {
+              setSegmentationOpen(false);
+              clearFilters();
+              setTab("network");
+              select({ kind: "edge", id });
+            }}
+            {...(mode === "live"
+              ? {
+                  loadWindow: async (start: string, end: string, signal) => {
+                    const source = snapshot.client ?? client;
+                    if (!source)
+                      throw new Error("Splunk search is unavailable.");
+                    return loadLive(
+                      source,
+                      {
+                        ...graph.boundary,
+                        earliest: String(Date.parse(start) / 1000),
+                        latest: String(Date.parse(end) / 1000),
+                        timezone,
+                      },
+                      signal,
+                    );
                   },
-                  signal,
-                );
-              }}
-            />
-          </Suspense>
+                }
+              : {})}
+          />
         </div>
       )}
       {error && (
@@ -1312,6 +1357,9 @@ function StandardMapPage({
             )}
             <TracePathForm
               compact
+              live={mode === "live"}
+              suggestions={endpointSuggestions}
+              client={snapshot.client ?? client}
               key={
                 traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""
               }

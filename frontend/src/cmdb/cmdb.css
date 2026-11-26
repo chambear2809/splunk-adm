@@ -1,0 +1,101 @@
+.adm .cmdb-workspace {
+  margin-block: 12px;
+  padding: 16px;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+
+.adm .cmdb-workspace h3,
+.adm .cmdb-workspace h4,
+.adm .cmdb-workspace p {
+  margin: 0;
+}
+
+.adm .cmdb-workspace h3 {
+  margin-block: 14px 6px;
+  font-size: 1.05rem;
+}
+
+.adm .cmdb-workspace h4 {
+  margin-block: 10px 4px;
+  font-size: 0.95rem;
+}
+
+.adm .cmdb-workspace__muted {
+  color: var(--adm-muted);
+}
+
+.adm .cmdb-workspace__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+  margin-block: 10px;
+}
+
+.adm .cmdb-workspace__controls label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.9em;
+}
+
+.adm .cmdb-workspace input,
+.adm .cmdb-workspace select,
+.adm .cmdb-workspace button {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 4px;
+  font: inherit;
+}
+
+.adm .cmdb-workspace button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.adm .cmdb-workspace__notice {
+  margin-block: 8px;
+  padding: 8px 10px;
+  color: var(--adm-ink-2);
+  background: var(--adm-page);
+  border-left: 4px solid var(--adm-link);
+}
+
+.adm .cmdb-workspace__notice--warning {
+  color: var(--adm-warn-ink);
+  background: var(--adm-warn-bg);
+  border-left-color: var(--adm-warn-icon);
+}
+
+.adm .cmdb-workspace__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block: 6px;
+}
+
+.adm .cmdb-workspace__chip {
+  padding: 2px 8px;
+  color: var(--adm-ink-2);
+  background: var(--adm-card-head);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 999px;
+  font-size: 0.88em;
+}
+
+.adm .cmdb-workspace__chip--warning {
+  color: var(--adm-warn-ink);
+  background: var(--adm-warn-bg);
+  border-color: var(--adm-warn-icon);
+}
+
+.adm .cmdb-workspace ul {
+  margin-block: 4px;
+  padding-left: 18px;
+}

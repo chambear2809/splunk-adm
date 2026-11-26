@@ -24,9 +24,13 @@ export function impactAssetVersion() {
     "package-lock.json",
     "vite.impact.config.ts",
     "vite.impact.shared.ts",
-    ...readdirSync("frontend/src/impact")
-      .filter((name) => /\.(tsx?|css)$/.test(name) && !name.includes(".test."))
-      .map((name) => `frontend/src/impact/${name}`),
+    ...["impact", "changeVerification"].flatMap((dir) =>
+      readdirSync(`frontend/src/${dir}`)
+        .filter(
+          (name) => /\.(tsx?|css)$/.test(name) && !name.includes(".test."),
+        )
+        .map((name) => `frontend/src/${dir}/${name}`),
+    ),
     ...Object.keys(host).map((path) => {
       const file = path.split("/").pop()!;
       const dir = path.slice(0, -file.length);

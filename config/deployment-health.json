@@ -975,6 +975,216 @@
       ],
       "requiredFields": [],
       "probeMacro": ""
+    },
+    {
+      "id": "pan_traffic",
+      "readinessImpact": "optional_evidence",
+      "label": "Palo Alto Networks traffic (pan:traffic)",
+      "healthNames": [
+        "Palo Alto Networks traffic (pan:traffic)"
+      ],
+      "indexMacros": [
+        "adm_index_pan"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic",
+        "translation"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "pan_firewall"
+      ],
+      "requiredFields": [
+        "type",
+        "log_subtype",
+        "generated_time",
+        "src_ip",
+        "dest_ip",
+        "transport",
+        "vendor_action"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "fortigate_traffic",
+      "readinessImpact": "optional_evidence",
+      "label": "FortiGate traffic (fgt_traffic / fortigate_traffic)",
+      "healthNames": [
+        "FortiGate traffic (fgt_traffic / fortigate_traffic)"
+      ],
+      "indexMacros": [
+        "adm_index_fortigate"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic",
+        "translation"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "fortigate_firewall"
+      ],
+      "requiredFields": [
+        "type",
+        "subtype",
+        "eventtime",
+        "srcip",
+        "dstip",
+        "proto",
+        "action"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "f5_ltm_http",
+      "readinessImpact": "optional_evidence",
+      "label": "F5 BIG-IP LTM iRule request legs (f5:bigip:ltm:*:irule)",
+      "healthNames": [
+        "F5 BIG-IP LTM iRule request legs (f5:bigip:ltm:*:irule)"
+      ],
+      "indexMacros": [
+        "adm_index_f5"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "f5_bigip"
+      ],
+      "requiredFields": [
+        "f5_irule",
+        "src_ip",
+        "vip",
+        "http_host",
+        "req_start_time",
+        "virtual_server"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "aws_elb_access",
+      "readinessImpact": "optional_evidence",
+      "label": "AWS ALB/NLB access logs (aws:elb:accesslogs)",
+      "healthNames": [
+        "AWS ALB/NLB access logs (aws:elb:accesslogs)"
+      ],
+      "indexMacros": [
+        "adm_index_aws"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "aws_elb"
+      ],
+      "requiredFields": [
+        "type",
+        "time",
+        "elb",
+        "client:port",
+        "target:port",
+        "request_creation_time"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "azure_vnet_flow",
+      "readinessImpact": "optional_evidence",
+      "label": "Azure VNet flow logs (mscs:vnet:flow)",
+      "healthNames": [
+        "Azure VNet flow logs (mscs:vnet:flow)"
+      ],
+      "indexMacros": [
+        "adm_index_azure"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic",
+        "translation"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "azure_vnet_flow"
+      ],
+      "requiredFields": [
+        "time",
+        "flowLogVersion",
+        "category",
+        "flowRecords.flows{}.aclID",
+        "flowRecords.flows{}.flowGroups{}.rule",
+        "flowRecords.flows{}.flowGroups{}.flowTuples{}"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "gcp_vpc_flow",
+      "readinessImpact": "optional_evidence",
+      "label": "GCP VPC flow logs (google:gcp:compute:vpc_flows)",
+      "healthNames": [
+        "GCP VPC flow logs (google:gcp:compute:vpc_flows)"
+      ],
+      "indexMacros": [
+        "adm_index_gcp"
+      ],
+      "qualitySources": [],
+      "evidence": [
+        "traffic",
+        "translation"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [
+        "gcp_vpc_flow"
+      ],
+      "requiredFields": [
+        "logName",
+        "jsonPayload.connection.src_ip",
+        "jsonPayload.connection.dest_ip",
+        "jsonPayload.reporter",
+        "jsonPayload.start_time",
+        "jsonPayload.end_time"
+      ],
+      "probeMacro": ""
     }
   ],
   "jobs": [

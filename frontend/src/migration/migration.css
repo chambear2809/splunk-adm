@@ -1,0 +1,81 @@
+.atlas .migration-page h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.atlas .migration-page h3 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+}
+.atlas .migration-setup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.atlas .migration-page fieldset {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--adm-card-border);
+  border-radius: 4px;
+  background: var(--adm-surface);
+}
+.atlas .migration-page legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+.atlas .migration-page textarea {
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--adm-ink);
+  background: var(--adm-surface);
+  border: 1px solid var(--adm-card-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.atlas .migration-page label.migration-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.atlas .migration-page .migration-check input {
+  min-height: auto;
+}
+.atlas .migration-ports {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 12px;
+}
+.atlas .migration-hint,
+.atlas .migration-muted {
+  color: var(--adm-muted);
+  font-size: 13px;
+}
+.atlas .migration-summary {
+  margin-top: 16px;
+}
+.atlas .migration-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-block: 12px;
+}
+.atlas .migration-group {
+  border-top: 1px solid var(--adm-line);
+}
+.atlas .migration-pairs,
+.atlas .migration-unplanned {
+  padding-left: 20px;
+  line-height: 1.6;
+}
+.atlas .migration-table-scroll table {
+  min-width: 1100px;
+}
+.atlas .migration-page select:focus-visible,
+.atlas .migration-page input:focus-visible,
+.atlas .migration-page textarea:focus-visible {
+  outline: 3px solid var(--adm-focus);
+  outline-offset: 2px;
+}

@@ -20,7 +20,7 @@ export function cabPack(
     window,
     singlePoints: posture.singlePoints.map((row) => row.label),
     verification: [
-      "Compare Depends-on before and after the change window using the same scope.",
+      "Run Verify change on the saved dependency assertions with before and after windows around the change.",
       "Confirm Stream NetFlow, SC4SNMP and OTel traces still populate health.",
       "Newly blocked conversations stay disabled until a webhook URL is configured.",
     ],

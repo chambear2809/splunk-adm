@@ -90,13 +90,39 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "301285b9e77babcb43995099f4271de17dd10c592bc93292e250212ebe695ad5",
+      "reviewed_macro_file_sha256": "8dac575b7369bd12a0c5c4e1e213194f52a8628dedd66eb3caf39c0440d755d5",
       "method": "static review only; no recapture",
-      "reason": "Fixed adm_thousandeyes_schema_qualified to set iseval = 0 (matching all other *_schema_qualified macros so Splunk SearchParser does not reject integer 0 as an eval expression). Not referenced by adm_graph(4); all 38 stanzas reachable from adm_graph(4) remain byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
+      "reason": "Combined integration of change verification, IP/host field suggestions, ITSI export/CMDB reconciliation, and ecosystem traffic evidence (PAN, FortiGate, F5 BIG-IP LTM, AWS ALB/NLB, Azure VNet, GCP VPC). Added read-only or inert-default stanzas: adm_change_request_window(1), adm_ip_suggest_read_limit, adm_ip_suggest(2), adm_cmdb_observed_relationships(1), adm_cmdb_relationship_rows (inert), adm_cmdb_relationships_schema_qualified (literal 0, iseval = 0), and six ecosystem *_schema_qualified flags (literal 0, iseval = 0). Description-only edits to adm_index_snow, adm_itsi_import_objects (still inert), adm_index_fortigate, adm_index_f5, adm_index_azure, and adm_index_gcp. None is expanded by adm_graph(4); a stanza-by-stanza comparison with the prior reviewed file confirms all 40 stanzas in the adm_graph(4) expansion closure are byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_thousandeyes_schema_qualified"
+        "adm_index_azure",
+        "adm_index_f5",
+        "adm_index_fortigate",
+        "adm_index_gcp",
+        "adm_index_snow",
+        "adm_itsi_import_objects",
+        "adm_aws_elb_access_schema_qualified",
+        "adm_azure_vnet_flow_schema_qualified",
+        "adm_change_request_window(1)",
+        "adm_cmdb_observed_relationships(1)",
+        "adm_cmdb_relationship_rows",
+        "adm_cmdb_relationships_schema_qualified",
+        "adm_f5_ltm_irule_schema_qualified",
+        "adm_fortigate_traffic_schema_qualified",
+        "adm_gcp_vpc_flow_schema_qualified",
+        "adm_ip_suggest(2)",
+        "adm_ip_suggest_read_limit",
+        "adm_pan_traffic_schema_qualified"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "301285b9e77babcb43995099f4271de17dd10c592bc93292e250212ebe695ad5",
+          "method": "static review only; no recapture",
+          "reason": "Fixed adm_thousandeyes_schema_qualified to set iseval = 0 (matching all other *_schema_qualified macros so Splunk SearchParser does not reject integer 0 as an eval expression). Not referenced by adm_graph(4); all 38 stanzas reachable from adm_graph(4) remain byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_thousandeyes_schema_qualified"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "61072fd736d7b433e4bf3133d890a8ceedd5a376bc87511af92e618bba2f3959",

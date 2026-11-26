@@ -89,14 +89,16 @@ membership establishes each peer's KV replication readiness. The local readiness
 and SHC identity checks are deployment guards, not proof of distributed write
 arbitration. Operator attestation still requires all-member KV readiness and
 coordinated cross-member duplicate-key/concurrency qualification before enabling
-writes; local snapshots can remain stale. The runtime gate is pinned to Enterprise
-10.6.0.5, the qualification target. Other versions remain read-only until their
-installed endpoint/concurrency behavior is qualified. These guards do not replace
+writes; local snapshots can remain stale. The runtime gate admits Enterprise
+10.6.0.5, the qualification target, and 10.6.1.1 build `b2ae2962645c` in
+`single_namespace` mode only, whose installed qualification is pending. Other
+versions remain read-only until their installed endpoint/concurrency behavior is
+qualified; see the [support matrix](operators/SUPPORT_MATRIX.md). These guards do not replace
 deployment qualification. The persistent endpoint explicitly selects
 `python.required = 3.13`, supported by the target's native `restmap.conf.spec`;
 installed qualification uses Python 3.13.11. A legacy `python.version = python3`
-declaration also remains because AppInspect 4.3.1 has an older rule requiring
-that selector. Its newer rule accepts the explicit `python.required = 3.13`;
+declaration also remains because AppInspect 4.3.1 and 4.4.0 retain an older rule
+requiring that selector. Its newer rule accepts the explicit `python.required = 3.13`;
 the native specification gives `python.required` precedence, so the qualified
 runtime selects Python 3.13. This dual declaration reconciles both tool checks
 without weakening them or expanding the qualified platform boundary. Other

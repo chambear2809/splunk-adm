@@ -8,6 +8,10 @@ import { InventoryEvidencePanel } from "./InventoryEvidencePanel";
 import { AppDynamicsEvidenceInspection } from "./AppDynamicsEvidencePanel";
 import { ThousandEyesLazyInspection } from "./ThousandEyesLazyInspection";
 import { LazyChangeTimelineInspection } from "./HistoryLazyInspection";
+import {
+  ECOSYSTEM_EVIDENCE_SOURCES,
+  LazyEcosystemEvidencePanel,
+} from "./ecosystem/EcosystemLazyEvidence";
 
 /** The existing scoped endpoint and map investigation owns all optional evidence. */
 export function EndpointEvidencePanels({
@@ -41,6 +45,15 @@ export function EndpointEvidencePanels({
         client={client}
         configurationClient={configurationClient}
       />
+      {ECOSYSTEM_EVIDENCE_SOURCES.map((source) => (
+        <LazyEcosystemEvidencePanel
+          key={source}
+          source={source}
+          selection={selection}
+          client={client}
+          configurationClient={configurationClient}
+        />
+      ))}
       <InventoryEvidencePanel
         selection={selection}
         client={client}

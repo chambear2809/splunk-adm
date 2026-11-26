@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   MulticastPage,
   MulticastResults,
+  observedGroupSuggestions,
   utcInput,
   utcSeconds,
 } from "./MulticastPage";
@@ -173,6 +174,42 @@ describe("Multicast page", () => {
     expect(html).toContain("(192.0.2.21, 239.1.2.3)");
     expect(html).toContain("Stale state");
     expect(html).not.toContain("stale-target");
+  });
+  it("suggests observed groups and the selected group's flow senders", () => {
+    const flow = (group: string, senders: string[]) => ({
+      kind: "flow" as const,
+      profile: "netflow",
+      group,
+      observer: "leaf-a",
+      direction: "ingress" as const,
+      senders,
+      samplingInterval: 1,
+      replication: "unknown" as const,
+      counters: "delta" as const,
+      firstSeen: 1000,
+      lastSeen: 2000,
+    });
+    const rows = [
+      {
+        group: "239.1.2.3",
+        summaries: [
+          flow("239.1.2.3", ["192.0.2.9", "192.0.2.1"]),
+          flow("239.1.2.3", ["192.0.2.1"]),
+        ],
+        flags: [],
+      },
+      {
+        group: "239.9.9.9",
+        summaries: [flow("239.9.9.9", ["192.0.2.50"])],
+        flags: [],
+      },
+    ];
+    expect(observedGroupSuggestions(rows, " 239.1.2.3 ")).toEqual({
+      groups: ["239.1.2.3", "239.9.9.9"],
+      senders: ["192.0.2.1", "192.0.2.9"],
+    });
+    expect(observedGroupSuggestions(rows, "239.0.0.1").senders).toEqual([]);
+    expect(observedGroupSuggestions(rows, "", 1).groups).toEqual(["239.1.2.3"]);
   });
   it("qualifies an empty result with coverage", () => {
     const html = renderToStaticMarkup(

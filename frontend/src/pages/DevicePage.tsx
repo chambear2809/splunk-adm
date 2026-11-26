@@ -54,6 +54,7 @@ import {
   traceTopology,
 } from "../trace/traceModel";
 import { DeviceLookup, deviceURL, ExploreTabs, traceURL } from "./ExploreTools";
+import type { SuggestOption } from "../SuggestCombobox";
 
 const TOKEN = /^[A-Za-z0-9_.:/-]{1,128}$/;
 
@@ -113,7 +114,31 @@ type Load =
       exporters?: string[];
       /** Non-fatal search messages retained for result qualification. */
       warnings: string[];
+      /** Loaded device names for lookup suggestions; no extra search. */
+      inventory?: SuggestOption[];
     };
+
+export const MAX_DEVICE_SUGGESTIONS = 200;
+
+/** Device lookup suggestions from an already-loaded topology. */
+export function deviceSuggestions(
+  devices: readonly Pick<Device, "id" | "name" | "kind" | "mgmt_ip">[],
+  limit = MAX_DEVICE_SUGGESTIONS,
+): SuggestOption[] {
+  const seen = new Set<string>();
+  const out: SuggestOption[] = [];
+  for (const device of [...devices].sort((a, b) =>
+    (a.name || a.id).localeCompare(b.name || b.id),
+  )) {
+    if (out.length >= limit) break;
+    const value = isSafeIdentifier(device.name) ? device.name : device.id;
+    if (!isSafeIdentifier(value) || seen.has(value)) continue;
+    seen.add(value);
+    const label = device.mgmt_ip ?? device.kind;
+    out.push({ value, ...(label ? { label } : {}) });
+  }
+  return out;
+}
 
 /** Device page data: inventory lookup, then adm_device_flows per token. */
 export async function loadDevicePage({
@@ -167,11 +192,14 @@ export async function loadDevicePage({
     warnings.push(...base.warnings, ...inventory.warnings);
     topology = traceTopology(base, inventory.rows);
   }
+  const inventory = deviceSuggestions(topology.devices);
   const candidates = findDevices(query, topology);
-  if (candidates.length > 1) return { status: "done", candidates, warnings };
+  if (candidates.length > 1)
+    return { status: "done", candidates, warnings, inventory };
   const device = candidates[0];
   const tokens = device ? flowTokens(device) : TOKEN.test(query) ? [query] : [];
-  if (!tokens.length) return { status: "done", device, candidates, warnings };
+  if (!tokens.length)
+    return { status: "done", device, candidates, warnings, inventory };
   const nxos = isNxosDevice(device);
   const parts =
     !__ADM_SPLUNK_BUILD__ && demo
@@ -240,6 +268,7 @@ export async function loadDevicePage({
     flows: inferLeafEgress(flows, device, indexTopology(topology)),
     exporters: deviceExporters(parts),
     warnings,
+    inventory,
   };
 }
 
@@ -478,6 +507,7 @@ export function DevicePage({
   });
   const [nonce, setNonce] = useState(0);
   const [load, setLoad] = useState<Load>({ status: "loading" });
+  const [inventory, setInventory] = useState<SuggestOption[]>([]);
   const query = navigation.value?.device;
   const earliest = navigation.value?.earliest ?? "";
   const latest = navigation.value?.latest ?? "";
@@ -521,7 +551,11 @@ export function DevicePage({
       timezone,
       signal: controller.signal,
     })
-      .then((r) => !controller.signal.aborted && setLoad(r))
+      .then((r) => {
+        if (controller.signal.aborted) return;
+        setLoad(r);
+        if (r.inventory) setInventory(r.inventory);
+      })
       .catch(
         (e: unknown) =>
           !controller.signal.aborted &&
@@ -561,7 +595,7 @@ export function DevicePage({
     <main className="atlas-page atlas-page-wide atlas-explore atlas-device-page">
       <ExploreTabs />
       <div className="atlas-explore-tools">
-        <DeviceLookup key={query} initial={query} />
+        <DeviceLookup key={query} initial={query} suggestions={inventory} />
         <TimePicker
           earliest={earliest || state.earliest}
           latest={latest || state.latest}

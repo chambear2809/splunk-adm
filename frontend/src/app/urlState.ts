@@ -16,6 +16,7 @@ export const PAGES = [
   "help",
   "device",
   "impact",
+  "migration",
 ] as const;
 export type Page = (typeof PAGES)[number];
 /** Top-level navigation sections; each owns one or more Splunk views. */
@@ -28,6 +29,7 @@ export const SECTION_OF: Record<Page, Section> = {
   multicast: "multicast",
   device: "explore",
   impact: "explore",
+  migration: "explore",
   map: "map",
   setup: "admin",
   data_health: "admin",

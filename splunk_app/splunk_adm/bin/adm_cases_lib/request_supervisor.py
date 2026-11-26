@@ -2,12 +2,15 @@
 
 The operational deadline covers worker execution and IPC, not an OS guarantee
 against an uninterruptible process launch or kernel operation. Source transport
-limits remain independent. A request whose retirement is unproven keeps its
-admission slot until a later request proves the group gone, so leaked groups
-are bounded by MAX_CONCURRENT and admission recovers without a restart.
+limits remain independent. Admission slots are host-wide flock locks shared by
+every persistent-handler process. A request whose retirement is unproven keeps
+its slot until a later request in the same process proves the group gone, so
+leaked groups are bounded by MAX_CONCURRENT and admission recovers without a
+restart. The kernel releases a dead handler process's slots.
 """
 
 import ctypes
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -28,7 +31,7 @@ REQUEST_SECONDS = 40.0
 RETIRE_SECONDS = 1.0
 RECOVER_SECONDS = 0.2
 MAX_CONCURRENT = 3
-_slot = threading.BoundedSemaphore(MAX_CONCURRENT)
+SLOT_DIRECTORY = ("var", "run", "splunk", "splunk_adm_request_slots")
 _leaked_lock = threading.Lock()
 _leaked = []
 # Serializes worker launches with leader reaping and reaped-group probes.
@@ -89,6 +92,69 @@ def _environment():
             raise RuntimeError("unsafe runtime directory")
         environment[key] = str(path)
     return environment
+
+
+def _slot_directory():
+    home = Path(os.environ.get("SPLUNK_HOME", ""))
+    if not home.is_absolute() or home.resolve(strict=True) != home:
+        raise RuntimeError("fixed runtime directory unavailable")
+    parent = home.joinpath(*SLOT_DIRECTORY[:-1])
+    info = parent.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid not in (0, os.getuid())
+        or stat.S_IMODE(info.st_mode) & 0o022
+    ):
+        raise RuntimeError("unsafe runtime directory")
+    directory = parent / SLOT_DIRECTORY[-1]
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    return directory
+
+
+def _acquire_slot():
+    """Return a locked host-wide slot descriptor, or None when all are held."""
+    directory = os.open(
+        _slot_directory(),
+        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+    )
+    try:
+        info = os.fstat(directory)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
+            raise RuntimeError("unsafe slot directory")
+        for index in range(MAX_CONCURRENT):
+            slot = os.open(
+                f"slot_{index}.lock",
+                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+                dir_fd=directory,
+            )
+            try:
+                info = os.fstat(slot)
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or info.st_uid != os.getuid()
+                    or stat.S_IMODE(info.st_mode) & 0o077
+                    or info.st_nlink != 1
+                ):
+                    raise RuntimeError("unsafe slot file")
+                fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(slot)
+                continue
+            except BaseException:
+                os.close(slot)
+                raise
+            return slot
+        return None
+    finally:
+        os.close(directory)
+
+
+def _release_slot(slot):
+    os.close(slot)
 
 
 def _retire(process, seconds=RETIRE_SECONDS):
@@ -216,16 +282,16 @@ def _recover_leaked():
     with _leaked_lock:
         pending = list(_leaked)
         _leaked.clear()
-    for process in pending:
+    for process, slot in pending:
         try:
             retired = _retire(process, RECOVER_SECONDS)
         except Exception:
             retired = False
         if retired:
-            _slot.release()
+            _release_slot(slot)
         else:
             with _leaked_lock:
-                _leaked.append(process)
+                _leaked.append((process, slot))
 
 
 def leaked_count():
@@ -250,12 +316,16 @@ def supervise(in_string, *, _worker_path=None, _timeout=REQUEST_SECONDS, _env=No
         return unavailable()
     if _leaked:
         _recover_leaked()
-    if not _slot.acquire(blocking=False):
+    try:
+        _prepare_parent()
+        slot = _acquire_slot()
+    except Exception:
+        return unavailable()
+    if slot is None:
         return unavailable()
     process, retired, output = None, True, None
     deadline = started + _timeout
     try:
-        _prepare_parent()
         environment = _environment() if _env is None else _env
         with _process_lock:
             process = subprocess.Popen(
@@ -283,10 +353,10 @@ def supervise(in_string, *, _worker_path=None, _timeout=REQUEST_SECONDS, _env=No
             except Exception:
                 retired = False
         if retired:
-            _slot.release()
+            _release_slot(slot)
         else:
             with _leaked_lock:
-                _leaked.append(process)
+                _leaked.append((process, slot))
     if output is None or not retired or time.monotonic() >= deadline:
         return unavailable()
     try:

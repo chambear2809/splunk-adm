@@ -4,6 +4,7 @@ import unittest
 
 
 CI = Path(__file__).parents[1] / ".github/workflows/ci.yml"
+WORKFLOWS = sorted(CI.parent.glob("*.yml"))
 
 
 class CIChecks(unittest.TestCase):
@@ -44,11 +45,62 @@ class CIChecks(unittest.TestCase):
     def test_appinspect_version_is_pinned(self):
         self.assertRegex(self.text, r"'splunk-appinspect==\d+\.\d+\.\d+'")
 
+    def test_appinspect_gate_covers_every_cloud_experience_tag(self):
+        gate = self.text.split("- name: AppInspect Cloud precert gate", 1)[1]
+        gate = gate.split("- name:", 1)[0]
+        self.assertIn("for tag in cloud private_victoria private_classic; do", gate)
+        self.assertIn("splunk-appinspect list tags", gate)
+        self.assertIn('--mode precert "${tag_args[@]}"', gate)
+        self.assertNotIn("--excluded-tags", gate)
+
+    def test_go_receiver_is_vetted_and_tested(self):
+        go = self.text.split("\n  go:\n", 1)[1].split("\n  dependency-audit:", 1)[0]
+        self.assertIn("working-directory: integrations/otel_atlas_receiver", go)
+        self.assertIn("go-version-file: integrations/otel_atlas_receiver/go.mod", go)
+        for command in ("go mod verify", "go vet ./...", "go test ./..."):
+            self.assertIn(f"- run: {command}", go)
+
+    def test_dependency_audits_fail_on_shipped_vulnerabilities(self):
+        audit = self.text.split("  dependency-audit:", 1)[1].split("\n  secret-scan:")[
+            0
+        ]
+        self.assertIn("npm audit --omit=dev --audit-level=high", audit)
+        self.assertRegex(audit, r"'pip-audit==\d+\.\d+\.\d+'")
+        self.assertIn("requirements=(tools/requirements*.txt)", audit)
+        self.assertIn("pip_audit --strict", audit)
+
+    def test_secret_scan_uses_checksum_verified_gitleaks_over_full_history(self):
+        scan = self.text.split("  secret-scan:", 1)[1].split("\n  splunk-lab:", 1)[0]
+        self.assertRegex(scan, r"GITLEAKS_SHA256: [0-9a-f]{64}\n")
+        self.assertIn("sha256sum --check --strict", scan)
+        self.assertIn("fetch-depth: 0", scan)
+        self.assertIn('gitleaks" git --redact', scan)
+        ignore = (CI.parents[2] / ".gitleaksignore").read_text(encoding="utf-8")
+        for line in ignore.splitlines():
+            if line and not line.startswith("#"):
+                self.assertRegex(line, r"^[0-9a-f]{40}:[^:]+:[\w-]+:\d+$")
+
     def test_third_party_actions_are_pinned_to_commits(self):
-        uses = re.findall(r"uses:\s*(\S+)", self.text)
-        self.assertTrue(uses)
-        for action in uses:
-            self.assertRegex(action, r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                uses = re.findall(r"uses:\s*(\S+)", workflow.read_text("utf-8"))
+                self.assertTrue(uses)
+                for action in uses:
+                    self.assertRegex(action, r"^[\w.-]+/[\w./-]+@[0-9a-f]{40}$")
+
+    def test_workflows_default_to_read_only_contents(self):
+        for workflow in WORKFLOWS:
+            with self.subTest(workflow=workflow.name):
+                text = workflow.read_text("utf-8")
+                self.assertIn("\npermissions:\n  contents: read\n", text)
+                self.assertNotRegex(text, r":\s*write-all|contents:\s*write")
+                self.assertNotIn("pull_request_target", text)
+
+    def test_codeql_scans_first_party_typescript_and_python(self):
+        codeql = (CI.parent / "codeql.yml").read_text(encoding="utf-8")
+        self.assertIn("language: [javascript-typescript, python]", codeql)
+        self.assertIn("security-events: write", codeql)
+        self.assertEqual(codeql.count("security-events: write"), 1)
 
     def test_only_pull_requests_cancel_in_progress_runs(self):
         self.assertIn("${{ github.event_name }}", self.text.split("concurrency:")[1])

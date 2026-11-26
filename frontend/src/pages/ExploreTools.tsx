@@ -1,5 +1,15 @@
 import { useId, useState } from "react";
 import { isSafeIdentifier, pageURL } from "../app/urlState";
+import { useRoutingScopes } from "../data/routingScopes";
+import type { SearchClient } from "../data/searchClient";
+import type { GraphNode } from "../graph";
+import { RoutingScopeSelect } from "../RoutingScopeSelect";
+import {
+  EndpointCombobox,
+  SuggestCombobox,
+  filterSuggestOptions,
+  type SuggestOption,
+} from "../SuggestCombobox";
 
 const currentParams = () =>
   new URLSearchParams(typeof location === "undefined" ? "" : location.search);
@@ -40,23 +50,65 @@ export function deviceURL(
 
 const navigate = (href: string) => location.assign(href);
 
+export const MAX_TRACE_SUGGESTIONS = 100;
+
+/**
+ * Trace endpoint suggestions from nodes already on the page: the selected node
+ * first, then node addresses and names. No search is issued.
+ */
+export function traceSuggestions(
+  nodes: readonly Pick<GraphNode, "id" | "label" | "addresses">[],
+  selectedId?: string,
+  limit = MAX_TRACE_SUGGESTIONS,
+): string[] {
+  const selected = nodes.find((node) => node.id === selectedId);
+  const ordered = selected
+    ? [selected, ...nodes.filter((node) => node !== selected)]
+    : nodes;
+  const out = new Set<string>();
+  for (const node of ordered)
+    for (const value of [...(node.addresses ?? []), node.label]) {
+      if (out.size >= limit) return [...out];
+      if (isSafeIdentifier(value)) out.add(value);
+    }
+  return [...out];
+}
+
 /** Source → destination trace request (IP or name). */
 export function TracePathForm({
   onSubmit = (src, dst, scope) =>
     navigate(traceURL(src, dst, currentParams(), scope)),
   initial,
   compact = false,
+  live = false,
+  suggestions = [],
+  client,
 }: {
   onSubmit?: (src: string, dst: string, scope?: string) => void;
   initial?: { src: string; dst: string; scope?: string };
   /** Map toolbar: no visible label. */
   compact?: boolean;
+  /** Offer caller-visible mapped routing scopes instead of free text. */
+  live?: boolean;
+  /** Endpoint names or addresses already loaded on this page. */
+  suggestions?: readonly string[];
+  /** Live scope suggestions run as the caller through this client. */
+  client?: SearchClient;
 }) {
   const id = useId();
   const [src, setSrc] = useState(initial?.src ?? "");
   const [dst, setDst] = useState(initial?.dst ?? "");
   const [scope, setScope] = useState(initial?.scope ?? "");
+  const scopes = useRoutingScopes(live);
   const valid = isSafeIdentifier(src.trim()) && isSafeIdentifier(dst.trim());
+  const endpoint = {
+    className: "atlas-input",
+    spellCheck: false,
+    scope,
+    client,
+    live,
+    local: suggestions,
+  } as const;
   return (
     <form
       className={`atlas-tool ${compact ? "compact" : ""}`}
@@ -69,37 +121,35 @@ export function TracePathForm({
       <label htmlFor={`${id}-src`} className={compact ? "sr-only" : undefined}>
         Trace
       </label>
-      <input
+      <EndpointCombobox
+        {...endpoint}
         id={`${id}-src`}
-        className="atlas-input"
+        wrapperClassName="atlas-trace-src"
         aria-label="Trace source"
         placeholder="Source IP or name"
-        autoComplete="off"
-        spellCheck={false}
         value={src}
-        onChange={(e) => setSrc(e.target.value)}
+        onChange={setSrc}
       />
-      <span aria-hidden="true">→</span>
-      <input
-        className="atlas-input"
+      <span className="atlas-trace-arrow" aria-hidden="true">
+        →
+      </span>
+      <EndpointCombobox
+        {...endpoint}
+        wrapperClassName="atlas-trace-dst"
         aria-label="Trace destination"
         placeholder="Destination"
-        autoComplete="off"
-        spellCheck={false}
         value={dst}
-        onChange={(e) => setDst(e.target.value)}
+        onChange={setDst}
       />
       <button className="atlas-button" type="submit" disabled={!valid}>
         Trace
       </button>
-      <input
-        className="atlas-input"
-        aria-label="Routing scope"
-        placeholder="Routing scope"
-        autoComplete="off"
-        spellCheck={false}
+      <RoutingScopeSelect
+        compact
+        className="atlas-trace-scope"
         value={scope}
-        onChange={(e) => setScope(e.target.value)}
+        onChange={setScope}
+        state={scopes}
       />
     </form>
   );
@@ -109,9 +159,12 @@ export function TracePathForm({
 export function DeviceLookup({
   onSelect = (deviceId) => navigate(deviceURL(deviceId)),
   initial = "",
+  suggestions = [],
 }: {
   onSelect?: (deviceId: string) => void;
   initial?: string;
+  /** Devices already loaded on this page; no search is issued. */
+  suggestions?: readonly SuggestOption[];
 }) {
   const id = useId();
   const [value, setValue] = useState(initial);
@@ -126,15 +179,15 @@ export function DeviceLookup({
       }}
     >
       <label htmlFor={id}>Device</label>
-      <input
+      <SuggestCombobox
         id={id}
         className="atlas-input"
         aria-label="Device name or ID"
         placeholder="Name, IP, serial or DN"
-        autoComplete="off"
         spellCheck={false}
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={setValue}
+        options={filterSuggestOptions(suggestions, value)}
       />
       <button className="atlas-button" type="submit" disabled={!valid}>
         Open
@@ -146,6 +199,7 @@ export function DeviceLookup({
 const EXPLORE_TABS = [
   ["applications", "Applications"],
   ["endpoints", "Endpoints"],
+  ["migration", "Move groups"],
 ] as const;
 const ENDPOINT_KEYS = [
   "endpoint_ip",

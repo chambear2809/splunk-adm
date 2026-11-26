@@ -1,42 +1,89 @@
+# App objects and derived lookups/collections expose data aggregated from every
+# configured source index. Readers must hold adm_viewer (inherited by
+# adm_investigate) or be administrators; see docs/SECURITY.md.
 []
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 export = none
 
 [collections/adm_deployment_settings]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_multicast_profiles]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_observer_scope]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_saved_views]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_business_ownership]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+# ---- Change verification ----
+[collections/adm_change_assertions]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+# ---- End change verification ----
 
 [collections/adm_network_source_scope]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_network_client_history]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_cilium_cluster_settings]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_observer_scope]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_network_source_scope]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_network_client_history]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_cilium_cluster_settings]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_ip_identity]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_ip_identity]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_service_workload]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_service_workload]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_interfaces]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_interfaces]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_service_backends]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_service_backends]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_service_routes]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_service_routes]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[collections/adm_aci_policy]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_aci_policy]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
+[transforms/adm_ip_identity_service]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 # All saved searches in this app write derived state or perform maintenance.
 # Read access permits dispatchAs=owner, so these are administrator-only.
@@ -72,16 +119,16 @@ access = read : [ admin, sc_admin ], write : [ admin, sc_admin ]
 export = none
 
 [collections/adm_app_catalog]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_app_catalog]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [collections/adm_app_catalog_v2]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 [transforms/adm_app_catalog_v2]
-access = read : [ * ], write : [ admin, sc_admin ]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
 # Unfiltered identity maintenance inventory; public identity readers quarantine
 # legacy default-scope rows without explicit-mapping provenance.

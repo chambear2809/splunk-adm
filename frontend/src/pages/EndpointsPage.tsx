@@ -17,6 +17,9 @@ import {
   type EndpointInput,
   type EndpointResult,
 } from "../data/endpointInvestigation";
+import { useRoutingScopes } from "../data/routingScopes";
+import { RoutingScopeSelect } from "../RoutingScopeSelect";
+import { EndpointCombobox } from "../SuggestCombobox";
 
 const localDate = (seconds: number) => {
   const d = new Date(seconds * 1000);
@@ -84,6 +87,7 @@ export function EndpointsPage({
   const [link] = useState(() => pageInitial(initial));
   const [address, setAddress] = useState(link.input?.address ?? "");
   const [scope, setScope] = useState(link.input?.scope ?? "");
+  const scopes = useRoutingScopes(live, "verified");
   const [start, setStart] = useState(
     localDate(link.input?.start ?? now - 3600),
   );
@@ -381,22 +385,27 @@ export function EndpointsPage({
       >
         <label>
           IP address
-          <input
+          <EndpointCombobox
             aria-label="IP address"
+            spellCheck={false}
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            onChange={setAddress}
+            scope={scope}
+            client={client}
+            live={live}
+            local={diagramPeers}
             required
           />
         </label>
-        <label>
-          Verified routing scope
-          <input
-            aria-label="Verified routing scope"
-            value={scope}
-            onChange={(e) => setScope(e.target.value)}
-            required
-          />
-        </label>
+        <RoutingScopeSelect
+          showLabel
+          required
+          label="Verified routing scope"
+          value={scope}
+          onChange={setScope}
+          state={scopes}
+          onRetry={scopes.retry}
+        />
         <label>
           Start (local time)
           <input

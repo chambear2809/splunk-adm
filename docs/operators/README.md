@@ -1,6 +1,6 @@
 # Application Atlas operator guides
 
-Index for operators. Support targets: **Splunk Cloud Platform** and **Splunk Enterprise 10.6+**. Configure only the sources you select; see [deployment options](deployment-options.md). Ordered runbook: [splunk-setup-guide.md](splunk-setup-guide.md).
+Index for operators. Platforms: **Splunk Enterprise 10.6.0.5** is the qualified target; **10.6.1.1 build `b2ae2962645c`** and **Splunk Cloud Platform** have narrower, feature-specific support. Other builds are not a blanket "10.6+" range: gated features stay read-only or unavailable there by design. See the [support matrix](SUPPORT_MATRIX.md) for each feature. Configure only the sources you select; see [deployment options](deployment-options.md). Ordered runbook: [splunk-setup-guide.md](splunk-setup-guide.md).
 
 ## Reference topology
 
@@ -42,6 +42,7 @@ Versions are the inspected pins in [`research/package-manifest.json`](../../rese
 | Load balancers / NGFW / Azure VNet / GCP VPC / ServiceNow | Existing Splunkbase TAs | Search-time only | `adm_index_f5`, `adm_index_haproxy`, `adm_index_aws`, `adm_index_azure`, `adm_index_gcp`, `adm_index_pan`, `adm_index_fortigate`, `adm_index_snow` (unset) | Optional VIP legs, VNet/VPC flows, NGFW traffic, CMDB context | — | [ecosystem-tas](ecosystem-tas.md) |
 | Observability Cloud health / detectors | Atlas exporters | Operator host → HEC | `adm_index_o11y_health`, `adm_index_o11y_detector_events` (unset) | Optional health evidence | — | [o11y-health](o11y-health.md), [o11y-detector-events](o11y-detector-events.md) |
 | Asset history (CMDB/IPAM export) | Atlas importer | Operator host → HEC | `adm_index_asset_history` (unset) / `adm:asset_history` | Optional ownership history | — | [asset-history](asset-history.md) |
+| CMDB relationships / ITSI export | Operator CSV lookup; ITSI import (no write-back) | Search-time only | `adm_cmdb_relationship_rows` (inert), `adm_cmdb_relationships_schema_qualified` (0) | CMDB reconciliation; ITSI service/entity CSV drafts | — | [itsi-cmdb](itsi-cmdb.md) |
 
 "Unset" = macro defaults to `index=unconfigured_*` until the administrator sets it.
 
@@ -122,11 +123,16 @@ Lab runbooks and records (lab addresses allowed; not deployment contracts): [loc
 | Section | Pages | Needs |
 | --- | --- | --- |
 | Explore | Applications (catalog, Find), Endpoints, Device (all flows through one device), path-trace form | Identity + flow sources |
+| Move groups | Migration wave planner: seeded groups, shared services, cross-group wave blockers, CSV/JSON draft export | One verified routing scope and 7–30 days of conversation summaries. [Move-group guide](move-groups.md) |
 | Map | Dependency map (network, services, devices, table); src → dst path trace | Path trace adds ACI topology + VMM/spine classes. Limit 4,000 nodes / 10,000 edges; above that the top N edges are kept (structure, then bytes, then connections) with a warning |
+| Map → More actions → Segmentation policy (draft) | Coverage of observed conversations by collected ACI policy; replay of a proposed rule set over a historical window; Kubernetes, Cilium, ACI and firewall rule **drafts** (never applied) | A loaded map. Coverage needs ACI contract classes; other windows need live Splunk data. [Segmentation policy workbench](segmentation-policy.md) |
 | Multicast | Standalone IPv4 group investigation for sender traffic, IGMP receiver interest, and device-reported forwarding | One verified routing scope, a bounded time window, and an active source profile for the evidence you need. [Multicast operator guide](multicast.md) |
+| Impact → Verify change | Saved dependency assertions checked over before/after windows (pass, fail, unknown) with JSON/CSV/Markdown export | A mapped routing scope and scoped Trace sources; ServiceNow TA only for change-number windows. [Change verification](change-verification.md) |
 | Admin | Setup, Data health | Admin role for writes; writes ship disabled |
 
 Help is a separate page.
+
+When an Atlas endpoint or the recovery action reports "unavailable", start with the [troubleshooting guide](troubleshooting.md). It explains the sanitized operator log in `_internal`.
 
 Macros behind path trace and Device: `adm_path_trace`, `adm_path_trace_resolve`, `adm_fabric_path_evidence`, `adm_vsphere_topology`, `adm_vsphere_uplinks`, `adm_device_flows`, `adm_graph_edge_cut`, `adm_graph_edge_limit`. Design: [VSPHERE_SWITCH_DESIGN](../VSPHERE_SWITCH_DESIGN.md).
 

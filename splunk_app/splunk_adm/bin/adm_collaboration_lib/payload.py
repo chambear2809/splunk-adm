@@ -7,7 +7,7 @@ NAME = re.compile(r"[^\x00-\x1f\x7f]{1,80}\Z")
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}\Z")
 PRINCIPAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\\@-]{0,127}\Z")
 VISIBILITY = frozenset({"private", "shared"})
-KINDS = frozenset({"views", "ownership"})
+KINDS = frozenset({"views", "ownership", "assertions"})
 
 
 class PayloadError(ValueError):
@@ -135,4 +135,8 @@ def validate(kind, payload, principal):
         return views_payload(payload, principal)
     if kind == "ownership":
         return ownership_payload(payload)
+    if kind == "assertions":
+        from .assertions import assertions_payload
+
+        return assertions_payload(payload, principal)
     raise PayloadError("Unsupported collaboration kind.")

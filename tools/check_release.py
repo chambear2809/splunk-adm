@@ -51,6 +51,29 @@ HISTORY_MANIFEST_PATH = "splunk_adm/appserver/static/history-manifest.json"
 HISTORY_CSS_PATH = "splunk_adm/appserver/static/history.css"
 MAX_HISTORY_GZIP_BYTES = 48 * 1024
 MAX_HISTORY_CSS_BYTES = 16 * 1024
+MIGRATION_BUNDLE_PATH = "splunk_adm/appserver/static/pages/migration.js"
+MIGRATION_MANIFEST_PATH = "splunk_adm/appserver/static/migration-manifest.json"
+MIGRATION_CSS_PATH = "splunk_adm/appserver/static/migration.css"
+MAX_MIGRATION_GZIP_BYTES = 48 * 1024
+MAX_MIGRATION_CSS_BYTES = 16 * 1024
+# Segmentation policy workbench: optional asset, loaded only when opened from the map.
+SEGMENTATION_BUNDLE_PATH = "splunk_adm/appserver/static/pages/segmentation.js"
+SEGMENTATION_MANIFEST_PATH = "splunk_adm/appserver/static/segmentation-manifest.json"
+SEGMENTATION_CSS_PATH = "splunk_adm/appserver/static/segmentation.css"
+MAX_SEGMENTATION_GZIP_BYTES = 40 * 1024
+MAX_SEGMENTATION_CSS_BYTES = 16 * 1024
+# End segmentation policy workbench.
+# Map investigation workspace: optional asset, loaded only when opened from the map.
+INCIDENT_BUNDLE_PATH = "splunk_adm/appserver/static/pages/incident.js"
+INCIDENT_MANIFEST_PATH = "splunk_adm/appserver/static/incident-manifest.json"
+INCIDENT_CSS_PATH = "splunk_adm/appserver/static/incident.css"
+MAX_INCIDENT_GZIP_BYTES = 32 * 1024
+MAX_INCIDENT_CSS_BYTES = 16 * 1024
+ECOSYSTEM_BUNDLE_PATH = "splunk_adm/appserver/static/pages/ecosystem.js"
+ECOSYSTEM_MANIFEST_PATH = "splunk_adm/appserver/static/ecosystem-manifest.json"
+ECOSYSTEM_CSS_PATH = "splunk_adm/appserver/static/ecosystem.css"
+MAX_ECOSYSTEM_GZIP_BYTES = 48 * 1024
+MAX_ECOSYSTEM_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -85,6 +108,32 @@ CASE_CONFIG_FILES = frozenset(
         "splunk_adm/README/adm_investigations.conf.spec",
     }
 )
+# Whitespace-free metadata ACLs. Derived lookups aggregate every configured
+# source index, so no packaged object may be readable by everyone.
+VIEWER_ACL = "read:[adm_investigate,adm_viewer,admin,sc_admin],write:[admin,sc_admin]"
+ADMIN_ACL = "read:[admin,sc_admin],write:[admin,sc_admin]"
+ADMIN_ONLY_METADATA = frozenset(
+    {
+        "savedsearches",
+        "alert_actions/adm_recovery",
+        "adm_recovery",
+        "alert_actions/adm_dependency_watch",
+        "adm_dependency_watch",
+        "collections/adm_recovery_state",
+        "collections/adm_recovery_audit",
+        "transforms/adm_recovery_state",
+        "transforms/adm_recovery_audit",
+        "views/setup",
+        "transforms/adm_ip_identity_all",
+    }
+)
+VIEWER_ROLE = {
+    "edit_own_objects": "disabled",
+    "list_all_objects": "disabled",
+    "run_collect": "disabled",
+    "run_mcollect": "disabled",
+    "schedule_rtsearch": "disabled",
+}
 CASE_EXPOSURES = {
     "expose:adm_case_capabilities": ("adm/investigations/capabilities", "GET"),
     "expose:adm_cases": ("adm/investigations/cases", "GET,POST"),
@@ -180,6 +229,7 @@ COLLABORATION_RUNTIME_FILES = frozenset(
         "splunk_adm/bin/adm_collaboration_lib/__init__.py",
         "splunk_adm/bin/adm_collaboration_lib/payload.py",
         "splunk_adm/bin/adm_collaboration_lib/rest.py",
+        "splunk_adm/bin/adm_collaboration_lib/assertions.py",
         "splunk_adm/bin/adm_observer_lib/__init__.py",
         "splunk_adm/bin/adm_observer_lib/rest.py",
         "splunk_adm/bin/adm_ops_lib/__init__.py",
@@ -248,6 +298,7 @@ BUNDLED_RUNTIME_FILES = frozenset(
         "splunk_adm/bin/adm_recovery_lib/core.py",
         "splunk_adm/bin/adm_recovery_lib/planner.py",
         "splunk_adm/bin/adm_recovery_lib/rest.py",
+        "splunk_adm/bin/adm_log_lib/__init__.py",
         "splunk_adm/bin/lib/SPLUNK_SDK_LICENSE.txt",
         "splunk_adm/bin/lib/SPLUNK_SDK_PROVENANCE.md",
         "splunk_adm/bin/lib/splunklib/__init__.py",
@@ -298,6 +349,12 @@ QUALIFIED_CONFIG_FILES = frozenset(
         "splunk_adm/README/adm_identity.conf.spec",
         "splunk_adm/README/adm_aci_poll.conf.spec",
         "splunk_adm/README/adm_aci_bindings.conf.spec",
+    }
+)
+LOGGING_CONFIG_FILES = frozenset(
+    {
+        "splunk_adm/default/adm_logging.conf",
+        "splunk_adm/README/adm_logging.conf.spec",
     }
 )
 CHECKSUM_RE = re.compile(r"^([0-9a-fA-F]{64})  ([^\s]+)$")
@@ -551,16 +608,14 @@ def _check_cases_contract(files, rest, web):
     investigate_grant = {"adm_investigate": "enabled"}
     investigator_role = {
         **investigate_grant,
-        "edit_own_objects": "disabled",
-        "list_all_objects": "disabled",
-        "run_collect": "disabled",
-        "run_mcollect": "disabled",
-        "schedule_rtsearch": "disabled",
+        **VIEWER_ROLE,
+        "importroles": "adm_viewer",
     }
     if (
         set(authorize.sections())
         != {
             "capability::adm_investigate",
+            "role_adm_viewer",
             "role_adm_investigate",
             "role_admin",
             "role_sc_admin",
@@ -716,7 +771,7 @@ def _check_collaboration_contract(files, rest, web):
         "field.payload_json": "string",
         "replicate": "false",
     }
-    for name in ("adm_saved_views", "adm_business_ownership"):
+    for name in ("adm_saved_views", "adm_business_ownership", "adm_change_assertions"):
         if (
             not collections.has_section(name)
             or dict(collections[name]) != ledger_fields
@@ -728,12 +783,13 @@ def _check_collaboration_contract(files, rest, web):
     for stanza in (
         "collections/adm_saved_views",
         "collections/adm_business_ownership",
+        "collections/adm_change_assertions",
         "collections/adm_observer_scope",
     ):
         acl = re.sub(r"\s+", "", metadata.get(stanza, "access", fallback=""))
-        if acl != "read:[*],write:[admin,sc_admin]":
+        if acl != VIEWER_ACL:
             raise ValueError(
-                f"packaged {stanza} ACL must preserve readers and admin/sc_admin writers"
+                f"packaged {stanza} ACL must preserve Atlas viewer readers and admin/sc_admin writers"
             )
     for name in COLLABORATION_RUNTIME_FILES:
         if not name.endswith(".py"):
@@ -882,9 +938,9 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         )
     metadata = _packaged_config(files, "metadata/default.meta")
     acl = metadata.get("collections/adm_deployment_settings", "access", fallback="")
-    if re.sub(r"\s+", "", acl) != "read:[*],write:[admin,sc_admin]":
+    if re.sub(r"\s+", "", acl) != VIEWER_ACL:
         raise ValueError(
-            "packaged settings ACL must preserve readers and admin/sc_admin writers"
+            "packaged settings ACL must preserve Atlas viewer readers and admin/sc_admin writers"
         )
     spec = files["splunk_adm/README/adm_settings.conf.spec"]
     if any(
@@ -947,6 +1003,19 @@ STATIC_ALLOWLIST = frozenset(
         HISTORY_BUNDLE_PATH,
         HISTORY_MANIFEST_PATH,
         HISTORY_CSS_PATH,
+        MIGRATION_BUNDLE_PATH,
+        MIGRATION_MANIFEST_PATH,
+        MIGRATION_CSS_PATH,
+        # Segmentation policy workbench.
+        SEGMENTATION_BUNDLE_PATH,
+        SEGMENTATION_MANIFEST_PATH,
+        SEGMENTATION_CSS_PATH,
+        INCIDENT_BUNDLE_PATH,
+        INCIDENT_MANIFEST_PATH,
+        INCIDENT_CSS_PATH,
+        ECOSYSTEM_BUNDLE_PATH,
+        ECOSYSTEM_MANIFEST_PATH,
+        ECOSYSTEM_CSS_PATH,
     }
 )
 
@@ -965,6 +1034,14 @@ def _is_fixture(name: str) -> bool:
     )
 
 
+INTERNAL_EVIDENCE_DOCS = frozenset(
+    {
+        "splunk_adm/docs/FEATURE_DELIVERY.md",
+        "splunk_adm/docs/FEATURE_QUALIFICATION.json",
+    }
+)
+
+
 def _check_no_demo(files: dict[str, bytes]) -> None:
     static = "splunk_adm/appserver/static/"
     for name in sorted(files):
@@ -977,6 +1054,8 @@ def _check_no_demo(files: dict[str, bytes]) -> None:
     for name in sorted(files):
         if _is_fixture(name):
             raise ValueError(f"archive ships demo fixture: {name}")
+        if name in INTERNAL_EVIDENCE_DOCS:
+            raise ValueError(f"archive ships internal evidence doc: {name}")
         if name.startswith(static) and name not in STATIC_ALLOWLIST:
             raise ValueError(f"archive ships unlisted static file: {name}")
 
@@ -1001,6 +1080,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "device",
                 "impact",
                 "cases",
+                "migration",
             )
         },
         "splunk_adm/default/app.conf",
@@ -1017,7 +1097,6 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "splunk_adm/docs/INVESTIGATION_RECORDS.md",
         "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md",
         "splunk_adm/docs/FEATURE_FOUNDATIONS.md",
-        "splunk_adm/docs/FEATURE_DELIVERY.md",
         "splunk_adm/docs/DEPLOYMENT_HEALTH.md",
         "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md",
         "splunk_adm/docs/UPGRADES.md",
@@ -1048,6 +1127,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         *SETTINGS_CONFIG_FILES,
         *BASELINE_CONFIG_FILES,
         *QUALIFIED_CONFIG_FILES,
+        *LOGGING_CONFIG_FILES,
         SETTINGS_REGISTRY_PATH,
     }
     missing = sorted(required - files.keys())
@@ -1268,6 +1348,183 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             raise ValueError(
                 "History asset version/hash does not match the main bundle"
             ) from exc
+    # The migration move-group planner is an independently versioned optional
+    # page. Once the main bundle registers its host, or any one asset is
+    # present, require and validate the complete set.
+    migration_files = {
+        MIGRATION_BUNDLE_PATH,
+        MIGRATION_MANIFEST_PATH,
+        MIGRATION_CSS_PATH,
+    }
+    migration_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasMigrationHost", b"pages/migration.js")
+    )
+    if migration_registered or migration_files.intersection(files):
+        missing = sorted(migration_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Migration files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[MIGRATION_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_MIGRATION_GZIP_BYTES
+        ):
+            raise ValueError("Migration optional bundle exceeds its 48 KiB gzip budget")
+        if len(files[MIGRATION_CSS_PATH]) > MAX_MIGRATION_CSS_BYTES:
+            raise ValueError("Migration optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[MIGRATION_MANIFEST_PATH])
+            migration_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(migration_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", migration_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[MIGRATION_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[MIGRATION_CSS_PATH]).hexdigest()
+                or migration_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or migration_version.encode() not in files[MIGRATION_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Migration asset version/hash does not match the main bundle"
+            ) from exc
+    # Segmentation policy workbench: an independently versioned optional asset.
+    # Once the main bundle registers its host, or any one asset is present,
+    # require and validate the complete set.
+    segmentation_files = {
+        SEGMENTATION_BUNDLE_PATH,
+        SEGMENTATION_MANIFEST_PATH,
+        SEGMENTATION_CSS_PATH,
+    }
+    segmentation_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasSegmentationHost", b"pages/segmentation.js")
+    )
+    if segmentation_registered or segmentation_files.intersection(files):
+        missing = sorted(segmentation_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Segmentation files: {', '.join(missing)}"
+            )
+        if (
+            len(
+                gzip.compress(files[SEGMENTATION_BUNDLE_PATH], compresslevel=9, mtime=0)
+            )
+            > MAX_SEGMENTATION_GZIP_BYTES
+        ):
+            raise ValueError(
+                "Segmentation optional bundle exceeds its 40 KiB gzip budget"
+            )
+        if len(files[SEGMENTATION_CSS_PATH]) > MAX_SEGMENTATION_CSS_BYTES:
+            raise ValueError("Segmentation optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[SEGMENTATION_MANIFEST_PATH])
+            segmentation_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(segmentation_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", segmentation_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[SEGMENTATION_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[SEGMENTATION_CSS_PATH]).hexdigest()
+                or segmentation_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or segmentation_version.encode() not in files[SEGMENTATION_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Segmentation asset version/hash does not match the main bundle"
+            ) from exc
+    # End segmentation policy workbench.
+    # The map investigation workspace is an independently versioned optional
+    # asset. Once the main bundle registers its host, or any one asset is
+    # present, require and validate the complete set.
+    incident_files = {INCIDENT_BUNDLE_PATH, INCIDENT_MANIFEST_PATH, INCIDENT_CSS_PATH}
+    incident_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasIncidentHost", b"pages/incident.js")
+    )
+    if incident_registered or incident_files.intersection(files):
+        missing = sorted(incident_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Incident files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[INCIDENT_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_INCIDENT_GZIP_BYTES
+        ):
+            raise ValueError("Incident optional bundle exceeds its 32 KiB gzip budget")
+        if len(files[INCIDENT_CSS_PATH]) > MAX_INCIDENT_CSS_BYTES:
+            raise ValueError("Incident optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[INCIDENT_MANIFEST_PATH])
+            incident_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(incident_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", incident_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[INCIDENT_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[INCIDENT_CSS_PATH]).hexdigest()
+                or incident_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or incident_version.encode() not in files[INCIDENT_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Incident asset version/hash does not match the main bundle"
+            ) from exc
+    # Ecosystem firewall evidence is an independently versioned optional asset.
+    # Once the main bundle registers its host, or any one asset is present,
+    # require and validate the complete set.
+    ecosystem_files = {
+        ECOSYSTEM_BUNDLE_PATH,
+        ECOSYSTEM_MANIFEST_PATH,
+        ECOSYSTEM_CSS_PATH,
+    }
+    ecosystem_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasEcosystemHost", b"pages/ecosystem.js")
+    )
+    if ecosystem_registered or ecosystem_files.intersection(files):
+        missing = sorted(ecosystem_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Ecosystem files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[ECOSYSTEM_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_ECOSYSTEM_GZIP_BYTES
+        ):
+            raise ValueError("Ecosystem optional bundle exceeds its 48 KiB gzip budget")
+        if len(files[ECOSYSTEM_CSS_PATH]) > MAX_ECOSYSTEM_CSS_BYTES:
+            raise ValueError("Ecosystem optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[ECOSYSTEM_MANIFEST_PATH])
+            ecosystem_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(ecosystem_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", ecosystem_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[ECOSYSTEM_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[ECOSYSTEM_CSS_PATH]).hexdigest()
+                or ecosystem_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or ecosystem_version.encode() not in files[ECOSYSTEM_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Ecosystem asset version/hash does not match the main bundle"
+            ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:
         config.read_string(files["splunk_adm/default/app.conf"].decode("utf-8"))
@@ -1289,6 +1546,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         "adm_aci_bindings",
         "adm_investigations",
         "adm_baselines",
+        "adm_logging",
     }
     custom = set(simple_reload)
     for path in files:
@@ -1325,6 +1583,18 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         raise ValueError("shipped adm_recovery.py is not an executable script")
     if actions.get("adm_recovery", "passSystemAuth", fallback="").lower() != "false":
         raise ValueError("adm_recovery alert action must set passSystemAuth = false")
+    logging_config = _packaged_config(files, "default/adm_logging.conf")
+    if set(logging_config.sections()) != {"logging"} or dict(
+        logging_config["logging"]
+    ) != {"level": "INFO"}:
+        raise ValueError("adm_logging.conf must ship with level = INFO only")
+    if (
+        actions.get("adm_recovery", "python.version", fallback="") != "python3"
+        or actions.get("adm_recovery", "python.required", fallback="") != "3.13"
+    ):
+        raise ValueError(
+            "adm_recovery alert action must use the exact Python 3.13 settings"
+        )
     recovery = _packaged_config(files, "default/adm_recovery.conf")
     if (
         not recovery.has_section("recovery")
@@ -1337,6 +1607,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
     build = config.get("install", "build", fallback=None)
     if build is None or not re.fullmatch(r"[1-9]\d*", build):
         raise ValueError("app.conf [install] build must be a positive integer")
+    _check_viewer_boundary(files)
 
 
 def _check_watch_action(files, actions, app):
@@ -1563,14 +1834,53 @@ def _check_qualified_contract(files: dict[str, bytes]) -> None:
         raise ValueError("graph wrapper must retain argument validation")
     metadata = _packaged_config(files, "metadata/default.meta")
     global_acl = re.sub(r"\s+", "", metadata.get("app", "access", fallback=""))
-    if global_acl != "read:[*],write:[admin,sc_admin]":
+    if global_acl != VIEWER_ACL:
         raise ValueError("qualified configuration ACL must remain admin-owned")
     for section in metadata.sections():
         lowered = section.casefold()
         if any(token in lowered for token in ("adm_identity", "adm_aci", "commands")):
             acl = re.sub(r"\s+", "", metadata.get(section, "access", fallback=""))
-            if acl and acl != "read:[*],write:[admin,sc_admin]":
+            if acl and acl != VIEWER_ACL:
                 raise ValueError("qualified configuration ACL must remain admin-owned")
+
+
+def _check_viewer_boundary(files: dict[str, bytes]) -> None:
+    if "splunk_adm/default/authorize.conf" not in files:
+        raise ValueError("archive must ship the adm_viewer role in authorize.conf")
+    authorize = _packaged_config(files, "default/authorize.conf")
+    if (
+        not authorize.has_section("role_adm_viewer")
+        or dict(authorize["role_adm_viewer"]) != VIEWER_ROLE
+    ):
+        raise ValueError("adm_viewer must grant no capability, index or imported role")
+    if (
+        authorize.get("role_adm_investigate", "importRoles", fallback="")
+        != "adm_viewer"
+    ):
+        raise ValueError("adm_investigate must inherit exactly the adm_viewer role")
+    metadata = _packaged_config(files, "metadata/default.meta")
+    for section in metadata.sections():
+        acl = re.sub(r"\s+", "", metadata.get(section, "access", fallback=""))
+        if "*" in acl:
+            raise ValueError(f"metadata must not grant everyone access: {section}")
+        if metadata.get(section, "export", fallback="none") != "none":
+            raise ValueError(f"metadata must not export app objects: {section}")
+        expected = ADMIN_ACL if section in ADMIN_ONLY_METADATA else VIEWER_ACL
+        if metadata.has_option(section, "access") and acl != expected:
+            raise ValueError(
+                f"metadata {section} must grant read only to Atlas viewers or administrators"
+            )
+    missing = sorted(ADMIN_ONLY_METADATA - set(metadata.sections()))
+    if missing:
+        raise ValueError(
+            f"administrator-only metadata stanzas are missing: {', '.join(missing)}"
+        )
+    for kind in ("collections", "transforms"):
+        for name in _packaged_config(files, f"default/{kind}.conf").sections():
+            if not metadata.has_option(f"{kind}/{name}", "access"):
+                raise ValueError(
+                    f"derived lookup {kind}/{name} requires an explicit metadata ACL"
+                )
 
 
 def check_release(

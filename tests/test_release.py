@@ -39,12 +39,23 @@ from tools.check_release import (
     HISTORY_MANIFEST_PATH,
     HISTORY_CSS_PATH,
     MAX_HISTORY_GZIP_BYTES,
+    MIGRATION_BUNDLE_PATH,
+    MIGRATION_MANIFEST_PATH,
+    MIGRATION_CSS_PATH,
+    MAX_MIGRATION_GZIP_BYTES,
+    ECOSYSTEM_BUNDLE_PATH,
+    ECOSYSTEM_MANIFEST_PATH,
+    ECOSYSTEM_CSS_PATH,
+    MAX_ECOSYSTEM_GZIP_BYTES,
     SETTINGS_CONFIG_FILES,
     SETTINGS_REGISTRY_PATH,
     SETTINGS_RUNTIME_FILES,
     COLLABORATION_RUNTIME_FILES,
+    LOGGING_CONFIG_FILES,
     check_release,
 )
+
+VIEWER_ACCESS = b"read : [ adm_investigate, adm_viewer, admin, sc_admin ]"
 
 
 def _incompressible(size: int) -> bytes:
@@ -283,6 +294,146 @@ class ReleaseArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Multicast optional bundle exceeds"):
             check_release(self.root / "dist", self.root / "package.json")
 
+    def _migration_files(self):
+        files = self._files()
+        version = "1" * 24
+        files["splunk_adm/appserver/static/pages/atlas.js"] += (
+            b" __AtlasMigrationHost pages/migration.js " + version.encode()
+        )
+        files[MIGRATION_BUNDLE_PATH] = b"migration bundle " + version.encode()
+        files[MIGRATION_CSS_PATH] = b"migration styles"
+        files[MIGRATION_MANIFEST_PATH] = json.dumps(
+            {
+                "schemaVersion": 1,
+                "assetVersion": version,
+                "javascriptSha256": hashlib.sha256(
+                    files[MIGRATION_BUNDLE_PATH]
+                ).hexdigest(),
+                "cssSha256": hashlib.sha256(files[MIGRATION_CSS_PATH]).hexdigest(),
+            }
+        ).encode()
+        return files
+
+    def _ecosystem_files(self):
+        files = self._files()
+        version = "9" * 24
+        files["splunk_adm/appserver/static/pages/atlas.js"] += (
+            b" __AtlasEcosystemHost pages/ecosystem.js " + version.encode()
+        )
+        files[ECOSYSTEM_BUNDLE_PATH] = b"ecosystem bundle " + version.encode()
+        files[ECOSYSTEM_CSS_PATH] = b"ecosystem styles"
+        files[ECOSYSTEM_MANIFEST_PATH] = json.dumps(
+            {
+                "schemaVersion": 1,
+                "assetVersion": version,
+                "javascriptSha256": hashlib.sha256(
+                    files[ECOSYSTEM_BUNDLE_PATH]
+                ).hexdigest(),
+                "cssSha256": hashlib.sha256(files[ECOSYSTEM_CSS_PATH]).hexdigest(),
+            }
+        ).encode()
+        return files
+
+    def test_accepts_complete_migration_bundle(self):
+        self._write_pair(self._migration_files())
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_migration_registration_and_partial_assets_require_complete_set(self):
+        for missing in (
+            MIGRATION_BUNDLE_PATH,
+            MIGRATION_MANIFEST_PATH,
+            MIGRATION_CSS_PATH,
+        ):
+            with self.subTest(missing=missing):
+                files = self._migration_files()
+                del files[missing]
+                self._write_pair(files)
+                with self.assertRaisesRegex(
+                    ValueError, "missing required Migration files"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files[MIGRATION_CSS_PATH] = b"orphan"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required Migration files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_migration_tampering_and_mixed_versions(self):
+        for path in (
+            MIGRATION_BUNDLE_PATH,
+            MIGRATION_CSS_PATH,
+            MIGRATION_MANIFEST_PATH,
+            "splunk_adm/appserver/static/pages/atlas.js",
+        ):
+            with self.subTest(path=path):
+                files = self._migration_files()
+                if path == MIGRATION_MANIFEST_PATH:
+                    files[path] = b"{}"
+                elif path.endswith("atlas.js"):
+                    files[path] = files[path].replace(b"1" * 24, b"2" * 24)
+                else:
+                    files[path] += b"tampered"
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "Migration asset version/hash"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_migration_bundle_has_independent_48k_gzip_budget(self):
+        files = self._migration_files()
+        files[MIGRATION_BUNDLE_PATH] = _incompressible(MAX_MIGRATION_GZIP_BYTES + 1)
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "Migration optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_accepts_complete_ecosystem_bundle(self):
+        self._write_pair(self._ecosystem_files())
+        check_release(self.root / "dist", self.root / "package.json")
+
+    def test_ecosystem_registration_and_partial_assets_require_complete_set(self):
+        for missing in (
+            ECOSYSTEM_BUNDLE_PATH,
+            ECOSYSTEM_MANIFEST_PATH,
+            ECOSYSTEM_CSS_PATH,
+        ):
+            with self.subTest(missing=missing):
+                files = self._ecosystem_files()
+                del files[missing]
+                self._write_pair(files)
+                with self.assertRaisesRegex(
+                    ValueError, "missing required Ecosystem files"
+                ):
+                    check_release(self.root / "dist", self.root / "package.json")
+        files = self._files()
+        files[ECOSYSTEM_CSS_PATH] = b"orphan"
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "missing required Ecosystem files"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_ecosystem_tampering_and_mixed_versions(self):
+        for path in (
+            ECOSYSTEM_BUNDLE_PATH,
+            ECOSYSTEM_CSS_PATH,
+            ECOSYSTEM_MANIFEST_PATH,
+            "splunk_adm/appserver/static/pages/atlas.js",
+        ):
+            with self.subTest(path=path):
+                files = self._ecosystem_files()
+                if path == ECOSYSTEM_MANIFEST_PATH:
+                    files[path] = b"{}"
+                elif path.endswith("atlas.js"):
+                    files[path] = files[path].replace(b"9" * 24, b"8" * 24)
+                else:
+                    files[path] += b"tampered"
+                self._write_pair(files)
+                with self.assertRaisesRegex(ValueError, "Ecosystem asset version/hash"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_ecosystem_bundle_has_independent_48k_gzip_budget(self):
+        files = self._ecosystem_files()
+        files[ECOSYSTEM_BUNDLE_PATH] = _incompressible(MAX_ECOSYSTEM_GZIP_BYTES + 1)
+        self._write_pair(files)
+        with self.assertRaisesRegex(ValueError, "Ecosystem optional bundle exceeds"):
+            check_release(self.root / "dist", self.root / "package.json")
+
     def test_journey_registration_and_partial_assets_require_complete_set(self):
         for missing in (
             JOURNEYS_BUNDLE_PATH,
@@ -415,6 +566,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             b"reload.adm_dependency_watch = simple\n"
             b"reload.adm_investigations = simple\nreload.adm_baselines = simple\n"
             b"reload.adm_identity = simple\nreload.adm_aci_poll = simple\nreload.adm_aci_bindings = simple\n"
+            b"reload.adm_logging = simple\n"
         )
         return {
             **{
@@ -437,6 +589,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                 | SETTINGS_CONFIG_FILES
                 | CASE_CONFIG_FILES
                 | BASELINE_CONFIG_FILES
+                | LOGGING_CONFIG_FILES
             },
             SETTINGS_REGISTRY_PATH: (
                 self.root / "config/deployment-health.json"
@@ -466,6 +619,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "device",
                     "impact",
                     "cases",
+                    "migration",
                 )
             },
             "splunk_adm/appserver/static/adm.css": b"css",
@@ -487,7 +641,6 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/INVESTIGATION_RECORDS.md": b"case source authorization docs",
             "splunk_adm/docs/FEATURE_SOURCE_OBSERVATIONS.md": b"source observations",
             "splunk_adm/docs/FEATURE_FOUNDATIONS.md": b"evidence contracts",
-            "splunk_adm/docs/FEATURE_DELIVERY.md": b"qualification limits",
             "splunk_adm/docs/DEPLOYMENT_HEALTH.md": b"settings operator docs",
             "splunk_adm/docs/LATE_CATALYST_RECEIPTS.md": b"late receipt operator docs",
             "splunk_adm/docs/RECOVERY.md": b"# Recovery and replay\n",
@@ -573,6 +726,62 @@ class ReleaseArchiveTests(unittest.TestCase):
         )
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, grant_error):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_viewer_role_grants_nothing_and_investigator_inherits_it(self):
+        for old, new in (
+            (
+                b"[role_adm_viewer]\n",
+                b"[role_adm_viewer]\nimportRoles = user\n",
+            ),
+            (
+                b"[role_adm_viewer]\n",
+                b"[role_adm_viewer]\nsrchIndexesAllowed = *\n",
+            ),
+            (b"importRoles = adm_viewer\n", b""),
+            (b"importRoles = adm_viewer\n", b"importRoles = adm_viewer;power\n"),
+        ):
+            with self.subTest(change=new):
+                install = self._files()
+                name = "splunk_adm/default/authorize.conf"
+                self.assertIn(old, install[name])
+                install[name] = install[name].replace(old, new, 1)
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "adm_viewer|adm_investigate"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_everyone_readable_or_exported_metadata(self):
+        name = "splunk_adm/metadata/default.meta"
+        for old, new in (
+            (
+                b"[]\naccess = " + VIEWER_ACCESS,
+                b"[]\naccess = read : [ * ]",
+            ),
+            (
+                b"[collections/adm_network_client_history]\naccess = " + VIEWER_ACCESS,
+                b"[collections/adm_network_client_history]\naccess = read : [ * ]",
+            ),
+            (
+                b"[transforms/adm_interfaces]\naccess = " + VIEWER_ACCESS,
+                b"[transforms/adm_interfaces]\naccess = read : [ adm_viewer, user ]",
+            ),
+            (b"export = none", b"export = system"),
+        ):
+            with self.subTest(change=new):
+                install = self._files()
+                self.assertIn(old, install[name])
+                install[name] = install[name].replace(old, new, 1)
+                self._write_pair(install)
+                with self.assertRaises(ValueError):
+                    check_release(self.root / "dist", self.root / "package.json")
+
+    def test_derived_lookups_require_explicit_metadata_acl(self):
+        install = self._files()
+        install["splunk_adm/default/transforms.conf"] += (
+            b"\n[adm_unlisted]\nexternal_type = kvstore\ncollection = adm_unlisted\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "transforms/adm_unlisted"):
             check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_unsafe_case_release_contract(self):
@@ -1075,6 +1284,24 @@ class ReleaseArchiveTests(unittest.TestCase):
         ):
             check_release(self.root / "dist", self.root / "package.json")
 
+    def test_rejects_recovery_action_without_exact_python_313_settings(self):
+        name = "splunk_adm/default/alert_actions.conf"
+        recovery = b"alert.execute.cmd = adm_recovery.py"
+        for before, after in (
+            (b"python.required = 3.13\n", b"python.required = 3.9,3.13\n"),
+            (b"python.required = 3.13\n", b"python.required = 3.9\n"),
+            (b"python.required = 3.13\n", b""),
+            (b"python.version = python3\n", b""),
+        ):
+            with self.subTest(after=after):
+                install = self._files()
+                head, tail = install[name].split(recovery, 1)
+                self.assertIn(before, head.split(b"[adm_recovery]", 1)[1])
+                install[name] = head.replace(before, after, 1) + recovery + tail
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "adm_recovery.*Python 3.13"):
+                    check_release(self.root / "dist", self.root / "package.json")
+
     def test_rejects_missing_settings_runtime_configuration_or_operator_docs(self):
         for name in (
             SETTINGS_RUNTIME_FILES
@@ -1199,8 +1426,12 @@ class ReleaseArchiveTests(unittest.TestCase):
                     )
                 if not suffix:
                     install[name] = install[name].replace(
-                        b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]",
-                        b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ * ]",
+                        b"[collections/adm_deployment_settings]\naccess = "
+                        + VIEWER_ACCESS
+                        + b", write : [ admin, sc_admin ]",
+                        b"[collections/adm_deployment_settings]\naccess = "
+                        + VIEWER_ACCESS
+                        + b", write : [ * ]",
                         1,
                     )
                 self._write_pair(install)
@@ -1273,6 +1504,31 @@ class ReleaseArchiveTests(unittest.TestCase):
         ].replace(b"reload.adm_recovery = simple\n", b"")
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "reload.adm_recovery must be simple"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_operator_log_must_ship_info_level_and_simple_reload(self):
+        name = "splunk_adm/default/adm_logging.conf"
+        for content in (
+            b"[logging]\nlevel = DEBUG\n",
+            b"[logging]\nlevel = INFO\npath = /tmp/x.log\n",
+            b"[other]\nlevel = INFO\n",
+        ):
+            with self.subTest(content=content):
+                install = self._files()
+                install[name] = content
+                self._write_pair(install)
+                with self.assertRaisesRegex(ValueError, "level = INFO"):
+                    check_release(self.root / "dist", self.root / "package.json")
+        install = self._files()
+        del install[name]
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "missing required files"):
+            check_release(self.root / "dist", self.root / "package.json")
+        install = self._files()
+        app = "splunk_adm/default/app.conf"
+        install[app] = install[app].replace(b"reload.adm_logging = simple\n", b"")
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "reload.adm_logging must be simple"):
             check_release(self.root / "dist", self.root / "package.json")
 
     def test_rejects_missing_or_restart_settings_reload_trigger(self):
@@ -1522,8 +1778,12 @@ class ReleaseArchiveTests(unittest.TestCase):
         install["splunk_adm/metadata/default.meta"] = install[
             "splunk_adm/metadata/default.meta"
         ].replace(
-            b"[collections/adm_saved_views]\naccess = read : [ * ], write : [ admin, sc_admin ]",
-            b"[collections/adm_saved_views]\naccess = read : [ * ], write : [ * ]",
+            b"[collections/adm_saved_views]\naccess = "
+            + VIEWER_ACCESS
+            + b", write : [ admin, sc_admin ]",
+            b"[collections/adm_saved_views]\naccess = "
+            + VIEWER_ACCESS
+            + b", write : [ * ]",
             1,
         )
         self._write_pair(install)
@@ -1538,6 +1798,17 @@ class ReleaseArchiveTests(unittest.TestCase):
         self._write_pair(install)
         with self.assertRaisesRegex(ValueError, "adm_recovery.conf must ship"):
             check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_internal_evidence_docs(self):
+        for doc in (
+            "splunk_adm/docs/FEATURE_DELIVERY.md",
+            "splunk_adm/docs/FEATURE_QUALIFICATION.json",
+        ):
+            install = self._files()
+            install[doc] = b"internal lab record"
+            self._write_pair(install)
+            with self.assertRaisesRegex(ValueError, "internal evidence doc"):
+                check_release(self.root / "dist", self.root / "package.json")
 
 
 if __name__ == "__main__":

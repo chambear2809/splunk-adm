@@ -7,6 +7,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { thousandEyesAssetVersion } from "./vite.thousandeyes.shared";
 import { journeysAssetVersion } from "./vite.journeys.shared";
 import { historyAssetVersion } from "./vite.history.shared";
+import { migrationAssetVersion } from "./vite.migration.shared";
+// Segmentation policy workbench optional asset.
+import { segmentationAssetVersion } from "./vite.segmentation.shared";
+import { incidentAssetVersion } from "./vite.incident.shared";
+import { ecosystemAssetVersion } from "./vite.ecosystem.shared";
 
 // Match the release gate in tools/check_release.py.
 const SPLUNK_BUNDLE_CEILING_GZIP = 680 * 1024;
@@ -125,6 +130,13 @@ export default defineConfig({
     __ADM_IMPACT_ASSET_VERSION__: JSON.stringify(impactAssetVersion()),
     __ADM_TE_ASSET_VERSION__: JSON.stringify(thousandEyesAssetVersion()),
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify(journeysAssetVersion()),
+    __ADM_MIGRATION_ASSET_VERSION__: JSON.stringify(migrationAssetVersion()),
+    // Segmentation policy workbench optional asset.
+    __ADM_SEGMENTATION_ASSET_VERSION__: JSON.stringify(
+      segmentationAssetVersion(),
+    ),
+    __ADM_INCIDENT_ASSET_VERSION__: JSON.stringify(incidentAssetVersion()),
+    __ADM_ECOSYSTEM_ASSET_VERSION__: JSON.stringify(ecosystemAssetVersion()),
   },
   build: {
     outDir: "splunk_app/splunk_adm/appserver/static",

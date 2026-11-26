@@ -661,6 +661,43 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
         "adm_index_thousandeyes",
         "adm_thousandeyes_schema_qualified",
       ],
+      // Ecosystem TA traffic sources.
+      [
+        "pan_traffic",
+        "pan_firewall",
+        "adm_index_pan",
+        "adm_pan_traffic_schema_qualified",
+      ],
+      [
+        "fortigate_traffic",
+        "fortigate_firewall",
+        "adm_index_fortigate",
+        "adm_fortigate_traffic_schema_qualified",
+      ],
+      [
+        "f5_ltm_http",
+        "f5_bigip",
+        "adm_index_f5",
+        "adm_f5_ltm_irule_schema_qualified",
+      ],
+      [
+        "aws_elb_access",
+        "aws_elb",
+        "adm_index_aws",
+        "adm_aws_elb_access_schema_qualified",
+      ],
+      [
+        "azure_vnet_flow",
+        "azure_vnet_flow",
+        "adm_index_azure",
+        "adm_azure_vnet_flow_schema_qualified",
+      ],
+      [
+        "gcp_vpc_flow",
+        "gcp_vpc_flow",
+        "adm_index_gcp",
+        "adm_gcp_vpc_flow_schema_qualified",
+      ],
     ] as const;
     const supplemental: SupplementalSourceConfiguration[] = await Promise.all(
       supplementalSpecs.map(

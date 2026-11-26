@@ -1,0 +1,106 @@
+.atlas-verify {
+  margin-top: 14px;
+  border: 1px solid var(--adm-line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--adm-surface);
+}
+.atlas-verify > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  cursor: pointer;
+}
+.atlas-verify > summary h2 {
+  display: inline;
+  margin: 0;
+  font-size: 15px;
+}
+.atlas-verify-body {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.atlas-verify-step h3 {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+.atlas-verify-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.atlas-verify-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--adm-line);
+}
+.atlas-verify-remove {
+  border: 0;
+  background: none;
+  color: var(--adm-muted);
+  cursor: pointer;
+}
+.atlas-verify-actions,
+.atlas-verify-new,
+.atlas-verify-window,
+.atlas-verify-window form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.atlas-verify-window label,
+.atlas-verify-new label,
+.atlas-verify-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.atlas-verify-port {
+  width: 72px;
+}
+.atlas-verify-error {
+  color: var(--adm-error-ink);
+}
+.atlas-verify-status {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.atlas-verify-status.pass {
+  color: var(--adm-ok-ink);
+  background: var(--adm-ok-bg);
+}
+.atlas-verify-status.fail {
+  color: var(--impact-outage);
+  background: var(--impact-outage-bg);
+}
+.atlas-verify-status.unknown {
+  color: var(--impact-unknown);
+  background: var(--impact-unknown-bg);
+}
+.atlas-verify-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.atlas-verify-table th,
+.atlas-verify-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--adm-line);
+  text-align: left;
+  vertical-align: top;
+}
+.atlas-verify-links {
+  display: flex;
+  gap: 8px;
+}

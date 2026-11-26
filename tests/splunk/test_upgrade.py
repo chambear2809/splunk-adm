@@ -27,6 +27,7 @@ from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 APP = "splunk_adm"
+VIEWER_READERS = {"adm_investigate", "adm_viewer", "admin", "sc_admin"}
 CONTAINER = os.environ.get("ADM_LAB_NAME", "adm-splunk-lab")
 MGMT = f"https://127.0.0.1:{int(os.environ.get('ADM_LAB_MGMT_PORT', '8089'))}"
 CTX = ssl.create_default_context()
@@ -865,7 +866,8 @@ class UpgradeIntegrationTest(unittest.TestCase):
                     )
             perms = result["acl"]["perms"]
             read, write = set(perms["read"]), set(perms["write"])
-            if read != {"*"} or write != {"admin", "sc_admin"}:
+            # Releases before the adm_viewer boundary shipped read : [ * ].
+            if read not in ({"*"}, VIEWER_READERS) or write != {"admin", "sc_admin"}:
                 raise AssertionError(f"unsafe scope ACL: read={read}, write={write}")
             out[kind] = {"read": sorted(read), "write": sorted(write)}
         return out
@@ -985,7 +987,9 @@ class UpgradeIntegrationTest(unittest.TestCase):
         for name, acl in self.before["acl"].items():
             self.assertEqual(acl, self.after["acl"][name], name)
         self.assertEqual(self.before["protected_acl"], self.after["protected_acl"])
-        self.assertEqual(self.before["scope_acl"], self.after["scope_acl"])
+        for kind, acl in self.after["scope_acl"].items():
+            self.assertEqual(acl["read"], sorted(VIEWER_READERS), kind)
+            self.assertEqual(acl["write"], self.before["scope_acl"][kind]["write"])
         self.assertEqual(self.before["macro_file"], self.after["macro_file"])
         self.assertEqual(self.before["scope_file"], self.after["scope_file"])
         self.assertEqual(

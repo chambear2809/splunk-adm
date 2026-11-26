@@ -3,6 +3,9 @@ import { pageURL, stateParams, type UrlState } from "./app/urlState";
 import { savedViewsFor } from "./app/savedViews";
 import type { ServerSavedView } from "./data/collaborationClient";
 
+const sharedReadOnly =
+  "Shared views are read-only for your role. An administrator can save shared views.";
+
 export function SavedViews({
   state,
   user,
@@ -15,6 +18,7 @@ export function SavedViews({
   const store = useMemo(() => savedViewsFor(user), [user]);
   const [views, setViews] = useState(store.read);
   const [shared, setShared] = useState<ServerSavedView[]>([]);
+  const [sharedWritable, setSharedWritable] = useState(true);
   const [name, setName] = useState("");
   const [visibility, setVisibility] = useState<"private" | "shared">("private");
   const [message, setMessage] = useState("");
@@ -34,7 +38,10 @@ export function SavedViews({
     void import("./data/collaborationClient")
       .then(({ collaborationClient }) =>
         collaborationClient.loadViews(request.signal).then((document) => {
-          if (!request.signal.aborted) setShared(document.views);
+          if (request.signal.aborted) return;
+          setShared(document.views);
+          setSharedWritable(document.writable);
+          if (!document.writable) setVisibility("private");
         }),
       )
       .catch((error) => {
@@ -98,6 +105,10 @@ export function SavedViews({
         onSubmit={(event) => {
           event.preventDefault();
           if (!state || saving) return;
+          if (inSplunk && visibility === "shared" && !sharedWritable) {
+            setMessage(sharedReadOnly);
+            return;
+          }
           if (inSplunk && visibility === "shared" && user) {
             const trimmed = name.trim();
             if (
@@ -230,9 +241,16 @@ export function SavedViews({
               }
             >
               <option value="private">Private (this browser)</option>
-              <option value="shared">Shared with this search head</option>
+              <option value="shared" disabled={!sharedWritable}>
+                Shared with this search head
+              </option>
             </select>
           </label>
+        )}
+        {inSplunk && !sharedWritable && (
+          <p className="muted" role="status">
+            {sharedReadOnly}
+          </p>
         )}
         <button type="submit" disabled={!state || !store.enabled || saving}>
           Save view

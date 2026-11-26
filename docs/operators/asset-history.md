@@ -95,3 +95,9 @@ Empty results do not prove no asset existed or complete source coverage.
 Disabling the optional source removes it from later reads; previously indexed
 events remain subject to the organization's normal index retention and access
 controls.
+
+The same qualified source backs the scope-wide "Not in CMDB" check in
+[ITSI export and CMDB reconciliation](itsi-cmdb.md), with the same scan cap.
+
+The same qualified source backs the scope-wide "Not in CMDB" check in
+[ITSI export and CMDB reconciliation](itsi-cmdb.md), with the same scan cap.

@@ -3,11 +3,15 @@
 import json
 from pathlib import Path
 import sys
+import time
 
 from splunk.persistconn.application import PersistentServerConnectionApplication
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from adm_baselines_lib.splunk_host import SplunkHost, handle  # noqa: E402
+from adm_log_lib import log_response  # noqa: E402
+
+HANDLER = "adm_dependency_monitoring"
 
 
 class BaselinesHandler(PersistentServerConnectionApplication):
@@ -15,14 +19,23 @@ class BaselinesHandler(PersistentServerConnectionApplication):
         super().__init__()
 
     def handle(self, in_string):
+        started = time.monotonic()
+        request = error = None
         try:
             request = json.loads(in_string)
             token = request.get("session", {}).get("authtoken")
             status, payload, headers = handle(request, SplunkHost(token))
-        except Exception:
+        except Exception as exc:
+            error = exc
             status, payload, headers = (
                 503,
                 {"error": "unavailable"},
                 {"Cache-Control": "no-store"},
             )
-        return {"status": status, "payload": payload, "headers": headers}
+        return log_response(
+            HANDLER,
+            {"status": status, "payload": payload, "headers": headers},
+            started=started,
+            request=request,
+            error=error,
+        )

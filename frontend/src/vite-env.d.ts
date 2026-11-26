@@ -8,3 +8,8 @@ declare const __ADM_IMPACT_ASSET_VERSION__: string;
 
 declare const __ADM_MULTICAST_ASSET_VERSION__: string;
 declare const __ADM_HISTORY_ASSET_VERSION__: string;
+
+declare const __ADM_MIGRATION_ASSET_VERSION__: string;
+declare const __ADM_SEGMENTATION_ASSET_VERSION__: string;
+declare const __ADM_INCIDENT_ASSET_VERSION__: string;
+declare const __ADM_ECOSYSTEM_ASSET_VERSION__: string;

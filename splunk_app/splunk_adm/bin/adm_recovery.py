@@ -8,11 +8,15 @@ from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 import sys
+import time
 
 BIN = Path(__file__).resolve().parent
 sys.path.insert(0, str(BIN / "lib"))
 from adm_recovery_lib.core import Recovery, Settings, TARGET_WINDOWS  # noqa: E402
 from adm_recovery_lib.rest import Rest  # noqa: E402
+from adm_log_lib import log_outcome  # noqa: E402
+
+HANDLER = "adm_recovery"
 
 
 def _spl_string(value):
@@ -51,7 +55,8 @@ def earliest_replayable(rows):
     return min(candidates)[1] if candidates else None
 
 
-def main():
+def main(started=None):
+    started = time.monotonic() if started is None else started
     parser = configparser.RawConfigParser()
     parser.read(
         [
@@ -62,6 +67,13 @@ def main():
     config = parser["recovery"]
     if not config.getboolean("enabled", fallback=False):
         print(json.dumps({"status": "refused", "reason": "recovery is not enabled"}))
+        log_outcome(
+            HANDLER,
+            started=started,
+            outcome="refused",
+            code="recovery_disabled",
+            exit_code=1,
+        )
         return 1
     # Bounded input, never logged. No password or system-token fallback.
     payload = json.loads(sys.stdin.read(1024 * 1024))
@@ -84,16 +96,21 @@ def main():
             print(
                 json.dumps({"status": "noop", "reason": "no replayable detector rows"})
             )
+            log_outcome(HANDLER, started=started, code="noop", exit_code=0)
             return 0
     result = recovery.run(target)
     print(json.dumps(result, sort_keys=True))
-    return 0 if result["status"] in ("noop", "recovered") else 1
+    exit_code = 0 if result["status"] in ("noop", "recovered") else 1
+    log_outcome(HANDLER, started=started, code=result["status"], exit_code=exit_code)
+    return exit_code
 
 
 if __name__ == "__main__":
+    STARTED = time.monotonic()
     try:
-        sys.exit(main())
+        sys.exit(main(STARTED))
     except Exception as exc:
         # Avoid logging SDK exceptions or payloads containing session credentials.
         print(json.dumps({"status": "uncertain", "error_type": type(exc).__name__}))
+        log_outcome(HANDLER, started=STARTED, code="uncertain", error=exc, exit_code=1)
         sys.exit(1)

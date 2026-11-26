@@ -160,6 +160,34 @@ export interface SetupClient {
     enabled: boolean,
     signal?: AbortSignal,
   ): Promise<void>;
+  /** Enabled index names visible to the caller, for index macro suggestions. */
+  listIndexes?(signal?: AbortSignal): Promise<IndexList>;
+}
+export interface IndexList {
+  names: string[];
+  truncated: boolean;
+}
+export const MAX_INDEX_SUGGESTIONS = 500;
+
+/** Enabled, valid index names from a `data/indexes` listing, sorted. */
+export function parseIndexList(payload: unknown): IndexList {
+  if (!object(payload) || !Array.isArray(payload.entry))
+    throw new Error("Splunk returned an incomplete index list.");
+  const names = new Set<string>();
+  for (const row of payload.entry) {
+    if (!object(row) || typeof row.name !== "string") continue;
+    const content = object(row.content) ? row.content : {};
+    if (flag(content.disabled) === true) continue;
+    if (!validateIndexName(row.name)) names.add(row.name);
+  }
+  const total = object(payload.paging) ? Number(payload.paging.total) : NaN;
+  const sorted = [...names].sort();
+  return {
+    names: sorted.slice(0, MAX_INDEX_SUGGESTIONS),
+    truncated:
+      sorted.length > MAX_INDEX_SUGGESTIONS ||
+      (Number.isFinite(total) && total > payload.entry.length),
+  };
 }
 const object = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -1070,6 +1098,15 @@ export class ToolkitSetupClient implements SetupClient {
     await this.request(path, signal, true, {
       definition: name === "adm_summary_index_name" ? value : `index=${value}`,
     });
+  }
+  async listIndexes(signal?: AbortSignal): Promise<IndexList> {
+    return parseIndexList(
+      await this.request(
+        `data/indexes?count=${MAX_INDEX_SUGGESTIONS}&datatype=all&f=disabled`,
+        signal,
+        false,
+      ),
+    );
   }
   async setBuilderEnabled(
     name: string,

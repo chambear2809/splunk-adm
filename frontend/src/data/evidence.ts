@@ -22,7 +22,14 @@ export type SupplementalSource =
   | "o11y_health"
   | "o11y_detector_events"
   | "appdynamics_inventory"
-  | "thousandeyes";
+  | "thousandeyes"
+  // Ecosystem TA traffic sources (search-time, optional).
+  | "pan_traffic"
+  | "fortigate_traffic"
+  | "f5_ltm_http"
+  | "aws_elb_access"
+  | "azure_vnet_flow"
+  | "gcp_vpc_flow";
 export type OptionalSource = DnsSource | SupplementalSource | MulticastSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {

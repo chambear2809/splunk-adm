@@ -67,7 +67,7 @@ Splunk is required; add sources for the questions you need answered. Full matrix
 
 | Source | What it adds |
 | --- | --- |
-| [Splunk Cloud / Enterprise 10.6+](docs/operators/splunk-platform.md) | Search, summaries, correlation and the Atlas UI |
+| [Splunk Enterprise 10.6.0.5 / Cloud](docs/operators/splunk-platform.md) ([support matrix](docs/operators/SUPPORT_MATRIX.md)) | Search, summaries, correlation and the Atlas UI |
 | [Splunk Stream NetFlow/IPFIX](docs/operators/network-stream.md) | Observed conversations; ACI leaf and port "Seen" |
 | [Stream IPFIX from VMware VDS](docs/operators/network-stream.md#vmware-vds-ipfix) | VDS hop observations on traces and Device pages |
 | [Cisco ACI / APIC classes](docs/operators/aci-network.md) | Endpoints, EPG/BD, fabric links, contracts, ACL-log drops, vPC, L3Out |
@@ -105,10 +105,12 @@ Presenter scripts: [networking SE](docs/demos/NETWORKING_SE.md) · [Splunk SE](d
 | Area | Status |
 | --- | --- |
 | Splunk Enterprise 10.6.0.5 | Lab-qualified with synthetic data (standalone, V2 migration, bounded SHC) |
-| Splunk Cloud 10.6 | Live lab validation, 2026-11 |
+| Splunk Cloud 10.6 | Live lab validation of read-only views, 2026-11; Setup writes, Cases, Baselines and recovery refuse Cloud |
 | Production capacity, customer pilots, Splunk Cloud app vetting | Not yet qualified |
 
-Details: [qualification evidence and limits](docs/ATLAS_FINAL_QUALIFICATION.md) · [optional integrations](docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md).
+Details: [support matrix by feature and platform](docs/operators/SUPPORT_MATRIX.md) · [qualification evidence and limits](docs/ATLAS_FINAL_QUALIFICATION.md) · [optional integrations](docs/OPTIONAL_INTEGRATIONS_QUALIFICATION.md).
+
+**Upgrading?** Atlas now restricts app and derived-lookup read access to the `adm_viewer` role. Existing non-admin users lose access until an administrator grants it; see [Upgrades](docs/UPGRADES.md#action-required-atlas-viewer-role).
 
 ## Links
 

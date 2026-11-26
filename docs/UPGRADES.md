@@ -1,5 +1,19 @@
 # Application Atlas upgrades
 
+## Action required: Atlas viewer role
+
+> **Upgrading to this release removes Atlas access from every user who is not an administrator until you grant the new `adm_viewer` role.** Earlier releases shipped `access = read : [ * ]` for the app and every derived KV collection and lookup. Any user who could open the app could therefore run `| inputlookup` on client MAC/IP/SSID history, identity, interface, service and ACI policy data, whatever their source-index access. This release restricts read on the app, views, macros, lookups and collections to `adm_viewer`, `adm_investigate`, `admin` and `sc_admin`. Write access is unchanged: `admin` and `sc_admin` only.
+
+Before or immediately after updating:
+
+1. List the non-administrators who use Atlas today. Confirm each one is entitled to the complete configured dataset, because derived lookups aggregate every configured source index ([security boundary](SECURITY.md#shared-data-viewer-boundary)).
+2. **Splunk Enterprise:** the app ships `adm_viewer`, and `adm_investigate` inherits it. Add `adm_viewer` to each entitled user, or to an existing reader role's inherited roles, under **Settings > Roles** or **Settings > Users**. Investigators who already hold `adm_investigate` need nothing more.
+3. **Splunk Cloud Platform:** Cloud manages roles only in Splunk Web, so do not rely on the app's `authorize.conf`. An `sc_admin` creates `adm_viewer` (no inheritance, capabilities or indexes) and, if Cases are used, adds `adm_viewer` to the inheritance of `adm_investigate`. Then grant the roles. See [Splunk platform roles](operators/splunk-platform.md#roles-and-kv-store).
+4. Saved-search owners that are not `admin`/`sc_admin` also need `adm_viewer`. Otherwise their scheduled builders can no longer read the app's lookups.
+5. Verify as one granted user and one user without the role: `| inputlookup adm_network_client_history | stats count` must succeed for the first and fail for the second.
+
+Users without the role can no longer see the app. Their direct `storage/collections` reads and lookups in the app namespace are denied. Do not restore `read : [ * ]` in `local.meta` to suppress complaints. The release gate rejects wildcard reads in packaged metadata, and a local override reopens the boundary. Rolling back to an earlier release restores the earlier wildcard read.
+
 For optional DNS/endpoint investigations, follow [DNS disable-first rollback](operators/dns-evidence.md). Keep DNS unselected until every serving search head has the compatible app and the exact target/source acceptance checks pass. Before rollback disable both DNS expectations, cancel investigations, verify native cleanup and retain the complete settings ledger. An older registry may hide unknown DNS source IDs and drop their intent on a later save; automatic reactivation after an old-version save is not guaranteed. No DNS history collection needs migration because evidence is on demand.
 
 Apply an app update over the existing `splunk_adm` installation. Do not use `tests/splunk/lab.sh install` as an upgrade check: that helper removes the app directory first and can hide loss of deployment-local state.

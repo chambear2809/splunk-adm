@@ -126,6 +126,7 @@ class CollaborationPayloadTests(unittest.TestCase):
                 "token",
             )
             self.assertEqual(empty["state"], "absent")
+            self.assertIs(empty["writable"], True)
             saved = collab_rest.handle_request(
                 {
                     "method": "POST",
@@ -141,6 +142,12 @@ class CollaborationPayloadTests(unittest.TestCase):
             self.assertEqual(saved["payload"]["views"][0]["name"], "Shared")
 
             store.writable = False
+            read_only = collab_rest.handle_request(
+                {"method": "GET", "query": [["kind", "views"]]},
+                "token",
+            )
+            self.assertIs(read_only["writable"], False)
+            self.assertEqual(read_only["payload"]["views"][0]["name"], "Shared")
             with self.assertRaises(Forbidden):
                 collab_rest.handle_request(
                     {

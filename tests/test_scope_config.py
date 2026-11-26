@@ -90,7 +90,10 @@ class ScopeConfigTest(unittest.TestCase):
                 r"(?m)^\[" + re.escape(name) + r"\]\naccess = ([^\n]+)", metadata
             )
             self.assertIsNotNone(match)
-            self.assertEqual(match[1], "read : [ * ], write : [ admin, sc_admin ]")
+            self.assertEqual(
+                match[1],
+                "read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]",
+            )
 
     def test_migration_is_disabled_unscheduled_and_owner_dispatched(self):
         saved = configparser.RawConfigParser()

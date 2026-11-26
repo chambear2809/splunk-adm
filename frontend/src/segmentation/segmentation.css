@@ -1,0 +1,125 @@
+.adm .atlas-seg {
+  padding: 1rem;
+  overflow-wrap: anywhere;
+  color: var(--adm-ink, #202a35);
+}
+
+.adm .atlas-seg-header {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.adm .atlas-seg h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+}
+
+.adm .atlas-seg h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.adm .atlas-seg-section {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--adm-line, #ccd2d8);
+}
+
+.adm .atlas-seg-window,
+.adm .atlas-seg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.adm .atlas-seg-window label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+}
+
+.adm .atlas-seg-window input {
+  min-width: 16rem;
+  min-height: 32px;
+}
+
+.adm .atlas-seg-tallies {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.5rem;
+}
+
+.adm .atlas-seg-tally {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--adm-card-border, #8b98a5);
+  border-left-width: 4px;
+}
+
+.adm .atlas-seg-tally.ok {
+  border-left-color: var(--adm-ok-ink, #0f5f2f);
+}
+
+.adm .atlas-seg-tally.blocked {
+  border-left-color: var(--adm-blocked, #d03b3b);
+}
+
+.adm .atlas-seg-tally small,
+.adm .atlas-seg .muted {
+  color: var(--adm-muted, #576576);
+}
+
+.adm .atlas-seg-completeness {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--adm-ok-bg, #e3f4e8);
+  color: var(--adm-ok-ink, #0f5f2f);
+  font-size: 0.85rem;
+}
+
+.adm .atlas-seg-completeness.warn,
+.adm .atlas-seg .warn:not(.chip) {
+  background: var(--adm-warn-bg, #fff2d6);
+  color: var(--adm-warn-ink, #7a4a00);
+}
+
+.adm .atlas-seg-completeness ul,
+.adm .atlas-seg-notes {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.adm .atlas-seg-json {
+  display: block;
+  width: 100%;
+  min-height: 14rem;
+  margin: 0.5rem 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+.adm .atlas-seg-exports {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.25rem;
+}
+
+.adm .atlas-seg table caption {
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .adm .atlas-seg-header {
+    flex-direction: column;
+  }
+  .adm .atlas-seg-window input {
+    min-width: 0;
+    width: 100%;
+  }
+}

@@ -18,6 +18,7 @@ export interface ServerSavedView {
 export interface ViewsDocument {
   revision: string | null;
   views: ServerSavedView[];
+  writable: boolean;
 }
 
 function unwrap(payload: unknown): Record<string, unknown> {
@@ -153,6 +154,7 @@ export class CollaborationClient {
     return {
       revision: typeof content.revision === "string" ? content.revision : null,
       views: viewsOf(content.payload),
+      writable: content.writable === true,
     };
   }
 
@@ -188,6 +190,7 @@ export class CollaborationClient {
             ? content.revision
             : expectedRevision,
       views: viewsOf(content.payload),
+      writable: true,
     };
   }
 }

@@ -4,8 +4,12 @@
 import json
 import re
 import sys
+import time
 
 from adm_baselines_lib.splunk_host import SplunkHost
+from adm_log_lib import log_outcome
+
+HANDLER = "adm_dependency_watch"
 
 MAX_INPUT_BYTES = 64 * 1024
 
@@ -48,10 +52,22 @@ def main(*, stdin=None, stdout=None, configuration=None, host_factory=SplunkHost
     stdin = sys.stdin.buffer if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     configuration = configuration or SplunkHost._execution_configuration
+    started = time.monotonic()
 
-    def emit(state):
+    def emit(state, error=None):
         # Never log the payload, credential, source reference or protected results.
         stdout.write(json.dumps({"status": state}, separators=(",", ":")) + "\n")
+        outcome = {"committed": "ok", "disabled": "refused"}.get(state)
+        if state == "invalid_request":
+            outcome = "refused"
+        log_outcome(
+            HANDLER,
+            started=started,
+            outcome=outcome or "failed",
+            code=state,
+            error=error,
+            exit_code=0 if state == "committed" else 1,
+        )
 
     dispatched = False
     try:
@@ -119,13 +135,13 @@ def main(*, stdin=None, stdout=None, configuration=None, host_factory=SplunkHost
             return 1
         emit("committed")
         return 0
-    except ValueError:
-        emit("unavailable_or_uncertain" if dispatched else "invalid_request")
+    except ValueError as exc:
+        emit("unavailable_or_uncertain" if dispatched else "invalid_request", exc)
         return 1
-    except Exception:
+    except Exception as exc:
         # After dispatch an exception may mean commit-before-response loss. Keep
         # the stable request identity; the executor journal owns reconciliation.
-        emit("unavailable_or_uncertain")
+        emit("unavailable_or_uncertain", exc)
         return 1
 
 

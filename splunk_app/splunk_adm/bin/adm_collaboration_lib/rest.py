@@ -13,7 +13,15 @@ from adm_kv_lib.store import SplunkCollectionStore
 
 from .payload import PayloadError, validate
 
-COLLECTIONS = {"views": "adm_saved_views", "ownership": "adm_business_ownership"}
+COLLECTIONS = {
+    "views": "adm_saved_views",
+    "ownership": "adm_business_ownership",
+    "assertions": "adm_change_assertions",
+}
+OWNED_ROWS = {
+    "views": ("views", "a shared view"),
+    "assertions": ("assertions", "an assertion"),
+}
 MAX_BODY_BYTES = 32 * 1024
 COMPACT_CAPABILITY = "admin_all_objects"
 
@@ -62,7 +70,12 @@ def handle_request(request, token):
     ledger = RecordLedger(store, kind)
     principal = principal_of(store)
     if method == "GET":
-        return ledger.read()
+        result = ledger.read()
+        try:
+            writable = bool(store.allows_write("adm_investigate"))
+        except Exception:
+            writable = False
+        return {**result, "writable": writable}
     raw = request.get("payload", "")
     if isinstance(raw, dict):
         body = raw
@@ -98,36 +111,39 @@ def handle_request(request, token):
     except PayloadError as exc:
         raise Invalid(str(exc)) from exc
     precheck = None
-    if kind == "views":
+    if kind in OWNED_ROWS:
+        rows_key, label = OWNED_ROWS[kind]
 
         def precheck(current_payload):
-            _enforce_view_ownership(current_payload, document, principal)
+            _enforce_row_ownership(
+                current_payload, document, principal, rows_key, label
+            )
 
     return ledger.write(document, expected, request_id, precheck=precheck)
 
 
-def _enforce_view_ownership(current_payload, document, principal):
-    existing_views = (
-        current_payload.get("views", []) if isinstance(current_payload, dict) else []
+def _enforce_row_ownership(current_payload, document, principal, rows_key, label):
+    existing_rows = (
+        current_payload.get(rows_key, []) if isinstance(current_payload, dict) else []
     )
     existing_others = {
         row["id"]: row
-        for row in existing_views
+        for row in existing_rows
         if isinstance(row, dict)
         and isinstance(row.get("id"), str)
         and row.get("owner") != principal
     }
     seen_other_ids = set()
-    for row in document["views"]:
+    for row in document[rows_key]:
         if row["owner"] != principal:
             prior = existing_others.get(row["id"])
             if prior != row:
                 raise Forbidden(
-                    "Cannot create or modify a shared view owned by another user."
+                    "Cannot create or modify " + label + " owned by another user."
                 )
             seen_other_ids.add(row["id"])
     if seen_other_ids != set(existing_others):
-        raise Forbidden("Cannot delete a shared view owned by another user.")
+        raise Forbidden("Cannot delete " + label + " owned by another user.")
 
 
 def error_body(exc):

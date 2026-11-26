@@ -1,7 +1,7 @@
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import { loadVersionedAssetPair } from "./optionalAssetLoader";
-import { routingScope } from "./data/evidence";
+import { literal, normalizeIp, routingScope } from "./data/evidence";
 import {
   requireNoSearchErrors,
   SearchAccessDeniedError,
@@ -9,11 +9,13 @@ import {
 import { validateIndexName } from "./data/deploymentHealth";
 import { optionalJobs } from "./data/optionalJobs";
 import type { ChangeTimelineInspectionProps } from "./changeCorrelation/ChangeTimelineInspection";
+import type { CmdbWorkspaceProps } from "./cmdb/CmdbWorkspace";
 
 type Runtime = typeof globalThis & {
   ApplicationAtlasHistory?: {
     assetVersion: string;
     ChangeTimelineInspection: React.ComponentType<ChangeTimelineInspectionProps>;
+    CmdbWorkspace: React.ComponentType<CmdbWorkspaceProps>;
   };
   __AtlasHistoryHost?: unknown;
   __ADM_FORCE_SPLUNK_BUILD__?: boolean;
@@ -27,6 +29,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
     return import("./history-entry").then((module): HistoryUi => ({
       assetVersion: "development",
       ChangeTimelineInspection: module.ChangeTimelineInspection,
+      CmdbWorkspace: module.CmdbWorkspace,
     }));
   if (pending) return pending;
   if (!runtime.__AtlasHistoryHost)
@@ -34,7 +37,7 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       value: Object.freeze({
         react: React,
         jsxRuntime,
-        evidence: Object.freeze({ routingScope }),
+        evidence: Object.freeze({ literal, normalizeIp, routingScope }),
         searchClient: Object.freeze({
           requireNoSearchErrors,
           SearchAccessDeniedError,
@@ -51,7 +54,8 @@ export function loadHistoryUi(): Promise<HistoryUi> {
       const ui = runtime.ApplicationAtlasHistory;
       return (
         ui?.assetVersion === __ADM_HISTORY_ASSET_VERSION__ &&
-        typeof ui.ChangeTimelineInspection === "function"
+        typeof ui.ChangeTimelineInspection === "function" &&
+        typeof ui.CmdbWorkspace === "function"
       );
     },
   })

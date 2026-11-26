@@ -10,6 +10,34 @@ Python unit tests and the upgrade metadata/ACL unit tests. A Chromium job runs
 mock-SDK harness. The full package-update and paced-ingestion checks remain
 explicit local lab runs; see [upgrades](UPGRADES.md) and [continuous load](CONTINUOUS_LOAD.md).
 
+The frontend job's AppInspect gate pins `splunk-appinspect==4.4.0` and runs one
+precert inspection of the exact packaged archive with the `cloud`,
+`private_victoria` (the tag Splunk Cloud vetting reports) and `private_classic`
+tags. The step fails if the pinned version stops providing any of these tags.
+See [Splunk Cloud vetting](CLOUD_VETTING.md) for the current warning
+dispositions.
+
+Supply-chain jobs also run on every push and pull request with read-only
+`contents` permission:
+
+- **Go receiver checks** run `go mod verify`, `go vet ./...` and `go test ./...`
+  in `integrations/otel_atlas_receiver`, using the Go version from its `go.mod`.
+- **Dependency audits** run `npm audit --omit=dev --audit-level=high` against the
+  lockfile and `pip-audit --strict` (pinned) over every `tools/requirements*.txt`.
+- **Secret scan** downloads gitleaks 8.30.1, verifies the release SHA-256 before
+  extracting it and scans the full git history with redacted output. Reviewed
+  false positives are listed by exact fingerprint in `.gitleaksignore`; new
+  findings fail. Add a fingerprint only after reviewing the redacted finding, and
+  never suppress a rule or path wholesale. A real secret must be rotated, not
+  ignored.
+- **CodeQL** (`.github/workflows/codeql.yml`) analyses first-party
+  JavaScript/TypeScript and Python weekly and on pushes and pull requests. Only
+  that job receives `security-events: write`, which code-scanning upload needs.
+  Vendored TA releases, the bundled Splunk SDK, built static bundles and the
+  `vendor/` submodule are excluded.
+
+All actions are pinned to full commit SHAs resolved from their release tags.
+
 The Splunk integration suite runs when `run_splunk_lab` is selected from the
 Actions **Run workflow** form on the repository's default branch. After the runner
 is provisioned, set repository variable `ADM_SPLUNK_LAB_ENABLED=true` to also run

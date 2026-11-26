@@ -33,6 +33,7 @@ function fixture({
   appd = false,
   appdIndexDefinition = "index=atlas_asset",
   thousandeyes = false,
+  firewall = false,
   teBindings = "[]",
   detectorIds = '["detector-1"]',
   controllerOrigin = "https://controller.example.test",
@@ -54,6 +55,10 @@ function fixture({
   if (detector) settings.sources.o11y_detector_events.state = "active";
   if (appd) settings.sources.appdynamics_inventory.state = "staged";
   if (thousandeyes) settings.sources.thousandeyes.state = "active";
+  if (firewall) {
+    settings.sources.pan_traffic.state = "active";
+    settings.sources.fortigate_traffic.state = "staged";
+  }
   const deployment: DeploymentClient = {
     read: async () => ({
       state: "configured",
@@ -161,6 +166,26 @@ function fixture({
           },
         ]
       : []),
+    ...(firewall
+      ? [
+          {
+            _key: "pan",
+            observer_kind: "pan_firewall",
+            observer: "pa-fw-01",
+            scope: "prod",
+            cluster: "",
+            mapping_status: "verified",
+          },
+          {
+            _key: "fortigate",
+            observer_kind: "fortigate_firewall",
+            observer: "fgt-edge-01",
+            scope: "prod",
+            cluster: "",
+            mapping_status: "verified",
+          },
+        ]
+      : []),
   ];
   const fetcher = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -200,6 +225,10 @@ function fixture({
           adm_appdynamics_inventory_schema_qualified: "0",
           adm_index_thousandeyes: "index=atlas_te",
           adm_thousandeyes_schema_qualified: "0",
+          adm_index_pan: "index=pan",
+          adm_pan_traffic_schema_qualified: "0",
+          adm_index_fortigate: "(index=fortigate OR index=fortigate_dr)",
+          adm_fortigate_traffic_schema_qualified: "0",
         };
         body = {
           settings: [
@@ -271,6 +300,31 @@ function fixture({
   };
 }
 describe("caller-context evidence configuration", () => {
+  it("resolves ecosystem firewall sources through their own index, schema and observer kinds", async () => {
+    const config = await fixture({ active: false, firewall: true }).client.read(
+      undefined,
+      [],
+      "prod",
+    );
+    expect(
+      config.supplemental?.find((source) => source.source === "pan_traffic"),
+    ).toMatchObject({
+      state: "active",
+      indexes: ["pan"],
+      authorities: ["pa-fw-01"],
+      schemaQualified: false,
+    });
+    expect(
+      config.supplemental?.find(
+        (source) => source.source === "fortigate_traffic",
+      ),
+    ).toMatchObject({
+      state: "staged",
+      indexes: ["fortigate", "fortigate_dr"],
+      authorities: ["fgt-edge-01"],
+      schemaQualified: false,
+    });
+  });
   it("projects ThousandEyes identity and historical binding fields through shared app reads", async () => {
     const { client, fetcher } = fixture({ active: false, thousandeyes: true });
     const config = await client.read(undefined, [], "prod");

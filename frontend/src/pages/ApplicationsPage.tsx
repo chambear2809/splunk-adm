@@ -1,5 +1,6 @@
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { ControllerCatalogSection } from "../AppDynamicsCatalog";
+import { CmdbSection } from "../cmdb/CmdbSection";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ButtonExport from "@splunk/react-ui/Button";
 import Table from "../SimpleTable";
@@ -753,6 +754,8 @@ export function ApplicationsPage({
       </div>
       <div className="atlas-explore-tools" aria-label="Investigate">
         <TracePathForm
+          live={state.mode === "live"}
+          client={client}
           key={traceRequest ? `${traceRequest.src}>${traceRequest.dst}` : ""}
           initial={traceRequest}
           onSubmit={(src, dst, scope) =>
@@ -1053,6 +1056,13 @@ export function ApplicationsPage({
           <summary>AppDynamics applications</summary>
           <ControllerCatalogSection state={state} client={client} />
         </details>
+      )}
+      {state.mode === "live" && client && (
+        <CmdbSection
+          client={client}
+          catalog={catalog}
+          catalogWarning={error ?? catalogWarning}
+        />
       )}
     </main>
   );

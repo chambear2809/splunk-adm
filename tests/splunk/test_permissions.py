@@ -139,6 +139,7 @@ class RestrictedViewerTest(unittest.TestCase):
             {
                 "name": cls.role,
                 "capabilities": "search",
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": ALLOWED_INDEXES,
                 "srchIndexesDisallowed": ["_internal", "_audit"],
             },
@@ -385,7 +386,7 @@ class RestrictedViewerTest(unittest.TestCase):
         imported = role_content.get(
             "importedRoles", role_content.get("imported_roles", [])
         )
-        self.assertIn(imported, ([], ""))
+        self.assertIn(imported, (["adm_viewer"], "adm_viewer"))
         capabilities = role_content.get("capabilities", [])
         if isinstance(capabilities, str):
             capabilities = [item for item in capabilities.split(",") if item]
@@ -616,6 +617,22 @@ class RestrictedViewerTest(unittest.TestCase):
             "application/json",
         )
         self.assertEqual(self.lab._json("GET", collection), before)
+
+    def test_role_without_adm_viewer_cannot_read_derived_lookups(self):
+        role_path = f"/services/authorization/roles/{self.role}"
+        self.lab._json("POST", role_path, {"imported_roles": ""})
+        self.addCleanup(
+            self.lab._json, "POST", role_path, {"imported_roles": "adm_viewer"}
+        )
+        for name in ("adm_network_client_history", "adm_ip_identity"):
+            with self.subTest(collection=name):
+                status, _ = self._viewer_json(
+                    "GET",
+                    f"/servicesNS/nobody/{APP}/storage/collections/data/{name}",
+                )
+                self.assertIn(status, (403, 404))
+                with self.assertRaises(SearchRejected):
+                    self._viewer_search(f"| inputlookup {name} | stats count", 0, "now")
 
     def test_optional_integration_mapping_projection_and_viewer_acl(self):
         collection = (

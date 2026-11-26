@@ -4,7 +4,9 @@ import { activeFacetCount } from "../map/FilterBar";
 import {
   DeviceLookup,
   deviceURL,
+  MAX_TRACE_SUGGESTIONS,
   TracePathForm,
+  traceSuggestions,
   traceURL,
 } from "./ExploreTools";
 
@@ -46,6 +48,43 @@ describe("Explore placeholders", () => {
     expect(trace).toMatch(/<button[^>]*disabled[^>]*>Trace<\/button>/);
     const device = renderToStaticMarkup(<DeviceLookup />);
     expect(device).toContain('aria-label="Device name or ID"');
+  });
+
+  it("suggests loaded map endpoints, selected node first, without a search", () => {
+    const nodes = [
+      { id: "a", label: "win-client-01", addresses: ["10.0.0.5"] },
+      { id: "b", label: "orders-db-01", addresses: ["10.0.0.9", "bad value"] },
+    ];
+    expect(traceSuggestions(nodes, "b")).toEqual([
+      "10.0.0.9",
+      "orders-db-01",
+      "10.0.0.5",
+      "win-client-01",
+    ]);
+    expect(traceSuggestions(nodes, undefined, 3)).toHaveLength(3);
+    const many = Array.from({ length: 200 }, (_, i) => ({
+      id: String(i),
+      label: `host-${i}`,
+    }));
+    expect(traceSuggestions(many)).toHaveLength(MAX_TRACE_SUGGESTIONS);
+  });
+
+  it("renders trace endpoints as collapsed list-autocomplete comboboxes", () => {
+    const html = renderToStaticMarkup(
+      <TracePathForm suggestions={["10.0.0.5", "orders-db-01"]} />,
+    );
+    expect(html.match(/role="combobox"/g)).toHaveLength(2);
+    expect(html.match(/aria-autocomplete="list"/g)).toHaveLength(2);
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(2);
+    expect(html).not.toContain("datalist");
+    expect(html).not.toContain("aria-activedescendant");
+    expect(html).toContain('class="atlas-combobox atlas-trace-src"');
+    expect(html).toContain('class="atlas-combobox atlas-trace-dst"');
+    expect(html).toContain("atlas-trace-scope");
+    const device = renderToStaticMarkup(
+      <DeviceLookup suggestions={[{ value: "leaf-101" }]} />,
+    );
+    expect(device).toContain('role="combobox"');
   });
 
   it("counts active map facets for the Filters button", () => {

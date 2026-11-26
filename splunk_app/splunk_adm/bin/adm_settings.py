@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 import sys
+import time
 
 from splunk.persistconn.application import PersistentServerConnectionApplication
 
@@ -12,8 +13,12 @@ from splunk.persistconn.application import PersistentServerConnectionApplication
 APP_BIN = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_BIN))
 
+from adm_log_lib import log_response  # noqa: E402
 from adm_settings_lib import SettingsError  # noqa: E402
 from adm_settings_lib.rest import SplunkStore, handle_request, source_ids  # noqa: E402
+
+
+HANDLER = "adm_deployment_settings"
 
 
 class SettingsHandler(PersistentServerConnectionApplication):
@@ -21,31 +26,50 @@ class SettingsHandler(PersistentServerConnectionApplication):
         super().__init__()
 
     def handle(self, in_string):
+        started = time.monotonic()
+        request = None
         try:
             request = json.loads(in_string)
             token = request.get("session", {}).get("authtoken")
             if not isinstance(token, str) or not token:
                 raise SettingsError(401, "forbidden", "Authentication is required.")
             result = handle_request(request, SplunkStore(token), source_ids())
-            return {
-                "status": 200,
-                "payload": result,
-                "headers": {"Cache-Control": "no-store"},
-            }
+            return log_response(
+                HANDLER,
+                {
+                    "status": 200,
+                    "payload": result,
+                    "headers": {"Cache-Control": "no-store"},
+                },
+                started=started,
+                request=request,
+            )
         except SettingsError as exc:
-            return {
-                "status": exc.status,
-                "payload": {"code": exc.code, "error": str(exc)},
-                "headers": {"Cache-Control": "no-store"},
-            }
-        except Exception:
+            return log_response(
+                HANDLER,
+                {
+                    "status": exc.status,
+                    "payload": {"code": exc.code, "error": str(exc)},
+                    "headers": {"Cache-Control": "no-store"},
+                },
+                started=started,
+                request=request,
+                error=exc,
+            )
+        except Exception as exc:
             # Never serialize exception details: Splunk exceptions may contain a
             # request, session token, or internal deployment details.
-            return {
-                "status": 503,
-                "payload": {
-                    "code": "unavailable",
-                    "error": "Deployment settings are unavailable; verify permissions and persistence health.",
+            return log_response(
+                HANDLER,
+                {
+                    "status": 503,
+                    "payload": {
+                        "code": "unavailable",
+                        "error": "Deployment settings are unavailable; verify permissions and persistence health.",
+                    },
+                    "headers": {"Cache-Control": "no-store"},
                 },
-                "headers": {"Cache-Control": "no-store"},
-            }
+                started=started,
+                request=request,
+                error=exc,
+            )

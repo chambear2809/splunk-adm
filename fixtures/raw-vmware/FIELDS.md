@@ -42,6 +42,7 @@ The writer and format are the same as the ACI fixtures (`fixtures/raw-aci/FIELDS
 | `hypervisor_name hypervisor_id ip datacenter cluster` (host) | `bin/inventory_handlers.py:93-102,171-187` | verified |
 | `vm_id vm_name hypervisor_os_version cluster`, `changeSet.summary.runtime.host.{uuid,name}` (VM) | `bin/inventory_handlers.py:137-165` | verified |
 | `changeSet.guest.net.GuestNicInfo{}.macAddress` | `TA-VMW-FieldExtractions/default/props.conf:115` (FIELDALIAS `mac`) | verified path |
+| `changeSet.guest.ipAddress` (primary guest IP; move-group VM names), `cluster.name` | `TA-VMW-FieldExtractions/default/props.conf:115` (FIELDALIAS `ip`, `cluster_name`), TA-VMW-FieldExtractions 4.0.4 ([Splunkbase 5641](https://splunkbase.splunk.com/app/5641)) | verified path |
 | `config.network.{pnic.PhysicalNic, vswitch.HostVirtualSwitch, portgroup.HostPortGroup, proxySwitch.HostProxySwitch}` members `device mac key name spec.vlanId spec.vswitchName dvsUuid dvsName uplinkPort` | vSphere API `HostNetworkInfo` | **unverified** |
 | `config.hardware.device.VirtualDevice{}` `macAddress backing.port.{switchUuid,portgroupKey,portKey}` / `backing.deviceName` | vSphere API `VirtualEthernetCard` | **unverified** |
 | `guest.net.GuestNicInfo{}` `network ipAddress deviceConfigId` | vSphere API `GuestNicInfo` | **unverified** (only `macAddress` is TA-grounded) |
