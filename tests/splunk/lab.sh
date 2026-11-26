@@ -58,6 +58,12 @@ if [[ -n "$TASK" ]]; then
   unset DOCKER_CONTEXT
 fi
 
+# When invoked under a host resource lease, verify the active allocation still
+# matches this lab's identity, ports, and credentials before any lifecycle action.
+if [[ -n "${SPLUNK_ADM_RESOURCE_LEASE_ID:-}" || -n "${SPLUNK_ADM_RESOURCE_LEASE_TOKEN:-}" ]]; then
+  python3 "$ROOT/tools/lab_resources.py" verify-active
+fi
+
 
 verify_owned() {
   [[ -z "$TASK" ]] || py verify-target
