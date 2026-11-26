@@ -174,8 +174,11 @@ describe("executeConnectedQuery", () => {
         };
       }),
     };
-    await expect(
-      executeConnectedQuery(spec, provenance, transport),
-    ).resolves.toBeDefined();
+    const evidence = await executeConnectedQuery(spec, provenance, transport);
+    expect(evidence.args).toEqual(application);
+    expect(evidence.window).toEqual({
+      ...spec.window,
+      basis: "source_time",
+    });
   });
 });
