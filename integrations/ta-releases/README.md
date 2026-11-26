@@ -1,6 +1,8 @@
-# Atlas TA release snapshots
+# Atlas TA release snapshots (historical / deprecated)
 
-`20261031-r1/` preserves our exact deployed AppDynamics 3.3.0 and Cisco DC Networking 1.2.2 modifications. These are Atlas builds based on those vendor versions, not official vendor releases.
+> **Deprecated — retained for rollback/audit only:** Application Atlas now targets official, unmodified Splunkbase add-ons — **Cisco DC Networking 2.0.10 (Splunkbase 7777)** and **Splunk Add-on for AppDynamics 3.3.0 (Splunkbase 3471)**. See [`docs/operators/official-splunkbase-tas.md`](../../docs/operators/official-splunkbase-tas.md) for the supported official-TA configuration. Do **not** deploy these historical modified vendor builds on new environments; these snapshots remain in the repository solely for audit and rollback until live validation completes and removal is explicitly approved.
+
+`20261031-r1/` preserves our historical deployed AppDynamics 3.3.0 and Cisco DC Networking 1.2.2 modifications. These are Atlas builds based on those vendor versions, not official vendor releases.
 
 Each release contains a `manifest.json` and `files/` with every added or changed package file, including configuration defaults and embedded Atlas source. Apply the listed additions/replacements to the pinned vendor archive to recover the deployed file contents. No vendor files were deleted. The manifest records archive modes and SHA-256 checksums. These source snapshots can be versioned with this project; no commit has been made.
 

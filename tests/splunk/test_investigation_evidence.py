@@ -163,6 +163,7 @@ class InstalledInvestigationEvidenceTest(unittest.TestCase):
                 {
                     "name": role,
                     "capabilities": ["search", "adm_investigate"],
+                    "imported_roles": "adm_viewer",
                     "srchIndexesAllowed": INDEXES,
                     "srchIndexesDefault": INDEXES,
                     "srchFilter": source_filter,
@@ -174,6 +175,7 @@ class InstalledInvestigationEvidenceTest(unittest.TestCase):
                 "/services/authorization/roles/" + role,
                 {
                     "capabilities": ["search", "adm_investigate"],
+                    "imported_roles": "adm_viewer",
                     "srchIndexesAllowed": INDEXES,
                     "srchIndexesDefault": INDEXES,
                     "srchFilter": source_filter,

@@ -64,13 +64,30 @@ class DemoCatalogGroundingTest(unittest.TestCase):
         self.assertTrue(path.exists(), f"missing real capture: {path}")
         return json.loads(path.read_text())
 
+    def _assert_macro_provenance(self, provenance):
+        current = macro_hashes()
+        captured = provenance["macro_definitions"]
+        compat = provenance.get("reviewed_macro_compatibility")
+        if compat is None:
+            self.assertEqual(captured, current)
+            return
+        self.assertEqual(compat["captured_macro_definitions"], captured)
+        self.assertEqual(compat["method"], "static review only; no recapture")
+        self.assertTrue(compat["reason"])
+        self.assertEqual(compat["reviewed_macro_definitions"], current)
+        modified = set(compat["modified_macros"])
+        self.assertTrue(modified)
+        for name, digest in captured.items():
+            if name not in modified:
+                self.assertEqual(current.get(name), digest, name)
+
     def test_catalog_capture_schema_and_provenance(self):
         p = self.payload("demo-catalog.json")
         self.assertEqual(p["search"], "| `adm_catalog_build`")
         self.assertTrue(p["rows"])
         self.assertEqual(list(p["rows"][0]), CATALOG_FIELDS)
         self.assertEqual(p["provenance"]["schema"], CATALOG_FIELDS)
-        self.assertEqual(p["provenance"]["macro_definitions"], macro_hashes())
+        self._assert_macro_provenance(p["provenance"])
         self.assertTrue(p["provenance"].get("macro_sha256"))
         self.assertTrue(p["provenance"].get("input_fields"))
         for row in p["rows"]:
@@ -96,7 +113,7 @@ class DemoCatalogGroundingTest(unittest.TestCase):
     def test_find_capture_has_positive_grounded_queries(self):
         p = self.payload("demo-find.json")
         self.assertTrue(p["queries"])
-        self.assertEqual(p["provenance"]["macro_definitions"], macro_hashes())
+        self._assert_macro_provenance(p["provenance"])
         for query in p["queries"]:
             self.assertTrue(query["query"])
             self.assertTrue(query["search"].startswith('| `adm_find("'))

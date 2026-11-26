@@ -341,3 +341,114 @@ def resolve_context(rows, profile, bindings, *, start, as_of, now):
     ):
         raise SearchError("ACI context output byte cap exceeded.")
     return result
+
+
+def resolve_official_bd_vrf_context(raw_events, *, expected_apic_host):
+    """Resolve EPG -> BD -> VRF relations from official DC Networking 2.0.10 classInfo JSON.
+
+    Requires operators to include fvRsBd, fvBD, fvRsCtx, and fvCtx in the official
+    cisco_nexus_aci classInfo apic_arguments list (DC Networking 2.0.10 has no
+    fvRsCtx preset). Single-pass snapshots cannot prove atomic two-pass completeness;
+    the result records qualification='unverified_single_pass' and fails closed on
+    unformed relations or missing targets.
+    """
+    from .reader import normalize_apic_host, parse_official_class_event
+    from .schema import (
+        OFFICIAL_DCN_CLASSINFO_SOURCETYPE,
+        OFFICIAL_DCN_SPLUNKBASE_ID,
+        OFFICIAL_DCN_VERSION,
+    )
+
+    expected_host = normalize_apic_host(expected_apic_host)
+    latest: dict[tuple[str, str], dict] = {}
+    for raw in raw_events:
+        parsed = parse_official_class_event(raw)
+        if parsed["apic_host"] != expected_host:
+            raise SearchError("ACI official classInfo apic_host mismatch.")
+        key = (parsed["class"], parsed["dn"])
+        prior = latest.get(key)
+        if prior is None:
+            latest[key] = parsed
+            continue
+        ts, prior_ts = parsed["event_timestamp"], prior["event_timestamp"]
+        if ts == prior_ts:
+            if prior["attributes"] != parsed["attributes"]:
+                raise SearchError("Conflicting official ACI classInfo records.")
+            continue
+        if prior_ts is None or (ts is not None and ts > prior_ts):
+            latest[key] = parsed
+
+    bds = {
+        dn: item
+        for (cls, dn), item in latest.items()
+        if cls == "fvBD"
+    }
+    vrfs = {
+        dn: item
+        for (cls, dn), item in latest.items()
+        if cls == "fvCtx"
+    }
+    bd_to_vrf: dict[str, dict] = {}
+    for (cls, dn), item in latest.items():
+        if cls != "fvRsCtx":
+            continue
+        if not dn.endswith("/rsctx"):
+            raise SearchError("Invalid fvRsCtx DN hierarchy.")
+        bd_dn = dn[: -len("/rsctx")]
+        attrs = item["attributes"]
+        if attrs.get("state") != "formed" or not isinstance(attrs.get("tDn"), str) or not attrs["tDn"]:
+            raise SearchError("Unresolved fvRsCtx relation.")
+        vrf_dn = attrs["tDn"]
+        if bd_dn not in bds or vrf_dn not in vrfs:
+            raise SearchError("Missing fvBD or fvCtx target for fvRsCtx.")
+        bd_to_vrf[bd_dn] = {
+            "bd_dn": bd_dn,
+            "bd_name": bds[bd_dn]["attributes"].get("name") or bd_dn.rsplit("/BD-", 1)[-1],
+            "vrf_dn": vrf_dn,
+            "vrf_name": vrfs[vrf_dn]["attributes"].get("name") or vrf_dn.rsplit("/ctx-", 1)[-1],
+            "rsctx_dn": dn,
+            "observed_at": item["event_timestamp"],
+        }
+
+    epg_mappings = []
+    for (cls, dn), item in latest.items():
+        if cls != "fvRsBd":
+            continue
+        if not dn.endswith("/rsbd"):
+            raise SearchError("Invalid fvRsBd DN hierarchy.")
+        epg_dn = dn[: -len("/rsbd")]
+        attrs = item["attributes"]
+        if attrs.get("state") != "formed" or not isinstance(attrs.get("tDn"), str) or not attrs["tDn"]:
+            raise SearchError("Unresolved fvRsBd relation.")
+        bd_dn = attrs["tDn"]
+        if bd_dn not in bd_to_vrf:
+            raise SearchError("Bridge domain has no verified fvRsCtx mapping.")
+        entry = bd_to_vrf[bd_dn]
+        epg_mappings.append(
+            {
+                "epg_dn": epg_dn,
+                "bd_dn": bd_dn,
+                "bd_name": entry["bd_name"],
+                "vrf_dn": entry["vrf_dn"],
+                "vrf_name": entry["vrf_name"],
+                "rsbd_dn": dn,
+                "rsctx_dn": entry["rsctx_dn"],
+            }
+        )
+    epg_mappings.sort(key=lambda row: row["epg_dn"])
+    return {
+        "schema": "application_atlas.aci_network_context.v1",
+        "qualification": "unverified_single_pass",
+        "source_mode": "official_dc_networking_classinfo",
+        "traversal": "not_observed",
+        "ta": "cisco_dc_networking_app_for_splunk",
+        "ta_version": OFFICIAL_DCN_VERSION,
+        "splunkbase_id": OFFICIAL_DCN_SPLUNKBASE_ID,
+        "sourcetype": OFFICIAL_DCN_CLASSINFO_SOURCETYPE,
+        "apic_host": expected_host,
+        "bd_vrf_count": len(bd_to_vrf),
+        "epg_mapping_count": len(epg_mappings),
+        "bd_vrf_mappings": [bd_to_vrf[k] for k in sorted(bd_to_vrf)],
+        "epg_mappings": epg_mappings,
+    }
+

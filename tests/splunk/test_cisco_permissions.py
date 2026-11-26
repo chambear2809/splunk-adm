@@ -102,6 +102,7 @@ class CiscoV2RestrictedViewerTest(unittest.TestCase):
             {
                 "name": cls.role,
                 "capabilities": "search",
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": V2_ALLOWED_INDEXES,
                 "srchIndexesDisallowed": ["_internal", "_audit"],
             },

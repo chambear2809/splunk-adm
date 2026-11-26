@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import math
 import re
@@ -12,6 +13,11 @@ from .fabric import project_fabric_snapshot
 
 SOURCE = "atlas:aci_poll"
 SOURCETYPE = "adm:aci_poll:v1"
+OFFICIAL_CLASSINFO_SOURCETYPE = "cisco:dc:aci:class"
+OFFICIAL_METADATA_KEYS = frozenset(
+    {"event_timestamp", "apic_host", "actual_host", "component"}
+)
+_APIC_HOST_PORT443 = re.compile(r"^(?:\[[^\]]+\]|[^:]+):443\Z")
 MAX_ROWS = 10_001
 MAX_RAW_BYTES = 1024 * 1024
 MAX_TOTAL_BYTES = 16 * 1024 * 1024
@@ -337,3 +343,74 @@ def read_fabric_snapshot(rows, profile, start, as_of, now):
     )
     encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"))
     return [{"row_type": "aci_fabric_snapshot", "snapshot": encoded}]
+
+
+def normalize_apic_host(value: str) -> str:
+    """Normalize APIC host matching Cisco DC Networking 2.0.10 EVAL-apic_host."""
+    if not isinstance(value, str):
+        raise ValueError("invalid_apic_host")
+    cleaned = value.strip().lower()
+    if not cleaned:
+        raise ValueError("invalid_apic_host")
+    if _APIC_HOST_PORT443.fullmatch(cleaned):
+        cleaned = cleaned[:-4]
+    return cleaned
+
+
+def _parse_iso_utc(value: object) -> float | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("invalid_event_timestamp")
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    dt = datetime.fromisoformat(text)
+    if dt.tzinfo is None:
+        raise ValueError("naive_event_timestamp")
+    return dt.astimezone(timezone.utc).timestamp()
+
+
+def parse_official_class_event(raw: str | dict) -> dict:
+    """Parse one official Cisco DC Networking 2.0.10 cisco:dc:aci:class JSON event.
+
+    DC Networking 2.0.10 serializes classInfo events as compact JSON with
+    top-level APIC object attributes plus event_timestamp, apic_host,
+    actual_host, and component.
+    """
+    if isinstance(raw, str):
+        if len(raw.encode("utf-8")) > MAX_RAW_BYTES:
+            raise ValueError("event_bytes_exceed_bound")
+        payload = json.loads(raw, object_pairs_hook=unique_object)
+    elif isinstance(raw, dict):
+        payload = raw
+    else:
+        raise ValueError("invalid_official_aci_event")
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_official_aci_event")
+    component = payload.get("component")
+    if not isinstance(component, str) or not re.fullmatch(
+        r"[A-Za-z][A-Za-z0-9_-]{0,127}", component
+    ):
+        raise ValueError("invalid_aci_component")
+    dn = payload.get("dn")
+    if not isinstance(dn, str) or not dn or any(ord(c) < 32 or ord(c) == 127 for c in dn):
+        raise ValueError("invalid_aci_dn")
+    apic_host = normalize_apic_host(payload.get("apic_host", ""))
+    actual_raw = payload.get("actual_host")
+    actual_host = normalize_apic_host(actual_raw) if isinstance(actual_raw, str) and actual_raw.strip() else None
+    event_ts = _parse_iso_utc(payload.get("event_timestamp"))
+    attributes = {
+        key: value
+        for key, value in payload.items()
+        if key not in OFFICIAL_METADATA_KEYS
+    }
+    return {
+        "class": component,
+        "dn": dn,
+        "apic_host": apic_host,
+        "actual_host": actual_host,
+        "event_timestamp": event_ts,
+        "attributes": attributes,
+    }
+

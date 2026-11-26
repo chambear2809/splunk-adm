@@ -763,12 +763,16 @@ def _check_collaboration_contract(files, rest, web):
     collections = _packaged_config(files, "default/collections.conf")
     ledger_fields = {
         "field.format": "number",
+        "field.epoch": "number",
+        "field.epoch_root": "bool",
+        "field.seal": "bool",
         "field.kind": "string",
         "field.previous_revision": "string",
         "field.request_id": "string",
         "field.operation_fingerprint": "string",
         "field.revision": "string",
         "field.payload_json": "string",
+        "accelerated_fields.epoch": '{"epoch": 1, "epoch_root": 1}',
         "replicate": "false",
     }
     for name in ("adm_saved_views", "adm_business_ownership", "adm_change_assertions"):

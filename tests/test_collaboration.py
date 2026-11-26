@@ -282,6 +282,117 @@ class CollaborationPayloadTests(unittest.TestCase):
                 )
         self.assertEqual(len(store.rows), 1)
 
+    def test_assertions_kind_writable_flag_and_head_only_store_path(self):
+        rows = []
+        calls = []
+        state = {"writable": True, "admin": False}
+
+        class HeadOnlyStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+                self.collection = collection
+
+            def allows_write(self, capability):
+                if capability == "admin_all_objects":
+                    return state["admin"]
+                return state["writable"]
+
+            def scan(self, limit):
+                raise AssertionError("full scan must not be called")
+
+            def scan_metadata(self, limit):
+                calls.append(("scan_metadata", limit))
+                meta_keys = {
+                    "_key",
+                    "format",
+                    "epoch",
+                    "epoch_root",
+                    "seal",
+                    "kind",
+                    "previous_revision",
+                    "request_id",
+                    "operation_fingerprint",
+                    "revision",
+                }
+                return [
+                    {k: v for k, v in r.items() if k in meta_keys}
+                    for r in sorted(rows, key=lambda r: r["_key"])[:limit]
+                ]
+
+            def get(self, key):
+                calls.append(("get", key))
+                for r in rows:
+                    if r["_key"] == key:
+                        return dict(r)
+                return None
+
+            def insert(self, document):
+                if any(r["_key"] == document["_key"] for r in rows):
+                    raise RuntimeError("duplicate")
+                rows.append(dict(document))
+
+            def delete_many(self, keys):
+                calls.append(("delete_many", list(keys)))
+                ks = set(keys)
+                rows[:] = [r for r in rows if r["_key"] not in ks]
+
+        assertion = {
+            "id": "a1",
+            "name": "Payments calls Auth",
+            "owner": "alice",
+            "kind": "reaches",
+            "scope": "fabric-a",
+            "src": "10.0.0.1",
+            "dst": "10.0.0.2",
+            "transport": "tcp",
+            "port": 443,
+        }
+        with (
+            patch.object(collab_rest, "SplunkCollectionStore", HeadOnlyStore),
+            patch.object(collab_rest, "principal_of", return_value="alice"),
+        ):
+            written = collab_rest.handle_request(
+                {
+                    "method": "POST",
+                    "query": [["kind", "assertions"]],
+                    "payload": {
+                        "expectedRevision": None,
+                        "requestId": "req-a1",
+                        "payload": {"assertions": [assertion]},
+                    },
+                },
+                "token",
+            )
+            self.assertEqual(written["state"], "configured")
+            calls.clear()
+            got = collab_rest.handle_request(
+                {"method": "GET", "query": [["kind", "assertions"]]}, "token"
+            )
+            self.assertTrue(got["writable"])
+            self.assertEqual(len(got["payload"]["assertions"]), 1)
+            self.assertEqual([c[0] for c in calls], ["scan_metadata", "get"])
+
+            state["writable"] = False
+            got_ro = collab_rest.handle_request(
+                {"method": "GET", "query": [["kind", "assertions"]]}, "token"
+            )
+            self.assertFalse(got_ro["writable"])
+
+            # Non-admin cannot compact.
+            with self.assertRaises(Forbidden):
+                collab_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "query": [["kind", "assertions"]],
+                        "payload": {
+                            "action": "compact",
+                            "expectedRevision": written["committedRevision"],
+                            "requestId": "req-c1",
+                        },
+                    },
+                    "token",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

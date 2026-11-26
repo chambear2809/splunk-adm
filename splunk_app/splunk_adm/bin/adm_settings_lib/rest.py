@@ -9,6 +9,8 @@ from . import SettingsError, SettingsService, canonical, digest
 APP = "/servicesNS/nobody/splunk_adm"
 COLLECTION = APP + "/storage/collections/data/adm_deployment_settings"
 QUALIFIED_VERSIONS = frozenset({"10.6.0.5"})
+MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+MAX_SCAN_LIMIT = 4097
 
 
 def content(value):
@@ -52,9 +54,18 @@ class SplunkStore:
         )
         if int(response.status) >= 300:
             raise SettingsError(503, "unavailable", "Splunk settings request failed.")
+        raw_len = len(data.encode("utf-8")) if isinstance(data, str) else len(data)
+        if raw_len > MAX_RESPONSE_BYTES:
+            raise SettingsError(
+                503, "unavailable", "Splunk settings response exceeds size limit."
+            )
         return json.loads(data)
 
     def scan(self, limit):
+        if type(limit) is not int or not 1 <= limit <= MAX_SCAN_LIMIT:
+            raise SettingsError(
+                503, "unavailable", "Unsupported deployment settings scan limit."
+            )
         # A server-side query cap can masquerade as a short complete result.
         # Shift the sorted query by one row: an actual final page must shrink
         # by exactly its first row. Never infer completeness from length alone.

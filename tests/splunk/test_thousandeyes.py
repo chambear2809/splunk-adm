@@ -187,6 +187,7 @@ class ThousandEyesInstalledLabTest(unittest.TestCase):
             {
                 "name": cls.role,
                 "capabilities": ["search", "list_conf_objects"],
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": [INDEX],
                 "srchIndexesDisallowed": ["atlas_asset", "_internal", "_audit"],
             },

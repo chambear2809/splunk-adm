@@ -170,6 +170,62 @@ class ObserverMappingTests(unittest.TestCase):
                     "token",
                 )
 
+    def test_post_duplicate_uses_point_get_and_get_uses_field_projection(self):
+        doc = validate_mapping(
+            {
+                "observer_kind": "cluster",
+                "observer": "atlas-k3s",
+                "scope": "dc1",
+            }
+        )
+        calls = []
+
+        class PointStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def allows_write(self, capability):
+                return True
+
+            def scan(self, limit, *, fields=None):
+                calls.append(("scan", limit, fields))
+                return [doc]
+
+            def insert(self, document):
+                calls.append(("insert", document["_key"]))
+                raise RuntimeError("duplicate")
+
+            def get(self, key):
+                calls.append(("get", key))
+                return dict(doc) if key == doc["_key"] else None
+
+        with patch.object(observer_rest, "SplunkCollectionStore", PointStore):
+            listed = observer_rest.handle_request({"method": "GET"}, "token")
+            self.assertEqual(listed["recordCount"], 1)
+            self.assertEqual(
+                calls[0],
+                (
+                    "scan",
+                    observer_rest.MAPPING_LIMIT + 1,
+                    "_key,observer_kind,observer,scope,cluster,mapping_status",
+                ),
+            )
+            calls.clear()
+            res = observer_rest.handle_request(
+                {
+                    "method": "POST",
+                    "payload": {
+                        "observer_kind": "cluster",
+                        "observer": "atlas-k3s",
+                        "scope": "dc1",
+                    },
+                },
+                "token",
+            )
+            self.assertTrue(res["idempotent"])
+            # Duplicate check must use single-key point get, never a full scan.
+            self.assertEqual(calls, [("insert", doc["_key"]), ("get", doc["_key"])])
+
 
 if __name__ == "__main__":
     unittest.main()

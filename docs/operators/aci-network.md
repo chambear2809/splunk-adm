@@ -4,10 +4,10 @@ Gives Atlas read-only fabric inventory, policy and flow observations. All DC Net
 
 ## Checklist
 
-- [ ] Read-only APIC and Nexus Dashboard accounts in DC Networking 1.2.2 on the HF (**Configuration → ACI Account / ND Account**; password or certificate).
-- [ ] Shipped APIC inputs enabled: `stats`, `classInfo_faultInst`, `classInfo_fvRsCEpToPathEp`, `health_fvTenant`.
+- [ ] Read-only APIC and Nexus Dashboard accounts in **official unmodified Cisco DC Networking 2.0.10 (Splunkbase 7777)** on the HF (**Configuration → ACI Account / ND Account**; password or certificate). No companion ACI add-on is required; see [official-splunkbase-tas.md](official-splunkbase-tas.md) for full 2.0.10 `local/inputs.conf` stanzas (2.0.10 ships no pre-populated APIC inputs and has no `fvRsCtx` preset). Legacy 1.2.2 tab-KV events remain supported for backward compatibility.
+- [ ] APIC `stats` (`fvCEp`) and core `classInfo` inputs enabled.
 - [ ] Custom `classInfo_adm` input with the 13 classes below.
-- [ ] Optional: `classInfo_adm_network` (`fvRsBd`), `classInfo_adm_policy`.
+- [ ] Recommended: `classInfo_adm_network` (`fvRsBd fvBD fvRsCtx fvCtx l1PhysIf ethpmPhysIf l3EncRtdIf`) for EPG → BD → VRF mapping (`fvRsCtx` is not included in any 2.0.10 preset) and optional `classInfo_adm_policy`.
 - [ ] LLDP receive on leaf ports facing Kubernetes nodes and ESXi hosts / UCS FIs.
 - [ ] NetFlow v9 from **leaves** to the HF Stream receiver; each leaf OOB address in `adm_observer_scope` (V1) and registered with profile `aci_leaf_netflow` (V2, [checklist](README.md#source-scope-profile-registration)).
 - [ ] ND `endpoints` and `flows` inputs for the site.
@@ -55,16 +55,16 @@ disabled = 0
 
 vSphere and spine details: [ACI_VMM_ADJACENCY_CLASSES](ACI_VMM_ADJACENCY_CLASSES.md), [ACI_SPINE_PATH_EVIDENCE](ACI_SPINE_PATH_EVIDENCE.md).
 
-### Optional: EPG to bridge-domain and VLAN facts
+### Recommended: EPG to bridge-domain, VRF (`fvRsCtx`), and VLAN facts
 
-Input `classInfo_adm_network`, class `fvRsBd`, 300 s. APIC only.
+Input `classInfo_adm_network`, classes `fvRsBd fvBD fvRsCtx fvCtx l1PhysIf ethpmPhysIf l3EncRtdIf`, 300 s. APIC only. Cisco DC Networking 2.0.10 has no `fvRsCtx` preset, so operators must include `fvRsCtx` explicitly in `apic_arguments` (see [official-splunkbase-tas.md](official-splunkbase-tas.md)).
 
 ```sh
 bash skills/cisco-dc-networking-setup/scripts/setup.sh \
-  --classinfo-input classInfo_adm_network --classinfo-classes "fvRsBd" \
+  --classinfo-input classInfo_adm_network --classinfo-classes "fvRsBd fvBD fvRsCtx fvCtx l1PhysIf ethpmPhysIf l3EncRtdIf" \
   --account "<ACI account>" --index cisco_dc --dry-run
 bash skills/cisco-dc-networking-setup/scripts/validate.sh \
-  --classinfo-input classInfo_adm_network --classinfo-classes fvRsBd --index cisco_dc
+  --classinfo-input classInfo_adm_network --classinfo-classes "fvRsBd fvBD fvRsCtx fvCtx" --index cisco_dc
 ```
 
 | Fact | Authority | Not authority |

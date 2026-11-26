@@ -44,6 +44,7 @@ class SetupViewerWriteTest(unittest.TestCase):
                 {
                     "name": role,
                     "capabilities": "search",
+                    "imported_roles": "adm_viewer",
                     "srchIndexesAllowed": ALLOWED_INDEXES,
                 },
                 doseq=True,

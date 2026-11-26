@@ -1,11 +1,11 @@
-# AppDynamics inventory evidence
+# AppDynamics inventory and topology evidence
 
-Application Atlas does not call an AppDynamics Controller from the browser or
-Splunk search head. An operator runs a bounded read-only collector, validates
-the generated capture locally, then queues the two finalized HEC captures with
-the shared delivery utility. One capture contains the Controller hierarchy
-and modeled backend candidates. The second contains current-only node-IP rows
-in the existing Asset History v1 contract.
+Application Atlas supports two complementary, official-TA-compatible AppDynamics evidence paths without modifying `Splunk_TA_AppDynamics`:
+
+1. **Official Splunk Add-on for AppDynamics 3.3.0 (Splunkbase 3471) `appdynamics_topology` input:** emits `sourcetype=appdynamics_topology` (`schema_version=1`) covering `application`, `tier`, `node`, and `backend` entities plus relationships (`contains`, `uses`, `runs_on`, `has_interface`). When Server Visibility (SIM) is licensed, it also emits `server` and `network_interface` (`ipv4_addresses`, `ipv6_addresses`) entities, which `adm_appdynamics_topology_entities` and `tools/appdynamics_topology.py` join to nodes automatically. See [official-splunkbase-tas.md](official-splunkbase-tas.md#2-splunk-add-on-for-appdynamics-330-splunkbase-3471).
+2. **External read-only HEC collector (below — required for node IPs when SIM is not licensed):** the official `appdynamics_topology` `node` record does not include node IP addresses. An operator runs the bounded read-only collector (`tools/export_appdynamics.py` + `tools/import_appdynamics.py`), validates the capture locally, and queues the two finalized HEC captures (`source=appdynamics_inventory` and `source=appdynamics_asset_history`) with `tools/hec_delivery.py`.
+
+Application Atlas never calls an AppDynamics Controller from the browser or Splunk search head.
 
 ## Controller access
 

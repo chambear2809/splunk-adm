@@ -112,6 +112,20 @@ class RestoreTest(unittest.TestCase):
             self.assertTrue(lock_path.is_file())
             self.assertEqual(lock_path.read_text(), "")
 
+    def test_backup_collections_cover_every_configured_collection(self):
+        import configparser
+
+        conf = configparser.RawConfigParser()
+        conf.read(
+            Path(__file__).resolve().parents[1]
+            / "splunk_app/splunk_adm/default/collections.conf"
+        )
+        self.assertEqual(set(restore.COLLECTIONS), set(conf.sections()))
+        self.assertIn("adm_change_assertions", restore.COLLECTIONS)
+        self.assertIn("adm_multicast_profiles", restore.COLLECTIONS)
+        self.assertIn("adm_saved_views", restore.COLLECTIONS)
+        self.assertIn("adm_business_ownership", restore.COLLECTIONS)
+
 
 if __name__ == "__main__":
     unittest.main()

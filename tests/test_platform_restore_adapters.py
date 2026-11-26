@@ -19,7 +19,16 @@ class KVAdapterTests(unittest.TestCase):
             :limit
         ]
 
-    def test_exact_all_fifteen_and_keyset_pages(self):
+    def test_exact_all_collections_and_keyset_pages(self):
+        import configparser
+        from pathlib import Path
+
+        conf = configparser.RawConfigParser()
+        conf.read(
+            Path(__file__).resolve().parents[1]
+            / "splunk_app/splunk_adm/default/collections.conf"
+        )
+        self.assertEqual(set(adapters.COLLECTIONS), set(conf.sections()))
         self.assertEqual(
             adapters.discover_collections(
                 [{"name": x} for x in reversed(adapters.COLLECTIONS)]
@@ -96,9 +105,9 @@ class KVAdapterTests(unittest.TestCase):
         self.rows[adapters.COLLECTIONS[0]] = []
         snapshot = adapters.stable_kv_snapshot(self.fetch, lambda: True)
         report = adapters.collection_population_report(snapshot)
-        self.assertEqual(len(report["counts"]), 15)
+        self.assertEqual(len(report["counts"]), len(adapters.COLLECTIONS))
         self.assertEqual(report["empty"], [adapters.COLLECTIONS[0]])
-        self.assertEqual(len(report["populated"]), 14)
+        self.assertEqual(len(report["populated"]), len(adapters.COLLECTIONS) - 1)
         self.assertFalse(report["domain_validity_qualified"])
         snapshot["rows"].pop(adapters.COLLECTIONS[0])
         with self.assertRaises(adapters.RestoreError):

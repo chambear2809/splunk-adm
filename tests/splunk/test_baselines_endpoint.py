@@ -124,10 +124,13 @@ class InstalledBaselinesTest(unittest.TestCase):
             for part in ("yes", "no")
         ]
         for role, capabilities in zip(self.roles, (["adm_investigate"], [])):
+            role_data = {"name": role, "capabilities": capabilities}
+            if capabilities:
+                role_data["imported_roles"] = "adm_viewer"
             lab._json(
                 "POST",
                 "/services/authorization/roles",
-                {"name": role, "capabilities": capabilities},
+                role_data,
             )
             self.addCleanup(
                 lab._json, "DELETE", "/services/authorization/roles/" + role

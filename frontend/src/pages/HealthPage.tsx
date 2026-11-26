@@ -13,6 +13,7 @@ import { TimePicker } from "../map/TimePicker";
 import { isSafeTime, resolveTime, timeError } from "../data/timeBounds";
 import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
 import { LazyEcosystemReceiptPanel } from "../ecosystem/EcosystemLazyEvidence";
+import { ModifiedVendorTaCallout } from "../components/ModifiedVendorTaCallout";
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -110,6 +111,11 @@ export function HealthPage({
             asOf={range.asOf}
           />
           <UnmappedObserversCallout refresh={report} />
+          <ModifiedVendorTaCallout
+            client={client}
+            live={live}
+            refresh={report}
+          />
           <LazyEcosystemReceiptPanel client={client} />
         </>
       )}

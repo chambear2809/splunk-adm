@@ -24,6 +24,7 @@ import {
   type SetupMacro,
   type SetupSnapshot,
 } from "../data/setupClient";
+import { ModifiedVendorTaCallout } from "../components/ModifiedVendorTaCallout";
 
 const Button = toolkitDefault(ButtonExport);
 const Text = toolkitDefault(TextExport);
@@ -414,6 +415,10 @@ export function SetupPage({
                   {warning}
                 </p>
               ))}
+              <ModifiedVendorTaCallout
+                live={live && snapshot.authorized}
+                refresh={revision}
+              />
               <h2>Deployment expectations</h2>
               <p className="muted">
                 Cadence: expected interval · Freshness: max receipt age

@@ -131,7 +131,13 @@ def handle_request(request, token):
         raise Invalid("Only GET and POST are supported.")
     store = SplunkCollectionStore(token, COLLECTION)
     if method == "GET":
-        rows = store.scan(MAPPING_LIMIT + 1)
+        try:
+            rows = store.scan(
+                MAPPING_LIMIT + 1,
+                fields="_key,observer_kind,observer,scope,cluster,mapping_status",
+            )
+        except TypeError:
+            rows = store.scan(MAPPING_LIMIT + 1)
         if len(rows) > MAPPING_LIMIT:
             raise Unavailable(
                 "Observer mapping history limit reached; writes are disabled."
@@ -181,11 +187,15 @@ def handle_request(request, token):
     except Forbidden:
         raise
     except Exception as exc:
-        existing = [
-            row
-            for row in store.scan(MAPPING_LIMIT + 1)
-            if isinstance(row, dict) and row.get("_key") == document["_key"]
-        ]
+        if hasattr(store, "get"):
+            existing_row = store.get(document["_key"])
+            existing = [existing_row] if isinstance(existing_row, dict) else []
+        else:
+            existing = [
+                row
+                for row in store.scan(MAPPING_LIMIT + 1)
+                if isinstance(row, dict) and row.get("_key") == document["_key"]
+            ]
         if existing:
             if _same_mapping(existing[0], document):
                 return {

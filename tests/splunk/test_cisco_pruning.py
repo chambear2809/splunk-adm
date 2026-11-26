@@ -342,6 +342,7 @@ class CiscoPruningTest(unittest.TestCase):
                 {
                     "name": role,
                     "capabilities": "search",
+                    "imported_roles": "adm_viewer",
                     "srchIndexesAllowed": "adm_summary_v2",
                 },
             ),

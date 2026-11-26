@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import configparser
 import hashlib
 import json
 import os
@@ -23,7 +24,6 @@ import lab  # noqa: E402
 from lab_lock import run_main, with_lab_lock  # noqa: E402
 from benchmark_fixtures import Workload, manifest  # noqa: E402
 from benchmark_pipeline import (  # noqa: E402
-    COLLECTIONS,
     CONTAINER,
     Runner,
     graph_check,
@@ -34,6 +34,7 @@ from benchmark_pipeline import (  # noqa: E402
     truth,
     wait_count,
 )
+from platform_restore_adapters import COLLECTIONS  # noqa: E402
 from soak_pipeline import checked_search, closed_boundary, graph_query, rollup  # noqa: E402
 
 FILES = (
@@ -212,11 +213,24 @@ def wait_kv(timeout=300):
     raise TimeoutError("KV store not ready")
 
 
+def _expected_saved_search_count():
+    parser = configparser.RawConfigParser(strict=False)
+    parser.read_string(
+        (ROOT / "splunk_app/splunk_adm/default/savedsearches.conf")
+        .read_text()
+        .replace("\\\n", "")
+    )
+    return len(parser.sections())
+
+
 def assert_idle():
     searches = lab._json("GET", "/servicesNS/nobody/splunk_adm/saved/searches?count=0")[
         "entry"
     ]
-    require(len(searches) == 11, "unexpected saved-search inventory")
+    require(
+        len(searches) == _expected_saved_search_count(),
+        "unexpected saved-search inventory",
+    )
     require(
         all(
             truth(e["content"].get("disabled"))

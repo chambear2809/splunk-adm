@@ -39,6 +39,8 @@ class ScopeConfigTest(unittest.TestCase):
                 "te_bindings",
                 "te_path_sources",
                 "thousandeyes_origin",
+                "valid_from",
+                "valid_end",
             },
         )
         self.assertTrue(scope.getboolean("replicate"))

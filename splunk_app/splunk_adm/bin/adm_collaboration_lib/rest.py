@@ -9,7 +9,7 @@ from adm_kv_lib.ledger import (
     RecordLedger,
     Unavailable,
 )
-from adm_kv_lib.store import SplunkCollectionStore
+from adm_kv_lib.store import MAX_RESPONSE_BYTES, SplunkCollectionStore
 
 from .payload import PayloadError, validate
 
@@ -38,6 +38,9 @@ def principal_of(store):
     )
     if int(response.status) >= 300:
         raise Unavailable("Caller identity is unavailable.")
+    raw_len = len(data.encode("utf-8")) if isinstance(data, str) else len(data)
+    if raw_len > MAX_RESPONSE_BYTES:
+        raise Unavailable("Caller identity response exceeds size limit.")
     payload = json.loads(data)
     entries = payload.get("entry") if isinstance(payload, dict) else None
     if not isinstance(entries, list) or len(entries) != 1:

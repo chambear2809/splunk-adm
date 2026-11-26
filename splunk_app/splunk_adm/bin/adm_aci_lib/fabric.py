@@ -12,6 +12,11 @@ import json
 import re
 from typing import Any
 
+from .schema import (
+    OFFICIAL_DCN_CLASSINFO_SOURCETYPE,
+    OFFICIAL_DCN_SPLUNKBASE_ID,
+    OFFICIAL_DCN_VERSION,
+)
 from .validation import validate_events
 
 SCHEMA = "application_atlas.aci_fabric_snapshot.v1"
@@ -301,3 +306,276 @@ def project_fabric_snapshot(
     ):
         raise ValueError("snapshot_bytes_exceed_bound")
     return result
+
+
+def project_official_fabric_snapshot(
+    raw_events: list[str | dict[str, Any]],
+    *,
+    authority: str,
+    fabric: str,
+    scope: str,
+    expected_apic_host: str,
+    as_of: float,
+) -> dict[str, Any]:
+    """Project official Cisco DC Networking 2.0.10 cisco:dc:aci:class JSON events.
+
+    Official DC Networking 2.0.10 emits single-pass classInfo snapshots without a
+    two-pass manifest or cryptographic digest. This projector applies the same
+    device/link/routed-interface validation while labeling the result honestly as
+    unverified_single_pass.
+    """
+    from .reader import normalize_apic_host, parse_official_class_event
+
+    expected_host = normalize_apic_host(expected_apic_host)
+    latest_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    timestamps: list[float] = []
+    for raw in raw_events:
+        parsed = parse_official_class_event(raw)
+        if parsed["apic_host"] != expected_host:
+            raise ValueError("apic_host_mismatch")
+        key = (parsed["class"], parsed["dn"])
+        ts = parsed["event_timestamp"]
+        if ts is not None:
+            timestamps.append(ts)
+        prior = latest_by_key.get(key)
+        if prior is None:
+            latest_by_key[key] = parsed
+            continue
+        prior_ts = prior["event_timestamp"]
+        if ts == prior_ts:
+            if prior["attributes"] != parsed["attributes"]:
+                raise ValueError("conflicting_official_class_event")
+            continue
+        if prior_ts is None or (ts is not None and ts > prior_ts):
+            latest_by_key[key] = parsed
+
+    objects = [
+        {"record_type": "object", "class": item["class"], "attributes": item["attributes"]}
+        for item in latest_by_key.values()
+    ]
+    devices: list[dict[str, Any]] = []
+    device_ids: dict[str, str] = {}
+    for event in objects:
+        if event["class"] != "topSystem":
+            continue
+        attrs = event["attributes"]
+        dn = attrs["dn"]
+        match = _NODE.search(dn)
+        if not match:
+            raise ValueError("topSystem_dn_invalid")
+        node = match.group("node")
+        native = f"pod-{match.group('pod')}/node-{node}"
+        ident = _id(authority, fabric, native)
+        if native in device_ids or node in device_ids:
+            raise ValueError("duplicate_device_identity")
+        device_ids[native] = ident
+        device_ids[node] = ident
+        device = {
+            "id": ident,
+            "authority": authority,
+            "fabric": fabric,
+            "native_id": native,
+            "pod": match.group("pod"),
+            "node": match.group("node"),
+            "name": attrs.get("name") or native,
+            "role": attrs.get("role", "unknown"),
+            "source": "topSystem",
+            "dn": dn,
+        }
+        for source, target in (
+            ("oobMgmtAddr", "oob_mgmt_ip"),
+            ("inbMgmtAddr", "inband_mgmt_ip"),
+            ("address", "fabric_address"),
+            ("serial", "serial"),
+        ):
+            if source in attrs and attrs[source] not in (None, ""):
+                if not isinstance(attrs[source], str):
+                    raise ValueError("topSystem_optional_invalid")
+                device[target] = attrs[source]
+        if "oob_mgmt_ip" in device:
+            device["mgmt_ip"] = device["oob_mgmt_ip"]
+        elif "inband_mgmt_ip" in device:
+            device["mgmt_ip"] = device["inband_mgmt_ip"]
+        devices.append(device)
+    if len(devices) > MAX_DEVICES:
+        raise ValueError("device_count_exceeds_bound")
+
+    capture_key = f"official-classinfo:{expected_host}:{max(timestamps) if timestamps else 'none'}"
+    links: list[dict[str, Any]] = []
+    for event in objects:
+        if event["class"] != "fabricLink":
+            continue
+        attrs = event["attributes"]
+        required = ("dn", "n1", "n2", "s1", "s2", "p1", "p2")
+        if (
+            not isinstance(attrs.get("dn"), str)
+            or not attrs["dn"]
+            or any(
+                isinstance(attrs.get(key), bool)
+                or not isinstance(attrs.get(key), (str, int))
+                or not str(attrs[key])
+                for key in required[1:]
+            )
+        ):
+            raise ValueError("fabric_link_endpoint_invalid")
+        n1, n2 = str(attrs["n1"]), str(attrs["n2"])
+        if n1 not in device_ids or n2 not in device_ids:
+            raise ValueError("fabric_link_endpoint_missing")
+        links.append(
+            {
+                "id": _link_id(authority, fabric, capture_key, attrs),
+                "authority": authority,
+                "fabric": fabric,
+                "a_device": device_ids[n1],
+                "b_device": device_ids[n2],
+                "a_native_id": n1,
+                "b_native_id": n2,
+                "a_interface": f"eth{attrs['s1']}/{attrs['p1']}",
+                "b_interface": f"eth{attrs['s2']}/{attrs['p2']}",
+                "link_kind": "physical",
+                "source": "fabricLink",
+                "dn": attrs["dn"],
+                "parallel_key": ":".join(sorted((n1, n2))),
+            }
+        )
+    if len(links) > MAX_LINKS:
+        raise ValueError("link_count_exceeds_bound")
+
+    physical, ethpm, routed = {}, {}, []
+    for event in objects:
+        if event["class"] not in ("l1PhysIf", "ethpmPhysIf"):
+            continue
+        attrs, dn = event["attributes"], event["attributes"]["dn"]
+        suffix = "" if event["class"] == "l1PhysIf" else "/phys"
+        match = re.fullmatch(
+            r"(topology/pod-\d+/node-\d+/sys/phys-\[(eth\d+/\d+)\])"
+            + re.escape(suffix),
+            dn,
+        )
+        if match:
+            if event["class"] == "l1PhysIf" and attrs.get(
+                "id", match.group(2)
+            ) != match.group(2):
+                raise ValueError("physical_interface_id_mismatch")
+            (physical if event["class"] == "l1PhysIf" else ethpm)[match.group(1)] = (
+                attrs
+            )
+    for event in objects:
+        if event["class"] != "l3EncRtdIf":
+            continue
+        attrs, dn = event["attributes"], event["attributes"]["dn"]
+        node_match = _NODE.search(dn)
+        if not node_match:
+            continue
+        native = f"pod-{node_match.group('pod')}/node-{node_match.group('node')}"
+        if native not in device_ids:
+            raise ValueError("routed_interface_node_missing")
+        if not all(
+            isinstance(attrs.get(field), str) and attrs[field]
+            for field in ("ifConnDn", "rtdOutDefDn")
+        ):
+            continue
+        identifier = attrs.get("id")
+        id_parent = re.fullmatch(r"(eth\d+/\d+)\.\d+", str(identifier))
+        if not id_parent:
+            continue
+        parent = id_parent.group(1)
+        expected_dn = (
+            re.escape(f"topology/{native}/sys/ctx-[")
+            + r"[^\]\r\n]+\]/encrtd-\["
+            + re.escape(identifier)
+            + r"\]"
+        )
+        if not re.fullmatch(expected_dn, dn):
+            raise ValueError("routed_interface_dn_id_mismatch")
+        if not re.fullmatch(
+            r"resPolCont/rtdOutCont/rtdOutDef-\[uni/tn-[^/\[\]\s]+/out-[^/\[\]\s]+\]",
+            attrs["rtdOutDefDn"],
+        ):
+            continue
+        if not attrs["ifConnDn"].startswith(attrs["rtdOutDefDn"] + "/"):
+            raise ValueError("routed_interface_connection_mismatch")
+        conn_node = re.fullmatch(
+            re.escape(attrs["rtdOutDefDn"])
+            + r"/node-(\d+)/stpathatt-\[(eth\d+/\d+)\]/conndef/conn-\[(vlan-\d+)\]-\[([^\[\]\s]+)\]",
+            attrs["ifConnDn"],
+        )
+        if not conn_node:
+            raise ValueError("routed_interface_connection_invalid")
+        if (
+            conn_node.group(1) != node_match.group("node")
+            or conn_node.group(2) != parent
+        ):
+            raise ValueError("routed_interface_node_mismatch")
+        if (
+            attrs.get("encap") != conn_node.group(3)
+            or not 1 <= int(conn_node.group(3)[5:]) <= 4094
+        ):
+            raise ValueError("routed_interface_encap_mismatch")
+        try:
+            ipaddress.ip_interface(conn_node.group(4))
+        except ValueError:
+            raise ValueError("routed_interface_local_address_invalid") from None
+        physical_dn = f"topology/pod-{node_match.group('pod')}/node-{node_match.group('node')}/sys/phys-[{parent}]"
+        if physical_dn not in physical or physical_dn not in ethpm:
+            continue
+        item = {
+            "id": f"{device_ids[native]}:{identifier}",
+            "device": device_ids[native],
+            "native_id": native,
+            "interface": identifier,
+            "parent_interface": parent,
+            "dn": dn,
+            "source": "l3EncRtdIf",
+            "physical_dn": physical_dn,
+            "physical_source": "l1PhysIf+ethpmPhysIf",
+            "classification": "reported_routed_interface",
+            "traversal": "not_observed",
+            "layer": "routed_interface",
+        }
+        for source, target in (
+            ("encap", "encap"),
+            ("adminSt", "admin_state"),
+            ("operSt", "oper_state"),
+            ("ifConnDn", "connection_dn"),
+            ("rtdOutDefDn", "routed_out_definition_dn"),
+        ):
+            if isinstance(attrs.get(source), str) and attrs[source]:
+                item[target] = attrs[source]
+        routed.append(item)
+    if len(routed) > MAX_ROUTED_INTERFACES:
+        raise ValueError("routed_interface_count_exceeds_bound")
+
+    result = {
+        "schema": SCHEMA,
+        "classification": "inventory_snapshot",
+        "qualification": "unverified_single_pass",
+        "source_mode": "official_dc_networking_classinfo",
+        "traversal": "not_observed",
+        "authority": authority,
+        "fabric": fabric,
+        "scope": scope,
+        "observed_earliest": min(timestamps) if timestamps else None,
+        "observed_latest": max(timestamps) if timestamps else None,
+        "as_of": as_of,
+        "provenance": {
+            "ta": "cisco_dc_networking_app_for_splunk",
+            "ta_version": OFFICIAL_DCN_VERSION,
+            "splunkbase_id": OFFICIAL_DCN_SPLUNKBASE_ID,
+            "sourcetype": OFFICIAL_DCN_CLASSINFO_SOURCETYPE,
+            "apic_host": expected_host,
+        },
+        "device_count": len(devices),
+        "link_count": len(links),
+        "routed_interface_count": len(routed),
+        "devices": devices,
+        "links": links,
+        "routed_interfaces": routed,
+    }
+    if (
+        len(json.dumps(result, sort_keys=True, separators=(",", ":")).encode())
+        > MAX_SERIALIZED_BYTES
+    ):
+        raise ValueError("snapshot_bytes_exceed_bound")
+    return result
+

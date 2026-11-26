@@ -289,6 +289,7 @@ class MulticastRuntimeTest(unittest.TestCase):
             {
                 "name": role,
                 "capabilities": "search",
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": "main",
                 "srchIndexesDisallowed": "netflow",
             },

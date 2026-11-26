@@ -130,6 +130,7 @@ class ClientSelectedSearchJobTest(unittest.TestCase):
                 {
                     "name": role,
                     "capabilities": "search",
+                    "imported_roles": "adm_viewer",
                     "srchFilter": source_filter,
                     "srchIndexesAllowed": ["main"],
                     "srchIndexesDefault": ["main"],
@@ -143,6 +144,7 @@ class ClientSelectedSearchJobTest(unittest.TestCase):
                 "/services/authorization/roles/" + role,
                 {
                     "capabilities": "search",
+                    "imported_roles": "adm_viewer",
                     "srchFilter": source_filter,
                     "srchIndexesAllowed": ["main"],
                     "srchIndexesDefault": ["main"],

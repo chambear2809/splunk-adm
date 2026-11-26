@@ -25,6 +25,7 @@ from adm_recovery_lib.rest import ResponseTooLarge, Rest  # noqa: E402
 APP = "/servicesNS/nobody/splunk_adm"
 CLIFF, PAGE_SIZE = 200_000, 1000
 MAX_ROWS, MAX_BYTES, MAX_SECONDS = 1_000_000, 512 * 1024 * 1024, 900
+MAX_IN_BATCH = 50
 COLLECTIONS = {
     "adm_ip_identity": ("valid_end",),
     "adm_service_workload": ("last_seen",),
@@ -145,6 +146,118 @@ class RetentionMaintenance:
     def expiry(collection, row):
         values = [number(row.get(name)) for name in COLLECTIONS[collection]]
         return None if any(value is None for value in values) else max(values)
+
+    @staticmethod
+    def expired_query(collection, threshold):
+        if collection not in COLLECTIONS:
+            raise MaintenanceError("unknown_collection")
+        cutoff = number(threshold)
+        if cutoff is None:
+            raise MaintenanceError("invalid_budget")
+        fields = COLLECTIONS[collection]
+        if len(fields) == 1:
+            return {fields[0]: {"$gte": 0, "$lt": cutoff}}
+        return {"$and": [{name: {"$gte": 0, "$lt": cutoff}} for name in fields]}
+
+    def scan_expired(self, collection, *, threshold, sink=None):
+        """Indexed keyset scan restricted to rows matching the collection's expiry filter."""
+        base_filter = self.expired_query(collection, threshold)
+        result = dict(
+            collection=collection,
+            rows_read=0,
+            rows_expired=0,
+            bytes_read=0,
+            oldest_expiry=None,
+            complete=False,
+            warnings=[],
+        )
+        last_key = None
+        try:
+            while True:
+                limit = min(self.page_size, self.max_rows - result["rows_read"] + 1)
+                query_doc = (
+                    base_filter
+                    if last_key is None
+                    else {"$and": [base_filter, {"_key": {"$gt": last_key}}]}
+                )
+                params = {
+                    "limit": limit,
+                    "sort": "_key:1",
+                    "query": json.dumps(query_doc, separators=(",", ":")),
+                }
+                page = self.request(
+                    "GET", self.path(collection) + "?" + urlencode(params)
+                )
+                if not isinstance(page, list) or len(page) > limit:
+                    raise MaintenanceError("invalid_collection_page")
+                if not page:
+                    result["complete"] = True
+                    break
+                keys = [
+                    row.get("_key") if isinstance(row, dict) else None for row in page
+                ]
+                if (
+                    any(not isinstance(key, str) or not key for key in keys)
+                    or keys != sorted(set(keys))
+                    or (last_key is not None and keys[0] <= last_key)
+                ):
+                    raise MaintenanceError("invalid_cursor_progress")
+                for row in page:
+                    encoded = canonical(row) + b"\n"
+                    if (
+                        result["rows_read"] >= self.max_rows
+                        or result["bytes_read"] + len(encoded) > self.max_bytes
+                    ):
+                        raise MaintenanceError("scan_ceiling")
+                    if sink:
+                        sink(encoded)
+                    result["rows_read"] += 1
+                    result["bytes_read"] += len(encoded)
+                    expiry = self.expiry(collection, row)
+                    if expiry is not None and expiry < threshold:
+                        oldest = result["oldest_expiry"]
+                        result["oldest_expiry"] = (
+                            min(oldest, expiry) if oldest is not None else expiry
+                        )
+                        result["rows_expired"] += 1
+                last_key = keys[-1]
+        except MaintenanceError as exc:
+            result["warnings"].append(str(exc))
+        except Exception:
+            result["warnings"].append("scan_unavailable")
+        return result
+
+    def verify_batch(self, collection, rows):
+        """Verify an entire expired batch in one indexed $in GET instead of N+1 calls."""
+        keys = [row["_key"] for row in rows]
+        expected = {row["_key"]: row for row in rows}
+        params = {
+            "query": json.dumps({"_key": {"$in": keys}}, separators=(",", ":")),
+            "limit": len(keys) + 1,
+            "sort": "_key:1",
+        }
+        current_rows = self.request(
+            "GET", self.path(collection) + "?" + urlencode(params)
+        )
+        if not isinstance(current_rows, list) or len(current_rows) != len(keys):
+            raise MaintenanceError("row_changed")
+        seen = set()
+        for current in current_rows:
+            if not isinstance(current, dict):
+                raise MaintenanceError("row_changed")
+            key = current.get("_key")
+            if key not in expected or key in seen or current != expected[key]:
+                raise MaintenanceError("row_changed")
+            seen.add(key)
+        if len(seen) != len(keys):
+            raise MaintenanceError("row_changed")
+
+    def delete_batch(self, collection, keys):
+        """Delete a verified expired batch in one query-based $in REST DELETE."""
+        params = {
+            "query": json.dumps({"_key": {"$in": list(keys)}}, separators=(",", ":"))
+        }
+        return self.request("DELETE", self.path(collection) + "?" + urlencode(params))
 
     def content(self, path):
         response = self.request("GET", path)
@@ -385,6 +498,7 @@ class RetentionMaintenance:
             "status": "snapshotting",
             "rows_deleted": 0,
             "pending_key": None,
+            "pending_keys": [],
         }
         private_json(journal_path, journal)
         digest = hashlib.sha256()
@@ -421,46 +535,70 @@ class RetentionMaintenance:
                     raise MaintenanceError("backup_changed")
                 identity = backup.stat()
                 stream.seek(0)
+                chunk_cap = min(batch_size, MAX_IN_BATCH)
+                batch = []
+                reached_limit = False
+
+                def flush_batch(rows_to_delete):
+                    current_identity = backup.stat()
+                    if (
+                        current_identity.st_ino,
+                        current_identity.st_size,
+                        current_identity.st_mtime_ns,
+                    ) != (identity.st_ino, identity.st_size, identity.st_mtime_ns):
+                        raise MaintenanceError("backup_changed")
+                    self.quiescent(target)
+                    if self.effective_retention() != period:
+                        raise MaintenanceError("retention_changed")
+                    self.verify_batch(collection, rows_to_delete)
+                    keys = [item["_key"] for item in rows_to_delete]
+                    journal.update(
+                        status="deleting", pending_key=keys[0], pending_keys=keys
+                    )
+                    private_json(journal_path, journal)
+                    try:
+                        self.delete_batch(collection, keys)
+                    except Exception:
+                        journal["status"] = "uncertain"
+                        return False
+                    result["rows_deleted"] += len(rows_to_delete)
+                    journal.update(
+                        rows_deleted=result["rows_deleted"],
+                        pending_key=None,
+                        pending_keys=[],
+                    )
+                    private_json(journal_path, journal)
+                    return True
+
+                aborted = False
                 for line in stream:
                     row = json.loads(line)
                     expiry = self.expiry(collection, row)
                     if expiry is None or expiry >= cutoff:
                         continue
-                    if result["rows_deleted"] >= self.max_deletes:
-                        journal["status"] = "partial"
+                    remaining = self.max_deletes - result["rows_deleted"] - len(batch)
+                    if remaining <= 0:
+                        reached_limit = True
                         break
-                    if result["rows_deleted"] % batch_size == 0:
-                        current_identity = backup.stat()
-                        if (
-                            current_identity.st_ino,
-                            current_identity.st_size,
-                            current_identity.st_mtime_ns,
-                        ) != (identity.st_ino, identity.st_size, identity.st_mtime_ns):
-                            raise MaintenanceError("backup_changed")
-                        self.quiescent(target)
-                        if self.effective_retention() != period:
-                            raise MaintenanceError("retention_changed")
-                    current = self.request("GET", self.path(collection, row["_key"]))
-                    if current != row:
-                        raise MaintenanceError("row_changed")
-                    journal.update(status="deleting", pending_key=row["_key"])
-                    private_json(journal_path, journal)
-                    try:
-                        self.request("DELETE", self.path(collection, row["_key"]))
-                    except Exception:
-                        journal["status"] = "uncertain"
-                        break
-                    result["rows_deleted"] += 1
-                    journal.update(
-                        rows_deleted=result["rows_deleted"], pending_key=None
-                    )
-                    private_json(journal_path, journal)
-                else:
-                    journal["status"] = "complete"
+                    batch.append(row)
+                    if len(batch) >= min(
+                        chunk_cap, self.max_deletes - result["rows_deleted"]
+                    ):
+                        if not flush_batch(batch):
+                            aborted = True
+                            break
+                        batch = []
+                if not aborted and batch:
+                    if not flush_batch(batch):
+                        aborted = True
+                if not aborted:
+                    journal["status"] = "partial" if reached_limit else "complete"
         except Exception:
             journal["status"] = (
                 "uncertain"
-                if journal["pending_key"] is not None or result["rows_deleted"]
+                if journal["pending_key"] is not None
+                or journal.get("pending_keys")
+                or result["rows_deleted"]
                 else "stopped"
             )
         try:

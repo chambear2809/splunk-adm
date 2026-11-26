@@ -86,7 +86,13 @@ class CiscoIdentityQualityContractTest(unittest.TestCase):
 
     def test_find_exposes_bounded_history_and_unresolved_reasons(self):
         find = definition("adm_find_network_client(1)")
-        self.assertIn("`adm_kv_read_all(adm_network_client_history)`", find)
+        self.assertIn('`adm_find_network_client_read("$query$")`', find)
+        read_macro = definition("adm_find_network_client_read(1)")
+        self.assertIn(
+            "lookup local=true adm_network_client_history client_ip AS", read_macro
+        )
+        self.assertIn("`adm_identity_max_matches`", read_macro)
+        self.assertNotIn("`adm_kv_read_all(", read_macro)
         for term in (
             "diagnostic_status",
             "diagnostic_reason",
@@ -275,7 +281,7 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
         rows[-1].pop("client_mac")
         query = (
             definition("adm_find_network_client(1)")
-            .replace("`adm_kv_read_all(adm_network_client_history)`", seed(rows), 1)
+            .replace('`adm_find_network_client_read("$query$")`', seed(rows), 1)
             .replace("$query$", "192.0.2.10")
         )
         result = self.lab.search(query, "1000", "2000")
@@ -295,7 +301,7 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
         query = (
             definition("adm_find_network_client(1)")
             .replace(
-                "`adm_kv_read_all(adm_network_client_history)`",
+                '`adm_find_network_client_read("$query$")`',
                 seed([missing_receipt]),
                 1,
             )
@@ -317,7 +323,7 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
         ]
         query = (
             definition("adm_find_network_client(1)")
-            .replace("`adm_kv_read_all(adm_network_client_history)`", seed(capped), 1)
+            .replace('`adm_find_network_client_read("$query$")`', seed(capped), 1)
             .replace("$query$", "192.0.2.10")
         )
         result = self.lab.search(query, "1000", "2000")
@@ -707,6 +713,7 @@ class CiscoIdentityQualityLabTest(unittest.TestCase):
             {
                 "name": self.role,
                 "capabilities": "search",
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": ["netflow"],
                 "srchIndexesDisallowed": [
                     "cisco_meraki",

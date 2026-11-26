@@ -342,5 +342,203 @@ class KvLedgerTests(unittest.TestCase):
         self.assertEqual(self.ledger.read()["payload"], {"n": 1})
 
 
+class RichMemoryStore(MemoryStore):
+    """Test store supporting metadata scans, point gets, indexed queries, and $in deletes."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = []
+
+    def scan(self, limit):
+        self.calls.append(("scan", limit))
+        return super().scan(limit)
+
+    def scan_metadata(self, limit):
+        self.calls.append(("scan_metadata", limit))
+        meta_keys = {
+            "_key",
+            "format",
+            "epoch",
+            "epoch_root",
+            "seal",
+            "kind",
+            "previous_revision",
+            "request_id",
+            "operation_fingerprint",
+            "revision",
+        }
+        return [
+            {k: v for k, v in row.items() if k in meta_keys}
+            for row in sorted(self.rows, key=lambda r: r["_key"])[:limit]
+        ]
+
+    def get(self, key):
+        self.calls.append(("get", key))
+        for row in self.rows:
+            if row["_key"] == key:
+                return dict(row)
+        return None
+
+    def query(self, filter_doc, *, limit, sort=None, fields=None):
+        self.calls.append(("query", filter_doc, limit, sort, fields))
+        field_set = set(fields.split(",")) if fields else None
+
+        def match(row):
+            for k, cond in filter_doc.items():
+                if isinstance(cond, dict) and "$exists" in cond:
+                    if (k in row) != bool(cond["$exists"]):
+                        return False
+                elif row.get(k) != cond:
+                    return False
+            return True
+
+        matched = [row for row in self.rows if match(row)]
+        if sort == "epoch:-1":
+            matched.sort(key=lambda r: -(r.get("epoch", 0)))
+        else:
+            matched.sort(key=lambda r: r["_key"])
+        matched = matched[:limit]
+        if field_set is not None:
+            return [{k: v for k, v in row.items() if k in field_set} for row in matched]
+        return [dict(row) for row in matched]
+
+    def delete_many(self, keys):
+        self.calls.append(("delete_many", list(keys)))
+        key_set = set(keys)
+        self.rows = [row for row in self.rows if row["_key"] not in key_set]
+
+
+class KvLedgerPerfAndCapsTests(unittest.TestCase):
+    def test_head_only_read_never_scans_historical_payloads_and_verifies_head(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=32)
+        rev = None
+        for i in range(10):
+            rev = ledger.write({"n": i}, rev, f"req-{i}")["committedRevision"]
+        store.calls.clear()
+        result = ledger.read()
+        self.assertEqual(result["payload"], {"n": 9})
+        self.assertEqual(result["revision"], rev)
+        self.assertEqual(result["recordCount"], 10)
+        # Must use metadata scan + 1 single point get for the head document; never full scan.
+        self.assertEqual([c[0] for c in store.calls], ["scan_metadata", "get"])
+        # Forging payload_json on the head document must still fail closed.
+        head_key = store.calls[1][1]
+        for row in store.rows:
+            if row["_key"] == head_key:
+                row["payload_json"] = canonical({"n": 999})
+        with self.assertRaises(Unavailable):
+            ledger.read()
+
+    def test_write_uses_point_verification_without_post_write_scan(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        first = ledger.write({"n": 0}, None, "req-0")
+        store.calls.clear()
+        second = ledger.write({"n": 1}, first["committedRevision"], "req-1")
+        self.assertEqual(second["payload"], {"n": 1})
+        self.assertFalse(second["superseded"])
+        self.assertEqual(second["recordCount"], 2)
+        # Pre-write: 1 scan_metadata (no precheck => 0 head payload get);
+        # Post-write: 2 point gets (committed target + empty successor), 0 post-write scans!
+        self.assertEqual([c[0] for c in store.calls], ["scan_metadata", "get", "get"])
+
+    def test_read_head_uses_indexed_epoch_query_and_skips_old_epoch_residue(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="assertions", max_records=16)
+        rev = None
+        for i in range(5):
+            rev = ledger.write({"step": i}, rev, f"req-{i}")["committedRevision"]
+        # Add stale epoch-0 residue after compaction by saving rows, compacting, then re-inserting residue.
+        old_rows = [dict(r) for r in store.rows]
+        compacted = ledger.compact(rev, "compact-1")
+        rev = compacted["committedRevision"]
+        rev = ledger.write({"step": 5}, rev, "req-5")["committedRevision"]
+        existing_keys = {r["_key"] for r in store.rows}
+        for row in old_rows:
+            if row["_key"] not in existing_keys:
+                store.rows.append(row)
+        store.calls.clear()
+        head = ledger.read_head()
+        self.assertEqual(head["state"], "configured")
+        self.assertEqual(head["payload"], {"step": 5})
+        self.assertEqual(head["revision"], rev)
+        self.assertEqual(head["epoch"], 1)
+        self.assertEqual(head["activeEpochRecords"], 2)
+        # Must use indexed query(epoch_root=True), get(seal), query(epoch=1), get(head); never scan!
+        self.assertFalse(any(c[0] in ("scan", "scan_metadata") for c in store.calls))
+        queries = [c[1] for c in store.calls if c[0] == "query"]
+        self.assertEqual(queries, [{"epoch_root": True}, {"epoch": 1}])
+
+    def test_compact_purges_debris_with_batched_delete_many(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        rev = None
+        for i in range(6):
+            rev = ledger.write({"n": i}, rev, f"req-{i}")["committedRevision"]
+        store.calls.clear()
+        res = ledger.compact(rev, "compact-batch")
+        self.assertEqual(res["epoch"], 1)
+        self.assertEqual(res["residueCount"], 0)
+        delete_many_calls = [c for c in store.calls if c[0] == "delete_many"]
+        self.assertEqual(len(delete_many_calls), 1)
+        self.assertEqual(len(delete_many_calls[0][1]), 6)
+
+    def test_splunk_collection_store_caps_and_batched_delete_many(self):
+        import types
+        from adm_kv_lib import store as store_mod
+
+        s = store_mod.SplunkCollectionStore("tok", "adm_saved_views")
+        # Limit bounds reject 0, negative, booleans, and > MAX_SCAN_LIMIT.
+        for bad_limit in (0, -1, True, store_mod.MAX_SCAN_LIMIT + 1):
+            with self.assertRaises(Unavailable):
+                s.scan(bad_limit)
+            with self.assertRaises(Unavailable):
+                s.query({}, limit=bad_limit)
+
+        # Oversized response is rejected before json.loads.
+        fake_resp = types.SimpleNamespace(status=200)
+        oversized = b"x" * (store_mod.MAX_RESPONSE_BYTES + 1)
+        fake_splunk = types.SimpleNamespace(
+            rest=types.SimpleNamespace(
+                simpleRequest=lambda *a, **k: (fake_resp, oversized)
+            )
+        )
+        with patch.dict(
+            sys.modules, {"splunk": fake_splunk, "splunk.rest": fake_splunk.rest}
+        ):
+            with self.assertRaisesRegex(Unavailable, "size limit"):
+                s.get("views_root")
+
+        # scan_metadata projects METADATA_FIELDS and delete_many chunks by MAX_IN_BATCH (50).
+        recorded = []
+
+        def fake_simple_request(path, **kwargs):
+            recorded.append((kwargs["method"], path))
+            if kwargs["method"] == "DELETE":
+                return fake_resp, b""
+            return fake_resp, b"[]"
+
+        fake_splunk_ok = types.SimpleNamespace(
+            rest=types.SimpleNamespace(simpleRequest=fake_simple_request)
+        )
+        with patch.dict(
+            sys.modules, {"splunk": fake_splunk_ok, "splunk.rest": fake_splunk_ok.rest}
+        ):
+            s.scan_metadata(10)
+            self.assertIn("fields=", recorded[0][1])
+            self.assertNotIn("payload_json", recorded[0][1])
+            recorded.clear()
+            keys = [f"views_after_{i:064x}" for i in range(120)]
+            s.delete_many(keys)
+            self.assertEqual(len(recorded), 3)
+            self.assertTrue(all(m == "DELETE" and "%24in" in p for m, p in recorded))
+            # Invalid key shape must be rejected before issuing any DELETE.
+            recorded.clear()
+            with self.assertRaises(Unavailable):
+                s.delete_many(["../bad_key"])
+            self.assertEqual(recorded, [])
+
+
 if __name__ == "__main__":
     unittest.main()

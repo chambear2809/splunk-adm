@@ -212,6 +212,7 @@ class DnsEvidenceRuntimeTest(unittest.TestCase):
             {
                 "name": role,
                 "capabilities": "search",
+                "imported_roles": "adm_viewer",
                 "srchIndexesAllowed": allowed_indexes,
                 "srchIndexesDisallowed": ["_internal", "_audit"],
             },

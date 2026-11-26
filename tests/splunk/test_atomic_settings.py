@@ -187,7 +187,7 @@ class InstalledAtomicSettingsTest(unittest.TestCase):
         self.fixture.lab._json(
             "POST",
             "/services/authentication/users",
-            {"name": user, "password": password, "roles": "user"},
+            {"name": user, "password": password, "roles": ["user", "adm_viewer"]},
         )
         self.addCleanup(
             lambda: self.fixture.lab._mgmt(

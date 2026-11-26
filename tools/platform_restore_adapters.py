@@ -13,6 +13,7 @@ from pathlib import Path
 
 COLLECTIONS = (
     "adm_deployment_settings",
+    "adm_multicast_profiles",
     "adm_observer_scope",
     "adm_network_source_scope",
     "adm_network_client_history",
@@ -26,6 +27,9 @@ COLLECTIONS = (
     "adm_recovery_state",
     "adm_recovery_audit",
     "adm_app_catalog",
+    "adm_saved_views",
+    "adm_business_ownership",
+    "adm_change_assertions",
     "adm_app_catalog_v2",
 )
 PAGE_SIZE = 500
@@ -365,7 +369,7 @@ def pdl_parallel_restore(
 ):
     """Restore whole-KV backup only to an independently proven fresh fixture.
 
-    This native command can overwrite KV contents beyond the 15 app collections.
+    This native command can overwrite KV contents beyond the 19 app collections.
     It is never safe on a shared or live installation. Callers must independently
     prove target identity, complete prior-state absence and exclusive ownership.
     """

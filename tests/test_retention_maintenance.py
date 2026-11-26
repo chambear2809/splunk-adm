@@ -80,12 +80,61 @@ class FakeApi:
         if "/storage/collections/data/" in parsed.path:
             if parsed.query:
                 query = parse_qs(parsed.query)
+                filter_doc = json.loads(query["query"][0])
+                if method == "DELETE":
+                    in_keys = filter_doc.get("_key", {}).get("$in")
+                    assert isinstance(in_keys, list) and in_keys
+                    if self.on_delete:
+                        for key in in_keys:
+                            self.on_delete(key)
+                    for key in in_keys:
+                        self.rows.pop(key, None)
+                    return {}
                 self.assert_query(query)
-                last = json.loads(query["query"][0]).get("_key", {}).get("$gt")
+                if "$in" in filter_doc.get("_key", {}):
+                    in_keys = set(filter_doc["_key"]["$in"])
+                    rows = []
+                    for key in sorted(in_keys):
+                        if key in self.rows:
+                            rows.append(
+                                self.on_get(key)
+                                if self.on_get
+                                else dict(self.rows[key])
+                            )
+                    return rows[: min(self.native_cap, int(query["limit"][0]))]
+
+                def matches(row, clause):
+                    if not clause:
+                        return True
+                    if "$and" in clause:
+                        return all(matches(row, sub) for sub in clause["$and"])
+                    for field, cond in clause.items():
+                        val = row.get(field)
+                        if isinstance(cond, dict):
+                            if "$gt" in cond and not (
+                                isinstance(val, str) and val > cond["$gt"]
+                            ):
+                                return False
+                            if "$gte" in cond and (
+                                not isinstance(val, (int, float))
+                                or isinstance(val, bool)
+                                or val < cond["$gte"]
+                            ):
+                                return False
+                            if "$lt" in cond and (
+                                not isinstance(val, (int, float))
+                                or isinstance(val, bool)
+                                or val >= cond["$lt"]
+                            ):
+                                return False
+                        elif val != cond:
+                            return False
+                    return True
+
                 rows = [
-                    row
-                    for key, row in sorted(self.rows.items())
-                    if last is None or key > last
+                    dict(row)
+                    for _, row in sorted(self.rows.items())
+                    if matches(row, filter_doc)
                 ]
                 return rows[: min(self.native_cap, int(query["limit"][0]))]
             key = unquote(parsed.path.rsplit("/", 1)[1])
@@ -311,11 +360,12 @@ class RetentionMaintenanceTests(unittest.TestCase):
 
         api.on_delete = lose_response
         result = self.tool(api).prune(
-            "adm_ip_identity", backup_dir=self.directory, confirm=True
+            "adm_ip_identity", backup_dir=self.directory, confirm=True, batch_size=1
         )
         self.assertEqual(result["status"], "uncertain")
         journal = json.loads((self.directory / "manifest.json").read_text())
         self.assertEqual(journal["pending_key"], "a")
+        self.assertEqual(journal["pending_keys"], ["a"])
         self.assertEqual(set(api.rows), {"b"})
         self.assertNotIn("sensitive", json.dumps(result))
         self.assertNotIn("pending_key", result)
@@ -365,6 +415,120 @@ class RetentionMaintenanceTests(unittest.TestCase):
         self.assertIsNone(
             json.loads((self.directory / "manifest.json").read_text())["pending_key"]
         )
+
+    def test_expired_query_filters_cover_every_pruned_collection(self):
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_ip_identity", 100),
+            {"valid_end": {"$gte": 0, "$lt": 100}},
+        )
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_service_workload", 100),
+            {"last_seen": {"$gte": 0, "$lt": 100}},
+        )
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_service_backends", 100),
+            {"valid_to": {"$gte": 0, "$lt": 100}},
+        )
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_service_routes", 100),
+            {"valid_to": {"$gte": 0, "$lt": 100}},
+        )
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_aci_policy", 100),
+            {"last_seen": {"$gte": 0, "$lt": 100}},
+        )
+        self.assertEqual(
+            rm.RetentionMaintenance.expired_query("adm_network_client_history", 100),
+            {
+                "$and": [
+                    {"received_time": {"$gte": 0, "$lt": 100}},
+                    {"latest_received_time": {"$gte": 0, "$lt": 100}},
+                ]
+            },
+        )
+
+    def test_scan_expired_reads_only_matching_rows_via_indexed_filter(self):
+        api = FakeApi(
+            [
+                {"_key": "k1", "valid_end": 1},
+                {"_key": "k2", "valid_end": 50},
+                {"_key": "k3", "valid_end": 2},
+                {"_key": "k4", "valid_end": None},
+            ],
+            native_cap=1,
+        )
+        report = self.tool(api).scan_expired("adm_ip_identity", threshold=5)
+        self.assertTrue(report["complete"])
+        self.assertEqual(report["rows_read"], 2)
+        self.assertEqual(report["rows_expired"], 2)
+        self.assertEqual(report["oldest_expiry"], 1)
+
+    def test_batched_in_query_verify_and_delete_eliminates_n_plus_one(self):
+        rows = [{"_key": f"exp-{i:03d}", "valid_end": 1} for i in range(120)]
+        rows.append({"_key": "keep-000", "valid_end": None})
+        api = FakeApi(rows)
+        result = self.tool(api, max_deletes=200).prune(
+            "adm_ip_identity", backup_dir=self.directory, confirm=True, batch_size=100
+        )
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["rows_deleted"], 120)
+        self.assertEqual(set(api.rows), {"keep-000"})
+        # 120 rows chunked by MAX_IN_BATCH=50 -> exactly 3 $in GETs and 3 $in DELETEs.
+        delete_calls = [path for method, path in api.calls if method == "DELETE"]
+        self.assertEqual(len(delete_calls), 3)
+        batch_sizes = []
+        for path in delete_calls:
+            query = parse_qs(urlsplit(path).query)
+            in_keys = json.loads(query["query"][0])["_key"]["$in"]
+            batch_sizes.append(len(in_keys))
+        self.assertEqual(batch_sizes, [50, 50, 20])
+        in_gets = [
+            path
+            for method, path in api.calls
+            if method == "GET"
+            and "/storage/collections/data/" in path
+            and "%24in" in path
+        ]
+        self.assertEqual(len(in_gets), 3)
+
+    def test_batch_drift_refuses_entire_batch_without_delete(self):
+        api = FakeApi(
+            [
+                {"_key": "a", "valid_end": 1},
+                {"_key": "b", "valid_end": 1},
+            ]
+        )
+        api.on_get = lambda key: (
+            {"_key": key, "valid_end": 99}
+            if key == "b"
+            else {"_key": key, "valid_end": 1}
+        )
+        result = self.tool(api).prune(
+            "adm_ip_identity", backup_dir=self.directory, confirm=True
+        )
+        self.assertEqual(result["status"], "stopped")
+        self.assertEqual(result["rows_deleted"], 0)
+        self.assertFalse(any(method == "DELETE" for method, _ in api.calls))
+
+    def test_mid_batch_uncertain_delete_records_all_pending_keys(self):
+        api = FakeApi(
+            [
+                {"_key": "a", "valid_end": 1},
+                {"_key": "b", "valid_end": 1},
+            ]
+        )
+
+        def fail_batch(key):
+            raise OSError("network dropped")
+
+        api.on_delete = fail_batch
+        result = self.tool(api).prune(
+            "adm_ip_identity", backup_dir=self.directory, confirm=True
+        )
+        self.assertEqual(result["status"], "uncertain")
+        journal = json.loads((self.directory / "manifest.json").read_text())
+        self.assertEqual(journal["pending_key"], "a")
+        self.assertEqual(journal["pending_keys"], ["a", "b"])
 
 
 if __name__ == "__main__":

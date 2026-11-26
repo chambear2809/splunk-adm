@@ -234,6 +234,82 @@ class AciPolicyActionTest(unittest.TestCase):
         ):
             self.assertEqual(verified.get(name), "0")
 
+    def test_builder_preserves_raw_action_for_official_dcn_2010_json(self):
+        """Official DC Networking 2.0.10 JSON cisco:dc:aci:class events preserve raw action."""
+        prefix = "uni/tn-" + self.token + "-json"
+        rows = [
+            json.dumps(
+                {
+                    "event_timestamp": "2026-11-26T15:00:00.000000+00:00",
+                    "apic_host": self.apic,
+                    "actual_host": self.apic,
+                    "component": "vzRsSubjFiltAtt",
+                    "dn": f"{prefix}/brc-web/subj-spermit/rssubjFiltAtt-fpermit",
+                    "tDn": f"{prefix}/flt-permit",
+                    "tnVzFilterName": "web",
+                    "action": "permit",
+                    "directives": "log",
+                },
+                separators=(",", ":"),
+            ),
+            json.dumps(
+                {
+                    "event_timestamp": "2026-11-26T15:00:00.000000+00:00",
+                    "apic_host": self.apic,
+                    "actual_host": self.apic,
+                    "component": "vzRsSubjFiltAtt",
+                    "dn": f"{prefix}/brc-web/subj-sdeny/rssubjFiltAtt-fdeny",
+                    "tDn": f"{prefix}/flt-deny",
+                    "tnVzFilterName": "web",
+                    "action": "deny",
+                    "directives": "log",
+                },
+                separators=(",", ":"),
+            ),
+            json.dumps(
+                {
+                    "event_timestamp": "2026-11-26T15:00:00.000000+00:00",
+                    "apic_host": self.apic,
+                    "actual_host": self.apic,
+                    "component": "vzRsSubjFiltAtt",
+                    "dn": f"{prefix}/brc-web/subj-smissing/rssubjFiltAtt-fmissing",
+                    "tDn": f"{prefix}/flt-missing",
+                    "tnVzFilterName": "web",
+                },
+                separators=(",", ":"),
+            ),
+            (
+                '{"apic_host":"'
+                + self.apic
+                + '","component":"vzRsSubjFiltAtt","dn":"'
+                + prefix
+                + '/brc-web/subj-sdup/rssubjFiltAtt-fdup","tDn":"'
+                + prefix
+                + '/flt-dup","action":"permit","action":"deny"}'
+            ),
+        ]
+        now = self.send_raw(rows)
+        lab.search("`adm_aci_policy_build`", now - 5, now + 5)
+        got = lab.search(
+            f'| inputlookup adm_aci_policy where apic_host="{self.apic}" '
+            f'| search object_kind=filtatt dn="{prefix}/*" | table dn action action_verified'
+        )
+        actions = {
+            row["dn"].split("/rssubjFiltAtt-f", 1)[1]: row.get("action") for row in got
+        }
+        verified = {
+            row["dn"].split("/rssubjFiltAtt-f", 1)[1]: row.get("action_verified")
+            for row in got
+        }
+        self.assertEqual(actions.get("permit"), "permit")
+        self.assertEqual(verified.get("permit"), "1")
+        self.assertEqual(actions.get("deny"), "deny")
+        self.assertEqual(verified.get("deny"), "1")
+        self.assertEqual(actions.get("missing"), "unknown")
+        self.assertEqual(verified.get("missing"), "0")
+        self.assertEqual(actions.get("dup"), "unknown")
+        self.assertEqual(verified.get("dup"), "0")
+
     def seed(self, collection, rows):
         for index, row in enumerate(rows):
             row.setdefault("_key", self.token + "-" + str(index))

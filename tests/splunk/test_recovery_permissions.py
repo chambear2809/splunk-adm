@@ -59,7 +59,11 @@ class RecoveryPermissionsTest(unittest.TestCase):
         cls.password = secrets.token_urlsafe(24)
         cls.role = "adm_recovery_viewer_role_" + secrets.token_hex(8)
         role_data = urllib.parse.urlencode(
-            {"name": cls.role, "capabilities": "search"}
+            {
+                "name": cls.role,
+                "capabilities": "search",
+                "imported_roles": "adm_viewer",
+            }
         ).encode()
         status, body = _request(
             "POST",

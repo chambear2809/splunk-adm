@@ -119,13 +119,16 @@
       "installed_at": "2026-11-20",
       "target_splunk_version": "10.6.1.1",
       "execution_scope": "validation_splunk_nexus_dashboard_managed_inputs",
+      "recommended_official_ta": true,
+      "aci_classinfo_inspection": "Static inspection of default/inputs.conf, default/props.conf, bin/cisco_dc_aci_event.py, and bin/cisco_dc_aci_classinfo_utils.py confirms 2.0.10 ships no pre-populated cisco_nexus_aci stanzas, has no fvRsCtx/fvRsBd preset, accepts arbitrary space-separated APIC class names via apic_input_type=classInfo + apic_arguments (regex ^[A-Za-z][A-Za-z0-9_-]{0,127}$), emits compact JSON on cisco:dc:aci:class, and retains EVAL-action from ind on cisco:dc:aci:class. No companion add-on is used.",
       "validation": "First scheduled run indexed 4 fabric, 16 switch, 654 endpoint and 28 topology records; exact Invoice records corroborate placement and four fabric links. Both exact Invoice flow queries returned zero ND records."
     },
     {
       "title": "Cisco DC Networking",
       "splunkbase_id": "7777",
       "version": "1.2.2",
-      "status": "installed_with_reviewed_atlas_ta_extension",
+      "status": "historical_modified_vendor_build_deprecated",
+      "superseded_by": "Cisco DC Networking 2.0.10 (Splunkbase 7777, unmodified)",
       "archive_path": "research/packages/cisco-dc-networking_122.tar.gz",
       "extracted_path": "research/extracted/cisco-dc-networking_122/cisco_dc_networking_app_for_splunk",
       "source_url": "https://api.splunkbase.splunk.com/api/v2/apps/7777/releases/1.2.2/download/?origin=sb&lead=true",
@@ -146,6 +149,8 @@
       "target_splunk_version": "10.6.0.5",
       "local_overlay": {
         "build_id": "atlas-20261031-r2-candidate",
+        "lifecycle": "historical_deprecated",
+        "superseded_by": "Cisco DC Networking 2.0.10 (Splunkbase 7777, unmodified) with apic_input_type=classInfo + explicit apic_arguments including fvRsCtx",
         "status": "deployed_hf_v2_first_indexed_capture_verified",
         "artifact": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r2-candidate.tgz",
         "sha256": "6848bc5d6f3f511cb7ec3ca747e6670d652f15afc078b4b027f9fc59782173f4",
@@ -172,34 +177,7 @@
         "consumer_quarantine": true,
         "input": "atlas_aci_snapshot",
         "poll_version": 2,
-        "version_note": "Atlas build based on vendor 1.2.2; original app.conf vendor version retained."
-      },
-      "candidate_overlay": {
-        "build_id": "atlas-20261031-r2-candidate",
-        "status": "deployed_hf_v2_first_indexed_capture_verified",
-        "artifact": "research/packages/atlas/cisco-dc-networking-1.2.2-atlas-20261031-r2-candidate.tgz",
-        "sha256": "6848bc5d6f3f511cb7ec3ca747e6670d652f15afc078b4b027f9fc59782173f4",
-        "bytes": 12122000,
-        "source_snapshot": "integrations/ta-releases/20261031-r2-candidate/dc-networking",
-        "validation": "Independent source review, 39 focused snapshot/poll/overlay tests and targeted Ruff passed. Exact archive matches reviewed builder inputs and pinned vendor file contents; source delta reconstructed successfully. The candidate was subsequently deployed on the lab heavy forwarder with v2 explicitly enabled; the first scheduled 515-event capture passed 23-class integrity validation. Consumer/path qualification remains quarantined.",
-        "live_dry_capture": {
-          "capture_id": "4822798f-752c-4399-bbc9-fe4cc6ff6cf8",
-          "schema": "application_atlas.aci_poll.v2",
-          "class_count": 23,
-          "event_count": 515,
-          "fvRsCtx_count": 6,
-          "integrity": "passed",
-          "all_bd_parents_and_vrf_targets_present": true,
-          "all_fvRsCtx_formed": true,
-          "published": false,
-          "enabled_for_recurring_collection": false,
-          "consumer_quarantine": true,
-          "evidence_location": "Protected external deployment directory/v2-dry-capture-report.private.json"
-        },
-        "installed_at": "2026-10-31",
-        "first_verified_capture_id": "078bb315-b87f-42fd-a82d-a5db9c6711bf",
-        "first_verified_indexed_events": 515,
-        "consumer_quarantine": true
+        "version_note": "Historical Atlas-modified build based on vendor 1.2.2; retained for audit/rollback until live validation of official 2.0.10 completes and removal is approved."
       },
       "previous_overlays": [
         {
@@ -208,8 +186,9 @@
           "bytes": 12121760,
           "input": "atlas_aci_snapshot",
           "build_id": "atlas-20261031-r1",
+          "lifecycle": "historical_deprecated",
           "vendor_version": "1.2.2",
-          "version_note": "Atlas-modified build; upstream app.conf version retained. Not an official vendor release.",
+          "version_note": "Historical Atlas-modified build; upstream app.conf version retained. Not an official vendor release.",
           "contents": "Vendor package plus reviewed Atlas input source and default configuration; no host-local runtime configuration or credentials.",
           "builder": "tools/package_dc_networking_ta_overlay.py",
           "source": "integrations/dc_networking_ta_overlay",
@@ -486,14 +465,18 @@
       "installed_at": "2026-10-31",
       "execution_scope": "existing_lab_heavy_forwarder",
       "target_splunk_version": "10.6.0.5",
+      "recommended_official_ta": true,
+      "official_topology_inspection": "Static inspection of Splunk_TA_AppDynamics/bin/appdynamics_topology.py confirms official modular input appdynamics_topology emits sourcetype=appdynamics_topology (schema_version=1) covering application, tier, node, and backend entities plus contains/uses/runs_on/has_interface relationships. Node records omit IP addresses; node IPs come from SIM server/network_interface records when licensed, or from Atlas's external HEC collector (tools/export_appdynamics.py + tools/import_appdynamics.py).",
       "local_overlay": {
+        "lifecycle": "historical_deprecated",
+        "superseded_by": "Official unmodified Splunk Add-on for AppDynamics 3.3.0 (Splunkbase 3471) appdynamics_topology + optional external HEC collector (tools/export_appdynamics.py)",
         "artifact": "research/packages/atlas/splunk-ta-appdynamics-3.3.0-atlas-20261031-r1.tgz",
         "sha256": "41843e59692ed2ca66e03cd6ee06b8fed2c6c3a1bad527630e3d65324ccd54d7",
         "bytes": 6820677,
         "input": "atlas_appdynamics_inventory",
         "build_id": "atlas-20261031-r1",
         "vendor_version": "3.3.0",
-        "version_note": "Atlas-modified build; upstream app.conf version retained. Not an official vendor release.",
+        "version_note": "Historical Atlas-modified build; upstream app.conf version retained. Retained for audit/rollback until live validation of official 3.3.0 completes and removal is approved.",
         "contents": "Vendor package plus reviewed Atlas input source and default configuration; no host-local runtime configuration or credentials.",
         "builder": "tools/package_appdynamics_ta_overlay.py",
         "source": "integrations/appdynamics_ta_overlay",
@@ -574,7 +557,7 @@
       },
       "installed": true,
       "executed": false,
-      "notes": "Downloaded by the operator from Splunkbase (authenticated) on 2026-11-03. Splunkbase ID to confirm.",
+      "notes": "Downloaded by the operator from Splunkbase (authenticated) on 2026-11-03; Splunkbase ID 7828 recorded from download URL, publisher digest not published.",
       "installed_on": "lab heavy forwarder splunk-ta (2026-11-04); see docs/operators/INTERSIGHT_VMWARE_LAB_SETUP.md"
     },
     {
@@ -624,6 +607,7 @@
     },
     {
       "title": "Cisco Security Cloud",
+      "splunkbase_id": "7404",
       "version": "3.6.10",
       "status": "installed_and_live_ingestion_verified_in_validation_lab",
       "archive_path": "research/packages/cisco-security-cloud_3610.tar.gz",
