@@ -87,10 +87,11 @@ export async function executeConnectedQuery(
   };
   await validateExecutionInputs(approvedSpec, approvedProvenance);
   const result = await transport.execute({
-    application: approvedSpec.application,
+    // Keep transport-owned mutation separate from the snapshot used below.
+    application: { ...approvedSpec.application },
     key: approvedSpec.key,
     literal: approvedSpec.literal,
-    window: approvedSpec.window,
+    window: { ...approvedSpec.window },
     ...(approvedSpec.key === "find.service"
       ? {
           findInput: {

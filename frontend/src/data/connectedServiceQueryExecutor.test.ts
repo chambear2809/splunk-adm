@@ -155,4 +155,27 @@ describe("executeConnectedQuery", () => {
       expect.objectContaining({ literal: original.literal }),
     );
   });
+
+  it("keeps transport mutations away from final validation", async () => {
+    const spec = (await plan()).find(({ key }) => key === "graph.impact")!;
+    const transport = {
+      execute: vi.fn(async (input) => {
+        input.application.service = "foreign";
+        input.window.earliest = 0;
+        return {
+          rows: [],
+          complete: true as const,
+          source: "splunk_rest" as const,
+          executionId: provenance.executionId,
+          planSha256: provenance.planSha256,
+          indexTimeBounds: provenance.indexTimeBounds,
+          receiptFingerprints: [...provenance.receiptFingerprints],
+          queryJob: { sid: provenance.queryJobSid },
+        };
+      }),
+    };
+    await expect(
+      executeConnectedQuery(spec, provenance, transport),
+    ).resolves.toBeDefined();
+  });
 });
