@@ -5,6 +5,8 @@ import type {
 } from "./connectedServiceQueryExecutor";
 
 export interface OwnedSplunkSearchClient {
+  /** Return identity read from the owned task/run, never from query evidence. */
+  verifyOwnership(): Promise<{ executionId: string; planSha256: string }>;
   search(input: {
     literal: string;
     earliest: number;
@@ -24,6 +26,12 @@ export function createSplunkConnectedQueryTransport(
 ): ConnectedQueryTransport {
   return {
     async execute(input): Promise<ConnectedQueryExecutionResult> {
+      const ownership = await client.verifyOwnership();
+      if (
+        ownership.executionId !== provenance.executionId ||
+        ownership.planSha256 !== provenance.planSha256
+      )
+        throw new Error("Splunk connected query ownership differs from run.");
       const approved = await buildApprovedConnectedQuery(input);
       if (approved.literal !== input.literal)
         throw new Error(
@@ -41,15 +49,19 @@ export function createSplunkConnectedQueryTransport(
         result.job.dispatchState !== "DONE" ||
         !Array.isArray(result.rows) ||
         !Array.isArray(result.receiptFingerprints) ||
-        !result.receiptFingerprints.length
+        !result.receiptFingerprints.length ||
+        !Number.isSafeInteger(result.indexTimeBounds?.earliest) ||
+        !Number.isSafeInteger(result.indexTimeBounds?.latest) ||
+        result.indexTimeBounds.earliest >= result.indexTimeBounds.latest ||
+        !result.receiptFingerprints.every((item) => /^[a-f0-9]{64}$/.test(item))
       )
         throw new Error("Splunk connected query did not complete cleanly.");
       return {
         rows: result.rows,
         complete: true,
         source: "splunk_rest",
-        executionId: provenance.executionId,
-        planSha256: provenance.planSha256,
+        executionId: ownership.executionId,
+        planSha256: ownership.planSha256,
         indexTimeBounds: result.indexTimeBounds,
         receiptFingerprints: result.receiptFingerprints,
         queryJob: result.job,
