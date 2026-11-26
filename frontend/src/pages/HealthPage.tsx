@@ -156,12 +156,14 @@ function SummaryHealthSection({
 
 function UnmappedObserversCallout() {
   const [count, setCount] = useState<number>();
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const request = new AbortController();
     void import("../data/observerMappingClient")
       .then(({ observerMappingClient }) =>
         observerMappingClient.list(request.signal).then((rows) => {
           if (request.signal.aborted) return;
+          setFailed(false);
           setCount(
             rows.filter(
               (row) =>
@@ -172,10 +174,23 @@ function UnmappedObserversCallout() {
         }),
       )
       .catch(() => {
-        if (!request.signal.aborted) setCount(undefined);
+        if (!request.signal.aborted) {
+          setFailed(true);
+          setCount(undefined);
+        }
       });
     return () => request.abort();
   }, []);
+  if (failed)
+    return (
+      <section className="callout warn" role="status">
+        <h3>Unmapped observers</h3>
+        <p>Observer mappings could not be read. Retry from Setup.</p>
+        <p>
+          <a href={pageURL("setup")}>Open observer mapping</a>
+        </p>
+      </section>
+    );
   if (!count) return null;
   return (
     <section className="callout warn" role="status">

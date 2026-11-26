@@ -5,6 +5,9 @@ import unittest
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
+from unittest.mock import patch
+
+from adm_collaboration_lib import rest as collab_rest  # noqa: E402
 from adm_collaboration_lib.payload import (  # noqa: E402
     PayloadError,
     ownership_payload,
@@ -86,6 +89,83 @@ class CollaborationPayloadTests(unittest.TestCase):
         written = ledger.write({"views": []}, None, "req-1")
         self.assertEqual(written["state"], "configured")
         self.assertEqual(ledger.read()["payload"], {"views": []})
+
+    def test_bob_shared_save_keeps_alice_private_view(self):
+        store = MemoryStore()
+        alice = {
+            "id": "a1",
+            "name": "Alice Private",
+            "visibility": "private",
+            "owner": "alice",
+            "state": {"mode": "live"},
+        }
+        shared = {
+            "id": "s1",
+            "name": "Shared",
+            "visibility": "shared",
+            "owner": "alice",
+            "state": {"mode": "live"},
+        }
+        RecordLedger(store, "views").write({"views": [alice, shared]}, None, "req-a")
+
+        class FakeStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+                self.collection = collection
+
+            def scan(self, limit):
+                return store.scan(limit)
+
+            def insert(self, document):
+                return store.insert(document)
+
+        with (
+            patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
+            patch.object(collab_rest, "principal_of", return_value="bob"),
+        ):
+            visible = collab_rest.handle_request(
+                {"method": "GET", "query": [["kind", "views"]]},
+                "token",
+            )
+            self.assertEqual(
+                [row["name"] for row in visible["payload"]["views"]],
+                ["Shared"],
+            )
+            collab_rest.handle_request(
+                {
+                    "method": "POST",
+                    "query": [["kind", "views"]],
+                    "payload": {
+                        "expectedRevision": visible["revision"],
+                        "requestId": "req-b",
+                        "payload": {
+                            "views": [
+                                {
+                                    "id": "b1",
+                                    "name": "Bob Private",
+                                    "visibility": "private",
+                                    "owner": "bob",
+                                    "state": {"mode": "live"},
+                                },
+                                shared,
+                            ]
+                        },
+                    },
+                },
+                "token",
+            )
+        with (
+            patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
+            patch.object(collab_rest, "principal_of", return_value="alice"),
+        ):
+            remaining = collab_rest.handle_request(
+                {"method": "GET", "query": [["kind", "views"]]},
+                "token",
+            )
+        self.assertEqual(
+            {row["name"] for row in remaining["payload"]["views"]},
+            {"Alice Private", "Shared"},
+        )
 
 
 if __name__ == "__main__":

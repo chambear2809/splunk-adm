@@ -3,7 +3,7 @@
 import json
 from urllib.parse import urlencode
 
-from .ledger import Unavailable, canonical
+from .ledger import Forbidden, Unavailable, canonical
 
 APP = "/servicesNS/nobody/splunk_adm"
 
@@ -29,11 +29,53 @@ class SplunkCollectionStore:
             rawResult=True,
             raiseAllErrors=True,
         )
-        if int(response.status) >= 300:
+        status = int(response.status)
+        if status in (401, 403):
+            raise Forbidden("Collection access is denied.")
+        if status >= 300:
             raise Unavailable("Splunk collection request failed.")
         if not data:
             return None
         return json.loads(data)
+
+    def allows_write(self, capability):
+        context = self.request(
+            "GET",
+            "/services/authentication/current-context",
+            query={"output_mode": "json"},
+        )
+        entries = context.get("entry") if isinstance(context, dict) else None
+        content = (
+            entries[0].get("content")
+            if isinstance(entries, list)
+            and len(entries) == 1
+            and isinstance(entries[0], dict)
+            else {}
+        )
+        caps = content.get("capabilities") if isinstance(content, dict) else None
+        permissions = self.request(
+            "GET",
+            APP + "/storage/collections/config/" + self.collection,
+            query={"output_mode": "json"},
+        )
+        entry = (
+            permissions.get("entry", [{}])[0] if isinstance(permissions, dict) else {}
+        )
+        acl = (entry.get("acl") if isinstance(entry, dict) else None) or (
+            entry.get("content", {}).get("eai:acl", {})
+            if isinstance(entry, dict)
+            else {}
+        )
+        return (
+            isinstance(caps, list)
+            and capability in caps
+            and acl.get("can_write")
+            in (
+                True,
+                1,
+                "1",
+            )
+        )
 
     def scan(self, limit):
         for _attempt in range(2):

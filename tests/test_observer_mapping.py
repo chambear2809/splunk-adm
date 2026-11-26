@@ -7,7 +7,10 @@ import unittest
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
-from adm_kv_lib.ledger import Invalid  # noqa: E402
+from unittest.mock import patch
+
+from adm_kv_lib.ledger import Forbidden, Invalid, Unavailable  # noqa: E402
+from adm_observer_lib import rest as observer_rest  # noqa: E402
 from adm_observer_lib.rest import mapping_key, validate_mapping  # noqa: E402
 
 
@@ -58,6 +61,50 @@ class ObserverMappingTests(unittest.TestCase):
                     "realm": "us-east-1",
                 }
             )
+
+    def test_list_fails_closed_when_scan_hits_bound(self):
+        class FullStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def scan(self, limit):
+                return [
+                    {
+                        "_key": f"{index:04d}",
+                        "observer_kind": "cluster",
+                        "observer": "x",
+                    }
+                    for index in range(limit)
+                ]
+
+        with patch.object(observer_rest, "SplunkCollectionStore", FullStore):
+            with self.assertRaises(Unavailable):
+                observer_rest.handle_request({"method": "GET"}, "token")
+
+    def test_post_requires_administrator_write(self):
+        class ReadOnlyStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def allows_write(self, capability):
+                return False
+
+            def insert(self, document):
+                raise AssertionError("insert must not run")
+
+        with patch.object(observer_rest, "SplunkCollectionStore", ReadOnlyStore):
+            with self.assertRaises(Forbidden):
+                observer_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "payload": {
+                            "observer_kind": "cluster",
+                            "observer": "atlas-k3s",
+                            "scope": "dc1",
+                        },
+                    },
+                    "token",
+                )
 
 
 if __name__ == "__main__":

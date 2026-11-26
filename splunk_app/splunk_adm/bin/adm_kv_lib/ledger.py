@@ -19,6 +19,11 @@ class Invalid(LedgerError):
         super().__init__(400, "invalid", message)
 
 
+class Forbidden(LedgerError):
+    def __init__(self, message="Permission denied."):
+        super().__init__(403, "forbidden", message)
+
+
 class Conflict(LedgerError):
     def __init__(self, message="The record changed. Reload before saving."):
         super().__init__(409, "conflict", message)
@@ -163,6 +168,8 @@ class RecordLedger:
         }
         try:
             self.store.insert(document)
+        except Forbidden:
+            raise
         except Exception:
             pass
         try:

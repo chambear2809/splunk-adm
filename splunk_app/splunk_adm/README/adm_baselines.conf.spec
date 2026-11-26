@@ -8,6 +8,8 @@ platform = <string>
   Enterprise 10.6.1.1 with build b2ae2962645c. Runtime admission does not
   establish installed app qualification.
 * Every request requires the dedicated adm_investigate capability.
+* admin and sc_admin receive it on install; other users need the
+  adm_investigate role or an equivalent grant.
 source_mode = unavailable
 * The only shipped value; there is no production source provider.
 * No setting enables capture, schedules, notifications, or automated actions.

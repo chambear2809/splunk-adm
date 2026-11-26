@@ -7,6 +7,7 @@ sys.path.insert(
 )
 from adm_kv_lib.ledger import (  # noqa: E402
     Conflict,
+    Forbidden,
     Invalid,
     LedgerError,
     RecordLedger,
@@ -88,6 +89,15 @@ class KvLedgerTests(unittest.TestCase):
             self.ledger.write({"name": "a"}, None, "bad id")
         with self.assertRaises(LedgerError):
             self.ledger.write({"name": "a"}, None, "bad id")
+
+    def test_forbidden_insert_is_not_uncertain(self):
+        class DenyStore(MemoryStore):
+            def insert(self, document):
+                raise Forbidden("Collection write is not permitted.")
+
+        ledger = RecordLedger(DenyStore(), "views")
+        with self.assertRaises(Forbidden):
+            ledger.write({"name": "a"}, None, "req-1")
 
 
 if __name__ == "__main__":

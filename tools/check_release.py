@@ -548,10 +548,31 @@ def _check_cases_contract(files, rest, web):
             "case defaults must remain disabled and unqualified with transport trust unconfigured"
         )
     authorize = _packaged_config(files, "default/authorize.conf")
-    if set(authorize.sections()) != {"capability::adm_investigate"} or dict(
-        authorize["capability::adm_investigate"]
+    investigate_grant = {"adm_investigate": "enabled"}
+    investigator_role = {
+        **investigate_grant,
+        "edit_own_objects": "disabled",
+        "list_all_objects": "disabled",
+        "run_collect": "disabled",
+        "run_mcollect": "disabled",
+        "schedule_rtsearch": "disabled",
+    }
+    if (
+        set(authorize.sections())
+        != {
+            "capability::adm_investigate",
+            "role_adm_investigate",
+            "role_admin",
+            "role_sc_admin",
+        }
+        or dict(authorize["capability::adm_investigate"])
+        or dict(authorize["role_adm_investigate"]) != investigator_role
+        or dict(authorize["role_admin"]) != investigate_grant
+        or dict(authorize["role_sc_admin"]) != investigate_grant
     ):
-        raise ValueError("case capability must have no default role grants")
+        raise ValueError(
+            "case capability must grant adm_investigate only to admin, sc_admin, and the adm_investigate role"
+        )
     for name in CASE_RUNTIME_FILES:
         if not name.endswith(".py"):
             continue

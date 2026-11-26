@@ -1,5 +1,6 @@
 """Bounded collaboration documents. Ownership never grants search authorization."""
 
+import json
 import re
 
 NAME = re.compile(r"[^\x00-\x1f\x7f]{1,80}\Z")
@@ -50,9 +51,7 @@ def views_payload(value, principal):
         _text(owner, PRINCIPAL, "view owner")
         if visibility == "private" and owner != principal:
             raise PayloadError("Private views stay with their owner.")
-        state = row["state"]
-        if not isinstance(state, dict) or len(state) > 32:
-            raise PayloadError("Invalid view state.")
+        state = _view_state(row["state"])
         team = row.get("team")
         if team is not None:
             _text(team, TOKEN, "team")
@@ -67,6 +66,38 @@ def views_payload(value, principal):
             }
         )
     return {"views": result}
+
+
+def _view_state(value):
+    if not isinstance(value, dict) or len(value) > 32:
+        raise PayloadError("Invalid view state.")
+    state = {}
+    for key, item in value.items():
+        _text(key, TOKEN, "view state")
+        if not isinstance(item, str) or len(item) > 512:
+            raise PayloadError("Invalid view state.")
+        state[key] = item
+    encoded = json.dumps(state, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    if len(encoded.encode()) > 4096:
+        raise PayloadError("View state exceeds 4 KiB.")
+    return state
+
+
+def merge_views(stored, submitted, principal):
+    kept = [
+        row
+        for row in stored
+        if isinstance(row, dict)
+        and row.get("visibility") == "private"
+        and row.get("owner") != principal
+    ]
+    merged = kept + list(submitted)
+    if len(merged) > 50:
+        raise PayloadError("Saved views exceed the 50-view bound.")
+    names = [row.get("name") for row in merged]
+    if len(names) != len(set(names)):
+        raise PayloadError("Duplicate saved view name.")
+    return {"views": merged}
 
 
 def ownership_payload(value):

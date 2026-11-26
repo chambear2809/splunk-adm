@@ -550,6 +550,25 @@ class ReleaseArchiveTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             check_release(self.root / "dist", self.root / "package.json")
 
+    def test_investigate_capability_requires_admin_role_grants(self):
+        grant_error = (
+            "adm_investigate only to admin, sc_admin, and the adm_investigate role"
+        )
+        install = self._files()
+        install["splunk_adm/default/authorize.conf"] = (
+            b"[capability::adm_investigate]\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, grant_error):
+            check_release(self.root / "dist", self.root / "package.json")
+        install = self._files()
+        install["splunk_adm/default/authorize.conf"] += (
+            b"\n[role_user]\nadm_investigate = enabled\n"
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, grant_error):
+            check_release(self.root / "dist", self.root / "package.json")
+
     def test_rejects_unsafe_case_release_contract(self):
         variants = (
             (
@@ -642,7 +661,7 @@ class ReleaseArchiveTests(unittest.TestCase):
             ),
             (
                 "splunk_adm/default/authorize.conf",
-                b"\n[role_admin]\nadm_investigate = enabled\n",
+                b"\n[role_user]\nadm_investigate = enabled\n",
             ),
         ):
             with self.subTest(name=name):

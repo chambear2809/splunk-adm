@@ -10,6 +10,8 @@ platform = <string>
 * unqualified (default), or enterprise after installed qualification.
 * The host checks its runtime version, Cloud marker and SHC configuration.
 * A dedicated adm_investigate capability is also required for every request.
+* The package grants that capability to admin and sc_admin and ships the
+  assignable adm_investigate role. It does not grant it to user or power.
 
 capture_mode = <string>
 * disabled (default), or reproducible_qualified_v1 after separate qualification.

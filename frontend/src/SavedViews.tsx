@@ -100,33 +100,37 @@ export function SavedViews({
             setViews(store.read());
             setName("");
             setMessage("View saved.");
-            if (inSplunk && visibility === "shared" && user) {
+            if (inSplunk && user) {
               const requestId = `view${Date.now().toString(36)}${Math.random()
                 .toString(36)
                 .slice(2, 10)}`.replace(/[^A-Za-z0-9_-]/g, "");
               void import("./data/collaborationClient")
                 .then(({ collaborationClient }) =>
-                  collaborationClient.loadViews().then((document) =>
-                    collaborationClient.saveViews(
-                      [
-                        {
-                          id:
-                            saved.id
-                              .replace(/[^A-Za-z0-9_-]/g, "")
-                              .slice(0, 80) || requestId,
-                          name: saved.name,
-                          visibility: "shared" as const,
-                          owner: user,
-                          state: saved.state,
-                        },
-                        ...document.views.filter(
-                          (view) => view.name !== saved.name,
-                        ),
-                      ].slice(0, 50),
+                  collaborationClient.loadViews().then((document) => {
+                    const next = [
+                      {
+                        id:
+                          saved.id
+                            .replace(/[^A-Za-z0-9_-]/g, "")
+                            .slice(0, 80) || requestId,
+                        name: saved.name,
+                        visibility,
+                        owner: user,
+                        state: saved.state,
+                      },
+                      ...document.views.filter(
+                        (view) => view.name !== saved.name,
+                      ),
+                    ];
+                    if (next.length > 50) {
+                      throw new Error("Saved views exceed the 50-view bound.");
+                    }
+                    return collaborationClient.saveViews(
+                      next,
                       document.revision,
                       requestId,
-                    ),
-                  ),
+                    );
+                  }),
                 )
                 .then((document) => setShared(document.views))
                 .catch((error) =>
@@ -177,7 +181,11 @@ export function SavedViews({
         {shared.map((view) => (
           <li key={`shared-${view.id}`}>
             <a href={hrefFor(view.state)}>{view.name}</a>{" "}
-            <span className="muted">shared · {view.owner}</span>
+            <span className="muted">
+              {view.visibility === "private"
+                ? "private"
+                : `shared · ${view.owner}`}
+            </span>
           </li>
         ))}
         {views.map((view) => (

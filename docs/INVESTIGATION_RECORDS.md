@@ -34,10 +34,14 @@ capture or make Cloud/SHC persistence supported.
 ## Deployment boundary
 
 `adm_investigations.conf` ships with persistence disabled and platform
-unqualified. `adm_investigate` is a dedicated capability with no default role
-assignment. The host derives the principal from the caller's current Splunk
-context and rechecks it during store operations; it never requests system auth.
-Investigator roles do not need administrator access. The local server process
+unqualified. `adm_investigate` is a dedicated capability. The package grants it
+to the built-in `admin` and `sc_admin` roles and ships an assignable
+`adm_investigate` role that contains only this capability. Splunk apps cannot
+attach a role to a named user account, so admin users receive the right because
+they already hold `admin` or `sc_admin`. The host derives the principal from the
+caller's current Splunk context and rechecks it during store operations; it never
+requests system auth. Non-admin investigator roles do not need administrator
+access. The local server process
 checks the fixed SHC disabled setting without exposing configuration to callers.
 It reads only the fixed app-scoped persistence control flags using local btool;
 investigators do not receive configuration-read privileges. The fixed app/user

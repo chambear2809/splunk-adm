@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from adm_kv_lib.ledger import Invalid, Unavailable, canonical
+from adm_kv_lib.ledger import Forbidden, Invalid, Unavailable, canonical
 from adm_kv_lib.store import SplunkCollectionStore
 
 KIND = re.compile(r"[a-z][a-z0-9._-]{0,63}\Z")
@@ -15,6 +15,7 @@ REALM = re.compile(r"[a-z][a-z0-9]{0,7}\Z")
 TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}\Z")
 UNMAPPED = re.compile(r"(?i)^(unmapped|unknown|reserved)(:|$)")
 COLLECTION = "adm_observer_scope"
+MAPPING_LIMIT = 4096
 
 
 def mapping_key(kind, observer):
@@ -103,7 +104,11 @@ def handle_request(request, token):
         raise Invalid("Only GET and POST are supported.")
     store = SplunkCollectionStore(token, COLLECTION)
     if method == "GET":
-        rows = store.scan(4096)
+        rows = store.scan(MAPPING_LIMIT + 1)
+        if len(rows) > MAPPING_LIMIT:
+            raise Unavailable(
+                "Observer mapping history limit reached; writes are disabled."
+            )
         return {
             "state": "configured" if rows else "absent",
             "mappings": [
@@ -134,13 +139,17 @@ def handle_request(request, token):
             body = json.loads(raw)
         except ValueError as exc:
             raise Invalid("Invalid observer mapping.") from exc
+    if not store.allows_write("admin_all_objects"):
+        raise Forbidden(
+            "Administrator permission is required to store observer mappings."
+        )
     document = validate_mapping(body)
     try:
         store.insert(document)
     except Exception as exc:
         existing = [
             row
-            for row in store.scan(4096)
+            for row in store.scan(MAPPING_LIMIT + 1)
             if isinstance(row, dict) and row.get("_key") == document["_key"]
         ]
         if existing:
