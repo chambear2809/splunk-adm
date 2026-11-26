@@ -19,12 +19,24 @@ describe("createSplunkConnectedQueryTransport", () => {
       window,
     });
     const client = {
-      search: vi.fn(async () => ({
-        rows: [{ service: "inventory" }],
-        job: { sid: "sid", dispatchState: "DONE" as const },
-        indexTimeBounds: window,
-        receiptFingerprints: ["b".repeat(64)],
-      })),
+      search: vi.fn(async (input) => {
+        // Model the installed macro behavior: bounds are dispatch arguments;
+        // a post-macro _time filter would remove projected graph rows.
+        expect(input.literal).not.toContain("_time>=");
+        expect(input.literal).not.toContain("adm_find(");
+        expect(input.literal).toContain('service="inventory"');
+        expect(input.literal).toContain('environment="demo"');
+        expect(input.literal).toContain('cluster="c"');
+        expect(input.literal).toContain('namespace="shop"');
+        expect(input.earliest).toBe(100);
+        expect(input.latest).toBe(200);
+        return {
+          rows: [{ service: "inventory" }],
+          job: { sid: "sid", dispatchState: "DONE" as const },
+          indexTimeBounds: window,
+          receiptFingerprints: ["b".repeat(64)],
+        };
+      }),
     };
     const transport = createSplunkConnectedQueryTransport(client, provenance);
     await expect(
