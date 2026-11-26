@@ -111,6 +111,13 @@ describe("connected query evidence", () => {
       },
       {
         ...base,
+        readback: {
+          ...base.readback,
+          index_time_bounds: { earliest: 0, latest: 1000 },
+        },
+      },
+      {
+        ...base,
         readback: { ...base.readback, query_job: { sid: "" } },
       },
     ])
@@ -128,5 +135,19 @@ describe("connected query evidence", () => {
     await expect(
       validateConnectedQueryEvidence(findSpec, findEvidence, provenance),
     ).rejects.toThrow();
+
+    await expect(
+      validateConnectedQueryEvidence(
+        spec,
+        {
+          ...base,
+          readback: {
+            ...base.readback,
+            index_time_bounds: { earliest: 200, latest: 400 },
+          },
+        },
+        provenance,
+      ),
+    ).resolves.toBeDefined();
   });
 });

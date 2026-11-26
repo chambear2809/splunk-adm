@@ -147,9 +147,9 @@ export async function validateConnectedQueryEvidence(
     ) ||
     (readback.index_time_bounds as Record<string, number>).earliest >=
       (readback.index_time_bounds as Record<string, number>).latest ||
-    (readback.index_time_bounds as Record<string, number>).earliest >
+    (readback.index_time_bounds as Record<string, number>).earliest <
       provenance.indexTimeBounds.earliest ||
-    (readback.index_time_bounds as Record<string, number>).latest <
+    (readback.index_time_bounds as Record<string, number>).latest >
       provenance.indexTimeBounds.latest ||
     !readback.query_job ||
     typeof readback.query_job !== "object" ||
