@@ -18,6 +18,11 @@ capture_mode = <string>
 * Source retention loss does not delete the case or its notes.
 * Does not enable attachments, schedules, notifications, Cloud or SHC support.
 
+storage_backend = <string>
+* sqlite (default, omitted from packaged defaults) or kvstore after installed
+  qualification. sqlite remains standalone Enterprise only. kvstore uses the
+  insert-only CAS ledger and does not enable a custom collector.
+
 [capture_transport]
 management_uri = <string>
 * unconfigured (default), or an explicit HTTPS loopback management origin.

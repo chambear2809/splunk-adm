@@ -42,6 +42,8 @@ export function useMapPresentation({
   setTab,
   mergeFrontends,
   initialQuery,
+  initialFacets,
+  initialFocus,
 }: {
   graph: Graph;
   topology: Topology;
@@ -49,16 +51,22 @@ export function useMapPresentation({
   setTab: (tab: Tab) => void;
   mergeFrontends: boolean;
   initialQuery: string;
+  initialFacets?: Facets;
+  initialFocus?: {
+    id: string;
+    hops: number;
+    direction: FocusDirection;
+  };
 }) {
   const [backend, setBackend] = useState<string>();
   const [collapse, setCollapse] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [facets, setFacets] = useState<Facets>({});
+  const [facets, setFacets] = useState<Facets>(initialFacets ?? {});
   const [focus, setFocus] = useState<{
     id: string;
     hops: number;
     direction: FocusDirection;
-  } | null>(null);
+  } | null>(initialFocus ?? null);
   const clearFilters = () => {
     setFacets({});
     setFocus(null);

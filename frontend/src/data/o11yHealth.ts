@@ -16,6 +16,10 @@ import {
   type ServiceHealthSelection,
 } from "./evidence";
 import { indexNames } from "./deploymentHealth";
+import {
+  isObservabilityRealm,
+  observabilityRealmOrigin,
+} from "./observabilityRealm";
 import { optionalJobs } from "./optionalJobs";
 import { parseSupplementalEnvelope } from "./supplementalEvidence";
 import { requireNoSearchErrors, type SearchClient } from "./searchClient";
@@ -38,8 +42,9 @@ export function observabilityOrigin(
       return undefined;
     }
   }
-  if (!/^[a-z][a-z0-9]{0,7}$/.test(realm)) return undefined;
-  return `https://app.${realm}.observability.splunkcloud.com/`;
+  if (!isObservabilityRealm(realm)) return undefined;
+  const origin = observabilityRealmOrigin(realm);
+  return origin ? `${origin}/` : undefined;
 }
 
 const OBSERVER_KIND = "o11y_export";

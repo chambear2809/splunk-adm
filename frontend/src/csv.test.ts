@@ -307,6 +307,7 @@ describe("contextEvidenceCsv", () => {
         client_authority: "org-a/network-a",
       },
     ];
+    edge.evidence_truncated = true;
     edge.traffic_observations = [
       {
         source: "stream_ipfix",
@@ -352,6 +353,8 @@ describe("contextEvidenceCsv", () => {
     expect(csv).toContain("traffic_observation");
     expect(csv).toContain("nat_observation");
     expect(csv).toContain("evidence_truncated");
+    expect(csv).toContain(",attachment_evidence,1,");
+    expect(csv).toContain(",traffic_observation,1,");
     expect(csv).toContain(",nat_observation,1,");
     expect(csv).toContain("Cisco FTD eStreamer ConnectionEvent");
     expect(csv).toContain('""translated_initiator_ip"":""192.0.2.44""');

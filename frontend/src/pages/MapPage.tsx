@@ -255,7 +255,10 @@ function StandardMapPage({
     setTab,
     mergeFrontends,
     initialQuery: initialState.query,
+    initialFacets: initialState.facets,
+    initialFocus: initialState.focus,
   });
+  const [pathCollapsed, setPathCollapsed] = useState(false);
   const empty = visible && graph.nodes.length === 0;
   const selectedBundle = useMemo(() => {
     if (selection?.kind !== "edge") return undefined;
@@ -490,9 +493,22 @@ function StandardMapPage({
       scenario,
       tab,
       query,
+      ...(Object.keys(facets).length ? { facets } : {}),
+      ...(focus ? { focus } : {}),
       ...(traceRequest ? { trace: traceRequest } : {}),
     });
-  }, [args, earliest, latest, mode, scenario, tab, query, traceRequest]);
+  }, [
+    args,
+    earliest,
+    latest,
+    mode,
+    scenario,
+    tab,
+    query,
+    facets,
+    focus,
+    traceRequest,
+  ]);
   const switchLive = () => {
     switchSnapshotLive();
     clearSelection();
@@ -511,6 +527,7 @@ function StandardMapPage({
     exportCsv,
     exportContextEvidenceCsv,
     exportJson,
+    exportPolicy,
     exportPng,
     exportPrint,
   } = useMapExports({
@@ -585,7 +602,7 @@ function StandardMapPage({
       data-line-count={visible ? layout.edges.length : 0}
       ref={root}
       style={{
-        height: `calc(max(600px, 100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px) + ${(pathOpen ? PATH_STRIP_ROOM : 0) + (traceOpen ? TRACE_ROOM : 0)}px)`,
+        height: `calc(max(600px, 100vh - ${Math.round(top) + (inSplunk ? 16 : 0)}px) + ${(pathOpen ? (pathCollapsed ? 64 : PATH_STRIP_ROOM) : 0) + (traceOpen ? TRACE_ROOM : 0)}px)`,
       }}
       onKeyDown={(e) => {
         if (e.key !== "Escape" || e.defaultPrevented) return;
@@ -923,6 +940,7 @@ function StandardMapPage({
                 (edge.nat_observations?.length ?? 0) > 0 ||
                 edge.nat_observations_truncated === true,
             )}
+            onPolicy={exportPolicy}
             onJson={exportJson}
             onPng={exportPng}
             onPrint={exportPrint}
@@ -963,6 +981,7 @@ function StandardMapPage({
             <SavedViews
               key={user}
               user={user}
+              inSplunk={inSplunk}
               state={
                 visible
                   ? {
@@ -973,6 +992,8 @@ function StandardMapPage({
                       scenario,
                       tab,
                       query,
+                      ...(Object.keys(facets).length ? { facets } : {}),
+                      ...(focus ? { focus } : {}),
                     }
                   : undefined
               }
@@ -1516,8 +1537,12 @@ function StandardMapPage({
             <PathStrip
               path={path}
               title={`${label(selectedEdge.source)} → ${label(selectedEdge.target)} · ${portLabel(selectedEdge)}`}
-              onClose={() => setPathHidden(true)}
+              onClose={() => {
+                setPathHidden(true);
+                setPathCollapsed(false);
+              }}
               onBackend={setBackend}
+              onCollapsedChange={setPathCollapsed}
             />
           )}
         </section>

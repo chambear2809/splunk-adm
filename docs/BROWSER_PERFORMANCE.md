@@ -2,7 +2,7 @@
 
 The Splunk production build writes `dist/atlas-bundle-report.json` outside the
 app archive. It reports final gzip bytes at level 9, remaining headroom against
-the 671 KiB release gate, and per-module rendered-byte attribution.
+the 680 KiB release gate, and per-module rendered-byte attribution.
 The release checker explicitly uses level 9, preserving its established CI
 calculation across Python versions whose default compression levels differ.
 Module contributions are uncompressed attribution estimates, not additive gzip

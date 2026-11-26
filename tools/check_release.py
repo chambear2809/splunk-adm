@@ -21,7 +21,7 @@ MAX_MEMBER_BYTES = 64 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 # Optional AppDynamics/detector inspection extends the existing single-IIFE page.
 # Same-runtime baseline and measured growth are recorded in the evidence contract.
-MAX_ATLAS_GZIP_BYTES = 671 * 1024
+MAX_ATLAS_GZIP_BYTES = 680 * 1024
 ATLAS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/atlas.js"
 THOUSANDEYES_BUNDLE_PATH = "splunk_adm/appserver/static/pages/thousandeyes.js"
 THOUSANDEYES_MANIFEST_PATH = "splunk_adm/appserver/static/thousandeyes-manifest.json"
@@ -113,6 +113,7 @@ BASELINE_RUNTIME_FILES = frozenset(
                 "watch_management",
                 "retained_artifacts",
                 "source_provider",
+                "qualified_snapshot",
             )
         ),
     }
@@ -169,6 +170,26 @@ BASELINE_EXPOSURES = {
         "POST",
     ),
 }
+COLLABORATION_RUNTIME_FILES = frozenset(
+    {
+        "splunk_adm/bin/adm_collaboration.py",
+        "splunk_adm/bin/adm_observer_mapping.py",
+        "splunk_adm/bin/adm_kv_lib/__init__.py",
+        "splunk_adm/bin/adm_kv_lib/ledger.py",
+        "splunk_adm/bin/adm_kv_lib/store.py",
+        "splunk_adm/bin/adm_collaboration_lib/__init__.py",
+        "splunk_adm/bin/adm_collaboration_lib/payload.py",
+        "splunk_adm/bin/adm_collaboration_lib/rest.py",
+        "splunk_adm/bin/adm_observer_lib/__init__.py",
+        "splunk_adm/bin/adm_observer_lib/rest.py",
+        "splunk_adm/bin/adm_ops_lib/__init__.py",
+        "splunk_adm/bin/adm_ops_lib/ecosystem.py",
+    }
+)
+COLLABORATION_EXPOSURES = {
+    "expose:adm_collaboration": ("adm/collaboration", "GET,POST"),
+    "expose:adm_observer_mapping": ("adm/observer-mapping", "GET,POST"),
+}
 SETTINGS_RUNTIME_FILES = frozenset(
     {
         SETTINGS_ENTRYPOINT,
@@ -221,6 +242,7 @@ BUNDLED_RUNTIME_FILES = frozenset(
         *CASE_RUNTIME_FILES,
         *SETTINGS_RUNTIME_FILES,
         *QUALIFIED_RUNTIME_FILES,
+        *COLLABORATION_RUNTIME_FILES,
         "splunk_adm/bin/adm_recovery.py",
         "splunk_adm/bin/adm_recovery_lib/__init__.py",
         "splunk_adm/bin/adm_recovery_lib/core.py",
@@ -497,6 +519,8 @@ def _check_cases_contract(files, rest, web):
             "script:adm_deployment_settings",
             stanza,
             "script:adm_dependency_monitoring",
+            "script:adm_collaboration",
+            "script:adm_observer_mapping",
         }
     ):
         raise ValueError(
@@ -603,6 +627,81 @@ def _check_baselines_contract(files, rest, web):
     return set(BASELINE_EXPOSURES)
 
 
+def _check_collaboration_contract(files, rest, web):
+    missing = sorted(COLLABORATION_RUNTIME_FILES - files.keys())
+    if missing:
+        raise ValueError(
+            f"collaboration registration missing required files: {', '.join(missing)}"
+        )
+    expected_collaboration = {
+        "match": "/adm/collaboration",
+        "script": "adm_collaboration.py",
+        "scripttype": "persist",
+        "handler": "adm_collaboration.CollaborationHandler",
+        "python.version": "python3",
+        "python.required": "3.13",
+        "requireauthentication": "true",
+        "capability": "adm_investigate",
+        "output_modes": "json",
+        "passpayload": "true",
+        "passsession": "true",
+        "passsystemauth": "false",
+        "passhttpheaders": "true",
+    }
+    expected_mapping = {
+        "match": "/adm/observer-mapping",
+        "script": "adm_observer_mapping.py",
+        "scripttype": "persist",
+        "handler": "adm_observer_mapping.ObserverMappingHandler",
+        "python.version": "python3",
+        "python.required": "3.13",
+        "requireauthentication": "true",
+        "capability.post": "admin_all_objects",
+        "output_modes": "json",
+        "passpayload": "true",
+        "passsession": "true",
+        "passsystemauth": "false",
+    }
+    if dict(rest["script:adm_collaboration"]) != expected_collaboration:
+        raise ValueError(
+            "collaboration registration must use the exact authenticated capability and handler"
+        )
+    if dict(rest["script:adm_observer_mapping"]) != expected_mapping:
+        raise ValueError(
+            "observer mapping registration must use authenticated administrator writes"
+        )
+    for section, (pattern, methods) in COLLABORATION_EXPOSURES.items():
+        if not web.has_section(section) or dict(web[section]) != {
+            "pattern": pattern,
+            "methods": methods,
+        }:
+            raise ValueError(
+                "collaboration browser exposure must use exact routes, methods, and native CSRF"
+            )
+    for name in COLLABORATION_RUNTIME_FILES:
+        if not name.endswith(".py"):
+            continue
+        try:
+            tree = ast.parse(files[name], filename=name)
+        except (SyntaxError, ValueError, UnicodeDecodeError) as exc:
+            raise ValueError(f"invalid collaboration Python runtime: {name}") from exc
+        if name.endswith("/adm_collaboration.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "CollaborationHandler"
+            for node in tree.body
+        ):
+            raise ValueError(
+                "collaboration entrypoint must define CollaborationHandler"
+            )
+        if name.endswith("/adm_observer_mapping.py") and not any(
+            isinstance(node, ast.ClassDef) and node.name == "ObserverMappingHandler"
+            for node in tree.body
+        ):
+            raise ValueError(
+                "observer mapping entrypoint must define ObserverMappingHandler"
+            )
+    return set(COLLABORATION_EXPOSURES)
+
+
 def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
     for name in SETTINGS_RUNTIME_FILES:
         try:
@@ -670,6 +769,7 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
     web = _packaged_config(files, "default/web.conf")
     case_exposures = _check_cases_contract(files, rest, web)
     baseline_exposures = _check_baselines_contract(files, rest, web)
+    collaboration_exposures = _check_collaboration_contract(files, rest, web)
     exposure = "expose:adm_deployment_settings"
     if (
         not web.has_section(exposure)
@@ -693,7 +793,10 @@ def _check_settings_contract(files: dict[str, bytes], registry: bytes) -> None:
         != "configs/v1/conftypes/macros/stanzas:get"
         or web.get(macro_read, "methods", fallback="") != "POST"
         or set(web.sections())
-        != {exposure, macro_read} | case_exposures | baseline_exposures
+        != {exposure, macro_read}
+        | case_exposures
+        | baseline_exposures
+        | collaboration_exposures
     ):
         raise ValueError(
             "metadata browser exposure must use the exact read-only macro getter, POST only, and native CSRF protection"

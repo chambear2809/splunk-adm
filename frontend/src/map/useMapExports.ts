@@ -106,6 +106,21 @@ export function useMapExports({
       setExportBusy(false);
     }
   };
+  const exportPolicy = () => {
+    void import("../ops/policy").then(({ ciliumPolicyDraft }) => {
+      const draft = ciliumPolicyDraft(
+        graph,
+        graph.boundary.namespace,
+        graph.boundary.service,
+      );
+      download(
+        `${fileStem}-cilium-observed-l4.yaml`,
+        "text/yaml;charset=utf-8",
+        draft.yaml,
+      );
+      close();
+    });
+  };
   const exportJson = () => {
     download(
       `${fileStem}.json`,
@@ -133,6 +148,7 @@ export function useMapExports({
     exportCsv,
     exportContextEvidenceCsv,
     exportJson,
+    exportPolicy,
     exportPng,
     exportPrint,
   };

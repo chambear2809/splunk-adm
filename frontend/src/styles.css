@@ -797,6 +797,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.adm .path-strip .path-collapse {
+  flex: none;
+  font-size: 12px;
+}
+.adm .path-strip.collapsed {
+  padding-bottom: 8px;
+}
+.adm .path-strip.collapsed .stages,
+.adm .path-strip.collapsed .path-policy,
+.adm .path-strip.collapsed .path-backend,
+.adm .path-strip.collapsed .path-note,
+.adm .path-strip.collapsed .path-legend {
+  display: none;
+}
+@media (max-width: 900px) {
+  .adm .path-strip:not(.collapsed) .stages {
+    max-height: 140px;
+  }
+}
 .adm .path-legend {
   display: flex;
   gap: 12px;

@@ -631,6 +631,12 @@ export function SetupPage({
                 . Stored observer and observer_kind values must be lowercase;
                 this checklist reads the stored keys without changing them.
               </p>
+              <ObserverMappingForm
+                disabled={busy || !snapshot.authorized}
+                onMapped={() => setRevision((value) => value + 1)}
+                onError={setError}
+                onNotice={setNotice}
+              />
               {uppercase.length > 0 && (
                 <ul>
                   {uppercase.slice(0, 10).map((row) => (
@@ -1020,5 +1026,111 @@ export function SetupPage({
         </a>
       </p>
     </section>
+  );
+}
+
+function ObserverMappingForm({
+  disabled,
+  onMapped,
+  onError,
+  onNotice,
+}: {
+  disabled: boolean;
+  onMapped: () => void;
+  onError: (message: string) => void;
+  onNotice: (message: string) => void;
+}) {
+  const [kind, setKind] = useState("");
+  const [observer, setObserver] = useState("");
+  const [scope, setScope] = useState("");
+  const [cluster, setCluster] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="atlas-observer-map"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setBusy(true);
+        void import("../data/observerMappingClient")
+          .then(({ observerMappingClient }) =>
+            observerMappingClient.map({
+              observer_kind: kind.trim().toLowerCase(),
+              observer: observer.trim().toLowerCase(),
+              scope: scope.trim(),
+              ...(cluster.trim() ? { cluster: cluster.trim() } : {}),
+            }),
+          )
+          .then(() => {
+            setKind("");
+            setObserver("");
+            setScope("");
+            setCluster("");
+            onNotice(
+              "Observer mapping stored. Insert-only KV does not replace an existing row.",
+            );
+            onMapped();
+          })
+          .catch((error) =>
+            onError(
+              error instanceof Error
+                ? error.message
+                : "Observer mapping could not be stored.",
+            ),
+          )
+          .finally(() => setBusy(false));
+      }}
+    >
+      <h3>Map an unmapped observer</h3>
+      <p className="muted">
+        Insert-only. Reserved unmapped, unknown, or reserved scopes are
+        rejected. NetFlow exporters, APIC hosts, FTD devices, clusters and
+        Hubble nodes use this form instead of a CSV edit.
+      </p>
+      <label>
+        Observer kind
+        <Text
+          aria-label="Observer kind"
+          value={kind}
+          disabled={disabled || busy}
+          onChange={(_, { value }) => setKind(value)}
+        />
+      </label>
+      <label>
+        Observer
+        <Text
+          aria-label="Observer"
+          value={observer}
+          disabled={disabled || busy}
+          onChange={(_, { value }) => setObserver(value)}
+        />
+      </label>
+      <label>
+        Scope
+        <Text
+          aria-label="Mapped scope"
+          value={scope}
+          disabled={disabled || busy}
+          onChange={(_, { value }) => setScope(value)}
+        />
+      </label>
+      <label>
+        Cluster (optional)
+        <Text
+          aria-label="Mapped cluster"
+          value={cluster}
+          disabled={disabled || busy}
+          onChange={(_, { value }) => setCluster(value)}
+        />
+      </label>
+      <button
+        type="submit"
+        className="secondary-button"
+        disabled={
+          disabled || busy || !kind.trim() || !observer.trim() || !scope.trim()
+        }
+      >
+        Store mapping
+      </button>
+    </form>
   );
 }

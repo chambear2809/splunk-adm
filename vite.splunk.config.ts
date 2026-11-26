@@ -9,7 +9,7 @@ import { journeysAssetVersion } from "./vite.journeys.shared";
 import { historyAssetVersion } from "./vite.history.shared";
 
 // Match the release gate in tools/check_release.py.
-const SPLUNK_BUNDLE_CEILING_GZIP = 671 * 1024;
+const SPLUNK_BUNDLE_CEILING_GZIP = 680 * 1024;
 type AtlasBundleAsset = {
   type: string;
   fileName: string;

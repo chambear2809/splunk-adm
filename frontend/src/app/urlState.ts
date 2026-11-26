@@ -3,6 +3,7 @@ import { validVmScope } from "../graph";
 import { isSafeTime } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
 import type { DemoScenario } from "../data/demoClient";
+import type { Facets, FocusDirection } from "../filters";
 
 export const PAGES = [
   "applications",
@@ -48,6 +49,8 @@ export type UrlState = {
   scenario: DemoScenario;
   tab: "network" | "services" | "devices" | "table";
   query: string;
+  facets?: Facets;
+  focus?: { id: string; hops: number; direction: FocusDirection };
   /** Requested source → destination trace (Map `trace_src` / `trace_dst`). */
   trace?: { src: string; dst: string; scope?: string };
   /** Device lookup target (Device page `id`). */
@@ -159,6 +162,69 @@ export function parseUrlState(
     )
   )
     throw new Error("Invalid highlight query.");
+  const identity = params.get("facet_identity");
+  if (
+    identity !== null &&
+    identity !== "identified" &&
+    identity !== "external" &&
+    identity !== "unknown"
+  )
+    throw new Error("Unsupported identity filter.");
+  const portRaw = params.get("facet_port");
+  if (
+    portRaw !== null &&
+    (!/^[1-9]\d{0,4}$/.test(portRaw) || Number(portRaw) > 65535)
+  )
+    throw new Error("Unsupported port filter.");
+  const source = params.get("facet_source");
+  if (source !== null && !isSafeIdentifier(source))
+    throw new Error("Unsupported source filter.");
+  const flag = (key: string) => {
+    const value = params.get(key);
+    if (value === null) return undefined;
+    if (value !== "1") throw new Error(`Unsupported ${key} filter.`);
+    return true;
+  };
+  const blocked = flag("facet_blocked");
+  const hideInfrastructure = flag("facet_hide_infra");
+  const hideInferred = flag("facet_hide_inferred");
+  const facets: Facets | undefined =
+    identity ||
+    portRaw ||
+    source ||
+    blocked ||
+    hideInfrastructure ||
+    hideInferred
+      ? {
+          ...(identity ? { identity } : {}),
+          ...(portRaw ? { port: Number(portRaw) } : {}),
+          ...(source ? { source } : {}),
+          ...(blocked ? { blocked } : {}),
+          ...(hideInfrastructure ? { hideInfrastructure } : {}),
+          ...(hideInferred ? { hideInferred } : {}),
+        }
+      : undefined;
+  const focusId = params.get("focus_id");
+  const focusHops = params.get("focus_hops");
+  const focusDir = params.get("focus_dir");
+  if (
+    (focusId !== null || focusHops !== null || focusDir !== null) &&
+    (!isSafeIdentifier(focusId ?? "") ||
+      !/^[1-3]$/.test(focusHops ?? "") ||
+      (focusDir !== null &&
+        focusDir !== "any" &&
+        focusDir !== "callers" &&
+        focusDir !== "dependencies"))
+  )
+    throw new Error("Invalid focus selection.");
+  const focus =
+    focusId && focusHops
+      ? {
+          id: focusId,
+          hops: Number(focusHops),
+          direction: (focusDir ?? "any") as FocusDirection,
+        }
+      : undefined;
   const appdValues = [
     params.get("appd_app"),
     params.get("appd_snapshot"),
@@ -217,6 +283,8 @@ export function parseUrlState(
         }
       : {}),
     ...(device ? { device } : {}),
+    ...(facets ? { facets } : {}),
+    ...(focus ? { focus } : {}),
     args,
     earliest,
     latest,
@@ -242,6 +310,12 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
     "scenario",
     "tab",
     "q",
+    "facet_identity",
+    "facet_port",
+    "facet_source",
+    "facet_blocked",
+    "facet_hide_infra",
+    "facet_hide_inferred",
   ]) {
     if (!clean.has(key)) continue;
     const probe = new URLSearchParams();
@@ -309,6 +383,25 @@ export function recoverUrlState(params: URLSearchParams, inSplunk = false) {
       }
     }
   }
+  if (
+    clean.has("focus_id") ||
+    clean.has("focus_hops") ||
+    clean.has("focus_dir")
+  ) {
+    const probe = new URLSearchParams();
+    for (const key of ["focus_id", "focus_hops", "focus_dir"]) {
+      const value = clean.get(key);
+      if (value !== null) probe.set(key, value);
+    }
+    try {
+      parseUrlState(probe, inSplunk);
+    } catch {
+      for (const key of ["focus_id", "focus_hops", "focus_dir"]) {
+        clean.delete(key);
+        dropped.push(key);
+      }
+    }
+  }
   if (clean.has("vm_scope")) {
     try {
       parseUrlState(clean, inSplunk);
@@ -351,6 +444,20 @@ export function stateParams(state: UrlState): URLSearchParams {
   });
   if (state.args.vmScope) params.set("vm_scope", state.args.vmScope);
   if (state.query) params.set("q", state.query);
+  if (state.facets?.identity)
+    params.set("facet_identity", state.facets.identity);
+  if (state.facets?.port !== undefined)
+    params.set("facet_port", String(state.facets.port));
+  if (state.facets?.source) params.set("facet_source", state.facets.source);
+  if (state.facets?.blocked) params.set("facet_blocked", "1");
+  if (state.facets?.hideInfrastructure) params.set("facet_hide_infra", "1");
+  if (state.facets?.hideInferred) params.set("facet_hide_inferred", "1");
+  if (state.focus) {
+    params.set("focus_id", state.focus.id);
+    params.set("focus_hops", String(state.focus.hops));
+    if (state.focus.direction !== "any")
+      params.set("focus_dir", state.focus.direction);
+  }
   if (state.trace) {
     params.set("trace_src", state.trace.src);
     params.set("trace_dst", state.trace.dst);
@@ -395,6 +502,15 @@ export function writeUrlState(state: UrlState) {
       "trace_src",
       "trace_dst",
       "trace_scope",
+      "facet_identity",
+      "facet_port",
+      "facet_source",
+      "facet_blocked",
+      "facet_hide_infra",
+      "facet_hide_inferred",
+      "focus_id",
+      "focus_hops",
+      "focus_dir",
     ])
       params.delete(key);
     stateParams(state).forEach((value, key) => params.set(key, value));

@@ -61,14 +61,25 @@ export function PathStrip({
   title,
   onClose,
   onBackend,
+  onCollapsedChange,
 }: {
   path: CandidatePath;
   title: string;
   onClose: () => void;
   onBackend?: (id: string) => void;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const scroller = useRef<HTMLOListElement>(null);
   const [fade, setFade] = useState({ left: false, right: false });
+  const [collapsed, setCollapsed] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 900px)").matches,
+  );
+  const toggleCollapsed = (next: boolean) => {
+    setCollapsed(next);
+    onCollapsedChange?.(next);
+  };
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -88,12 +99,24 @@ export function PathStrip({
   }, [path]);
   let n = 0;
   return (
-    <section className="path-strip" aria-label={`Candidate path: ${title}`}>
+    <section
+      className={`path-strip${collapsed ? " collapsed" : ""}`}
+      aria-label={`Candidate path: ${title}`}
+    >
       <header>
         <h3>Candidate path</h3>
         <p title="From inventory; observations mark where traffic was seen, not packet order.">
           {title}
         </p>
+        <button
+          type="button"
+          className="secondary-button path-collapse"
+          aria-expanded={!collapsed}
+          aria-controls="atlas-path-stages"
+          onClick={() => toggleCollapsed(!collapsed)}
+        >
+          {collapsed ? "Show path" : "Hide path"}
+        </button>
         <div className="path-legend" aria-hidden="true">
           <span>
             <i className="seen" /> Seen
@@ -145,6 +168,8 @@ export function PathStrip({
         </div>
       )}
       <ol
+        id="atlas-path-stages"
+        hidden={collapsed}
         ref={scroller}
         className={`stages ${fade.left ? "fade-left" : ""} ${fade.right ? "fade-right" : ""}`}
         tabIndex={0}

@@ -1,5 +1,9 @@
 import { configuredHttpsOrigin as validatedOrigin } from "./evidenceConfig";
 import {
+  isObservabilityRealm,
+  observabilityRealmOrigin,
+} from "./observabilityRealm";
+import {
   literal,
   validText,
   validateServiceHealthSelection,
@@ -52,7 +56,6 @@ export interface O11yNavigationModel {
   actions: O11yNavigationAction[];
 }
 
-const REALM_PATTERN = /^[a-z][a-z0-9]{0,7}$/;
 const MAX_NATIVE_IDS = 64;
 
 /** Accept only an explicit HTTPS origin, never a route, credential, or query. */
@@ -64,11 +67,7 @@ export function configuredHttpsOrigin(value: string): string | undefined {
   }
 }
 
-/** Splunk's documented realm-based product UI origin on the current domain. */
-export function observabilityRealmOrigin(realm: string): string | undefined {
-  if (!REALM_PATTERN.test(realm)) return undefined;
-  return `https://app.${realm}.observability.splunkcloud.com`;
-}
+export { observabilityRealmOrigin };
 
 function validateIds(ids: string[] | undefined, label: string): string[] {
   if (ids === undefined) return [];
@@ -121,7 +120,7 @@ export function buildO11yNavigation(
 ): O11yNavigationModel {
   const selection = validateServiceHealthSelection(input.selection);
   const realm = literal(input.realm, 8);
-  if (!REALM_PATTERN.test(realm))
+  if (!isObservabilityRealm(realm))
     throw new Error("Invalid Observability Cloud realm.");
   const organizationId = literal(input.organizationId, 255);
   const apmMmsId =

@@ -11,3 +11,8 @@ platform = <string>
 source_mode = unavailable
 * The only shipped value; there is no production source provider.
 * No setting enables capture, schedules, notifications, or automated actions.
+storage_backend = <string>
+* sqlite (default, omitted from packaged defaults) or kvstore after installed
+  qualification. kvstore writes the same document model through the insert-only
+  CAS ledger. It never creates a collector; baselines read retained
+  source=adm:qualified summaries.

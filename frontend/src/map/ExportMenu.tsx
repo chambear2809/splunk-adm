@@ -4,6 +4,7 @@ export function ExportMenu({
   onCsv,
   onContextEvidenceCsv,
   hasContextEvidence,
+  onPolicy,
   onJson,
   onPng,
   onPrint,
@@ -15,6 +16,7 @@ export function ExportMenu({
   onCsv: () => void;
   onContextEvidenceCsv: () => void;
   hasContextEvidence: boolean;
+  onPolicy?: () => void;
   onJson: () => void;
   onPng: () => void;
   onPrint: () => void;
@@ -59,6 +61,18 @@ export function ExportMenu({
           <span>
             <b>Context evidence (CSV)</b>
             <small>Per-edge attachment, traffic, and NAT evidence.</small>
+          </span>
+        </button>
+      )}
+      {onPolicy && (
+        <button className="menu-item" onClick={onPolicy}>
+          <FileJson size={17} aria-hidden />
+          <span>
+            <b>Cilium policy draft (YAML)</b>
+            <small>
+              L3/L4 observed conversations. Apply with per-endpoint
+              PolicyAuditMode; never daemon-wide audit.
+            </small>
           </span>
         </button>
       )}

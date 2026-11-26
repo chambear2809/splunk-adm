@@ -39,6 +39,7 @@ Versions are the inspected pins in [`research/package-manifest.json`](../../rese
 | DNS (Stream / Hubble L7) | Stream App 8.1.6; Hubble | HF / cluster | `adm_index_dns_stream` (unset) / `stream:dns` | Optional resolution evidence | [`splunk-stream-setup`][s-stream] (platform only) | [dns-evidence](dns-evidence.md) |
 | Envoy access logs | Customer producer | HEC | `adm_index_proxy_envoy` (unset) / `atlas:proxy:envoy_access` | Optional request evidence | — | [proxy-evidence](proxy-evidence.md) |
 | AWS VPC Flow Logs | AWS add-on | Vendor input | `adm_index_aws_vpc_flow` (unset) | Optional cloud flow evidence | [`splunk-aws-ta-setup`][s-aws] (platform only) | [aws-vpc-flow-evidence](aws-vpc-flow-evidence.md) |
+| Load balancers / NGFW / Azure VNet / GCP VPC / ServiceNow | Existing Splunkbase TAs | Search-time only | `adm_index_f5`, `adm_index_haproxy`, `adm_index_aws`, `adm_index_azure`, `adm_index_gcp`, `adm_index_pan`, `adm_index_fortigate`, `adm_index_snow` (unset) | Optional VIP legs, VNet/VPC flows, NGFW traffic, CMDB context | — | [ecosystem-tas](ecosystem-tas.md) |
 | Observability Cloud health / detectors | Atlas exporters | Operator host → HEC | `adm_index_o11y_health`, `adm_index_o11y_detector_events` (unset) | Optional health evidence | — | [o11y-health](o11y-health.md), [o11y-detector-events](o11y-detector-events.md) |
 | Asset history (CMDB/IPAM export) | Atlas importer | Operator host → HEC | `adm_index_asset_history` (unset) / `adm:asset_history` | Optional ownership history | — | [asset-history](asset-history.md) |
 

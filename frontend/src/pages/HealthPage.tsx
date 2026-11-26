@@ -11,6 +11,7 @@ import {
 import { formatUtc } from "../time";
 import { TimePicker } from "../map/TimePicker";
 import { isSafeTime, resolveTime, timeError } from "../data/timeBounds";
+import { pageURL } from "../app/urlState";
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -101,6 +102,7 @@ export function HealthPage({
             refresh={report}
             asOf={range.asOf}
           />
+          <UnmappedObserversCallout />
         </>
       )}
     </section>
@@ -148,6 +150,45 @@ function SummaryHealthSection({
           {h.duplicatedRuns > 0 && ` · ${h.duplicatedRuns} duplicated runs`}
         </p>
       )}
+    </section>
+  );
+}
+
+function UnmappedObserversCallout() {
+  const [count, setCount] = useState<number>();
+  useEffect(() => {
+    const request = new AbortController();
+    void import("../data/observerMappingClient")
+      .then(({ observerMappingClient }) =>
+        observerMappingClient.list(request.signal).then((rows) => {
+          if (request.signal.aborted) return;
+          setCount(
+            rows.filter(
+              (row) =>
+                row.mapping_status === "unmapped" ||
+                row.scope.toLowerCase().startsWith("unmapped:"),
+            ).length,
+          );
+        }),
+      )
+      .catch(() => {
+        if (!request.signal.aborted) setCount(undefined);
+      });
+    return () => request.abort();
+  }, []);
+  if (!count) return null;
+  return (
+    <section className="callout warn" role="status">
+      <h3>Unmapped observers</h3>
+      <p>
+        {count} stored observer{" "}
+        {count === 1 ? "row still uses" : "rows still use"} a reserved unmapped
+        identity. Map them in Setup before correlating NetFlow, FTD, Hubble or
+        cluster evidence.
+      </p>
+      <p>
+        <a href={pageURL("setup")}>Open observer mapping</a>
+      </p>
     </section>
   );
 }

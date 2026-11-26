@@ -39,6 +39,9 @@ import {
 } from "./observedImpact";
 import "./impact.css";
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
+import { resiliencePosture } from "../ops/spof";
+import { cabPack } from "../ops/cab";
+import { triageSteps } from "../ops/triage";
 
 /** Resolve a shareable Impact window once before dispatching a live search. */
 export function resolveImpactWindow(
@@ -871,15 +874,18 @@ export function ImpactPage({
                 </div>
               </>
             ) : (
-              <div className="atlas-impact-table">
-                <VirtualTable
-                  caption={`${result.rows.length} dependencies across ${plural(result.conversations, "conversation")}`}
-                  rows={result.rows}
-                  columns={dependsColumns(data?.hours)}
-                  rowKey={(d) => d.id}
-                  empty="No dependency observed (not evidence that none exist)"
-                />
-              </div>
+              <>
+                <div className="atlas-impact-table">
+                  <VirtualTable
+                    caption={`${result.rows.length} dependencies across ${plural(result.conversations, "conversation")}`}
+                    rows={result.rows}
+                    columns={dependsColumns(data?.hours)}
+                    rowKey={(d) => d.id}
+                    empty="No dependency observed (not evidence that none exist)"
+                  />
+                </div>
+                <ResilienceOps result={result} />
+              </>
             )}
             <p className="atlas-impact-foot muted small">
               <button
@@ -954,5 +960,56 @@ export function ImpactPage({
         )}
       </div>
     </main>
+  );
+}
+
+function ResilienceOps({ result }: { result: DependsResult }) {
+  const posture = resiliencePosture(result);
+  const pack = cabPack(
+    `${result.label}-window`,
+    { start: "selected-window", end: "selected-window" },
+    posture,
+  );
+  const first = result.rows[0];
+  const steps = first
+    ? triageSteps({
+        id: first.id,
+        source: first.token,
+        target: first.token,
+        relationship: "communicates_with",
+        evidence: [],
+        confidence: first.evidence === "observed" ? "observed" : "inferred",
+        count: first.conversations,
+      })
+    : [];
+  return (
+    <section className="atlas-impact-ops" aria-label="Resilience posture">
+      <h2>Resilience posture</h2>
+      <p>{posture.headline}</p>
+      <p className="muted small">
+        Outage rows are observed single points. Degraded rows have an alternate
+        in this window. Unverified means redundancy was not collected.
+      </p>
+      {pack.singlePoints.length > 0 && (
+        <p>CAB pre-flight: {pack.singlePoints.slice(0, 8).join(", ")}</p>
+      )}
+      <ol>
+        {pack.verification.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ol>
+      {steps.length > 0 && (
+        <>
+          <h3>Connectivity triage</h3>
+          <ol>
+            {steps.map((step) => (
+              <li key={step.id}>
+                <strong>{step.title}</strong> {step.detail}
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
+    </section>
   );
 }

@@ -21,8 +21,22 @@ export function HelpPage() {
           what it needs. Add up to 5 elements to fail together.
         </dd>
         <dt>Admin</dt>
-        <dd>Setup and data health.</dd>
+        <dd>
+          Setup (index macros, observer mapping, deployment expectations) and
+          data health. Unmapped observers stay isolated until mapped.
+        </dd>
       </dl>
+      <h2>Collectors Atlas reads</h2>
+      <p>
+        Atlas ships no inputs.conf. Evidence comes from Splunk Stream
+        (NetFlow/TCP), Splunk Connect for SNMP, the Splunk OTel Collector
+        (traces, Kubernetes objects, Hubble), Cisco DC Networking, FTD
+        eStreamer, and optional Splunkbase TAs (F5, HAProxy, AWS, Azure VNet,
+        GCP VPC, PAN-OS, FortiGate, VMware, ServiceNow). Point the matching{" "}
+        <code>adm_index_*</code> macros at those indexes. Webhook alerts for
+        newly blocked, redundancy loss, new dependency and telemetry blindness
+        ship disabled.
+      </p>
       <h2 id="about-evidence">About evidence</h2>
       <ul className="atlas-help-list">
         <li>Findings cover the loaded window and sources only.</li>

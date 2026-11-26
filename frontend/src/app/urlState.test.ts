@@ -13,6 +13,21 @@ describe("Atlas deep links", () => {
     expect(SECTION_OF.cases).toBe("cases");
   });
 
+  it("round trips filter facets and focus", () => {
+    const state = parseUrlState(
+      new URLSearchParams(
+        "service=payments&environment=prod&cluster=cluster-a&namespace=shop&mode=live&facet_identity=unknown&facet_blocked=1&focus_id=leaf-201&focus_hops=2&focus_dir=callers",
+      ),
+    );
+    expect(state.facets).toEqual({ identity: "unknown", blocked: true });
+    expect(state.focus).toEqual({
+      id: "leaf-201",
+      hops: 2,
+      direction: "callers",
+    });
+    expect(parseUrlState(stateParams(state))).toEqual(state);
+  });
+
   it("round trips the complete map state", () => {
     const state = parseUrlState(
       new URLSearchParams(

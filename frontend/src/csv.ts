@@ -245,9 +245,13 @@ export function contextEvidenceCsv(graph: Graph): string {
         edge.source,
         edge.target,
         evidenceKind,
-        evidenceKind === "nat_observation" && edge.nat_observations_truncated
-          ? "1"
-          : "",
+        evidenceKind === "nat_observation"
+          ? edge.nat_observations_truncated
+            ? "1"
+            : ""
+          : edge.evidence_truncated
+            ? "1"
+            : "",
         evidenceKind === "nat_observation"
           ? "Cisco FTD eStreamer ConnectionEvent"
           : evidenceKind === "traffic_observation"

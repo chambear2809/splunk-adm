@@ -11,6 +11,12 @@ access = read : [ * ], write : [ admin, sc_admin ]
 [collections/adm_observer_scope]
 access = read : [ * ], write : [ admin, sc_admin ]
 
+[collections/adm_saved_views]
+access = read : [ * ], write : [ admin, sc_admin ]
+
+[collections/adm_business_ownership]
+access = read : [ * ], write : [ admin, sc_admin ]
+
 [collections/adm_network_source_scope]
 access = read : [ * ], write : [ admin, sc_admin ]
 

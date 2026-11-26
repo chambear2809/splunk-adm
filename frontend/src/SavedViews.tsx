@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { pageURL, stateParams, type UrlState } from "./app/urlState";
 import { savedViewsFor } from "./app/savedViews";
+import type { ServerSavedView } from "./data/collaborationClient";
 
 export function SavedViews({
   state,
   user,
+  inSplunk = false,
 }: {
   state?: UrlState;
   user?: string;
+  inSplunk?: boolean;
 }) {
   const store = useMemo(() => savedViewsFor(user), [user]);
   const [views, setViews] = useState(store.read);
+  const [shared, setShared] = useState<ServerSavedView[]>([]);
   const [name, setName] = useState("");
+  const [visibility, setVisibility] = useState<"private" | "shared">("private");
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
@@ -20,6 +25,25 @@ export function SavedViews({
     setCopied(false);
     setMessage("");
   }, [store]);
+  useEffect(() => {
+    if (!inSplunk) return;
+    const request = new AbortController();
+    void import("./data/collaborationClient")
+      .then(({ collaborationClient }) =>
+        collaborationClient.loadViews(request.signal).then((document) => {
+          if (!request.signal.aborted) setShared(document.views);
+        }),
+      )
+      .catch((error) => {
+        if (!request.signal.aborted)
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Shared views are unavailable.",
+          );
+      });
+    return () => request.abort();
+  }, [inSplunk]);
   const hrefFor = (viewState: UrlState) => {
     const params = stateParams(viewState);
     if (typeof location === "undefined") return pageURL("map", params);
@@ -51,8 +75,8 @@ export function SavedViews({
     <section className="atlas-saved-views" aria-labelledby="saved-views-title">
       <h2 id="saved-views-title">Saved views</h2>
       <p>
-        Saved only for your user in this browser. Links restore scope, time, tab
-        and highlight; local filters and focus are not included.
+        Browser saves stay on this workstation. Shared views use the insert-only
+        collaboration ledger and restore filters and focus.
       </p>
       <button
         className="secondary-button"
@@ -72,10 +96,47 @@ export function SavedViews({
           event.preventDefault();
           if (!state) return;
           try {
-            store.save(name, state);
+            const saved = store.save(name, state);
             setViews(store.read());
             setName("");
             setMessage("View saved.");
+            if (inSplunk && visibility === "shared" && user) {
+              const requestId = `view${Date.now().toString(36)}${Math.random()
+                .toString(36)
+                .slice(2, 10)}`.replace(/[^A-Za-z0-9_-]/g, "");
+              void import("./data/collaborationClient")
+                .then(({ collaborationClient }) =>
+                  collaborationClient.loadViews().then((document) =>
+                    collaborationClient.saveViews(
+                      [
+                        {
+                          id:
+                            saved.id
+                              .replace(/[^A-Za-z0-9_-]/g, "")
+                              .slice(0, 80) || requestId,
+                          name: saved.name,
+                          visibility: "shared" as const,
+                          owner: user,
+                          state: saved.state,
+                        },
+                        ...document.views.filter(
+                          (view) => view.name !== saved.name,
+                        ),
+                      ].slice(0, 50),
+                      document.revision,
+                      requestId,
+                    ),
+                  ),
+                )
+                .then((document) => setShared(document.views))
+                .catch((error) =>
+                  setMessage(
+                    error instanceof Error
+                      ? error.message
+                      : "Shared view could not be stored.",
+                  ),
+                );
+            }
           } catch (error) {
             setMessage(
               error instanceof Error
@@ -93,12 +154,32 @@ export function SavedViews({
             disabled={!state || !store.enabled}
           />
         </label>
+        {inSplunk && (
+          <label>
+            Visibility{" "}
+            <select
+              value={visibility}
+              onChange={(event) =>
+                setVisibility(event.target.value as "private" | "shared")
+              }
+            >
+              <option value="private">Private</option>
+              <option value="shared">Shared with this search head</option>
+            </select>
+          </label>
+        )}
         <button type="submit" disabled={!state || !store.enabled}>
           Save view
         </button>
       </form>
       {message && <p role="alert">{message}</p>}
       <ul>
+        {shared.map((view) => (
+          <li key={`shared-${view.id}`}>
+            <a href={hrefFor(view.state)}>{view.name}</a>{" "}
+            <span className="muted">shared · {view.owner}</span>
+          </li>
+        ))}
         {views.map((view) => (
           <li key={view.id}>
             <a href={hrefFor(view.state)}>{view.name}</a>{" "}

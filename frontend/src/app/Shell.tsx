@@ -18,6 +18,7 @@ import {
 import type { SearchClient } from "../data/searchClient";
 import { healthIndicator, useHealthStatus } from "../data/healthStatus";
 import { NarrowAtlas } from "./mountWidth";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 const useSplunkTheme = toolkitDefault(useSplunkThemeExport);
 const Root = styled.div`
@@ -197,7 +198,7 @@ export function Shell({
             pageFocus.current = focusBeforePointer.current;
           }}
         >
-          {children}
+          <ErrorBoundary label="This page">{children}</ErrorBoundary>
         </div>
       </NarrowAtlas.Provider>
     </Root>

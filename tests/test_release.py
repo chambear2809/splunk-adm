@@ -42,6 +42,7 @@ from tools.check_release import (
     SETTINGS_CONFIG_FILES,
     SETTINGS_REGISTRY_PATH,
     SETTINGS_RUNTIME_FILES,
+    COLLABORATION_RUNTIME_FILES,
     check_release,
 )
 
@@ -423,6 +424,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     in QUALIFIED_RUNTIME_FILES
                     | CASE_RUNTIME_FILES
                     | BASELINE_RUNTIME_FILES
+                    | COLLABORATION_RUNTIME_FILES
                     else b"#!/usr/bin/env python3\n"
                     if name.endswith("adm_recovery.py")
                     else b"runtime\n"
