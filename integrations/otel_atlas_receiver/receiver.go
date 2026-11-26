@@ -55,7 +55,15 @@ func (r *snapshotReceiver) Start(_ context.Context, _ component.Host) error {
 		defer ticker.Stop()
 		for {
 			if err := r.collectAndSend(ctx); err != nil && ctx.Err() == nil {
-				r.logger.Error("atlas kubernetes snapshot failed")
+				reason, resource, status := reasonOf(err)
+				fields := []zap.Field{zap.String("reason", reason)}
+				if resource != "" {
+					fields = append(fields, zap.String("resource", resource))
+				}
+				if status != 0 {
+					fields = append(fields, zap.Int("http_status", status))
+				}
+				r.logger.Error("atlas kubernetes snapshot failed", fields...)
 			}
 			select {
 			case <-ctx.Done():
@@ -88,11 +96,11 @@ func (r *snapshotReceiver) collectAndSend(parent context.Context) error {
 	var budget int64
 	nodes, err := collect(ctx, "nodes", &r.config, r.fetch, &budget, time.Now)
 	if err != nil {
-		return errors.New("snapshot collection failed")
+		return inResource("nodes", err)
 	}
 	pods, err := collect(ctx, "pods", &r.config, r.fetch, &budget, time.Now)
 	if err != nil {
-		return errors.New("snapshot collection failed")
+		return inResource("pods", err)
 	}
 	logs := plog.NewLogs()
 	for _, s := range []snapshot{nodes, pods} {
@@ -111,25 +119,25 @@ func (r *snapshotReceiver) collectAndSend(parent context.Context) error {
 		for _, row := range append(s.Rows, s.Manifest) {
 			b, err := encoded(row)
 			if err != nil {
-				return errors.New("snapshot encoding failed")
+				return fail("encoding")
 			}
 			var body map[string]any
 			if err := json.Unmarshal(b, &body); err != nil {
-				return errors.New("snapshot encoding failed")
+				return fail("encoding")
 			}
 			l := sl.LogRecords().AppendEmpty()
 			if err := l.Body().SetEmptyMap().FromRaw(body); err != nil {
-				return errors.New("snapshot encoding failed")
+				return fail("encoding")
 			}
 			seconds := row["observation_completed_at"].(float64)
 			l.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(0, int64(seconds*1e9))))
 		}
 	}
 	if ctx.Err() != nil {
-		return errors.New("snapshot collection timed out")
+		return fail("timeout")
 	}
 	if err := r.next.ConsumeLogs(ctx, logs); err != nil {
-		return errors.New("snapshot delivery failed")
+		return fail("delivery_failed")
 	}
 	return nil
 }

@@ -15,6 +15,7 @@ from .payload import PayloadError, validate
 
 COLLECTIONS = {"views": "adm_saved_views", "ownership": "adm_business_ownership"}
 MAX_BODY_BYTES = 32 * 1024
+COMPACT_CAPABILITY = "admin_all_objects"
 
 
 def principal_of(store):
@@ -79,23 +80,33 @@ def handle_request(request, token):
             raise Invalid("Invalid collaboration payload.") from exc
     if not isinstance(body, dict):
         raise Invalid("Invalid collaboration payload.")
-    if not store.allows_write("adm_investigate"):
-        raise Forbidden("Collection write permission is required.")
-    payload = body.get("payload")
+    action = body.get("action", "write")
     expected = body.get("expectedRevision")
     request_id = body.get("requestId")
+    if action == "compact":
+        if set(body) - {"action", "expectedRevision", "requestId"}:
+            raise Invalid("Compaction accepts only expectedRevision and requestId.")
+        if not store.allows_write(COMPACT_CAPABILITY):
+            raise Forbidden("Ledger compaction requires an administrator.")
+        return ledger.compact(expected, request_id)
+    if action != "write":
+        raise Invalid("Unsupported collaboration action.")
+    if not store.allows_write("adm_investigate"):
+        raise Forbidden("Collection write permission is required.")
     try:
-        document = validate(kind, payload, principal)
+        document = validate(kind, body.get("payload"), principal)
     except PayloadError as exc:
         raise Invalid(str(exc)) from exc
+    precheck = None
     if kind == "views":
-        _enforce_view_ownership(ledger, document, principal)
-    return ledger.write(document, expected, request_id)
+
+        def precheck(current_payload):
+            _enforce_view_ownership(current_payload, document, principal)
+
+    return ledger.write(document, expected, request_id, precheck=precheck)
 
 
-def _enforce_view_ownership(ledger, document, principal):
-    current = ledger.read()
-    current_payload = current.get("payload") if isinstance(current, dict) else None
+def _enforce_view_ownership(current_payload, document, principal):
     existing_views = (
         current_payload.get("views", []) if isinstance(current_payload, dict) else []
     )

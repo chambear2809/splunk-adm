@@ -62,13 +62,39 @@ receivers:
     page_size: 200
     max_pages: 100
     max_records: 10000
-    max_bytes: 16777216
+    max_bytes: 16777216        # normalized output per Node or Pod generation
+    max_page_bytes: 33554432   # one raw LIST response page
 service:
   pipelines:
     logs/atlas_k8s_snapshot:
       receivers: [atlas_k8s_snapshot]
       exporters: [splunk_hec/platform]
 ```
+
+Sizing: `max_page_bytes` (64 KiB to 256 MiB, default 32 MiB) caps one raw LIST
+response. Each page is decoded into the few fields the receiver keeps and then
+discarded, so total cluster size is limited by `max_pages × page_size` and
+`max_records`, not by this value. Budget transient memory of up to about twice
+`max_page_bytes` for the read buffer and decode, plus roughly three copies of
+the normalized output (rows, canonical strings and log records). Bytes read per
+cycle are bounded by the timeout and by `max_pages × max_page_bytes` per
+resource, not by a cumulative cap. Full Pod objects with large `managedFields`, env lists or
+annotations are commonly 10–40 KiB each; at the default `page_size: 200` a
+32 MiB page allows roughly 160 KiB per Pod. Lower `page_size` before raising
+`max_page_bytes`. `max_bytes` (1 KiB to 64 MiB, default 16 MiB) caps the
+normalized JSON rows plus manifest of one generation; normalized Pod rows are
+typically under 1 KiB, so the default covers `max_records: 10000`.
+
+Each failed cycle logs `atlas kubernetes snapshot failed` with a fixed
+`reason` field, the `resource` (`nodes` or `pods`), and `http_status` when the
+API server replied with a non-200 status. Reasons are `page_byte_limit`,
+`page_limit`, `record_limit`, `output_limit`, `http_status`, `timeout`,
+`request_failed`, `read_failed`, `malformed_response`, `inconsistent_list`,
+`invalid_object`, `clock_discontinuity`, `credential_unavailable`,
+`credential_invalid`, `encoding`, `delivery_failed`, `generation` (random
+generation ID unavailable), `invalid_resource`, `invalid_request` and `internal`
+(an unclassified error). No response bodies,
+tokens or exporter error text are logged.
 
 This fragment is illustrative: the exporter name, HEC token/index authorization,
 parser settings and all existing pipelines must be reconciled against the target

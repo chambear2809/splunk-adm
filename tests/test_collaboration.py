@@ -166,6 +166,115 @@ class CollaborationPayloadTests(unittest.TestCase):
                     "token",
                 )
 
+    def test_rest_compaction_requires_administrator(self):
+        store = MemoryStore()
+        granted = {"adm_investigate"}
+        test = self
+
+        class FakeStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def allows_write(self, capability):
+                return capability in granted
+
+            def scan(self, limit):
+                return store.scan(limit)
+
+            def insert(self, document):
+                return store.insert(document)
+
+            def delete(self, key):
+                test.assertIn("admin_all_objects", granted)
+                store.rows = [row for row in store.rows if row["_key"] != key]
+
+        def post(body):
+            return collab_rest.handle_request(
+                {"method": "POST", "query": [["kind", "ownership"]], "payload": body},
+                "token",
+            )
+
+        record = {
+            "service": "payments",
+            "environment": "prod",
+            "owner": "alice",
+            "team": "netops",
+            "contact": "pager-payments",
+        }
+        with (
+            patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
+            patch.object(collab_rest, "principal_of", return_value="alice"),
+        ):
+            revision = None
+            for index in range(3):
+                revision = post(
+                    {
+                        "expectedRevision": revision,
+                        "requestId": "req-" + str(index),
+                        "payload": {"records": [record]},
+                    }
+                )["committedRevision"]
+            compact = {
+                "action": "compact",
+                "expectedRevision": revision,
+                "requestId": "compact-1",
+            }
+            with self.assertRaises(Forbidden):
+                post(compact)
+            with self.assertRaises(Invalid):
+                post({**compact, "payload": {"records": []}})
+            with self.assertRaises(Invalid):
+                post({**compact, "action": "purge"})
+            granted.add("admin_all_objects")
+            result = post(compact)
+            self.assertEqual(result["recordCount"], 2)
+            self.assertEqual(result["epoch"], 1)
+            self.assertEqual(result["payload"]["records"][0]["owner"], "alice")
+
+    def test_view_ownership_checked_against_superseded_head(self):
+        store = MemoryStore()
+        ledger = RecordLedger(store, "views")
+        bob = {
+            "id": "b1",
+            "name": "Bob view",
+            "visibility": "shared",
+            "owner": "bob",
+            "state": {"mode": "live"},
+        }
+        head = ledger.write({"views": [bob]}, None, "req-1")["committedRevision"]
+
+        class FakeStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def allows_write(self, capability):
+                return True
+
+            def scan(self, limit):
+                return store.scan(limit)
+
+            def insert(self, document):
+                return store.insert(document)
+
+        with (
+            patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
+            patch.object(collab_rest, "principal_of", return_value="alice"),
+        ):
+            with self.assertRaises(Forbidden):
+                collab_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "query": [["kind", "views"]],
+                        "payload": {
+                            "expectedRevision": head,
+                            "requestId": "req-2",
+                            "payload": {"views": []},
+                        },
+                    },
+                    "token",
+                )
+        self.assertEqual(len(store.rows), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 """Real child/pipe/retirement checks, isolated from the test runner's prctl."""
 
+import io
 import json
 import os
 from pathlib import Path
@@ -41,16 +42,24 @@ from pathlib import Path
 spec=json.load(sys.stdin)
 sys.path.insert(0,spec['bin'])
 from adm_cases_lib import request_supervisor as s
-if spec.get('uncertain_retirement'):
+uncertain_left=spec.get('uncertain_retirements',0)
+if uncertain_left:
     real=s._retire
-    def uncertain(p):real(p);return False
+    def uncertain(p,*a):
+        global uncertain_left
+        if not (spec.get('skip_real') and uncertain_left):
+            real(p,*a)
+        if uncertain_left:
+            uncertain_left-=1
+            return False
+        return True
     s._retire=uncertain
 results=[]
 for raw in spec['requests']:
     start=time.monotonic()
     result=s.supervise(json.dumps(raw),_worker_path=spec['worker'],_timeout=spec.get('timeout',2),_env=s._worker_environment())
-    results.append({'result':result,'elapsed':time.monotonic()-start})
-print(json.dumps({'results':results,'poisoned':s._poisoned}))
+    results.append({'result':result,'elapsed':time.monotonic()-start,'leaked':s.leaked_count()})
+print(json.dumps({'results':results,'leaked':s.leaked_count()}))
 """
 
 
@@ -95,7 +104,7 @@ class CaseRequestSupervisorTests(unittest.TestCase):
         self.assertFalse(result["payload"]["token_in_argv"])
         self.assertFalse(result["payload"]["token_in_env"])
         self.assert_group_gone(result["payload"]["pid"])
-        self.assertFalse(value["poisoned"])
+        self.assertEqual(value["leaked"], 0)
 
     @unittest.skipUnless(
         sys.platform == "linux", "requires Linux child-subreaper semantics"
@@ -111,7 +120,7 @@ class CaseRequestSupervisorTests(unittest.TestCase):
         self.assertEqual([v["result"]["status"] for v in value["results"]], [503, 200])
         self.assertLess(value["results"][0]["elapsed"], 3)
         self.assert_group_gone(json.loads(self.marker.read_text())["pid"])
-        self.assertFalse(value["poisoned"])
+        self.assertEqual(value["leaked"], 0)
 
     @unittest.skipUnless(
         sys.platform == "linux", "requires Linux child-subreaper semantics"
@@ -121,7 +130,7 @@ class CaseRequestSupervisorTests(unittest.TestCase):
         result = value["results"][0]["result"]
         self.assertEqual(result["status"], 200)
         self.assert_group_gone(result["payload"]["pid"])
-        self.assertFalse(value["poisoned"])
+        self.assertEqual(value["leaked"], 0)
 
     @unittest.skipUnless(
         sys.platform == "linux", "requires Linux child-subreaper semantics"
@@ -133,15 +142,55 @@ class CaseRequestSupervisorTests(unittest.TestCase):
                 self.assertEqual(
                     [v["result"]["status"] for v in value["results"]], [503, 200]
                 )
-                self.assertFalse(value["poisoned"])
+                self.assertEqual(value["leaked"], 0)
 
     @unittest.skipUnless(
         sys.platform == "linux", "requires Linux child-subreaper semantics"
     )
-    def test_uncertain_retirement_permanently_closes_process_admission(self):
-        value = self.run_requests([{}, {}], uncertain_retirement=True)
-        self.assertEqual([v["result"]["status"] for v in value["results"]], [503, 503])
-        self.assertTrue(value["poisoned"])
+    def test_uncertain_retirements_hold_slots_until_admission_closes(self):
+        value = self.run_requests([{}] * 5, uncertain_retirements=100)
+        self.assertEqual([v["result"]["status"] for v in value["results"]], [503] * 5)
+        self.assertEqual([v["leaked"] for v in value["results"]], [1, 2, 3, 3, 3])
+
+    @unittest.skipUnless(
+        sys.platform == "linux", "requires Linux child-subreaper semantics"
+    )
+    def test_admission_recovers_once_leaked_group_is_proven_gone(self):
+        value = self.run_requests([{"mode": "descendant"}, {}], uncertain_retirements=1)
+        self.assertEqual([v["result"]["status"] for v in value["results"]], [503, 200])
+        self.assertEqual([v["leaked"] for v in value["results"]], [1, 0])
+
+    @unittest.skipUnless(
+        sys.platform == "linux", "requires Linux child-subreaper semantics"
+    )
+    def test_recovery_signals_and_reaps_a_leaked_live_leader(self):
+        value = self.run_requests(
+            [{"marker": str(self.marker)}, {}], uncertain_retirements=1, skip_real=True
+        )
+        self.assertEqual([v["result"]["status"] for v in value["results"]], [503, 200])
+        self.assertEqual([v["leaked"] for v in value["results"]], [1, 0])
+        self.assert_group_gone(json.loads(self.marker.read_text())["pid"])
+
+    def test_reused_pgid_of_live_worker_proves_old_group_gone_without_reaping(self):
+        sys.path.insert(0, str(BIN))
+        from adm_cases_lib import request_supervisor as supervisor
+        from unittest.mock import patch
+
+        class Reaped:
+            pid = 424242
+            returncode = 0
+
+            def __init__(self):
+                self.stdin, self.stdout = io.BytesIO(), io.BytesIO()
+
+        with (
+            patch.object(supervisor, "_unreaped", {Reaped.pid}),
+            patch.object(supervisor.os, "waitpid") as reap,
+            patch.object(supervisor.os, "killpg") as signal_group,
+        ):
+            self.assertTrue(supervisor._retire(Reaped(), 0.05))
+            reap.assert_not_called()
+            signal_group.assert_not_called()
 
     def test_input_size_limit_prevents_launch_and_includes_utf8_bytes(self):
         # No subprocess preparation is reached for oversized envelopes.
@@ -157,7 +206,7 @@ class CaseRequestSupervisorTests(unittest.TestCase):
                 self.assertEqual(supervisor.supervise(raw)["status"], 413)
                 launch.assert_not_called()
 
-    def test_non_linux_fails_closed_before_launch_without_poisoning(self):
+    def test_non_linux_fails_closed_before_launch_without_leaking_slots(self):
         sys.path.insert(0, str(BIN))
         from adm_cases_lib import request_supervisor as supervisor
         from unittest.mock import patch
@@ -168,7 +217,7 @@ class CaseRequestSupervisorTests(unittest.TestCase):
             patch.object(supervisor.subprocess, "Popen") as launch,
         ):
             self.assertEqual(supervisor.supervise("{}")["status"], 503)
-            self.assertFalse(supervisor._poisoned)
+            self.assertEqual(supervisor.leaked_count(), 0)
             launch.assert_not_called()
 
     @unittest.skipUnless(
@@ -183,26 +232,38 @@ class CaseRequestSupervisorTests(unittest.TestCase):
         value = self.run_requests([{"payload": "x" * 500000}], timeout=0.5)
         self.assertEqual(value["results"][0]["result"]["status"], 503)
         self.assertLess(value["results"][0]["elapsed"], 3)
-        self.assertFalse(value["poisoned"])
+        self.assertEqual(value["leaked"], 0)
         self.assert_group_gone(int(self.marker.read_text()))
 
     @unittest.skipUnless(
         sys.platform == "linux", "requires Linux child-subreaper semantics"
     )
-    def test_concurrent_request_cannot_bypass_process_wide_admission(self):
+    def test_concurrent_requests_share_bounded_process_wide_admission(self):
         runner = RUNNER.replace(
             "results=[]",
             """
 import threading
 original=s.supervise
-first=[]
-t=threading.Thread(target=lambda:first.append(original(json.dumps({'mode':'timeout','marker':spec['marker']}),_worker_path=spec['worker'],_timeout=.8,_env=s._worker_environment())))
-t.start()
-end=time.monotonic()+2
-while not Path(spec['marker']).exists() and time.monotonic()<end:time.sleep(.01)
-busy=original('{}',_worker_path=spec['worker'],_timeout=2,_env=s._worker_environment())
-t.join(timeout=4)
-assert first and first[0]['status']==503 and busy['status']==503
+env=s._worker_environment()
+def hold(i,out):
+    marker=spec['marker']+str(i)
+    out.append(original(json.dumps({'mode':'timeout','marker':marker}),_worker_path=spec['worker'],_timeout=1.5,_env=env))
+def wait_markers(n):
+    end=time.monotonic()+3
+    while not all(Path(spec['marker']+str(i)).exists() for i in range(n)) and time.monotonic()<end:time.sleep(.01)
+held=[]
+threads=[threading.Thread(target=hold,args=(0,held))]
+threads[0].start()
+wait_markers(1)
+alongside=original('{}',_worker_path=spec['worker'],_timeout=2,_env=env)
+for i in range(1,s.MAX_CONCURRENT):
+    threads.append(threading.Thread(target=hold,args=(i,held)));threads[-1].start()
+wait_markers(s.MAX_CONCURRENT)
+busy=original('{}',_worker_path=spec['worker'],_timeout=2,_env=env)
+for t in threads:t.join(timeout=5)
+assert alongside['status']==200, alongside
+assert busy['status']==503, busy
+assert len(held)==s.MAX_CONCURRENT and all(r['status']==503 for r in held)
 results=[]""",
         )
         spec = {

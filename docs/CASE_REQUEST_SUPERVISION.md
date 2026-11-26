@@ -17,11 +17,12 @@ endpoint qualification. See the performed results in
 
 ## Admission and process lifetime
 
-One module-wide worker slot preserves the existing per-process capture admission
-limit and now serializes notes work too. Busy admission returns a generic 503
-without starting another worker. There is no unbounded queue. Different Splunk
-persistent-handler processes remain independent; the durable capture ledger's
-global three-slot quota is unchanged.
+A module-wide pool of three worker slots (`MAX_CONCURRENT`) admits concurrent
+case requests from different users, so one slow request no longer refuses every
+other caller. Busy admission returns a generic 503 without starting another
+worker. There is no unbounded queue. Each worker keeps its own one-job capture
+admission, and the durable capture ledger's global three-slot quota still bounds
+concurrent captures across all workers and persistent-handler processes.
 
 The parent requires Linux child-subreaper support and verifies that process-local
 setting before launch. Unsupported platforms or unavailable setup fail closed.
@@ -39,10 +40,17 @@ independently bounded.
 The parent sends TERM and then KILL to the owned group **before** reaping its
 leader. It subsequently reaps only descendants in that group and verifies group
 absence. It sends no later mutating group signal after the leader is reaped.
-Failed or uncertain retirement permanently closes admission in that handler
-process; constructing another handler object cannot reset it. An operator must
-investigate and restart the affected handler through the platform's supported
-procedure. Deleting case data or the capture ledger is not a recovery action.
+A request whose retirement fails or is uncertain keeps its slot. Each later
+admission first re-checks those groups for 0.2 seconds each: it signals a group
+only if its leader is still unreaped, otherwise it only reaps descendants and
+probes for absence. Worker launches, leader reaping and those probes share one
+lock, and a probed PGID now held by an unreaped worker leader is treated as proof
+that the old group is gone, so a recycled PGID is never reaped or signalled on
+behalf of a different request. A group proven gone releases its slot. At most three
+unretired groups can therefore exist per handler process, and admission closes
+only while all three slots are held. If it stays closed, investigate and restart
+the affected handler through the platform's supported procedure. Deleting case
+data or the capture ledger is not a recovery action.
 
 ## Data and authority boundaries
 

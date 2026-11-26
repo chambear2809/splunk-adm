@@ -320,6 +320,104 @@ func TestExporterMetadataAndCompleteManifests(t *testing.T) {
 	}
 }
 
+func TestPageByteLimitIsPerPageAndReasonsAreFixed(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "token")
+	if e := os.WriteFile(p, []byte("tok"), 0600); e != nil {
+		t.Fatal(e)
+	}
+	body := `{"kind":"NodeList","apiVersion":"v1","metadata":{"resourceVersion":"r"},"items":[` + node1 + `]}`
+	status := 200
+	k := kubeClient{origin: "https://kubernetes.default.svc", tokenPath: p, client: &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}}
+	c := testConfig()
+	c.MaxPageBytes = int64(len(body))
+	var total int64
+	for i := 0; i < 5; i++ {
+		if _, e := k.fetch(context.Background(), "nodes", "", c, &total); e != nil {
+			t.Fatalf("page %d rejected by cumulative budget: %v", i, e)
+		}
+	}
+	if total != int64(5*len(body)) {
+		t.Fatal("raw byte accounting incorrect")
+	}
+	c.MaxPageBytes = int64(len(body)) - 1
+	if _, e := k.fetch(context.Background(), "nodes", "", c, &total); e == nil {
+		t.Fatal("oversized page accepted")
+	} else if reason, _, _ := reasonOf(e); reason != "page_byte_limit" {
+		t.Fatalf("reason %q", reason)
+	}
+	c.MaxPageBytes = 1 << 20
+	status = 403
+	_, e := k.fetch(context.Background(), "nodes", "", c, &total)
+	reason, _, code := reasonOf(inResource("pods", e))
+	if reason != "http_status" || code != 403 || !strings.Contains(inResource("pods", e).Error(), "pods") {
+		t.Fatalf("status not reported: %v", e)
+	}
+	if strings.Contains(e.Error(), "tok") || strings.Contains(e.Error(), "NodeList") {
+		t.Fatal("error leaked request or response content")
+	}
+}
+
+func TestCollectFailuresCarryReasonAndResource(t *testing.T) {
+	c := testConfig()
+	c.MaxPages = 1
+	fetch := func(context.Context, string, string, *Config, *int64) (page, error) {
+		return mkPage(t, "a", "next", node1), nil
+	}
+	var b int64
+	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+		t.Fatal("page limit not enforced")
+	} else if reason, _, _ := reasonOf(e); reason != "page_limit" {
+		t.Fatalf("reason %q", reason)
+	}
+	c = testConfig()
+	c.MaxRecords = 1
+	fetch = func(context.Context, string, string, *Config, *int64) (page, error) {
+		return mkPage(t, "a", "", node1, node2), nil
+	}
+	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+		t.Fatal("record limit not enforced")
+	} else if reason, _, _ := reasonOf(e); reason != "record_limit" {
+		t.Fatalf("reason %q", reason)
+	}
+	c = testConfig()
+	c.MaxBytes = 1024
+	fetch = func(context.Context, string, string, *Config, *int64) (page, error) {
+		items := []string{}
+		for i := 0; i < 2; i++ {
+			items = append(items, strings.ReplaceAll(strings.ReplaceAll(node1, "uid-1", "uid-"+strings.Repeat("x", 100)+string(rune('a'+i))), "node-a", "node-"+string(rune('a'+i))))
+		}
+		return mkPage(t, "a", "", strings.ReplaceAll(items[0], "10.0.0.1", "10.0.0.5"), items[1]), nil
+	}
+	c.PageSize = 2
+	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+		t.Fatal("output limit not enforced")
+	} else if reason, _, _ := reasonOf(e); reason != "output_limit" {
+		t.Fatalf("reason %q", reason)
+	}
+}
+
+func TestConfigBoundsForByteLimits(t *testing.T) {
+	for name, mutate := range map[string]func(*Config){
+		"page bytes too small": func(c *Config) { c.MaxPageBytes = 1024 },
+		"page bytes too large": func(c *Config) { c.MaxPageBytes = maxPageBytes + 1 },
+		"output too large":     func(c *Config) { c.MaxBytes = maxOutputBytes + 1 },
+	} {
+		c := testConfig()
+		mutate(c)
+		if c.Validate() == nil {
+			t.Fatal(name + " accepted")
+		}
+	}
+	c := testConfig()
+	c.MaxBytes, c.MaxPageBytes = maxOutputBytes, maxPageBytes
+	if e := c.Validate(); e != nil {
+		t.Fatal(e)
+	}
+}
+
 type roundTrip func(*http.Request) (*http.Response, error)
 
 func (f roundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

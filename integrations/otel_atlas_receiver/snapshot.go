@@ -16,6 +16,42 @@ import (
 	"time"
 )
 
+// failure carries only a fixed reason code and, for API replies, the HTTP
+// status, so logs never include response bodies, tokens or exporter errors.
+type failure struct {
+	reason   string
+	status   int
+	resource string
+}
+
+func (f *failure) Error() string {
+	msg := "atlas snapshot: " + f.reason
+	if f.resource != "" {
+		msg = "atlas snapshot " + f.resource + ": " + f.reason
+	}
+	if f.status != 0 {
+		msg += fmt.Sprintf(" (HTTP %d)", f.status)
+	}
+	return msg
+}
+func fail(reason string) error { return &failure{reason: reason} }
+
+// reasonOf maps any error to its fixed reason code and HTTP status.
+func reasonOf(err error) (reason, resource string, status int) {
+	var f *failure
+	if errors.As(err, &f) {
+		return f.reason, f.resource, f.status
+	}
+	return "internal", "", 0
+}
+func inResource(resource string, err error) error {
+	var f *failure
+	if errors.As(err, &f) {
+		return &failure{reason: f.reason, status: f.status, resource: resource}
+	}
+	return &failure{reason: "internal", resource: resource}
+}
+
 type record map[string]any
 type snapshot struct {
 	Manifest record
@@ -26,7 +62,7 @@ type fetcher func(context.Context, string, string, *Config, *int64) (page, error
 func generationID() (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "", errors.New("generation failed")
+		return "", fail("generation")
 	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
@@ -47,11 +83,11 @@ func address(s string) (string, error) {
 }
 func validateWindow(started, completed time.Time, startWall, endWall int64) error {
 	if completed.Before(started) || endWall < startWall {
-		return errors.New("clock discontinuity")
+		return fail("clock_discontinuity")
 	}
 	drift := time.Duration(endWall-startWall) - completed.Sub(started)
 	if drift > 500*time.Millisecond || drift < -500*time.Millisecond {
-		return errors.New("clock discontinuity")
+		return fail("clock_discontinuity")
 	}
 	return nil
 }
@@ -62,7 +98,7 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 		kind = "PodList"
 		schema = "application_atlas.k8s_pod_node_snapshot.v1"
 	} else if resource != "nodes" {
-		return result, errors.New("invalid resource")
+		return result, fail("invalid_resource")
 	}
 	started := now()
 	id, err := generationID()
@@ -80,46 +116,46 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 	complete := false
 	for p := 0; p < c.MaxPages; p++ {
 		if err := ctx.Err(); err != nil {
-			return result, errors.New("collection timeout")
+			return result, fail("timeout")
 		}
 		data, err := fetch(ctx, resource, continuation, c, budget)
 		if err != nil {
 			return result, err
 		}
 		if err := ctx.Err(); err != nil {
-			return result, errors.New("collection timeout")
+			return result, fail("timeout")
 		}
 		if data.Kind != kind || data.APIVersion != "v1" || data.Metadata.RV == "" || data.Items == nil || (rv != "" && data.Metadata.RV != rv) || len(data.Items) > c.PageSize {
-			return result, errors.New("invalid list generation")
+			return result, fail("inconsistent_list")
 		}
 		if haveRemaining {
 			remaining -= int64(len(data.Items))
 			if remaining < 0 {
-				return result, errors.New("invalid remaining count")
+				return result, fail("inconsistent_list")
 			}
 		}
 		if data.Metadata.RemainingItemCount != nil {
 			count := *data.Metadata.RemainingItemCount
 			if count < 0 || (haveRemaining && count != remaining) {
-				return result, errors.New("invalid remaining count")
+				return result, fail("inconsistent_list")
 			}
 			remaining, haveRemaining = count, true
 		}
 		if haveRemaining && ((data.Metadata.Continue == "" && remaining != 0) || (data.Metadata.Continue != "" && remaining == 0)) {
-			return result, errors.New("invalid remaining count")
+			return result, fail("inconsistent_list")
 		}
 		rv = data.Metadata.RV
 		for _, x := range data.Items {
 			if resource == "nodes" && x.Metadata.Namespace != "" {
-				return result, errors.New("invalid node namespace")
+				return result, fail("invalid_object")
 			}
 			if !identity.MatchString(x.Metadata.UID) || !identity.MatchString(x.Metadata.Name) || seenUID[x.Metadata.UID] {
-				return result, errors.New("invalid or duplicate object")
+				return result, fail("invalid_object")
 			}
 			seenUID[x.Metadata.UID] = true
 			nameKey := x.Metadata.Namespace + "/" + x.Metadata.Name
 			if seenName[nameKey] {
-				return result, errors.New("duplicate object name")
+				return result, fail("invalid_object")
 			}
 			seenName[nameKey] = true
 			row := record{"schema": schema, "schema_version": 1, "kind": "object", "generation_id": id, "cluster": c.Cluster, "scope": c.Scope, "producer_id": c.ProducerID, "uid": x.Metadata.UID, "name": x.Metadata.Name}
@@ -132,11 +168,11 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 					}
 					ip, e := address(v.Address)
 					if e != nil || seen[v.Type+"/"+ip] {
-						return result, errors.New("invalid node address")
+						return result, fail("invalid_object")
 					}
 					seen[v.Type+"/"+ip] = true
 					if prior, ok := seenNodeIP[ip]; ok && prior != x.Metadata.UID {
-						return result, errors.New("ambiguous node address")
+						return result, fail("invalid_object")
 					}
 					seenNodeIP[ip] = x.Metadata.UID
 					a = append(a, nodeAddress{Type: v.Type, Address: ip})
@@ -153,14 +189,14 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 				row["addresses"] = a
 			} else {
 				if !identity.MatchString(x.Metadata.Namespace) || (x.Spec.NodeName != "" && !identity.MatchString(x.Spec.NodeName)) {
-					return result, errors.New("invalid pod identity")
+					return result, fail("invalid_object")
 				}
 				ips := []string{}
 				seen := map[string]bool{}
 				for _, v := range x.Status.PodIPs {
 					ip, e := address(v.IP)
 					if e != nil || seen[ip] {
-						return result, errors.New("invalid pod address")
+						return result, fail("invalid_object")
 					}
 					seen[ip] = true
 					ips = append(ips, ip)
@@ -168,12 +204,12 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 				if x.Status.PodIP != "" {
 					ip, e := address(x.Status.PodIP)
 					if e != nil {
-						return result, errors.New("invalid pod address")
+						return result, fail("invalid_object")
 					}
 					if len(ips) == 0 {
 						ips = append(ips, ip)
 					} else if !seen[ip] {
-						return result, errors.New("contradictory pod address")
+						return result, fail("invalid_object")
 					}
 				}
 				sort.Strings(ips)
@@ -185,7 +221,7 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 			}
 			rows = append(rows, row)
 			if len(rows) > c.MaxRecords {
-				return result, errors.New("record limit")
+				return result, fail("record_limit")
 			}
 		}
 		continuation = data.Metadata.Continue
@@ -194,12 +230,12 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 			break
 		}
 		if len(continuation) > 4096 || seenContinue[continuation] {
-			return result, errors.New("invalid continuation")
+			return result, fail("inconsistent_list")
 		}
 		seenContinue[continuation] = true
 	}
 	if !complete {
-		return result, errors.New("page limit")
+		return result, fail("page_limit")
 	}
 	completed := now()
 	if err := validateWindow(started, completed, started.UnixNano(), completed.UnixNano()); err != nil {
@@ -214,29 +250,29 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 		row["observation_completed_at"] = end
 		b, e := encoded(row)
 		if e != nil {
-			return result, e
+			return result, fail("encoding")
 		}
 		row["record_fingerprint"] = digest(b)
 		b, e = encoded(row)
 		if e != nil {
-			return result, e
+			return result, fail("encoding")
 		}
 		if len(b) >= 65536 {
-			return result, errors.New("event size limit")
+			return result, fail("output_limit")
 		}
 		outputSize += int64(len(b) + 1)
 		if outputSize > c.MaxBytes {
-			return result, errors.New("output size limit")
+			return result, fail("output_limit")
 		}
 		canonical = append(canonical, string(b))
 	}
 	manifest := record{"schema": schema, "schema_version": 1, "kind": "manifest", "generation_id": id, "cluster": c.Cluster, "scope": c.Scope, "producer_id": c.ProducerID, "resource_version": rv, "observation_started_at": start, "observation_completed_at": end, "expected_count": len(rows), "records_sha256": digest([]byte(strings.Join(canonical, "\n"))), "complete": true, "validity_basis": "point_snapshot", "namespace_scope": "all"}
 	mb, err := encoded(manifest)
 	if err != nil || len(mb) >= 65536 || outputSize+int64(len(mb)+1) > c.MaxBytes {
-		return result, errors.New("output size limit")
+		return result, fail("output_limit")
 	}
 	if err := ctx.Err(); err != nil {
-		return result, errors.New("collection timeout")
+		return result, fail("timeout")
 	}
 	result.Manifest = manifest
 	result.Rows = rows

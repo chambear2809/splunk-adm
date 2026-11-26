@@ -159,6 +159,90 @@ class ImportConfigurationChangesTests(unittest.TestCase):
             self.assertFalse(manifest_path.exists())
             self.assertIn("io_error", stderr.getvalue())
 
+    def _run(self, root: Path, *extra: str) -> tuple[int, str]:
+        stderr = io.StringIO()
+        with (
+            contextlib.redirect_stderr(stderr),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            status = main(
+                [
+                    str(root / "normalized.json"),
+                    "--output-hec",
+                    str(root / "history.ndjson"),
+                    "--output-manifest",
+                    str(root / "manifest.json"),
+                    "--index",
+                    "atlas_changes",
+                    *extra,
+                ]
+            )
+        return status, stderr.getvalue()
+
+    def test_existing_outputs_are_not_replaced_without_overwrite(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "normalized.json").write_text(json.dumps(self._document()))
+            (root / "manifest.json").write_text("prior")
+            status, stderr = self._run(root)
+            self.assertEqual(status, 2)
+            self.assertIn("output_exists", stderr)
+            self.assertEqual((root / "manifest.json").read_text(), "prior")
+            self.assertFalse((root / "history.ndjson").exists())
+            status, _ = self._run(root, "--overwrite")
+            self.assertEqual(status, 0)
+            self.assertNotEqual((root / "manifest.json").read_text(), "prior")
+            self.assertEqual(
+                sorted(p.name for p in root.iterdir()),
+                ["history.ndjson", "manifest.json", "normalized.json"],
+            )
+
+    def test_manifest_race_removes_new_hec_output(self) -> None:
+        from tools import import_configuration_changes as tool
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "normalized.json").write_text(json.dumps(self._document()))
+            real = tool._atomic_write
+
+            def racing(path, content, *, overwrite=False):
+                if path.name == "manifest.json":
+                    path.write_text("raced")
+                return real(path, content, overwrite=overwrite)
+
+            with patch.object(tool, "_atomic_write", side_effect=racing):
+                status, stderr = self._run(root)
+            self.assertEqual(status, 2)
+            self.assertIn("output_exists", stderr)
+            self.assertEqual((root / "manifest.json").read_text(), "raced")
+            self.assertFalse((root / "history.ndjson").exists())
+
+    def test_failed_overwrite_restores_previous_hec_output(self) -> None:
+        from tools import import_configuration_changes as tool
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "normalized.json").write_text(json.dumps(self._document()))
+            (root / "history.ndjson").write_text("previous-hec")
+            (root / "manifest.json").write_text("previous-manifest")
+            real = tool._atomic_write
+
+            def fail_manifest(path, content, *, overwrite=False):
+                if path.name == "manifest.json":
+                    raise OSError("disk full")
+                return real(path, content, overwrite=overwrite)
+
+            with patch.object(tool, "_atomic_write", side_effect=fail_manifest):
+                status, stderr = self._run(root, "--overwrite")
+            self.assertEqual(status, 2)
+            self.assertIn("io_error", stderr)
+            self.assertEqual((root / "history.ndjson").read_text(), "previous-hec")
+            self.assertEqual((root / "manifest.json").read_text(), "previous-manifest")
+            self.assertEqual(
+                sorted(p.name for p in root.iterdir()),
+                ["history.ndjson", "manifest.json", "normalized.json"],
+            )
+
     def test_invalid_json_error_does_not_echo_secret_text(self) -> None:
         with TemporaryDirectory() as directory:
             root = Path(directory)

@@ -78,15 +78,15 @@ type page struct {
 func (k *kubeClient) fetch(ctx context.Context, resource, continuation string, c *Config, budget *int64) (page, error) {
 	var out page
 	if resource != "nodes" && resource != "pods" {
-		return out, errors.New("invalid resource")
+		return out, fail("invalid_resource")
 	}
 	token, err := os.ReadFile(k.tokenPath)
 	if err != nil {
-		return out, errors.New("kubernetes token unavailable")
+		return out, fail("credential_unavailable")
 	}
 	t := strings.TrimSpace(string(token))
 	if t == "" || strings.ContainsAny(t, "\r\n \t") {
-		return out, errors.New("invalid kubernetes token")
+		return out, fail("credential_invalid")
 	}
 	q := url.Values{"limit": {fmt.Sprint(c.PageSize)}}
 	if continuation != "" {
@@ -94,29 +94,36 @@ func (k *kubeClient) fetch(ctx context.Context, resource, continuation string, c
 	}
 	req, err := http.NewRequestWithContext(ctx, "GET", k.origin+"/api/v1/"+resource+"?"+q.Encode(), nil)
 	if err != nil {
-		return out, errors.New("invalid request")
+		return out, fail("invalid_request")
 	}
 	req.Header.Set("Authorization", "Bearer "+t)
 	req.Header.Set("Accept", "application/json")
 	resp, err := k.client.Do(req)
 	if err != nil {
-		return out, errors.New("kubernetes request failed")
+		if ctx.Err() != nil {
+			return out, fail("timeout")
+		}
+		return out, fail("request_failed")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return out, errors.New("kubernetes list failed")
+		return out, &failure{reason: "http_status", status: resp.StatusCode}
 	}
-	remaining := c.MaxBytes - *budget
-	if remaining <= 0 {
-		return out, errors.New("collection byte limit")
+	// The page limit bounds memory for one decoded response; pages are
+	// discarded after normalization, so it does not cap cluster size.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.MaxPageBytes+1))
+	if err != nil {
+		if ctx.Err() != nil {
+			return out, fail("timeout")
+		}
+		return out, fail("read_failed")
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, remaining+1))
-	if err != nil || int64(len(raw)) > remaining {
-		return out, errors.New("collection byte limit")
+	if int64(len(raw)) > c.MaxPageBytes {
+		return out, fail("page_byte_limit")
 	}
 	*budget += int64(len(raw))
 	if err = json.Unmarshal(raw, &out); err != nil {
-		return out, errors.New("malformed kubernetes response")
+		return out, fail("malformed_response")
 	}
 	return out, nil
 }

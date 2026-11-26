@@ -1,11 +1,13 @@
 """Bounded insert-only KV collection adapter. Collection POST uniqueness arbitrates."""
 
 import json
+import re
 from urllib.parse import urlencode
 
 from .ledger import Forbidden, Unavailable, canonical
 
 APP = "/servicesNS/nobody/splunk_adm"
+KEY = re.compile(r"[a-z][a-z0-9_]{0,31}_(?:root|after_[0-9a-f]{64}|epoch_[0-9]{1,7})\Z")
 
 
 class SplunkCollectionStore:
@@ -16,7 +18,7 @@ class SplunkCollectionStore:
         self.collection = collection
         self.path = APP + "/storage/collections/data/" + collection
 
-    def request(self, method, path, body=None, query=None):
+    def request(self, method, path, body=None, query=None, absent_ok=False):
         import splunk.rest
 
         if query:
@@ -32,6 +34,8 @@ class SplunkCollectionStore:
         status = int(response.status)
         if status in (401, 403):
             raise Forbidden("Collection access is denied.")
+        if absent_ok and status == 404:
+            return None
         if status >= 300:
             raise Unavailable("Splunk collection request failed.")
         if not data:
@@ -116,3 +120,8 @@ class SplunkCollectionStore:
 
     def insert(self, document):
         return self.request("POST", self.path, body=document)
+
+    def delete(self, key):
+        if not isinstance(key, str) or not KEY.fullmatch(key):
+            raise Unavailable("Unsupported collection key.")
+        self.request("DELETE", self.path + "/" + key, absent_ok=True)

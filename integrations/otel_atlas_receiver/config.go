@@ -23,11 +23,19 @@ type Config struct {
 	PageSize   int           `mapstructure:"page_size"`
 	MaxPages   int           `mapstructure:"max_pages"`
 	MaxRecords int           `mapstructure:"max_records"`
-	MaxBytes   int64         `mapstructure:"max_bytes"`
+	// MaxBytes bounds the normalized output of one Node or Pod generation.
+	MaxBytes int64 `mapstructure:"max_bytes"`
+	// MaxPageBytes bounds one raw Kubernetes LIST response page.
+	MaxPageBytes int64 `mapstructure:"max_page_bytes"`
 }
 
+const (
+	maxOutputBytes = 64 << 20
+	maxPageBytes   = 256 << 20
+)
+
 func defaultConfig() *Config {
-	return &Config{Index: "atlas_identity", Source: "atlas_k8s_snapshot", Interval: time.Minute, Timeout: 30 * time.Second, PageSize: 200, MaxPages: 100, MaxRecords: 10000, MaxBytes: 16 << 20}
+	return &Config{Index: "atlas_identity", Source: "atlas_k8s_snapshot", Interval: time.Minute, Timeout: 30 * time.Second, PageSize: 200, MaxPages: 100, MaxRecords: 10000, MaxBytes: 16 << 20, MaxPageBytes: 32 << 20}
 }
 func (c *Config) Validate() error {
 	for _, v := range []string{c.Cluster, c.Scope, c.ProducerID, c.Source} {
@@ -39,7 +47,7 @@ func (c *Config) Validate() error {
 	if baseScope == "unknown" || baseScope == "unmapped" || baseScope == "reserved" || !indexName.MatchString(c.Index) {
 		return fmt.Errorf("invalid scope or index")
 	}
-	if c.Interval < 20*time.Second || c.Interval > time.Hour || c.Timeout <= 0 || c.Timeout > c.Interval || c.PageSize < 1 || c.PageSize > 500 || c.MaxPages < 1 || c.MaxPages > 100 || c.MaxRecords < 1 || c.MaxRecords > 10000 || c.MaxBytes < 1024 || c.MaxBytes > 16<<20 {
+	if c.Interval < 20*time.Second || c.Interval > time.Hour || c.Timeout <= 0 || c.Timeout > c.Interval || c.PageSize < 1 || c.PageSize > 500 || c.MaxPages < 1 || c.MaxPages > 100 || c.MaxRecords < 1 || c.MaxRecords > 10000 || c.MaxBytes < 1024 || c.MaxBytes > maxOutputBytes || c.MaxPageBytes < 64<<10 || c.MaxPageBytes > maxPageBytes {
 		return fmt.Errorf("invalid collection bounds")
 	}
 	return nil
