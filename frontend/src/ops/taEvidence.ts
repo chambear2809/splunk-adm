@@ -123,10 +123,16 @@ export const TA_SOURCES: TaSource[] = [
   },
 ];
 
+const MACRO_NAME = /^[a-z][a-z0-9_]{0,63}$/;
+const SOURCETYPE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+
 export function taSearch(source: TaSource, bound = 64): string {
-  return `| \` ${source.indexMacro} \` sourcetype="${source.sourcetype}" | head ${bound}`
-    .replace(/` /g, "`")
-    .replace(/ `/, "`");
+  if (!MACRO_NAME.test(source.indexMacro))
+    throw new Error("Invalid index macro.");
+  if (!SOURCETYPE.test(source.sourcetype))
+    throw new Error("Invalid sourcetype.");
+  const limit = Math.max(1, Math.min(10000, Math.trunc(bound)));
+  return `search \`${source.indexMacro}\` sourcetype="${source.sourcetype}" | head ${limit}`;
 }
 
 export function lbLegFields(sourceId: string): string[] {

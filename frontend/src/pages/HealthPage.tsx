@@ -11,7 +11,7 @@ import {
 import { formatUtc } from "../time";
 import { TimePicker } from "../map/TimePicker";
 import { isSafeTime, resolveTime, timeError } from "../data/timeBounds";
-import { pageURL } from "../app/urlState";
+import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -54,12 +54,14 @@ export function HealthPage({
     q.set("earliest", range.earliest);
     q.set("latest", range.latest);
     const query = `?${q}`;
-    if (location.search !== query)
+    if (location.search !== query) {
       history.replaceState(
         null,
         "",
         `${location.pathname}${query}${location.hash}`,
       );
+      window.dispatchEvent(new Event(URL_STATE_CHANGED));
+    }
   }, [range]);
   const { report, error, busy, checkAgain } = useHealthData(
     client,
@@ -80,7 +82,11 @@ export function HealthPage({
             live={live}
             onChange={(e, l) =>
               setRange(
-                healthWindow(`?earliest=${e}&latest=${l}`, undefined, timezone),
+                healthWindow(
+                  `?${new URLSearchParams({ earliest: e, latest: l }).toString()}`,
+                  undefined,
+                  timezone,
+                ),
               )
             }
           />{" "}

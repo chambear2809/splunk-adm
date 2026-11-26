@@ -79,12 +79,13 @@ def project_fabric_snapshot(
         match = _NODE.search(dn)
         if not match:
             raise ValueError("topSystem_dn_invalid")
-        native = f"pod-{match.group('pod')}/node-{match.group('node')}"
+        node = match.group("node")
+        native = f"pod-{match.group('pod')}/node-{node}"
         ident = _id(profile["authority"], profile["fabric"], native)
-        if native in device_ids:
+        if native in device_ids or node in device_ids:
             raise ValueError("duplicate_device_identity")
         device_ids[native] = ident
-        device_ids[match.group("node")] = ident
+        device_ids[node] = ident
         device = {
             "id": ident,
             "authority": profile["authority"],

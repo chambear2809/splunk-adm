@@ -647,12 +647,13 @@ def render(rows, selection, root_sid, chosen, scope, cluster, network_enabled):
     for row in rows:
         kind = row.get("q_kind")
         if isinstance(kind, list):
-            kind = kind[0]
+            kind = kind[0] if kind else None
         if kind == RUN_KIND:
             continue
-        body = unpack(
-            row.get("body") if not isinstance(row.get("body"), list) else row["body"][0]
-        )
+        raw_body = row.get("body")
+        if isinstance(raw_body, list):
+            raw_body = raw_body[0] if raw_body else None
+        body = unpack(raw_body)
         if kind == "s":
             if not isinstance(body, dict) or not isinstance(body.get("id"), str):
                 raise SummaryError("Malformed summary service.")
@@ -724,13 +725,20 @@ def render(rows, selection, root_sid, chosen, scope, cluster, network_enabled):
                 pod_addresses[ident].add(address)
                 pod_names[ident] |= _names(names)
             else:
-                candidate = (first, intent == root, key[3], key[4], address)
+                has_intent = intent == root
+                candidate = (not has_intent, first, key[3], key[4], address)
                 if ident not in endpoints or candidate < endpoints[ident]:
                     endpoints[ident] = candidate
         merged.setdefault(tuple(key), {"rows": []})["rows"].append(row)
-    for ident, (_, intent, record_scope, record_cluster, address) in endpoints.items():
+    for ident, (
+        not_intent,
+        _,
+        record_scope,
+        record_cluster,
+        address,
+    ) in endpoints.items():
         nodes[ident] = endpoint_node(
-            ident, record_scope, record_cluster, address, intent
+            ident, record_scope, record_cluster, address, not not_intent
         )
     for ident, owner in pod_owner.items():
         nodes[ident] = workload_node(

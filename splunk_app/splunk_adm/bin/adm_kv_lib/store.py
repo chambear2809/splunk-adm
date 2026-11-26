@@ -27,7 +27,7 @@ class SplunkCollectionStore:
             method=method,
             jsonargs=canonical(body) if body is not None else None,
             rawResult=True,
-            raiseAllErrors=True,
+            raiseAllErrors=False,
         )
         status = int(response.status)
         if status in (401, 403):

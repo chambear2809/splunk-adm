@@ -1045,22 +1045,36 @@ function ObserverMappingForm({
   const [scope, setScope] = useState("");
   const [cluster, setCluster] = useState("");
   const [busy, setBusy] = useState(false);
+  const submitController = useRef<AbortController | null>(null);
+  useEffect(() => () => submitController.current?.abort(), []);
+  const canSubmit =
+    !disabled &&
+    !busy &&
+    Boolean(kind.trim() && observer.trim() && scope.trim());
   return (
     <form
       className="atlas-observer-map"
       onSubmit={(event) => {
         event.preventDefault();
+        if (!canSubmit) return;
+        submitController.current?.abort();
+        const controller = new AbortController();
+        submitController.current = controller;
         setBusy(true);
         void import("../data/observerMappingClient")
           .then(({ observerMappingClient }) =>
-            observerMappingClient.map({
-              observer_kind: kind.trim().toLowerCase(),
-              observer: observer.trim().toLowerCase(),
-              scope: scope.trim(),
-              ...(cluster.trim() ? { cluster: cluster.trim() } : {}),
-            }),
+            observerMappingClient.map(
+              {
+                observer_kind: kind.trim().toLowerCase(),
+                observer: observer.trim().toLowerCase(),
+                scope: scope.trim(),
+                ...(cluster.trim() ? { cluster: cluster.trim() } : {}),
+              },
+              controller.signal,
+            ),
           )
           .then(() => {
+            if (controller.signal.aborted) return;
             setKind("");
             setObserver("");
             setScope("");
@@ -1070,14 +1084,17 @@ function ObserverMappingForm({
             );
             onMapped();
           })
-          .catch((error) =>
+          .catch((error) => {
+            if (controller.signal.aborted) return;
             onError(
               error instanceof Error
                 ? error.message
                 : "Observer mapping could not be stored.",
-            ),
-          )
-          .finally(() => setBusy(false));
+            );
+          })
+          .finally(() => {
+            if (!controller.signal.aborted) setBusy(false);
+          });
       }}
     >
       <h3>Map an unmapped observer</h3>

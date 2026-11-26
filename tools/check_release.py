@@ -683,11 +683,17 @@ def _check_collaboration_contract(files, rest, web):
         "passsession": "true",
         "passsystemauth": "false",
     }
-    if dict(rest["script:adm_collaboration"]) != expected_collaboration:
+    if (
+        not rest.has_section("script:adm_collaboration")
+        or dict(rest["script:adm_collaboration"]) != expected_collaboration
+    ):
         raise ValueError(
             "collaboration registration must use the exact authenticated capability and handler"
         )
-    if dict(rest["script:adm_observer_mapping"]) != expected_mapping:
+    if (
+        not rest.has_section("script:adm_observer_mapping")
+        or dict(rest["script:adm_observer_mapping"]) != expected_mapping
+    ):
         raise ValueError(
             "observer mapping registration must use authenticated administrator writes"
         )
@@ -698,6 +704,36 @@ def _check_collaboration_contract(files, rest, web):
         }:
             raise ValueError(
                 "collaboration browser exposure must use exact routes, methods, and native CSRF"
+            )
+    collections = _packaged_config(files, "default/collections.conf")
+    ledger_fields = {
+        "field.format": "number",
+        "field.kind": "string",
+        "field.previous_revision": "string",
+        "field.request_id": "string",
+        "field.operation_fingerprint": "string",
+        "field.revision": "string",
+        "field.payload_json": "string",
+        "replicate": "false",
+    }
+    for name in ("adm_saved_views", "adm_business_ownership"):
+        if (
+            not collections.has_section(name)
+            or dict(collections[name]) != ledger_fields
+        ):
+            raise ValueError(
+                f"packaged collaboration collection {name} must preserve insert-only schema and replicate = false"
+            )
+    metadata = _packaged_config(files, "metadata/default.meta")
+    for stanza in (
+        "collections/adm_saved_views",
+        "collections/adm_business_ownership",
+        "collections/adm_observer_scope",
+    ):
+        acl = re.sub(r"\s+", "", metadata.get(stanza, "access", fallback=""))
+        if acl != "read:[*],write:[admin,sc_admin]":
+            raise ValueError(
+                f"packaged {stanza} ACL must preserve readers and admin/sc_admin writers"
             )
     for name in COLLABORATION_RUNTIME_FILES:
         if not name.endswith(".py"):
@@ -1283,6 +1319,14 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         )
     if not files[entrypoint].startswith(b"#!"):
         raise ValueError("shipped adm_recovery.py is not an executable script")
+    if actions.get("adm_recovery", "passSystemAuth", fallback="").lower() != "false":
+        raise ValueError("adm_recovery alert action must set passSystemAuth = false")
+    recovery = _packaged_config(files, "default/adm_recovery.conf")
+    if (
+        not recovery.has_section("recovery")
+        or recovery.get("recovery", "enabled", fallback=None) != "0"
+    ):
+        raise ValueError("adm_recovery.conf must ship with enabled = 0")
     _check_watch_action(files, actions, config)
     if not config.has_section("install"):
         raise ValueError("packaged app.conf is missing [install]")
@@ -1331,14 +1375,39 @@ def _check_watch_action(files, actions, app):
                 "dependency watch action and owner searches must remain administrator-only"
             )
     searches = _packaged_config(files, "default/savedsearches.conf")
+    webhook_alerts = {
+        "ADM - Newly blocked production dependency",
+        "ADM - Redundancy loss",
+        "ADM - Unexpected new dependency",
+        "ADM - Telemetry blindness",
+    }
     for stanza in searches.sections():
-        if searches.get(
-            stanza, "action.adm_dependency_watch", fallback="0"
-        ).lower() not in ("0", "false") or "adm_dependency_watch" in {
+        if searches.get(stanza, "disabled", fallback="0").lower() not in ("1", "true"):
+            raise ValueError(f"saved search must ship disabled: {stanza}")
+        if searches.get(stanza, "dispatchAs", fallback="") != "owner":
+            raise ValueError(f"saved search must set dispatchAs = owner: {stanza}")
+        actions_list = {
             value.strip()
             for value in searches.get(stanza, "actions", fallback="").split(",")
-        }:
+            if value.strip()
+        }
+        if (
+            searches.get(stanza, "action.adm_dependency_watch", fallback="0").lower()
+            not in ("0", "false")
+            or "adm_dependency_watch" in actions_list
+        ):
             raise ValueError("dependency watch schedules must not ship")
+        if (
+            searches.get(stanza, "action.webhook", fallback="0").lower()
+            not in ("0", "false")
+            or "webhook" in actions_list
+            or searches.has_option(stanza, "action.webhook.param.url")
+        ):
+            raise ValueError(f"webhook action must ship disabled: {stanza}")
+        if stanza in webhook_alerts and searches.get(
+            stanza, "enableSched", fallback="1"
+        ).lower() not in ("0", "false"):
+            raise ValueError(f"opt-in alert schedule must ship disabled: {stanza}")
 
 
 def _check_qualified_contract(files: dict[str, bytes]) -> None:

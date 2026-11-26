@@ -41,7 +41,7 @@ import "./impact.css";
 import { JourneyLazyEvidence } from "../JourneyLazyEvidence";
 import { resiliencePosture } from "../ops/spof";
 import { cabPack } from "../ops/cab";
-import { triageSteps } from "../ops/triage";
+import { URL_STATE_CHANGED } from "../app/urlState";
 
 /** Resolve a shareable Impact window once before dispatching a live search. */
 export function resolveImpactWindow(
@@ -462,13 +462,16 @@ export function ImpactPage({
       { mode, ...evidenceWindow, scope },
       new URLSearchParams(),
     );
-    const query = href.slice(href.indexOf("?"));
-    if (location.search !== query)
+    const idx = href.indexOf("?");
+    const query = idx >= 0 ? href.slice(idx) : "";
+    if (location.search !== query) {
       history.replaceState(
         null,
         "",
         `${location.pathname}${query}${location.hash}`,
       );
+      window.dispatchEvent(new Event(URL_STATE_CHANGED));
+    }
   }, [elements, mode, scope, evidenceWindow]);
 
   useEffect(() => {
@@ -884,7 +887,13 @@ export function ImpactPage({
                     empty="No dependency observed (not evidence that none exist)"
                   />
                 </div>
-                <ResilienceOps result={result} />
+                <ResilienceOps
+                  result={result}
+                  window={{
+                    start: evidenceWindow.earliest,
+                    end: evidenceWindow.latest,
+                  }}
+                />
               </>
             )}
             <p className="atlas-impact-foot muted small">
@@ -963,32 +972,25 @@ export function ImpactPage({
   );
 }
 
-function ResilienceOps({ result }: { result: DependsResult }) {
+function ResilienceOps({
+  result,
+  window: win,
+}: {
+  result: DependsResult;
+  window: { start: string; end: string };
+}) {
   const posture = resiliencePosture(result);
-  const pack = cabPack(
-    `${result.label}-window`,
-    { start: "selected-window", end: "selected-window" },
-    posture,
-  );
-  const first = result.rows[0];
-  const steps = first
-    ? triageSteps({
-        id: first.id,
-        source: first.token,
-        target: first.token,
-        relationship: "communicates_with",
-        evidence: [],
-        confidence: first.evidence === "observed" ? "observed" : "inferred",
-        count: first.conversations,
-      })
-    : [];
+  const rawId = `${result.label || "impact"}-window`.trim();
+  const changeId = rawId.length > 80 ? rawId.slice(0, 80) : rawId;
+  const pack = cabPack(changeId, win, posture);
   return (
     <section className="atlas-impact-ops" aria-label="Resilience posture">
       <h2>Resilience posture</h2>
       <p>{posture.headline}</p>
       <p className="muted small">
-        Outage rows are observed single points. Degraded rows have an alternate
-        in this window. Unverified means redundancy was not collected.
+        Outage rows have no observed alternate in this window (check the
+        evidence column for observed vs. inferred). Degraded rows have an
+        alternate. Unverified means redundancy was not collected.
       </p>
       {pack.singlePoints.length > 0 && (
         <p>CAB pre-flight: {pack.singlePoints.slice(0, 8).join(", ")}</p>
@@ -998,18 +1000,6 @@ function ResilienceOps({ result }: { result: DependsResult }) {
           <li key={item}>{item}</li>
         ))}
       </ol>
-      {steps.length > 0 && (
-        <>
-          <h3>Connectivity triage</h3>
-          <ol>
-            {steps.map((step) => (
-              <li key={step.id}>
-                <strong>{step.title}</strong> {step.detail}
-              </li>
-            ))}
-          </ol>
-        </>
-      )}
     </section>
   );
 }

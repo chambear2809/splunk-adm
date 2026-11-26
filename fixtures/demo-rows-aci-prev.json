@@ -90,21 +90,40 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "6a72bc42b9f9f397bafd0227a7106d13f84c39f38777f76f84677f457d80e9fc",
+      "reviewed_macro_file_sha256": "61072fd736d7b433e4bf3133d890a8ceedd5a376bc87511af92e618bba2f3959",
       "method": "static review only; no recapture",
-      "reason": "The opt-in service-scoped graph adds service-only preparation, handoff scoping and output fields. The legacy adm_graph(4) body hash and all 38 stanzas reachable from its expansion remain byte-identical; service fields are null or bypassed when service mode is absent. The three newly appended configuration-history stanzas are disabled by default and are not reachable from adm_graph(4); they only define administrator-gated optional history selection and activation. Captured legacy rows remain valid and no recapture is claimed.",
+      "reason": "Additive optional TA index macros appended at the end of default/macros.conf (adm_index_gnmi, adm_index_f5, adm_index_avi, adm_index_haproxy, adm_index_aws_alb, adm_index_azure_flow, adm_index_gcp_flow, adm_index_panos, adm_index_fortinet, adm_index_intersight, adm_index_vmware_events). None of these stanzas is referenced by adm_graph(4); the legacy adm_graph(4) body hash and all 38 stanzas reachable from its expansion remain byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_service_binding_freshness",
-        "adm_graph_service_prepare(4)",
-        "adm_graph_service_handoff_scope",
-        "adm_graph_service_scope(4)",
-        "adm_graph_service(4)",
-        "adm_graph_service_v2(4)",
-        "adm_graph_handoffs(4)",
-        "adm_graph_edges(4)",
-        "adm_graph_output(4)"
+        "adm_index_gnmi",
+        "adm_index_f5",
+        "adm_index_avi",
+        "adm_index_haproxy",
+        "adm_index_aws_alb",
+        "adm_index_azure_flow",
+        "adm_index_gcp_flow",
+        "adm_index_panos",
+        "adm_index_fortinet",
+        "adm_index_intersight",
+        "adm_index_vmware_events"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "6a72bc42b9f9f397bafd0227a7106d13f84c39f38777f76f84677f457d80e9fc",
+          "method": "static review only; no recapture",
+          "reason": "The opt-in service-scoped graph adds service-only preparation, handoff scoping and output fields. The legacy adm_graph(4) body hash and all 38 stanzas reachable from its expansion remain byte-identical; service fields are null or bypassed when service mode is absent. The three newly appended configuration-history stanzas are disabled by default and are not reachable from adm_graph(4); they only define administrator-gated optional history selection and activation. Captured legacy rows remain valid and no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_service_binding_freshness",
+            "adm_graph_service_prepare(4)",
+            "adm_graph_service_handoff_scope",
+            "adm_graph_service_scope(4)",
+            "adm_graph_service(4)",
+            "adm_graph_service_v2(4)",
+            "adm_graph_handoffs(4)",
+            "adm_graph_edges(4)",
+            "adm_graph_output(4)"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "fa059ea74eae0367d1ed1942ae6609a8535b7b479cc601d507daeefc31f45c1b",

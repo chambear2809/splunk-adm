@@ -403,7 +403,9 @@ class AdmQualified(GeneratingCommand):
         try:
             start = int(float(self.start or getattr(info, "earliest_time", None)))
             end = int(float(self.as_of or getattr(info, "latest_time", None)))
-            lateness = int(self.lateness or settings["lateness"])
+            lateness = int(
+                settings["lateness"] if self.lateness is None else self.lateness
+            )
         except (TypeError, ValueError, OverflowError):
             raise SearchError("Summary bounds must be finite epochs.") from None
         if not 0 <= lateness <= 86400:

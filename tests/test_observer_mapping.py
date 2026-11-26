@@ -106,6 +106,70 @@ class ObserverMappingTests(unittest.TestCase):
                     "token",
                 )
 
+    def test_rejects_bad_origin_urls_and_oversized_body(self):
+        for field in (
+            "observability_origin",
+            "controller_origin",
+            "thousandeyes_origin",
+        ):
+            for bad in (
+                "http://example.com",
+                "https://",
+                "https://user:pw@example.com",
+            ):
+                with self.assertRaises(Invalid):
+                    validate_mapping(
+                        {
+                            "observer_kind": "cluster",
+                            "observer": "atlas-k3s",
+                            "scope": "dc1",
+                            field: bad,
+                        }
+                    )
+        with self.assertRaises(Invalid):
+            observer_rest.handle_request(
+                {"method": "POST", "payload": "x" * (observer_rest.MAX_BODY_BYTES + 1)},
+                "token",
+            )
+
+    def test_duplicate_with_changed_optional_field_is_rejected(self):
+        doc = validate_mapping(
+            {
+                "observer_kind": "cluster",
+                "observer": "atlas-k3s",
+                "scope": "dc1",
+                "region": "us-east-1",
+            }
+        )
+
+        class DuplicateStore:
+            def __init__(self, token, collection):
+                self.session_key = token
+
+            def allows_write(self, capability):
+                return True
+
+            def insert(self, document):
+                raise RuntimeError("duplicate")
+
+            def scan(self, limit):
+                return [doc]
+
+        with patch.object(observer_rest, "SplunkCollectionStore", DuplicateStore):
+            with self.assertRaises(Invalid):
+                observer_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "payload": {
+                            "observer_kind": "cluster",
+                            "observer": "atlas-k3s",
+                            "scope": "dc1",
+                            "region": "us-west-2",
+                        },
+                    },
+                    "token",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,12 +1,11 @@
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "..", "splunk_app", "splunk_adm", "bin")
 )
-from unittest.mock import patch
-
 from adm_collaboration_lib import rest as collab_rest  # noqa: E402
 from adm_collaboration_lib.payload import (  # noqa: E402
     PayloadError,
@@ -14,12 +13,16 @@ from adm_collaboration_lib.payload import (  # noqa: E402
     validate,
     views_payload,
 )
-from adm_kv_lib.ledger import RecordLedger  # noqa: E402
+from adm_kv_lib.ledger import Forbidden, Invalid, RecordLedger  # noqa: E402
 
 
 class MemoryStore:
-    def __init__(self):
+    def __init__(self, writable=True):
         self.rows = []
+        self.writable = writable
+
+    def allows_write(self, capability):
+        return self.writable
 
     def scan(self, limit):
         return sorted(self.rows, key=lambda row: row["_key"])[:limit]
@@ -31,7 +34,7 @@ class MemoryStore:
 
 
 class CollaborationPayloadTests(unittest.TestCase):
-    def test_views_accept_shared_and_owner_private(self):
+    def test_views_accept_shared_only(self):
         payload = views_payload(
             {
                 "views": [
@@ -49,7 +52,7 @@ class CollaborationPayloadTests(unittest.TestCase):
         )
         self.assertEqual(payload["views"][0]["visibility"], "shared")
 
-    def test_private_view_cannot_change_owner(self):
+    def test_private_views_rejected_from_shared_ledger(self):
         with self.assertRaises(PayloadError):
             views_payload(
                 {
@@ -58,7 +61,7 @@ class CollaborationPayloadTests(unittest.TestCase):
                             "id": "view-1",
                             "name": "Mine",
                             "visibility": "private",
-                            "owner": "bob",
+                            "owner": "alice",
                             "state": {"mode": "live"},
                         }
                     ]
@@ -90,28 +93,16 @@ class CollaborationPayloadTests(unittest.TestCase):
         self.assertEqual(written["state"], "configured")
         self.assertEqual(ledger.read()["payload"], {"views": []})
 
-    def test_bob_shared_save_keeps_alice_private_view(self):
-        store = MemoryStore()
-        alice = {
-            "id": "a1",
-            "name": "Alice Private",
-            "visibility": "private",
-            "owner": "alice",
-            "state": {"mode": "live"},
-        }
-        shared = {
-            "id": "s1",
-            "name": "Shared",
-            "visibility": "shared",
-            "owner": "alice",
-            "state": {"mode": "live"},
-        }
-        RecordLedger(store, "views").write({"views": [alice, shared]}, None, "req-a")
+    def test_rest_get_post_and_write_denial(self):
+        store = MemoryStore(writable=True)
 
         class FakeStore:
             def __init__(self, token, collection):
                 self.session_key = token
                 self.collection = collection
+
+            def allows_write(self, capability):
+                return store.allows_write(capability)
 
             def scan(self, limit):
                 return store.scan(limit)
@@ -119,53 +110,61 @@ class CollaborationPayloadTests(unittest.TestCase):
             def insert(self, document):
                 return store.insert(document)
 
-        with (
-            patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
-            patch.object(collab_rest, "principal_of", return_value="bob"),
-        ):
-            visible = collab_rest.handle_request(
-                {"method": "GET", "query": [["kind", "views"]]},
-                "token",
-            )
-            self.assertEqual(
-                [row["name"] for row in visible["payload"]["views"]],
-                ["Shared"],
-            )
-            collab_rest.handle_request(
-                {
-                    "method": "POST",
-                    "query": [["kind", "views"]],
-                    "payload": {
-                        "expectedRevision": visible["revision"],
-                        "requestId": "req-b",
-                        "payload": {
-                            "views": [
-                                {
-                                    "id": "b1",
-                                    "name": "Bob Private",
-                                    "visibility": "private",
-                                    "owner": "bob",
-                                    "state": {"mode": "live"},
-                                },
-                                shared,
-                            ]
-                        },
-                    },
-                },
-                "token",
-            )
+        shared = {
+            "id": "s1",
+            "name": "Shared",
+            "visibility": "shared",
+            "owner": "alice",
+            "state": {"mode": "live"},
+        }
         with (
             patch.object(collab_rest, "SplunkCollectionStore", FakeStore),
             patch.object(collab_rest, "principal_of", return_value="alice"),
         ):
-            remaining = collab_rest.handle_request(
+            empty = collab_rest.handle_request(
                 {"method": "GET", "query": [["kind", "views"]]},
                 "token",
             )
-        self.assertEqual(
-            {row["name"] for row in remaining["payload"]["views"]},
-            {"Alice Private", "Shared"},
-        )
+            self.assertEqual(empty["state"], "absent")
+            saved = collab_rest.handle_request(
+                {
+                    "method": "POST",
+                    "query": [["kind", "views"]],
+                    "payload": {
+                        "expectedRevision": None,
+                        "requestId": "req-1",
+                        "payload": {"views": [shared]},
+                    },
+                },
+                "token",
+            )
+            self.assertEqual(saved["payload"]["views"][0]["name"], "Shared")
+
+            store.writable = False
+            with self.assertRaises(Forbidden):
+                collab_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "query": [["kind", "views"]],
+                        "payload": {
+                            "expectedRevision": saved["committedRevision"],
+                            "requestId": "req-2",
+                            "payload": {"views": [shared]},
+                        },
+                    },
+                    "token",
+                )
+
+            store.writable = True
+            with self.assertRaises(Invalid):
+                collab_rest.handle_request(
+                    {
+                        "method": "POST",
+                        "query": [["kind", "views"]],
+                        "payload": "x" * (collab_rest.MAX_BODY_BYTES + 1),
+                    },
+                    "token",
+                )
 
 
 if __name__ == "__main__":

@@ -35,7 +35,12 @@ import {
 } from "../data/demoClient";
 import { loadCatalogDemo, type FindQueryCapture } from "../data/catalogDemo";
 import { toolkitDefault } from "../app/interop";
-import { pageURL, stateParams, type UrlState } from "../app/urlState";
+import {
+  pageURL,
+  stateParams,
+  URL_STATE_CHANGED,
+  type UrlState,
+} from "../app/urlState";
 import { argError } from "../provider";
 import { timeError } from "../data/timeBounds";
 import type { GraphArgs } from "../rows";
@@ -130,7 +135,12 @@ export function ApplicationsPage({
       params.set("trace_dst", next.dst);
       if (next.scope) params.set("trace_scope", next.scope);
     }
-    history.replaceState(null, "", `${location.pathname}?${params}`);
+    history.replaceState(
+      null,
+      "",
+      `${location.pathname}?${params}${location.hash}`,
+    );
+    window.dispatchEvent(new Event(URL_STATE_CHANGED));
   };
   const scopeKnown =
     demoMode ||

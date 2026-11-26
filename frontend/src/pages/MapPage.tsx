@@ -940,7 +940,7 @@ function StandardMapPage({
                 (edge.nat_observations?.length ?? 0) > 0 ||
                 edge.nat_observations_truncated === true,
             )}
-            onPolicy={exportPolicy}
+            onPolicy={graph.boundary.namespace ? exportPolicy : undefined}
             onJson={exportJson}
             onPng={exportPng}
             onPrint={exportPrint}

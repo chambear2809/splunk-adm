@@ -11,7 +11,7 @@ from adm_kv_lib.ledger import (
 )
 from adm_kv_lib.store import SplunkCollectionStore
 
-from .payload import PayloadError, merge_views, validate
+from .payload import PayloadError, validate
 
 COLLECTIONS = {"views": "adm_saved_views", "ownership": "adm_business_ownership"}
 MAX_BODY_BYTES = 32 * 1024
@@ -61,7 +61,7 @@ def handle_request(request, token):
     ledger = RecordLedger(store, kind)
     principal = principal_of(store)
     if method == "GET":
-        return visible_result(kind, ledger.read(), principal)
+        return ledger.read()
     raw = request.get("payload", "")
     if isinstance(raw, dict):
         body = raw
@@ -79,42 +79,16 @@ def handle_request(request, token):
             raise Invalid("Invalid collaboration payload.") from exc
     if not isinstance(body, dict):
         raise Invalid("Invalid collaboration payload.")
+    if not store.allows_write("adm_investigate"):
+        raise Forbidden("Collection write permission is required.")
     payload = body.get("payload")
     expected = body.get("expectedRevision")
     request_id = body.get("requestId")
     try:
-        submitted = validate(kind, payload, principal)
-        if kind == "views":
-            current = ledger.read().get("payload") or {"views": []}
-            document = merge_views(
-                current.get("views") or [], submitted["views"], principal
-            )
-        else:
-            document = submitted
+        document = validate(kind, payload, principal)
     except PayloadError as exc:
         raise Invalid(str(exc)) from exc
-    return visible_result(kind, ledger.write(document, expected, request_id), principal)
-
-
-def visible_result(kind, result, principal):
-    payload = result.get("payload")
-    if (
-        kind != "views"
-        or not isinstance(payload, dict)
-        or not isinstance(payload.get("views"), list)
-    ):
-        return result
-    return {
-        **result,
-        "payload": {
-            "views": [
-                row
-                for row in payload["views"]
-                if isinstance(row, dict)
-                and (row.get("visibility") == "shared" or row.get("owner") == principal)
-            ]
-        },
-    }
+    return ledger.write(document, expected, request_id)
 
 
 def error_body(exc):

@@ -505,8 +505,14 @@ class ReleaseArchiveTests(unittest.TestCase):
             "splunk_adm/docs/operators/dns-evidence.md": b"dns operator docs",
             "splunk_adm/docs/operators/multicast.md": b"multicast operator docs",
             "splunk_adm/docs/multicast-source-qualification.md": b"multicast source findings",
-            "splunk_adm/default/collections.conf": b"[adm_deployment_settings]\nfield.revision = string\nfield.settings_json = string\n",
-            "splunk_adm/default/adm_recovery.conf": b"[recovery]\nenabled = 0\n",
+            "splunk_adm/default/collections.conf": (
+                Path(__file__).parents[1]
+                / "splunk_app/splunk_adm/default/collections.conf"
+            ).read_bytes(),
+            "splunk_adm/default/adm_recovery.conf": (
+                Path(__file__).parents[1]
+                / "splunk_app/splunk_adm/default/adm_recovery.conf"
+            ).read_bytes(),
             "splunk_adm/default/macros.conf": (
                 Path(__file__).parents[1] / "splunk_app/splunk_adm/default/macros.conf"
             ).read_bytes(),
@@ -514,19 +520,19 @@ class ReleaseArchiveTests(unittest.TestCase):
                 name: (Path(__file__).parents[1] / "splunk_app" / name).read_bytes()
                 for name in QUALIFIED_CONFIG_FILES
             },
-            "splunk_adm/default/savedsearches.conf": b"[x]\n",
+            "splunk_adm/default/savedsearches.conf": (
+                Path(__file__).parents[1]
+                / "splunk_app/splunk_adm/default/savedsearches.conf"
+            ).read_bytes(),
             "splunk_adm/default/transforms.conf": (
                 b"[adm_observer_scope]\nexternal_type = kvstore\ncollection = adm_observer_scope\n"
             ),
             "splunk_adm/default/data/ui/nav/default.xml": b"<nav />\n",
             "splunk_adm/default/data/ui/views/dependency_map.xml": b"<view />\n",
             "splunk_adm/metadata/default.meta": (
-                b"[]\naccess = read : [ * ], write : [ admin, sc_admin ]\n"
-                b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]\n"
-                b"[savedsearches]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
-                b"[alert_actions/adm_dependency_watch]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
-                b"[adm_dependency_watch]\naccess = read : [ admin, sc_admin ], write : [ admin, sc_admin ]\n"
-            ),
+                Path(__file__).parents[1]
+                / "splunk_app/splunk_adm/metadata/default.meta"
+            ).read_bytes(),
         }
 
     def _write_pair(self, install=None, upgrade=None):
@@ -708,14 +714,14 @@ class ReleaseArchiveTests(unittest.TestCase):
             ),
             (
                 "splunk_adm/default/savedsearches.conf",
-                b"[x]\n",
-                b"[x]\nactions = email, adm_dependency_watch \n",
+                b"[ADM - Telemetry blindness]\n",
+                b"[ADM - Telemetry blindness]\nactions = email, adm_dependency_watch \n",
                 "schedules must not ship",
             ),
             (
                 "splunk_adm/default/savedsearches.conf",
-                b"[x]\n",
-                b"[x]\naction.adm_dependency_watch = 1\n",
+                b"[ADM - Telemetry blindness]\n",
+                b"[ADM - Telemetry blindness]\naction.adm_dependency_watch = 1\n",
                 "schedules must not ship",
             ),
         )
@@ -1193,7 +1199,9 @@ class ReleaseArchiveTests(unittest.TestCase):
                     )
                 if not suffix:
                     install[name] = install[name].replace(
-                        b"write : [ admin, sc_admin ]", b"write : [ * ]"
+                        b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ admin, sc_admin ]",
+                        b"[collections/adm_deployment_settings]\naccess = read : [ * ], write : [ * ]",
+                        1,
                     )
                 self._write_pair(install)
                 with self.assertRaisesRegex(ValueError, "reader access|settings ACL"):
@@ -1469,6 +1477,66 @@ class ReleaseArchiveTests(unittest.TestCase):
         duplicate.size = 0
         self._write_archive("splunk_adm-1.2.3.tar.gz", install, [duplicate])
         with self.assertRaisesRegex(ValueError, "duplicate archive member"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_enabled_webhook_or_savedsearch(self):
+        install = self._files()
+        install["splunk_adm/default/savedsearches.conf"] = install[
+            "splunk_adm/default/savedsearches.conf"
+        ].replace(b"action.webhook = 0", b"action.webhook = 1", 1)
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "webhook action must ship disabled"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+        install = self._files()
+        install["splunk_adm/default/savedsearches.conf"] = install[
+            "splunk_adm/default/savedsearches.conf"
+        ].replace(b"disabled = 1", b"disabled = 0", 1)
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "saved search must ship disabled"):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_replicated_or_world_writable_collaboration_collection(self):
+        install = self._files()
+        install["splunk_adm/default/collections.conf"] = install[
+            "splunk_adm/default/collections.conf"
+        ].replace(
+            b"[adm_saved_views]\n",
+            b"[adm_saved_views]\nreplicate = true\n",
+            1,
+        )
+        # Drop the duplicate replicate = false line that follows in the stanza
+        raw = install["splunk_adm/default/collections.conf"].decode("utf-8")
+        head, tail = raw.split("[adm_saved_views]\n", 1)
+        tail = tail.replace("replicate = false\n", "", 1)
+        install["splunk_adm/default/collections.conf"] = (
+            head + "[adm_saved_views]\n" + tail
+        ).encode("utf-8")
+        self._write_pair(install)
+        with self.assertRaisesRegex(
+            ValueError, "packaged collaboration collection adm_saved_views"
+        ):
+            check_release(self.root / "dist", self.root / "package.json")
+
+        install = self._files()
+        install["splunk_adm/metadata/default.meta"] = install[
+            "splunk_adm/metadata/default.meta"
+        ].replace(
+            b"[collections/adm_saved_views]\naccess = read : [ * ], write : [ admin, sc_admin ]",
+            b"[collections/adm_saved_views]\naccess = read : [ * ], write : [ * ]",
+            1,
+        )
+        self._write_pair(install)
+        with self.assertRaisesRegex(
+            ValueError, "packaged collections/adm_saved_views ACL"
+        ):
+            check_release(self.root / "dist", self.root / "package.json")
+
+    def test_rejects_enabled_recovery_conf(self):
+        install = self._files()
+        install["splunk_adm/default/adm_recovery.conf"] = b"[recovery]\nenabled = 1\n"
+        self._write_pair(install)
+        with self.assertRaisesRegex(ValueError, "adm_recovery.conf must ship"):
             check_release(self.root / "dist", self.root / "package.json")
 
 

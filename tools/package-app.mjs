@@ -25,9 +25,9 @@ const app = "splunk_app/splunk_adm";
 const excludedFromStage = (source) => {
   const path = source.replaceAll("\\", "/");
   return (
-    /(^|\/)(\.DS_Store|\._.*|docs|local|local\.meta|\.git|node_modules|__pycache__|.*\.py[co])$/.test(
+    /(^|\/)(\.DS_Store|\._.*|docs|local|local\.meta|\.git|node_modules|__pycache__|.*\.py[co])$/i.test(
       path,
-    ) || /^\/appserver\/static\/demo(?:\/|$)/.test(path)
+    ) || /^\/appserver\/static\/demo(?:\/|$)/i.test(path)
   );
 };
 await assertPackableTree(app, { excluded: excludedFromStage });
@@ -233,8 +233,13 @@ await writeFile(
 );
 
 // Splunk Web caches appserver/static by build number; bump it on every package.
-const epoch = Number(process.env.SOURCE_DATE_EPOCH ?? Date.now() / 1000);
+const rawEpoch = process.env.SOURCE_DATE_EPOCH;
+const epoch =
+  rawEpoch !== undefined ? Number(rawEpoch) : Math.floor(Date.now() / 1000);
 const build = Math.floor(epoch);
+if (rawEpoch === "" || !Number.isSafeInteger(build) || build < 1) {
+  throw new Error(`Invalid SOURCE_DATE_EPOCH build number: ${rawEpoch}`);
+}
 await writeFile(
   `${stage}/default/app.conf`,
   `[install]\nbuild = ${build}\n${appConf}`,

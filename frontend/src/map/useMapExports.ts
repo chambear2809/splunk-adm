@@ -107,19 +107,28 @@ export function useMapExports({
     }
   };
   const exportPolicy = () => {
-    void import("../ops/policy").then(({ ciliumPolicyDraft }) => {
-      const draft = ciliumPolicyDraft(
-        graph,
-        graph.boundary.namespace,
-        graph.boundary.service,
+    setExportError("");
+    void import("../ops/policy")
+      .then(({ ciliumPolicyDraft }) => {
+        const draft = ciliumPolicyDraft(
+          graph,
+          graph.boundary.namespace,
+          graph.boundary.service,
+        );
+        download(
+          `${fileStem}-cilium-observed-l4.yaml`,
+          "text/yaml;charset=utf-8",
+          draft.yaml,
+        );
+        close();
+      })
+      .catch((error) =>
+        setExportError(
+          error instanceof Error
+            ? error.message
+            : "Cilium policy draft could not be exported.",
+        ),
       );
-      download(
-        `${fileStem}-cilium-observed-l4.yaml`,
-        "text/yaml;charset=utf-8",
-        draft.yaml,
-      );
-      close();
-    });
   };
   const exportJson = () => {
     download(

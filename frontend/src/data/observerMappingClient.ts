@@ -46,6 +46,22 @@ function mapping(row: unknown): ObserverMapping | undefined {
   };
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
+function withTimeout(signal?: AbortSignal) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const onAbort = () => controller.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    done: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
 export class ObserverMappingClient {
   constructor(
     private readonly fetcher: typeof fetch = (...args) => fetch(...args),
@@ -55,27 +71,32 @@ export class ObserverMappingClient {
     const defaults = getDefaultFetchInit();
     const headers = new Headers(defaults.headers);
     if (body !== undefined) headers.set("Content-Type", "application/json");
-    const response = await this.fetcher(
-      createRESTURL("adm/observer-mapping?output_mode=json", {
-        app: "splunk_adm",
-        owner: "nobody",
-      }),
-      {
-        ...defaults,
-        headers,
-        signal,
-        method: body === undefined ? "GET" : "POST",
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-      },
-    );
-    const payload: unknown = await response.json().catch(() => undefined);
-    if (!response.ok)
-      throw new Error(
-        object(payload) && typeof payload.error === "string"
-          ? payload.error
-          : `Observer mapping request failed (HTTP ${response.status}).`,
+    const timed = withTimeout(signal);
+    try {
+      const response = await this.fetcher(
+        createRESTURL("adm/observer-mapping?output_mode=json", {
+          app: "splunk_adm",
+          owner: "nobody",
+        }),
+        {
+          ...defaults,
+          headers,
+          signal: timed.signal,
+          method: body === undefined ? "GET" : "POST",
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        },
       );
-    return unwrap(payload);
+      const payload: unknown = await response.json().catch(() => undefined);
+      if (!response.ok)
+        throw new Error(
+          object(payload) && typeof payload.error === "string"
+            ? payload.error
+            : `Observer mapping request failed (HTTP ${response.status}).`,
+        );
+      return unwrap(payload);
+    } finally {
+      timed.done();
+    }
   }
 
   async list(signal?: AbortSignal): Promise<ObserverMapping[]> {

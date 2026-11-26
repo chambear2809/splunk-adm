@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+from urllib.parse import urlsplit
 
 from adm_kv_lib.ledger import Forbidden, Invalid, Unavailable, canonical
 from adm_kv_lib.store import SplunkCollectionStore
@@ -16,6 +17,43 @@ TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,254}\Z")
 UNMAPPED = re.compile(r"(?i)^(unmapped|unknown|reserved)(:|$)")
 COLLECTION = "adm_observer_scope"
 MAPPING_LIMIT = 4096
+MAX_BODY_BYTES = 32 * 1024
+ORIGIN_FIELDS = frozenset(
+    {"observability_origin", "controller_origin", "thousandeyes_origin"}
+)
+OPTIONAL_FIELDS = (
+    "account_id",
+    "region",
+    "vpc_id",
+    "organization_id",
+    "realm",
+    "apm_mms_id",
+    "detector_ids",
+    "controller_origin",
+    "observability_origin",
+    "te_account_group_id",
+    "te_stream_account_id",
+    "te_alert_account_id",
+    "te_organization_id",
+    "te_families",
+    "te_bindings",
+    "te_path_sources",
+    "thousandeyes_origin",
+)
+
+
+def _https_origin(value, label):
+    if not isinstance(value, str) or len(value) > 255:
+        raise Invalid(label + " must be an HTTPS URL.")
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise Invalid(label + " must be an HTTPS URL without credentials.")
+    return value
 
 
 def mapping_key(kind, observer):
@@ -58,10 +96,6 @@ def validate_mapping(body):
     realm = body.get("realm")
     if realm not in (None, ""):
         _text(realm, REALM, "Observability realm")
-    origin = body.get("observability_origin")
-    if origin not in (None, ""):
-        if not isinstance(origin, str) or not origin.startswith("https://"):
-            raise Invalid("Observability origin must be an HTTPS URL.")
     document = {
         "_key": mapping_key(kind, observer),
         "observer_kind": kind,
@@ -70,32 +104,25 @@ def validate_mapping(body):
         "cluster": cluster,
         "mapping_status": "mapped",
     }
-    for field in (
-        "account_id",
-        "region",
-        "vpc_id",
-        "organization_id",
-        "realm",
-        "apm_mms_id",
-        "detector_ids",
-        "controller_origin",
-        "observability_origin",
-        "te_account_group_id",
-        "te_stream_account_id",
-        "te_alert_account_id",
-        "te_organization_id",
-        "te_families",
-        "te_bindings",
-        "te_path_sources",
-        "thousandeyes_origin",
-    ):
+    for field in OPTIONAL_FIELDS:
         value = body.get(field)
         if value in (None, ""):
             continue
-        document[field] = _text(value, TOKEN, field) if field != "realm" else realm
-        if field == "observability_origin":
-            document[field] = origin
+        if field == "realm":
+            document[field] = realm
+        elif field in ORIGIN_FIELDS:
+            document[field] = _https_origin(value, field)
+        else:
+            document[field] = _text(value, TOKEN, field)
     return document
+
+
+def _same_mapping(existing, document):
+    fields = ("observer_kind", "observer", "scope", "cluster", *OPTIONAL_FIELDS)
+    for field in fields:
+        if (existing.get(field) or "") != (document.get(field) or ""):
+            return False
+    return True
 
 
 def handle_request(request, token):
@@ -132,9 +159,14 @@ def handle_request(request, token):
     raw = request.get("payload", "")
     if isinstance(raw, dict):
         body = raw
+        encoded = json.dumps(body, separators=(",", ":"), allow_nan=False)
+        if len(encoded.encode()) > MAX_BODY_BYTES:
+            raise Invalid("Observer mapping payload exceeds 32 KiB.")
     else:
         if not isinstance(raw, str) or not raw:
             raise Invalid("Invalid observer mapping.")
+        if len(raw.encode()) > MAX_BODY_BYTES:
+            raise Invalid("Observer mapping payload exceeds 32 KiB.")
         try:
             body = json.loads(raw)
         except ValueError as exc:
@@ -146,6 +178,8 @@ def handle_request(request, token):
     document = validate_mapping(body)
     try:
         store.insert(document)
+    except Forbidden:
+        raise
     except Exception as exc:
         existing = [
             row
@@ -153,12 +187,7 @@ def handle_request(request, token):
             if isinstance(row, dict) and row.get("_key") == document["_key"]
         ]
         if existing:
-            if (
-                existing[0].get("observer_kind") == document["observer_kind"]
-                and existing[0].get("observer") == document["observer"]
-                and existing[0].get("scope") == document["scope"]
-                and existing[0].get("cluster") == document["cluster"]
-            ):
+            if _same_mapping(existing[0], document):
                 return {
                     "state": "configured",
                     "mapping": existing[0],

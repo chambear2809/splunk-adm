@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { pageURL, stateParams, type UrlState } from "./app/urlState";
 import { savedViewsFor } from "./app/savedViews";
 import type { ServerSavedView } from "./data/collaborationClient";
@@ -20,6 +20,9 @@ export function SavedViews({
   const [message, setMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveController = useRef<AbortController | null>(null);
+  useEffect(() => () => saveController.current?.abort(), []);
   useEffect(() => {
     setViews(store.read());
     setCopied(false);
@@ -94,32 +97,45 @@ export function SavedViews({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (!state) return;
-          try {
-            const saved = store.save(name, state);
-            setViews(store.read());
-            setName("");
-            setMessage("View saved.");
-            if (inSplunk && user) {
-              const requestId = `view${Date.now().toString(36)}${Math.random()
-                .toString(36)
-                .slice(2, 10)}`.replace(/[^A-Za-z0-9_-]/g, "");
-              void import("./data/collaborationClient")
-                .then(({ collaborationClient }) =>
-                  collaborationClient.loadViews().then((document) => {
+          if (!state || saving) return;
+          if (inSplunk && visibility === "shared" && user) {
+            const trimmed = name.trim();
+            if (!trimmed) {
+              setMessage("Enter a view name before saving.");
+              return;
+            }
+            const requestId = `view${Date.now().toString(36)}${Math.random()
+              .toString(36)
+              .slice(2, 10)}`.replace(/[^A-Za-z0-9_-]/g, "");
+            saveController.current?.abort();
+            const controller = new AbortController();
+            saveController.current = controller;
+            setSaving(true);
+            setMessage("");
+            void import("./data/collaborationClient")
+              .then(({ collaborationClient, CollaborationError }) =>
+                collaborationClient
+                  .loadViews(controller.signal)
+                  .then((document) => {
+                    const conflict = document.views.find(
+                      (view) => view.name === trimmed && view.owner !== user,
+                    );
+                    if (conflict) {
+                      throw new Error(
+                        `A shared view named "${trimmed}" is already owned by ${conflict.owner}.`,
+                      );
+                    }
                     const next = [
                       {
-                        id:
-                          saved.id
-                            .replace(/[^A-Za-z0-9_-]/g, "")
-                            .slice(0, 80) || requestId,
-                        name: saved.name,
-                        visibility,
+                        id: requestId,
+                        name: trimmed,
+                        visibility: "shared" as const,
                         owner: user,
-                        state: saved.state,
+                        state,
                       },
                       ...document.views.filter(
-                        (view) => view.name !== saved.name,
+                        (view) =>
+                          !(view.name === trimmed && view.owner === user),
                       ),
                     ];
                     if (next.length > 50) {
@@ -129,18 +145,50 @@ export function SavedViews({
                       next,
                       document.revision,
                       requestId,
+                      controller.signal,
+                    );
+                  })
+                  .then((document) => {
+                    if (controller.signal.aborted) return;
+                    setShared(document.views);
+                    setName("");
+                    setMessage("Shared view saved.");
+                  })
+                  .catch((error) => {
+                    if (controller.signal.aborted) return;
+                    if (
+                      error instanceof CollaborationError &&
+                      error.status === 409
+                    ) {
+                      void collaborationClient
+                        .loadViews(controller.signal)
+                        .then((document) => {
+                          if (!controller.signal.aborted)
+                            setShared(document.views);
+                        })
+                        .catch(() => undefined);
+                      setMessage(
+                        "Shared views changed while saving. Reloaded the latest list; retry your save.",
+                      );
+                      return;
+                    }
+                    setMessage(
+                      error instanceof Error
+                        ? error.message
+                        : "Shared view could not be stored.",
                     );
                   }),
-                )
-                .then((document) => setShared(document.views))
-                .catch((error) =>
-                  setMessage(
-                    error instanceof Error
-                      ? error.message
-                      : "Shared view could not be stored.",
-                  ),
-                );
-            }
+              )
+              .finally(() => {
+                if (!controller.signal.aborted) setSaving(false);
+              });
+            return;
+          }
+          try {
+            store.save(name, state);
+            setViews(store.read());
+            setName("");
+            setMessage("View saved.");
           } catch (error) {
             setMessage(
               error instanceof Error
@@ -155,7 +203,7 @@ export function SavedViews({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            disabled={!state || !store.enabled}
+            disabled={!state || !store.enabled || saving}
           />
         </label>
         {inSplunk && (
@@ -163,16 +211,17 @@ export function SavedViews({
             Visibility{" "}
             <select
               value={visibility}
+              disabled={saving}
               onChange={(event) =>
                 setVisibility(event.target.value as "private" | "shared")
               }
             >
-              <option value="private">Private</option>
+              <option value="private">Private (this browser)</option>
               <option value="shared">Shared with this search head</option>
             </select>
           </label>
         )}
-        <button type="submit" disabled={!state || !store.enabled}>
+        <button type="submit" disabled={!state || !store.enabled || saving}>
           Save view
         </button>
       </form>

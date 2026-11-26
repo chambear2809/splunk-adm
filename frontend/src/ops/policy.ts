@@ -5,14 +5,33 @@ export interface CiliumPolicyDraft {
   endpointSelector: { "k8s:io.kubernetes.pod.namespace": string };
   egress: {
     toCIDR: string[];
-    toPorts: { ports: { port: string; protocol: string }[] }[];
+    toPorts?: { ports: { port: string; protocol: string }[] }[];
   }[];
   yaml: string;
   coverage: string;
 }
 
-const ipv4 = (value: string) =>
-  /^(?:\d{1,3}\.){3}\d{1,3}$/.test(value) ? `${value}/32` : undefined;
+const K8S_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+function ipv4(value: string): string | undefined {
+  const parts = value.split(".");
+  if (parts.length !== 4) return undefined;
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return undefined;
+    const n = Number(part);
+    if (n < 0 || n > 255) return undefined;
+  }
+  return `${value}/32`;
+}
+
+function dnsName(service: string): string {
+  const base = service
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 240);
+  return `${base || "workload"}-observed-l4`;
+}
 
 /**
  * L3/L4 CiliumNetworkPolicy from observed conversations. Never enables
@@ -23,56 +42,95 @@ export function ciliumPolicyDraft(
   namespace: string,
   service: string,
 ): CiliumPolicyDraft {
+  const ns = namespace.trim();
+  if (!K8S_LABEL.test(ns)) {
+    throw new Error(
+      "CiliumNetworkPolicy export requires a valid Kubernetes namespace.",
+    );
+  }
+  const sourceIds = new Set(
+    graph.nodes
+      .filter(
+        (node) =>
+          node.id === service ||
+          node.label === service ||
+          node.attributes?.service === service,
+      )
+      .map((node) => node.id),
+  );
+  sourceIds.add(service);
   const edges = graph.edges.filter(
     (edge) =>
       edge.relationship === "communicates_with" &&
       edge.confidence === "observed" &&
-      !edge.acl_action?.includes("drop"),
+      !edge.acl_action?.includes("drop") &&
+      sourceIds.has(edge.source),
   );
-  const cidrs = new Set<string>();
-  const ports = new Map<string, string>();
+  const byCidr = new Map<string, Map<string, string>>();
   for (const edge of edges) {
     const dest = destinationOf(graph, edge);
-    if (dest) cidrs.add(dest);
-    if (edge.server_port && edge.transport)
+    if (!dest) continue;
+    const ports = byCidr.get(dest) ?? new Map<string, string>();
+    if (edge.server_port && edge.transport) {
       ports.set(
         `${edge.server_port}/${edge.transport}`,
         edge.transport.toUpperCase(),
       );
+    }
+    byCidr.set(dest, ports);
   }
-  const toCIDR = [...cidrs].sort();
-  const toPorts = [...ports.entries()].sort().map(([key, protocol]) => ({
-    ports: [{ port: key.split("/")[0]!, protocol }],
-  }));
-  const name = `${service.replace(/[^A-Za-z0-9-]/g, "-")}-observed-l4`;
-  const yaml = [
+  if (byCidr.size === 0) {
+    throw new Error(
+      "No observed IPv4 egress destinations for this service in the current window.",
+    );
+  }
+  const egress = [...byCidr.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([cidr, ports]) => {
+      const toPorts = [...ports.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, protocol]) => ({
+          ports: [{ port: key.split("/")[0]!, protocol }],
+        }));
+      return toPorts.length > 0
+        ? { toCIDR: [cidr], toPorts }
+        : { toCIDR: [cidr] };
+    });
+  const name = dnsName(service);
+  const lines = [
     "apiVersion: cilium.io/v2",
     "kind: CiliumNetworkPolicy",
     "metadata:",
-    `  name: ${name}`,
-    `  namespace: ${namespace}`,
+    `  name: "${name}"`,
+    `  namespace: "${ns}"`,
     "spec:",
     "  endpointSelector:",
-    `    matchLabels:`,
-    `      k8s:io.kubernetes.pod.namespace: ${namespace}`,
+    "    matchLabels:",
+    `      k8s:io.kubernetes.pod.namespace: "${ns}"`,
     "  egress:",
-    "  - toCIDR:",
-    ...toCIDR.map((cidr) => `    - ${cidr}`),
-    "    toPorts:",
-    ...toPorts.flatMap((entry) => [
-      "    - ports:",
-      `      - port: "${entry.ports[0]!.port}"`,
-      `        protocol: ${entry.ports[0]!.protocol}`,
-    ]),
+  ];
+  for (const rule of egress) {
+    lines.push("  - toCIDR:");
+    for (const cidr of rule.toCIDR) lines.push(`    - ${cidr}`);
+    if (rule.toPorts && rule.toPorts.length > 0) {
+      lines.push("    toPorts:");
+      for (const entry of rule.toPorts) {
+        lines.push("    - ports:");
+        lines.push(`      - port: "${entry.ports[0]!.port}"`);
+        lines.push(`        protocol: ${entry.ports[0]!.protocol}`);
+      }
+    }
+  }
+  lines.push(
     "# Apply with per-endpoint PolicyAuditMode. Do not set daemon-wide audit mode.",
-  ].join("\n");
+  );
   return {
     name,
-    endpointSelector: { "k8s:io.kubernetes.pod.namespace": namespace },
-    egress: [{ toCIDR, toPorts }],
-    yaml,
+    endpointSelector: { "k8s:io.kubernetes.pod.namespace": ns },
+    egress,
+    yaml: lines.join("\n"),
     coverage:
-      "L3/L4 observed conversations only. Hubble L7 and DNS identities are omitted.",
+      "L3/L4 observed IPv4 egress conversations only. Hubble L7 and DNS identities are omitted.",
   };
 }
 
@@ -81,6 +139,9 @@ function destinationOf(
   edge: GraphEdge,
 ): string | undefined {
   const node = graph.nodes.find((candidate) => candidate.id === edge.target);
-  const address = node?.addresses?.[0];
-  return address ? ipv4(address) : undefined;
+  for (const address of node?.addresses ?? []) {
+    const cidr = ipv4(address);
+    if (cidr) return cidr;
+  }
+  return undefined;
 }

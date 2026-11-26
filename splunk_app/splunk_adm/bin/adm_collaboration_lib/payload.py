@@ -47,10 +47,12 @@ def views_payload(value, principal):
         visibility = row["visibility"]
         if visibility not in VISIBILITY:
             raise PayloadError("Invalid view visibility.")
+        if visibility == "private":
+            raise PayloadError(
+                "Private views stay on this workstation; only shared views are stored in the shared ledger."
+            )
         owner = row.get("owner", principal)
         _text(owner, PRINCIPAL, "view owner")
-        if visibility == "private" and owner != principal:
-            raise PayloadError("Private views stay with their owner.")
         state = _view_state(row["state"])
         team = row.get("team")
         if team is not None:
@@ -81,23 +83,6 @@ def _view_state(value):
     if len(encoded.encode()) > 4096:
         raise PayloadError("View state exceeds 4 KiB.")
     return state
-
-
-def merge_views(stored, submitted, principal):
-    kept = [
-        row
-        for row in stored
-        if isinstance(row, dict)
-        and row.get("visibility") == "private"
-        and row.get("owner") != principal
-    ]
-    merged = kept + list(submitted)
-    if len(merged) > 50:
-        raise PayloadError("Saved views exceed the 50-view bound.")
-    names = [row.get("name") for row in merged]
-    if len(names) != len(set(names)):
-        raise PayloadError("Duplicate saved view name.")
-    return {"views": merged}
 
 
 def ownership_payload(value):
