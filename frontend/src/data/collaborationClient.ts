@@ -40,7 +40,7 @@ function viewState(value: unknown): UrlState | undefined {
     for (const [key, item] of Object.entries(value)) {
       if (typeof item === "string") params.set(key, item);
     }
-    return parseUrlState(params, false);
+    return parseUrlState(params, true);
   } catch {
     return undefined;
   }
@@ -51,9 +51,14 @@ function encodeState(state: UrlState): Record<string, string> {
 }
 
 function viewsOf(payload: unknown): ServerSavedView[] {
-  if (!object(payload) || !Array.isArray(payload.views)) return [];
-  return payload.views.flatMap((row) => {
-    if (!object(row)) return [];
+  if (payload === null || payload === undefined) return [];
+  if (!object(payload) || !Array.isArray(payload.views)) {
+    throw new CollaborationError("Saved views payload is malformed.", 502);
+  }
+  return payload.views.map((row) => {
+    if (!object(row)) {
+      throw new CollaborationError("Saved view record is malformed.", 502);
+    }
     const state = viewState(row.state);
     if (
       typeof row.id !== "string" ||
@@ -61,18 +66,17 @@ function viewsOf(payload: unknown): ServerSavedView[] {
       (row.visibility !== "private" && row.visibility !== "shared") ||
       typeof row.owner !== "string" ||
       !state
-    )
-      return [];
-    return [
-      {
-        id: row.id,
-        name: row.name,
-        visibility: row.visibility,
-        owner: row.owner,
-        ...(typeof row.team === "string" ? { team: row.team } : {}),
-        state,
-      },
-    ];
+    ) {
+      throw new CollaborationError("Saved view record is malformed.", 502);
+    }
+    return {
+      id: row.id,
+      name: row.name,
+      visibility: row.visibility,
+      owner: row.owner,
+      ...(typeof row.team === "string" ? { team: row.team } : {}),
+      state,
+    };
   });
 }
 

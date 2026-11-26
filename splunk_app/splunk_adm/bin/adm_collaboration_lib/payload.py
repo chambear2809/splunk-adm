@@ -27,6 +27,7 @@ def views_payload(value, principal):
     if not isinstance(rows, list) or len(rows) > 50:
         raise PayloadError("Saved views exceed the 50-view bound.")
     names = set()
+    ids = set()
     result = []
     for row in rows:
         if not isinstance(row, dict) or not {
@@ -39,6 +40,10 @@ def views_payload(value, principal):
         extra = set(row) - {"id", "name", "visibility", "owner", "team", "state"}
         if extra:
             raise PayloadError("Invalid saved view.")
+        view_id = _text(row["id"], TOKEN, "view id")
+        if view_id in ids:
+            raise PayloadError("Duplicate saved view id.")
+        ids.add(view_id)
         raw_name = row["name"].strip() if isinstance(row["name"], str) else ""
         name = _text(raw_name, NAME, "view name")
         if name in names:
@@ -59,7 +64,7 @@ def views_payload(value, principal):
             _text(team, TOKEN, "team")
         result.append(
             {
-                "id": _text(row["id"], TOKEN, "view id"),
+                "id": view_id,
                 "name": name,
                 "visibility": visibility,
                 "owner": owner,

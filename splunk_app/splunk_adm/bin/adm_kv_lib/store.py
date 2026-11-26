@@ -58,13 +58,27 @@ class SplunkCollectionStore:
             APP + "/storage/collections/config/" + self.collection,
             query={"output_mode": "json"},
         )
-        entry = (
-            permissions.get("entry", [{}])[0] if isinstance(permissions, dict) else {}
+        perm_entries = (
+            permissions.get("entry") if isinstance(permissions, dict) else None
         )
-        acl = (entry.get("acl") if isinstance(entry, dict) else None) or (
-            entry.get("content", {}).get("eai:acl", {})
-            if isinstance(entry, dict)
+        entry = (
+            perm_entries[0]
+            if isinstance(perm_entries, list)
+            and len(perm_entries) == 1
+            and isinstance(perm_entries[0], dict)
             else {}
+        )
+        raw_acl = entry.get("acl")
+        perm_content = entry.get("content")
+        acl = (
+            raw_acl
+            if isinstance(raw_acl, dict)
+            else (
+                perm_content.get("eai:acl")
+                if isinstance(perm_content, dict)
+                and isinstance(perm_content.get("eai:acl"), dict)
+                else {}
+            )
         )
         return (
             isinstance(caps, list)

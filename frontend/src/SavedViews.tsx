@@ -100,8 +100,17 @@ export function SavedViews({
           if (!state || saving) return;
           if (inSplunk && visibility === "shared" && user) {
             const trimmed = name.trim();
-            if (!trimmed) {
-              setMessage("Enter a view name before saving.");
+            if (
+              !trimmed ||
+              trimmed.length > 80 ||
+              [...trimmed].some((ch) => {
+                const code = ch.charCodeAt(0);
+                return code < 32 || code === 127;
+              })
+            ) {
+              setMessage(
+                "Enter a view name (1–80 printable characters) before saving.",
+              );
               return;
             }
             const requestId = `view${Date.now().toString(36)}${Math.random()
@@ -160,17 +169,21 @@ export function SavedViews({
                       error instanceof CollaborationError &&
                       error.status === 409
                     ) {
-                      void collaborationClient
+                      return collaborationClient
                         .loadViews(controller.signal)
                         .then((document) => {
-                          if (!controller.signal.aborted)
-                            setShared(document.views);
+                          if (controller.signal.aborted) return;
+                          setShared(document.views);
+                          setMessage(
+                            "Shared views changed while saving. Reloaded the latest list; retry your save.",
+                          );
                         })
-                        .catch(() => undefined);
-                      setMessage(
-                        "Shared views changed while saving. Reloaded the latest list; retry your save.",
-                      );
-                      return;
+                        .catch(() => {
+                          if (!controller.signal.aborted)
+                            setMessage(
+                              "Shared views changed while saving and could not be reloaded. Refresh before retrying.",
+                            );
+                        });
                     }
                     setMessage(
                       error instanceof Error

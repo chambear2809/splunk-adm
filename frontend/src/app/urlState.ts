@@ -532,7 +532,10 @@ export function pageURL(
     ? "/app/splunk_adm/map"
     : location.pathname,
 ): string {
-  const match = /^(.*\/app\/splunk_adm\/)[^/]+\/?$/.exec(pathname);
+  const safePath = pathname.startsWith("//")
+    ? `/${pathname.replace(/^\/+/, "")}`
+    : pathname;
+  const match = /^(.*\/app\/splunk_adm\/)[^/]+\/?$/.exec(safePath);
   const base = match?.[1] ?? "/";
   const query = params.toString();
   return `${base}${page}${query ? `?${query}` : ""}`;

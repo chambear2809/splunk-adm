@@ -88,7 +88,35 @@ def handle_request(request, token):
         document = validate(kind, payload, principal)
     except PayloadError as exc:
         raise Invalid(str(exc)) from exc
+    if kind == "views":
+        _enforce_view_ownership(ledger, document, principal)
     return ledger.write(document, expected, request_id)
+
+
+def _enforce_view_ownership(ledger, document, principal):
+    current = ledger.read()
+    current_payload = current.get("payload") if isinstance(current, dict) else None
+    existing_views = (
+        current_payload.get("views", []) if isinstance(current_payload, dict) else []
+    )
+    existing_others = {
+        row["id"]: row
+        for row in existing_views
+        if isinstance(row, dict)
+        and isinstance(row.get("id"), str)
+        and row.get("owner") != principal
+    }
+    seen_other_ids = set()
+    for row in document["views"]:
+        if row["owner"] != principal:
+            prior = existing_others.get(row["id"])
+            if prior != row:
+                raise Forbidden(
+                    "Cannot create or modify a shared view owned by another user."
+                )
+            seen_other_ids.add(row["id"])
+    if seen_other_ids != set(existing_others):
+        raise Forbidden("Cannot delete a shared view owned by another user.")
 
 
 def error_body(exc):

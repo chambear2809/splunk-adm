@@ -108,7 +108,7 @@ export function HealthPage({
             refresh={report}
             asOf={range.asOf}
           />
-          <UnmappedObserversCallout />
+          <UnmappedObserversCallout refresh={report} />
         </>
       )}
     </section>
@@ -160,7 +160,7 @@ function SummaryHealthSection({
   );
 }
 
-function UnmappedObserversCallout() {
+function UnmappedObserversCallout({ refresh }: { refresh?: unknown }) {
   const [count, setCount] = useState<number>();
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -186,7 +186,7 @@ function UnmappedObserversCallout() {
         }
       });
     return () => request.abort();
-  }, []);
+  }, [refresh]);
   if (failed)
     return (
       <section className="callout warn" role="status">

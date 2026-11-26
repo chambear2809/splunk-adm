@@ -633,7 +633,9 @@ export function SetupPage({
               </p>
               <ObserverMappingForm
                 disabled={busy || !snapshot.authorized}
-                onMapped={() => setRevision((value) => value + 1)}
+                onMapped={() => {
+                  if (!mutation.current) setRevision((value) => value + 1);
+                }}
                 onError={setError}
                 onNotice={setNotice}
               />

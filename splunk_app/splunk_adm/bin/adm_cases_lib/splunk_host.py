@@ -345,13 +345,15 @@ class SplunkHost:
             raise HostUnavailable()
         database = directory / "cases.sqlite"
         # Precreate privately and refuse links or unsafe preexisting permissions.
-        descriptor = (
-            os.open(database, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-            if not database.exists()
-            else None
-        )
-        if descriptor is not None:
-            os.close(descriptor)
+        if not database.exists():
+            try:
+                descriptor = os.open(
+                    database, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600
+                )
+            except FileExistsError:
+                descriptor = None
+            if descriptor is not None:
+                os.close(descriptor)
         info = database.lstat()
         if (
             not stat.S_ISREG(info.st_mode)

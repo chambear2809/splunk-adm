@@ -131,6 +131,7 @@ export function taSearch(source: TaSource, bound = 64): string {
     throw new Error("Invalid index macro.");
   if (!SOURCETYPE.test(source.sourcetype))
     throw new Error("Invalid sourcetype.");
+  if (!Number.isFinite(bound)) throw new Error("Invalid head bound.");
   const limit = Math.max(1, Math.min(10000, Math.trunc(bound)));
   return `search \`${source.indexMacro}\` sourcetype="${source.sourcetype}" | head ${limit}`;
 }

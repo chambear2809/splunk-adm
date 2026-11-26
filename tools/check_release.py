@@ -1309,6 +1309,8 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         actions.read_string(files[ALERT_ACTIONS_PATH].decode("utf-8"))
     except (configparser.Error, UnicodeDecodeError) as exc:
         raise ValueError("invalid packaged alert_actions.conf") from exc
+    if "splunk_adm/default/inputs.conf" in files:
+        raise ValueError("packaged app must not ship default/inputs.conf")
     if not actions.has_section("adm_recovery"):
         raise ValueError("packaged alert_actions.conf is missing [adm_recovery]")
     command = actions.get("adm_recovery", "alert.execute.cmd", fallback="").strip()
@@ -1317,6 +1319,8 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         raise ValueError(
             "adm_recovery alert registration must reference shipped adm_recovery.py"
         )
+    if set(actions.sections()) != {"adm_recovery", "adm_dependency_watch"}:
+        raise ValueError("packaged alert_actions.conf contains unreviewed stanzas")
     if not files[entrypoint].startswith(b"#!"):
         raise ValueError("shipped adm_recovery.py is not an executable script")
     if actions.get("adm_recovery", "passSystemAuth", fallback="").lower() != "false":
@@ -1408,6 +1412,19 @@ def _check_watch_action(files, actions, app):
             stanza, "enableSched", fallback="1"
         ).lower() not in ("0", "false"):
             raise ValueError(f"opt-in alert schedule must ship disabled: {stanza}")
+    current_macro = ""
+    for raw_line in (
+        files["splunk_adm/default/macros.conf"].decode("utf-8").splitlines()
+    ):
+        stripped = raw_line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current_macro = stripped[1:-1].strip()
+        elif current_macro.endswith("_schema_qualified") and re.fullmatch(
+            r"iseval\s*=\s*(?:1|true|t|yes|y|on)", stripped, flags=re.IGNORECASE
+        ):
+            raise ValueError(
+                f"schema qualification macro must not set iseval = 1: {current_macro}"
+            )
 
 
 def _check_qualified_contract(files: dict[str, bytes]) -> None:
@@ -1429,6 +1446,8 @@ def _check_qualified_contract(files: dict[str, bytes]) -> None:
             raise ValueError("ACI poll entrypoint must define AdmAciPoll")
 
     commands = _packaged_config(files, "default/commands.conf")
+    if set(commands.sections()) != {"admqualified", "admacipoll"}:
+        raise ValueError("packaged commands.conf contains unreviewed stanzas")
     expected = {
         "chunked": "true",
         "local": "true",

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import io
 import ipaddress
 import json
 import math
@@ -181,11 +182,17 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _read_bounded_text(path: Path) -> str:
+    with path.open("rb") as handle:
+        raw = handle.read(MAX_INPUT_BYTES + 1)
+    if len(raw) > MAX_INPUT_BYTES:
+        _fail("input_too_large", f"Input exceeds {MAX_INPUT_BYTES} bytes.")
+    return raw.decode("utf-8-sig")
+
+
 def read_json(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
-        root = json.loads(
-            path.read_text(encoding="utf-8-sig"), object_pairs_hook=_unique_object
-        )
+        root = json.loads(_read_bounded_text(path), object_pairs_hook=_unique_object)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise ImportErrorDetail(
             "invalid_json", f"Could not read JSON input: {exc}"
@@ -224,7 +231,8 @@ def read_json(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
 
 def read_csv(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
-        with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        text = _read_bounded_text(path)
+        with io.StringIO(text, newline="") as handle:
             reader = csv.DictReader(handle, strict=True)
             if reader.fieldnames is None:
                 _fail("invalid_csv", "CSV input must include a header row.")

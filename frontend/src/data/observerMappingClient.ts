@@ -101,10 +101,15 @@ export class ObserverMappingClient {
 
   async list(signal?: AbortSignal): Promise<ObserverMapping[]> {
     const content = await this.request(undefined, signal);
-    const rows = Array.isArray(content.mappings) ? content.mappings : [];
-    return rows.flatMap((row) => {
+    if (!Array.isArray(content.mappings)) {
+      throw new Error("Observer mapping list response is malformed.");
+    }
+    return content.mappings.map((row) => {
       const item = mapping(row);
-      return item ? [item] : [];
+      if (!item) {
+        throw new Error("Observer mapping record is malformed.");
+      }
+      return item;
     });
   }
 
@@ -113,7 +118,11 @@ export class ObserverMappingClient {
     signal?: AbortSignal,
   ): Promise<ObserverMapping> {
     const content = await this.request(document, signal);
-    return mapping(content.mapping) ?? document;
+    const confirmed = mapping(content.mapping);
+    if (!confirmed) {
+      throw new Error("Observer mapping response was malformed.");
+    }
+    return confirmed;
   }
 }
 

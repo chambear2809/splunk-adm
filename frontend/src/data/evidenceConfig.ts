@@ -729,6 +729,8 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
                   literal(row.realm ?? "");
                   if (!/^[A-Za-z0-9._:-]{1,128}$/.test(row.apm_mms_id ?? ""))
                     throw new Error("Observability Cloud MMS ID is invalid.");
+                  if (row.observability_origin !== undefined)
+                    configuredHttpsOrigin(row.observability_origin);
                 }
                 if (source === "thousandeyes") {
                   const group = thousandEyesAccountGroupId(

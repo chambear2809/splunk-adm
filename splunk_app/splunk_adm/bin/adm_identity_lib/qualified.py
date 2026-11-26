@@ -104,7 +104,7 @@ def decode(row):
     )
     try:
         result = json.loads(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):
         raise EvidenceError("Malformed identity event JSON.") from None
     require(isinstance(result, dict), "Identity event must be an object.")
     return result
