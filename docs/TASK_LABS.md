@@ -213,3 +213,27 @@ lock. Its platform fault hook belongs only to that disposable container and is
 excluded from the app archive. Run it with a new empty private runtime directory;
 retain failed attempts as evidence. It does not establish native AMD64 resource
 enforcement or source-capture qualification.
+
+## Host-wide resource reservations (opt-in)
+
+When coordinating multiple concurrent or queued disposable task labs on one host,
+use `tools/lab_resources.py` alongside `tools/lab_lock.py`. It maintains a
+per-user host registry at `/tmp/splunk-adm-resource-registry-<uid>.json` (mode
+0600, serialized through a `.lock` sidecar with atomic replace and `fsync`) that
+reserves unique allocation IDs, task/lab names, five ports, and private paths
+across checkouts, and caps active concurrent labs (default capacity 1, override
+with `--capacity N` or `ADM_LAB_RESOURCE_CAPACITY=N` only while no active lease
+remains).
+
+`python3 tools/lab_resources.py run <manifest> -- <command>` acquires both the
+host capacity lease and the per-lab lock (`tools/lab_lock.py`), injects the
+manifest's task/lab/port/credentials/runtime/evidence variables and pinned
+`DOCKER_HOST` (clearing `DOCKER_CONTEXT`), and exports the active lease identity.
+When `SPLUNK_ADM_RESOURCE_LEASE_ID` or `SPLUNK_ADM_RESOURCE_LEASE_TOKEN` is set,
+`tests/splunk/lab.sh` runs `python3 tools/lab_resources.py verify-active` before
+any lifecycle command and fails closed if the lease is expired, unlocked, or
+mismatched against the current task, lab name, ports, or credentials path. Labs
+without an active resource lease retain their existing `tools/lab_lock.py` and
+`tests/splunk/lab.sh` behavior unchanged. `release <manifest>` removes only the
+registry reservation after the operator has separately verified lab cleanup and
+retained evidence; it never deletes Docker resources, credentials, or evidence.

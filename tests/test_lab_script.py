@@ -29,6 +29,12 @@ class LabScriptPortabilityTest(unittest.TestCase):
                 text.replace('${%s[@]+"${%s[@]}"}' % (name, name), ""),
             )
 
+    def test_lab_script_verifies_active_resource_lease_when_opt_in_env_set(self):
+        text = LAB.read_text()
+        self.assertIn("SPLUNK_ADM_RESOURCE_LEASE_ID", text)
+        self.assertIn("tools/lab_resources.py", text)
+        self.assertIn("verify-active", text)
+
 
 if __name__ == "__main__":
     unittest.main()
