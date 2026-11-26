@@ -25,9 +25,9 @@ TASK_ID = os.environ.get("ADM_LAB_TASK", "")
 class InstalledConnectedScenarioExecutionTests(unittest.TestCase):
     def test_track_a_firewall_physical_readback_and_ownership(self):
         execution_id = str(uuid.uuid4())
-        # Anchor slightly in the past so all scenario offsets stay within Splunk's
-        # indexed time bounds and never sit in the future.
-        anchor_epoch = int(time.time()) - 1800
+        # Anchor on a UTC 300-second boundary slightly in the past so all
+        # scenario offsets stay within Splunk's indexed time bounds.
+        anchor_epoch = ((int(time.time()) - 1800) // 300) * 300
         with tempfile.TemporaryDirectory(prefix="adm-connected-auth-") as tmp:
             private_dir = Path(tmp).resolve() / "private"
             private_dir.mkdir(mode=0o700)
