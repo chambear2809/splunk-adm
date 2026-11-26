@@ -3,6 +3,7 @@
 This module does not dispatch searches. A local lab adapter supplies the SID and
 readback; this verifier binds both to the immutable run plan and task owner.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -55,7 +56,9 @@ def bind_local_readback(
     if _sha(canonical_json(plan_body)) != plan["plan_sha256"]:
         raise DispatchOwnershipError("Run plan body does not match its immutable hash.")
     if plan.get("execution_id") != expected_execution_id:
-        raise DispatchOwnershipError("Run plan execution is not independently approved.")
+        raise DispatchOwnershipError(
+            "Run plan execution is not independently approved."
+        )
     if not isinstance(task_id, str) or not TASK_RE.fullmatch(task_id):
         raise DispatchOwnershipError("Task owner ID is invalid.")
     if not isinstance(sid, str) or not SID_RE.fullmatch(sid):
@@ -65,10 +68,15 @@ def bind_local_readback(
     if not isinstance(query_literal, str) or not query_literal.strip():
         raise DispatchOwnershipError("Dispatch query is empty.")
     query_sha256 = _sha(query_literal.encode("utf-8"))
-    if query_sha256 != expected_query_sha256 or query_sha256 not in approved_query_sha256:
+    if (
+        query_sha256 != expected_query_sha256
+        or query_sha256 not in approved_query_sha256
+    ):
         raise DispatchOwnershipError("Dispatch query is not approved for this run.")
     if task_id != expected_task_id:
-        raise DispatchOwnershipError("Task owner is not the independently allocated task.")
+        raise DispatchOwnershipError(
+            "Task owner is not the independently allocated task."
+        )
     if isinstance(dispatch_epoch, bool) or not isinstance(dispatch_epoch, (int, float)):
         raise DispatchOwnershipError("Dispatch epoch is invalid.")
     if not isinstance(readback, dict):
@@ -86,7 +94,9 @@ def bind_local_readback(
     receipts = readback.get("receipt_fingerprints")
     if not isinstance(receipts, list) or receipts != sorted(set(receipts)):
         raise DispatchOwnershipError("Receipt fingerprints must be sorted and unique.")
-    if any(not isinstance(item, str) or not HASH_RE.fullmatch(item) for item in receipts):
+    if any(
+        not isinstance(item, str) or not HASH_RE.fullmatch(item) for item in receipts
+    ):
         raise DispatchOwnershipError("Receipt fingerprints are invalid.")
     if len(receipts) != len(rows):
         raise DispatchOwnershipError("Receipt count must match physical row count.")
@@ -107,7 +117,11 @@ def bind_local_readback(
     ):
         raise DispatchOwnershipError("Physical index-time bounds are invalid.")
     derived_receipts = sorted(
-        _sha(canonical_json({"_indextime": row["_indextime"], "record_id": row.get("record_id")}))
+        _sha(
+            canonical_json(
+                {"_indextime": row["_indextime"], "record_id": row.get("record_id")}
+            )
+        )
         for row in rows
     )
     if receipts != derived_receipts:
@@ -149,13 +163,21 @@ def verify_local_readback_ownership(
     approved_query_sha256: set[str],
     expected_readback: dict[str, Any],
 ) -> dict[str, Any]:
-    if not isinstance(record, dict) or record.get("kind") != "local_connected_run_ownership_v1":
+    if (
+        not isinstance(record, dict)
+        or record.get("kind") != "local_connected_run_ownership_v1"
+    ):
         raise DispatchOwnershipError("Ownership record kind is unsupported.")
     if not TASK_RE.fullmatch(record.get("task_id", "")):
         raise DispatchOwnershipError("Ownership task ID is invalid.")
     _digest(record.get("plan_sha256"), "ownership plan_sha256")
-    if record["task_id"] != expected_task_id or record["plan_sha256"] != expected_plan_sha256:
-        raise DispatchOwnershipError("Ownership is not bound to the approved task and plan.")
+    if (
+        record["task_id"] != expected_task_id
+        or record["plan_sha256"] != expected_plan_sha256
+    ):
+        raise DispatchOwnershipError(
+            "Ownership is not bound to the approved task and plan."
+        )
     if record.get("execution_id") != expected_execution_id:
         raise DispatchOwnershipError("Ownership execution is not approved.")
     ownership_hash = record.get("ownership_sha256")
@@ -167,15 +189,32 @@ def verify_local_readback_ownership(
         raise DispatchOwnershipError("Ownership SID is invalid.")
     if not isinstance(readback, dict) or readback.get("sid") != dispatch["sid"]:
         raise DispatchOwnershipError("Ownership SID/readback mismatch.")
-    if dispatch["sid"] != expected_sid or dispatch.get("query_sha256") != expected_query_sha256:
-        raise DispatchOwnershipError("Ownership dispatch differs from independent evidence.")
-    if readback.get("task_id") != expected_task_id or readback.get("plan_sha256") != expected_plan_sha256:
-        raise DispatchOwnershipError("Nested readback ownership differs from its parent.")
+    if (
+        dispatch["sid"] != expected_sid
+        or dispatch.get("query_sha256") != expected_query_sha256
+    ):
+        raise DispatchOwnershipError(
+            "Ownership dispatch differs from independent evidence."
+        )
+    if (
+        readback.get("task_id") != expected_task_id
+        or readback.get("plan_sha256") != expected_plan_sha256
+    ):
+        raise DispatchOwnershipError(
+            "Nested readback ownership differs from its parent."
+        )
     _digest(readback.get("rows_sha256"), "readback rows_sha256")
     _digest(dispatch.get("query_sha256"), "dispatch query_sha256")
-    for key in ("row_count", "rows_sha256", "receipt_fingerprints", "index_time_bounds"):
+    for key in (
+        "row_count",
+        "rows_sha256",
+        "receipt_fingerprints",
+        "index_time_bounds",
+    ):
         if readback.get(key) != expected_readback.get(key):
-            raise DispatchOwnershipError("Readback metadata differs from independent evidence.")
+            raise DispatchOwnershipError(
+                "Readback metadata differs from independent evidence."
+            )
     if dispatch["query_sha256"] not in approved_query_sha256:
         raise DispatchOwnershipError("Ownership query is not approved.")
     return record
