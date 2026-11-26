@@ -4,7 +4,8 @@ import type { ConnectedQuerySpec } from "./connectedServiceQueryPlan";
 
 export interface ConnectedQueryEvidence {
   status: "complete";
-  args: GraphArgs;
+  args?: GraphArgs;
+  input?: { field: "service"; value: string };
   window: { earliest: number; latest: number; basis: "source_time" };
   query: { literal: string; sha256: string };
   rows: Record<string, unknown>[];
@@ -18,6 +19,14 @@ export interface ConnectedQueryEvidence {
     receipt_fingerprints: string[];
     query_job: Record<string, unknown>;
   };
+}
+
+export interface ConnectedQueryProvenanceContext {
+  executionId: string;
+  planSha256: string;
+  indexTimeBounds: { earliest: number; latest: number };
+  receiptFingerprints: readonly string[];
+  queryJobSid: string;
 }
 
 const HASH = /^[a-f0-9]{64}$/;
@@ -35,22 +44,52 @@ function sameArgs(left: GraphArgs, right: GraphArgs) {
   return canonicalJson(left) === canonicalJson(right);
 }
 
-/** Validate installed evidence against a plan; does not authenticate the caller or dispatch SPL. */
+/**
+ * Validate installed evidence against a plan and trusted run context. The
+ * context must come from the execution owner; this validator does not
+ * authenticate the caller or dispatch SPL.
+ */
 export async function validateConnectedQueryEvidence(
   spec: ConnectedQuerySpec,
   value: unknown,
+  provenance: ConnectedQueryProvenanceContext,
 ): Promise<ConnectedQueryEvidence> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Connected query evidence is invalid.");
+  if (
+    !provenance.executionId ||
+    !HASH.test(provenance.planSha256) ||
+    !Number.isSafeInteger(provenance.indexTimeBounds.earliest) ||
+    !Number.isSafeInteger(provenance.indexTimeBounds.latest) ||
+    provenance.indexTimeBounds.earliest >= provenance.indexTimeBounds.latest ||
+    !provenance.queryJobSid ||
+    !provenance.receiptFingerprints.length ||
+    !provenance.receiptFingerprints.every((item) => HASH.test(item))
+  )
+    throw new Error("Connected query provenance context is invalid.");
   const evidence = value as Record<string, unknown>;
+  const isFind = spec.key === "find.service";
   exactKeys(
     evidence,
-    ["status", "args", "window", "query", "rows", "readback"],
+    [
+      "status",
+      ...(isFind ? ["input"] : ["args"]),
+      "window",
+      "query",
+      "rows",
+      "readback",
+    ],
     "evidence",
   );
   if (
     evidence.status !== "complete" ||
-    !sameArgs(evidence.args as GraphArgs, spec.application)
+    (isFind
+      ? evidence.args !== undefined ||
+        !evidence.input ||
+        (evidence.input as Record<string, unknown>).field !== "service" ||
+        (evidence.input as Record<string, unknown>).value !==
+          spec.application.service
+      : !sameArgs(evidence.args as GraphArgs, spec.application))
   )
     throw new Error("Connected query evidence is not complete or scope-bound.");
   const window = evidence.window as Record<string, unknown>;
@@ -95,15 +134,37 @@ export async function validateConnectedQueryEvidence(
     readback.complete !== true ||
     readback.result_count !== (evidence.rows as unknown[]).length ||
     readback.source !== "splunk_rest" ||
-    typeof readback.execution_id !== "string" ||
-    !HASH.test(String(readback.plan_sha256)) ||
+    readback.execution_id !== provenance.executionId ||
+    readback.plan_sha256 !== provenance.planSha256 ||
+    !readback.index_time_bounds ||
+    typeof readback.index_time_bounds !== "object" ||
+    Array.isArray(readback.index_time_bounds) ||
+    !Number.isSafeInteger(
+      (readback.index_time_bounds as Record<string, unknown>).earliest,
+    ) ||
+    !Number.isSafeInteger(
+      (readback.index_time_bounds as Record<string, unknown>).latest,
+    ) ||
+    (readback.index_time_bounds as Record<string, number>).earliest >=
+      (readback.index_time_bounds as Record<string, number>).latest ||
+    (readback.index_time_bounds as Record<string, number>).earliest >
+      provenance.indexTimeBounds.earliest ||
+    (readback.index_time_bounds as Record<string, number>).latest <
+      provenance.indexTimeBounds.latest ||
     !readback.query_job ||
     typeof readback.query_job !== "object" ||
+    Array.isArray(readback.query_job) ||
+    typeof (readback.query_job as Record<string, unknown>).sid !== "string" ||
+    !(readback.query_job as Record<string, unknown>).sid ||
+    (readback.query_job as Record<string, unknown>).sid !==
+      provenance.queryJobSid ||
     !Array.isArray(readback.receipt_fingerprints) ||
     !readback.receipt_fingerprints.length ||
     !readback.receipt_fingerprints.every(
       (item) => typeof item === "string" && HASH.test(item),
-    )
+    ) ||
+    canonicalJson(readback.receipt_fingerprints) !==
+      canonicalJson(provenance.receiptFingerprints)
   )
     throw new Error("Connected query evidence readback is incomplete.");
   return evidence as unknown as ConnectedQueryEvidence;

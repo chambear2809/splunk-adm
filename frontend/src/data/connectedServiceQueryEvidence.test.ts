@@ -15,6 +15,13 @@ const windows = {
   impact: { earliest: 300, latest: 400 },
   recovery: { earliest: 400, latest: 500 },
 };
+const provenance = {
+  executionId: "exec",
+  planSha256: "a".repeat(64),
+  indexTimeBounds: { earliest: 100, latest: 500 },
+  receiptFingerprints: ["b".repeat(64)],
+  queryJobSid: "sid",
+};
 
 describe("connected query evidence", () => {
   it("accepts exact planned evidence with independent readback proof", async () => {
@@ -45,8 +52,18 @@ describe("connected query evidence", () => {
       },
     };
     await expect(
-      validateConnectedQueryEvidence(spec, evidence),
+      validateConnectedQueryEvidence(spec, evidence, provenance),
     ).resolves.toEqual(evidence);
+    const findSpec = plan.find(({ key }) => key === "find.service")!;
+    const findEvidence = {
+      ...evidence,
+      input: { field: "service" as const, value: application.service },
+      query: { literal: findSpec.literal, sha256: findSpec.sha256 },
+    } as Record<string, unknown>;
+    delete findEvidence.args;
+    await expect(
+      validateConnectedQueryEvidence(findSpec, findEvidence, provenance),
+    ).resolves.toBeDefined();
   });
 
   it("rejects scope, window, query, and readback tampering", async () => {
@@ -81,7 +98,35 @@ describe("connected query evidence", () => {
       { ...base, window: { earliest: 0, latest: 1, basis: "source_time" } },
       { ...base, query: { ...base.query, literal: "| makeresults" } },
       { ...base, readback: { ...base.readback, query_job: undefined } },
+      {
+        ...base,
+        readback: { ...base.readback, execution_id: "other-run" },
+      },
+      {
+        ...base,
+        readback: {
+          ...base.readback,
+          index_time_bounds: { earliest: 500, latest: 100 },
+        },
+      },
+      {
+        ...base,
+        readback: { ...base.readback, query_job: { sid: "" } },
+      },
     ])
-      await expect(validateConnectedQueryEvidence(spec, bad)).rejects.toThrow();
+      await expect(
+        validateConnectedQueryEvidence(spec, bad, provenance),
+      ).rejects.toThrow();
+
+    const findSpec = plan.find(({ key }) => key === "find.service")!;
+    const findEvidence = {
+      ...base,
+      input: { field: "service" as const, value: "foreign" },
+      query: { literal: findSpec.literal, sha256: findSpec.sha256 },
+    } as Record<string, unknown>;
+    delete findEvidence.args;
+    await expect(
+      validateConnectedQueryEvidence(findSpec, findEvidence, provenance),
+    ).rejects.toThrow();
   });
 });
