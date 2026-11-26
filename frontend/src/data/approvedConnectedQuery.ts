@@ -41,15 +41,18 @@ export async function buildApprovedConnectedQuery(input: {
   const cluster = quote(input.application.cluster, ENV, "cluster");
   const namespace = quote(input.application.namespace, K8S, "namespace");
   validateWindow(input.window);
-  const start = input.window.earliest;
-  const end = input.window.latest;
-  const suffix = ` | where _time>=${start} AND _time<${end}`;
+  // Time bounds are dispatch parameters on the Splunk job. Appending a
+  // post-macro _time filter would discard graph rows, which are projections
+  // without a row-level event clock.
+  const scopeFilter =
+    ` | search service="${service}" environment="${environment}" ` +
+    `cluster="${cluster}" namespace="${namespace}"`;
   const literal = input.key.startsWith("graph.")
-    ? `| \`adm_graph("${service}","${environment}","${cluster}","${namespace}")\`${suffix}`
+    ? `| \`adm_graph("${service}","${environment}","${cluster}","${namespace}")\``
     : input.key.startsWith("topology.")
-      ? `| \`adm_topology\`${suffix}`
+      ? "| `adm_topology`"
       : input.key === "catalog.selected"
-        ? `| \`adm_catalog_build\` | search service="${service}"${suffix}`
-        : `| \`adm_find("${service}")\`${suffix}`;
+        ? `| \`adm_catalog_build\`${scopeFilter}`
+        : `| \`adm_catalog_build\`${scopeFilter}`;
   return { literal, sha256: await sha256Hex(literal) };
 }

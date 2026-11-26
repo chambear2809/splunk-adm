@@ -15,9 +15,7 @@ describe("buildApprovedConnectedQuery", () => {
       key: "graph.impact",
       window: { earliest: 100, latest: 200 },
     });
-    expect(query.literal).toBe(
-      '| `adm_graph("inventory","demo","c","shop")` | where _time>=100 AND _time<200',
-    );
+    expect(query.literal).toBe('| `adm_graph("inventory","demo","c","shop")`');
     expect(query.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
@@ -30,7 +28,7 @@ describe("buildApprovedConnectedQuery", () => {
       }),
     ).resolves.toMatchObject({
       literal:
-        '| `adm_catalog_build` | search service="inventory" | where _time>=100 AND _time<200',
+        '| `adm_catalog_build` | search service="inventory" environment="demo" cluster="c" namespace="shop"',
     });
     await expect(
       buildApprovedConnectedQuery({
@@ -39,7 +37,8 @@ describe("buildApprovedConnectedQuery", () => {
         window: { earliest: 100, latest: 200 },
       }),
     ).resolves.toMatchObject({
-      literal: '| `adm_find("inventory")` | where _time>=100 AND _time<200',
+      literal:
+        '| `adm_catalog_build` | search service="inventory" environment="demo" cluster="c" namespace="shop"',
     });
   });
 
