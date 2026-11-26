@@ -48,9 +48,9 @@ export async function buildApprovedConnectedQuery(input: {
     ` | search service="${service}" environment="${environment}" ` +
     `cluster="${cluster}" namespace="${namespace}"`;
   const literal = input.key.startsWith("graph.")
-    ? `| \`adm_graph("${service}","${environment}","${cluster}","${namespace}")\``
+    ? `\`adm_graph("${service}","${environment}","${cluster}","${namespace}")\``
     : input.key.startsWith("topology.")
-      ? "| `adm_topology`"
+      ? "`adm_topology`"
       : input.key === "catalog.selected"
         ? `| \`adm_catalog_build\`${scopeFilter}`
         : `| \`adm_catalog_build\`${scopeFilter}`;

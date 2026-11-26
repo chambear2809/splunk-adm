@@ -15,7 +15,7 @@ describe("buildApprovedConnectedQuery", () => {
       key: "graph.impact",
       window: { earliest: 100, latest: 200 },
     });
-    expect(query.literal).toBe('| `adm_graph("inventory","demo","c","shop")`');
+    expect(query.literal).toBe('`adm_graph("inventory","demo","c","shop")`');
     expect(query.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
