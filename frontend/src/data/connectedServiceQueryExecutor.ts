@@ -1,10 +1,16 @@
 import type { GraphArgs } from "../rows";
+import { sha256Hex } from "../changeCorrelation/canonicalJson";
 import {
   validateConnectedQueryEvidence,
   type ConnectedQueryEvidence,
   type ConnectedQueryProvenanceContext,
 } from "./connectedServiceQueryEvidence";
-import type { ConnectedQuerySpec } from "./connectedServiceQueryPlan";
+import {
+  CONNECTED_QUERY_KEYS,
+  type ConnectedQuerySpec,
+} from "./connectedServiceQueryPlan";
+
+const HASH = /^[a-f0-9]{64}$/;
 
 export interface ConnectedQueryExecutionResult {
   rows: Record<string, unknown>[];
@@ -19,9 +25,9 @@ export interface ConnectedQueryExecutionResult {
 
 export interface ConnectedQueryTransport {
   /**
-   * Execute one already-approved literal and return owned job/readback data.
-   * Implementations own dispatch and receipt acquisition; this boundary never
-   * accepts caller SPL or fabricates execution metadata.
+   * Execute one literal selected by a trusted query builder and return owned
+   * job/readback data. Implementations own dispatch and receipt acquisition;
+   * this boundary does not authorize arbitrary SPL or fabricate metadata.
    */
   execute(input: {
     application: GraphArgs;
@@ -32,12 +38,41 @@ export interface ConnectedQueryTransport {
   }): Promise<ConnectedQueryExecutionResult>;
 }
 
+async function validateExecutionInputs(
+  spec: ConnectedQuerySpec,
+  provenance: ConnectedQueryProvenanceContext,
+) {
+  if (
+    !CONNECTED_QUERY_KEYS.includes(spec.key) ||
+    typeof spec.literal !== "string" ||
+    !spec.literal ||
+    spec.literal.length > 65536 ||
+    !HASH.test(spec.sha256) ||
+    spec.sha256 !== (await sha256Hex(spec.literal)) ||
+    !spec.window ||
+    !Number.isSafeInteger(spec.window.earliest) ||
+    !Number.isSafeInteger(spec.window.latest) ||
+    spec.window.earliest < 0 ||
+    spec.window.latest <= spec.window.earliest ||
+    !provenance.executionId ||
+    !HASH.test(provenance.planSha256) ||
+    !Number.isSafeInteger(provenance.indexTimeBounds.earliest) ||
+    !Number.isSafeInteger(provenance.indexTimeBounds.latest) ||
+    provenance.indexTimeBounds.earliest >= provenance.indexTimeBounds.latest ||
+    !provenance.queryJobSid ||
+    !provenance.receiptFingerprints.length ||
+    !provenance.receiptFingerprints.every((item) => HASH.test(item))
+  )
+    throw new Error("Connected query execution inputs are invalid.");
+}
+
 /** Execute a trusted plan item and validate its independently owned readback. */
 export async function executeConnectedQuery(
   spec: ConnectedQuerySpec,
   provenance: ConnectedQueryProvenanceContext,
   transport: ConnectedQueryTransport,
 ): Promise<ConnectedQueryEvidence> {
+  await validateExecutionInputs(spec, provenance);
   const result = await transport.execute({
     application: spec.application,
     key: spec.key,

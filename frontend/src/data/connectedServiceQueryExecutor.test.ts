@@ -96,4 +96,31 @@ describe("executeConnectedQuery", () => {
       executeConnectedQuery(spec, provenance, transport),
     ).rejects.toThrow();
   });
+
+  it("rejects invalid plan inputs before transport dispatch", async () => {
+    const spec = (await plan()).find(({ key }) => key === "graph.impact")!;
+    const transport = { execute: vi.fn() };
+    await expect(
+      executeConnectedQuery(
+        { ...spec, sha256: "0".repeat(64) },
+        provenance,
+        transport,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      executeConnectedQuery(
+        { ...spec, window: { earliest: 400, latest: 100 } },
+        provenance,
+        transport,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      executeConnectedQuery(
+        spec,
+        { ...provenance, planSha256: "bad" },
+        transport,
+      ),
+    ).rejects.toThrow();
+    expect(transport.execute).not.toHaveBeenCalled();
+  });
 });
