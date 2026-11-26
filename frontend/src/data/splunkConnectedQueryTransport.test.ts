@@ -19,6 +19,7 @@ describe("createSplunkConnectedQueryTransport", () => {
       window,
     });
     const client = {
+      verifyOwnership: vi.fn(async () => provenance),
       search: vi.fn(async (input) => {
         // Model the installed macro behavior: bounds are dispatch arguments;
         // a post-macro _time filter would remove projected graph rows.
@@ -56,10 +57,14 @@ describe("createSplunkConnectedQueryTransport", () => {
       literal: approved.literal,
       ...window,
     });
+    expect(client.verifyOwnership).toHaveBeenCalledOnce();
   });
 
   it("rejects unapproved literals and incomplete jobs without dispatch", async () => {
-    const client = { search: vi.fn() };
+    const client = {
+      verifyOwnership: vi.fn(async () => provenance),
+      search: vi.fn(),
+    };
     const transport = createSplunkConnectedQueryTransport(client, provenance);
     await expect(
       transport.execute({
@@ -69,6 +74,31 @@ describe("createSplunkConnectedQueryTransport", () => {
         window,
       }),
     ).rejects.toThrow(/approved factory/);
+    expect(client.search).not.toHaveBeenCalled();
+  });
+
+  it("rejects a client bound to another run before dispatch", async () => {
+    const approved = await buildApprovedConnectedQuery({
+      application,
+      key: "find.service",
+      window,
+    });
+    const client = {
+      verifyOwnership: vi.fn(async () => ({
+        executionId: "other-run",
+        planSha256: provenance.planSha256,
+      })),
+      search: vi.fn(),
+    };
+    const transport = createSplunkConnectedQueryTransport(client, provenance);
+    await expect(
+      transport.execute({
+        application,
+        key: "find.service",
+        literal: approved.literal,
+        window,
+      }),
+    ).rejects.toThrow(/ownership/);
     expect(client.search).not.toHaveBeenCalled();
   });
 });
