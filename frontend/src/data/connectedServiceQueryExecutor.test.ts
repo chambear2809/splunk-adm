@@ -123,4 +123,36 @@ describe("executeConnectedQuery", () => {
     ).rejects.toThrow();
     expect(transport.execute).not.toHaveBeenCalled();
   });
+
+  it("uses a synchronous snapshot when caller objects mutate during hashing", async () => {
+    const original = (await plan()).find(({ key }) => key === "graph.impact")!;
+    let literal = original.literal;
+    const mutableSpec = { ...original };
+    Object.defineProperty(mutableSpec, "literal", {
+      configurable: true,
+      get() {
+        const value = literal;
+        literal = "| makeresults | eval tampered=1";
+        return value;
+      },
+    });
+    const transport = {
+      execute: vi.fn(async () => ({
+        rows: [],
+        complete: true as const,
+        source: "splunk_rest" as const,
+        executionId: provenance.executionId,
+        planSha256: provenance.planSha256,
+        indexTimeBounds: provenance.indexTimeBounds,
+        receiptFingerprints: [...provenance.receiptFingerprints],
+        queryJob: { sid: provenance.queryJobSid },
+      })),
+    };
+    await expect(
+      executeConnectedQuery(mutableSpec, provenance, transport),
+    ).resolves.toBeDefined();
+    expect(transport.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ literal: original.literal }),
+    );
+  });
 });

@@ -72,17 +72,30 @@ export async function executeConnectedQuery(
   provenance: ConnectedQueryProvenanceContext,
   transport: ConnectedQueryTransport,
 ): Promise<ConnectedQueryEvidence> {
-  await validateExecutionInputs(spec, provenance);
+  // Capture all caller-owned values before the first await. Hashing and
+  // transport are asynchronous; subsequent validation must not observe a
+  // caller mutation between those stages.
+  const approvedSpec: ConnectedQuerySpec = {
+    ...spec,
+    application: { ...spec.application },
+    window: { ...spec.window },
+  };
+  const approvedProvenance: ConnectedQueryProvenanceContext = {
+    ...provenance,
+    indexTimeBounds: { ...provenance.indexTimeBounds },
+    receiptFingerprints: [...provenance.receiptFingerprints],
+  };
+  await validateExecutionInputs(approvedSpec, approvedProvenance);
   const result = await transport.execute({
-    application: spec.application,
-    key: spec.key,
-    literal: spec.literal,
-    window: spec.window,
-    ...(spec.key === "find.service"
+    application: approvedSpec.application,
+    key: approvedSpec.key,
+    literal: approvedSpec.literal,
+    window: approvedSpec.window,
+    ...(approvedSpec.key === "find.service"
       ? {
           findInput: {
             field: "service" as const,
-            value: spec.application.service,
+            value: approvedSpec.application.service,
           },
         }
       : {}),
@@ -99,18 +112,22 @@ export async function executeConnectedQuery(
   };
   const evidence = {
     status: "complete" as const,
-    ...(spec.key === "find.service"
+    ...(approvedSpec.key === "find.service"
       ? {
           input: {
             field: "service" as const,
-            value: spec.application.service,
+            value: approvedSpec.application.service,
           },
         }
-      : { args: spec.application }),
-    window: { ...spec.window, basis: "source_time" as const },
-    query: { literal: spec.literal, sha256: spec.sha256 },
+      : { args: approvedSpec.application }),
+    window: { ...approvedSpec.window, basis: "source_time" as const },
+    query: { literal: approvedSpec.literal, sha256: approvedSpec.sha256 },
     rows: result.rows,
     readback,
   };
-  return validateConnectedQueryEvidence(spec, evidence, provenance);
+  return validateConnectedQueryEvidence(
+    approvedSpec,
+    evidence,
+    approvedProvenance,
+  );
 }
