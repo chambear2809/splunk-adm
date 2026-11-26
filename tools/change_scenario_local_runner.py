@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -461,7 +462,10 @@ class SplunkLabAdapter:
 
     def __init__(self, lab_module: Any | None = None) -> None:
         if lab_module is None:
-            from tests.splunk import lab as default_lab
+            splunk_dir = str(Path(__file__).resolve().parents[1] / "tests" / "splunk")
+            if splunk_dir not in sys.path:
+                sys.path.insert(0, splunk_dir)
+            import lab as default_lab
 
             lab_module = default_lab
         self._lab = lab_module
