@@ -14,7 +14,8 @@ from tools.change_correlation.contracts import canonical_json
 
 HASH_RE = re.compile(r"^[a-f0-9]{64}$")
 TASK_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
-SID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+SID_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$")
+MAX_SID_LENGTH = 128
 
 
 class DispatchOwnershipError(ValueError):
@@ -61,7 +62,11 @@ def bind_local_readback(
         )
     if not isinstance(task_id, str) or not TASK_RE.fullmatch(task_id):
         raise DispatchOwnershipError("Task owner ID is invalid.")
-    if not isinstance(sid, str) or not SID_RE.fullmatch(sid):
+    if (
+        not isinstance(sid, str)
+        or len(sid) > MAX_SID_LENGTH
+        or not SID_RE.fullmatch(sid)
+    ):
         raise DispatchOwnershipError("Returned search SID is invalid.")
     if sid != expected_sid:
         raise DispatchOwnershipError("Returned SID is not independently approved.")
@@ -185,7 +190,12 @@ def verify_local_readback_ownership(
     if ownership_hash != _sha(canonical_json(body)):
         raise DispatchOwnershipError("Ownership record hash does not match content.")
     dispatch, readback = record.get("dispatch"), record.get("readback")
-    if not isinstance(dispatch, dict) or not SID_RE.fullmatch(dispatch.get("sid", "")):
+    if (
+        not isinstance(dispatch, dict)
+        or not isinstance(dispatch.get("sid"), str)
+        or len(dispatch["sid"]) > MAX_SID_LENGTH
+        or not SID_RE.fullmatch(dispatch["sid"])
+    ):
         raise DispatchOwnershipError("Ownership SID is invalid.")
     if not isinstance(readback, dict) or readback.get("sid") != dispatch["sid"]:
         raise DispatchOwnershipError("Ownership SID/readback mismatch.")
