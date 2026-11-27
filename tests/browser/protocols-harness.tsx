@@ -36,6 +36,30 @@ import {
   normalizeInterfaceSyslogRow,
   DEFAULT_INTERFACE_HEALTH_THRESHOLDS,
 } from "../../frontend/src/protocols/lenses/interface_health/adapter";
+import { QosIcmpLensPage } from "../../frontend/src/protocols/lenses/qos_icmp/QosIcmpLensPage";
+import {
+  buildQosIcmpAnalysis,
+  normalizeQosIcmpRow,
+  DEFAULT_QOS_ICMP_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/qos_icmp/adapter";
+import { EnterpriseL7LensPage } from "../../frontend/src/protocols/lenses/enterprise_l7/EnterpriseL7LensPage";
+import {
+  buildEnterpriseL7Analysis,
+  normalizeEnterpriseL7Row,
+  DEFAULT_ENTERPRISE_L7_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/enterprise_l7/adapter";
+import { DropsLensPage } from "../../frontend/src/protocols/lenses/drops/DropsLensPage";
+import {
+  buildDropsAnalysis,
+  normalizeDropsRow,
+  DEFAULT_DROPS_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/drops/adapter";
+import { EndpointMobilityLensPage } from "../../frontend/src/protocols/lenses/endpoint_mobility/EndpointMobilityLensPage";
+import {
+  buildEndpointMobilityAnalysis,
+  normalizeEndpointMobilityRow,
+  DEFAULT_ENDPOINT_MOBILITY_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/endpoint_mobility/adapter";
 import {
   AdjacencyOverlay,
   CopyableIp,
@@ -1076,6 +1100,477 @@ function InterfaceHealthShowcase() {
   );
 }
 
+function QosIcmpShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const rawRows = [
+    {
+      _time: EARLIEST + 120,
+      host: "leaf1.pseudo.co",
+      sourcetype: "stream:netflow",
+      exporter_ip: "198.18.131.3",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.30.22",
+      src_port: 52100,
+      dest_port: 5060,
+      protoid: 17,
+      tos: 184,
+      bytes: 48000,
+      packets: 60,
+    },
+    {
+      _time: EARLIEST + 135,
+      host: "leaf2.pseudo.co",
+      sourcetype: "stream:netflow",
+      exporter_ip: "198.18.131.4",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.30.22",
+      src_port: 52100,
+      dest_port: 5060,
+      protoid: 17,
+      tos: 0,
+      bytes: 48000,
+      packets: 60,
+    },
+    {
+      _time: EARLIEST + 240,
+      host: "leaf1.pseudo.co",
+      sourcetype: "stream:netflow",
+      exporter_ip: "198.18.131.3",
+      src_ip: "10.10.20.15",
+      dest_ip: "10.10.30.40",
+      src_port: 49200,
+      dest_port: 443,
+      protoid: 6,
+      tos: 104,
+      bytes: 92000,
+      packets: 90,
+    },
+    {
+      _time: EARLIEST + 300,
+      host: "stream-01",
+      sourcetype: "stream:icmp",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.30.22",
+      icmp_type: 3,
+      icmp_code: 4,
+      packets_in: 4,
+      bytes_in: 512,
+    },
+    {
+      _time: EARLIEST + 420,
+      host: "nd-01",
+      sourcetype: "cisco:dc:nd:flows",
+      srcIp: "10.10.20.11",
+      dstIp: "10.10.30.22",
+      srcPort: 52100,
+      dstPort: 5060,
+      protocolName: "UDP",
+      dropPktCount: 14,
+      dropReasons: ["QUEUE_DROP"],
+      nodeName: "leaf2.pseudo.co",
+      fabricName: "pseudoco",
+    },
+  ];
+  const events = rawRows
+    .map((r) => normalizeQosIcmpRow(r, "stream:netflow"))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "netflow" }));
+  const initialResult = buildQosIcmpAnalysis({
+    events,
+    thresholds: DEFAULT_QOS_ICMP_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      { source: "protocol_qos_icmp", profile: "qos-dc1", state: "complete" },
+    ],
+    capped: false,
+    netflowConfigured: true,
+    icmpConfigured: true,
+    ndConfigured: true,
+  });
+  return (
+    <QosIcmpLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "qos-dc1",
+            source: "protocol_qos_icmp",
+            lens: "qos_icmp",
+            scope: "lab:dc1",
+            index: "netflow",
+            observer: "leaf1",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "qos-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function EnterpriseL7Showcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const rawRows = [
+    {
+      _time: EARLIEST + 100,
+      host: "stream-01",
+      sourcetype: "stream:smb",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.40.10",
+      dest_port: 445,
+      dialect: "NT LM 0.12",
+      status: "STATUS_ACCESS_DENIED",
+      time_taken: 42000,
+    },
+    {
+      _time: EARLIEST + 200,
+      host: "stream-01",
+      sourcetype: "stream:ldap",
+      src_ip: "10.10.20.12",
+      dest_ip: "10.10.40.20",
+      dest_port: 389,
+      auth_type: "simple",
+      result_code: "0",
+      time_taken: 18000,
+    },
+    {
+      _time: EARLIEST + 300,
+      host: "stream-01",
+      sourcetype: "stream:radius",
+      src_ip: "10.10.1.5",
+      dest_ip: "10.10.40.30",
+      dest_port: 1812,
+      nas_ip_address: "10.10.1.5",
+      code: "Access-Reject",
+      time_taken: 12000,
+    },
+    {
+      _time: EARLIEST + 360,
+      host: "stream-01",
+      sourcetype: "stream:rtp",
+      src_ip: "10.10.20.50",
+      dest_ip: "10.10.40.40",
+      dest_port: 16384,
+      mos: 2.9,
+      rtp_jitter: 48,
+      packet_loss_pct: 3.2,
+      codec: "G.711",
+    },
+    {
+      _time: EARLIEST + 420,
+      host: "stream-01",
+      sourcetype: "stream:nfs",
+      src_ip: "10.10.20.22",
+      dest_ip: "10.10.40.50",
+      dest_port: 2049,
+      nfs_version: "4.1",
+      status: "NFS4_OK",
+      time_taken: 6500,
+    },
+  ];
+  const events = rawRows
+    .map((r) => normalizeEnterpriseL7Row(r))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "stream" }));
+  const initialResult = buildEnterpriseL7Analysis({
+    events,
+    thresholds: DEFAULT_ENTERPRISE_L7_THRESHOLDS,
+    configuredProtocols: ["SMB", "NFS", "LDAP", "RADIUS", "VoIP"],
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_enterprise_l7",
+        profile: "l7-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+  });
+  return (
+    <EnterpriseL7LensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "l7-dc1",
+            source: "protocol_enterprise_l7",
+            lens: "enterprise_l7",
+            scope: "lab:dc1",
+            index: "stream",
+            observer: "stream-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "l7-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function DropsShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const rawRows = [
+    {
+      _time: EARLIEST + 100,
+      host: "ftd-01",
+      sourcetype: "cisco:sfw:estreamer",
+      InitiatorIP: "10.10.20.11",
+      InitiatorPort: 51400,
+      ResponderIP: "10.10.50.10",
+      ResponderPort: 443,
+      Protocol: "TCP",
+      AC_RuleAction: "Block with reset",
+      AccessControlRuleName: "Deny-PCI-EastWest",
+      Device: "ftd-edge-01",
+      IngressZone: "app",
+      EgressZone: "pci",
+      InitiatorPackets: 12,
+      InitiatorBytes: 1440,
+    },
+    {
+      _time: EARLIEST + 240,
+      host: "k8s-worker-01",
+      sourcetype: "cilium:hubble:flow",
+      verdict: "DROPPED",
+      drop_reason_desc: "POLICY_DENIED",
+      src_ip: "10.244.1.12",
+      dest_ip: "10.244.2.25",
+      dest_port: 5432,
+      transport: "TCP",
+      src_namespace: "frontend",
+      dest_namespace: "payments",
+    },
+    {
+      _time: EARLIEST + 360,
+      host: "nd-01",
+      sourcetype: "cisco:dc:nd:flows",
+      srcIp: "10.10.20.18",
+      dstIp: "10.10.60.5",
+      dstPort: 9092,
+      protocolName: "TCP",
+      dropPktCount: 48,
+      dropReasons: ["ACL_DROP"],
+      fabricName: "pseudoco",
+    },
+  ];
+  const events = rawRows
+    .map((r) => normalizeDropsRow(r))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_secure_fw" }));
+  const initialResult = buildDropsAnalysis({
+    events,
+    thresholds: DEFAULT_DROPS_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      { source: "protocol_drops", profile: "drops-dc1", state: "complete" },
+    ],
+    capped: false,
+  });
+  return (
+    <DropsLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "drops-dc1",
+            source: "protocol_drops",
+            lens: "drops",
+            scope: "lab:dc1",
+            index: "cisco_secure_fw",
+            observer: "ftd-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "drops-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function EndpointMobilityShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const rawRows = [
+    {
+      _time: EARLIEST + 100,
+      host: "stream-01",
+      sourcetype: "stream:arp",
+      sender_ip: "10.10.20.42",
+      sender_mac: "00:50:56:aa:11:01",
+      target_ip: "10.10.20.1",
+      arp_opcode: "request",
+      vlan_id: "120",
+    },
+    {
+      _time: EARLIEST + 180,
+      host: "stream-01",
+      sourcetype: "stream:arp",
+      sender_ip: "10.10.20.42",
+      sender_mac: "00:50:56:bb:22:02",
+      target_ip: "10.10.20.1",
+      arp_opcode: "reply",
+      vlan_id: "120",
+    },
+    {
+      _time: EARLIEST + 260,
+      host: "nd-01",
+      sourcetype: "cisco:dc:nd:endpoints",
+      mac: "00:50:56:cc:33:03",
+      ip: "10.10.20.77",
+      nodeName: "leaf1.pseudo.co",
+      displayInterface: "Ethernet1/12",
+      modType: "creation",
+      encap: "vlan-120",
+    },
+    {
+      _time: EARLIEST + 340,
+      host: "nd-01",
+      sourcetype: "cisco:dc:nd:endpoints",
+      mac: "00:50:56:cc:33:03",
+      ip: "10.10.20.77",
+      nodeName: "leaf2.pseudo.co",
+      displayInterface: "Ethernet1/14",
+      modType: "move",
+      encap: "vlan-120",
+    },
+    {
+      _time: EARLIEST + 420,
+      host: "nd-01",
+      sourcetype: "cisco:dc:nd:endpoints",
+      mac: "00:50:56:dd:44:04",
+      ip: "10.10.20.88",
+      nodeName: "leaf1.pseudo.co",
+      displayInterface: "Ethernet1/20",
+      modType: "creation",
+      encap: "vlan-120",
+    },
+  ];
+  const events = rawRows
+    .map((r, i) => normalizeEndpointMobilityRow(r, i))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const initialResult = buildEndpointMobilityAnalysis({
+    events,
+    thresholds: DEFAULT_ENDPOINT_MOBILITY_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_endpoint_mobility",
+        profile: "mob-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+    activeSourceKinds: ["stream_arp", "nd_endpoints"],
+  });
+  return (
+    <EndpointMobilityLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "mob-dc1",
+            source: "protocol_endpoint_mobility",
+            lens: "endpoint_mobility",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "nd-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "mob-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
 createRoot(document.getElementById("adm-root")!).render(
   <ThemeProvider family="enterprise" colorScheme={theme} density="comfortable">
     <Shell page="protocols" live={false}>
@@ -1095,6 +1590,14 @@ createRoot(document.getElementById("adm-root")!).render(
         <L2ControlShowcase />
       ) : scenario === "interface_health" ? (
         <InterfaceHealthShowcase />
+      ) : scenario === "qos_icmp" ? (
+        <QosIcmpShowcase />
+      ) : scenario === "enterprise_l7" ? (
+        <EnterpriseL7Showcase />
+      ) : scenario === "drops" ? (
+        <DropsShowcase />
+      ) : scenario === "endpoint_mobility" ? (
+        <EndpointMobilityShowcase />
       ) : (
         <SampleLensShowcase />
       )}

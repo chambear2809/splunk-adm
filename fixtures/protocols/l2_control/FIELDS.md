@@ -1,6 +1,6 @@
 # `l2_control` Synthetic Fixture Field Grounding
 
-All fields in `fixtures/raw/protocols/l2_control/` are grounded in the extracted Splunk Stream 8.1.6 stream definitions (`research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dhcp` and `streams/arp`) and Cisco DC Networking 2.0.10 / SC4S syslog contracts (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/default/props.conf` and `frontend/src/protocols/shared/adapters/nxosSyslog.ts`).
+All fields in `fixtures/protocols/l2_control/` are grounded in the extracted Splunk Stream 8.1.6 stream definitions (`research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dhcp` and `streams/arp`) and Cisco DC Networking 2.0.10 / SC4S syslog contracts (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/default/props.conf` and `frontend/src/protocols/shared/adapters/nxosSyslog.ts`).
 
 ## `stream:dhcp` (`stream_dhcp.ndjson`)
 

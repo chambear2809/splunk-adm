@@ -36,7 +36,7 @@ const CONFIG: ProtocolConfiguration = {
 
 function sampleRoutingResult(syslogOnly = false): RoutingInvestigationResult {
   const syslogRows = readFileSync(
-    "fixtures/raw/protocols/routing/nxos_routing_syslog.ndjson",
+    "fixtures/protocols/routing/nxos_routing_syslog.ndjson",
     "utf8",
   )
     .trim()
@@ -44,7 +44,7 @@ function sampleRoutingResult(syslogOnly = false): RoutingInvestigationResult {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
   const dmeRows = syslogOnly
     ? []
-    : readFileSync("fixtures/raw/protocols/routing/dcn_bgp_dme.ndjson", "utf8")
+    : readFileSync("fixtures/protocols/routing/dcn_bgp_dme.ndjson", "utf8")
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as Record<string, unknown>);

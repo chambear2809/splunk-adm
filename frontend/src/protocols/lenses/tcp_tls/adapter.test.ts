@@ -468,7 +468,7 @@ describe("normalizeTcpTlsRow & buildTcpTlsAnalysis", () => {
 
   it("loads and normalizes committed NDJSON fixtures cleanly", () => {
     const tcpLines = readFileSync(
-      "fixtures/raw/protocols/tcp_tls/stream_tcp_tls.ndjson",
+      "fixtures/protocols/tcp_tls/stream_tcp_tls.ndjson",
       "utf8",
     )
       .trim()
@@ -498,7 +498,7 @@ describe("normalizeTcpTlsRow & buildTcpTlsAnalysis", () => {
     }
 
     const nfLines = readFileSync(
-      "fixtures/raw/protocols/tcp_tls/stream_netflow_fallback.ndjson",
+      "fixtures/protocols/tcp_tls/stream_netflow_fallback.ndjson",
       "utf8",
     )
       .trim()

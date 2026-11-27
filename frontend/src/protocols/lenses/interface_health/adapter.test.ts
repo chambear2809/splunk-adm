@@ -369,14 +369,14 @@ describe("normalizeInterfaceDmeRow, normalizeInterfaceSyslogRow & buildInterface
 
   it("loads committed DME and syslog NDJSON fixtures and verifies ITEM_ID round-trip", () => {
     const dmeLines = readFileSync(
-      "fixtures/raw/protocols/interface_health/dcn_interface_dme.ndjson",
+      "fixtures/protocols/interface_health/dcn_interface_dme.ndjson",
       "utf8",
     )
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     const syslogLines = readFileSync(
-      "fixtures/raw/protocols/interface_health/nxos_interface_syslog.ndjson",
+      "fixtures/protocols/interface_health/nxos_interface_syslog.ndjson",
       "utf8",
     )
       .trim()

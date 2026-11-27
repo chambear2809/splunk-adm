@@ -350,14 +350,14 @@ describe("normalizeL2ControlRow & buildL2ControlAnalysis", () => {
 
   it("loads and normalizes committed stream_dhcp and nxos_l2_syslog fixtures cleanly", () => {
     const dhcpLines = readFileSync(
-      "fixtures/raw/protocols/l2_control/stream_dhcp.ndjson",
+      "fixtures/protocols/l2_control/stream_dhcp.ndjson",
       "utf8",
     )
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     const syslogLines = readFileSync(
-      "fixtures/raw/protocols/l2_control/nxos_l2_syslog.ndjson",
+      "fixtures/protocols/l2_control/nxos_l2_syslog.ndjson",
       "utf8",
     )
       .trim()

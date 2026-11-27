@@ -25,7 +25,6 @@ import type {
   ProtocolLensSummary,
   ProtocolStatus,
 } from "./shared/contract";
-import { loadProtocolLensComponent } from "./shared/loader";
 import { readProtocolConfiguration } from "./shared/runner";
 import { ProtocolStateBanner, StatusChip } from "./shared/ui";
 import "./protocols.css";
@@ -147,7 +146,8 @@ export function ProtocolsPage({
       return;
     }
     let cancelled = false;
-    loadProtocolLensComponent(activeLens.id, activeLens.loadComponent)
+    activeLens
+      .loadComponent()
       .then((comp) => {
         if (!cancelled) setLensComponent(() => comp);
       })

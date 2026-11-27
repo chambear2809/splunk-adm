@@ -1,0 +1,2 @@
+{"_time":1764246845,"host":"splunk-hf-01","sourcetype":"cisco:dc:nd:flows","srcIp":"10.42.0.25","dstIp":"10.42.0.50","srcPort":44300,"dstPort":5432,"protocolName":"TCP","dropPktCount":14,"dropReasons":["QOS_WRED_DROP"],"fabricName":"dc1-vxlan","nd_host":"192.0.2.60","nodeName":"leaf-101"}
+{"_time":1764246725,"host":"splunk-hf-01","sourcetype":"cisco:dc:nd:flows","srcIp":"10.42.0.20","dstIp":"10.42.0.40","srcPort":5060,"dstPort":5060,"protocolName":"UDP","dropPktCount":0,"dropReasons":[],"fabricName":"dc1-vxlan","nd_host":"192.0.2.60","nodeName":"leaf-101"}

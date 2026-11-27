@@ -294,14 +294,14 @@ describe("normalizeRoutingSyslogRow, normalizeRoutingDmeRow & buildRoutingAnalys
 
   it("loads committed NDJSON fixtures, merges syslog + DME, and passes ITEM_ID validation", () => {
     const syslogRows = readFileSync(
-      "fixtures/raw/protocols/routing/nxos_routing_syslog.ndjson",
+      "fixtures/protocols/routing/nxos_routing_syslog.ndjson",
       "utf8",
     )
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     const dmeRows = readFileSync(
-      "fixtures/raw/protocols/routing/dcn_bgp_dme.ndjson",
+      "fixtures/protocols/routing/dcn_bgp_dme.ndjson",
       "utf8",
     )
       .trim()
@@ -389,7 +389,7 @@ describe("normalizeRoutingSyslogRow, normalizeRoutingDmeRow & buildRoutingAnalys
 
   it("marks prefixesReceived undefined (Not covered) when syslog-only", () => {
     const syslogRows = readFileSync(
-      "fixtures/raw/protocols/routing/nxos_routing_syslog.ndjson",
+      "fixtures/protocols/routing/nxos_routing_syslog.ndjson",
       "utf8",
     )
       .trim()

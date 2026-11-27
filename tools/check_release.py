@@ -1054,6 +1054,28 @@ STATIC_ALLOWLIST = frozenset(
         ENDPOINTS_BUNDLE_PATH,
         ENDPOINTS_MANIFEST_PATH,
         ENDPOINTS_CSS_PATH,
+        *{
+            path
+            for lens_id in (
+                "tcp_tls",
+                "dns_ops",
+                "routing",
+                "l2_control",
+                "interface_health",
+                "qos_icmp",
+                "enterprise_l7",
+                "drops",
+                "endpoint_mobility",
+                "app_transactions",
+                "state_events",
+                "mgmt_plane",
+                "lb_health",
+            )
+            for path in (
+                f"splunk_adm/appserver/static/pages/protocol-{lens_id}.js",
+                f"splunk_adm/appserver/static/protocol-{lens_id}-manifest.json",
+            )
+        },
     }
 )
 
@@ -1397,6 +1419,69 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             raise ValueError(
                 "Protocols core asset version/hash does not match the main bundle"
             ) from exc
+        lens_manifests = sorted(
+            path
+            for path in files
+            if path.startswith("splunk_adm/appserver/static/protocol-")
+            and path.endswith("-manifest.json")
+        )
+        lens_bundles = sorted(
+            path
+            for path in files
+            if path.startswith("splunk_adm/appserver/static/pages/protocol-")
+            and path.endswith(".js")
+        )
+        manifest_ids = {
+            path.removeprefix("splunk_adm/appserver/static/protocol-").removesuffix(
+                "-manifest.json"
+            )
+            for path in lens_manifests
+        }
+        bundle_ids = {
+            path.removeprefix(
+                "splunk_adm/appserver/static/pages/protocol-"
+            ).removesuffix(".js")
+            for path in lens_bundles
+        }
+        if manifest_ids != bundle_ids:
+            raise ValueError(
+                "Protocol lens manifests and bundles do not match: "
+                f"manifests={sorted(manifest_ids)}, bundles={sorted(bundle_ids)}"
+            )
+        for manifest_path in lens_manifests:
+            lens_id = manifest_path.removeprefix(
+                "splunk_adm/appserver/static/protocol-"
+            ).removesuffix("-manifest.json")
+            bundle_path = f"splunk_adm/appserver/static/pages/protocol-{lens_id}.js"
+            if bundle_path not in files:
+                raise ValueError(
+                    f"archive missing protocol lens bundle for {lens_id}: {bundle_path}"
+                )
+            if (
+                len(gzip.compress(files[bundle_path], compresslevel=9, mtime=0))
+                > MAX_PROTOCOLS_CORE_GZIP_BYTES
+            ):
+                raise ValueError(
+                    f"Protocol lens {lens_id} optional bundle exceeds its 64 KiB gzip budget"
+                )
+            try:
+                lens_manifest = json.loads(files[manifest_path])
+                lens_version = lens_manifest["assetVersion"]
+                if (
+                    lens_manifest.get("schemaVersion") != 1
+                    or lens_manifest.get("lens") != lens_id
+                    or not isinstance(lens_version, str)
+                    or not re.fullmatch(r"[0-9a-f]{24}", lens_version)
+                    or lens_manifest.get("javascriptSha256")
+                    != hashlib.sha256(files[bundle_path]).hexdigest()
+                    or lens_version.encode() not in files[PROTOCOLS_CORE_BUNDLE_PATH]
+                    or lens_version.encode() not in files[bundle_path]
+                ):
+                    raise ValueError("mismatch")
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise ValueError(
+                    f"Protocol lens {lens_id} asset version/hash does not match protocols-core"
+                ) from exc
     # Configuration history is an independently versioned, live-only asset.
     # Once the main bundle registers its host, or any one asset is present,
     # require and validate the complete set.

@@ -1,6 +1,6 @@
 # `dns_ops` Synthetic Fixture Field Grounding
 
-All fields in `fixtures/raw/protocols/dns_ops/` are grounded in the extracted Splunk Stream 8.1.6 DNS stream definition at `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dns` and the `cilium:hubble:flow` DNS L7 schema documented in `fixtures/raw-aci/FIELDS.md` and `tests/splunk/test_dns_evidence.py`.
+All fields in `fixtures/protocols/dns_ops/` are grounded in the extracted Splunk Stream 8.1.6 DNS stream definition at `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dns` and the `cilium:hubble:flow` DNS L7 schema documented in `fixtures/raw-aci/FIELDS.md` and `tests/splunk/test_dns_evidence.py`.
 
 ## `stream:dns` (`stream_dns.ndjson`)
 

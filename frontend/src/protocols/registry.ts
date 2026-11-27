@@ -1,19 +1,70 @@
+import type { ComponentType } from "react";
 import {
   sourceForLens,
   type LensProfileValidator,
+  type ProtocolLensComponentProps,
   type ProtocolLensId,
   type ProtocolLensRegistration,
+  type ProtocolLensSummaryRunner,
 } from "./shared/contract";
+import { loadProtocolLensBundle } from "./shared/loader";
 import { validateTcpTlsExtra } from "./lenses/tcp_tls/validate";
 import { validateDnsOpsExtra } from "./lenses/dns_ops/validate";
 import { validateRoutingExtra } from "./lenses/routing/validate";
 import { validateL2ControlExtra } from "./lenses/l2_control/validate";
 import { validateInterfaceHealthExtra } from "./lenses/interface_health/validate";
+import { validateQosIcmpExtra } from "./lenses/qos_icmp/validate";
+import { validateEnterpriseL7Extra } from "./lenses/enterprise_l7/validate";
+import { validateDropsExtra } from "./lenses/drops/validate";
+import { validateEndpointMobilityExtra } from "./lenses/endpoint_mobility/validate";
+
+/**
+ * Builds Splunk-aware lazy loaders for a lens.
+ * - In packaged Splunk builds (`__ADM_SPLUNK_BUILD__`), loads the per-lens
+ *   optional IIFE asset (`pages/protocol-<id>.js`), so Vite dead-code-eliminates
+ *   every lens page and adapter from `protocols-core.js`.
+ * - In Vite dev/preview and Vitest (`!__ADM_SPLUNK_BUILD__`), imports the lens
+ *   modules directly.
+ */
+function makeSplunkLensLoaders(
+  id: ProtocolLensId,
+): Pick<ProtocolLensRegistration, "loadComponent" | "summarize"> {
+  return {
+    summarize: async (client, request, configuration, signal) => {
+      const bundle = await loadProtocolLensBundle(id);
+      if (!bundle.summarize) {
+        throw new Error(
+          `Protocol lens "${id}" does not export a summary runner.`,
+        );
+      }
+      return bundle.summarize(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () => {
+      const bundle = await loadProtocolLensBundle(id);
+      return bundle.LensPage;
+    },
+  };
+}
+
+function makeDevLensLoaders(
+  loadDevPage: () => Promise<ComponentType<ProtocolLensComponentProps>>,
+  loadDevSummarize: () => Promise<ProtocolLensSummaryRunner>,
+): Pick<ProtocolLensRegistration, "loadComponent" | "summarize"> {
+  return {
+    summarize: async (client, request, configuration, signal) => {
+      const fn = await loadDevSummarize();
+      return fn(client, request, configuration, signal);
+    },
+    loadComponent: loadDevPage,
+  };
+}
 
 /**
  * Central registry of all 13 protocol workbenches.
  * Wave 0 populates metadata and validators; Waves 1–4 add lens implementations
- * and Wave 5 wires every lens's lazy loader and summary runner.
+ * and per-lens optional bundles (`pages/protocol-<lens>.js`).
  */
 export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
   {
@@ -28,14 +79,20 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     streamIds: ["tcp"],
     operatorDoc: "protocol-tcp-tls.md",
     validateExtra: validateTcpTlsExtra,
-    summarize: async (client, request, configuration, signal) => {
-      const { summarizeTcpTls } = await import("./lenses/tcp_tls/adapter");
-      return summarizeTcpTls(client, request, configuration, signal, {
-        profileValidators: registeredProfileValidators(),
-      });
-    },
-    loadComponent: async () =>
-      (await import("./lenses/tcp_tls/TcpTlsLensPage")).TcpTlsLensPage,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("tcp_tls")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/tcp_tls/TcpTlsLensPage")).TcpTlsLensPage,
+          async () => {
+            const { summarizeTcpTls } =
+              await import("./lenses/tcp_tls/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeTcpTls(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "dns_ops",
@@ -49,14 +106,20 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     streamIds: ["dns"],
     operatorDoc: "protocol-dns-ops.md",
     validateExtra: validateDnsOpsExtra,
-    summarize: async (client, request, configuration, signal) => {
-      const { summarizeDnsOps } = await import("./lenses/dns_ops/adapter");
-      return summarizeDnsOps(client, request, configuration, signal, {
-        profileValidators: registeredProfileValidators(),
-      });
-    },
-    loadComponent: async () =>
-      (await import("./lenses/dns_ops/DnsOpsLensPage")).DnsOpsLensPage,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("dns_ops")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/dns_ops/DnsOpsLensPage")).DnsOpsLensPage,
+          async () => {
+            const { summarizeDnsOps } =
+              await import("./lenses/dns_ops/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeDnsOps(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "routing",
@@ -74,14 +137,20 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     streamIds: [],
     operatorDoc: "protocol-routing.md",
     validateExtra: validateRoutingExtra,
-    summarize: async (client, request, configuration, signal) => {
-      const { summarizeRouting } = await import("./lenses/routing/adapter");
-      return summarizeRouting(client, request, configuration, signal, {
-        profileValidators: registeredProfileValidators(),
-      });
-    },
-    loadComponent: async () =>
-      (await import("./lenses/routing/RoutingLensPage")).RoutingLensPage,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("routing")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/routing/RoutingLensPage")).RoutingLensPage,
+          async () => {
+            const { summarizeRouting } =
+              await import("./lenses/routing/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeRouting(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "l2_control",
@@ -101,15 +170,21 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     streamIds: ["dhcp", "arp"],
     operatorDoc: "protocol-l2-control.md",
     validateExtra: validateL2ControlExtra,
-    summarize: async (client, request, configuration, signal) => {
-      const { summarizeL2Control } =
-        await import("./lenses/l2_control/adapter");
-      return summarizeL2Control(client, request, configuration, signal, {
-        profileValidators: registeredProfileValidators(),
-      });
-    },
-    loadComponent: async () =>
-      (await import("./lenses/l2_control/L2ControlLensPage")).L2ControlLensPage,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("l2_control")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/l2_control/L2ControlLensPage"))
+              .L2ControlLensPage,
+          async () => {
+            const { summarizeL2Control } =
+              await import("./lenses/l2_control/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeL2Control(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "interface_health",
@@ -127,16 +202,21 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     streamIds: [],
     operatorDoc: "protocol-interface-health.md",
     validateExtra: validateInterfaceHealthExtra,
-    summarize: async (client, request, configuration, signal) => {
-      const { summarizeInterfaceHealth } =
-        await import("./lenses/interface_health/adapter");
-      return summarizeInterfaceHealth(client, request, configuration, signal, {
-        profileValidators: registeredProfileValidators(),
-      });
-    },
-    loadComponent: async () =>
-      (await import("./lenses/interface_health/InterfaceHealthLensPage"))
-        .InterfaceHealthLensPage,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("interface_health")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/interface_health/InterfaceHealthLensPage"))
+              .InterfaceHealthLensPage,
+          async () => {
+            const { summarizeInterfaceHealth } =
+              await import("./lenses/interface_health/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeInterfaceHealth(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "qos_icmp",
@@ -149,6 +229,21 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     sources: ["stream:netflow", "stream:icmp", "cisco:dc:nd:*"],
     streamIds: ["icmp"],
     operatorDoc: "protocol-qos-icmp.md",
+    validateExtra: validateQosIcmpExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("qos_icmp")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/qos_icmp/QosIcmpLensPage")).QosIcmpLensPage,
+          async () => {
+            const { summarizeQosIcmp } =
+              await import("./lenses/qos_icmp/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeQosIcmp(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "enterprise_l7",
@@ -164,9 +259,26 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
       "stream:radius",
       "stream:sip",
       "stream:rtp",
+      "stream:rtcp",
     ],
     streamIds: ["smb", "nfs", "ldap", "radius", "sip", "rtp", "rtcp"],
     operatorDoc: "protocol-enterprise-l7.md",
+    validateExtra: validateEnterpriseL7Extra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("enterprise_l7")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/enterprise_l7/EnterpriseL7LensPage"))
+              .EnterpriseL7LensPage,
+          async () => {
+            const { summarizeEnterpriseL7 } =
+              await import("./lenses/enterprise_l7/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeEnterpriseL7(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "drops",
@@ -184,6 +296,20 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     ],
     streamIds: [],
     operatorDoc: "protocol-drops.md",
+    validateExtra: validateDropsExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("drops")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/drops/DropsLensPage")).DropsLensPage,
+          async () => {
+            const { summarizeDrops } = await import("./lenses/drops/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeDrops(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "endpoint_mobility",
@@ -193,9 +319,39 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     category: "control_plane",
     summary:
       "MAC/IP moves, duplicate IP conflicts, ARP spikes, and port flaps.",
-    sources: ["stream:arp", "cisco:dc:nd:*", "cisco:dc:nexus9k:dme"],
+    sources: [
+      "stream:arp",
+      "cisco:dc:nd:*",
+      "cisco:dc:aci:*",
+      "cisco:dc:nexus9k:dme",
+      "cisco:ios",
+      "cisco:dc:nexus9k:syslog",
+    ],
     streamIds: ["arp"],
     operatorDoc: "protocol-endpoint-mobility.md",
+    validateExtra: validateEndpointMobilityExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("endpoint_mobility")
+      : makeDevLensLoaders(
+          async () =>
+            (
+              await import("./lenses/endpoint_mobility/EndpointMobilityLensPage")
+            ).EndpointMobilityLensPage,
+          async () => {
+            const { summarizeEndpointMobility } =
+              await import("./lenses/endpoint_mobility/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeEndpointMobility(
+                client,
+                request,
+                configuration,
+                signal,
+                {
+                  profileValidators: registeredProfileValidators(),
+                },
+              );
+          },
+        )),
   },
   {
     id: "app_transactions",

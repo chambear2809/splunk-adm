@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
+import {
+  PROTOCOLS_HOST_MODULES,
+  protocolLensVersions,
+  protocolsCoreHostModule,
+} from "./tools/protocol-lenses.mjs";
 
-const host = {
-  "frontend/src/data/deploymentHealth": "deploymentHealth",
-  "frontend/src/data/evidence": "evidence",
-  "frontend/src/data/evidenceConfig": "evidenceConfig",
-  "frontend/src/data/optionalJobs": "optionalJobs",
-  "frontend/src/data/searchClient": "searchClient",
-  "frontend/src/app/urlState": "urlState",
-} as const;
+export { protocolLensVersions, protocolsCoreHostModule };
 
 function collectProtocolCoreFiles(dir: string): string[] {
   const out: string[] = [];
@@ -22,6 +20,12 @@ function collectProtocolCoreFiles(dir: string): string[] {
         dir.includes("/shared/")
       ) {
         out.push(...collectProtocolCoreFiles(full));
+      } else if (entry.name === "lenses") {
+        for (const lensDir of readdirSync(full, { withFileTypes: true })) {
+          if (!lensDir.isDirectory()) continue;
+          const validatePath = `${full}/${lensDir.name}/validate.ts`;
+          if (existsSync(resolve(validatePath))) out.push(validatePath);
+        }
       }
       continue;
     }
@@ -42,22 +46,12 @@ export function protocolsCoreAssetVersion() {
     "package-lock.json",
     "vite.protocols-core.config.ts",
     "vite.protocols-core.shared.ts",
+    "tools/protocol-lenses.mjs",
     ...collectProtocolCoreFiles("frontend/src/protocols"),
-    ...Object.keys(host).map((path) => `${path}.ts`),
+    ...Object.keys(PROTOCOLS_HOST_MODULES).map((path) => `${path}.ts`),
   ];
   for (const file of files.sort())
     hash.update(file).update(readFileSync(resolve(file)));
+  hash.update(JSON.stringify(protocolLensVersions()));
   return hash.digest("hex").slice(0, 24);
 }
-
-const modules = new Map([
-  ["react", "react"],
-  ["react/jsx-runtime", "jsxRuntime"],
-  ...Object.entries(host).map(([path, name]): [string, string] => [
-    resolve(path),
-    name,
-  ]),
-]);
-
-export const protocolsCoreHostModule = (id: string) =>
-  modules.get(id.replace(/\.tsx?$/, ""));

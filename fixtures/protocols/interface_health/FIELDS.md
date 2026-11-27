@@ -1,6 +1,6 @@
 # `interface_health` Synthetic Fixture Field Grounding
 
-All fields in `fixtures/raw/protocols/interface_health/` are grounded in Cisco DC Networking 2.0.10 (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/`) and the shared NX-OS/ACI syslog adapter (`frontend/src/protocols/shared/adapters/nxosSyslog.ts`).
+All fields in `fixtures/protocols/interface_health/` are grounded in Cisco DC Networking 2.0.10 (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/`) and the shared NX-OS/ACI syslog adapter (`frontend/src/protocols/shared/adapters/nxosSyslog.ts`).
 
 ## `dcn_interface_dme.ndjson` (`cisco:dc:nexus9k:dme` / `cisco:dc:nd:*`)
 

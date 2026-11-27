@@ -1,6 +1,6 @@
 # `tcp_tls` Synthetic Fixture Field Grounding
 
-All fields in `fixtures/raw/protocols/tcp_tls/` are grounded in the extracted Splunk Stream 8.1.6 stream definition at `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/tcp` and the existing repository NetFlow grounding in `fixtures/raw/FIELDS.md`.
+All fields in `fixtures/protocols/tcp_tls/` are grounded in the extracted Splunk Stream 8.1.6 stream definition at `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/tcp` and the existing repository NetFlow grounding in `fixtures/raw/FIELDS.md`.
 
 ## `stream:tcp` (`stream_tcp_tls.ndjson`)
 

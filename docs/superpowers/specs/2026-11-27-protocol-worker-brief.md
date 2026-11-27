@@ -11,13 +11,13 @@ The orchestrator fills one brief per lens. Workers do not expand the brief or de
 
 ## 2. Allowed and forbidden paths
 
-- Allowed writes: `frontend/src/protocols/lenses/<lens>/`, `fixtures/raw/protocols/<lens>/`, `docs/operators/protocol-<lens>.md`
+- Allowed writes: `frontend/src/protocols/lenses/<lens>/`, `fixtures/protocols/<lens>/`, `docs/operators/protocol-<lens>.md`
 - Forbidden: git; `npm run build`; `npm run package`; repo-wide `npm run format` (use scoped `npx prettier --write frontend/src/protocols/lenses/<lens>`); shared SDK; `registry.ts`; routing; nav; collections; Vite; `package.json`; other lenses
 
 ## 3. Grounding files and field allowlist
 
 - **MANDATORY FIRST STEP:** Read the matching vendor extract in `research/extracted/` (e.g., `splunk-app-for-stream_816/splunk_app_stream/default/streams/<proto>`, `cisco-dc-networking-app-for-splunk_2010/`, etc.) AND `fixtures/raw/FIELDS.md` BEFORE writing any SPL field name, unit, or status code. Never guess field names or bitmasks when the TA extract is present.
-- Lens `FIELDS.md`: `fixtures/raw/protocols/<lens>/FIELDS.md`
+- Lens `FIELDS.md`: `fixtures/protocols/<lens>/FIELDS.md`
 - Allowlist (never select outside `LENS_FIELD_ALLOWLISTS.<lens>` in `frontend/src/protocols/shared/fields.ts`; never project `_raw`, `src_content`, `dest_content`, `cookie`, `form_data`, `uri_query`, SQL `query`, `community`, `login`, `password`):
 - Row-expansion fields only (if any):
 - Config recheck testing note: In unit tests exercising `withProtocolConfigRecheck`, spy on `protocolConfigClient.readProtocolProfileDocument` from `../../../data/evidenceConfig` so no real `fetch` runs.

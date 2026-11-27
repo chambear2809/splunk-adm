@@ -57,7 +57,7 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 
 ## 4. Field Grounding & Security Boundaries
 
-- **TA source:** `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dns` and `fixtures/raw/protocols/dns_ops/FIELDS.md`.
+- **TA source:** `research/extracted/splunk-app-for-stream_816/splunk_app_stream/default/streams/dns` and `fixtures/protocols/dns_ops/FIELDS.md`.
 - **Units:** `response_time` (request-to-response) and `time_taken` (flow completion) are in microseconds (µs); Atlas divides by `1000` to render milliseconds and omits latency on request-only records.
 - **Response codes:** `reply_code` and `reply_code_id` (`0=NOERROR`, `2=SERVFAIL`, `3=NXDOMAIN`, `5=REFUSED`) normalize consistently across Stream and Hubble `flow.l7.dns.rcode` (treating omitted proto3 `rcode` on Hubble `RESPONSE` events as `NOERROR`).
 - **Directionality in Hubble:** On `cilium:hubble:flow` `RESPONSE` events, `flow.IP.source` is the resolver and `flow.IP.destination` is the client; `buildDnsOpsSearch` and `normalizeDnsOpsRow` invert `REQUEST` vs `RESPONSE` endpoints accurately.

@@ -26,15 +26,19 @@ type Runtime = typeof globalThis & {
 };
 let pending: Promise<typeof ProtocolsPage> | undefined;
 
-function assetUrl(file: "pages/protocols-core.js" | "protocols-core.css") {
+function verifiedStaticAssetUrl(file: string, version: string) {
   const url = new URL(createStaticURL(`app/splunk_adm/${file}`), location.href);
   if (
     url.origin !== location.origin ||
     !url.pathname.endsWith(`/app/splunk_adm/${file}`)
   )
     throw new Error("The protocols asset origin could not be verified.");
-  url.searchParams.set("v", __ADM_PROTOCOLS_CORE_ASSET_VERSION__);
+  url.searchParams.set("v", version);
   return url.href;
+}
+
+function assetUrl(file: "pages/protocols-core.js" | "protocols-core.css") {
+  return verifiedStaticAssetUrl(file, __ADM_PROTOCOLS_CORE_ASSET_VERSION__);
 }
 
 export async function loadProtocolsPage() {
@@ -69,6 +73,7 @@ export async function loadProtocolsPage() {
         optionalJobs: { optionalJobs },
         searchClient: { SearchAccessDeniedError, requireNoSearchErrors },
         urlState: { pageURL, URL_STATE_CHANGED },
+        staticUrlFor: verifiedStaticAssetUrl,
       }),
     });
   pending = new Promise<typeof ProtocolsPage>((resolve, reject) => {

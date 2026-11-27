@@ -212,6 +212,10 @@ export interface ProtocolLensRegistration {
   loadComponent?: () => Promise<ComponentType<ProtocolLensComponentProps>>;
 }
 
+export type ProtocolLensSummaryRunner = NonNullable<
+  ProtocolLensRegistration["summarize"]
+>;
+
 export function sourceForLens(lens: ProtocolLensId): ProtocolLensSource {
   return `protocol_${lens}`;
 }

@@ -1,6 +1,6 @@
 # `routing` Synthetic Fixture Field Grounding
 
-All fields in `fixtures/raw/protocols/routing/` are grounded in Cisco DC Networking 2.0.10 (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/default/props.conf`, `default/transforms.conf`, `bin/cisco_nexus_9k.py`, `bin/cisco_dc_n9k_custom.py`) and the shared SC4S / NX-OS operational syslog contract in `frontend/src/protocols/shared/adapters/nxosSyslog.ts`.
+All fields in `fixtures/protocols/routing/` are grounded in Cisco DC Networking 2.0.10 (`research/extracted/cisco-dc-networking_2010/cisco_dc_networking_app_for_splunk/default/props.conf`, `default/transforms.conf`, `bin/cisco_nexus_9k.py`, `bin/cisco_dc_n9k_custom.py`) and the shared SC4S / NX-OS operational syslog contract in `frontend/src/protocols/shared/adapters/nxosSyslog.ts`.
 
 ## `nxos_routing_syslog.ndjson` (SC4S `cisco:ios` / `cisco:aci` & DCN TA `cisco:dc:nexus9k:syslog`)
 

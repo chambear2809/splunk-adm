@@ -17,3 +17,5 @@ declare const __ADM_ADMIN_ASSET_VERSION__: string;
 declare const __ADM_O11Y_ASSET_VERSION__: string;
 declare const __ADM_ENDPOINTS_ASSET_VERSION__: string;
 declare const __ADM_PROTOCOLS_CORE_ASSET_VERSION__: string;
+declare const __ADM_PROTOCOL_LENS_VERSIONS__: Record<string, string>;
+declare const __ADM_PROTOCOL_LENS_ASSET_VERSION__: string;

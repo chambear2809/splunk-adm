@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import {
+  protocolLensVersions,
   protocolsCoreAssetVersion,
   protocolsCoreHostModule,
 } from "./vite.protocols-core.shared";
@@ -14,6 +15,7 @@ export default defineConfig({
     __ADM_PROTOCOLS_CORE_ASSET_VERSION__: JSON.stringify(
       protocolsCoreAssetVersion(),
     ),
+    __ADM_PROTOCOL_LENS_VERSIONS__: JSON.stringify(protocolLensVersions()),
   },
   plugins: [
     {

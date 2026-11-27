@@ -348,7 +348,7 @@ describe("normalizeDnsOpsRow & buildDnsOpsAnalysis", () => {
 
   it("loads and normalizes committed stream_dns.ndjson and hubble_dns.ndjson fixtures cleanly", () => {
     const streamLines = readFileSync(
-      "fixtures/raw/protocols/dns_ops/stream_dns.ndjson",
+      "fixtures/protocols/dns_ops/stream_dns.ndjson",
       "utf8",
     )
       .trim()
@@ -377,7 +377,7 @@ describe("normalizeDnsOpsRow & buildDnsOpsAnalysis", () => {
     }
 
     const hubbleLines = readFileSync(
-      "fixtures/raw/protocols/dns_ops/hubble_dns.ndjson",
+      "fixtures/protocols/dns_ops/hubble_dns.ndjson",
       "utf8",
     )
       .trim()
