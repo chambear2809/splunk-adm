@@ -613,6 +613,7 @@ class ReleaseArchiveTests(unittest.TestCase):
                     "map",
                     "endpoints",
                     "multicast",
+                    "protocols",
                     "data_health",
                     "setup",
                     "help",

@@ -46,6 +46,13 @@ MULTICAST_MANIFEST_PATH = "splunk_adm/appserver/static/multicast-manifest.json"
 MULTICAST_CSS_PATH = "splunk_adm/appserver/static/multicast.css"
 MAX_MULTICAST_GZIP_BYTES = 64 * 1024
 MAX_MULTICAST_CSS_BYTES = 16 * 1024
+PROTOCOLS_CORE_BUNDLE_PATH = "splunk_adm/appserver/static/pages/protocols-core.js"
+PROTOCOLS_CORE_MANIFEST_PATH = (
+    "splunk_adm/appserver/static/protocols-core-manifest.json"
+)
+PROTOCOLS_CORE_CSS_PATH = "splunk_adm/appserver/static/protocols-core.css"
+MAX_PROTOCOLS_CORE_GZIP_BYTES = 64 * 1024
+MAX_PROTOCOLS_CORE_CSS_BYTES = 24 * 1024
 HISTORY_BUNDLE_PATH = "splunk_adm/appserver/static/pages/history.js"
 HISTORY_MANIFEST_PATH = "splunk_adm/appserver/static/history-manifest.json"
 HISTORY_CSS_PATH = "splunk_adm/appserver/static/history.css"
@@ -1019,6 +1026,9 @@ STATIC_ALLOWLIST = frozenset(
         MULTICAST_BUNDLE_PATH,
         MULTICAST_MANIFEST_PATH,
         MULTICAST_CSS_PATH,
+        PROTOCOLS_CORE_BUNDLE_PATH,
+        PROTOCOLS_CORE_MANIFEST_PATH,
+        PROTOCOLS_CORE_CSS_PATH,
         HISTORY_BUNDLE_PATH,
         HISTORY_MANIFEST_PATH,
         HISTORY_CSS_PATH,
@@ -1102,6 +1112,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "map",
                 "endpoints",
                 "multicast",
+                "protocols",
                 "data_health",
                 "setup",
                 "help",
@@ -1337,6 +1348,54 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(
                 "Multicast asset version/hash does not match the main bundle"
+            ) from exc
+    protocols_core_files = {
+        PROTOCOLS_CORE_BUNDLE_PATH,
+        PROTOCOLS_CORE_MANIFEST_PATH,
+        PROTOCOLS_CORE_CSS_PATH,
+    }
+    protocols_core_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasProtocolsHost", b"pages/protocols-core.js")
+    )
+    if protocols_core_registered or protocols_core_files.intersection(files):
+        missing = sorted(protocols_core_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Protocols core files: {', '.join(missing)}"
+            )
+        if (
+            len(
+                gzip.compress(
+                    files[PROTOCOLS_CORE_BUNDLE_PATH], compresslevel=9, mtime=0
+                )
+            )
+            > MAX_PROTOCOLS_CORE_GZIP_BYTES
+        ):
+            raise ValueError(
+                "Protocols core optional bundle exceeds its 64 KiB gzip budget"
+            )
+        if len(files[PROTOCOLS_CORE_CSS_PATH]) > MAX_PROTOCOLS_CORE_CSS_BYTES:
+            raise ValueError("Protocols core optional CSS exceeds its 24 KiB budget")
+        try:
+            manifest = json.loads(files[PROTOCOLS_CORE_MANIFEST_PATH])
+            protocols_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(protocols_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", protocols_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[PROTOCOLS_CORE_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[PROTOCOLS_CORE_CSS_PATH]).hexdigest()
+                or protocols_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or protocols_version.encode() not in files[PROTOCOLS_CORE_BUNDLE_PATH]
+                or b"__AtlasProtocolsCore" in files[ATLAS_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Protocols core asset version/hash does not match the main bundle"
             ) from exc
     # Configuration history is an independently versioned, live-only asset.
     # Once the main bundle registers its host, or any one asset is present,

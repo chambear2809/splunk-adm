@@ -38,6 +38,7 @@ const optionalBundles = [
   "journeys",
   "impact",
   "multicast",
+  "protocols-core",
   "history",
   "migration",
   "segmentation",

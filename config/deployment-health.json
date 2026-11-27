@@ -1185,6 +1185,361 @@
         "jsonPayload.end_time"
       ],
       "probeMacro": ""
+    },
+    {
+      "id": "protocol_tcp_tls",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: TCP Health & TLS",
+      "healthNames": [
+        "Protocol lens: TCP Health & TLS"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "client_rtt",
+        "server_rtt",
+        "tcp_status"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_dns_ops",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: DNS Operations",
+      "healthNames": [
+        "Protocol lens: DNS Operations"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "query",
+        "reply_code",
+        "time_taken"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_routing",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Routing Control Plane",
+      "healthNames": [
+        "Protocol lens: Routing Control Plane"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "host",
+        "mnemonics",
+        "src_sysnum",
+        "dest_sysnum"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_l2_control",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: L2 Control Plane",
+      "healthNames": [
+        "Protocol lens: L2 Control Plane"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "client_mac",
+        "message_type",
+        "server_ip"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_interface_health",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Interface & Link Health",
+      "healthNames": [
+        "Protocol lens: Interface & Link Health"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "host",
+        "dn",
+        "operSt"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_qos_icmp",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: QoS/DSCP & ICMP",
+      "healthNames": [
+        "Protocol lens: QoS/DSCP & ICMP"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "tos",
+        "exporter_ip"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_enterprise_l7",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Enterprise L7",
+      "healthNames": [
+        "Protocol lens: Enterprise L7"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "protocol_stack"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_drops",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Blocked Traffic & Drop Reasons",
+      "healthNames": [
+        "Protocol lens: Blocked Traffic & Drop Reasons"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_endpoint_mobility",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Endpoint Mobility & Address Conflicts",
+      "healthNames": [
+        "Protocol lens: Endpoint Mobility & Address Conflicts"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_mac",
+        "src_ip"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_app_transactions",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: HTTP & Database Transactions",
+      "healthNames": [
+        "Protocol lens: HTTP & Database Transactions"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "status",
+        "time_taken"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_state_events",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Network State-Change Timeline",
+      "healthNames": [
+        "Protocol lens: Network State-Change Timeline"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "host",
+        "category",
+        "mnemonics"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_mgmt_plane",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Management-Plane Hygiene",
+      "healthNames": [
+        "Protocol lens: Management-Plane Hygiene"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "src_ip",
+        "dest_ip",
+        "dest_port"
+      ],
+      "probeMacro": ""
+    },
+    {
+      "id": "protocol_lb_health",
+      "readinessImpact": "optional_evidence",
+      "label": "Protocol lens: Load Balancer Pool Health",
+      "healthNames": [
+        "Protocol lens: Load Balancer Pool Health"
+      ],
+      "indexMacros": [],
+      "qualitySources": [],
+      "evidence": [
+        "protocol"
+      ],
+      "cadenceSeconds": 300,
+      "staleAfterSeconds": 1800,
+      "quiet": true,
+      "minimumContract": 1,
+      "selectable": true,
+      "derivedFrom": [],
+      "contract": null,
+      "observerKinds": [],
+      "requiredFields": [
+        "vip",
+        "pool_member"
+      ],
+      "probeMacro": ""
     }
   ],
   "jobs": [

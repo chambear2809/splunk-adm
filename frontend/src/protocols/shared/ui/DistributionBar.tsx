@@ -1,0 +1,82 @@
+import type { ProtocolDistributionMetric } from "../contract";
+
+export function DistributionBar({
+  title,
+  items,
+}: {
+  title: string;
+  items: readonly ProtocolDistributionMetric[];
+}) {
+  if (!items.length) return null;
+  const maxVal = Math.max(
+    ...items.map((item) => Math.max(item.max ?? item.p95, item.p95, item.p50)),
+    1,
+  );
+  const width = 220;
+  const height = 16;
+
+  return (
+    <section
+      className="pl-dist"
+      aria-label={title}
+      data-testid="protocol-distribution-bar"
+    >
+      <h3>{title}</h3>
+      <div className="pl-dist-list" data-pl-data="true">
+        {items.map((item) => {
+          const p50X = Math.min(
+            width - 4,
+            Math.max(2, (item.p50 / maxVal) * (width - 6)),
+          );
+          const p95X = Math.min(
+            width - 2,
+            Math.max(p50X + 2, (item.p95 / maxVal) * (width - 6)),
+          );
+          return (
+            <div className="pl-dist-row" key={item.id}>
+              <span className="pl-dist-label pl-mono" title={item.label}>
+                {item.label}
+              </span>
+              <svg
+                className={`pl-dist-svg${item.status ? ` pl-dist-${item.status}` : ""}`}
+                width={width}
+                height={height}
+                viewBox={`0 0 ${width} ${height}`}
+                role="img"
+                aria-label={`${item.label}: p50 ${item.p50} ${item.unit}, p95 ${item.p95} ${item.unit}`}
+              >
+                <rect
+                  x="0"
+                  y="6"
+                  width={width}
+                  height="4"
+                  rx="2"
+                  className="pl-dist-track"
+                />
+                <rect
+                  x="0"
+                  y="5"
+                  width={p95X}
+                  height="6"
+                  rx="3"
+                  className="pl-dist-p95"
+                />
+                <rect
+                  x="0"
+                  y="4"
+                  width={p50X}
+                  height="8"
+                  rx="3"
+                  className="pl-dist-p50"
+                />
+              </svg>
+              <span className="pl-dist-nums pl-mono">
+                p50 {item.p50} / p95 {item.p95} {item.unit}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

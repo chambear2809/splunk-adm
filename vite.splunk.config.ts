@@ -1,5 +1,6 @@
 import { impactAssetVersion } from "./vite.impact.shared";
 import { multicastAssetVersion } from "./vite.multicast.shared";
+import { protocolsCoreAssetVersion } from "./vite.protocols-core.shared";
 import { defineConfig, type Plugin } from "vite";
 import { basename, isAbsolute, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -88,6 +89,19 @@ function atlasBundleContributionReport(): Plugin {
         throw new Error(
           "ThousandEyes investigation code must remain outside the initial Atlas bundle.",
         );
+      const eagerProtocols = reports
+        .flatMap((entry) => entry.modules)
+        .filter(
+          (module) =>
+            module.bytes > 0 &&
+            /\/protocols\/(ProtocolsPage|registry|inputs|lenses\/|shared\/ui\/|shared\/adapters\/)/.test(
+              module.id,
+            ),
+        );
+      if (eagerProtocols.length)
+        throw new Error(
+          "Protocol workbench code must remain outside the initial Atlas bundle.",
+        );
       const report = {
         generatedBy: "atlas-bundle-contribution-report",
         measurementRole: "diagnostic_only",
@@ -143,6 +157,9 @@ export default defineConfig({
     __ADM_ADMIN_ASSET_VERSION__: JSON.stringify(adminAssetVersion()),
     __ADM_O11Y_ASSET_VERSION__: JSON.stringify(o11yAssetVersion()),
     __ADM_ENDPOINTS_ASSET_VERSION__: JSON.stringify(endpointsAssetVersion()),
+    __ADM_PROTOCOLS_CORE_ASSET_VERSION__: JSON.stringify(
+      protocolsCoreAssetVersion(),
+    ),
   },
   build: {
     outDir: "splunk_app/splunk_adm/appserver/static",

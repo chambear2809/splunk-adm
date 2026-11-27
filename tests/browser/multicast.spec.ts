@@ -37,7 +37,7 @@ test("opens the top-level Multicast route directly", async ({ page }) => {
   ).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Application Atlas" });
   await expect(
-    nav.getByRole("link", { name: "Multicast", exact: true }),
+    nav.getByRole("link", { name: "Protocols", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(
     nav.getByRole("link", { name: "Map", exact: true }),
@@ -101,7 +101,7 @@ for (const [source, heading, address, absent] of [
   });
 }
 
-test("keeps the shared Multicast navigation link in sync after edits", async ({
+test("keeps the shared Protocols navigation link isolated after Multicast edits", async ({
   page,
 }) => {
   await profiles(page, configuration.profiles);
@@ -114,8 +114,8 @@ test("keeps the shared Multicast navigation link in sync after edits", async ({
   await expect(
     page
       .getByRole("navigation", { name: "Application Atlas" })
-      .getByRole("link", { name: "Multicast", exact: true }),
-  ).toHaveAttribute("href", /mc_sender=192\.0\.2\.21/);
+      .getByRole("link", { name: "Protocols", exact: true }),
+  ).toHaveAttribute("href", /^\/protocols(\?mode=live)?$/);
 });
 
 test("cancels a running investigation and discards late evidence", async ({

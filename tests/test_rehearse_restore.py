@@ -123,6 +123,7 @@ class RestoreTest(unittest.TestCase):
         self.assertEqual(set(restore.COLLECTIONS), set(conf.sections()))
         self.assertIn("adm_change_assertions", restore.COLLECTIONS)
         self.assertIn("adm_multicast_profiles", restore.COLLECTIONS)
+        self.assertIn("adm_protocol_profiles", restore.COLLECTIONS)
         self.assertIn("adm_saved_views", restore.COLLECTIONS)
         self.assertIn("adm_business_ownership", restore.COLLECTIONS)
 

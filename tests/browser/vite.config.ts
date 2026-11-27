@@ -25,6 +25,7 @@ export default defineConfig({
       "tests/browser/ownership-integration-harness.tsx",
       "tests/browser/thousandeyes-harness.tsx",
       "tests/browser/source-replay-harness.tsx",
+      "tests/browser/protocols-harness.tsx",
     ],
   },
   plugins: [
@@ -42,6 +43,7 @@ export default defineConfig({
               "/applications",
               "/endpoints",
               "/multicast",
+              "/protocols",
               "/map",
               "/data_health",
               "/setup",
@@ -67,6 +69,7 @@ export default defineConfig({
   define: {
     __ADM_SPLUNK_BUILD__: "false",
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify("development"),
+    __ADM_PROTOCOLS_CORE_ASSET_VERSION__: JSON.stringify("development"),
     __ADM_HISTORY_ASSET_VERSION__: JSON.stringify(
       JSON.parse(
         readFileSync(

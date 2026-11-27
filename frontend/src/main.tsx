@@ -64,7 +64,7 @@ async function mount(node: HTMLElement) {
       return;
     }
     const graphParams =
-      page === "multicast"
+      page === "multicast" || page === "protocols"
         ? new URLSearchParams(
             params.has("mode") ? { mode: params.get("mode")! } : {},
           )
@@ -73,7 +73,8 @@ async function mount(node: HTMLElement) {
       graphParams,
       __ADM_SPLUNK_BUILD__,
     );
-    if (notice && page !== "multicast") writeUrlState(state);
+    if (notice && page !== "multicast" && page !== "protocols")
+      writeUrlState(state);
     if (
       !__ADM_SPLUNK_BUILD__ &&
       (page === "map" || page === "applications") &&
