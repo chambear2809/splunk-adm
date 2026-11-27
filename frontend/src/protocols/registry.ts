@@ -4,6 +4,7 @@ import {
   type ProtocolLensId,
   type ProtocolLensRegistration,
 } from "./shared/contract";
+import { validateTcpTlsExtra } from "./lenses/tcp_tls/validate";
 
 /**
  * Central registry of all 13 protocol workbenches.
@@ -22,6 +23,15 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     sources: ["stream:tcp", "stream:netflow"],
     streamIds: ["tcp"],
     operatorDoc: "protocol-tcp-tls.md",
+    validateExtra: validateTcpTlsExtra,
+    summarize: async (client, request, configuration, signal) => {
+      const { summarizeTcpTls } = await import("./lenses/tcp_tls/adapter");
+      return summarizeTcpTls(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () =>
+      (await import("./lenses/tcp_tls/TcpTlsLensPage")).TcpTlsLensPage,
   },
   {
     id: "dns_ops",

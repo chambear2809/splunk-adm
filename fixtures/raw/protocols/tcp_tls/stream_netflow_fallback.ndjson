@@ -1,0 +1,2 @@
+{"_time":1800000120,"host":"stream-hf-01","sourcetype":"stream:netflow","exporter_ip":"198.18.131.1","src_ip":"198.18.38.10","dest_ip":"198.18.38.20","src_port":51422,"dest_port":443,"protoid":6,"bytes":22600,"packets":40}
+{"_time":1800000240,"host":"stream-hf-01","sourcetype":"stream:netflow","exporter_ip":"198.18.131.1","src_ip":"198.18.38.11","dest_ip":"198.18.38.21","src_port":49810,"dest_port":443,"protoid":6,"bytes":524800,"packets":500}

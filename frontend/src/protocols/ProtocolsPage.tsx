@@ -287,6 +287,7 @@ export function ProtocolsPage({
           filter={params.filter}
           selectedItem={params.item}
           configuration={config}
+          profileValidators={registeredProfileValidators()}
           onBackToHub={backToHub}
           onRefreshConfig={() => setConfigRevision((v) => v + 1)}
           onChangeParams={(patch) => {

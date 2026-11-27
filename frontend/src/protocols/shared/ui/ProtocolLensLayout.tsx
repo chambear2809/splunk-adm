@@ -151,7 +151,9 @@ export function ProtocolLensLayout<
       : banner?.state === "empty"
         ? "none_observed"
         : banner?.state === "unavailable"
-          ? "not_covered"
+          ? verdictStatus === "unknown"
+            ? "unknown"
+            : "not_covered"
           : banner?.state === "blocked"
             ? "unknown"
             : verdictStatus;
@@ -162,7 +164,9 @@ export function ProtocolLensLayout<
       : banner?.state === "empty"
         ? "No exceptions or matching activity observed."
         : banner?.state === "unavailable"
-          ? "No active source profile covers this scope."
+          ? verdictStatus === "unknown" && verdict
+            ? verdict
+            : "No active source profile covers this scope."
           : banner?.state === "blocked"
             ? "Source evidence could not be read for this role."
             : verdict;

@@ -33,10 +33,10 @@ export function StatusChip({
       : STATUS_LABELS[status];
   const content =
     status === "not_covered" ? (
-      <span className="pl-status-inner">
-        <Icon size={12} aria-hidden="true" />
+      <>
+        <span className="pl-status-hatch-swatch" aria-hidden="true" />
         <span>{resolvedLabel}</span>
-      </span>
+      </>
     ) : (
       <>
         <Icon size={13} aria-hidden="true" />
@@ -50,6 +50,7 @@ export function StatusChip({
         type="button"
         className={`${className} pl-status-interactive`}
         title={title}
+        aria-label={title ? `${resolvedLabel}: ${title}` : undefined}
         onClick={onClick}
       >
         {content}
@@ -57,7 +58,12 @@ export function StatusChip({
     );
   }
   return (
-    <span className={className} title={title}>
+    <span
+      className={className}
+      title={title}
+      tabIndex={title ? 0 : undefined}
+      aria-label={title ? `${resolvedLabel}: ${title}` : undefined}
+    >
       {content}
     </span>
   );

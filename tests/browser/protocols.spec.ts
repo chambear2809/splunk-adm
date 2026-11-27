@@ -164,4 +164,109 @@ test.describe("Protocol Lens UX contract", () => {
       });
     });
   }
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`tcp_tls pilot lens meets UX contract at 1280x800 (${theme})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(
+        `/tests/browser/protocols.html?scenario=tcp_tls&theme=${theme}`,
+      );
+      const verdict = page.getByTestId("protocol-verdict");
+      await expect(verdict).toBeVisible();
+      const box = await verdict.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeLessThanOrEqual(160);
+      expect(
+        await page.getByTestId("protocol-kpi-tile").count(),
+      ).toBeLessThanOrEqual(4);
+      expect(
+        await page
+          .locator('[data-testid="protocol-overview-table"] thead th')
+          .count(),
+      ).toBeLessThanOrEqual(8);
+      expect(await measureChromeWords(page)).toBeLessThan(60);
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(false);
+      await page.screenshot({
+        path: `${SHOT_DIR}/tcp-tls-overview-1280x800-${theme}.png`,
+        fullPage: false,
+      });
+    });
+  }
+
+  test("tcp_tls matrix, drawer, and NetFlow fallback render truthfully", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=tcp_tls&view=matrix&drawer=open&theme=dark",
+    );
+    await expect(page.getByTestId("protocol-heat-matrix")).toBeVisible();
+    await expect(page.getByTestId("protocol-detail-drawer")).toBeVisible();
+    // Verify long cert subject wraps without overflowing the detail drawer.
+    const drawerOverflow = await page.evaluate(() => {
+      const el = document.querySelector(
+        '[data-testid="protocol-detail-drawer"]',
+      );
+      return el ? el.scrollWidth > el.clientWidth + 1 : true;
+    });
+    expect(drawerOverflow).toBe(false);
+    await page.screenshot({
+      path: `${SHOT_DIR}/tcp-tls-matrix-drawer-1280x800-dark.png`,
+      fullPage: false,
+    });
+
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=tcp_tls&view=matrix&theme=light",
+    );
+    await expect(page.getByTestId("protocol-heat-matrix")).toBeVisible();
+    await page.screenshot({
+      path: `${SHOT_DIR}/tcp-tls-matrix-1280x800-light.png`,
+      fullPage: false,
+    });
+
+    for (const theme of ["light", "dark"] as const) {
+      await page.goto(
+        `/tests/browser/protocols.html?scenario=tcp_tls_netflow&theme=${theme}`,
+      );
+      await expect(page.getByTestId("protocol-verdict")).toContainText(
+        /NetFlow/i,
+      );
+      // NetFlow-only rows must NEVER render as green OK.
+      await expect(
+        page.locator('[data-testid="protocol-overview-table"] .pl-status-ok'),
+      ).toHaveCount(0);
+      await page.screenshot({
+        path: `${SHOT_DIR}/tcp-tls-netflow-1280x800-${theme}.png`,
+        fullPage: false,
+      });
+    }
+  });
+
+  test("tcp_tls aborts in-flight search on scope switch and drops stale responses", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=tcp_tls_race&theme=light",
+    );
+    await page.getByRole("button", { name: "Investigate" }).click();
+    await page.getByLabel("Scope").selectOption("lab:dc2");
+    await expect(page.getByTestId("scope-race-root")).toHaveAttribute(
+      "data-aborted-count",
+      "1",
+    );
+    // Wait past the 200ms slow response and confirm lab:dc1 row NEVER renders under lab:dc2.
+    await page.waitForTimeout(350);
+    await expect(page.getByText("198.18.99.1")).toHaveCount(0);
+    await expect(page.getByTestId("protocol-verdict")).toContainText(
+      /Click Investigate/i,
+    );
+  });
 });

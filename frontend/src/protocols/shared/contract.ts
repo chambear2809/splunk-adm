@@ -173,6 +173,7 @@ export interface ProtocolLensComponentProps {
   filter?: ProtocolFilter;
   selectedItem?: string;
   configuration: ProtocolConfiguration;
+  profileValidators?: Partial<Record<ProtocolLensId, LensProfileValidator>>;
   onChangeParams: (patch: {
     scope?: string;
     earliest?: number;

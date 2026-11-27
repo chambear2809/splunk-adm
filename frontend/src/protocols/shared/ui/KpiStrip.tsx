@@ -17,7 +17,7 @@ const ICONS = {
 
 function Sparkline({ points }: { points: readonly number[] }) {
   const clean = points.filter((n) => Number.isFinite(n));
-  if (clean.length < 2) return null;
+  if (clean.length < 4) return null;
   const min = Math.min(...clean);
   const max = Math.max(...clean);
   const span = max - min || 1;

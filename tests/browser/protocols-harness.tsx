@@ -4,6 +4,12 @@ import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
 import { Shell } from "../../frontend/src/app/Shell";
 import { ProtocolsPage } from "../../frontend/src/protocols/ProtocolsPage";
+import { TcpTlsLensPage } from "../../frontend/src/protocols/lenses/tcp_tls/TcpTlsLensPage";
+import {
+  buildTcpTlsAnalysis,
+  normalizeTcpTlsRow,
+  DEFAULT_TCP_TLS_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/tcp_tls/adapter";
 import {
   AdjacencyOverlay,
   CopyableIp,
@@ -329,11 +335,277 @@ function SampleLensShowcase() {
   );
 }
 
+function TcpTlsShowcase({ mode }: { mode: "stream_tcp" | "netflow" }) {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    params.get("drawer") === "open" ? "198.18.38.11__198.18.38.21" : undefined,
+  );
+  const rawRows =
+    mode === "netflow"
+      ? [
+          {
+            _time: EARLIEST + 120,
+            host: "leaf1",
+            sourcetype: "stream:netflow",
+            exporter_ip: "198.18.131.3",
+            src_ip: "198.18.38.11",
+            dest_ip: "198.18.38.21",
+            src_port: 51200,
+            dest_port: 443,
+            total_bytes: 512000,
+            total_packets: 500,
+          },
+          {
+            _time: EARLIEST + 240,
+            host: "leaf2",
+            sourcetype: "stream:netflow",
+            exporter_ip: "198.18.131.4",
+            src_ip: "198.18.38.10",
+            dest_ip: "198.18.38.20",
+            src_port: 51422,
+            dest_port: 443,
+            total_bytes: 22600,
+            total_packets: 40,
+          },
+        ]
+      : [
+          {
+            _time: EARLIEST + 100,
+            host: "stream-fwd-01",
+            sourcetype: "stream:tcp",
+            src_ip: "198.18.38.10",
+            dest_ip: "198.18.38.20",
+            dest_port: 443,
+            client_rtt: 4200,
+            server_rtt: 11800,
+            client_rtt_packets: 12,
+            server_rtt_packets: 12,
+            bytes_in: 18400,
+            bytes_out: 4200,
+            packets_in: 24,
+            packets_out: 16,
+            tcp_status: 0,
+            ssl_version: "TLSv1.3",
+            ssl_cipher_name: "TLS_AES_256_GCM_SHA384",
+            ssl_subject: "CN=api.internal.example",
+            ssl_issuer: "CN=Corp Internal CA",
+            ssl_cert_days_remaining: 180,
+          },
+          {
+            _time: EARLIEST + 200,
+            host: "stream-fwd-01",
+            sourcetype: "stream:tcp",
+            src_ip: "198.18.38.11",
+            dest_ip: "198.18.38.21",
+            dest_port: 443,
+            client_rtt: 14200,
+            server_rtt: 68400,
+            client_rtt_packets: 20,
+            server_rtt_packets: 20,
+            bytes_in: 512000,
+            bytes_out: 12800,
+            packets_in: 400,
+            packets_out: 100,
+            duplicate_packets_in: 18,
+            duplicate_packets_out: 6,
+            tcp_status: 0,
+            ssl_version: "TLSv1.2",
+            ssl_cipher_name: "ECDHE-RSA-AES128-GCM-SHA256",
+            ssl_subject: "CN=orders.internal.example",
+            ssl_issuer: "CN=Corp Internal CA",
+            ssl_cert_days_remaining: 9,
+          },
+          {
+            _time: EARLIEST + 300,
+            host: "stream-fwd-01",
+            sourcetype: "stream:tcp",
+            src_ip: "198.18.38.12",
+            dest_ip: "198.18.38.22",
+            dest_port: 8443,
+            client_rtt: 6500,
+            server_rtt: 18900,
+            client_rtt_packets: 4,
+            server_rtt_packets: 4,
+            bytes_in: 1200,
+            bytes_out: 980,
+            packets_in: 8,
+            packets_out: 6,
+            refused: true,
+            tcp_status: 1,
+            ssl_version: "TLSv1.0",
+            ssl_cipher_name: "ECDHE-RSA-AES128-SHA",
+            ssl_subject: "CN=legacy-erp.internal.example",
+            ssl_issuer: "CN=Legacy Root CA",
+            ssl_cert_days_remaining: 95,
+          },
+        ];
+  const st = mode === "netflow" ? "stream:netflow" : "stream:tcp";
+  const indexName = mode === "netflow" ? "netflow" : "stream_tcp";
+  const events = rawRows
+    .map((row) => normalizeTcpTlsRow(row, st, NOW))
+    .filter((ev): ev is NonNullable<typeof ev> => Boolean(ev))
+    .map((event) => ({ event, indexName }));
+  const initialResult = buildTcpTlsAnalysis({
+    events,
+    thresholds: { ...DEFAULT_TCP_TLS_THRESHOLDS, sourcetype: st },
+    outcomes: [
+      {
+        source: "protocol_tcp_tls",
+        profile: mode === "netflow" ? "nf-dc1" : "tcp-dc1",
+        state: "complete",
+        inputRows: events.length,
+        capped: false,
+      },
+    ],
+    capped: false,
+    earliest: EARLIEST,
+    latest: NOW,
+  });
+
+  return (
+    <TcpTlsLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: mode === "netflow" ? "nf-dc1" : "tcp-dc1",
+            source: "protocol_tcp_tls",
+            lens: "tcp_tls",
+            scope: "lab:dc1",
+            index: mode === "netflow" ? "netflow" : "stream_tcp",
+            observer: "stream-fwd-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+            extra: { sourcetype: st },
+          },
+        ],
+        fingerprint: "harness-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function TcpTlsScopeRaceShowcase() {
+  const [scope, setScope] = useState("lab:dc1");
+  const [view, setView] = useState<ProtocolViewMode>("overview");
+  const [abortedCount, setAbortedCount] = useState(0);
+  const client = {
+    search: ({ signal }: { signal?: AbortSignal }) =>
+      new Promise<{
+        rows: Record<string, unknown>[];
+        warnings: string[];
+        errors: string[];
+      }>((resolve) => {
+        signal?.addEventListener("abort", () => {
+          setAbortedCount((n) => n + 1);
+        });
+        setTimeout(() => {
+          resolve({
+            rows: [
+              {
+                _time: EARLIEST + 60,
+                host: "stream-fwd-01",
+                sourcetype: "stream:tcp",
+                src_ip: "198.18.99.1",
+                dest_ip: "198.18.99.2",
+                dest_port: 443,
+                client_rtt: 4000,
+                server_rtt: 85000,
+                packets_in: 100,
+                packets_out: 100,
+                tcp_status: 1,
+              },
+            ],
+            warnings: [],
+            errors: [],
+          });
+        }, 200);
+      }),
+  };
+
+  return (
+    <div
+      data-testid="scope-race-root"
+      data-aborted-count={String(abortedCount)}
+    >
+      <TcpTlsLensPage
+        client={client}
+        live
+        theme={theme}
+        scope={scope}
+        scopes={["lab:dc1", "lab:dc2"]}
+        earliest={EARLIEST}
+        latest={NOW}
+        view={view}
+        configuration={{
+          profiles: [
+            {
+              id: "tcp-dc1",
+              source: "protocol_tcp_tls",
+              lens: "tcp_tls",
+              scope: "lab:dc1",
+              index: "stream_tcp",
+              observer: "stream-fwd-01",
+              validFrom: EARLIEST - 3600,
+              validUntil: NOW + 3600,
+              extra: { sourcetype: "stream:tcp" },
+            },
+            {
+              id: "tcp-dc2",
+              source: "protocol_tcp_tls",
+              lens: "tcp_tls",
+              scope: "lab:dc2",
+              index: "stream_tcp",
+              observer: "stream-fwd-02",
+              validFrom: EARLIEST - 3600,
+              validUntil: NOW + 3600,
+              extra: { sourcetype: "stream:tcp" },
+            },
+          ],
+          fingerprint: "race-fp",
+        }}
+        skipConfigRecheck
+        onBackToHub={() => {}}
+        onRefreshConfig={() => {}}
+        onChangeParams={(patch) => {
+          if (patch.scope) setScope(patch.scope);
+          if (patch.view) setView(patch.view);
+        }}
+      />
+    </div>
+  );
+}
+
 createRoot(document.getElementById("adm-root")!).render(
   <ThemeProvider family="enterprise" colorScheme={theme} density="comfortable">
     <Shell page="protocols" live={false}>
       {scenario === "hub" ? (
         <ProtocolsPage live={false} theme={theme} />
+      ) : scenario === "tcp_tls" ? (
+        <TcpTlsShowcase mode="stream_tcp" />
+      ) : scenario === "tcp_tls_netflow" ? (
+        <TcpTlsShowcase mode="netflow" />
+      ) : scenario === "tcp_tls_race" ? (
+        <TcpTlsScopeRaceShowcase />
       ) : (
         <SampleLensShowcase />
       )}

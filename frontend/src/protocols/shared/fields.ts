@@ -20,6 +20,9 @@ export const FORBIDDEN_SENSITIVE_FIELDS = new Set<string>([
   "authorization",
   "raw_packet",
   "payload",
+  "src_content",
+  "dest_content",
+  "ssl_session_id",
   "_raw",
 ]);
 
@@ -65,27 +68,43 @@ export const LENS_FIELD_ALLOWLISTS: Record<ProtocolLensId, readonly string[]> =
       "transport",
       "client_rtt",
       "server_rtt",
+      "initial_rtt",
       "client_rtt_packets",
       "server_rtt_packets",
+      "bytes",
+      "packets",
       "bytes_in",
       "bytes_out",
       "packets_in",
       "packets_out",
+      "duplicate_packets_in",
+      "duplicate_packets_out",
+      "missing_packets_in",
+      "missing_packets_out",
+      "canceled",
+      "refused",
       "tcp_status",
+      "tcp_flags",
       "time_taken",
       "tls_version",
       "ssl_version",
+      "ssl_subject",
       "ssl_cert_subject",
+      "ssl_validity_end",
       "ssl_cert_not_after",
       "ssl_cert_days_remaining",
+      "ssl_cert_self_signed",
       "ssl_validity_window",
       "ssl_end_time",
       "ssl_issuer",
       "ssl_subject_common_name",
       "ssl_error",
+      "ssl_cipher_name",
       "ssl_cipher",
       "cipher_suite",
+      "ssl_time",
       "sni",
+      "vxlan_id",
       "exporter_ip",
     ],
     dns_ops: [
@@ -385,8 +404,11 @@ export function isFieldAllowedForLens(
 }
 
 /**
- * Builds a Splunk `| fields ...` projection clause after validating every field
+ * Builds a Splunk `| table ...` projection clause after validating every field
  * against both the global sensitive-field denylist and the lens allowlist.
+ *
+ * Uses `| table` rather than `| fields` so Splunk drops internal fields such as
+ * `_raw` server-side before results cross the wire.
  */
 export function buildAllowedFieldsClause(
   lens: ProtocolLensId,
@@ -406,7 +428,7 @@ export function buildAllowedFieldsClause(
     }
     validated.push(field.trim());
   }
-  return `| fields ${validated.join(" ")}`;
+  return `| table ${validated.join(" ")}`;
 }
 
 /**
@@ -445,7 +467,12 @@ export function assertNoForbiddenFieldsInSpl(
       `Protocol lens "${lens}" SPL must not use wildcard field projections.`,
     );
   }
-  const tokens = spl.toLowerCase().match(/[a-z_][a-z0-9_]*/g) ?? [];
+  // Strip double-quoted values only on the right-hand side of `=` predicates
+  // (e.g. host="content-sw01") so quoted field references like `| table "payload"`
+  // or `| rename "_raw" AS ssl_subject` remain blocked.
+  const withoutRhsLiterals = spl.replace(/=\s*"(?:\\.|[^"\\])*"/g, "=");
+  const tokens =
+    withoutRhsLiterals.toLowerCase().match(/[a-z_][a-z0-9_]*/g) ?? [];
   for (const token of tokens) {
     if (FORBIDDEN_SENSITIVE_FIELDS.has(token)) {
       throw new Error(

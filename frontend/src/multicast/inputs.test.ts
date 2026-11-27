@@ -29,7 +29,7 @@ describe("multicast investigation inputs", () => {
     );
     const url = new URL(link, "https://example.test");
     expect(pageFromPath(url.pathname)).toBe("multicast");
-    expect(SECTION_OF.multicast).toBe("multicast");
+    expect(SECTION_OF.multicast).toBe("protocols");
     expect(parseMulticastLink(url.searchParams)).toEqual(request);
     expect(
       parseMulticastLink(new URLSearchParams("namespace=shop")),

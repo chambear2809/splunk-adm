@@ -6,7 +6,7 @@ import {
 } from "./fields";
 
 describe("protocol field allowlists and sensitive-field guards", () => {
-  it("builds a clean fields clause for allowlisted fields", () => {
+  it("builds a clean table projection clause that drops _raw server-side", () => {
     expect(
       buildAllowedFieldsClause("tcp_tls", [
         "_time",
@@ -15,7 +15,7 @@ describe("protocol field allowlists and sensitive-field guards", () => {
         "client_rtt",
         "server_rtt",
       ]),
-    ).toBe("| fields _time src_ip dest_ip client_rtt server_rtt");
+    ).toBe("| table _time src_ip dest_ip client_rtt server_rtt");
   });
 
   it("rejects globally forbidden sensitive fields on every lens", () => {
@@ -63,5 +63,26 @@ describe("protocol field allowlists and sensitive-field guards", () => {
         includeRowExpansion: true,
       }),
     ).toBe(true);
+  });
+
+  it("does not false-positive on forbidden words inside quoted filter literals", () => {
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "tcp_tls",
+        'search index=netflow sourcetype="stream:tcp" host="content-sw01" | head 10 | table _time src_ip dest_ip',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "tcp_tls",
+        'search index=netflow | rename "_raw" AS ssl_subject | table ssl_subject',
+      ),
+    ).toThrow(/forbidden sensitive field/i);
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "tcp_tls",
+        'search index=netflow | table "payload"',
+      ),
+    ).toThrow(/forbidden sensitive field/i);
   });
 });
