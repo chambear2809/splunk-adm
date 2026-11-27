@@ -168,6 +168,26 @@ Flows and traces contain internal IPs, host/pod names and, for Hubble L7 and spa
 
 DNS, Envoy, AWS VPC Flow Logs, asset history, AppDynamics, ThousandEyes and Observability Cloud stay unselected by default. Each handout defines its producer schema, index, scope mapping and qualification limits. Shared rules: [SUPPLEMENTAL_EVIDENCE_CONTRACT](../SUPPLEMENTAL_EVIDENCE_CONTRACT.md). DNS gates: [DNS_EVIDENCE_QUALIFICATION](../DNS_EVIDENCE_QUALIFICATION.md).
 
+## Protocol analysis workbenches
+
+Application Atlas includes 13 scoped, on-demand protocol workbenches under **Protocols** (alongside the standalone [Multicast](multicast.md) workbench). Each lens uses strict allowlisted field projections (never `_raw`, cookies, SQL query text, SNMP community strings, or credentials), bounded SPL, explicit `adm_protocol_profiles` registration, and Stream Estimate-mode (`statsOnly`) checks on demand. For syslog-backed lenses, **SC4S** (`cisco:ios`, `cisco:aci`) is the primary recommended production collector; direct `udp://5514` (`cisco:dc:nexus9k:syslog`) is documented as a lab fallback.
+
+| Lens | Primary sources | Operator guide |
+| --- | --- | --- |
+| TCP Health & TLS (`tcp_tls`) | `stream:tcp`, `stream:netflow` fallback | [protocol-tcp-tls](protocol-tcp-tls.md) |
+| DNS Operations (`dns_ops`) | `stream:dns`, `cilium:hubble:flow` | [protocol-dns-ops](protocol-dns-ops.md) |
+| Routing Control Plane (`routing`) | `cisco:dc:nexus9k:dme`, SC4S `cisco:ios` / `cisco:dc:nexus9k:syslog`, `stream:netflow` | [protocol-routing](protocol-routing.md) |
+| L2 Control Plane (`l2_control`) | `stream:dhcp`, `stream:arp`, `cisco:dc:nexus9k:dme`, SC4S `cisco:ios` / `cisco:dc:nexus9k:syslog` | [protocol-l2-control](protocol-l2-control.md) |
+| Interface & Link Health (`interface_health`) | `cisco:dc:nexus9k:dme`, `cisco:dc:nd:*`, SC4S `cisco:ios` / `cisco:dc:nexus9k:syslog` | [protocol-interface-health](protocol-interface-health.md) |
+| QoS/DSCP & ICMP (`qos_icmp`) | `stream:netflow`, `stream:icmp`, `cisco:dc:nd:flows` | [protocol-qos-icmp](protocol-qos-icmp.md) |
+| Enterprise L7 (`enterprise_l7`) | `stream:smb`, `stream:nfs`, `stream:ldap`, `stream:radius`, `stream:sip`, `stream:rtp`, `stream:rtcp` | [protocol-enterprise-l7](protocol-enterprise-l7.md) |
+| Blocked Traffic & Drops (`drops`) | `cisco:sfw:estreamer`, `cilium:hubble:flow`, `cisco:dc:nd:flows`, `cisco:dc:aci:*` | [protocol-drops](protocol-drops.md) |
+| Endpoint Mobility & ARP (`endpoint_mobility`) | `stream:arp`, `cisco:dc:nd:endpoints`, `cisco:dc:aci:*`, NX-OS DME/syslog | [protocol-endpoint-mobility](protocol-endpoint-mobility.md) |
+| HTTP & DB Transactions (`app_transactions`) | `stream:http`, `stream:mysql`, `stream:postgres`, `stream:tds`, `stream:tns` (no SQL text) | [protocol-app-transactions](protocol-app-transactions.md) |
+| Network State-Change Timeline (`state_events`) | SC4S `cisco:ios` / `cisco:aci`, `cisco:dc:nexus9k:syslog`, ACI `faultInst`/`eventRecord` | [protocol-state-events](protocol-state-events.md) |
+| Management-Plane Hygiene (`mgmt_plane`) | `stream:snmp` (no communities), `stream:ftp` (no credentials), `stream:netflow`, syslog receipt gaps | [protocol-mgmt-plane](protocol-mgmt-plane.md) |
+| Load Balancer Pool Health (`lb_health`) | F5 BIG-IP iRule HSL, AWS ALB/NLB access logs | [protocol-lb-health](protocol-lb-health.md) |
+
 [s-compat]: https://github.com/chambear2809/splunk-cisco-skills/blob/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/SPLUNK_ENTERPRISE_10_6_COMPATIBILITY.md
 [s-acs]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-cloud-acs-admin-setup
 [s-hec]: https://github.com/chambear2809/splunk-cisco-skills/tree/1c93cd87b5a97fe54a2b3284b1d2c43034413edd/skills/splunk-hec-service-setup

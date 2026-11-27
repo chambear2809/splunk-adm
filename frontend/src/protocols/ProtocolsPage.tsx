@@ -26,6 +26,11 @@ import type {
   ProtocolStatus,
 } from "./shared/contract";
 import { readProtocolConfiguration } from "./shared/runner";
+import {
+  loadProtocolTrafficMix,
+  selectTrafficMixIndex,
+  type TrafficMixResult,
+} from "./shared/trafficMix";
 import { ProtocolStateBanner, StatusChip } from "./shared/ui";
 import "./protocols.css";
 
@@ -91,8 +96,11 @@ export function ProtocolsPage({
   const [summaries, setSummaries] = useState<
     Partial<Record<ProtocolLensId, ProtocolLensSummary>>
   >({});
+  const [trafficMix, setTrafficMix] = useState<TrafficMixResult>();
+  const [loadingMix, setLoadingMix] = useState(false);
   const [checkingAll, setCheckingAll] = useState(false);
   const checkAbort = useRef<AbortController | null>(null);
+  const mixAbort = useRef<AbortController | null>(null);
 
   const [lensComponent, setLensComponent] =
     useState<ComponentType<ProtocolLensComponentProps>>();
@@ -101,6 +109,7 @@ export function ProtocolsPage({
   useEffect(() => {
     return () => {
       checkAbort.current?.abort();
+      mixAbort.current?.abort();
     };
   }, []);
 
@@ -203,6 +212,32 @@ export function ProtocolsPage({
     writeProtocolParams(next);
   }, []);
 
+  const handleLoadTrafficMix = useCallback(async () => {
+    if (!client || !live || loadingMix) return;
+    const scope = params.scope ?? scopes[0];
+    if (!scope) return;
+    const win = defaultWindow();
+    mixAbort.current?.abort();
+    const controller = new AbortController();
+    mixAbort.current = controller;
+    setLoadingMix(true);
+    try {
+      const mix = await loadProtocolTrafficMix(client, {
+        configuration: config,
+        scope,
+        earliest: win.earliest,
+        latest: win.latest,
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) setTrafficMix(mix);
+    } catch {
+      /* Aborted or handled by loadProtocolTrafficMix. */
+    } finally {
+      if (mixAbort.current === controller) mixAbort.current = null;
+      setLoadingMix(false);
+    }
+  }, [client, config, live, loadingMix, params.scope, scopes]);
+
   /** Explicit operator action: runs configured lens summaries one at a time. */
   const handleCheckAll = useCallback(async () => {
     if (!client || !live || checkingAll) return;
@@ -213,6 +248,20 @@ export function ProtocolsPage({
     checkAbort.current = controller;
     setCheckingAll(true);
     try {
+      if (selectTrafficMixIndex(config, scope)) {
+        try {
+          const mix = await loadProtocolTrafficMix(client, {
+            configuration: config,
+            scope,
+            earliest: win.earliest,
+            latest: win.latest,
+            signal: controller.signal,
+          });
+          if (!controller.signal.aborted) setTrafficMix(mix);
+        } catch {
+          if (controller.signal.aborted) return;
+        }
+      }
       for (const lens of PROTOCOL_LENSES) {
         if (controller.signal.aborted) break;
         if (!lens.summarize || !configuredByLens.get(lens.id)) continue;
@@ -432,6 +481,47 @@ export function ProtocolsPage({
           onAction={() => setConfigRevision((v) => v + 1)}
           actionLabel="Retry"
         />
+      ) : null}
+
+      {configuredCount > 0 ? (
+        <section
+          className="pl-traffic-mix"
+          aria-label="Traffic and IPv4/IPv6 mix"
+          data-testid="protocol-traffic-mix"
+        >
+          <div className="pl-traffic-mix-head">
+            <span className="pl-traffic-mix-title">Traffic &amp; IP mix</span>
+            {trafficMix ? (
+              <StatusChip status={trafficMix.status} />
+            ) : (
+              <button
+                type="button"
+                className="pl-btn-secondary"
+                disabled={!live || !client || loadingMix}
+                onClick={() => void handleLoadTrafficMix()}
+              >
+                {loadingMix ? "Loading…" : "Load traffic mix"}
+              </button>
+            )}
+          </div>
+          {trafficMix ? (
+            <div className="pl-traffic-mix-body" data-pl-data="true">
+              <p className="pl-traffic-mix-summary">{trafficMix.summary}</p>
+              {trafficMix.topProtocols.length > 0 ? (
+                <div className="pl-traffic-mix-chips">
+                  {trafficMix.topProtocols.map((b) => (
+                    <span key={b.id} className="pl-neutral-tag pl-mono">
+                      {b.label} {b.sharePct}%
+                    </span>
+                  ))}
+                  <span className="pl-neutral-tag pl-mono">
+                    IPv4 {trafficMix.ipv4Pct}% · IPv6 {trafficMix.ipv6Pct}%
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
       ) : null}
 
       <section

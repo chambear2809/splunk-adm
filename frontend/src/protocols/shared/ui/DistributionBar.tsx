@@ -3,9 +3,11 @@ import type { ProtocolDistributionMetric } from "../contract";
 export function DistributionBar({
   title,
   items,
+  mode = "percentile",
 }: {
   title: string;
   items: readonly ProtocolDistributionMetric[];
+  mode?: "percentile" | "count";
 }) {
   if (!items.length) return null;
   const maxVal = Math.max(
@@ -32,6 +34,15 @@ export function DistributionBar({
             width - 2,
             Math.max(p50X + 2, (item.p95 / maxVal) * (width - 6)),
           );
+          const countVal = item.p95;
+          const countX = Math.min(
+            width - 2,
+            Math.max(2, (countVal / maxVal) * (width - 6)),
+          );
+          const ariaLabel =
+            mode === "count"
+              ? `${item.label}: ${countVal} ${item.unit}`
+              : `${item.label}: p50 ${item.p50} ${item.unit}, p95 ${item.p95} ${item.unit}`;
           return (
             <div className="pl-dist-row" key={item.id}>
               <span className="pl-dist-label pl-mono" title={item.label}>
@@ -43,7 +54,7 @@ export function DistributionBar({
                 height={height}
                 viewBox={`0 0 ${width} ${height}`}
                 role="img"
-                aria-label={`${item.label}: p50 ${item.p50} ${item.unit}, p95 ${item.p95} ${item.unit}`}
+                aria-label={ariaLabel}
               >
                 <rect
                   x="0"
@@ -53,25 +64,40 @@ export function DistributionBar({
                   rx="2"
                   className="pl-dist-track"
                 />
-                <rect
-                  x="0"
-                  y="5"
-                  width={p95X}
-                  height="6"
-                  rx="3"
-                  className="pl-dist-p95"
-                />
-                <rect
-                  x="0"
-                  y="4"
-                  width={p50X}
-                  height="8"
-                  rx="3"
-                  className="pl-dist-p50"
-                />
+                {mode === "count" ? (
+                  <rect
+                    x="0"
+                    y="4"
+                    width={countX}
+                    height="8"
+                    rx="3"
+                    className="pl-dist-p50"
+                  />
+                ) : (
+                  <>
+                    <rect
+                      x="0"
+                      y="5"
+                      width={p95X}
+                      height="6"
+                      rx="3"
+                      className="pl-dist-p95"
+                    />
+                    <rect
+                      x="0"
+                      y="4"
+                      width={p50X}
+                      height="8"
+                      rx="3"
+                      className="pl-dist-p50"
+                    />
+                  </>
+                )}
               </svg>
               <span className="pl-dist-nums pl-mono">
-                p50 {item.p50} / p95 {item.p95} {item.unit}
+                {mode === "count"
+                  ? `${countVal} ${item.unit}`
+                  : `p50 ${item.p50} / p95 ${item.p95} ${item.unit}`}
               </span>
             </div>
           );

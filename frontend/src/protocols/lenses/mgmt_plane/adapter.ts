@@ -1932,15 +1932,30 @@ export function buildMgmtPlaneAnalysis(options: {
     verdict = `${rows.length} observed management ${rows.length === 1 ? "item" : "items"} had no flagged findings, but one or more sources were capped or degraded.`;
     verdictStatus = "unknown";
   } else {
+    const snmpRows = rows.filter(
+      (r) =>
+        r.category === "snmp_v3" ||
+        r.category === "snmp_v1_v2c" ||
+        r.category === "snmp_set" ||
+        r.category === "netflow_snmp",
+    );
+    const hasUnknownRows = rows.some((r) => r.status === "unknown");
+    const allSnmpOk =
+      snmpRows.length > 0 && snmpRows.every((r) => r.status === "ok");
     const coveredScopeParts: string[] = [];
-    if (hasActiveSnmp) coveredScopeParts.push("SNMPv3 only");
+    if (allSnmpOk) coveredScopeParts.push("SNMPv3 only");
     if (hasCleartextCoverage) coveredScopeParts.push("no cleartext sessions");
     if (hasSyslogBaseline) coveredScopeParts.push("continuous syslog receipt");
     const suffix = coveredScopeParts.length
       ? ` (${coveredScopeParts.join(", ")})`
       : "";
-    verdict = `${rows.length} of ${rows.length} management ${rows.length === 1 ? "item" : "items"} healthy across covered sources${suffix}.`;
-    verdictStatus = "ok";
+    if (hasUnknownRows) {
+      verdict = `${rows.length} observed management ${rows.length === 1 ? "item" : "items"} had no flagged findings, but one or more items had unknown version or status.`;
+      verdictStatus = "unknown";
+    } else {
+      verdict = `${rows.length} of ${rows.length} management ${rows.length === 1 ? "item" : "items"} healthy across covered sources${suffix}.`;
+      verdictStatus = "ok";
+    }
   }
 
   const coverageStatus: ProtocolStatus = anyDegraded

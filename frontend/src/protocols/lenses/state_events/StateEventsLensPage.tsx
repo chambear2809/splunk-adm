@@ -438,6 +438,7 @@ export function StateEventsLensPage({
               <DistributionBar
                 title="Operational domains"
                 items={result.distribution}
+                mode="count"
               />
             ) : null}
           </>

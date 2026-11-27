@@ -818,6 +818,46 @@
   font-weight: 500;
 }
 
+.pl-muted {
+  color: var(--adm-muted);
+}
+
+.pl-traffic-mix {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--adm-card-border);
+  background: var(--adm-card);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pl-traffic-mix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pl-traffic-mix-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--adm-ink-2);
+}
+
+.pl-traffic-mix-summary {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  color: var(--adm-ink);
+}
+
+.pl-traffic-mix-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .pl-muted-note {
   font-size: 0.78rem;
   color: var(--adm-ink-2);

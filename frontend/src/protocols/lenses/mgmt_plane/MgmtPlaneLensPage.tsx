@@ -536,6 +536,7 @@ export function MgmtPlaneLensPage({
           <DistributionBar
             title="Findings by category"
             items={result.distribution}
+            mode="count"
           />
         ) : null}
         {result.timelineEvents.length > 0 ? (

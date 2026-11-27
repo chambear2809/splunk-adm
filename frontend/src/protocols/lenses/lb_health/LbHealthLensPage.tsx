@@ -313,7 +313,13 @@ export function LbHealthLensPage({
       header: "p95 Latency",
       align: "right",
       render: (r) =>
-        r.p95LatencyMs !== undefined ? formatDurationMs(r.p95LatencyMs) : "—",
+        r.p95LatencyMs !== undefined ? (
+          formatDurationMs(r.p95LatencyMs)
+        ) : (
+          <span className="pl-muted">
+            {r.lbFailedCount > 0 ? "No response" : "Not reported"}
+          </span>
+        ),
     },
     {
       key: "status",
@@ -416,7 +422,11 @@ export function LbHealthLensPage({
     (result.distribution.length > 0 || result.timelineEvents.length > 0) ? (
       <>
         {result.distribution.length > 0 ? (
-          <DistributionBar title="Error split" items={result.distribution} />
+          <DistributionBar
+            title="Error split"
+            items={result.distribution}
+            mode="count"
+          />
         ) : null}
         {result.timelineEvents.length > 0 ? (
           <SwimlaneTimeline

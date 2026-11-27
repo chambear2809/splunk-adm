@@ -32,6 +32,7 @@ import {
 import { requireNoSearchErrors, type SearchClient } from "../data/searchClient";
 import { plural, prettyBytes, sourceLabel } from "../glossary";
 import { TimePicker } from "../map/TimePicker";
+import { deviceProtocolLinks } from "../protocols/drillIn";
 import { resolveTime, timeError } from "../data/timeBounds";
 import { loadTopology } from "../provider";
 import { VirtualTable, type VirtualColumn } from "../scale/VirtualTable";
@@ -644,13 +645,35 @@ export function DevicePage({
           <h1 id="device-title">{title}</h1>
           {meta.length > 0 && <p className="muted">{meta.join(" · ")}</p>}
           {navigation.value && (device || query) && (
-            <ImpactButton
-              token={device?.mgmt_ip ?? device?.id ?? query}
-              label={title}
-              interfaces={flows?.conversations.flatMap((c) =>
-                c.interfaces.flatMap((i) => i.split(" > ")),
-              )}
-            />
+            <>
+              <ImpactButton
+                token={device?.mgmt_ip ?? device?.id ?? query}
+                label={title}
+                interfaces={flows?.conversations.flatMap((c) =>
+                  c.interfaces.flatMap((i) => i.split(" > ")),
+                )}
+              />
+              <nav
+                className="atlas-protocol-drillins"
+                aria-label="Protocol analysis"
+                data-testid="device-protocol-drillins"
+              >
+                <span className="atlas-protocol-drillins-label">Protocols</span>
+                {deviceProtocolLinks({
+                  device: device?.name ?? device?.mgmt_ip ?? query,
+                  earliest: Number(earliest) || undefined,
+                  latest: Number(latest) || undefined,
+                }).map((item) => (
+                  <a
+                    key={item.lens}
+                    className="atlas-protocol-pill"
+                    href={item.href}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+            </>
           )}
         </header>
         {navigation.error && <p role="alert">{navigation.error}</p>}

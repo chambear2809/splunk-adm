@@ -33,6 +33,7 @@ import { DevicesView } from "../DevicesView";
 import { formatUtc, formatInZone, graphWindowLabel } from "../time";
 import { argError } from "../provider";
 import { ScopeBar } from "../map/ScopeBar";
+import { mapEdgeProtocolLinks } from "../protocols/drillIn";
 import { TimePicker, pickerBound } from "../map/TimePicker";
 import { timeError, isIncompleteWindow } from "../data/timeBounds";
 import {
@@ -1668,6 +1669,36 @@ function StandardMapPage({
                     live={mode === "live"}
                     onShowPath={showFindingPath}
                   />
+                  <nav
+                    className="atlas-protocol-drillins"
+                    aria-label="Protocol analysis"
+                    data-testid="map-protocol-drillins"
+                  >
+                    <span className="atlas-protocol-drillins-label">
+                      Protocols
+                    </span>
+                    {mapEdgeProtocolLinks({
+                      srcIp: index.node.get(selectedEdge.source)
+                        ?.addresses?.[0],
+                      dstIp: index.node.get(selectedEdge.target)
+                        ?.addresses?.[0],
+                      scope:
+                        selectedRoutingScope ??
+                        index.node.get(selectedEdge.source)?.attributes?.scope,
+                      earliest: Math.floor(
+                        Date.parse(graph.window.start) / 1000,
+                      ),
+                      latest: Math.floor(Date.parse(graph.window.end) / 1000),
+                    }).map((item) => (
+                      <a
+                        key={item.lens}
+                        className="atlas-protocol-pill"
+                        href={item.href}
+                      >
+                        {item.label}
+                      </a>
+                    ))}
+                  </nav>
                 </div>
               )}
             </>

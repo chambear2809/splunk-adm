@@ -181,6 +181,8 @@ export function buildAppTransactionsSearch(options: {
     `search ${predicates.join(" ")} ` +
     `| head ${headLimit} ` +
     `| eval sql_error_code=coalesce(if(isnotnull(sql_error_code) AND sql_error_code!="" AND sql_error_code!="0" AND sql_error_code!="00000", sql_error_code, null()), if(sourcetype=="stream:tds", sql_result_codes, null()), error_code, if(isnotnull(error) AND error!="", "SQL_ERROR", null()), sql_error_code) ` +
+    `| eval sql_error_code=if(isnull(sql_error_code) OR sql_error_code=="", null(), if(match(sql_error_code, "^[A-Za-z0-9_.:-]{1,32}$"), sql_error_code, "SQL_ERROR")) ` +
+    `| eval error_code=if(isnull(error_code) OR error_code=="", null(), if(match(error_code, "^[A-Za-z0-9_.:-]{1,32}$"), error_code, "SQL_ERROR")) ` +
     tableClause
   );
 }

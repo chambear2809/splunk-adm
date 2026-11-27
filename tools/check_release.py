@@ -1443,10 +1443,27 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             ).removesuffix(".js")
             for path in lens_bundles
         }
-        if manifest_ids != bundle_ids:
+        expected_lens_ids = {
+            "tcp_tls",
+            "dns_ops",
+            "routing",
+            "l2_control",
+            "interface_health",
+            "qos_icmp",
+            "enterprise_l7",
+            "drops",
+            "endpoint_mobility",
+            "app_transactions",
+            "state_events",
+            "mgmt_plane",
+            "lb_health",
+        }
+        if manifest_ids != expected_lens_ids or bundle_ids != expected_lens_ids:
             raise ValueError(
-                "Protocol lens manifests and bundles do not match: "
-                f"manifests={sorted(manifest_ids)}, bundles={sorted(bundle_ids)}"
+                "Protocol lens manifests and bundles do not match all 13 implemented lenses: "
+                f"missing_manifests={sorted(expected_lens_ids - manifest_ids)}, "
+                f"missing_bundles={sorted(expected_lens_ids - bundle_ids)}, "
+                f"extra={sorted((manifest_ids | bundle_ids) - expected_lens_ids)}"
             )
         for manifest_path in lens_manifests:
             lens_id = manifest_path.removeprefix(

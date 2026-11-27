@@ -813,7 +813,7 @@ export function buildStateEventsAnalysis(options: {
         checkedAt: nowSec,
       };
     }
-    if (events.length === 0 && unparsedRowCount > 0) {
+    if (unparsedRowCount > 0) {
       const reason = `${unparsedRowCount} ${unparsedRowCount === 1 ? "row" : "rows"} returned but could not be normalized.`;
       return {
         verdict: reason,
