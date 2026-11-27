@@ -1496,9 +1496,23 @@ export async function summarizeTcpTls(
     signal,
     options,
   );
+  const degraded =
+    result.capped ||
+    result.outcomes.some(
+      (o) =>
+        o.state === "blocked" ||
+        o.state === "unavailable" ||
+        o.state === "partial",
+    );
+  const status: ProtocolStatus =
+    degraded && result.verdictStatus === "ok"
+      ? "attention"
+      : degraded && result.verdictStatus === "none_observed"
+        ? "unknown"
+        : result.verdictStatus;
   return {
     lens: "tcp_tls",
-    status: result.verdictStatus,
+    status,
     verdict: result.verdict,
     checkedAt: result.checkedAt,
     capped: result.capped,

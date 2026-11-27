@@ -1,0 +1,6 @@
+{"_time":1800000060,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%STP-2-ROOTGUARD_BLOCK: Root guard blocking port Ethernet1/49 on VLAN0110"}
+{"_time":1800000120,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%LACP-5-FOP_SUSPENDED: port-channel10: member Ethernet1/5 suspended (no LACP partner PDU)"}
+{"_time":1800000210,"host":"leaf2.dc1.example","sourcetype":"cisco:dc:nexus9k:syslog","category":"ARP","severity_id":"3","mnemonics":"DUP_V4_ADDR","interface":"Vlan110","syslog_msg":"Duplicate IPv4 address 10.10.110.25 detected from MAC 00:50:56:ff:99:11 on Vlan110"}
+{"_time":1800000260,"host":"leaf2.dc1.example","sourcetype":"cisco:dc:nexus9k:syslog","category":"ETH_PORT_CHANNEL","severity_id":"5","mnemonics":"PORT_CHANNEL_UP","interface":"port-channel20","syslog_msg":"port-channel20 is up"}
+{"_time":1800000310,"host":"leaf3.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%LLDP-5-NEIGHBOR_ADDED: LLDP neighbor sw-core-01 discovered on Ethernet1/48"}
+{"_time":1800000390,"host":"leaf3.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%DHCP_SNOOPING-4-DHCP_SNOOPING_RATE_LIMIT: DHCP rate limit exceeded on untrusted port Ethernet1/12"}

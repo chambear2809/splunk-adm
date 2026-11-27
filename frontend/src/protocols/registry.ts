@@ -5,6 +5,10 @@ import {
   type ProtocolLensRegistration,
 } from "./shared/contract";
 import { validateTcpTlsExtra } from "./lenses/tcp_tls/validate";
+import { validateDnsOpsExtra } from "./lenses/dns_ops/validate";
+import { validateRoutingExtra } from "./lenses/routing/validate";
+import { validateL2ControlExtra } from "./lenses/l2_control/validate";
+import { validateInterfaceHealthExtra } from "./lenses/interface_health/validate";
 
 /**
  * Central registry of all 13 protocol workbenches.
@@ -44,6 +48,15 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     sources: ["stream:dns", "cilium:hubble:flow"],
     streamIds: ["dns"],
     operatorDoc: "protocol-dns-ops.md",
+    validateExtra: validateDnsOpsExtra,
+    summarize: async (client, request, configuration, signal) => {
+      const { summarizeDnsOps } = await import("./lenses/dns_ops/adapter");
+      return summarizeDnsOps(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () =>
+      (await import("./lenses/dns_ops/DnsOpsLensPage")).DnsOpsLensPage,
   },
   {
     id: "routing",
@@ -60,6 +73,15 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     ],
     streamIds: [],
     operatorDoc: "protocol-routing.md",
+    validateExtra: validateRoutingExtra,
+    summarize: async (client, request, configuration, signal) => {
+      const { summarizeRouting } = await import("./lenses/routing/adapter");
+      return summarizeRouting(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () =>
+      (await import("./lenses/routing/RoutingLensPage")).RoutingLensPage,
   },
   {
     id: "l2_control",
@@ -71,12 +93,23 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
       "DHCP DORA health, STP root and port state, and port-channel members.",
     sources: [
       "stream:dhcp",
+      "stream:arp",
       "cisco:dc:nexus9k:dme",
       "cisco:ios",
       "cisco:dc:nexus9k:syslog",
     ],
-    streamIds: ["dhcp"],
+    streamIds: ["dhcp", "arp"],
     operatorDoc: "protocol-l2-control.md",
+    validateExtra: validateL2ControlExtra,
+    summarize: async (client, request, configuration, signal) => {
+      const { summarizeL2Control } =
+        await import("./lenses/l2_control/adapter");
+      return summarizeL2Control(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () =>
+      (await import("./lenses/l2_control/L2ControlLensPage")).L2ControlLensPage,
   },
   {
     id: "interface_health",
@@ -93,6 +126,17 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     ],
     streamIds: [],
     operatorDoc: "protocol-interface-health.md",
+    validateExtra: validateInterfaceHealthExtra,
+    summarize: async (client, request, configuration, signal) => {
+      const { summarizeInterfaceHealth } =
+        await import("./lenses/interface_health/adapter");
+      return summarizeInterfaceHealth(client, request, configuration, signal, {
+        profileValidators: registeredProfileValidators(),
+      });
+    },
+    loadComponent: async () =>
+      (await import("./lenses/interface_health/InterfaceHealthLensPage"))
+        .InterfaceHealthLensPage,
   },
   {
     id: "qos_icmp",

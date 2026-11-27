@@ -1,0 +1,8 @@
+{"_time":1764246720,"host":"leaf1.dc1","sourcetype":"cisco:ios","syslog_msg":"%BGP-5-ADJCHANGE: bgp-65001 [default] neighbor 10.255.0.2 Down - Hold Timer Expired"}
+{"_time":1764247020,"host":"leaf1.dc1","sourcetype":"cisco:ios","syslog_msg":"%BGP-5-ADJCHANGE: bgp-65001 [default] neighbor 10.255.0.2 Up"}
+{"_time":1764247380,"host":"leaf1.dc1","sourcetype":"cisco:ios","syslog_msg":"%BGP-5-ADJCHANGE: bgp-65001 [default] neighbor 10.255.0.2 Down - Peer closed the session"}
+{"_time":1764247390,"host":"leaf1.dc1","sourcetype":"cisco:ios","syslog_msg":"%BFD-5-SESSION_STATE_DOWN: BFD session 1090519041 to neighbor 10.255.0.2 on interface Ethernet1/1 has gone down"}
+{"_time":1764247500,"host":"leaf2.dc1","sourcetype":"cisco:dc:nexus9k:syslog","category":"OSPF","severity_id":"5","mnemonics":"ADJCHG","syslog_msg":"Process 100, Nbr 10.255.0.3 on Ethernet1/2 from FULL to DOWN, Neighbor Down: Dead timer expired","interface":"Ethernet1/2","neighbor_ip":"10.255.0.3","vrf":"default"}
+{"_time":1764247680,"host":"leaf2.dc1","sourcetype":"cisco:dc:nexus9k:syslog","category":"OSPF","severity_id":"5","mnemonics":"ADJCHG","syslog_msg":"Process 100, Nbr 10.255.0.3 on Ethernet1/2 from LOADING to FULL, Loading Done","interface":"Ethernet1/2","neighbor_ip":"10.255.0.3","vrf":"default"}
+{"_time":1764247800,"host":"spine1.dc1","sourcetype":"cisco:ios","syslog_msg":"%BGP-5-ADJCHANGE: bgp-65000 [default] neighbor 10.255.0.10 Up"}
+{"_time":1764248100,"host":"leaf3.dc1","sourcetype":"cisco:aci","syslog_msg":"%BFD-5-SESSION_STATE_UP: BFD session 2048 to neighbor 10.255.0.12 on interface eth1/49 has come up"}

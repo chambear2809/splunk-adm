@@ -42,7 +42,11 @@ export function SwimlaneTimeline({
           const laneEvents = events.filter((e) => e.lane === lane);
           return (
             <div key={lane} className="pl-lane">
-              <div className="pl-lane-label pl-mono" title={lane}>
+              <div
+                className="pl-lane-label pl-mono"
+                title={lane}
+                data-pl-data="true"
+              >
                 {lane}
               </div>
               <svg

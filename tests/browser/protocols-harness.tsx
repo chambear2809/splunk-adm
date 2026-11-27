@@ -10,6 +10,32 @@ import {
   normalizeTcpTlsRow,
   DEFAULT_TCP_TLS_THRESHOLDS,
 } from "../../frontend/src/protocols/lenses/tcp_tls/adapter";
+import { DnsOpsLensPage } from "../../frontend/src/protocols/lenses/dns_ops/DnsOpsLensPage";
+import {
+  buildDnsOpsAnalysis,
+  normalizeDnsOpsRow,
+  DEFAULT_DNS_OPS_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/dns_ops/adapter";
+import { RoutingLensPage } from "../../frontend/src/protocols/lenses/routing/RoutingLensPage";
+import {
+  buildRoutingAnalysis,
+  normalizeRoutingDmeRow,
+  normalizeRoutingSyslogRow,
+  DEFAULT_ROUTING_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/routing/adapter";
+import { L2ControlLensPage } from "../../frontend/src/protocols/lenses/l2_control/L2ControlLensPage";
+import {
+  buildL2ControlAnalysis,
+  normalizeL2ControlRow,
+  DEFAULT_L2_CONTROL_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/l2_control/adapter";
+import { InterfaceHealthLensPage } from "../../frontend/src/protocols/lenses/interface_health/InterfaceHealthLensPage";
+import {
+  buildInterfaceHealthAnalysis,
+  normalizeInterfaceDmeRow,
+  normalizeInterfaceSyslogRow,
+  DEFAULT_INTERFACE_HEALTH_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/interface_health/adapter";
 import {
   AdjacencyOverlay,
   CopyableIp,
@@ -595,6 +621,461 @@ function TcpTlsScopeRaceShowcase() {
   );
 }
 
+function DnsOpsShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    params.get("drawer") === "open" ? "10.10.20.12__10.10.0.53" : undefined,
+  );
+  const rows = [
+    {
+      _time: EARLIEST + 60,
+      host: "stream-01",
+      sourcetype: "stream:dns",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.0.53",
+      query: "api.prod.example.com",
+      query_type: "A",
+      reply_code: "NOERROR",
+      answer: "10.10.30.40",
+      time_taken: 4200,
+    },
+    {
+      _time: EARLIEST + 180,
+      host: "stream-01",
+      sourcetype: "stream:dns",
+      src_ip: "10.10.20.12",
+      dest_ip: "10.10.0.53",
+      query: "payments.prod.example.com",
+      query_type: "A",
+      reply_code: "SERVFAIL",
+      time_taken: 84000,
+    },
+    {
+      _time: EARLIEST + 240,
+      host: "stream-01",
+      sourcetype: "stream:dns",
+      src_ip: "10.10.20.12",
+      dest_ip: "10.10.0.53",
+      query: "db.svc.cluster.local.prod.example.com",
+      query_type: "A",
+      reply_code: "NXDOMAIN",
+      time_taken: 62000,
+    },
+    {
+      _time: EARLIEST + 360,
+      host: "stream-01",
+      sourcetype: "stream:dns",
+      src_ip: "10.10.20.15",
+      dest_ip: "10.10.0.54",
+      query: "auth.prod.example.com",
+      query_type: "A",
+      reply_code: "NOERROR",
+      answer: "10.10.30.50",
+      time_taken: 8100,
+    },
+  ];
+  const events = rows
+    .map((r) => normalizeDnsOpsRow(r, "stream:dns"))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "stream" }));
+  const initialResult = buildDnsOpsAnalysis({
+    events,
+    thresholds: DEFAULT_DNS_OPS_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      { source: "protocol_dns_ops", profile: "dns-dc1", state: "complete" },
+    ],
+    capped: false,
+  });
+  return (
+    <DnsOpsLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "dns-dc1",
+            source: "protocol_dns_ops",
+            lens: "dns_ops",
+            scope: "lab:dc1",
+            index: "stream",
+            observer: "stream-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "dns-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function RoutingShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    params.get("drawer") === "open"
+      ? "leaf1.pseudo.co__BGP__10.255.0.2"
+      : undefined,
+  );
+  const syslogEvents = [
+    {
+      _time: EARLIEST + 120,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:ios",
+      syslog_msg:
+        "%BGP-5-ADJCHANGE: bgp-65001 [default] neighbor 10.255.0.2 Down - Hold Timer Expired",
+      neighbor_ip: "10.255.0.2",
+      vrf: "default",
+    },
+    {
+      _time: EARLIEST + 300,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:syslog",
+      category: "BFD",
+      severity_id: "5",
+      mnemonics: "SESSION_STATE_DOWN",
+      syslog_msg: "BFD session to 10.255.0.2 on Ethernet1/49 went Down",
+      neighbor_ip: "10.255.0.2",
+      vrf: "default",
+    },
+  ]
+    .map((r, i) => normalizeRoutingSyslogRow(r, i))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const dmeEvents = [
+    {
+      _time: EARLIEST + 400,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      dn: "sys/bgp/inst/dom-default/peer-[10.255.0.1]",
+      peer_ip: "10.255.0.1",
+      peer_asn: "65000",
+      local_asn: "65001",
+      operSt: "established",
+      vrf: "default",
+      prefixes_received: 128,
+      flap_count: 0,
+    },
+    {
+      _time: EARLIEST + 420,
+      host: "leaf2.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      dn: "sys/bgp/inst/dom-default/peer-[10.255.0.1]",
+      peer_ip: "10.255.0.1",
+      peer_asn: "65000",
+      local_asn: "65002",
+      operSt: "established",
+      vrf: "default",
+      prefixes_received: 128,
+      flap_count: 0,
+    },
+  ]
+    .map((r, i) => normalizeRoutingDmeRow(r, i))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const initialResult = buildRoutingAnalysis({
+    events: [...syslogEvents, ...dmeEvents],
+    thresholds: DEFAULT_ROUTING_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      { source: "protocol_routing", profile: "routing-dc1", state: "complete" },
+    ],
+    capped: false,
+  });
+  return (
+    <RoutingLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "routing-dc1",
+            source: "protocol_routing",
+            lens: "routing",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "leaf1",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "routing-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function L2ControlShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const rawRows = [
+    {
+      _time: EARLIEST + 100,
+      host: "dhcp-01",
+      sourcetype: "stream:dhcp",
+      src_ip: "10.10.20.1",
+      dest_ip: "10.10.20.99",
+      client_mac: "00:50:56:aa:bb:01",
+      dhcp_message_type: "NAK",
+      vlan_id: "120",
+    },
+    {
+      _time: EARLIEST + 220,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:ios",
+      syslog_msg:
+        "%STP-2-ROOTGUARD_BLOCK: Root guard blocking port Ethernet1/12 on VLAN0120.",
+      interface: "Ethernet1/12",
+      vlan: "120",
+    },
+    {
+      _time: EARLIEST + 340,
+      host: "leaf2.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:syslog",
+      category: "LACP",
+      severity_id: "5",
+      mnemonics: "PORT_STATE",
+      syslog_msg: "Ethernet1/8 suspended in port-channel10 (LACP timeout)",
+      interface: "Ethernet1/8",
+    },
+    {
+      _time: EARLIEST + 460,
+      host: "dhcp-01",
+      sourcetype: "stream:dhcp",
+      src_ip: "10.10.20.1",
+      dest_ip: "10.10.20.55",
+      client_mac: "00:50:56:aa:bb:02",
+      yiaddr: "10.10.20.55",
+      lease_time: 3600,
+      dhcp_message_type: "ACK",
+      vlan_id: "120",
+    },
+  ];
+  const events = rawRows
+    .map((r, i) => normalizeL2ControlRow(r, i))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const initialResult = buildL2ControlAnalysis({
+    events,
+    thresholds: DEFAULT_L2_CONTROL_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      { source: "protocol_l2_control", profile: "l2-dc1", state: "complete" },
+    ],
+    capped: false,
+    activeSourceKinds: ["stream_dhcp", "syslog"],
+  });
+  return (
+    <L2ControlLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "l2-dc1",
+            source: "protocol_l2_control",
+            lens: "l2_control",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "leaf1",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "l2-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function InterfaceHealthShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>();
+  const dmeEvents = [
+    {
+      _time: EARLIEST + 100,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      interface: "Ethernet1/10",
+      adminSt: "up",
+      operSt: "down",
+      speed: "25G",
+      mtu: 9216,
+      crc_errors: 42,
+      in_errors: 48,
+      in_discards: 12,
+      utilization_pct: 0,
+    },
+    {
+      _time: EARLIEST + 200,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      interface: "Ethernet1/49",
+      adminSt: "up",
+      operSt: "up",
+      speed: "100G",
+      mtu: 9216,
+      crc_errors: 0,
+      in_errors: 0,
+      in_discards: 0,
+      utilization_pct: 62,
+    },
+    {
+      _time: EARLIEST + 260,
+      host: "leaf2.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      interface: "Ethernet1/50",
+      adminSt: "up",
+      operSt: "up",
+      speed: "100G",
+      mtu: 9216,
+      crc_errors: 0,
+      in_errors: 0,
+      in_discards: 4,
+      utilization_pct: 86,
+    },
+  ]
+    .map((r) => normalizeInterfaceDmeRow(r))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const syslogEvents = [
+    {
+      _time: EARLIEST + 150,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:syslog",
+      category: "ETHPORT",
+      severity_id: "5",
+      mnemonics: "IF_DOWN_LINK_FAILURE",
+      syslog_msg: "Interface Ethernet1/10 is down (Link failure)",
+      interface: "Ethernet1/10",
+    },
+    {
+      _time: EARLIEST + 310,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:syslog",
+      category: "ETHPORT",
+      severity_id: "5",
+      mnemonics: "IF_UP",
+      syslog_msg: "Interface Ethernet1/10 is up in mode trunk",
+      interface: "Ethernet1/10",
+    },
+  ]
+    .map((r, i) => normalizeInterfaceSyslogRow(r, i))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const initialResult = buildInterfaceHealthAnalysis({
+    dmeEvents,
+    syslogEvents,
+    thresholds: DEFAULT_INTERFACE_HEALTH_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_interface_health",
+        profile: "iface-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+  });
+  return (
+    <InterfaceHealthLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "iface-dc1",
+            source: "protocol_interface_health",
+            lens: "interface_health",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "leaf1",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "iface-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
 createRoot(document.getElementById("adm-root")!).render(
   <ThemeProvider family="enterprise" colorScheme={theme} density="comfortable">
     <Shell page="protocols" live={false}>
@@ -606,6 +1087,14 @@ createRoot(document.getElementById("adm-root")!).render(
         <TcpTlsShowcase mode="netflow" />
       ) : scenario === "tcp_tls_race" ? (
         <TcpTlsScopeRaceShowcase />
+      ) : scenario === "dns_ops" ? (
+        <DnsOpsShowcase />
+      ) : scenario === "routing" ? (
+        <RoutingShowcase />
+      ) : scenario === "l2_control" ? (
+        <L2ControlShowcase />
+      ) : scenario === "interface_health" ? (
+        <InterfaceHealthShowcase />
       ) : (
         <SampleLensShowcase />
       )}

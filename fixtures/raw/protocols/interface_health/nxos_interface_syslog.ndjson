@@ -1,0 +1,7 @@
+{"_time":1764246700,"host":"leaf1.dc1.example","sourcetype":"cisco:dc:nexus9k:syslog","category":"ETHPORT","severity_id":"5","mnemonics":"IF_DOWN_LINK_FAILURE","interface":"Ethernet1/1","syslog_msg":"Interface Ethernet1/1 is down (Link failure)"}
+{"_time":1764246780,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%ETHPORT-5-IF_DOWN_LINK_FAILURE: Interface Ethernet1/10 is down (Link failure)"}
+{"_time":1764246840,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%ETHPORT-5-IF_UP: Interface Ethernet1/10 is up in mode trunk"}
+{"_time":1764246960,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%ETHPORT-5-IF_DOWN_LINK_FAILURE: Interface Ethernet1/10 is down (Link failure)"}
+{"_time":1764247020,"host":"leaf1.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%ETHPORT-5-IF_UP: Interface Ethernet1/10 is up in mode trunk"}
+{"_time":1764247080,"host":"leaf2.dc1.example","sourcetype":"cisco:ios","syslog_msg":"%TRANSCEIVER-4-DOM_HIGH_RX_POWER_WARN: Interface Ethernet1/12, Rx power high warning"}
+{"_time":1764247140,"host":"leaf2.dc1.example","sourcetype":"cisco:dc:aci:syslog","category":"ETHPORT","severity_id":"5","mnemonics":"IF_UP","interface":"Ethernet1/10","syslog_msg":"Interface Ethernet1/10 is up"}

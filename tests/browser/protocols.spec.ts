@@ -269,4 +269,66 @@ test.describe("Protocol Lens UX contract", () => {
       /Click Investigate/i,
     );
   });
+
+  for (const lens of [
+    "dns_ops",
+    "routing",
+    "l2_control",
+    "interface_health",
+  ] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`Wave 2 ${lens} lens meets UX contract at 1280x800 (${theme})`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 1280, height: 800 });
+        await page.goto(
+          `/tests/browser/protocols.html?scenario=${lens}&theme=${theme}`,
+        );
+        const verdict = page.getByTestId("protocol-verdict");
+        await expect(verdict).toBeVisible();
+        const box = await verdict.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.y).toBeLessThanOrEqual(160);
+        expect(
+          await page.getByTestId("protocol-kpi-tile").count(),
+        ).toBeLessThanOrEqual(4);
+        expect(
+          await page
+            .locator('[data-testid="protocol-overview-table"] thead th')
+            .count(),
+        ).toBeLessThanOrEqual(8);
+        expect(await measureChromeWords(page)).toBeLessThan(60);
+        const overflow = await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth >
+            document.documentElement.clientWidth,
+        );
+        expect(overflow).toBe(false);
+        await page.screenshot({
+          path: `${SHOT_DIR}/w2-${lens}-overview-1280x800-${theme}.png`,
+          fullPage: false,
+        });
+      });
+    }
+
+    test(`Wave 2 ${lens} Matrix view renders without overflow`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await page.goto(
+        `/tests/browser/protocols.html?scenario=${lens}&view=matrix&theme=dark`,
+      );
+      await expect(page.getByTestId("protocol-heat-matrix")).toBeVisible();
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+      );
+      expect(overflow).toBe(false);
+      await page.screenshot({
+        path: `${SHOT_DIR}/w2-${lens}-matrix-1280x800-dark.png`,
+        fullPage: false,
+      });
+    });
+  }
 });

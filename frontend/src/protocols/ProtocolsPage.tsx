@@ -217,7 +217,7 @@ export function ProtocolsPage({
         if (controller.signal.aborted) break;
         if (!lens.summarize || !configuredByLens.get(lens.id)) continue;
         try {
-          const summary = await lens.summarize(
+          const rawSummary = await lens.summarize(
             client,
             {
               version: 1,
@@ -229,6 +229,20 @@ export function ProtocolsPage({
             config,
             controller.signal,
           );
+          const hasDegraded =
+            rawSummary.capped ||
+            rawSummary.outcomes.some(
+              (o) =>
+                o.state === "blocked" ||
+                o.state === "unavailable" ||
+                o.state === "partial",
+            );
+          const summary =
+            hasDegraded && rawSummary.status === "ok"
+              ? { ...rawSummary, status: "attention" as const }
+              : hasDegraded && rawSummary.status === "none_observed"
+                ? { ...rawSummary, status: "unknown" as const }
+                : rawSummary;
           if (!controller.signal.aborted) {
             setSummaries((prev) => ({ ...prev, [lens.id]: summary }));
           }

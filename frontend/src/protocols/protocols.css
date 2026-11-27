@@ -539,7 +539,7 @@
 
 .pl-lane {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
+  grid-template-columns: 195px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -596,7 +596,7 @@
 
 .pl-dist-row {
   display: grid;
-  grid-template-columns: 150px 220px minmax(0, 1fr);
+  grid-template-columns: 205px 220px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
   font-size: 0.8rem;
