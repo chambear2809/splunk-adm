@@ -1,0 +1,11 @@
+{"_time":1764246720,"host":"192.0.2.11","sourcetype":"cisco:ios","syslog_msg":"%ETHPORT-3-IF_DOWN_LINK_FAILURE: Interface Ethernet1/10 is down (Link failure)"}
+{"_time":1764246900,"host":"192.0.2.11","sourcetype":"cisco:ios","syslog_msg":"%BGP-5-ADJCHANGE: bgp-65001 [default] neighbor 10.255.0.2 Down - Hold Timer Expired"}
+{"_time":1764247020,"host":"192.0.2.11","sourcetype":"cisco:ios","syslog_msg":"%BFD-5-SESSION_STATE_DOWN: BFD session 1090519041 to neighbor 10.255.0.2 on interface Ethernet1/10 has gone down"}
+{"_time":1764247200,"host":"192.0.2.11","sourcetype":"cisco:ios","syslog_msg":"%HSRP-5-STATECHANGE: Vlan10 Grp 10 state Standby -> Active"}
+{"_time":1764247380,"host":"192.0.2.11","sourcetype":"cisco:ios","syslog_msg":"%PIM-5-NBRCHG: neighbor 10.255.0.2 DOWN on interface Ethernet1/10 (vrf default)"}
+{"_time":1764247500,"host":"leaf-01.dc1.local","sourcetype":"cisco:dc:nexus9k:syslog","category":"STP","severity_id":"2","mnemonics":"ROOTGUARD_BLOCK","syslog_msg":"Root guard blocking port Ethernet1/5 on VLAN0010","interface":"Ethernet1/5"}
+{"_time":1764247620,"host":"leaf-01.dc1.local","sourcetype":"cisco:dc:nexus9k:syslog","category":"OSPF","severity_id":"5","mnemonics":"ADJCHG","syslog_msg":"Process 100, Nbr 10.255.0.3 on Ethernet1/2 from FULL to DOWN, Neighbor Down: Dead timer expired","interface":"Ethernet1/2","neighbor_ip":"10.255.0.3","vrf":"default"}
+{"_time":1764247740,"host":"leaf-01.dc1.local","sourcetype":"cisco:dc:nexus9k:syslog","category":"ETH_PORT_CHANNEL","severity_id":"5","mnemonics":"PORT_DOWN","syslog_msg":"port-channel10: Ethernet1/8 is down","interface":"Ethernet1/8"}
+{"_time":1764247860,"host":"leaf-02.dc1.local","sourcetype":"cisco:ios","syslog_msg":"%VRRP-6-STATECHANGE: Vlan20 Grp 20 state Backup -> Master"}
+{"_time":1764247980,"host":"leaf-02.dc1.local","sourcetype":"cisco:aci","syslog_msg":"%LINK-5-CHANGED: Interface eth1/49, changed state to up"}
+{"_time":1764248100,"host":"spine-01.dc1.local","sourcetype":"cisco:dc:aci:syslog","category":"ISIS","severity_id":"5","mnemonics":"ADJCHANGE","syslog_msg":"L1 neighbor spine-02 (eth1/31) Up","interface":"eth1/31"}

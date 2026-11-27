@@ -1,0 +1,4 @@
+{"_time":1764245300,"host":"stream-fwd-01","sourcetype":"stream:netflow","exporter_ip":"192.0.2.1","src_ip":"198.51.100.40","dest_ip":"192.0.2.15","src_port":53012,"dest_port":23,"transport":"tcp","bytes":4820,"packets":42}
+{"_time":1764245900,"host":"stream-fwd-01","sourcetype":"stream:netflow","exporter_ip":"192.0.2.1","src_ip":"198.51.100.41","dest_ip":"192.0.2.12","src_port":54100,"dest_port":69,"transport":"udp","bytes":16384,"packets":32}
+{"_time":1764246300,"host":"stream-fwd-01","sourcetype":"stream:netflow","exporter_ip":"192.0.2.1","src_ip":"198.51.100.40","dest_ip":"192.0.2.16","src_port":55210,"dest_port":80,"transport":"tcp","bytes":9420,"packets":18}
+{"_time":1764245105,"host":"stream-fwd-01","sourcetype":"stream:netflow","exporter_ip":"192.0.2.1","src_ip":"198.51.100.20","dest_ip":"192.0.2.11","src_port":51200,"dest_port":161,"transport":"udp","bytes":1514,"packets":2}

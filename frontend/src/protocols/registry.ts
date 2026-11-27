@@ -17,6 +17,10 @@ import { validateQosIcmpExtra } from "./lenses/qos_icmp/validate";
 import { validateEnterpriseL7Extra } from "./lenses/enterprise_l7/validate";
 import { validateDropsExtra } from "./lenses/drops/validate";
 import { validateEndpointMobilityExtra } from "./lenses/endpoint_mobility/validate";
+import { validateAppTransactionsExtra } from "./lenses/app_transactions/validate";
+import { validateStateEventsExtra } from "./lenses/state_events/validate";
+import { validateMgmtPlaneExtra } from "./lenses/mgmt_plane/validate";
+import { validateLbHealthExtra } from "./lenses/lb_health/validate";
 
 /**
  * Builds Splunk-aware lazy loaders for a lens.
@@ -370,6 +374,22 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     ],
     streamIds: ["http", "mysql", "postgres", "tds", "tns"],
     operatorDoc: "protocol-app-transactions.md",
+    validateExtra: validateAppTransactionsExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("app_transactions")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/app_transactions/AppTransactionsLensPage"))
+              .AppTransactionsLensPage,
+          async () => {
+            const { summarizeAppTransactions } =
+              await import("./lenses/app_transactions/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeAppTransactions(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "state_events",
@@ -383,9 +403,27 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
       "cisco:dc:nexus9k:syslog",
       "cisco:aci",
       "cisco:dc:aci:syslog",
+      "cisco:dc:aci:fault",
+      "cisco:dc:aci:event",
     ],
     streamIds: [],
     operatorDoc: "protocol-state-events.md",
+    validateExtra: validateStateEventsExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("state_events")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/state_events/StateEventsLensPage"))
+              .StateEventsLensPage,
+          async () => {
+            const { summarizeStateEvents } =
+              await import("./lenses/state_events/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeStateEvents(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "mgmt_plane",
@@ -403,6 +441,22 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     ],
     streamIds: ["snmp", "ftp"],
     operatorDoc: "protocol-mgmt-plane.md",
+    validateExtra: validateMgmtPlaneExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("mgmt_plane")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/mgmt_plane/MgmtPlaneLensPage"))
+              .MgmtPlaneLensPage,
+          async () => {
+            const { summarizeMgmtPlane } =
+              await import("./lenses/mgmt_plane/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeMgmtPlane(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
   {
     id: "lb_health",
@@ -413,11 +467,27 @@ export const PROTOCOL_LENSES: readonly ProtocolLensRegistration[] = [
     summary: "VIP and pool-member failures across F5, ALB, and NLB.",
     sources: [
       "f5:bigip:ltm:http:irule",
-      "aws:alb:accesslogs",
-      "aws:nlb:accesslogs",
+      "f5:bigip:ltm:lb:failed:irule",
+      "aws:elb:accesslogs",
     ],
     streamIds: [],
     operatorDoc: "protocol-lb-health.md",
+    validateExtra: validateLbHealthExtra,
+    ...(__ADM_SPLUNK_BUILD__
+      ? makeSplunkLensLoaders("lb_health")
+      : makeDevLensLoaders(
+          async () =>
+            (await import("./lenses/lb_health/LbHealthLensPage"))
+              .LbHealthLensPage,
+          async () => {
+            const { summarizeLbHealth } =
+              await import("./lenses/lb_health/adapter");
+            return (client, request, configuration, signal) =>
+              summarizeLbHealth(client, request, configuration, signal, {
+                profileValidators: registeredProfileValidators(),
+              });
+          },
+        )),
   },
 ];
 

@@ -442,6 +442,10 @@
   color: var(--adm-ink-2);
 }
 
+.pl-matrix-table thead th:not(:first-child) {
+  text-align: center;
+}
+
 .pl-table tbody tr {
   cursor: pointer;
 }
@@ -675,6 +679,10 @@
   border-radius: 4px;
   cursor: pointer;
   min-height: 24px;
+}
+
+.pl-table td .pl-copy-ip {
+  margin-left: -4px;
 }
 
 .pl-copy-ip:hover,

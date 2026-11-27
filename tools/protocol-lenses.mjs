@@ -72,6 +72,26 @@ export const IMPLEMENTED_PROTOCOL_LENSES = [
     pageExport: "EndpointMobilityLensPage",
     summarizeExport: "summarizeEndpointMobility",
   },
+  {
+    id: "app_transactions",
+    pageExport: "AppTransactionsLensPage",
+    summarizeExport: "summarizeAppTransactions",
+  },
+  {
+    id: "state_events",
+    pageExport: "StateEventsLensPage",
+    summarizeExport: "summarizeStateEvents",
+  },
+  {
+    id: "mgmt_plane",
+    pageExport: "MgmtPlaneLensPage",
+    summarizeExport: "summarizeMgmtPlane",
+  },
+  {
+    id: "lb_health",
+    pageExport: "LbHealthLensPage",
+    summarizeExport: "summarizeLbHealth",
+  },
 ];
 
 function collectLensFiles(lensId) {

@@ -60,6 +60,31 @@ import {
   normalizeEndpointMobilityRow,
   DEFAULT_ENDPOINT_MOBILITY_THRESHOLDS,
 } from "../../frontend/src/protocols/lenses/endpoint_mobility/adapter";
+import { AppTransactionsLensPage } from "../../frontend/src/protocols/lenses/app_transactions/AppTransactionsLensPage";
+import {
+  buildAppTransactionsAnalysis,
+  normalizeAppTransactionRow,
+  DEFAULT_APP_TRANSACTIONS_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/app_transactions/adapter";
+import { StateEventsLensPage } from "../../frontend/src/protocols/lenses/state_events/StateEventsLensPage";
+import {
+  buildStateEventsAnalysis,
+  normalizeStateSyslogRow,
+  normalizeAciFaultEventRow,
+  DEFAULT_STATE_EVENTS_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/state_events/adapter";
+import { MgmtPlaneLensPage } from "../../frontend/src/protocols/lenses/mgmt_plane/MgmtPlaneLensPage";
+import {
+  buildMgmtPlaneAnalysis,
+  normalizeMgmtPlaneRow,
+  DEFAULT_MGMT_PLANE_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/mgmt_plane/adapter";
+import { LbHealthLensPage } from "../../frontend/src/protocols/lenses/lb_health/LbHealthLensPage";
+import {
+  buildLbHealthAnalysis,
+  normalizeLbHealthRow,
+  DEFAULT_LB_HEALTH_THRESHOLDS,
+} from "../../frontend/src/protocols/lenses/lb_health/adapter";
 import {
   AdjacencyOverlay,
   CopyableIp,
@@ -1571,6 +1596,575 @@ function EndpointMobilityShowcase() {
   );
 }
 
+function AppTransactionsShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    undefined,
+  );
+  const rawRows = [
+    {
+      _time: EARLIEST + 60,
+      host: "stream-01",
+      sourcetype: "stream:http",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.30.10",
+      dest_port: 8080,
+      site: "orders.prod.internal",
+      http_method: "POST",
+      uri_path: "/api/v1/checkout",
+      status: 503,
+      time_taken: 840000,
+      bytes_in: 1420,
+      bytes_out: 680,
+    },
+    {
+      _time: EARLIEST + 140,
+      host: "stream-01",
+      sourcetype: "stream:http",
+      src_ip: "10.10.20.12",
+      dest_ip: "10.10.30.10",
+      dest_port: 8080,
+      site: "orders.prod.internal",
+      http_method: "POST",
+      uri_path: "/api/v1/checkout",
+      status: 200,
+      time_taken: 185000,
+      bytes_in: 1120,
+      bytes_out: 3820,
+    },
+    {
+      _time: EARLIEST + 210,
+      host: "stream-01",
+      sourcetype: "stream:postgres",
+      src_ip: "10.10.30.10",
+      dest_ip: "10.10.40.25",
+      dest_port: 5432,
+      dbname: "orders_prod",
+      sql_error_code: "40P01",
+      response_time: 640000,
+      result_row_count: 0,
+      bytes_in: 420,
+      bytes_out: 210,
+    },
+    {
+      _time: EARLIEST + 300,
+      host: "stream-01",
+      sourcetype: "stream:postgres",
+      src_ip: "10.10.30.10",
+      dest_ip: "10.10.40.25",
+      dest_port: 5432,
+      dbname: "orders_prod",
+      response_time: 18000,
+      result_row_count: 14,
+      bytes_in: 380,
+      bytes_out: 4100,
+    },
+    {
+      _time: EARLIEST + 420,
+      host: "stream-01",
+      sourcetype: "stream:http",
+      src_ip: "10.10.20.11",
+      dest_ip: "10.10.30.18",
+      dest_port: 443,
+      site: "catalog.prod.internal",
+      http_method: "GET",
+      uri_path: "/api/v1/items",
+      status: 200,
+      time_taken: 24000,
+      bytes_in: 410,
+      bytes_out: 18200,
+    },
+  ];
+  const events = rawRows
+    .map((r) => normalizeAppTransactionRow(r))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "stream_app" }));
+  const initialResult = buildAppTransactionsAnalysis({
+    events,
+    thresholds: DEFAULT_APP_TRANSACTIONS_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_app_transactions",
+        profile: "app-dc1",
+        state: "complete",
+      },
+    ],
+    httpOutcomes: [
+      {
+        source: "protocol_app_transactions",
+        profile: "app-dc1",
+        state: "complete",
+      },
+    ],
+    dbOutcomes: [
+      {
+        source: "protocol_app_transactions",
+        profile: "app-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+    httpConfigured: true,
+    dbConfigured: true,
+  });
+  return (
+    <AppTransactionsLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "app-dc1",
+            source: "protocol_app_transactions",
+            lens: "app_transactions",
+            scope: "lab:dc1",
+            index: "stream_app",
+            observer: "stream-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "app-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function StateEventsShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    undefined,
+  );
+  const syslogRows = [
+    {
+      _time: EARLIEST + 60,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:ios",
+      category: "ETHPORT",
+      severity_id: 3,
+      mnemonics: "IF_DOWN_LINK_FAILURE",
+      interface: "Ethernet1/49",
+      syslog_msg: "Interface Ethernet1/49 is down (Link failure)",
+    },
+    {
+      _time: EARLIEST + 95,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:ios",
+      category: "BGP",
+      severity_id: 3,
+      mnemonics: "ADJCHANGE",
+      neighbor_ip: "10.0.0.1",
+      vrf: "default",
+      syslog_msg: "neighbor 10.0.0.1 Down - hold timer expired",
+    },
+    {
+      _time: EARLIEST + 140,
+      host: "leaf1.pseudo.co",
+      sourcetype: "cisco:ios",
+      category: "BFD",
+      severity_id: 3,
+      mnemonics: "SESSION_STATE_DOWN",
+      neighbor_ip: "10.0.0.1",
+      interface: "Ethernet1/49",
+      syslog_msg: "BFD session to 10.0.0.1 transitioned to Down",
+    },
+    {
+      _time: EARLIEST + 210,
+      host: "leaf2.pseudo.co",
+      sourcetype: "cisco:dc:nexus9k:syslog",
+      category: "HSRP",
+      severity_id: 5,
+      mnemonics: "STATECHANGE",
+      interface: "Vlan120",
+      syslog_msg: "Vlan120 Grp 120 state Standby -> Active",
+    },
+    {
+      _time: EARLIEST + 320,
+      host: "spine1.pseudo.co",
+      sourcetype: "cisco:ios",
+      category: "STP",
+      severity_id: 4,
+      mnemonics: "ROOTCHANGE",
+      interface: "port-channel10",
+      syslog_msg: "Topology change detected on VLAN 120",
+    },
+  ];
+  const aciRows = [
+    {
+      _time: EARLIEST + 180,
+      host: "apic1.pseudo.co",
+      apic_host: "apic1.pseudo.co",
+      sourcetype: "cisco:dc:aci:fault",
+      component: "faultInst",
+      code: "F0532",
+      severity: "major",
+      domain: "access",
+      cause: "port-down",
+      affected: "topology/pod-1/node-101/sys/phys-[eth1/5]",
+      dn: "topology/pod-1/node-101/sys/phys-[eth1/5]/fault-F0532",
+      descr: "Port eth1/5 is down (reason: link-failure)",
+    },
+  ];
+  const events = [
+    ...syslogRows
+      .map((r, i) => normalizeStateSyslogRow(r, i))
+      .filter((e): e is NonNullable<typeof e> => Boolean(e))
+      .map((event) => ({ event, indexName: "cisco_dc" })),
+    ...aciRows
+      .map((r, i) => normalizeAciFaultEventRow(r, i))
+      .filter((e): e is NonNullable<typeof e> => Boolean(e))
+      .map((event) => ({ event, indexName: "cisco_dc" })),
+  ];
+  const initialResult = buildStateEventsAnalysis({
+    events,
+    thresholds: DEFAULT_STATE_EVENTS_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_state_events",
+        profile: "state-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+  });
+  return (
+    <StateEventsLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "state-dc1",
+            source: "protocol_state_events",
+            lens: "state_events",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "sc4s-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "state-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function MgmtPlaneShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    undefined,
+  );
+  const rawRows: {
+    row: Record<string, unknown>;
+    defaultSt: "stream:snmp" | "stream:ftp" | "stream:netflow" | "cisco:ios";
+  }[] = [
+    {
+      defaultSt: "stream:snmp",
+      row: {
+        _time: EARLIEST + 60,
+        host: "stream-01",
+        sourcetype: "stream:snmp",
+        src_ip: "10.10.99.50",
+        dest_ip: "192.0.2.11",
+        dest_port: 161,
+        snmp_version: "2c",
+        pdu_type: "SetRequest",
+        status: "noError",
+        bytes_in: 192,
+        bytes_out: 204,
+      },
+    },
+    {
+      defaultSt: "stream:ftp",
+      row: {
+        _time: EARLIEST + 140,
+        host: "stream-01",
+        sourcetype: "stream:ftp",
+        src_ip: "10.10.99.55",
+        dest_ip: "192.0.2.12",
+        dest_port: 21,
+        command: "RETR",
+        reply_code: 226,
+        bytes_in: 128,
+        bytes_out: 18400,
+      },
+    },
+    {
+      defaultSt: "stream:netflow",
+      row: {
+        _time: EARLIEST + 200,
+        host: "leaf1.pseudo.co",
+        sourcetype: "stream:netflow",
+        src_ip: "10.10.99.60",
+        dest_ip: "192.0.2.14",
+        dest_port: 23,
+        transport: "tcp",
+        bytes: 4200,
+        packets: 34,
+        exporter_ip: "192.0.2.11",
+      },
+    },
+    {
+      defaultSt: "cisco:ios",
+      row: {
+        _time: EARLIEST + 30,
+        host: "leaf4.pseudo.co",
+        sourcetype: "cisco:ios",
+        category: "ETHPORT",
+      },
+    },
+    {
+      defaultSt: "cisco:ios",
+      row: {
+        _time: NOW - 30,
+        host: "leaf1.pseudo.co",
+        sourcetype: "cisco:ios",
+        category: "ETHPORT",
+      },
+    },
+    {
+      defaultSt: "cisco:ios",
+      row: {
+        _time: NOW - 10,
+        host: "leaf2.pseudo.co",
+        sourcetype: "cisco:ios",
+        category: "BGP",
+      },
+    },
+  ];
+  const events = rawRows
+    .map(({ row, defaultSt }) => normalizeMgmtPlaneRow(row, defaultSt))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "cisco_dc" }));
+  const okOutcome = {
+    source: "protocol_mgmt_plane",
+    profile: "mgmt-dc1",
+    state: "complete" as const,
+  };
+  const initialResult = buildMgmtPlaneAnalysis({
+    events,
+    thresholds: { ...DEFAULT_MGMT_PLANE_THRESHOLDS, receiptGapMinutes: 10 },
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [okOutcome],
+    capped: false,
+    snmpConfigured: true,
+    ftpConfigured: true,
+    netflowConfigured: true,
+    syslogConfigured: true,
+    snmpOutcomes: [okOutcome],
+    ftpOutcomes: [okOutcome],
+    netflowOutcomes: [okOutcome],
+    syslogOutcomes: [okOutcome],
+  });
+  return (
+    <MgmtPlaneLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "mgmt-dc1",
+            source: "protocol_mgmt_plane",
+            lens: "mgmt_plane",
+            scope: "lab:dc1",
+            index: "cisco_dc",
+            observer: "stream-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "mgmt-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
+function LbHealthShowcase() {
+  const [view, setView] = useState<ProtocolViewMode>(
+    params.get("view") === "matrix" ? "matrix" : "overview",
+  );
+  const [scope, setScope] = useState("lab:dc1");
+  const [selectedItem, setSelectedItem] = useState<string | undefined>(
+    undefined,
+  );
+  const rawRows = [
+    {
+      _time: EARLIEST + 60,
+      host: "bigip-01",
+      sourcetype: "f5:bigip:ltm:lb:failed:irule",
+      f5_irule: "Splunk-iRule-LB_FAILED",
+      vip: "198.51.100.10",
+      pool: "pool_checkout_prod",
+      src_ip: "203.0.113.20",
+      bytes_in: 620,
+    },
+    {
+      _time: EARLIEST + 140,
+      host: "bigip-01",
+      sourcetype: "f5:bigip:ltm:http:irule",
+      f5_irule: "Splunk-iRule-HTTP",
+      vip: "198.51.100.10",
+      pool: "pool_checkout_prod",
+      node: "10.10.30.12",
+      node_port: 8443,
+      src_ip: "203.0.113.21",
+      http_status: 200,
+      req_elapsed_time: 42,
+      bytes_in: 540,
+      bytes_out: 9400,
+    },
+    {
+      _time: EARLIEST + 210,
+      host: "aws-alb-01",
+      sourcetype: "aws:elb:accesslogs",
+      elb: "app/prod-api/01a2b3c4",
+      target_group: "tg-orders-api",
+      target_ip: "10.20.40.15",
+      target_port: 8080,
+      src_ip: "203.0.113.45",
+      elb_status_code: 502,
+      target_status_code: 502,
+      target_processing_time: 0.72,
+      request_processing_time: 0.004,
+      response_processing_time: 0.002,
+      bytes_in: 820,
+      bytes_out: 410,
+      ssl_protocol: "TLSv1.3",
+    },
+    {
+      _time: EARLIEST + 310,
+      host: "aws-nlb-01",
+      sourcetype: "aws:nlb:accesslogs",
+      elb: "net/prod-edge-tls/99d8e7",
+      listener: "tls-443",
+      target_ip: "10.20.50.22",
+      target_port: 443,
+      src_ip: "203.0.113.88",
+      tls_alert: "handshake_failure",
+      verify_status: "Failed:CertExpired",
+      handshake_time_ms: 680,
+      connection_time_ms: 920,
+      ssl_protocol: "TLSv1.2",
+      bytes_in: 310,
+      bytes_out: 180,
+    },
+  ];
+  const events = rawRows
+    .map((r) => normalizeLbHealthRow(r))
+    .filter((e): e is NonNullable<typeof e> => Boolean(e))
+    .map((event) => ({ event, indexName: "lb_logs" }));
+  const initialResult = buildLbHealthAnalysis({
+    events,
+    thresholds: DEFAULT_LB_HEALTH_THRESHOLDS,
+    earliest: EARLIEST,
+    latest: NOW,
+    outcomes: [
+      {
+        source: "protocol_lb_health",
+        profile: "lb-dc1",
+        state: "complete",
+      },
+    ],
+    capped: false,
+  });
+  return (
+    <LbHealthLensPage
+      live={false}
+      theme={theme}
+      scope={scope}
+      scopes={["lab:dc1"]}
+      earliest={EARLIEST}
+      latest={NOW}
+      view={view}
+      selectedItem={selectedItem}
+      configuration={{
+        profiles: [
+          {
+            id: "lb-dc1",
+            source: "protocol_lb_health",
+            lens: "lb_health",
+            scope: "lab:dc1",
+            index: "lb_logs",
+            observer: "bigip-01",
+            validFrom: EARLIEST - 3600,
+            validUntil: NOW + 3600,
+          },
+        ],
+        fingerprint: "lb-fp",
+      }}
+      initialResult={initialResult}
+      skipConfigRecheck
+      onBackToHub={() => {}}
+      onRefreshConfig={() => {}}
+      onChangeParams={(patch) => {
+        if (patch.scope) setScope(patch.scope);
+        if (patch.view) setView(patch.view);
+        if ("item" in patch) setSelectedItem(patch.item);
+      }}
+    />
+  );
+}
+
 createRoot(document.getElementById("adm-root")!).render(
   <ThemeProvider family="enterprise" colorScheme={theme} density="comfortable">
     <Shell page="protocols" live={false}>
@@ -1598,6 +2192,14 @@ createRoot(document.getElementById("adm-root")!).render(
         <DropsShowcase />
       ) : scenario === "endpoint_mobility" ? (
         <EndpointMobilityShowcase />
+      ) : scenario === "app_transactions" ? (
+        <AppTransactionsShowcase />
+      ) : scenario === "state_events" ? (
+        <StateEventsShowcase />
+      ) : scenario === "mgmt_plane" ? (
+        <MgmtPlaneShowcase />
+      ) : scenario === "lb_health" ? (
+        <LbHealthShowcase />
       ) : (
         <SampleLensShowcase />
       )}
