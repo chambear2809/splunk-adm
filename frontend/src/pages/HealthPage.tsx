@@ -1,8 +1,11 @@
 import ButtonExport from "@splunk/react-ui/Button";
+import { getDefaultFetchInit } from "@splunk/splunk-utils/fetch";
+import { createRESTURL } from "@splunk/splunk-utils/url";
 import { toolkitDefault } from "../app/interop";
 import { HealthResults, useHealthData } from "../HealthPanel";
+import type { DeploymentSnapshot } from "../data/deploymentHealth";
 import type { SearchClient } from "../data/searchClient";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   loadSummaryHealth,
   summaryHealthText,
@@ -15,6 +18,79 @@ import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
 import { LazyEcosystemReceiptPanel } from "../ecosystem/EcosystemLazyEvidence";
 import { ModifiedVendorTaCallout } from "../components/ModifiedVendorTaCallout";
 import { observerMappingClient } from "../data/observerMappingClient";
+
+type ContextFetchLike = (
+  input: string,
+  init?: RequestInit,
+) => Promise<{ ok: boolean; json: () => Promise<unknown> }>;
+
+export type AdminProbeResult = "admin" | "non-admin" | "error";
+
+export async function probeAdminCapability(
+  signal?: AbortSignal,
+  fetcher: ContextFetchLike = (...args) => fetch(...args),
+): Promise<AdminProbeResult> {
+  try {
+    const response = await fetcher(
+      createRESTURL("authentication/current-context?output_mode=json"),
+      {
+        ...getDefaultFetchInit(),
+        method: "GET",
+        signal,
+      },
+    );
+    if (!response.ok) return "error";
+    const payload = (await response.json()) as {
+      entry?: { content?: { capabilities?: unknown } }[];
+    };
+    const capabilities =
+      Array.isArray(payload?.entry) && payload.entry.length === 1
+        ? payload.entry[0]?.content?.capabilities
+        : undefined;
+    if (
+      !Array.isArray(capabilities) ||
+      !capabilities.every((capability) => typeof capability === "string")
+    ) {
+      return "error";
+    }
+    return capabilities.includes("admin_all_objects") ? "admin" : "non-admin";
+  } catch {
+    return "error";
+  }
+}
+
+/** True when the signed-in Splunk user holds `admin_all_objects`. */
+export async function hasAdminCapability(
+  signal?: AbortSignal,
+  fetcher: ContextFetchLike = (...args) => fetch(...args),
+): Promise<boolean> {
+  return (await probeAdminCapability(signal, fetcher)) === "admin";
+}
+
+export function shouldProbeAdminCapability(
+  configured: boolean,
+  canWrite: boolean,
+  lastProbe: "idle" | AdminProbeResult,
+): boolean {
+  return (
+    configured &&
+    !canWrite &&
+    lastProbe !== "admin" &&
+    lastProbe !== "non-admin"
+  );
+}
+
+export function shouldCheckModifiedVendorTas(
+  live: boolean,
+  deployment?: DeploymentSnapshot,
+  adminConfirmed = false,
+): boolean {
+  return (
+    live &&
+    deployment?.state === "configured" &&
+    (deployment.canWrite === true || adminConfirmed)
+  );
+}
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -71,6 +147,28 @@ export function HealthPage({
     live,
     range.asOf,
   );
+  const configured = live && report?.deployment?.state === "configured";
+  const canWrite = report?.deployment?.canWrite === true;
+  const [adminConfirmed, setAdminConfirmed] = useState(false);
+  const adminProbeRef = useRef<"idle" | AdminProbeResult>("idle");
+  useEffect(() => {
+    if (
+      !shouldProbeAdminCapability(configured, canWrite, adminProbeRef.current)
+    )
+      return;
+    const controller = new AbortController();
+    void probeAdminCapability(controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
+      adminProbeRef.current = result;
+      if (result === "admin") setAdminConfirmed(true);
+    });
+    return () => controller.abort();
+  }, [configured, canWrite, report]);
+  const checkModifiedVendorTas = shouldCheckModifiedVendorTas(
+    live,
+    report?.deployment,
+    adminConfirmed,
+  );
   return (
     <section className="atlas-admin-panel" aria-labelledby="health-title">
       <h2 id="health-title">Data health</h2>
@@ -114,7 +212,7 @@ export function HealthPage({
           <UnmappedObserversCallout refresh={report} />
           <ModifiedVendorTaCallout
             client={client}
-            live={live && report?.deployment?.state === "configured"}
+            live={checkModifiedVendorTas}
             refresh={report}
           />
           <LazyEcosystemReceiptPanel client={client} />

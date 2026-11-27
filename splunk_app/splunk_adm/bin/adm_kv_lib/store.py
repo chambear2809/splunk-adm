@@ -152,19 +152,41 @@ class SplunkCollectionStore:
         return row
 
     def query(self, filter_doc, *, limit, sort=None, fields=None):
-        """Bounded indexed KV query."""
+        """Bounded indexed KV query with skip=0/skip=1 completion proof."""
         self._validate_limit(limit)
         if not isinstance(filter_doc, dict):
             raise Unavailable("Unsupported collection query.")
-        params = {"query": canonical(filter_doc), "limit": limit}
-        if sort is not None:
-            params["sort"] = sort
+        effective_sort = "_key:1" if sort is None else sort
+        if not isinstance(effective_sort, str) or not effective_sort:
+            raise Unavailable("Unsupported collection sort.")
+        base_query = {
+            "query": canonical(filter_doc),
+            "limit": limit,
+            "sort": effective_sort,
+        }
         if fields is not None:
-            params["fields"] = fields
-        rows = self.request("GET", self.path, query=params)
-        if not isinstance(rows, list) or len(rows) > limit:
-            raise Unavailable("Collection query is malformed.")
-        return rows
+            if not isinstance(fields, str) or not fields:
+                raise Unavailable("Unsupported field projection.")
+            base_query["fields"] = fields
+        for _attempt in range(2):
+            rows = self.request("GET", self.path, query={**base_query, "skip": 0})
+            if not isinstance(rows, list) or len(rows) > limit:
+                raise Unavailable("Collection query is malformed.")
+            keys = [row.get("_key") if isinstance(row, dict) else None for row in rows]
+            if not all(isinstance(key, str) and key for key in keys) or len(
+                keys
+            ) != len(set(keys)):
+                raise Unavailable("Collection query is not uniquely ordered.")
+            if effective_sort == "_key:1" and keys != sorted(set(keys)):
+                raise Unavailable("Collection query is not uniquely ordered.")
+            if len(rows) == limit:
+                return rows
+            shifted = self.request("GET", self.path, query={**base_query, "skip": 1})
+            if shifted == rows[1:]:
+                return rows
+        raise Unavailable(
+            "Collection query is capped or changed during its completion proof."
+        )
 
     def insert(self, document):
         return self.request("POST", self.path, body=document)

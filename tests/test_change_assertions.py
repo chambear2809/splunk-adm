@@ -107,6 +107,25 @@ class AssertionPayloadTests(unittest.TestCase):
             with self.subTest(row=row), self.assertRaises(PayloadError):
                 assertions_payload({"assertions": [row]}, "alice")
 
+    def test_rejects_reserved_scopes_and_accepts_normal_scopes(self):
+        for scope in (
+            "unmapped",
+            "unmapped:foo",
+            "UNMAPPED",
+            "unknown",
+            "UNKNOWN:bar",
+            "reserved",
+            "Reserved:baz",
+        ):
+            with self.subTest(rejected=scope), self.assertRaises(PayloadError):
+                assertions_payload({"assertions": [reaches(scope=scope)]}, "alice")
+        for scope in ("unknown-prod", "prod-us-east", "reserved_prod"):
+            with self.subTest(accepted=scope):
+                document = assertions_payload(
+                    {"assertions": [reaches(scope=scope)]}, "alice"
+                )
+                self.assertEqual(document["assertions"][0]["scope"], scope)
+
     def test_document_bounds_and_duplicates(self):
         with self.assertRaises(PayloadError):
             assertions_payload({"assertions": [reaches(), reaches(name="b")]}, "a")

@@ -27,7 +27,7 @@ type EcosystemUi = {
 };
 type Runtime = typeof globalThis & {
   ApplicationAtlasEcosystem?: EcosystemUi;
-  __AtlasEcosystemHost?: unknown;
+  __AtlasEcosystemHost?: { assetVersion: string };
   __ADM_FORCE_SPLUNK_BUILD__?: boolean;
 };
 let pending: Promise<EcosystemUi> | undefined;
@@ -54,9 +54,20 @@ export function loadEcosystemUi(): Promise<EcosystemUi> {
       EcosystemReceiptPanel: module.EcosystemReceiptPanel,
     }));
   if (pending) return pending;
+  const version = __ADM_ECOSYSTEM_ASSET_VERSION__;
+  if (
+    runtime.__AtlasEcosystemHost &&
+    runtime.__AtlasEcosystemHost.assetVersion !== version
+  )
+    return Promise.reject(
+      new Error(
+        "The Ecosystem host belongs to a different app version. Reload the page.",
+      ),
+    );
   if (!runtime.__AtlasEcosystemHost)
     Object.defineProperty(runtime, "__AtlasEcosystemHost", {
       value: Object.freeze({
+        assetVersion: version,
         react: React,
         jsxRuntime,
         evidence: Object.freeze({
@@ -79,11 +90,11 @@ export function loadEcosystemUi(): Promise<EcosystemUi> {
   pending = loadVersionedAssetPair({
     js: "pages/ecosystem.js",
     css: "ecosystem.css",
-    version: __ADM_ECOSYSTEM_ASSET_VERSION__,
+    version,
     validate: () => {
       const ui = runtime.ApplicationAtlasEcosystem;
       return (
-        ui?.assetVersion === __ADM_ECOSYSTEM_ASSET_VERSION__ &&
+        ui?.assetVersion === version &&
         typeof ui.EcosystemEvidencePanel === "function" &&
         typeof ui.EcosystemReceiptPanel === "function"
       );
@@ -93,7 +104,7 @@ export function loadEcosystemUi(): Promise<EcosystemUi> {
     .catch((error: unknown) => {
       pending = undefined;
       throw error;
-    }) as Promise<EcosystemUi>;
+    });
   return pending;
 }
 

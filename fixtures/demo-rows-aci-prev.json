@@ -90,22 +90,33 @@
     "captured_at": 1792294645,
     "reviewed_macro_compatibility": {
       "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
-      "reviewed_macro_file_sha256": "0ee5f319762a6b8355ed7e8ed0ec897201a6a50742f2e55898c0e4f85a37c578",
+      "reviewed_macro_file_sha256": "1817b133de9dce656ae999406753e7606e9b4caaa6cc495c058e18288a214847",
       "method": "static review only; no recapture",
-      "reason": "Combined integration of official Splunkbase TA migration (DC Networking 2.0.10 JSON parsing in adm_aci_policy_build, adm_aci_bd_vrf_map, adm_index_appdynamics_topology, adm_appdynamics_topology_schema_qualified, adm_appdynamics_topology_entities, and adm_health_modified_vendor_tas) and KV Store performance optimizations (indexed local=true KV lookups in adm_find(1), adm_find_v2(1), adm_find_network_client(1), and adm_find_network_client_read(1)). None of these stanzas is expanded by adm_graph(4); a stanza-by-stanza comparison with the prior reviewed file confirms all 40 stanzas in the adm_graph(4) expansion closure are byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
+      "reason": "Fixed three review findings outside adm_graph(4): preserved change_request_invalid diagnostic metadata in adm_change_request_window(1), normalized apic_host and sorted by - _time before dedup in adm_aci_bd_vrf_map, and added two-hop has_interface/runs_on SIM joins plus hardened IPv4/IPv6 exclusion regex in adm_appdynamics_topology_entities. None of these stanzas is expanded by adm_graph(4); a stanza-by-stanza comparison with the prior reviewed file confirms all 40 stanzas in the adm_graph(4) expansion closure are byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
       "modified_macro_stanzas": [
-        "adm_aci_policy_build",
-        "adm_find(1)",
-        "adm_find_network_client(1)",
-        "adm_find_v2(1)",
         "adm_aci_bd_vrf_map",
         "adm_appdynamics_topology_entities",
-        "adm_appdynamics_topology_schema_qualified",
-        "adm_find_network_client_read(1)",
-        "adm_health_modified_vendor_tas",
-        "adm_index_appdynamics_topology"
+        "adm_change_request_window(1)"
       ],
       "prior_reviews": [
+        {
+          "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
+          "reviewed_macro_file_sha256": "0ee5f319762a6b8355ed7e8ed0ec897201a6a50742f2e55898c0e4f85a37c578",
+          "method": "static review only; no recapture",
+          "reason": "Combined integration of official Splunkbase TA migration (DC Networking 2.0.10 JSON parsing in adm_aci_policy_build, adm_aci_bd_vrf_map, adm_index_appdynamics_topology, adm_appdynamics_topology_schema_qualified, adm_appdynamics_topology_entities, and adm_health_modified_vendor_tas) and KV Store performance optimizations (indexed local=true KV lookups in adm_find(1), adm_find_v2(1), adm_find_network_client(1), and adm_find_network_client_read(1)). None of these stanzas is expanded by adm_graph(4); a stanza-by-stanza comparison with the prior reviewed file confirms all 40 stanzas in the adm_graph(4) expansion closure are byte-identical. Captured legacy rows remain valid and no recapture is claimed.",
+          "modified_macro_stanzas": [
+            "adm_aci_policy_build",
+            "adm_find(1)",
+            "adm_find_network_client(1)",
+            "adm_find_v2(1)",
+            "adm_aci_bd_vrf_map",
+            "adm_appdynamics_topology_entities",
+            "adm_appdynamics_topology_schema_qualified",
+            "adm_find_network_client_read(1)",
+            "adm_health_modified_vendor_tas",
+            "adm_index_appdynamics_topology"
+          ]
+        },
         {
           "captured_macro_file_sha256": "acb24335ee60e4eacbdd2914783915e926443a4c2e036c54725d819a00150aa0",
           "reviewed_macro_file_sha256": "8dac575b7369bd12a0c5c4e1e213194f52a8628dedd66eb3caf39c0440d755d5",

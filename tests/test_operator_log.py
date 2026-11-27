@@ -519,7 +519,11 @@ class HandlerLoggingTests(unittest.TestCase):
             {
                 "status": 200,
                 "payload": result,
-                "headers": {"Cache-Control": "no-store"},
+                "headers": {
+                    "Cache-Control": "no-store",
+                    "Content-Type": "application/json; charset=utf-8",
+                    "X-Content-Type-Options": "nosniff",
+                },
             },
         )
         self.assertEqual(text, "")

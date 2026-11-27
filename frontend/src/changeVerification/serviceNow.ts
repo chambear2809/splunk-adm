@@ -50,21 +50,45 @@ export function parseServiceNowUtc(value: unknown): number | undefined {
 const text = (value: unknown) =>
   typeof value === "string" && value !== "" ? value : undefined;
 
-/** Fails closed: no record, several sys_ids, capped reads or open work all throw. */
+const hasInvalidUpdates = (value: unknown): boolean => {
+  if (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    value === 0 ||
+    value === "0"
+  )
+    return false;
+  return true;
+};
+
+/** Fails closed: no record, several sys_ids, capped reads, invalid timestamps or open work all throw. */
 export function parseChangeRows(number: string, rows: unknown[]): ChangeRecord {
-  const records = rows.filter(
+  const allRows = rows.filter(
     (r): r is Record<string, unknown> =>
       !!r &&
       typeof r === "object" &&
-      (r as Record<string, unknown>).row_type === "change_request",
+      ((r as Record<string, unknown>).row_type === "change_request" ||
+        (r as Record<string, unknown>).row_type === "change_request_invalid"),
   );
-  if (!records.length)
+  if (!allRows.length)
     throw new Error(
       `No usable snow:change_request record for ${number} in the last 90 days.`,
     );
-  if (records.some((r) => r.records_capped === "1" || r.records_capped === 1))
+  if (allRows.some((r) => r.records_capped === "1" || r.records_capped === 1))
     throw new Error(
       `More than 500 events for ${number}; enter the window manually.`,
+    );
+  const invalidRows = allRows.filter(
+    (r) => r.row_type === "change_request_invalid",
+  );
+  const records = allRows.filter((r) => r.row_type === "change_request");
+  if (
+    invalidRows.length > 0 ||
+    records.some((r) => hasInvalidUpdates(r.invalid_updates))
+  )
+    throw new Error(
+      `${number} has ServiceNow records with an unsupported sys_updated_on timestamp; enter the window manually.`,
     );
   if (records.length > 1)
     throw new Error(

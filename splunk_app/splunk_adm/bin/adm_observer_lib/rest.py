@@ -1,6 +1,7 @@
 """Insert-only observer mapping. Stable keys match the documented KV upsert."""
 
 import hashlib
+import ipaddress
 import json
 import re
 from urllib.parse import urlsplit
@@ -42,17 +43,107 @@ OPTIONAL_FIELDS = (
 )
 
 
+_HOST_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+_ENDS_IN_NUMBER = re.compile(r"(?:[0-9]+|0x[0-9a-f]*)\Z")
+_PORT_TEXT = re.compile(r"[1-9][0-9]{0,4}\Z")
+
+
+def _canonical_ipv6(addr):
+    packed = addr.packed
+    groups = [int.from_bytes(packed[i : i + 2], "big") for i in range(0, 16, 2)]
+    best_start = -1
+    best_len = 0
+    run_start = -1
+    run_len = 0
+    for idx, group in enumerate(groups):
+        if group == 0:
+            if run_start == -1:
+                run_start = idx
+                run_len = 1
+            else:
+                run_len += 1
+            if run_len > best_len:
+                best_start = run_start
+                best_len = run_len
+        else:
+            run_start = -1
+            run_len = 0
+    if best_len < 2:
+        return ":".join(f"{group:x}" for group in groups)
+    left = ":".join(f"{group:x}" for group in groups[:best_start])
+    right = ":".join(f"{group:x}" for group in groups[best_start + best_len :])
+    return f"{left}::{right}"
+
+
+def _valid_bracketed_host(raw_host):
+    if not raw_host or "%" in raw_host:
+        return False
+    try:
+        addr = ipaddress.IPv6Address(raw_host)
+    except ValueError:
+        return False
+    return _canonical_ipv6(addr) == raw_host
+
+
+def _valid_unbracketed_host(raw_host):
+    if not raw_host or len(raw_host) > 253:
+        return False
+    try:
+        addr = ipaddress.IPv4Address(raw_host)
+    except ValueError:
+        pass
+    else:
+        return str(addr) == raw_host
+    labels = raw_host.split(".")
+    if not all(_HOST_LABEL.fullmatch(label) for label in labels):
+        return False
+    return not _ENDS_IN_NUMBER.fullmatch(labels[-1])
+
+
 def _https_origin(value, label):
-    if not isinstance(value, str) or len(value) > 255:
-        raise Invalid(label + " must be an HTTPS URL.")
-    parsed = urlsplit(value)
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > 255
+        or not value.startswith("https://")
+        or any(ord(c) <= 32 or ord(c) >= 127 for c in value)
+        or any(ch in value for ch in ("?", "#", "\\", "@"))
+    ):
+        raise Invalid(label + " must be an HTTPS origin.")
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise Invalid(label + " must be an HTTPS origin.") from exc
+    netloc = parsed.netloc
+    if netloc.startswith("["):
+        close = netloc.find("]")
+        if close == -1:
+            raise Invalid(label + " must be an HTTPS origin.")
+        raw_host = netloc[1:close]
+        port_part = netloc[close + 1 :]
+        valid_host = _valid_bracketed_host(raw_host)
+    else:
+        if "[" in netloc or "]" in netloc:
+            raise Invalid(label + " must be an HTTPS origin.")
+        raw_host, sep, rest = netloc.partition(":")
+        port_part = sep + rest
+        valid_host = _valid_unbracketed_host(raw_host)
+    if port_part and (
+        not port_part.startswith(":") or not _PORT_TEXT.fullmatch(port_part[1:])
+    ):
+        raise Invalid(label + " must be an HTTPS origin.")
     if (
         parsed.scheme != "https"
-        or not parsed.hostname
+        or not valid_host
+        or (port is not None and (not 0 < port < 65536 or port == 443))
         or parsed.username is not None
         or parsed.password is not None
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
     ):
-        raise Invalid(label + " must be an HTTPS URL without credentials.")
+        raise Invalid(label + " must be an HTTPS origin without credentials.")
     return value
 
 

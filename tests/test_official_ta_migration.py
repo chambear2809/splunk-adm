@@ -284,6 +284,13 @@ class OfficialMacrosAndManifestTest(unittest.TestCase):
         for cls in ("fvRsBd", "fvBD", "fvRsCtx", "fvCtx"):
             self.assertIn(f'component="{cls}"', bd_vrf)
         self.assertIn('qualification="unverified_single_pass"', bd_vrf)
+        norm_idx = bd_vrf.index(
+            'eval apic_host=lower(replace(trim(apic_host), ":443$", ""))'
+        )
+        sort_idx = bd_vrf.index("| sort 0 - _time")
+        dedup_idx = bd_vrf.index("| dedup apic_host component dn")
+        self.assertLess(norm_idx, sort_idx)
+        self.assertLess(sort_idx, dedup_idx)
 
         appd_idx = _extract_stanza(text, "adm_index_appdynamics_topology")
         self.assertIn("definition = index=unconfigured_optional", appd_idx)
@@ -297,6 +304,27 @@ class OfficialMacrosAndManifestTest(unittest.TestCase):
         self.assertIn('sourcetype="appdynamics_topology"', appd_ent)
         self.assertIn("sim_network_interface", appd_ent)
         self.assertIn("not_reported_by_topology_input", appd_ent)
+        self.assertIn('relationship_type=="has_interface"', appd_ent)
+        self.assertIn('relationship_type=="runs_on"', appd_ent)
+        self.assertIn("by adm_controller snapshot_id adm_iface_id", appd_ent)
+        self.assertIn("by adm_controller snapshot_id adm_node_id", appd_ent)
+        self.assertIn("by adm_controller snapshot_id adm_server_id", appd_ent)
+        # Relationship joins must execute before relationship rows are filtered out.
+        where_entities_idx = appd_ent.index(
+            '| where record_type=="entity" AND in(entity_kind,'
+        )
+        self.assertLess(
+            appd_ent.index("by adm_controller snapshot_id adm_iface_id"),
+            where_entities_idx,
+        )
+        self.assertLess(
+            appd_ent.index("by adm_controller snapshot_id adm_node_id"),
+            where_entities_idx,
+        )
+        self.assertLess(
+            appd_ent.index("by adm_controller snapshot_id adm_server_id"),
+            where_entities_idx,
+        )
 
         mod_ta = _extract_stanza(text, "adm_health_modified_vendor_tas")
         self.assertIn('sourcetype="adm:aci_poll:v1"', mod_ta)
@@ -305,6 +333,69 @@ class OfficialMacrosAndManifestTest(unittest.TestCase):
         self.assertIn('source="atlas_appdynamics_inventory*"', mod_ta)
         # External HEC collector uses source="appdynamics_inventory" and must not be flagged.
         self.assertNotIn('source="appdynamics_inventory"', mod_ta)
+
+    def test_appdynamics_topology_ip_filter_regex_from_macros_conf(self):
+        """Extract and compile the actual IP-exclusion regex from macros.conf."""
+        text = MACROS_PATH.read_text(encoding="utf-8")
+        appd_ent = _extract_stanza(text, "adm_appdynamics_topology_entities")
+        m = re.search(r'NOT match\(adm_server_ips,\s*"([^"]+)"\)', appd_ent)
+        self.assertIsNotNone(m, "missing adm_server_ips match() filter")
+        assert m is not None
+        # Unescape Splunk SPL eval string literal escapes (\\ -> \) to get the PCRE pattern.
+        pcre = m.group(1).replace("\\\\", "\\")
+        ip_exclude_re = re.compile(pcre)
+
+        excluded = [
+            "127.0.0.1",
+            "127.255.255.254",
+            "0.0.0.0",
+            "169.254.0.1",
+            "169.254.169.254",
+            "224.0.0.1",
+            "229.10.20.30",
+            "230.0.0.1",
+            "239.255.255.250",
+            "::1",
+            "::",
+            "fe80::1",
+            "FE80::1",
+            "fe90::abcd",
+            "fea0::1",
+            "febf::ffff",
+            "FEBF:1234::1",
+            "ff02::1",
+            "FF00::1",
+            "ff0e::1",
+            "FF02::fb",
+        ]
+        for addr in excluded:
+            with self.subTest(excluded=addr):
+                self.assertIsNotNone(
+                    ip_exclude_re.search(addr), f"{addr} should be excluded"
+                )
+
+        allowed = [
+            "::ffff:10.0.0.1",
+            "::FFFF:198.51.100.21",
+            "198.51.100.21",
+            "10.0.0.1",
+            "172.16.0.1",
+            "192.168.1.10",
+            "223.255.255.254",
+            "240.0.0.1",
+            "2001:db8::21",
+            "2001:DB8::21",
+            "fc00::1",
+            "fd12:3456::1",
+            "fec0::1",
+            "fe7f::1",
+            "::2",
+        ]
+        for addr in allowed:
+            with self.subTest(allowed=addr):
+                self.assertIsNone(
+                    ip_exclude_re.search(addr), f"{addr} should be allowed"
+                )
 
     def test_policy_action_json_regex_matches_single_action_and_rejects_deceptive(self):
         """Mirror the JSON key regex in adm_aci_policy_build against tricky payloads."""

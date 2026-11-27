@@ -74,6 +74,42 @@ describe("ServiceNow change windows", () => {
       parseChangeRows("CHG0030001", [row({ work_start: "", start_date: "" })]),
     ).toThrow();
   });
+  it("fails closed on invalid sys_updated_on rows and stale records with invalid_updates", () => {
+    expect(() =>
+      parseChangeRows("CHG0030001", [row({ invalid_updates: "1" })]),
+    ).toThrow(/unsupported sys_updated_on/);
+    expect(() =>
+      parseChangeRows("CHG0030001", [row({ invalid_updates: 2 })]),
+    ).toThrow(/unsupported sys_updated_on/);
+    expect(() =>
+      parseChangeRows("CHG0030001", [
+        {
+          row_type: "change_request_invalid",
+          number: "CHG0030001",
+          records_capped: "0",
+          invalid_updates: "3",
+        },
+      ]),
+    ).toThrow(/unsupported sys_updated_on/);
+    expect(() =>
+      parseChangeRows("CHG0030001", [
+        {
+          row_type: "change_request_invalid",
+          number: "CHG0030001",
+          records_capped: "1",
+          invalid_updates: "501",
+        },
+      ]),
+    ).toThrow(/500/);
+    expect(
+      parseChangeRows("CHG0030001", [row({ invalid_updates: "0" })]).basis,
+    ).toBe("servicenow_actual");
+    for (const malformed of ["-1", -1, "   ", false, []]) {
+      expect(() =>
+        parseChangeRows("CHG0030001", [row({ invalid_updates: malformed })]),
+      ).toThrow(/unsupported sys_updated_on/);
+    }
+  });
   it("validates the change number before building SPL", () => {
     expect(changeRequestSearch("CHG0030001")).toBe(
       "| `adm_change_request_window(CHG0030001)`",

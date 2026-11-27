@@ -97,6 +97,22 @@ function validIndexSelector(indexes: string[]): string {
     .join(" OR ");
 }
 
+const SUMMARY_INDEX_SELECTOR =
+  /^(?:index=[a-z][a-z0-9_-]{0,79})(?: OR index=[a-z][a-z0-9_-]{0,79})*$/;
+
+function validatePlannerSearchInputs(
+  selection: PlannerSelection,
+  summaryIndex: string,
+): PlannerSelection {
+  const valid = validatePlannerSelection(selection);
+  if (
+    valid.scope !== selection.scope ||
+    !SUMMARY_INDEX_SELECTOR.test(summaryIndex)
+  )
+    throw new Error("Invalid planner search selection.");
+  return valid;
+}
+
 const contractFilter = (contract: 1 | 2) =>
   contract === 1
     ? "(isnull(contract_version) OR tonumber(contract_version)=1)"
@@ -106,9 +122,10 @@ const scopePrefix = (
   selection: PlannerSelection,
   summaryIndex: string,
   contract: 1 | 2,
+  upperBound: number,
 ) => {
   const scope = literal(selection.scope, 253);
-  return `search (${summaryIndex}) source="adm:conversation" adm_record="conversation" _time>=${bucketStart(selection.start)} AND _time<${bucketEnd(selection.end)} | where ${contractFilter(contract)} | eval adm_unprotected=if(isnull(rollup_id),1,0) | dedup rollup_id keepempty=true | eval scope=if(scope="default" AND coalesce(tostring(scope_mapping_verified),"0")!="1","unmapped:legacy-default",scope) | where scope="${scope}"`;
+  return `search (${summaryIndex}) source="adm:conversation" adm_record="conversation" _time>=${bucketStart(selection.start)} AND _time<${upperBound} | where ${contractFilter(contract)} | eval adm_unprotected=if(isnull(rollup_id),1,0) | dedup rollup_id keepempty=true | eval scope=if(scope="default" AND coalesce(tostring(scope_mapping_verified),"0")!="1","unmapped:legacy-default",scope) | where scope="${scope}"`;
 };
 
 /**
@@ -121,17 +138,10 @@ export function buildPlannerConversationSearch(
   summaryIndex: string,
   contract: 1 | 2,
 ): string {
-  const valid = validatePlannerSelection(selection);
-  if (
-    valid.scope !== selection.scope ||
-    !/^(?:index=[a-z][a-z0-9_-]{0,79})(?: OR index=[a-z][a-z0-9_-]{0,79})*$/.test(
-      summaryIndex,
-    )
-  )
-    throw new Error("Invalid planner search selection.");
+  const valid = validatePlannerSearchInputs(selection, summaryIndex);
   const cap = PLANNER_LIMITS.conversations;
   const observers = PLANNER_LIMITS.observers;
-  return `${scopePrefix(valid, summaryIndex, contract)} | eval adm_first=tonumber(first_seen), adm_last=tonumber(last_seen), adm_port=if(isnull(tonumber(server_port)),"",tostring(tonumber(server_port))), adm_transport=lower(coalesce(transport,"unknown")), adm_directed=if(direction_basis="initiator" OR direction_basis="port_rule",1,0), adm_rec=tonumber(records), adm_bytes=if(isnull(tonumber(bytes_c2s)) AND isnull(tonumber(bytes_s2c)),null(),coalesce(tonumber(bytes_c2s),0)+coalesce(tonumber(bytes_s2c),0)), adm_sampled=if(tostring(sampled)="1",1,0), adm_observer=coalesce(observer,"unknown"), adm_source=coalesce(flow_source,"unknown") | where isnotnull(client_ip) AND isnotnull(server_ip) AND isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | stats sum(adm_rec) as adm_rec sum(adm_bytes) as adm_bytes min(adm_first) as adm_first max(adm_last) as adm_last max(adm_sampled) as adm_sampled min(adm_directed) as adm_directed sum(adm_unprotected) as adm_unprotected by client_ip server_ip adm_port adm_transport adm_observer adm_source | stats max(adm_rec) as records max(adm_bytes) as bytes min(adm_first) as first max(adm_last) as last max(adm_sampled) as sampled min(adm_directed) as directed dc(adm_observer) as observer_count values(adm_observer) as observers values(adm_source) as sources sum(adm_unprotected) as unprotected by client_ip server_ip adm_port adm_transport | eval observers_capped=if(observer_count>${observers},1,0), observers=mvjoin(mvindex(observers,0,${observers - 1}),"|"), sources=mvjoin(mvindex(sources,0,${observers - 1}),"|") | eventstats count as input_count sum(unprotected) as unprotected_count | sort 0 - records client_ip server_ip adm_port adm_transport | head ${cap + 1} | eval row_type="conversation" | appendpipe [ stats max(input_count) as input_count max(unprotected_count) as unprotected_count count as output_count | eval input_count=coalesce(input_count,0), unprotected_count=coalesce(unprotected_count,0), row_type="completion", schema_version=1, output_capped=if(input_count>${cap},1,0) | fields row_type schema_version input_count output_count output_capped unprotected_count ] | fields row_type schema_version input_count output_count output_capped unprotected_count client_ip server_ip adm_port adm_transport records bytes first last sampled directed observers observers_capped sources`;
+  return `${scopePrefix(valid, summaryIndex, contract, bucketEnd(valid.end))} | eval adm_first=tonumber(first_seen), adm_last=tonumber(last_seen), adm_port=if(isnull(tonumber(server_port)),"",tostring(tonumber(server_port))), adm_transport=lower(coalesce(transport,"unknown")), adm_directed=if(direction_basis="initiator" OR direction_basis="port_rule",1,0), adm_rec=tonumber(records), adm_bytes=if(isnull(tonumber(bytes_c2s)) AND isnull(tonumber(bytes_s2c)),null(),coalesce(tonumber(bytes_c2s),0)+coalesce(tonumber(bytes_s2c),0)), adm_sampled=if(tostring(sampled)="1",1,0), adm_observer=coalesce(observer,"unknown"), adm_source=coalesce(flow_source,"unknown") | where isnotnull(client_ip) AND isnotnull(server_ip) AND isnotnull(adm_first) AND isnotnull(adm_last) AND adm_last>=${valid.start} AND adm_first<${valid.end} | stats sum(adm_rec) as adm_rec sum(adm_bytes) as adm_bytes min(adm_first) as adm_first max(adm_last) as adm_last max(adm_sampled) as adm_sampled min(adm_directed) as adm_directed sum(adm_unprotected) as adm_unprotected by client_ip server_ip adm_port adm_transport adm_observer adm_source | stats max(adm_rec) as records max(adm_bytes) as bytes min(adm_first) as first max(adm_last) as last max(adm_sampled) as sampled min(adm_directed) as directed dc(adm_observer) as observer_count values(adm_observer) as observers values(adm_source) as sources sum(adm_unprotected) as unprotected by client_ip server_ip adm_port adm_transport | eval observers_capped=if(observer_count>${observers},1,0), observers=mvjoin(mvindex(observers,0,${observers - 1}),"|"), sources=mvjoin(mvindex(sources,0,${observers - 1}),"|") | eventstats count as input_count sum(unprotected) as unprotected_count | sort 0 - records client_ip server_ip adm_port adm_transport | head ${cap + 1} | eval row_type="conversation" | appendpipe [ stats max(input_count) as input_count max(unprotected_count) as unprotected_count count as output_count | eval input_count=coalesce(input_count,0), unprotected_count=coalesce(unprotected_count,0), row_type="completion", schema_version=1, output_capped=if(input_count>${cap},1,0) | fields row_type schema_version input_count output_count output_capped unprotected_count ] | fields row_type schema_version input_count output_count output_capped unprotected_count client_ip server_ip adm_port adm_transport records bytes first last sampled directed observers observers_capped sources`;
 }
 
 /** Count summary buckets with any conversation row in the scope, per UTC day. */
@@ -140,10 +150,8 @@ export function buildPlannerCoverageSearch(
   summaryIndex: string,
   contract: 1 | 2,
 ): string {
-  const valid = validatePlannerSelection(selection);
-  if (valid.scope !== selection.scope)
-    throw new Error("Invalid planner search selection.");
-  return `${scopePrefix(valid, summaryIndex, contract)} | stats count by _time | eval adm_day=floor(_time/86400)*86400 | stats count as buckets by adm_day | eval row_type="coverage_day" | appendpipe [ stats count as output_count sum(buckets) as covered_buckets | eval row_type="completion", schema_version=1, covered_buckets=coalesce(covered_buckets,0) ] | fields row_type schema_version adm_day buckets output_count covered_buckets`;
+  const valid = validatePlannerSearchInputs(selection, summaryIndex);
+  return `${scopePrefix(valid, summaryIndex, contract, valid.end)} | stats count by _time | eval adm_day=floor(_time/86400)*86400 | stats count as buckets by adm_day | eval row_type="coverage_day" | appendpipe [ stats count as output_count sum(buckets) as covered_buckets | eval row_type="completion", schema_version=1, covered_buckets=coalesce(covered_buckets,0) ] | fields row_type schema_version adm_day buckets output_count covered_buckets`;
 }
 
 const integer = (value: unknown): number | undefined => {
@@ -324,17 +332,15 @@ export async function loadPlannerDataset(
     )
   )
     throw new Error("Choose a verified routing scope.");
-  const window = {
-    earliest: String(bucketStart(selection.start)),
-    latest: String(bucketEnd(selection.end)),
-  };
+  const earliest = String(bucketStart(selection.start));
   const result = await client.search({
     search: buildPlannerConversationSearch(
       selection,
       summaryIndex,
       config.trafficContract,
     ),
-    ...window,
+    earliest,
+    latest: String(bucketEnd(selection.end)),
     maxRows: PLANNER_LIMITS.conversations + 2,
     allowEmpty: false,
     signal,
@@ -352,7 +358,8 @@ export async function loadPlannerDataset(
       summaryIndex,
       config.trafficContract,
     ),
-    ...window,
+    earliest,
+    latest: String(selection.end),
     maxRows: 40,
     allowEmpty: false,
     signal,

@@ -13,6 +13,7 @@ from .payload import NAME, PRINCIPAL, TOKEN, PayloadError, _text
 KINDS = frozenset({"reaches", "redundant", "no_new_blocked"})
 TRANSPORTS = frozenset({"tcp", "udp", "sctp"})
 SCOPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}\Z")
+RESERVED_SCOPE = re.compile(r"(?i)^(unmapped|unknown|reserved)(:|$)")
 NOTE = re.compile(r"[^\x00-\x1f\x7f]{0,280}\Z")
 MAX_ASSERTIONS = 100
 MAX_DOCUMENT_BYTES = 24 * 1024
@@ -56,7 +57,7 @@ def _scope(value):
     if (
         not isinstance(value, str)
         or not SCOPE.fullmatch(value)
-        or value.lower().startswith("unmapped:")
+        or RESERVED_SCOPE.search(value)
     ):
         raise PayloadError("Assertions require a mapped routing scope.")
     return value

@@ -116,8 +116,63 @@ class ObserverMappingTests(unittest.TestCase):
                 "http://example.com",
                 "https://",
                 "https://user:pw@example.com",
+                "https://host:99999",
+                "https://host:0",
+                "https://host:abc",
+                "https://host/api",
+                "https://host?x=1",
+                "https://host/?x=1",
+                "https://host#top",
+                "https://host?",
+                "https://host#",
+                "https://host\r\n",
+                " https://host",
+                "https://host ",
+                "https://host\t",
+                "https://host\x7f",
+                "https://host name",
+                "https://trusted.com\\evil",
+                "https://host:",
+                "https://[::1]:",
+                "https://host:000443",
+                "https://host<script>",
+                'https://host"quoted"',
+                "https://host;foo",
+                "https://host\u200b",
+                "https://host\x9f",
+                "HTTPS://host",
+                "https://[bad",
+                "https://host]",
+                "https://ho[st]",
+                "https://host:443",
+                "https://host:443/",
+                "https://[2001:db8::1]:443",
+                "https://Host.Example.com",
+                "https://HOST",
+                "https://[fe80::1%25eth0]",
+                "https://[fe80::1%eth0]",
+                "https://[2001:DB8::1]",
+                "https://[2001:0db8::1]",
+                "https://[0:0:0:0:0:0:0:1]",
+                "https://[::ffff:192.0.2.1]",
+                "https://[::ffff:192.0.2.1]/",
+                "https://[2001:db8::1:1:1:1:1]",
+                "https://[2001:0:1:0:0:1::]",
+                "https://010.0.0.1",
+                "https://0x7f.0.0.1",
+                "https://127.1",
+                "https://2130706433",
+                "https://123",
+                "https://foo.123",
+                "https://foo.0x",
+                "https://foo.0x1",
+                "https://999.999.999.999",
+                "https://1.2.3.4.5",
+                "https://1.2.3.04",
+                "https://[127.0.0.1]",
+                "https://" + "a" * 250,
             ):
-                with self.assertRaises(Invalid):
+                with self.subTest(field=field, bad=bad), self.assertRaises(Invalid):
                     validate_mapping(
                         {
                             "observer_kind": "cluster",
@@ -131,6 +186,45 @@ class ObserverMappingTests(unittest.TestCase):
                 {"method": "POST", "payload": "x" * (observer_rest.MAX_BODY_BYTES + 1)},
                 "token",
             )
+
+    def test_accepts_valid_origin_urls(self):
+        for field in (
+            "observability_origin",
+            "controller_origin",
+            "thousandeyes_origin",
+        ):
+            for good in (
+                "https://host",
+                "https://host/",
+                "https://host:8090",
+                "https://host:8090/",
+                "https://app.us1.signalfx.com",
+                "https://198.51.100.10:8443",
+                "https://198.51.100.10/",
+                "https://[2001:db8::1]:8443",
+                "https://[2001:db8::1]/",
+                "https://[::1]",
+                "https://[::]/",
+                "https://[::ffff:c000:201]/",
+                "https://[2001:0:1::1:0:0]",
+                "https://[2001:db8:0:1:1:1:1:1]",
+                "https://[1:0:0:1::1]",
+                "https://foo.0x1g",
+                "https://foo.123a",
+            ):
+                with self.subTest(field=field, good=good):
+                    document = validate_mapping(
+                        {
+                            "observer_kind": "cluster",
+                            "observer": "atlas-k3s",
+                            "scope": "dc1",
+                            field: good,
+                        }
+                    )
+                    self.assertEqual(document[field], good)
+        for bad_direct in ("", None, 123):
+            with self.subTest(bad_direct=bad_direct), self.assertRaises(Invalid):
+                observer_rest._https_origin(bad_direct, "controller_origin")
 
     def test_duplicate_with_changed_optional_field_is_rejected(self):
         doc = validate_mapping(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   pageFromPath,
   pageURL,
@@ -6,6 +6,7 @@ import {
   recoverUrlState,
   SECTION_OF,
   stateParams,
+  writeUrlState,
 } from "./urlState";
 describe("Atlas deep links", () => {
   it("registers Cases as its own navigation section", () => {
@@ -248,5 +249,36 @@ describe("Explore, Admin, trace and device links", () => {
     );
     expect(recoveredScope.state.trace).toBeUndefined();
     expect(recoveredScope.notice).toContain("trace_scope");
+  });
+
+  it("clears stale id query parameter when writeUrlState writes state without device", () => {
+    const replaceState = vi.fn();
+    const dispatchEvent = vi.fn();
+    vi.stubGlobal("window", { dispatchEvent });
+    vi.stubGlobal("location", {
+      pathname: "/en-US/app/splunk_adm/device",
+      search: "?id=leaf-101&custom=keep",
+      hash: "",
+    });
+    vi.stubGlobal("history", { replaceState });
+    try {
+      const state = parseUrlState(new URLSearchParams("mode=live"), true);
+      expect(state.device).toBeUndefined();
+      writeUrlState(state);
+      expect(replaceState).toHaveBeenCalledTimes(1);
+      const writtenUrl = replaceState.mock.calls[0]?.[2] as string;
+      const writtenParams = new URLSearchParams(writtenUrl.split("?")[1] ?? "");
+      expect(writtenParams.has("id")).toBe(false);
+      expect(writtenParams.get("custom")).toBe("keep");
+
+      writeUrlState({ ...state, device: "leaf-202" });
+      const withDeviceUrl = replaceState.mock.calls[1]?.[2] as string;
+      const withDeviceParams = new URLSearchParams(
+        withDeviceUrl.split("?")[1] ?? "",
+      );
+      expect(withDeviceParams.get("id")).toBe("leaf-202");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

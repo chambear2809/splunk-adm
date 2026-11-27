@@ -75,7 +75,7 @@ type page struct {
 	Items []item `json:"items"`
 }
 
-func (k *kubeClient) fetch(ctx context.Context, resource, continuation string, c *Config, budget *int64) (page, error) {
+func (k *kubeClient) fetch(ctx context.Context, resource, continuation string, c *Config) (page, error) {
 	var out page
 	if resource != "nodes" && resource != "pods" {
 		return out, fail("invalid_resource")
@@ -121,7 +121,6 @@ func (k *kubeClient) fetch(ctx context.Context, resource, continuation string, c
 	if int64(len(raw)) > c.MaxPageBytes {
 		return out, fail("page_byte_limit")
 	}
-	*budget += int64(len(raw))
 	if err = json.Unmarshal(raw, &out); err != nil {
 		return out, fail("malformed_response")
 	}

@@ -504,6 +504,7 @@ export function writeUrlState(state: UrlState) {
       "trace_src",
       "trace_dst",
       "trace_scope",
+      "id",
       "facet_identity",
       "facet_port",
       "facet_source",

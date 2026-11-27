@@ -15,7 +15,7 @@ type Element = {
 };
 type Runtime = typeof globalThis & {
   ApplicationAtlasEcosystem?: unknown;
-  __AtlasEcosystemHost?: Record<string, Record<string, unknown>>;
+  __AtlasEcosystemHost?: Record<string, unknown>;
   __ADM_FORCE_SPLUNK_BUILD__?: boolean;
 };
 
@@ -48,7 +48,9 @@ describe("ecosystem optional asset loader", () => {
     const loading = loadEcosystemUi();
     const host = (globalThis as Runtime).__AtlasEcosystemHost!;
     expect(Object.isFrozen(host)).toBe(true);
+    expect(host.assetVersion).toBe("a".repeat(24));
     expect(Object.keys(host).sort()).toEqual([
+      "assetVersion",
       "evidence",
       "evidenceConfig",
       "jsxRuntime",
@@ -57,6 +59,7 @@ describe("ecosystem optional asset loader", () => {
       "searchClient",
       "supplementalEvidence",
     ]);
+    const evidence = host.evidence as Record<string, unknown>;
     for (const name of [
       "EVIDENCE_LIMITS",
       "fingerprint",
@@ -65,11 +68,14 @@ describe("ecosystem optional asset loader", () => {
       "routingScope",
       "validateSelection",
     ])
-      expect(host.evidence[name]).toBeDefined();
-    expect(host.supplementalEvidence.loadSupplementalEvidence).toBeTypeOf(
-      "function",
-    );
-    expect(host.evidenceConfig.evidenceConfigClient).toBeDefined();
+      expect(evidence[name]).toBeDefined();
+    expect(
+      (host.supplementalEvidence as Record<string, unknown>)
+        .loadSupplementalEvidence,
+    ).toBeTypeOf("function");
+    expect(
+      (host.evidenceConfig as Record<string, unknown>).evidenceConfigClient,
+    ).toBeDefined();
     const [style, script] = appended;
     expect(script.src).toBe(
       `https://search.example/app/splunk_adm/pages/ecosystem.js?v=${"a".repeat(24)}`,
@@ -107,5 +113,21 @@ describe("ecosystem optional asset loader", () => {
     expect(appended).toHaveLength(4);
     appended[3].onerror?.();
     await expect(retry).rejects.toThrow("asset unavailable");
+  });
+
+  it("rejects an existing host from a different app version without appending assets", async () => {
+    if (!(globalThis as Runtime).__AtlasEcosystemHost) {
+      const initialAppended = stubPage();
+      const first = await import("./EcosystemLazyEvidence");
+      const initial = first.loadEcosystemUi();
+      initialAppended[1].onerror?.();
+      await initial.catch(() => undefined);
+      vi.resetModules();
+    }
+    const appended = stubPage();
+    vi.stubGlobal("__ADM_ECOSYSTEM_ASSET_VERSION__", "c".repeat(24));
+    const { loadEcosystemUi } = await import("./EcosystemLazyEvidence");
+    await expect(loadEcosystemUi()).rejects.toThrow("different app version");
+    expect(appended).toHaveLength(0);
   });
 });

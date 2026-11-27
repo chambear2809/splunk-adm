@@ -481,8 +481,13 @@ class KvLedgerPerfAndCapsTests(unittest.TestCase):
         self.assertEqual(res["epoch"], 1)
         self.assertEqual(res["residueCount"], 0)
         delete_many_calls = [c for c in store.calls if c[0] == "delete_many"]
-        self.assertEqual(len(delete_many_calls), 1)
-        self.assertEqual(len(delete_many_calls[0][1]), 6)
+        # Roots are deleted in a preceding batch before after_* links / seals.
+        self.assertEqual(len(delete_many_calls), 2)
+        self.assertEqual(delete_many_calls[0][1], ["views_root"])
+        self.assertEqual(len(delete_many_calls[1][1]), 5)
+        self.assertTrue(
+            all(k.startswith("views_after_") for k in delete_many_calls[1][1])
+        )
 
     def test_splunk_collection_store_caps_and_batched_delete_many(self):
         import types
@@ -538,6 +543,337 @@ class KvLedgerPerfAndCapsTests(unittest.TestCase):
             with self.assertRaises(Unavailable):
                 s.delete_many(["../bad_key"])
             self.assertEqual(recorded, [])
+
+    def test_splunk_query_completion_proof_catches_truncation_and_retries_once(self):
+        import json
+        import types
+        from urllib.parse import parse_qs, urlparse
+        from adm_kv_lib import store as store_mod
+
+        s = store_mod.SplunkCollectionStore("tok", "adm_saved_views")
+        fake_resp = types.SimpleNamespace(status=200)
+        all_rows = [{"_key": f"views_after_{i:064x}", "epoch": 1} for i in range(4)]
+
+        # Simulated max_rows_per_query = 2 truncates query(limit=10).
+        def capped_request(path, **kwargs):
+            qs = parse_qs(urlparse(path).query)
+            skip = int(qs.get("skip", ["0"])[0])
+            chunk = all_rows[skip : skip + 2]
+            return fake_resp, json.dumps(chunk).encode()
+
+        fake_capped = types.SimpleNamespace(
+            rest=types.SimpleNamespace(simpleRequest=capped_request)
+        )
+        with patch.dict(
+            sys.modules, {"splunk": fake_capped, "splunk.rest": fake_capped.rest}
+        ):
+            with self.assertRaisesRegex(Unavailable, "completion proof"):
+                s.query({"epoch": 1}, limit=10, sort="_key:1")
+
+        # Concurrent change on attempt 1 retries once and succeeds when attempt 2 is stable.
+        call_count = [0]
+
+        def flaky_then_stable(path, **kwargs):
+            call_count[0] += 1
+            qs = parse_qs(urlparse(path).query)
+            skip = int(qs.get("skip", ["0"])[0])
+            # First attempt's skip=1 returns a shifted/changed slice; second attempt is stable.
+            if call_count[0] == 2:
+                return fake_resp, json.dumps(all_rows[2:]).encode()
+            return fake_resp, json.dumps(all_rows[skip:]).encode()
+
+        fake_flaky = types.SimpleNamespace(
+            rest=types.SimpleNamespace(simpleRequest=flaky_then_stable)
+        )
+        with patch.dict(
+            sys.modules, {"splunk": fake_flaky, "splunk.rest": fake_flaky.rest}
+        ):
+            rows = s.query({"epoch": 1}, limit=10, sort="_key:1")
+            self.assertEqual(rows, all_rows)
+            self.assertEqual(call_count[0], 4)
+
+    def test_read_head_fails_closed_when_query_is_truncated_by_row_cap(self):
+        import json
+        import types
+        from urllib.parse import parse_qs, urlparse
+        from adm_kv_lib import store as store_mod
+
+        mem = RichMemoryStore()
+        seed_ledger = RecordLedger(mem, kind="views", max_records=16)
+        rev = None
+        for i in range(5):
+            rev = seed_ledger.write({"n": i}, rev, f"req-{i}")["committedRevision"]
+
+        # Back SplunkCollectionStore with mem.rows but cap every query at 2 rows.
+        def capped_splunk_request(path, **kwargs):
+            resp = types.SimpleNamespace(status=200)
+            parsed = urlparse(path)
+            if parsed.path.endswith("/adm_saved_views"):
+                qs = parse_qs(parsed.query)
+                filter_doc = json.loads(qs["query"][0])
+                sort = qs.get("sort", ["_key:1"])[0]
+                fields = qs.get("fields", [None])[0]
+                skip = int(qs.get("skip", ["0"])[0])
+                rows = mem.query(filter_doc, limit=100, sort=sort, fields=fields)
+                return resp, json.dumps(rows[skip : skip + 2]).encode()
+            key = parsed.path.rsplit("/", 1)[-1]
+            doc = mem.get(key)
+            if doc is None:
+                return types.SimpleNamespace(status=404), b""
+            return resp, json.dumps(doc).encode()
+
+        fake_splunk = types.SimpleNamespace(
+            rest=types.SimpleNamespace(simpleRequest=capped_splunk_request)
+        )
+        s = store_mod.SplunkCollectionStore("tok", "adm_saved_views")
+        ledger = RecordLedger(s, kind="views", max_records=16)
+        with patch.dict(
+            sys.modules, {"splunk": fake_splunk, "splunk.rest": fake_splunk.rest}
+        ):
+            with self.assertRaises(Unavailable):
+                ledger.read_head()
+
+    def test_read_head_fails_closed_on_unaccounted_or_orphaned_epoch_row(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        r0 = ledger.write({"n": 0}, None, "req-0")["committedRevision"]
+        r1 = ledger.write({"n": 1}, r0, "req-1")["committedRevision"]
+        ledger.write({"n": 2}, r1, "req-2")
+
+        # Delete middle link r1 (simulating mid-purge missing link leaving disconnected r2).
+        r1_key = successor_key("views", r0)
+        store.rows = [row for row in store.rows if row["_key"] != r1_key]
+        with self.assertRaises(Unavailable):
+            ledger.read_head()
+
+    def test_read_head_fails_closed_on_stray_seal_in_active_epoch(self):
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        r0 = ledger.write({"n": 0}, None, "req-0")["committedRevision"]
+        r1 = ledger.write({"n": 1}, r0, "req-1")["committedRevision"]
+        ledger.compact(r1, "compact-1")
+        # Inject an extra seal in epoch 1 that is not start's seal.
+        stray_seal = {
+            "_key": successor_key("views", r0),
+            "format": 3,
+            "epoch": 1,
+            "seal": True,
+            "kind": "views",
+            "previous_revision": r0,
+            "request_id": "stray-seal",
+            "operation_fingerprint": ledger.seal_fingerprint(r0, "stray-seal", 1),
+        }
+        store.rows.append(stray_seal)
+        with self.assertRaises(Unavailable):
+            ledger.read_head()
+
+    def test_read_head_fails_closed_when_successor_or_seal_appears_after_query(self):
+        # Case A: concurrent write appends after head right after epoch query.
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        r0 = ledger.write({"n": 0}, None, "req-0")["committedRevision"]
+        r1 = ledger.write({"n": 1}, r0, "req-1")["committedRevision"]
+
+        real_query = store.query
+        injected = [False]
+
+        def query_then_write(filter_doc, *, limit, sort=None, fields=None):
+            result = real_query(filter_doc, limit=limit, sort=sort, fields=fields)
+            if "$exists" in filter_doc.get("epoch", {}) and not injected[0]:
+                injected[0] = True
+                # Concurrent write lands at successor_key(r1) after query returned.
+                ledger.write({"n": 2}, r1, "req-2")
+            return result
+
+        with patch.object(store, "query", side_effect=query_then_write):
+            with self.assertRaises(Unavailable):
+                ledger.read_head()
+
+        # Case B: concurrent compaction seals head right after epoch query.
+        store2 = RichMemoryStore()
+        ledger2 = RecordLedger(store2, kind="views", max_records=16)
+        h0 = ledger2.write({"n": 0}, None, "req-0")["committedRevision"]
+        h1 = ledger2.write({"n": 1}, h0, "req-1")["committedRevision"]
+        real_query2 = store2.query
+        sealed = [False]
+
+        def query_then_seal(filter_doc, *, limit, sort=None, fields=None):
+            result = real_query2(filter_doc, limit=limit, sort=sort, fields=fields)
+            if "$exists" in filter_doc.get("epoch", {}) and not sealed[0]:
+                sealed[0] = True
+                store2.insert(
+                    {
+                        "_key": successor_key("views", h1),
+                        "format": 3,
+                        "epoch": 1,
+                        "seal": True,
+                        "kind": "views",
+                        "previous_revision": h1,
+                        "request_id": "compact-race",
+                        "operation_fingerprint": ledger2.seal_fingerprint(
+                            h1, "compact-race", 1
+                        ),
+                    }
+                )
+            return result
+
+        with patch.object(store2, "query", side_effect=query_then_seal):
+            with self.assertRaises(Unavailable):
+                ledger2.read_head()
+
+    def test_read_head_does_not_rollback_or_return_absent_during_concurrent_purge(self):
+        # Race 1: roots read before epoch 1 opens; compact() runs and purges epoch 0
+        # (deleting views_root first) before read_head() queries epoch 0.
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        rev = None
+        for i in range(4):
+            rev = ledger.write({"n": i}, rev, f"req-{i}")["committedRevision"]
+
+        real_query = store.query
+        compacted_once = [False]
+
+        def query_with_mid_purge(filter_doc, *, limit, sort=None, fields=None):
+            result = real_query(filter_doc, limit=limit, sort=sort, fields=fields)
+            if filter_doc == {"epoch_root": True} and not compacted_once[0]:
+                compacted_once[0] = True
+                # Compact but stop after deleting phase 1 (root_debris) only.
+                real_dm = store.delete_many
+                dm_calls = [0]
+
+                def partial_delete_many(keys):
+                    dm_calls[0] += 1
+                    if dm_calls[0] == 1:
+                        real_dm(keys)
+                    else:
+                        raise RuntimeError("pause after root deletion")
+
+                with patch.object(
+                    store, "delete_many", side_effect=partial_delete_many
+                ):
+                    with self.assertRaises(Uncertain):
+                        ledger.compact(rev, "compact-1")
+            return result
+
+        with patch.object(store, "query", side_effect=query_with_mid_purge):
+            with self.assertRaises(Unavailable):
+                ledger.read_head()
+
+        # Race 2: full compaction completes and purges epoch 0 between roots query
+        # and epoch-0 query; must fail closed instead of falsely returning "absent".
+        store_abs = RichMemoryStore()
+        ledger_abs = RecordLedger(store_abs, kind="views", max_records=16)
+        r_abs = ledger_abs.write({"n": 0}, None, "req-0")["committedRevision"]
+        real_q_abs = store_abs.query
+        raced_abs = [False]
+
+        def query_then_full_compact(filter_doc, *, limit, sort=None, fields=None):
+            result = real_q_abs(filter_doc, limit=limit, sort=sort, fields=fields)
+            if filter_doc == {"epoch_root": True} and not raced_abs[0]:
+                raced_abs[0] = True
+                ledger_abs.compact(r_abs, "compact-abs")
+            return result
+
+        with patch.object(store_abs, "query", side_effect=query_then_full_compact):
+            with self.assertRaises(Unavailable):
+                ledger_abs.read_head()
+
+        # Race 3: read_head sees epoch 1 in roots, then compaction to epoch 2 purges
+        # epoch 1's seal before read_head calls get(seal_1); must not fall back to
+        # epoch 0 (even if epoch 0 residue still somehow exists) or return "absent".
+        store3 = RichMemoryStore()
+        ledger3 = RecordLedger(store3, kind="views", max_records=16)
+        r0 = ledger3.write({"n": 0}, None, "req-0")["committedRevision"]
+        e1 = ledger3.compact(r0, "compact-1")["committedRevision"]
+        r1 = ledger3.write({"n": 1}, e1, "req-1")["committedRevision"]
+        real_get3 = store3.get
+        raced3 = [False]
+
+        def get_triggers_epoch2(key):
+            if not raced3[0] and key == successor_key("views", r0):
+                raced3[0] = True
+                ledger3.compact(r1, "compact-2")
+            return real_get3(key)
+
+        with patch.object(store3, "get", side_effect=get_triggers_epoch2):
+            with self.assertRaises(Unavailable):
+                ledger3.read_head()
+
+    def test_write_compacted_before_successor_check_returns_superseded_not_conflict(
+        self,
+    ):
+        # Case A: target is still in residue (compaction opened epoch 1 before purge).
+        store = RichMemoryStore()
+        ledger = RecordLedger(store, kind="views", max_records=16)
+        r0 = ledger.write({"n": 0}, None, "req-0")["committedRevision"]
+        target_key = successor_key("views", r0)
+        real_get = store.get
+        compacted = [False]
+
+        def compact_leaving_residue(key):
+            doc = real_get(key)
+            if key == target_key and isinstance(doc, dict) and not compacted[0]:
+                compacted[0] = True
+                # Compact the just-committed write into epoch 1, failing purge so
+                # target_key stays in snap.records as epoch-0 residue.
+                with patch.object(
+                    store, "delete_many", side_effect=RuntimeError("purge paused")
+                ):
+                    with self.assertRaises(Uncertain):
+                        ledger.compact(doc["revision"], "compact-race")
+            return doc
+
+        with patch.object(store, "get", side_effect=compact_leaving_residue):
+            res = ledger.write({"n": 1}, r0, "req-1")
+        self.assertEqual(res["state"], "configured")
+        self.assertEqual(res["payload"], {"n": 1})
+        self.assertEqual(res["requestId"], "req-1")
+        self.assertTrue(res["superseded"])
+        self.assertEqual(res["epoch"], 1)
+        self.assertGreater(res["residueCount"], 0)
+        self.assertTrue(any(r["_key"] == target_key for r in store.rows))
+
+        # Case B: target has already been purged (full compaction completed).
+        store2 = RichMemoryStore()
+        ledger2 = RecordLedger(store2, kind="views", max_records=16)
+        s0 = ledger2.write({"n": 0}, None, "req-0")["committedRevision"]
+        target_key2 = successor_key("views", s0)
+        real_get2 = store2.get
+        compacted2 = [False]
+
+        def compact_and_purge(key):
+            doc = real_get2(key)
+            if key == target_key2 and isinstance(doc, dict) and not compacted2[0]:
+                compacted2[0] = True
+                ledger2.compact(doc["revision"], "compact-full")
+            return doc
+
+        with patch.object(store2, "get", side_effect=compact_and_purge):
+            res2 = ledger2.write({"n": 1}, s0, "req-1")
+        self.assertEqual(res2["state"], "configured")
+        self.assertEqual(res2["payload"], {"n": 1})
+        self.assertEqual(res2["requestId"], "req-1")
+        self.assertTrue(res2["superseded"])
+        self.assertEqual(res2["epoch"], 1)
+        self.assertEqual(res2["residueCount"], 0)
+        self.assertFalse(any(r["_key"] == target_key2 for r in store2.rows))
+
+        # Case C: genuine losing race where a different writer wins target still conflicts.
+        store3 = RichMemoryStore()
+        ledger3 = RecordLedger(store3, kind="views", max_records=16)
+        t0 = ledger3.write({"n": 0}, None, "req-0")["committedRevision"]
+        real_insert3 = store3.insert
+        raced3 = [False]
+
+        def other_writer_wins(document):
+            if not raced3[0]:
+                raced3[0] = True
+                ledger3.write({"n": 999}, t0, "req-winner")
+            return real_insert3(document)
+
+        with patch.object(store3, "insert", side_effect=other_writer_wins):
+            with self.assertRaises(Conflict):
+                ledger3.write({"n": 1}, t0, "req-loser")
 
 
 if __name__ == "__main__":

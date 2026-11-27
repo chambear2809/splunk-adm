@@ -93,12 +93,11 @@ func (r *snapshotReceiver) Shutdown(ctx context.Context) error {
 func (r *snapshotReceiver) collectAndSend(parent context.Context) error {
 	ctx, cancel := context.WithTimeout(parent, r.config.Timeout)
 	defer cancel()
-	var budget int64
-	nodes, err := collect(ctx, "nodes", &r.config, r.fetch, &budget, time.Now)
+	nodes, err := collect(ctx, "nodes", &r.config, r.fetch, time.Now)
 	if err != nil {
 		return inResource("nodes", err)
 	}
-	pods, err := collect(ctx, "pods", &r.config, r.fetch, &budget, time.Now)
+	pods, err := collect(ctx, "pods", &r.config, r.fetch, time.Now)
 	if err != nil {
 		return inResource("pods", err)
 	}

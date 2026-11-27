@@ -170,14 +170,9 @@ class RecordLedger:
         if not valid:
             raise Unavailable()
 
-    def _sealed(self, records, key, epoch):
-        root = records[key]
-        previous, request_id = root.get("previous_revision"), root.get("request_id")
-        if not isinstance(previous, str) or not isinstance(request_id, str):
-            return False
-        seal = records.get(successor_key(self.kind, previous))
+    def _is_valid_seal(self, seal, previous, request_id, epoch):
         return (
-            seal is not None
+            isinstance(seal, dict)
             and seal.get("seal") is True
             and seal.get("epoch") == epoch
             and seal.get("kind") == self.kind
@@ -186,6 +181,14 @@ class RecordLedger:
             and seal.get("operation_fingerprint")
             == self.seal_fingerprint(previous, request_id, epoch)
         )
+
+    def _sealed(self, records, key, epoch):
+        root = records[key]
+        previous, request_id = root.get("previous_revision"), root.get("request_id")
+        if not isinstance(previous, str) or not isinstance(request_id, str):
+            return False
+        seal = records.get(successor_key(self.kind, previous))
+        return self._is_valid_seal(seal, previous, request_id, epoch)
 
     def _verify_head_doc(self, head_meta, head_doc, epoch, is_root):
         if not isinstance(head_doc, dict):
@@ -209,17 +212,14 @@ class RecordLedger:
             ):
                 raise Unavailable()
             payload = json.loads(head_doc["payload_json"])
-            if (
-                head_doc["operation_fingerprint"]
-                != self.fingerprint(
-                    payload,
-                    head_meta["previous_revision"],
-                    head_meta["request_id"],
-                    epoch,
-                    is_root,
-                )
-                or head_doc["revision"]
-                != digest(["revision", head_doc["operation_fingerprint"]])
+            if head_doc["operation_fingerprint"] != self.fingerprint(
+                payload,
+                head_meta["previous_revision"],
+                head_meta["request_id"],
+                epoch,
+                is_root,
+            ) or head_doc["revision"] != digest(
+                ["revision", head_doc["operation_fingerprint"]]
             ):
                 raise Unavailable()
             return payload
@@ -354,31 +354,30 @@ class RecordLedger:
         )
         if not isinstance(roots, list) or len(roots) > bound:
             raise Unavailable(LIMIT_MESSAGE)
-        epoch, start = 0, root_key(self.kind)
+        epoch, start, seal_key = 0, root_key(self.kind), None
         parsed_roots = []
+        seen_roots = set()
         for row in roots:
             if not isinstance(row, dict) or not isinstance(row.get("_key"), str):
                 raise Unavailable()
+            if row["_key"] in seen_roots or row.get("epoch_root") is not True:
+                raise Unavailable()
+            seen_roots.add(row["_key"])
             row_epoch = _epoch_of(row)
             self._check_shape(row, row_epoch)
             parsed_roots.append((row_epoch, row))
+        skipped_unsealed = False
         for row_epoch, root in sorted(parsed_roots, key=lambda item: -item[0]):
             previous, req_id = root.get("previous_revision"), root.get("request_id")
             if not isinstance(previous, str) or not isinstance(req_id, str):
+                skipped_unsealed = True
                 continue
-            seal = self.store.get(successor_key(self.kind, previous))
-            if (
-                isinstance(seal, dict)
-                and seal.get("seal") is True
-                and seal.get("epoch") == row_epoch
-                and seal.get("kind") == self.kind
-                and seal.get("request_id") == req_id
-                and seal.get("previous_revision") == previous
-                and seal.get("operation_fingerprint")
-                == self.seal_fingerprint(previous, req_id, row_epoch)
-            ):
-                epoch, start = row_epoch, root["_key"]
+            candidate_seal_key = successor_key(self.kind, previous)
+            seal = self.store.get(candidate_seal_key)
+            if self._is_valid_seal(seal, previous, req_id, row_epoch):
+                epoch, start, seal_key = row_epoch, root["_key"], candidate_seal_key
                 break
+            skipped_unsealed = True
         epoch_filter = {"epoch": epoch} if epoch else {"epoch": {"$exists": False}}
         rows = self.store.query(
             epoch_filter, limit=bound + 1, sort="_key:1", fields=meta_fields
@@ -397,7 +396,15 @@ class RecordLedger:
                 raise Unavailable()
             records[row["_key"]] = row
         if not records:
-            if epoch:
+            if epoch or parsed_roots:
+                raise Unavailable()
+            recheck_roots = self.store.query(
+                {"epoch_root": True},
+                limit=1,
+                sort="epoch:-1",
+                fields="_key",
+            )
+            if not isinstance(recheck_roots, list) or recheck_roots:
                 raise Unavailable()
             return {
                 "state": "absent",
@@ -408,6 +415,10 @@ class RecordLedger:
                 "maxRecords": self.max_records,
             }
         if start not in records:
+            raise Unavailable()
+        if epoch and (
+            seal_key not in records or not self._sealed(records, start, epoch)
+        ):
             raise Unavailable()
         previous = records[start]["previous_revision"] if epoch else None
         key, chain, ids = start, [], set()
@@ -431,11 +442,60 @@ class RecordLedger:
             ids.add(row["request_id"])
             previous = row["revision"]
             key = successor_key(self.kind, previous)
+        if not chain:
+            raise Unavailable()
+        accounted = {row["_key"] for row in chain}
+        if seal_key is not None:
+            accounted.add(seal_key)
+        if set(records) != accounted:
+            raise Unavailable()
+        head = chain[-1]["revision"]
+        if self.store.get(successor_key(self.kind, head)) is not None:
+            raise Unavailable()
         payload = self._fetch_head_payload(chain, epoch)
+        if len(chain) > 1:
+            start_doc = self.store.get(start)
+            if (
+                not isinstance(start_doc, dict)
+                or start_doc.get("_key") != start
+                or start_doc.get("operation_fingerprint")
+                != records[start].get("operation_fingerprint")
+            ):
+                raise Unavailable()
+        if skipped_unsealed:
+            initial_higher = {
+                root["_key"] for row_epoch, root in parsed_roots if row_epoch > epoch
+            }
+            latest_roots = self.store.query(
+                {"epoch_root": True},
+                limit=bound + 1,
+                sort="epoch:-1",
+                fields=meta_fields,
+            )
+            if not isinstance(latest_roots, list) or len(latest_roots) > bound:
+                raise Unavailable(LIMIT_MESSAGE)
+            latest_higher = set()
+            for row in latest_roots:
+                if not isinstance(row, dict) or not isinstance(row.get("_key"), str):
+                    raise Unavailable()
+                if row.get("epoch_root") is not True:
+                    raise Unavailable()
+                row_epoch = _epoch_of(row)
+                self._check_shape(row, row_epoch)
+                if row_epoch > epoch:
+                    latest_higher.add(row["_key"])
+                    previous_r = row.get("previous_revision")
+                    req_id_r = row.get("request_id")
+                    if isinstance(previous_r, str) and isinstance(req_id_r, str):
+                        seal_r = self.store.get(successor_key(self.kind, previous_r))
+                        if self._is_valid_seal(seal_r, previous_r, req_id_r, row_epoch):
+                            raise Unavailable()
+            if latest_higher != initial_higher:
+                raise Unavailable()
         return {
             "state": "configured" if payload is not None else "absent",
             "payload": payload,
-            "revision": chain[-1]["revision"] if chain else None,
+            "revision": head,
             "epoch": epoch,
             "activeEpochRecords": len(chain),
             "maxRecords": self.max_records,
@@ -474,6 +534,22 @@ class RecordLedger:
             or not TOKEN.fullmatch(expected_revision)
         ):
             raise Invalid("Invalid expected revision.")
+
+    def _matches_write(
+        self, row, target, expected_revision, request_id, fingerprint, revision, epoch
+    ):
+        return (
+            isinstance(row, dict)
+            and row.get("_key") == target
+            and row.get("kind") == self.kind
+            and row.get("previous_revision") == expected_revision
+            and row.get("request_id") == request_id
+            and row.get("operation_fingerprint") == fingerprint
+            and row.get("revision") == revision
+            and row.get("epoch", 0) == epoch
+            and row.get("seal", False) is False
+            and row.get("epoch_root", False) is False
+        )
 
     def write(self, payload, expected_revision, request_id, precheck=None):
         """Append ``payload`` after ``expected_revision``.
@@ -533,21 +609,21 @@ class RecordLedger:
         if epoch:
             document["epoch"] = epoch
         self._insert(document)
+        confirmed_committed = False
         if hasattr(self.store, "get"):
             try:
                 committed = self.store.get(target)
                 if isinstance(committed, dict):
-                    if (
-                        committed.get("_key") == target
-                        and committed.get("kind") == self.kind
-                        and committed.get("previous_revision") == expected_revision
-                        and committed.get("request_id") == request_id
-                        and committed.get("operation_fingerprint") == fingerprint
-                        and committed.get("revision") == document["revision"]
-                        and committed.get("epoch", 0) == epoch
-                        and committed.get("seal", False) is False
-                        and committed.get("epoch_root", False) is False
+                    if self._matches_write(
+                        committed,
+                        target,
+                        expected_revision,
+                        request_id,
+                        fingerprint,
+                        document["revision"],
+                        epoch,
                     ):
+                        confirmed_committed = True
                         next_row = self.store.get(
                             successor_key(self.kind, document["revision"])
                         )
@@ -578,6 +654,28 @@ class RecordLedger:
                 if row["operation_fingerprint"] == fingerprint:
                     return self._verified(row, snap)
                 raise Conflict()
+        if confirmed_committed or self._matches_write(
+            snap.records.get(target),
+            target,
+            expected_revision,
+            request_id,
+            fingerprint,
+            document["revision"],
+            epoch,
+        ):
+            if snap.epoch > epoch:
+                return {
+                    "state": "configured",
+                    "payload": snap.payload,
+                    "committedRevision": document["revision"],
+                    "requestId": request_id,
+                    "superseded": True,
+                    "recordCount": snap.count,
+                    "maxRecords": self.max_records,
+                    "epoch": snap.epoch,
+                    "residueCount": len(snap.debris),
+                }
+            raise Uncertain()
         if target in snap.records:
             raise Conflict()
         raise Uncertain()
@@ -682,25 +780,39 @@ class RecordLedger:
     def _purge(self, snap):
         if not snap.debris:
             return snap
+        root = root_key(self.kind)
+        epoch_prefix = self.kind + "_epoch_"
+        root_debris = sorted(
+            (key for key in snap.debris if key == root or key.startswith(epoch_prefix)),
+            key=lambda key: -(snap.records.get(key, {}).get("epoch", 0)),
+        )
+        other_debris = [
+            key
+            for key in snap.debris
+            if key != root and not key.startswith(epoch_prefix)
+        ]
+        phases = [phase for phase in (root_debris, other_debris) if phase]
         if hasattr(self.store, "delete_many"):
-            try:
-                self.store.delete_many(snap.debris)
-            except Forbidden:
-                raise
-            except Exception as exc:
-                raise Uncertain(
-                    "Compaction cleanup is incomplete. Retry the same request."
-                ) from exc
-        else:
-            for key in snap.debris:
+            for phase in phases:
                 try:
-                    self.store.delete(key)
+                    self.store.delete_many(phase)
                 except Forbidden:
                     raise
                 except Exception as exc:
                     raise Uncertain(
                         "Compaction cleanup is incomplete. Retry the same request."
                     ) from exc
+        else:
+            for phase in phases:
+                for key in phase:
+                    try:
+                        self.store.delete(key)
+                    except Forbidden:
+                        raise
+                    except Exception as exc:
+                        raise Uncertain(
+                            "Compaction cleanup is incomplete. Retry the same request."
+                        ) from exc
         return self.inspect()
 
     def _verified(self, row, snap):

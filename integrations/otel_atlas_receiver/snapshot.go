@@ -57,7 +57,7 @@ type snapshot struct {
 	Manifest record
 	Rows     []record
 }
-type fetcher func(context.Context, string, string, *Config, *int64) (page, error)
+type fetcher func(context.Context, string, string, *Config) (page, error)
 
 func generationID() (string, error) {
 	var b [16]byte
@@ -91,7 +91,7 @@ func validateWindow(started, completed time.Time, startWall, endWall int64) erro
 	}
 	return nil
 }
-func collect(ctx context.Context, resource string, c *Config, fetch fetcher, budget *int64, now func() time.Time) (snapshot, error) {
+func collect(ctx context.Context, resource string, c *Config, fetch fetcher, now func() time.Time) (snapshot, error) {
 	var result snapshot
 	kind, schema := "NodeList", "application_atlas.k8s_node_snapshot.v1"
 	if resource == "pods" {
@@ -118,7 +118,7 @@ func collect(ctx context.Context, resource string, c *Config, fetch fetcher, bud
 		if err := ctx.Err(); err != nil {
 			return result, fail("timeout")
 		}
-		data, err := fetch(ctx, resource, continuation, c, budget)
+		data, err := fetch(ctx, resource, continuation, c)
 		if err != nil {
 			return result, err
 		}

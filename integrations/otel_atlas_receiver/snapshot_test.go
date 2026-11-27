@@ -47,7 +47,7 @@ func TestPaginationCompleteAndEmptyGeneration(t *testing.T) {
 	c := testConfig()
 	responses := []page{mkPage(t, "rv1", "next", node1), mkPage(t, "rv1", "", node2)}
 	i := 0
-	fetch := func(_ context.Context, _ string, cont string, _ *Config, _ *int64) (page, error) {
+	fetch := func(_ context.Context, _ string, cont string, _ *Config) (page, error) {
 		if i == 1 && cont != "next" {
 			t.Fatal("continuation not propagated")
 		}
@@ -55,8 +55,7 @@ func TestPaginationCompleteAndEmptyGeneration(t *testing.T) {
 		i++
 		return p, nil
 	}
-	var budget int64
-	s, err := collect(context.Background(), "nodes", c, fetch, &budget, fixedNow)
+	s, err := collect(context.Background(), "nodes", c, fetch, fixedNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,8 +67,8 @@ func TestPaginationCompleteAndEmptyGeneration(t *testing.T) {
 			t.Fatal("missing generation/fingerprint")
 		}
 	}
-	empty := func(context.Context, string, string, *Config, *int64) (page, error) { return mkPage(t, "rv2", ""), nil }
-	s, err = collect(context.Background(), "nodes", c, empty, &budget, fixedNow)
+	empty := func(context.Context, string, string, *Config) (page, error) { return mkPage(t, "rv2", ""), nil }
+	s, err = collect(context.Background(), "nodes", c, empty, fixedNow)
 	if err != nil || len(s.Rows) != 0 || s.Manifest["expected_count"] != 0 || s.Manifest["records_sha256"] != digest(nil) {
 		t.Fatal("empty generation invalid", err)
 	}
@@ -90,7 +89,7 @@ func TestRejectPartialChangedRVDuplicateAndReuse(t *testing.T) {
 	for name, pages := range cases {
 		t.Run(name, func(t *testing.T) {
 			i := 0
-			fetch := func(context.Context, string, string, *Config, *int64) (page, error) {
+			fetch := func(context.Context, string, string, *Config) (page, error) {
 				if i >= len(pages) {
 					return page{}, errors.New("unexpected fetch")
 				}
@@ -98,8 +97,7 @@ func TestRejectPartialChangedRVDuplicateAndReuse(t *testing.T) {
 				i++
 				return p, nil
 			}
-			var b int64
-			s, e := collect(context.Background(), "nodes", testConfig(), fetch, &b, fixedNow)
+			s, e := collect(context.Background(), "nodes", testConfig(), fetch, fixedNow)
 			if e == nil || s.Manifest != nil || len(s.Rows) != 0 {
 				t.Fatal("invalid generation accepted")
 			}
@@ -126,7 +124,7 @@ func TestRemainingItemCountValidation(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			i := 0
-			fetch := func(context.Context, string, string, *Config, *int64) (page, error) {
+			fetch := func(context.Context, string, string, *Config) (page, error) {
 				if i >= len(test.pages) {
 					return page{}, errors.New("unexpected fetch")
 				}
@@ -134,8 +132,7 @@ func TestRemainingItemCountValidation(t *testing.T) {
 				i++
 				return p, nil
 			}
-			var b int64
-			result, err := collect(context.Background(), "nodes", testConfig(), fetch, &b, fixedNow)
+			result, err := collect(context.Background(), "nodes", testConfig(), fetch, fixedNow)
 			if (err == nil) != test.accepted {
 				t.Fatalf("accepted=%v error=%v", test.accepted, err)
 			}
@@ -155,9 +152,8 @@ func TestWindowRejectsBackwardWallClockDespiteForwardMonotonic(t *testing.T) {
 }
 func TestPodHostAndAddressSemantics(t *testing.T) {
 	p := decodePage(t, `{"kind":"PodList","apiVersion":"v1","metadata":{"resourceVersion":"r"},"items":[{"metadata":{"uid":"p-1","name":"pod-a","namespace":"shop"},"spec":{"nodeName":"node-a","hostNetwork":false},"status":{"podIP":"10.1.0.2","podIPs":[{"ip":"10.1.0.2"}],"phase":"Running"}}]}`)
-	fetch := func(context.Context, string, string, *Config, *int64) (page, error) { return p, nil }
-	var b int64
-	s, e := collect(context.Background(), "pods", testConfig(), fetch, &b, fixedNow)
+	fetch := func(context.Context, string, string, *Config) (page, error) { return p, nil }
+	s, e := collect(context.Background(), "pods", testConfig(), fetch, fixedNow)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -169,23 +165,22 @@ func TestPodHostAndAddressSemantics(t *testing.T) {
 		t.Fatal("inferred node UID")
 	}
 	p.Items[0].Status.PodIP = "10.1.0.3"
-	if _, e = collect(context.Background(), "pods", testConfig(), fetch, &b, fixedNow); e == nil {
+	if _, e = collect(context.Background(), "pods", testConfig(), fetch, fixedNow); e == nil {
 		t.Fatal("inconsistent pod IP accepted")
 	}
 }
 func TestCapsAndTimeout(t *testing.T) {
 	c := testConfig()
 	c.MaxRecords = 1
-	fetch := func(context.Context, string, string, *Config, *int64) (page, error) {
+	fetch := func(context.Context, string, string, *Config) (page, error) {
 		return mkPage(t, "a", "", node1, node2), nil
 	}
-	var b int64
-	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+	if _, e := collect(context.Background(), "nodes", c, fetch, fixedNow); e == nil {
 		t.Fatal("record cap not enforced")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, e := collect(ctx, "nodes", c, fetch, &b, fixedNow); e == nil {
+	if _, e := collect(ctx, "nodes", c, fetch, fixedNow); e == nil {
 		t.Fatal("cancel not honored")
 	}
 	c.Scope = "UNMAPPED:x"
@@ -211,7 +206,7 @@ func TestNoEmitUntilBothListsAndDeliveryError(t *testing.T) {
 		return errors.New("exporter secret must not leak")
 	})
 	r := snapshotReceiver{config: *c, next: next}
-	r.fetch = func(_ context.Context, res, _ string, _ *Config, _ *int64) (page, error) {
+	r.fetch = func(_ context.Context, res, _ string, _ *Config) (page, error) {
 		if res == "nodes" {
 			return mkPage(t, "r", "", node1), nil
 		}
@@ -220,7 +215,7 @@ func TestNoEmitUntilBothListsAndDeliveryError(t *testing.T) {
 	if e := r.collectAndSend(context.Background()); e == nil || calls != 0 {
 		t.Fatal("partial input emitted")
 	}
-	r.fetch = func(_ context.Context, res, _ string, _ *Config, _ *int64) (page, error) {
+	r.fetch = func(_ context.Context, res, _ string, _ *Config) (page, error) {
 		if res == "nodes" {
 			return mkPage(t, "r", "", node1), nil
 		}
@@ -241,7 +236,7 @@ func TestCancellationDuringFinalPodPagePreventsConsumerCall(t *testing.T) {
 	calls := 0
 	next, _ := consumer.NewLogs(func(context.Context, plog.Logs) error { calls++; return nil })
 	r := snapshotReceiver{config: *c, next: next}
-	r.fetch = func(_ context.Context, res, _ string, _ *Config, _ *int64) (page, error) {
+	r.fetch = func(_ context.Context, res, _ string, _ *Config) (page, error) {
 		if res == "nodes" {
 			return mkPage(t, "r", "", node1), nil
 		}
@@ -309,7 +304,7 @@ func TestExporterMetadataAndCompleteManifests(t *testing.T) {
 		return nil
 	})
 	r := snapshotReceiver{config: *c, next: next}
-	r.fetch = func(_ context.Context, res, _ string, _ *Config, _ *int64) (page, error) {
+	r.fetch = func(_ context.Context, res, _ string, _ *Config) (page, error) {
 		if res == "nodes" {
 			return mkPage(t, "r", "", node1), nil
 		}
@@ -333,24 +328,20 @@ func TestPageByteLimitIsPerPageAndReasonsAreFixed(t *testing.T) {
 	})}}
 	c := testConfig()
 	c.MaxPageBytes = int64(len(body))
-	var total int64
 	for i := 0; i < 5; i++ {
-		if _, e := k.fetch(context.Background(), "nodes", "", c, &total); e != nil {
+		if _, e := k.fetch(context.Background(), "nodes", "", c); e != nil {
 			t.Fatalf("page %d rejected by cumulative budget: %v", i, e)
 		}
 	}
-	if total != int64(5*len(body)) {
-		t.Fatal("raw byte accounting incorrect")
-	}
 	c.MaxPageBytes = int64(len(body)) - 1
-	if _, e := k.fetch(context.Background(), "nodes", "", c, &total); e == nil {
+	if _, e := k.fetch(context.Background(), "nodes", "", c); e == nil {
 		t.Fatal("oversized page accepted")
 	} else if reason, _, _ := reasonOf(e); reason != "page_byte_limit" {
 		t.Fatalf("reason %q", reason)
 	}
 	c.MaxPageBytes = 1 << 20
 	status = 403
-	_, e := k.fetch(context.Background(), "nodes", "", c, &total)
+	_, e := k.fetch(context.Background(), "nodes", "", c)
 	reason, _, code := reasonOf(inResource("pods", e))
 	if reason != "http_status" || code != 403 || !strings.Contains(inResource("pods", e).Error(), "pods") {
 		t.Fatalf("status not reported: %v", e)
@@ -363,28 +354,27 @@ func TestPageByteLimitIsPerPageAndReasonsAreFixed(t *testing.T) {
 func TestCollectFailuresCarryReasonAndResource(t *testing.T) {
 	c := testConfig()
 	c.MaxPages = 1
-	fetch := func(context.Context, string, string, *Config, *int64) (page, error) {
+	fetch := func(context.Context, string, string, *Config) (page, error) {
 		return mkPage(t, "a", "next", node1), nil
 	}
-	var b int64
-	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+	if _, e := collect(context.Background(), "nodes", c, fetch, fixedNow); e == nil {
 		t.Fatal("page limit not enforced")
 	} else if reason, _, _ := reasonOf(e); reason != "page_limit" {
 		t.Fatalf("reason %q", reason)
 	}
 	c = testConfig()
 	c.MaxRecords = 1
-	fetch = func(context.Context, string, string, *Config, *int64) (page, error) {
+	fetch = func(context.Context, string, string, *Config) (page, error) {
 		return mkPage(t, "a", "", node1, node2), nil
 	}
-	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+	if _, e := collect(context.Background(), "nodes", c, fetch, fixedNow); e == nil {
 		t.Fatal("record limit not enforced")
 	} else if reason, _, _ := reasonOf(e); reason != "record_limit" {
 		t.Fatalf("reason %q", reason)
 	}
 	c = testConfig()
 	c.MaxBytes = 1024
-	fetch = func(context.Context, string, string, *Config, *int64) (page, error) {
+	fetch = func(context.Context, string, string, *Config) (page, error) {
 		items := []string{}
 		for i := 0; i < 2; i++ {
 			items = append(items, strings.ReplaceAll(strings.ReplaceAll(node1, "uid-1", "uid-"+strings.Repeat("x", 100)+string(rune('a'+i))), "node-a", "node-"+string(rune('a'+i))))
@@ -392,7 +382,7 @@ func TestCollectFailuresCarryReasonAndResource(t *testing.T) {
 		return mkPage(t, "a", "", strings.ReplaceAll(items[0], "10.0.0.1", "10.0.0.5"), items[1]), nil
 	}
 	c.PageSize = 2
-	if _, e := collect(context.Background(), "nodes", c, fetch, &b, fixedNow); e == nil {
+	if _, e := collect(context.Background(), "nodes", c, fetch, fixedNow); e == nil {
 		t.Fatal("output limit not enforced")
 	} else if reason, _, _ := reasonOf(e); reason != "output_limit" {
 		t.Fatalf("reason %q", reason)
@@ -443,14 +433,13 @@ func TestCredentialRotatesAndRedirectStatusFailsClosed(t *testing.T) {
 		}
 		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(`{"kind":"NodeList","apiVersion":"v1","metadata":{"resourceVersion":"r"},"items":[]}`)), Header: make(http.Header)}, nil
 	})}}
-	var b int64
-	if _, e := k.fetch(context.Background(), "nodes", "", testConfig(), &b); e != nil {
+	if _, e := k.fetch(context.Background(), "nodes", "", testConfig()); e != nil {
 		t.Fatal(e)
 	}
 	if e := os.WriteFile(p, []byte("second"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := k.fetch(context.Background(), "nodes", "", testConfig(), &b); e == nil {
+	if _, e := k.fetch(context.Background(), "nodes", "", testConfig()); e == nil {
 		t.Fatal("redirect accepted")
 	}
 }

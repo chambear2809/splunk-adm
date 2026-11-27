@@ -82,6 +82,34 @@ describe("move-group planner searches", () => {
     expect(() =>
       buildPlannerConversationSearch(selection, "index=x | delete", 2),
     ).toThrow("Invalid planner search selection.");
+    for (const badIndex of [
+      "index=x | delete",
+      "index=adm_summary_v2) OR (index=_internal",
+      "",
+      "adm_summary_v2",
+      "index=ADM_UPPER",
+    ]) {
+      expect(() =>
+        buildPlannerConversationSearch(selection, badIndex, 2),
+      ).toThrow("Invalid planner search selection.");
+      expect(() => buildPlannerCoverageSearch(selection, badIndex, 2)).toThrow(
+        "Invalid planner search selection.",
+      );
+    }
+    expect(() =>
+      buildPlannerCoverageSearch(
+        { ...selection, scope: " prod " },
+        "index=adm_summary_v2",
+        2,
+      ),
+    ).toThrow("Invalid planner search selection.");
+    expect(
+      buildPlannerCoverageSearch(
+        selection,
+        "index=adm_summary OR index=adm_summary_v2",
+        2,
+      ),
+    ).toContain("(index=adm_summary OR index=adm_summary_v2)");
   });
 
   it("aggregates per observer before taking the largest observer total", () => {
@@ -107,8 +135,91 @@ describe("move-group planner searches", () => {
       "(isnull(contract_version) OR tonumber(contract_version)=1)",
     );
     const coverage = buildPlannerCoverageSearch(selection, "index=a", 2);
+    expect(coverage).toContain("_time>=86400 AND _time<172800");
     expect(coverage).toContain("stats count by _time");
     expect(coverage).toContain("floor(_time/86400)*86400");
+  });
+
+  it("bounds coverage search strictly before selection.end to match expectedCoverage", () => {
+    const cases = [
+      {
+        name: "UTC midnight aligned end",
+        window: { scope: "prod", start: 86400, end: 172800 },
+        expectedStart: 86400,
+        expectedEnd: 172800,
+      },
+      {
+        name: "mid-day 5-minute aligned end",
+        window: { scope: "prod", start: 86400 - 600, end: 86400 + 900 },
+        expectedStart: 85800,
+        expectedEnd: 87300,
+      },
+      {
+        name: "mid-bucket non-aligned end",
+        window: { scope: "prod", start: 86400, end: 86400 + 901 },
+        expectedStart: 86400,
+        expectedEnd: 87301,
+      },
+      {
+        name: "non-aligned start and end past UTC midnight",
+        window: { scope: "prod", start: 86550, end: 172801 },
+        expectedStart: 86400,
+        expectedEnd: 172801,
+      },
+      {
+        name: "preset selection",
+        window: presetSelection("prod", 86400, 86400 * 3 + 299),
+        expectedStart: 86400 * 2,
+        expectedEnd: 86400 * 3,
+      },
+    ];
+
+    for (const { window, expectedStart, expectedEnd } of cases) {
+      const spl = buildPlannerCoverageSearch(window, "index=adm_summary_v2", 2);
+      expect(spl).toContain(`_time>=${expectedStart} AND _time<${expectedEnd}`);
+      const match = /_time>=(\d+) AND _time<(\d+)/.exec(spl);
+      expect(match).not.toBeNull();
+      const lower = Number(match![1]);
+      const upper = Number(match![2]);
+
+      // Simulate every 5-minute summary bucket from one bucket before start
+      // through one bucket after end (including a bucket at t === window.end).
+      const simulatedByDay = new Map<number, number>();
+      for (let t = lower - 300; t <= upper + 300; t += 300) {
+        if (t >= lower && t < upper) {
+          const day = Math.floor(t / 86400) * 86400;
+          simulatedByDay.set(day, (simulatedByDay.get(day) ?? 0) + 1);
+        }
+      }
+      if (window.end % 300 === 0) {
+        // An aligned end bucket at t === window.end must never be counted.
+        expect(window.end < upper).toBe(false);
+      }
+
+      const expected = expectedCoverage(window);
+      expect([...simulatedByDay]).toEqual(
+        expected.map((d) => [d.day, d.expected]),
+      );
+
+      // Full-coverage rows produced by this search must parse cleanly.
+      const totalBuckets = expected.reduce((n, d) => n + d.expected, 0);
+      const rows = [
+        ...[...simulatedByDay].map(([day, buckets]) => ({
+          row_type: "coverage_day",
+          adm_day: String(day),
+          buckets: String(buckets),
+        })),
+        {
+          row_type: "completion",
+          schema_version: "1",
+          output_count: String(simulatedByDay.size),
+          covered_buckets: String(totalBuckets),
+        },
+      ];
+      const parsed = parsePlannerCoverage(rows, window);
+      expect(parsed.coveredBuckets).toBe(totalBuckets);
+      expect(parsed.expectedBuckets).toBe(totalBuckets);
+    }
   });
 
   it("parses rows strictly and reports the row cap", () => {
@@ -168,11 +279,12 @@ describe("move-group planner searches", () => {
   });
 
   it("derives expected buckets per UTC day and validates coverage rows", () => {
-    const expected = expectedCoverage({
+    const midDayWindow = {
       scope: "prod",
       start: 86400 - 600,
       end: 86400 + 900,
-    });
+    };
+    const expected = expectedCoverage(midDayWindow);
     expect(expected).toEqual([
       { day: 0, buckets: 0, expected: 2 },
       { day: 86400, buckets: 0, expected: 3 },
@@ -193,6 +305,40 @@ describe("move-group planner searches", () => {
       coveredBuckets: 200,
       expectedBuckets: 288,
     });
+    // Reject an out-of-window bucket at selection.end on a UTC midnight boundary
+    // (day 172800 is outside [86400, 172800)).
+    expect(() =>
+      parsePlannerCoverage(
+        [
+          { row_type: "coverage_day", adm_day: "86400", buckets: "288" },
+          { row_type: "coverage_day", adm_day: "172800", buckets: "1" },
+          {
+            row_type: "completion",
+            schema_version: "1",
+            output_count: "2",
+            covered_buckets: "289",
+          },
+        ],
+        selection,
+      ),
+    ).toThrow("coverage row");
+    // Reject an out-of-window bucket at selection.end on a full-coverage final day
+    // (4 buckets > 3 expected on day 86400).
+    expect(() =>
+      parsePlannerCoverage(
+        [
+          { row_type: "coverage_day", adm_day: "0", buckets: "2" },
+          { row_type: "coverage_day", adm_day: "86400", buckets: "4" },
+          {
+            row_type: "completion",
+            schema_version: "1",
+            output_count: "2",
+            covered_buckets: "6",
+          },
+        ],
+        midDayWindow,
+      ),
+    ).toThrow("coverage row");
     expect(() =>
       parsePlannerCoverage(
         [
@@ -252,6 +398,11 @@ describe("move-group planner searches", () => {
       earliest: "86400",
       latest: "173100",
       maxRows: PLANNER_LIMITS.conversations + 2,
+    });
+    expect(search.mock.calls[1][0]).toMatchObject({
+      earliest: "86400",
+      latest: "172800",
+      maxRows: 40,
     });
     await expect(
       loadPlannerDataset(
