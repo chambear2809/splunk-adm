@@ -12,6 +12,9 @@ import { migrationAssetVersion } from "./vite.migration.shared";
 import { segmentationAssetVersion } from "./vite.segmentation.shared";
 import { incidentAssetVersion } from "./vite.incident.shared";
 import { ecosystemAssetVersion } from "./vite.ecosystem.shared";
+import { adminAssetVersion } from "./vite.admin.shared";
+import { o11yAssetVersion } from "./vite.o11y.shared";
+import { endpointsAssetVersion } from "./vite.endpoints.shared";
 
 // Match the release gate in tools/check_release.py.
 const SPLUNK_BUNDLE_CEILING_GZIP = 680 * 1024;
@@ -137,6 +140,9 @@ export default defineConfig({
     ),
     __ADM_INCIDENT_ASSET_VERSION__: JSON.stringify(incidentAssetVersion()),
     __ADM_ECOSYSTEM_ASSET_VERSION__: JSON.stringify(ecosystemAssetVersion()),
+    __ADM_ADMIN_ASSET_VERSION__: JSON.stringify(adminAssetVersion()),
+    __ADM_O11Y_ASSET_VERSION__: JSON.stringify(o11yAssetVersion()),
+    __ADM_ENDPOINTS_ASSET_VERSION__: JSON.stringify(endpointsAssetVersion()),
   },
   build: {
     outDir: "splunk_app/splunk_adm/appserver/static",

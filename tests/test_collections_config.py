@@ -1,6 +1,7 @@
 """KV Store collection schema regressions, without a Splunk server."""
 
 import configparser
+import hashlib
 import json
 from pathlib import Path
 import unittest
@@ -241,6 +242,39 @@ class CollectionsConfigTest(unittest.TestCase):
             "lookup local=true adm_network_client_history native_id AS", nc_read
         )
         self.assertIn("mvcount(adm_ip_key)>=`adm_identity_max_matches`", nc_read)
+
+    def test_cisco_pipeline_interface_matches_shipped_macros(self):
+        macros_text = (APP / "default/macros.conf").read_text(encoding="utf-8")
+        macros = configparser.RawConfigParser(strict=False)
+        macros.read_string(macros_text.replace("\\\n", ""))
+        cpi = json.loads(
+            (APP.parents[1] / "research/cisco-pipeline-interface.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        def check_node(node: object, path: str = "") -> None:
+            if isinstance(node, dict):
+                name = node.get("name") or node.get("macro")
+                if isinstance(name, str) and macros.has_section(name):
+                    actual = macros.get(name, "definition").strip()
+                    actual_sha = hashlib.sha256(actual.encode("utf-8")).hexdigest()
+                    if "before" in node:
+                        with self.subTest(path=f"{path}.before", macro=name):
+                            self.assertEqual(node["before"].strip(), actual)
+                    if "definition" in node:
+                        with self.subTest(path=f"{path}.definition", macro=name):
+                            self.assertEqual(node["definition"].strip(), actual)
+                    if "definition_sha256" in node:
+                        with self.subTest(path=f"{path}.definition_sha256", macro=name):
+                            self.assertEqual(node["definition_sha256"], actual_sha)
+                for key, value in node.items():
+                    check_node(value, f"{path}.{key}")
+            elif isinstance(node, list):
+                for idx, item in enumerate(node):
+                    check_node(item, f"{path}[{idx}]")
+
+        check_node(cpi)
 
 
 if __name__ == "__main__":

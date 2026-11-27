@@ -18,8 +18,8 @@ import { isBlocked, plural, portLabel, warningTitle } from "../glossary";
 import type { View } from "../layout";
 import { MapView } from "../MapView";
 import { Inspector } from "../Inspector";
-import { MapDnsInspection } from "../MapDnsInspection";
-import { MapServiceHealthInspection } from "../MapServiceHealthInspection";
+import { MapDnsLazyInspection } from "../endpoints/EndpointsLazyPage";
+import { MapServiceHealthLazyInspection } from "../o11y/O11yLazyInspection";
 import { deriveFindings } from "../findings";
 import { FindingsList, EvidenceActions } from "../FindingsList";
 import { useHealthStatus } from "../data/healthStatus";
@@ -1639,7 +1639,7 @@ function StandardMapPage({
                 bundle={selectedBundle}
               />
               {selection && (
-                <MapDnsInspection
+                <MapDnsLazyInspection
                   key={`${user ?? "anonymous"}:${graph.snapshot_id}:${selection.kind}:${selection.id}:${mode}`}
                   graph={graph}
                   index={index}
@@ -1649,7 +1649,7 @@ function StandardMapPage({
                 />
               )}
               {selection && (
-                <MapServiceHealthInspection
+                <MapServiceHealthLazyInspection
                   key={`service-health:${graph.snapshot_id}:${selection.kind}:${selection.id}:${mode}`}
                   graph={graph}
                   index={index}

@@ -290,7 +290,9 @@ try {
   stage = "endpoint-ip";
   await page.getByLabel("IP address", { exact: true }).fill("198.51.100.20");
   stage = "endpoint-scope";
-  await page.getByLabel("Verified routing scope", { exact: true }).fill(scope);
+  await page
+    .getByLabel("Verified routing scope", { exact: true })
+    .selectOption(scope);
   stage = "endpoint-start-time";
   await page.getByLabel("Start time", { exact: true }).fill(localDate(start));
   stage = "endpoint-end-time";

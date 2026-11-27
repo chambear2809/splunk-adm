@@ -14,6 +14,7 @@ import { isSafeTime, resolveTime, timeError } from "../data/timeBounds";
 import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
 import { LazyEcosystemReceiptPanel } from "../ecosystem/EcosystemLazyEvidence";
 import { ModifiedVendorTaCallout } from "../components/ModifiedVendorTaCallout";
+import { observerMappingClient } from "../data/observerMappingClient";
 
 /** earliest/latest from the URL; a latest other than now evaluates health at that instant. */
 export function healthWindow(
@@ -113,7 +114,7 @@ export function HealthPage({
           <UnmappedObserversCallout refresh={report} />
           <ModifiedVendorTaCallout
             client={client}
-            live={live}
+            live={live && report?.deployment?.state === "configured"}
             refresh={report}
           />
           <LazyEcosystemReceiptPanel client={client} />
@@ -173,20 +174,19 @@ function UnmappedObserversCallout({ refresh }: { refresh?: unknown }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     const request = new AbortController();
-    void import("../data/observerMappingClient")
-      .then(({ observerMappingClient }) =>
-        observerMappingClient.list(request.signal).then((rows) => {
-          if (request.signal.aborted) return;
-          setFailed(false);
-          setCount(
-            rows.filter(
-              (row) =>
-                row.mapping_status === "unmapped" ||
-                row.scope.toLowerCase().startsWith("unmapped:"),
-            ).length,
-          );
-        }),
-      )
+    void observerMappingClient
+      .list(request.signal)
+      .then((rows) => {
+        if (request.signal.aborted) return;
+        setFailed(false);
+        setCount(
+          rows.filter(
+            (row) =>
+              row.mapping_status === "unmapped" ||
+              row.scope.toLowerCase().startsWith("unmapped:"),
+          ).length,
+        );
+      })
       .catch(() => {
         if (!request.signal.aborted) {
           setFailed(true);

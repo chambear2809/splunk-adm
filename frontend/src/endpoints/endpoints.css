@@ -1,0 +1,4 @@
+/* Optional endpoint investigation and map DNS evidence layout styles. */
+.dns-evidence td {
+  vertical-align: top;
+}

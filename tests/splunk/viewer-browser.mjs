@@ -35,6 +35,9 @@ async function documentMetadata(
   const onCommit = (frame) => {
     if (frame !== page.mainFrame()) return;
     if (committed) {
+      const next = new URL(frame.url());
+      if (next.origin === target.origin && next.pathname === target.pathname)
+        return;
       rejectObservation(
         new Error("Metadata document navigated before completion."),
       );

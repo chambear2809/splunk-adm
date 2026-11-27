@@ -1,0 +1,4 @@
+/* Admin configuration and pipeline health layout styles. */
+.atlas-admin .atlas-admin-panel > h2:first-child {
+  margin-top: 0;
+}

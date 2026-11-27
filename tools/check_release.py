@@ -74,6 +74,21 @@ ECOSYSTEM_MANIFEST_PATH = "splunk_adm/appserver/static/ecosystem-manifest.json"
 ECOSYSTEM_CSS_PATH = "splunk_adm/appserver/static/ecosystem.css"
 MAX_ECOSYSTEM_GZIP_BYTES = 48 * 1024
 MAX_ECOSYSTEM_CSS_BYTES = 16 * 1024
+ADMIN_BUNDLE_PATH = "splunk_adm/appserver/static/pages/admin.js"
+ADMIN_MANIFEST_PATH = "splunk_adm/appserver/static/admin-manifest.json"
+ADMIN_CSS_PATH = "splunk_adm/appserver/static/admin.css"
+MAX_ADMIN_GZIP_BYTES = 48 * 1024
+MAX_ADMIN_CSS_BYTES = 16 * 1024
+O11Y_BUNDLE_PATH = "splunk_adm/appserver/static/pages/o11y.js"
+O11Y_MANIFEST_PATH = "splunk_adm/appserver/static/o11y-manifest.json"
+O11Y_CSS_PATH = "splunk_adm/appserver/static/o11y.css"
+MAX_O11Y_GZIP_BYTES = 40 * 1024
+MAX_O11Y_CSS_BYTES = 16 * 1024
+ENDPOINTS_BUNDLE_PATH = "splunk_adm/appserver/static/pages/endpoints.js"
+ENDPOINTS_MANIFEST_PATH = "splunk_adm/appserver/static/endpoints-manifest.json"
+ENDPOINTS_CSS_PATH = "splunk_adm/appserver/static/endpoints.css"
+MAX_ENDPOINTS_GZIP_BYTES = 64 * 1024
+MAX_ENDPOINTS_CSS_BYTES = 16 * 1024
 ALERT_ACTIONS_PATH = "splunk_adm/default/alert_actions.conf"
 RECOVERY_DOC_PATH = "splunk_adm/docs/RECOVERY.md"
 RETENTION_DOC_PATH = "splunk_adm/docs/RETENTION_MAINTENANCE.md"
@@ -1020,6 +1035,15 @@ STATIC_ALLOWLIST = frozenset(
         ECOSYSTEM_BUNDLE_PATH,
         ECOSYSTEM_MANIFEST_PATH,
         ECOSYSTEM_CSS_PATH,
+        ADMIN_BUNDLE_PATH,
+        ADMIN_MANIFEST_PATH,
+        ADMIN_CSS_PATH,
+        O11Y_BUNDLE_PATH,
+        O11Y_MANIFEST_PATH,
+        O11Y_CSS_PATH,
+        ENDPOINTS_BUNDLE_PATH,
+        ENDPOINTS_MANIFEST_PATH,
+        ENDPOINTS_CSS_PATH,
     }
 )
 
@@ -1528,6 +1552,130 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
         except (ValueError, TypeError, KeyError, AttributeError) as exc:
             raise ValueError(
                 "Ecosystem asset version/hash does not match the main bundle"
+            ) from exc
+    # Admin (Setup & Data health) is an independently versioned optional page
+    # asset. Once the main bundle registers its host, or any one asset is
+    # present, require and validate the complete set.
+    admin_files = {ADMIN_BUNDLE_PATH, ADMIN_MANIFEST_PATH, ADMIN_CSS_PATH}
+    admin_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasAdminHost", b"pages/admin.js")
+    )
+    if admin_registered or admin_files.intersection(files):
+        missing = sorted(admin_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Admin files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[ADMIN_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_ADMIN_GZIP_BYTES
+        ):
+            raise ValueError("Admin optional bundle exceeds its 48 KiB gzip budget")
+        if len(files[ADMIN_CSS_PATH]) > MAX_ADMIN_CSS_BYTES:
+            raise ValueError("Admin optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[ADMIN_MANIFEST_PATH])
+            admin_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(admin_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", admin_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[ADMIN_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[ADMIN_CSS_PATH]).hexdigest()
+                or admin_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or admin_version.encode() not in files[ADMIN_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Admin asset version/hash does not match the main bundle"
+            ) from exc
+    # Splunk Observability Cloud service health inspection is an independently
+    # versioned optional asset. Once the main bundle registers its host, or any
+    # one asset is present, require and validate the complete set.
+    o11y_files = {O11Y_BUNDLE_PATH, O11Y_MANIFEST_PATH, O11Y_CSS_PATH}
+    o11y_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasO11yHost", b"pages/o11y.js")
+    )
+    if o11y_registered or o11y_files.intersection(files):
+        missing = sorted(o11y_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required O11y files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[O11Y_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_O11Y_GZIP_BYTES
+        ):
+            raise ValueError("O11y optional bundle exceeds its 40 KiB gzip budget")
+        if len(files[O11Y_CSS_PATH]) > MAX_O11Y_CSS_BYTES:
+            raise ValueError("O11y optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[O11Y_MANIFEST_PATH])
+            o11y_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(o11y_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", o11y_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[O11Y_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[O11Y_CSS_PATH]).hexdigest()
+                or o11y_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or o11y_version.encode() not in files[O11Y_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "O11y asset version/hash does not match the main bundle"
+            ) from exc
+    # Endpoints investigation and map DNS evidence form an independently
+    # versioned optional asset. Once the main bundle registers its host, or any
+    # one asset is present, require and validate the complete set.
+    endpoints_files = {
+        ENDPOINTS_BUNDLE_PATH,
+        ENDPOINTS_MANIFEST_PATH,
+        ENDPOINTS_CSS_PATH,
+    }
+    endpoints_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasEndpointsHost", b"pages/endpoints.js")
+    )
+    if endpoints_registered or endpoints_files.intersection(files):
+        missing = sorted(endpoints_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Endpoints files: {', '.join(missing)}"
+            )
+        if (
+            len(gzip.compress(files[ENDPOINTS_BUNDLE_PATH], compresslevel=9, mtime=0))
+            > MAX_ENDPOINTS_GZIP_BYTES
+        ):
+            raise ValueError("Endpoints optional bundle exceeds its 64 KiB gzip budget")
+        if len(files[ENDPOINTS_CSS_PATH]) > MAX_ENDPOINTS_CSS_BYTES:
+            raise ValueError("Endpoints optional CSS exceeds its 16 KiB budget")
+        try:
+            manifest = json.loads(files[ENDPOINTS_MANIFEST_PATH])
+            endpoints_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(endpoints_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", endpoints_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[ENDPOINTS_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[ENDPOINTS_CSS_PATH]).hexdigest()
+                or endpoints_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or endpoints_version.encode() not in files[ENDPOINTS_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Endpoints asset version/hash does not match the main bundle"
             ) from exc
     config = configparser.RawConfigParser(strict=True)
     try:

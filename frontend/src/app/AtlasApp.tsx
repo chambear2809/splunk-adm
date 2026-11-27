@@ -2,19 +2,13 @@ import { useState } from "react";
 import { deploymentClient as nativeDeploymentClient } from "../data/deploymentClient";
 import type { DeploymentClient } from "../data/deploymentHealth";
 import { HealthProvider } from "../data/healthStatus";
-import {
-  setupClient as nativeSetupClient,
-  type SetupClient,
-} from "../data/setupClient";
+import type { SetupClient } from "../data/setupClient";
 import { Shell } from "./Shell";
 import { ApplicationsPage } from "../pages/ApplicationsPage";
 import { MapPage } from "../pages/MapPage";
-import { EndpointsPage } from "../pages/EndpointsPage";
-import { EndpointEvidencePanels } from "../EndpointEvidencePanels";
-import { HealthPage } from "../pages/HealthPage";
-import { SetupPage } from "../pages/SetupPage";
+import { EndpointsLazyPage } from "../endpoints/EndpointsLazyPage";
+import { AdminLazyPage } from "../admin/AdminLazyPage";
 import { HelpPage } from "../pages/HelpPage";
-import { AdminPage } from "../pages/AdminPage";
 import { DevicePage } from "../pages/DevicePage";
 import { ExploreTabs } from "../pages/ExploreTools";
 import { ImpactLazyPage } from "../impact/ImpactLazyPage";
@@ -76,19 +70,10 @@ export function AtlasApp({
           <main className="atlas-page atlas-page-wide atlas-explore">
             <h1 className="atlas-visually-hidden">Explore</h1>
             <ExploreTabs active="endpoints" />
-            <EndpointsPage
+            <EndpointsLazyPage
               key={`${user ?? "anonymous"}:${mode}`}
               client={client}
               live={live}
-              renderEvidence={(selection) =>
-                client && live ? (
-                  <EndpointEvidencePanels
-                    key={JSON.stringify(selection)}
-                    selection={selection}
-                    client={client}
-                  />
-                ) : null
-              }
             />
           </main>
         ) : page === "migration" ? (
@@ -117,18 +102,17 @@ export function AtlasApp({
           />
         ) : page === "cases" ? (
           <CasesPage />
-        ) : page === "data_health" ? (
-          <AdminPage tab="data_health">
-            <HealthPage client={client} live={live} timezone={timezone} />
-          </AdminPage>
-        ) : page === "setup" ? (
-          <AdminPage tab="setup">
-            <SetupPage
-              client={setupClient ?? (inSplunk ? nativeSetupClient : undefined)}
-              live={mode === "live"}
-              deploymentClient={deployment}
-            />
-          </AdminPage>
+        ) : page === "data_health" || page === "setup" ? (
+          <AdminLazyPage
+            tab={page}
+            client={client}
+            live={live}
+            setupLive={mode === "live"}
+            timezone={timezone}
+            inSplunk={inSplunk}
+            setupClient={setupClient}
+            deploymentClient={deployment}
+          />
         ) : page === "impact" ? (
           <ImpactLazyPage
             client={client}

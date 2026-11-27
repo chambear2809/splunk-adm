@@ -25,6 +25,7 @@ import {
   type SetupSnapshot,
 } from "../data/setupClient";
 import { ModifiedVendorTaCallout } from "../components/ModifiedVendorTaCallout";
+import { observerMappingClient } from "../data/observerMappingClient";
 
 const Button = toolkitDefault(ButtonExport);
 const Text = toolkitDefault(TextExport);
@@ -1173,17 +1174,15 @@ function ObserverMappingForm({
         const controller = new AbortController();
         submitController.current = controller;
         setBusy(true);
-        void import("../data/observerMappingClient")
-          .then(({ observerMappingClient }) =>
-            observerMappingClient.map(
-              {
-                observer_kind: kind.trim().toLowerCase(),
-                observer: observer.trim().toLowerCase(),
-                scope: scope.trim(),
-                ...(cluster.trim() ? { cluster: cluster.trim() } : {}),
-              },
-              controller.signal,
-            ),
+        void observerMappingClient
+          .map(
+            {
+              observer_kind: kind.trim().toLowerCase(),
+              observer: observer.trim().toLowerCase(),
+              scope: scope.trim(),
+              ...(cluster.trim() ? { cluster: cluster.trim() } : {}),
+            },
+            controller.signal,
           )
           .then(() => {
             if (controller.signal.aborted) return;

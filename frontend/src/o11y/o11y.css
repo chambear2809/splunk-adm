@@ -1,0 +1,4 @@
+/* Optional Splunk Observability Cloud service health inspection styles. */
+.o11y-evidence td {
+  vertical-align: top;
+}
