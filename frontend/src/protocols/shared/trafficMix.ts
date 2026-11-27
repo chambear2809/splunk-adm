@@ -110,7 +110,7 @@ export function buildTrafficMixSearch(options: {
     `| eval ip_family=if(like(src_ip,"%:%") OR like(dest_ip,"%:%"),"IPv6","IPv4")`,
     `| eval proto_num=tonumber(protoid)`,
     `| eval port_num=tonumber(dest_port)`,
-    `| eval row_bytes=coalesce(tonumber(bytes), tonumber(bytes_in)+tonumber(bytes_out), 0)`,
+    `| eval row_bytes=coalesce(tonumber(bytes), if(isnotnull(bytes_in) OR isnotnull(bytes_out), coalesce(tonumber(bytes_in), 0)+coalesce(tonumber(bytes_out), 0), null()), 0)`,
     `| stats sum(row_bytes) AS total_bytes count AS flows BY proto_num port_num ip_family`,
     `| sort 0 -total_bytes -flows`,
     `| head ${limit + 1}`,

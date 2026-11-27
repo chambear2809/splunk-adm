@@ -84,3 +84,9 @@ Unknown keys or out-of-bounds values fail closed at profile validation time.
    - DHCP NAKs, STP RootGuard/TCN, LACP member drops, duplicate ARP, and DHCP snooping alerts sort first in Overview and render in the Swimlane timeline.
    - Switching to **Matrix** displays **Device × Subsystem** (`DHCP`, `STP`, `LACP`, `ARP`, `LLDP`), showing **Not covered** for uncollected subsystems and **None observed** (or **Unknown** when capped) for empty pairs.
    - Selecting any row opens the Detail drawer with Status chip first, DHCP/LACP/STP details, recent mnemonics, Exceptions, and a bounded **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Enabled, no events yet**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** DCN 2.0.10 `w0_n9k_dme_layer2` and NX-OS syslog (`udp://5514`) are enabled; `0` STP, LACP, or DHCP control-plane events arrived in the 60-minute validation window (**None observed**).
+

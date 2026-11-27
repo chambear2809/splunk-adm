@@ -99,3 +99,9 @@ Unknown keys or out-of-bounds values fail closed at profile validation time.
    - Duplicate IPs, MAC moves, ARP spikes, and correlated port flaps sort first in Overview and render on the Swimlane timeline.
    - Switching to **Matrix** displays **Switch / Leaf × VLAN/VNI**, showing **None observed** (or **Unknown** when capped) for empty pairs.
    - Selecting any row opens the Detail drawer with Status chip first, observed MACs/IPs (`<CopyableIp>`), chronological path transitions, ARP rate, correlated port flaps, and a bounded **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `256 of 256` endpoints steady (`0` duplicate IPs, `0` MAC moves) from live `cisco:dc:nd:endpoints`; ARP rate spikes and port flaps truthfully marked **Not covered**.
+

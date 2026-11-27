@@ -79,3 +79,9 @@ Unknown keys or out-of-range values fail closed during profile parsing.
    - `index=<nd_index> sourcetype="cisco:dc:nd:flows" | head 5 | spath path=stats{}.dropPktCount output=_nd_drop_pkts | table _time srcIp dstIp protocolName _nd_drop_pkts`
 2. Open **Application Atlas → Protocols → QoS/DSCP & ICMP**, choose the scope and UTC window, and click **Investigate**.
 3. Confirm remarked flows, PMTUD candidates, and ND fabric drops appear first in Overview, highlight in the Exporter × DSCP Matrix, and open with `literal()`-quoted raw-event links in the Detail drawer.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified** (NetFlow DSCP)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `256 of 256` flows observed (`0` DSCP remarks) from live `stream:netflow`; ICMP/PMTUD and ND fabric drops truthfully marked **Not covered**.
+

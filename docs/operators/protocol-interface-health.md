@@ -83,3 +83,9 @@ Unknown keys or out-of-range values fail closed at profile validation time.
    - `admin=up` + `oper=down` mismatches, CRC/error/discard violations, link flaps, and high utilization sort first in Overview and highlight in Matrix.
    - Link-flap timelines appear in `SwimlaneTimeline` when syslog events exist.
    - Selecting any interface opens the Detail drawer with state, speed/MTU, error breakdown, discards, flaps, utilization, recent syslog mnemonics, and a literal-quoted **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `69 of 69` interfaces healthy (`0` CRC/in/out errors, `0` discards) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`rmonIfIn`, `rmonIfOut`, `rmonEtherStats`); admin/oper state, link flaps, and utilization truthfully marked **Not covered**.
+

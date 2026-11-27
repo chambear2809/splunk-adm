@@ -73,3 +73,9 @@ Unknown keys or out-of-range values fail closed at profile validation time.
    - Flagged `client → resolver` pairs sort to the top of Overview and highlight in Matrix.
    - Selecting any pair opens the Detail drawer with Status first, copyable client/resolver IPs, top failing query domains, answer churn count, Exceptions, and a bounded **Open raw events in Splunk** link.
    - If only `cilium:hubble:flow` is present, resolver latency reports **Not covered** and unflagged pairs never report green `OK`.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Lab only**
+- **Notes:** `stream:dns` remained in Estimate mode on PseudoCo (no capture NIC / 80% license cap) and `cilium:hubble:flow` had 0 events in the validation window. Production Hubble DNS SPL (`flow.l7.dns.*`) is verified in the Docker Splunk lab (`tests/splunk/test_protocol_lenses.py::test_dns_ops_hubble_search_returns_l7_dns_fields`).
+

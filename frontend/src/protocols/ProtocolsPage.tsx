@@ -334,7 +334,29 @@ export function ProtocolsPage({
         ? { earliest: params.earliest, latest: params.latest }
         : defaultWindow();
     const activeScope = params.scope ?? scopes[0] ?? "";
-    if (lensComponent) {
+    if (configState === "error") {
+      return (
+        <main className="pl-page" data-testid="protocol-lens-config-error">
+          <header className="pl-header">
+            <div className="pl-header-left">
+              <button type="button" className="pl-back-btn" onClick={backToHub}>
+                ← Protocols
+              </button>
+              <h1 className="pl-title">{activeLens.title}</h1>
+            </div>
+          </header>
+          <ProtocolStateBanner
+            state="unavailable"
+            reason={
+              configError ?? "Protocol source configuration could not be read."
+            }
+            onAction={() => setConfigRevision((v) => v + 1)}
+            actionLabel="Retry"
+          />
+        </main>
+      );
+    }
+    if (lensComponent && configState !== "loading") {
       const Lens = lensComponent;
       return (
         <Lens

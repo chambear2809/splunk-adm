@@ -83,3 +83,9 @@ Unknown keys or out-of-range values fail closed during profile validation.
    - Overview shows a single-sentence verdict, up to 4 KPI tiles, flagged-first device rows with `Show all (N)`, the chronological **Device timeline** (`SwimlaneTimeline`), and the **Operational domains** distribution bar.
    - Matrix shows **Device × operational domain** (`HeatMatrix`) with `None observed` when uncapped and `Unknown` when capped or partial.
    - Clicking any device row, timeline dot, or matrix cell opens the detail drawer with Status first, transition history, the HSRP/VRRP syslog qualification note, and a `literal()`-quoted **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Enabled, no events yet**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `udp://5514` (`cisco:dc:nexus9k:syslog`) is active on all 7 switches (`16` initial config/boot syslog events confirmed in Wave 0); `0` link, routing, STP, or HSRP/VRRP state transitions occurred during the quiet 60-minute validation window (**None observed**).
+

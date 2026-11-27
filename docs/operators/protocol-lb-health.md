@@ -82,3 +82,9 @@ Unknown keys or out-of-range values fail closed during profile parsing.
    - `index=<aws_index> (sourcetype="aws:elb:accesslogs" OR sourcetype="aws:alb:accesslogs" OR sourcetype="aws:nlb:accesslogs") | head 5 | table _time elb target_group target_ip elb_status_code target_status_code error_reason tls_alert verify_status`
 2. Open **Application Atlas → Protocols → Load Balancer Pool Health**, select the scope and UTC window, and click **Investigate**.
 3. Confirm `LB_FAILED`, ALB balancer-vs-target 5xx splits, and NLB TLS failures sort first in Overview, highlight in the VIP × Pool Member Matrix, and open with `literal()`-quoted raw-event links in the Detail drawer.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Lab only**
+- **Notes:** No F5 BIG-IP, AWS ALB, or AWS NLB sources exist on PseudoCo. Verified via unit and Playwright fixture tests.
+

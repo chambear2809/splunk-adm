@@ -102,3 +102,9 @@ Unknown keys or out-of-range values fail closed during profile parsing.
    - `index=<syslog_index> (sourcetype="cisco:ios" OR sourcetype="cisco:dc:nexus9k:syslog" OR sourcetype="cisco:aci" OR sourcetype="cisco:dc:aci:syslog") | stats max(_time) AS last_seen count BY host sourcetype | head 5 | table host sourcetype last_seen count`
 2. Open **Application Atlas → Protocols → Management-Plane Hygiene**, select the scope and UTC window, and click **Investigate**.
 3. Confirm SNMPv1/v2c, SNMP SET writes, cleartext FTP/Telnet/TFTP/HTTP sessions, and **Receipt gap** rows sort first, populate the `Findings by category` distribution bar and Manager × Target matrix, and open with remediation guidance and `literal()`-quoted raw-event links in the Detail drawer.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified** (NetFlow cleartext)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `25 of 33` management items flagged (`Cleartext HTTP`, `168` sessions across live `stream:netflow`); SNMPv1/v2c and syslog receipt gaps truthfully marked **Not covered**.
+

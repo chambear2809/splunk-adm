@@ -666,4 +666,50 @@ describe("investigateInterfaceHealth (runner, degraded coverage, stale config)",
       expect(spl).toContain(`"${cat}"`);
     }
   });
+
+  it("maps DCN 2.0.10 rmonIfIn/rmonIfOut/rmonEtherStats Row_info counters in SPL and never reports ok when all rows are not_covered", async () => {
+    const spl = buildInterfaceDmeSearch({ index: "cisco_dc", maxRows: 256 });
+    expect(spl).toContain(
+      "if(component==\"rmonIfIn\", 'Row_info.errors', null())",
+    );
+    expect(spl).toContain(
+      "if(component==\"rmonIfOut\", 'Row_info.errors', null())",
+    );
+    expect(spl).toContain("'Row_info.cRCAlignErrors'");
+    expect(spl).toContain(
+      "if(component==\"rmonIfIn\", 'Row_info.discards', null())",
+    );
+    expect(spl).toContain(
+      "if(component==\"rmonIfOut\", 'Row_info.discards', null())",
+    );
+    expect(spl).toContain("'Row_info.dropEvents'");
+
+    const client: SearchClient = {
+      search: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/1]/dbgIfIn",
+          },
+        ],
+        truncated: false,
+        warnings: [],
+        errors: [],
+      }),
+    };
+    const res = await investigateInterfaceHealth(
+      client,
+      makeRequest(),
+      makeConfig([makeProfile({ extra: { sourceKind: "dme" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].status).toBe("not_covered");
+    expect(res.verdictStatus).toBe("not_covered");
+    expect(res.coverageStatus).toBe("not_covered");
+    expect(res.verdict).toContain("not covered");
+  });
 });

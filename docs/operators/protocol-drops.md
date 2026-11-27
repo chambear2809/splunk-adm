@@ -111,3 +111,9 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 1. Confirm drop events exist in the target index (`index=cisco_secure_fw sourcetype="cisco:sfw:estreamer" AC_RuleAction="*Block*" | head 5 | table _time Device InitiatorIP ResponderIP ResponderPort AC_RuleAction AccessControlRuleName`).
 2. Open **Application Atlas → Protocols → Blocked Traffic & Drops**, choose scope and UTC window, and click **Investigate**.
 3. Verify each source displays its native enforcer (`FTD`, `Hubble`, `Nexus Dashboard`, `ACI`, `Firewall`) and native rule/reason, `HeatMatrix` shows `Source × Destination` drops, and clicking a row opens the detail drawer with a bounded raw-events Splunk link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `44 of 44` blocked flows attributed (`FTD Block`, `243` drop events, `1.2k` dropped packets) from live `cisco:sfw:estreamer` (`fmcv01.pseudo.co`). Nexus Dashboard `stats{}.dropPktCount>0` brace-field SPL is also lab-verified (`tests/splunk/test_protocol_lenses.py::test_drops_nd_brace_field_search_returns_only_drop_rows`).
+

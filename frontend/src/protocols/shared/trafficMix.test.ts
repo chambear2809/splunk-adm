@@ -45,6 +45,9 @@ describe("protocol traffic mix", () => {
     expect(spl).toContain('sourcetype="stream:netflow"');
     expect(spl).toContain("| head 65");
     expect(spl).toContain(
+      "if(isnotnull(bytes_in) OR isnotnull(bytes_out), coalesce(tonumber(bytes_in), 0)+coalesce(tonumber(bytes_out), 0), null())",
+    );
+    expect(spl).toContain(
       "| table proto_num port_num ip_family total_bytes flows",
     );
     expect(spl).not.toContain("_raw");

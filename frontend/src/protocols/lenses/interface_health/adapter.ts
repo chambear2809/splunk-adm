@@ -135,15 +135,15 @@ export function buildInterfaceDmeSearch(options: {
     `oper_state=coalesce(oper_state, operStatus, operSt, 'Row_info.operSt'), ` +
     `speed=coalesce(speed, portSpeed, eth_speed, 'Row_info.speed'), ` +
     `mtu=coalesce(mtu, eth_mtu, 'Row_info.mtu'), ` +
-    `in_errors=coalesce(in_errors, inErrors, eth_inerr, 'Row_info.inErrors'), ` +
-    `out_errors=coalesce(out_errors, outErrors, eth_outerr, 'Row_info.outErrors'), ` +
-    `crc_errors=coalesce(crc_errors, crcErrors, eth_crc, 'Row_info.crcErrors'), ` +
-    `in_discards=coalesce(in_discards, inDiscards, eth_indiscard, 'Row_info.inDiscards'), ` +
-    `out_discards=coalesce(out_discards, outDiscards, eth_outdiscard, 'Row_info.outDiscards'), ` +
-    `rx_drops=coalesce(rx_drops, rxDrops, 'Row_info.rxDrops'), ` +
+    `in_errors=coalesce(in_errors, inErrors, eth_inerr, 'Row_info.inErrors', if(component=="rmonIfIn", 'Row_info.errors', null())), ` +
+    `out_errors=coalesce(out_errors, outErrors, eth_outerr, 'Row_info.outErrors', if(component=="rmonIfOut", 'Row_info.errors', null())), ` +
+    `crc_errors=coalesce(crc_errors, crcErrors, eth_crc, 'Row_info.crcErrors', 'Row_info.cRCAlignErrors'), ` +
+    `in_discards=coalesce(in_discards, inDiscards, eth_indiscard, 'Row_info.inDiscards', if(component=="rmonIfIn", 'Row_info.discards', null())), ` +
+    `out_discards=coalesce(out_discards, outDiscards, eth_outdiscard, 'Row_info.outDiscards', if(component=="rmonIfOut", 'Row_info.discards', null())), ` +
+    `rx_drops=coalesce(rx_drops, rxDrops, 'Row_info.rxDrops', 'Row_info.dropEvents'), ` +
     `tx_drops=coalesce(tx_drops, txDrops, 'Row_info.txDrops'), ` +
-    `in_octets=coalesce(in_octets, inOctets, rx_bytes, eth_inbytes, 'Row_info.inOctets'), ` +
-    `out_octets=coalesce(out_octets, outOctets, tx_bytes, eth_outbytes, 'Row_info.outOctets'), ` +
+    `in_octets=coalesce(in_octets, inOctets, rx_bytes, eth_inbytes, 'Row_info.inOctets', if(component=="rmonIfIn", 'Row_info.octets', null())), ` +
+    `out_octets=coalesce(out_octets, outOctets, tx_bytes, eth_outbytes, 'Row_info.outOctets', if(component=="rmonIfOut", 'Row_info.octets', null())), ` +
     `utilization_pct=coalesce(utilization_pct, interfaceRateIngress), ` +
     `flap_count=coalesce(flap_count, eth_link_flapped) `;
   const tableClause = buildAllowedFieldsClause(
@@ -1371,14 +1371,19 @@ export function buildInterfaceHealthAnalysis(options: {
   } else if (sourceMode === "syslog_only" && !anyCounterRows) {
     verdict = `Syslog events only (${rows.length} ${rows.length === 1 ? "interface" : "interfaces"} observed) — DME error counters and utilization are not covered.`;
     verdictStatus = "not_covered";
+  } else if (rows.every((r) => r.status === "not_covered")) {
+    verdict = `${rows.length} ${rows.length === 1 ? "interface" : "interfaces"} observed, but error counters, link state, and utilization fields are not covered.`;
+    verdictStatus = "not_covered";
   } else {
     verdict = `${rows.length} of ${rows.length} ${rows.length === 1 ? "interface" : "interfaces"} healthy with no counter, flap, or state exceptions.`;
     verdictStatus = "ok";
   }
 
+  const allRowsUncovered =
+    rows.length > 0 && rows.every((r) => r.status === "not_covered");
   const coverageStatus: ProtocolStatus = anyPartial
     ? "attention"
-    : sourceMode === "syslog_only" && !anyCounterRows
+    : (sourceMode === "syslog_only" && !anyCounterRows) || allRowsUncovered
       ? "not_covered"
       : "ok";
   const activeCount = outcomes.filter(

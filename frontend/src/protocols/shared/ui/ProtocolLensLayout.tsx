@@ -133,13 +133,21 @@ export function ProtocolLensLayout<
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen, onCloseDrawer]);
 
+  const DEFAULT_HEALTHY_PREVIEW_ROWS = 20;
   const safeColumns = columns.slice(0, 8);
   const flagged = rows.filter((r) => r.attention);
   const sortedRows = [...flagged, ...rows.filter((r) => !r.attention)];
-  const visibleRows =
-    !showAll && flagged.length > 0 && flagged.length < sortedRows.length
+  const canCollapseFlagged =
+    flagged.length > 0 && flagged.length < sortedRows.length;
+  const canCollapseHealthy =
+    flagged.length === 0 && sortedRows.length > DEFAULT_HEALTHY_PREVIEW_ROWS;
+  const visibleRows = showAll
+    ? sortedRows
+    : canCollapseFlagged
       ? flagged
-      : sortedRows;
+      : canCollapseHealthy
+        ? sortedRows.slice(0, DEFAULT_HEALTHY_PREVIEW_ROWS)
+        : sortedRows;
 
   const isLoading = banner?.state === "loading";
   const hideBody = banner ? HIDE_BODY_STATES.has(banner.state) : false;
@@ -369,7 +377,7 @@ export function ProtocolLensLayout<
                       </tbody>
                     </table>
                   </div>
-                  {flagged.length > 0 && flagged.length < sortedRows.length ? (
+                  {canCollapseFlagged || canCollapseHealthy ? (
                     <div className="pl-show-all">
                       <button
                         type="button"
@@ -377,7 +385,9 @@ export function ProtocolLensLayout<
                         onClick={() => setShowAll((v) => !v)}
                       >
                         {showAll
-                          ? `Show flagged only (${flagged.length})`
+                          ? canCollapseFlagged
+                            ? `Show flagged only (${flagged.length})`
+                            : `Show top ${DEFAULT_HEALTHY_PREVIEW_ROWS}`
                           : `Show all (${sortedRows.length})`}
                       </button>
                     </div>

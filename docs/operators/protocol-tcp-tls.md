@@ -73,3 +73,9 @@ Unknown keys or out-of-range values fail closed at profile validation time.
    - Flagged pairs sort to the top of Overview and highlight in Matrix.
    - Selecting any pair opens the Detail drawer with RTT p50/p95, retransmits/resets, TLS certificate details, and a bounded **View raw events** link.
    - If only `stream:netflow` is present, pairs display **Not covered** (never green `OK`) and flow volume / destination ports remain visible.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified** (NetFlow fallback)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `125` pairs, `1.6 MiB`, `256` flow records from `stream:netflow`; RTT and TLS posture truthfully reported as **Not covered** (`stream:tcp` kept in Estimate mode under the 80% daily license cap with no SPAN capture NIC).
+

@@ -87,3 +87,9 @@ Unknown keys or out-of-range values fail closed at profile validation time.
    - Overview and Matrix never display `user_id` or `calling_station_id`.
    - Unconfigured protocols appear as **Not covered** in the Matrix, and missing sub-metrics appear as **Not covered** rather than `—`.
    - Selecting any row opens the Detail Drawer with **Status** first, findings in `<ul className="pl-kv-list">`, `<CopyableIp>` controls, and a bounded **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Lab only**
+- **Notes:** Splunk Stream L7 wire streams (`smb`, `nfs`, `ldap`, `radius`, `sip`, `rtp`, `rtcp`) remain in Estimate mode on PseudoCo (no capture NIC / 80% daily license cap). Verified via unit and Playwright fixture tests.
+

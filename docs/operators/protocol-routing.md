@@ -78,3 +78,9 @@ Unknown keys or out-of-range values fail closed during profile validation.
    - Down or flapping peers sort to the top of Overview and appear in the **Adjacency transitions** swimlane timeline.
    - The **Matrix** tab renders both the **Device ↔ peer adjacencies** graph (`AdjacencyOverlay`) and **Device × peer routing state** grid (`HeatMatrix`).
    - Selecting any peer opens the detail drawer with Status chip first, copyable peer IP, VRF, ASN, state, flap count, recent mnemonics, and a bounded **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Live verified**
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `14 of 14` BGP sessions healthy (`Established`, `0` flaps) across all 6 Nexus switches (`198.18.131.1..6`) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`bgpPeerEntry`).
+

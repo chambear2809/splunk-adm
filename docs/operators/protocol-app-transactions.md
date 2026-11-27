@@ -71,3 +71,9 @@ Unknown keys or out-of-range thresholds fail closed during profile validation.
    - Flagged services sort first in Overview; healthy services sit behind **Show all (n)**.
    - Client × Server Matrix marks unobserved pairs as **None observed** when complete and **Unknown** when capped/partial.
    - Detail Drawer displays **Status** first, sanitized `uri_path` / `dbname` breakdowns, privacy boundary notice, and a `literal()`-quoted **Open raw events in Splunk** link.
+
+## PseudoCo Live Validation
+
+- **Verdict:** **Lab only**
+- **Notes:** Splunk Stream HTTP/DB wire streams (`http`, `mysql`, `postgres`, `tds`, `tns`) remain in Estimate mode on PseudoCo (no capture NIC / 80% daily license cap). Verified via unit and Playwright fixture tests.
+
