@@ -82,6 +82,6 @@ Unknown keys or out-of-range values fail closed during profile parsing.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Live verified** (NetFlow DSCP)
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `256 of 256` flows observed (`0` DSCP remarks in the 256-row capped sample) from live `stream:netflow`; ICMP/PMTUD and ND fabric drops truthfully marked **Not covered**. Use the **Source**, **Dest**, **Port**, and **A↔B** bidirectional filters (or **Focus flow** in the drawer) to isolate a specific conversation below the row cap.
+- **Verdict:** **Live verified** (NetFlow DSCP + `stream:icmp`)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `247` flows healthy across live `stream:netflow` (DSCP consistency) and scoped `stream:icmp` (`0` ICMP errors); ND fabric drops truthfully marked **Not covered**. Use the **Source**, **Dest**, **Port**, and **A↔B** bidirectional filters (or **Focus flow** in the drawer) to isolate a specific conversation below the row cap.
 

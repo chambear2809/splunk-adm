@@ -28,6 +28,11 @@ description = "Bounded protocol-lens worker. Writes only the named lens paths; d
 config_file = "./agents/protocol_worker.toml"
 nickname_candidates = ["protocol-worker", "protocol_worker"]
 
+[agents.ecosystem_worker]
+description = "Bounded non-lens network ecosystem worker. Writes only the named module, fixture, lab test, and operator doc paths; does not run git or package builds."
+config_file = "./agents/ecosystem_worker.toml"
+nickname_candidates = ["ecosystem-worker", "ecosystem_worker"]
+
 # Operator setup skills (Splunk platform, Cisco DC Networking/ACI, Isovalent,
 # Stream, etc.) vendored at vendor/splunk-cisco-skills (pinned submodule). The
 # path is explicit because `git rev-parse --show-toplevel` from this repo

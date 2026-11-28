@@ -1,8 +1,8 @@
 # Operator Guide: HTTP & DB Transactions (`app_transactions`)
 
-**Status:** Staged (synthetic fixture-verified; not yet qualified against a live deployed feed)
+**Status:** Live-verified on PseudoCo (`otel:traces`) and fixture-verified for Splunk Stream (`stream:http`, `stream:mysql`, `stream:postgres`, `stream:tds`, `stream:tns`)
 
-The **HTTP & DB Transactions** lens tracks golden signals (transaction rate, error rate, and p50/p95 latency) per HTTP service and SQL database endpoint across **Splunk Stream** wire telemetry without collecting SQL query text, bind variable values, HTTP query strings, form payloads, or cookies.
+The **HTTP & DB Transactions** lens tracks golden signals (transaction rate, error rate, and p50/p95 latency) per HTTP service and SQL database endpoint across **Splunk Stream** wire telemetry and **OpenTelemetry** (`otel:traces`) spans without collecting SQL query text (`query`, `sql_statement`, `db.statement`), bind variable values, HTTP query strings, form payloads, or cookies.
 
 ## 1. Supported Data Sources
 
@@ -10,6 +10,7 @@ The **HTTP & DB Transactions** lens tracks golden signals (transaction rate, err
 | --- | --- | --- | --- |
 | HTTP | `stream:http` | Splunk Stream (`Splunk_TA_stream` / `splunk_app_stream` 8.1.6+) | Request rate, HTTP status (`4xx`/`5xx`), sanitized `uri_path` (query strings stripped), `site`, `time_taken` / `response_time` (µs), `bytes_in` / `bytes_out`. |
 | SQL Databases | `stream:mysql`, `stream:postgres`, `stream:tds`, `stream:tns` | Splunk Stream 8.1.6+ | Transaction rate, SQL error rate (strict code tokens from `sql_error_code` / `sql_result_codes`, or `"SQL_ERROR"` boolean fallback), `dbname`, `result_row_count`, `time_taken` / `response_time` (µs), `bytes_in` / `bytes_out`. |
+| OpenTelemetry Traces | `otel:traces` (`sourceKind: "otel"`) | Splunk OTel Collector → HEC | HTTP golden signals on `SPAN_KIND_SERVER` (`http.request.method`, `http.response.status_code`, parameterized `http.route`) and DB golden signals on `SPAN_KIND_CLIENT` (`db.system`, `db.name`), plus span duration (`end_time - start_time`) and `STATUS_CODE_ERROR`. Never projects `db.statement` or `url.query`. |
 
 ## 2. Enabling Splunk Stream (`http`, `mysql`, `postgres`, `tds`, `tns`)
 
@@ -25,7 +26,7 @@ Application Atlas never runs searches on page load. When an operator clicks **In
 
 ## 3. Strict Privacy Boundary
 
-- **Blocked at SPL & projection layers:** `assertNoForbiddenFieldsInSpl("app_transactions", spl)`, `buildAllowedFieldsClause("app_transactions", ...)`, and `projectRowToLensAllowlist` forbid `query`, `sql_statement`, `bind_variable_value`, `uri_query`, `form_data`, `cookie`, `authorization`, `content`, `payload`, `src_content`, `dest_content`, `login`, `password`, `passwd`, and `_raw`. Raw free-text SQL `error` messages are never projected across the wire (`| eval` maps non-empty `error` to `"SQL_ERROR"` before `| table`, and client normalization maps any non-code-token string to `"SQL_ERROR"`).
+- **Blocked at SPL & projection layers:** `assertNoForbiddenFieldsInSpl("app_transactions", spl)`, `buildAllowedFieldsClause("app_transactions", ...)`, and `projectRowToLensAllowlist` forbid `query`, `statement` (`db.statement`), `sql_statement`, `bind_variable_value`, `uri_query`, `form_data`, `cookie`, `authorization`, `content`, `payload`, `src_content`, `dest_content`, `login`, `password`, `passwd`, and `_raw`. Raw free-text SQL `error` messages are never projected across the wire (`| eval` maps non-empty `error` to `"SQL_ERROR"` before `| table`, and client normalization maps any non-code-token string to `"SQL_ERROR"`).
 - **Client-side defensive sanitization:** `uri_path` is stripped of any `?…` query string or `#…` fragment client-side before aggregation or display.
 - **Server-side row bounding:** Every SPL search emits `| head <maxRows + 1>` before `| table <allowlisted fields>` so indexers bound rows and drop `_raw` before results reach the search head.
 
@@ -55,7 +56,7 @@ Configure a unified `"auto"` profile (when HTTP and DB streams share an index) o
 
 | Key | Type | Default | Allowed Range |
 | --- | --- | --- | --- |
-| `sourceKind` | `"auto" \| "http" \| "db"` | `"auto"` | Exact enum only |
+| `sourceKind` | `"auto" \| "http" \| "db" \| "otel"` | `"auto"` | Exact enum only |
 | `errorRateWarnPct` | number (%) | `5` | `(0, 100]` |
 | `latencyWarnMs` | number (ms) | `500` | `(0, 60000]` |
 
@@ -63,9 +64,10 @@ Unknown keys or out-of-range thresholds fail closed during profile validation.
 
 ## 5. Verification Checklist
 
-1. Confirm Stream events are indexed with non-sensitive fields:
+1. Confirm Stream or OpenTelemetry events are indexed with non-sensitive fields:
    - `index=<index> sourcetype="stream:http" | head 5 | table _time src_ip dest_ip dest_port http_method status uri_path site time_taken`
    - `index=<index> (sourcetype="stream:mysql" OR sourcetype="stream:postgres" OR sourcetype="stream:tds" OR sourcetype="stream:tns") | head 5 | table _time sourcetype src_ip dest_ip dest_port dbname sql_error_code time_taken`
+   - `index=<otel_index> sourcetype="otel:traces" (kind="SPAN_KIND_SERVER" OR kind="SPAN_KIND_CLIENT") | head 5 | table _time host kind attributes.http.request.method attributes.http.response.status_code attributes.db.system attributes.db.name`
 2. Open **Application Atlas → Protocols → HTTP & DB Transactions**, select the scope and UTC window, and click **Investigate**.
 3. Confirm:
    - Flagged services sort first in Overview; healthy services sit behind **Show all (n)**.
@@ -74,6 +76,6 @@ Unknown keys or out-of-range thresholds fail closed during profile validation.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Lab only**
-- **Notes:** Splunk Stream HTTP/DB wire streams (`http`, `mysql`, `postgres`, `tds`, `tns`) remain in Estimate mode on PseudoCo (no capture NIC / 80% daily license cap). Verified via unit and Playwright fixture tests.
+- **Verdict:** **Live verified** (`otel:traces`)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `8 of 8` TeaStore services healthy across `256` transactions (`HTTP (OTel)` on port `8080` plus `MYSQL (OTel)` on `teastore-db:3306` / `teadb`, p95 latency `1.2 ms`, `0.0%` errors) from live `index=otel_traces sourcetype="otel:traces"` with inline **Capped** indicator and zero SQL query text projected. Instant client-side table search (`"mysql"`) filtered to `1` row with `0` SPL jobs issued.
 

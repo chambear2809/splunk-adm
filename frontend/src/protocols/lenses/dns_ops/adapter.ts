@@ -23,6 +23,7 @@ import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1292,7 +1293,7 @@ export function buildDnsOpsAnalysis(options: {
         ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
         : anyUnavailable
           ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-          : "Search hit row cap or partial source — narrow the UTC window or filter.";
+          : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   return {
     verdict,
@@ -1337,8 +1338,12 @@ export async function investigateDnsOps(
   signal: AbortSignal,
   options: InvestigateDnsOpsOptions = {},
 ): Promise<DnsOpsInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "dns_ops" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "dns_ops",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

@@ -1,6 +1,7 @@
 import { validateIndexName } from "../data/deploymentHealth";
 import { isObject } from "../data/evidence";
 import {
+  MAX_METRICS_WINDOW_SECONDS,
   MAX_PROFILES,
   MAX_WINDOW_SECONDS,
   PROTOCOL_LENS_IDS,
@@ -12,10 +13,13 @@ import {
   type ProtocolLensId,
   type ProtocolRequest,
   type ProtocolViewMode,
+  type ProtocolWindowMode,
 } from "./shared/contract";
 
 const SELECTOR = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/;
 const ITEM_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,191}$/;
+/** Must stay within the `literal()` SPL quoting charset used by filterSpl. */
+const FILTER_VALUE = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/;
 const IFACE_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/;
 
 export function isProtocolLensId(value: unknown): value is ProtocolLensId {
@@ -51,6 +55,10 @@ export function protocolEpoch(value: unknown): value is number {
   );
 }
 
+export function protocolItemId(value: unknown): value is string {
+  return typeof value === "string" && ITEM_ID.test(value);
+}
+
 export function validVni(value: unknown): string | undefined {
   if (
     typeof value === "string" &&
@@ -65,15 +73,22 @@ export function validateProtocolWindow(
   earliest: unknown,
   latest: unknown,
   now = Date.now() / 1000,
+  windowMode: ProtocolWindowMode = "events",
 ): { earliest: number; latest: number } {
+  const maxSpan =
+    windowMode === "metrics" ? MAX_METRICS_WINDOW_SECONDS : MAX_WINDOW_SECONDS;
   if (
     !protocolEpoch(earliest) ||
     !protocolEpoch(latest) ||
     earliest >= latest ||
     latest > now + 60 ||
-    latest - earliest > MAX_WINDOW_SECONDS
+    latest - earliest > maxSpan
   )
-    throw new Error("Choose a past UTC window of up to one hour.");
+    throw new Error(
+      windowMode === "metrics"
+        ? "Choose a past UTC metrics window of up to 7 days."
+        : "Choose a past UTC window of up to one hour.",
+    );
   return { earliest, latest };
 }
 
@@ -87,10 +102,13 @@ export function validateProtocolRequest(
     throw new Error("Unsupported protocol lens.");
   const scope = protocolScopeName(request.scope);
   if (!scope) throw new Error("Choose one verified routing scope.");
+  const windowMode: ProtocolWindowMode =
+    request.windowMode === "metrics" ? "metrics" : "events";
   const { earliest, latest } = validateProtocolWindow(
     request.earliest,
     request.latest,
     now,
+    windowMode,
   );
   const filter = validateProtocolFilter(request.filter);
   return {
@@ -99,6 +117,7 @@ export function validateProtocolRequest(
     scope,
     earliest,
     latest,
+    ...(windowMode === "metrics" ? { windowMode } : {}),
     ...(filter ? { filter } : {}),
   };
 }
@@ -127,7 +146,7 @@ export function validateProtocolFilter(
     if (raw === undefined || raw === "") continue;
     const trimmed = typeof raw === "string" ? raw.trim() : raw;
     if (trimmed === "") continue;
-    if (typeof trimmed !== "string" || !ITEM_ID.test(trimmed))
+    if (typeof trimmed !== "string" || !FILTER_VALUE.test(trimmed))
       throw new Error(`Invalid protocol ${key} filter.`);
     filter[key] = trimmed;
   }
@@ -166,6 +185,7 @@ const LINK_KEYS = [
   "p_scope",
   "p_earliest",
   "p_latest",
+  "p_wmode",
   "p_view",
   "p_src",
   "p_dst",
@@ -178,6 +198,7 @@ const LINK_KEYS = [
 ] as const;
 
 const VIEWS: readonly ProtocolViewMode[] = ["overview", "matrix"];
+const WINDOW_MODES: readonly ProtocolWindowMode[] = ["events", "metrics"];
 const UNSUPPORTED_LINK = "The protocols link contains unsupported parameters.";
 
 export interface ParsedProtocolLink {
@@ -185,6 +206,7 @@ export interface ParsedProtocolLink {
   scope?: string;
   earliest?: number;
   latest?: number;
+  windowMode?: ProtocolWindowMode;
   view: ProtocolViewMode;
   filter?: ProtocolFilter;
   item?: string;
@@ -223,10 +245,18 @@ export function parseProtocolLink(
     if (raw === null) return undefined;
     return /^[1-9][0-9]{0,11}$/.test(raw) ? Number(raw) : NaN;
   };
+  const rawWmode = params.get("p_wmode");
+  if (
+    rawWmode !== null &&
+    !WINDOW_MODES.includes(rawWmode as ProtocolWindowMode)
+  )
+    throw new Error(UNSUPPORTED_LINK);
+  const windowMode: ProtocolWindowMode | undefined =
+    rawWmode === "metrics" ? "metrics" : undefined;
   const earliest = parseTime("p_earliest");
   const latest = parseTime("p_latest");
   if (earliest !== undefined || latest !== undefined) {
-    validateProtocolWindow(earliest, latest, now);
+    validateProtocolWindow(earliest, latest, now, windowMode ?? "events");
   }
   const view = parseProtocolView(params);
   const rawBidir = params.get("p_bidir");
@@ -249,6 +279,7 @@ export function parseProtocolLink(
     ...(scope ? { scope } : {}),
     ...(earliest !== undefined ? { earliest } : {}),
     ...(latest !== undefined ? { latest } : {}),
+    ...(windowMode ? { windowMode } : {}),
     view,
     ...(filter ? { filter } : {}),
     ...(rawItem ? { item: rawItem } : {}),
@@ -270,8 +301,21 @@ export function protocolLink(
     if (!scope) throw new Error("Choose one verified routing scope.");
     params.set("p_scope", scope);
   }
+  const windowMode: ProtocolWindowMode =
+    input.windowMode === "metrics" ? "metrics" : "events";
+  if (
+    input.windowMode !== undefined &&
+    !WINDOW_MODES.includes(input.windowMode)
+  )
+    throw new Error(UNSUPPORTED_LINK);
+  if (windowMode === "metrics") params.set("p_wmode", "metrics");
   if (input.earliest !== undefined || input.latest !== undefined) {
-    const win = validateProtocolWindow(input.earliest, input.latest, now);
+    const win = validateProtocolWindow(
+      input.earliest,
+      input.latest,
+      now,
+      windowMode,
+    );
     params.set("p_earliest", String(win.earliest));
     params.set("p_latest", String(win.latest));
   }
@@ -346,6 +390,58 @@ export function parseProtocolProfile(
   };
 }
 
+const SOURCE_SELECTOR_KEYS = [
+  "sourcetype",
+  "sourceKind",
+  "sourcetypes",
+  "sources",
+] as const;
+
+/** Stable key for the event selection a profile adds on top of its index. */
+function profileSourceSelector(profile: BaseProtocolProfile): string {
+  const extra = profile.extra ?? {};
+  return JSON.stringify(
+    SOURCE_SELECTOR_KEYS.map((key) => {
+      const value = extra[key];
+      if (typeof value === "string") return value.toLowerCase();
+      if (Array.isArray(value) && value.every((v) => typeof v === "string"))
+        return [...value].map((v) => v.toLowerCase()).sort();
+      return value ?? null;
+    }),
+  );
+}
+
+function selectsEverything(profile: BaseProtocolProfile): boolean {
+  const extra = profile.extra ?? {};
+  return SOURCE_SELECTOR_KEYS.every(
+    (key) =>
+      extra[key] === undefined ||
+      (key === "sourceKind" && extra.sourceKind === "auto"),
+  );
+}
+
+function validityOverlaps(
+  left: BaseProtocolProfile,
+  right: BaseProtocolProfile,
+): boolean {
+  return left.validFrom < right.validUntil && right.validFrom < left.validUntil;
+}
+
+/** Same index and overlapping event selection: searches return the same events. */
+function profilesReadSameEvents(
+  left: BaseProtocolProfile,
+  right: BaseProtocolProfile,
+): boolean {
+  return (
+    left.lens === right.lens &&
+    left.index === right.index &&
+    validityOverlaps(left, right) &&
+    (profileSourceSelector(left) === profileSourceSelector(right) ||
+      selectsEverything(left) ||
+      selectsEverything(right))
+  );
+}
+
 function profileConflicts(
   left: BaseProtocolProfile,
   right: BaseProtocolProfile,
@@ -356,14 +452,41 @@ function profileConflicts(
     left.scope.toLowerCase() === right.scope.toLowerCase()
   )
     return true;
-  if (left.validFrom >= right.validUntil || right.validFrom >= left.validUntil)
-    return false;
-  return (
+  if (!validityOverlaps(left, right)) return false;
+  if (
     left.lens === right.lens &&
     left.scope === right.scope &&
     left.observer.toLowerCase() === right.observer.toLowerCase() &&
     left.index === right.index
+  )
+    return true;
+  // Observer is not a search predicate, so two observers with an identical
+  // selector on one index in one scope would run the same search twice.
+  return (
+    left.lens === right.lens &&
+    left.scope === right.scope &&
+    left.index === right.index &&
+    profileSourceSelector(left) === profileSourceSelector(right)
   );
+}
+
+function annotateSharedIndexScopes(
+  profiles: BaseProtocolProfile[],
+): BaseProtocolProfile[] {
+  return profiles.map((profile) => {
+    const shared = [
+      ...new Set(
+        profiles
+          .filter(
+            (other) =>
+              other.scope !== profile.scope &&
+              profilesReadSameEvents(profile, other),
+          )
+          .map((other) => other.scope),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "en"));
+    return shared.length ? { ...profile, sharedIndexScopes: shared } : profile;
+  });
 }
 
 /**
@@ -393,5 +516,7 @@ export function parseProtocolProfiles(
     throw new Error(
       "Protocol source profiles have ambiguous or duplicate mappings.",
     );
-  return profiles.sort((left, right) => left.id.localeCompare(right.id, "en"));
+  return annotateSharedIndexScopes(profiles).sort((left, right) =>
+    left.id.localeCompare(right.id, "en"),
+  );
 }

@@ -31,6 +31,12 @@ ROLES = {
         "config_key": "protocol_worker",
         "readonly": False,
     },
+    "ecosystem-worker": {
+        "cursor": "ecosystem-worker.md",
+        "codex": "ecosystem_worker.toml",
+        "config_key": "ecosystem_worker",
+        "readonly": False,
+    },
 }
 
 
@@ -128,6 +134,7 @@ class AgentDefinitionChecks(unittest.TestCase):
             "code-reviewer": "claude-opus-5-5-medium",
             "ux-reviewer": "claude-opus-5-5-medium",
             "protocol-worker": "gemini-4-hydrogen",
+            "ecosystem-worker": "gemini-4-hydrogen",
         }
         for name, model in expected.items():
             meta, _ = parse_cursor_agent(CURSOR_AGENTS / f"{name}.md")

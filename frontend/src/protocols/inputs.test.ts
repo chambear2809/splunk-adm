@@ -179,4 +179,37 @@ describe("protocol inputs and URL contract", () => {
       ),
     ).toThrow(/Invalid interface/i);
   });
+
+  it("round-trips 7-day metrics windows with p_wmode=metrics and rejects >1h in events mode", () => {
+    const now = 1800000000;
+    const sevenDays = 7 * 86400;
+    const metricsQs = protocolLink(
+      {
+        lens: "interface_health",
+        scope: "prod:dc1",
+        earliest: now - sevenDays,
+        latest: now,
+        windowMode: "metrics",
+        view: "overview",
+      },
+      now,
+    );
+    expect(metricsQs.get("p_wmode")).toBe("metrics");
+    const parsed = parseProtocolLink(metricsQs, now);
+    expect(parsed.windowMode).toBe("metrics");
+    expect(parsed.latest! - parsed.earliest!).toBe(sevenDays);
+
+    expect(() =>
+      protocolLink(
+        {
+          lens: "tcp_tls",
+          scope: "prod:dc1",
+          earliest: now - sevenDays,
+          latest: now,
+          view: "overview",
+        },
+        now,
+      ),
+    ).toThrow(/up to one hour/i);
+  });
 });

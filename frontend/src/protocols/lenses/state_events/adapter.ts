@@ -27,8 +27,12 @@ import {
 import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
+  buildDmeDispatchBounds,
+  buildDmeSnapshotWindowPredicate,
+  dmePreDedupLimit,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -280,16 +284,42 @@ export function buildAciFaultEventSearch(options: {
   index: string;
   filter?: ProtocolFilter;
   maxRows: number;
+  earliest?: number;
+  latest?: number;
+  faultOnly?: boolean;
 }): string {
   const index = literal(options.index, 80);
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
-  const predicates: string[] = [
-    `index=${index}`,
-    `((sourcetype="cisco:dc:aci:fault" OR sourcetype="cisco:dc:aci:event") OR (sourcetype="cisco:dc:aci:class" (component="faultInst" OR component="eventRecord")))`,
-  ];
+  const preDedupLimit = dmePreDedupLimit(options.maxRows);
+  const windowPred = buildDmeSnapshotWindowPredicate(
+    options.earliest,
+    options.latest,
+  );
+  const e =
+    options.earliest !== undefined ? Math.trunc(options.earliest) : undefined;
+  const l =
+    options.latest !== undefined ? Math.trunc(options.latest) : undefined;
+  const hasAciWindow =
+    e !== undefined &&
+    l !== undefined &&
+    Number.isFinite(e) &&
+    Number.isFinite(l) &&
+    l > e;
+  const aciStClause = options.faultOnly
+    ? `(sourcetype="cisco:dc:aci:fault" OR (sourcetype="cisco:dc:aci:class" component="faultInst"))`
+    : `((sourcetype="cisco:dc:aci:fault" OR sourcetype="cisco:dc:aci:event") OR (sourcetype="cisco:dc:aci:class" (component="faultInst" OR component="eventRecord")))`;
+  const nxosCompClause = options.faultOnly
+    ? `component="faultInst"`
+    : `(component="faultInst" OR component="eventRecord")`;
+  const nxosDmeClause = `(sourcetype="cisco:dc:nexus9k:dme" ${nxosCompClause}${windowPred ? ` ${windowPred}` : ""})`;
+  const sourcetypeClause =
+    windowPred && hasAciWindow
+      ? `((${aciStClause} earliest=${e} latest=${l}) OR ${nxosDmeClause})`
+      : `(${aciStClause} OR ${nxosDmeClause})`;
+  const predicates: string[] = [`index=${index}`, sourcetypeClause];
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
-    predicates.push(`(host="${dev}" OR apic_host="${dev}")`);
+    predicates.push(`(host="${dev}" OR device="${dev}" OR apic_host="${dev}")`);
   }
   if (options.filter?.iface) {
     const ifaceTerms: string[] = [];
@@ -297,8 +327,10 @@ export function buildAciFaultEventSearch(options: {
       const safe = literal(variant, 64);
       ifaceTerms.push(
         `dn="*[${safe}]*"`,
+        `Row_info.dn="*[${safe}]*"`,
         `affected="*[${safe}]*"`,
         `dn="*${safe}*"`,
+        `Row_info.dn="*${safe}*"`,
         `affected="*${safe}*"`,
       );
     }
@@ -306,11 +338,25 @@ export function buildAciFaultEventSearch(options: {
       predicates.push(`(${ifaceTerms.join(" OR ")})`);
     }
   }
-  const tableClause = buildAllowedFieldsClause(
-    "state_events",
-    ACI_FAULT_EVENT_FIELDS,
-  );
-  return `search ${predicates.join(" ")} | head ${headLimit} ${tableClause}`;
+  const tableClause = buildAllowedFieldsClause("state_events", [
+    ...ACI_FAULT_EVENT_FIELDS,
+    "_pre_dedup_count",
+  ]);
+  const evalClause =
+    `| eval host=coalesce(device, host), ` +
+    `dn=coalesce(dn, 'Row_info.dn'), ` +
+    `code=coalesce(code, 'Row_info.code'), ` +
+    `rule=coalesce(rule, 'Row_info.rule'), ` +
+    `severity=coalesce(severity, 'Row_info.severity'), ` +
+    `lifecycle=coalesce(lifecycle, 'Row_info.lc'), ` +
+    `cause=coalesce(cause, 'Row_info.cause'), ` +
+    `domain=coalesce(domain, 'Row_info.domain'), ` +
+    `subject=coalesce(subject, 'Row_info.subject'), ` +
+    `type=coalesce(type, 'Row_info.type'), ` +
+    `descr=coalesce(descr, 'Row_info.descr'), ` +
+    `lastTransition=coalesce(lastTransition, 'Row_info.lastTransition'), ` +
+    `created=coalesce(created, 'Row_info.created') `;
+  return `search ${predicates.join(" ")} | head ${preDedupLimit} | eventstats count AS _pre_dedup_count | eval _dk=if(sourcetype=="cisco:dc:nexus9k:dme", coalesce(device, host, "none") . "|" . coalesce(dn, 'Row_info.dn', "none") . "|" . coalesce(code, 'Row_info.code', "none") . "|" . coalesce(lifecycle, 'Row_info.lc', "none"), _cd . "|" . coalesce(splunk_server, "") . "|" . coalesce(index, "")) | dedup _dk | head ${headLimit} ${evalClause}${tableClause}`;
 }
 
 /**
@@ -577,7 +623,8 @@ export function normalizeAciFaultEventRow(
   const isFaultEventSt =
     sourcetype === "cisco:dc:aci:fault" || sourcetype === "cisco:dc:aci:event";
   const isClassFaultEvent =
-    sourcetype === "cisco:dc:aci:class" &&
+    (sourcetype === "cisco:dc:aci:class" ||
+      sourcetype === "cisco:dc:nexus9k:dme") &&
     (compLower === "faultinst" || compLower === "eventrecord");
   if (!isFaultEventSt && !isClassFaultEvent) return undefined;
   if (
@@ -639,7 +686,10 @@ export function normalizeAciFaultEventRow(
     device,
     rawHost: effectiveRawHost,
     domain: "aci_faults",
-    domainLabel: DOMAIN_LABELS.aci_faults,
+    domainLabel:
+      sourcetype === "cisco:dc:nexus9k:dme"
+        ? "NX-OS Faults"
+        : DOMAIN_LABELS.aci_faults,
     severity,
     severityLabel: formatSeverityLabel(severity),
     codeOrMnemonic,
@@ -1294,7 +1344,7 @@ export function buildStateEventsAnalysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   return {
     verdict,
@@ -1340,8 +1390,12 @@ export async function investigateStateEvents(
   signal: AbortSignal,
   options: InvestigateStateEventsOptions = {},
 ): Promise<StateEventsInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "state_events" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "state_events",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1421,31 +1475,98 @@ export async function investigateStateEvents(
 
       if (runAciFaults) {
         signal.throwIfAborted();
+        const dispatchBounds = buildDmeDispatchBounds(
+          profile,
+          request.earliest,
+          request.latest,
+        );
         const spl = buildAciFaultEventSearch({
           index: profile.index,
           filter: request.filter,
           maxRows: MAX_INPUT_ROWS,
+          earliest: request.earliest,
+          latest: request.latest,
         });
+        const preDedupLimit = dmePreDedupLimit(MAX_INPUT_ROWS);
         const res = await runBoundedProtocolSearch(client, {
           lens: "state_events",
           profile,
           spl,
           earliest: request.earliest,
           latest: request.latest,
+          preDedupLimit,
+          ...dispatchBounds,
           maxRows: MAX_INPUT_ROWS,
           signal,
           keySuffix: "aci_faults",
         });
         outcomes.push(res.outcome);
         if (res.capped) capped = true;
+        const seenNxosDmeFaults = new Set<string>();
+        let sawFaultInst = false;
         res.rows.forEach((row, idx) => {
+          const rowSt = String(row.sourcetype ?? "").toLowerCase();
+          if (
+            String(row.component ?? "").toLowerCase() === "faultinst" ||
+            rowSt === "cisco:dc:aci:fault"
+          ) {
+            sawFaultInst = true;
+          }
           const norm = normalizeAciFaultEventRow(row, idx);
           if (norm) {
+            if (norm.domainLabel === "NX-OS Faults") {
+              const dedupeKey = `${norm.device}|${norm.interfaceOrDn ?? ""}|${norm.codeOrMnemonic}|${norm.lifecycle ?? ""}`;
+              if (seenNxosDmeFaults.has(dedupeKey)) return;
+              seenNxosDmeFaults.add(dedupeKey);
+            }
             collected.push({ event: norm, indexName: profile.index });
           } else if (!isIntentionallyExcludedAciRow(row)) {
             unparsedRowCount += 1;
           }
         });
+        // If high-volume eventRecord polls filled the scan cap before any
+        // faultInst record was reached, fetch active faultInst rows separately.
+        if (res.capped && !sawFaultInst) {
+          signal.throwIfAborted();
+          const faultSpl = buildAciFaultEventSearch({
+            index: profile.index,
+            filter: request.filter,
+            maxRows: MAX_INPUT_ROWS,
+            earliest: request.earliest,
+            latest: request.latest,
+            faultOnly: true,
+          });
+          const faultRes = await runBoundedProtocolSearch(client, {
+            lens: "state_events",
+            profile,
+            spl: faultSpl,
+            earliest: request.earliest,
+            latest: request.latest,
+            preDedupLimit,
+            ...dispatchBounds,
+            maxRows: MAX_INPUT_ROWS,
+            signal,
+            keySuffix: "aci_faults_only",
+          });
+          if (
+            faultRes.outcome.state === "blocked" ||
+            faultRes.outcome.state === "unavailable"
+          ) {
+            outcomes.push(faultRes.outcome);
+          }
+          if (faultRes.capped) capped = true;
+          faultRes.rows.forEach((row, idx) => {
+            const norm = normalizeAciFaultEventRow(row, idx);
+            if (norm) {
+              if (norm.domainLabel === "NX-OS Faults") {
+                const dedupeKey = `${norm.device}|${norm.interfaceOrDn ?? ""}|${norm.codeOrMnemonic}|${norm.lifecycle ?? ""}`;
+                if (seenNxosDmeFaults.has(dedupeKey)) return;
+                seenNxosDmeFaults.add(dedupeKey);
+              }
+              collected.push({ event: norm, indexName: profile.index });
+            }
+          });
+        }
       }
     }
 

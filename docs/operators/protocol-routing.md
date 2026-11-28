@@ -81,6 +81,6 @@ Unknown keys or out-of-range values fail closed during profile validation.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Live verified**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `14 of 14` BGP sessions healthy (`Established`, `0` flaps) across all 6 Nexus switches (`198.18.131.1..6`) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`bgpPeerEntry`).
+- **Verdict:** **Live verified** (BGP + OSPF via Cisco DCN 2.0.10 DME)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `78 of 78` routing sessions healthy (`Established` BGP + `Full` OSPF, `0` flaps, uncapped) across all 6 Nexus switches (`198.18.131.1..6`) using bounded `_index_earliest`/`_index_latest` DME snapshot matching (180-day `modTs` lookback + `| head 2056 | dedup`) and bloom-filtered `cisco:dc:nd:*` predicates. Matrix view renders cleanly with `0` horizontal overflow.
 

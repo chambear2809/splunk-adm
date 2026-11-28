@@ -102,6 +102,6 @@ Unknown keys or out-of-bounds values fail closed at profile validation time.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Live verified**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `256 of 256` endpoints steady (`0` MAC moves in the 256-row capped sample; duplicate IP detection truthfully marked **None observed** when ND endpoint records omit IP addresses) from live `cisco:dc:nd:endpoints`; ARP rate spikes and port flaps truthfully marked **Not covered**. Filter by **Endpoint IP** or **Device** to inspect a specific host below the row cap.
+- **Verdict:** **Live verified** (`cisco:dc:nd:endpoints` + `stream:arp`)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `266` endpoints inspected across live `cisco:dc:nd:endpoints` and scoped `stream:arp` (`5` ARP rate spikes flagged, `0` MAC moves); port flaps truthfully marked **Not covered**. Filter by **Endpoint IP** or **Device** to inspect a specific host below the row cap.
 

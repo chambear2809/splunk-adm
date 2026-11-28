@@ -26,6 +26,7 @@ import { formatBytes, formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -391,7 +392,21 @@ export function buildMgmtPlaneRawEventsUrl(options: {
       ? `src_ip="${src}" dest_ip="${target}"${portClause}`
       : `dest_ip="${target}"${portClause}`;
   }
-  const q = `search index=${index} ${stClause} ${targetClause}`;
+  let q: string;
+  if (options.isSyslog) {
+    const excludedCategories = EXCLUDED_AUTH_CATEGORIES.map(
+      (c) => `"${c}"`,
+    ).join(", ");
+    q = `search index=${index} ${stClause} ${targetClause} | rex "%(?<sc4s_cat>[A-Za-z0-9_]+)(?:-[A-Za-z0-9_]+)?-[0-7]-" | eval _cat=upper(coalesce(category, facility, sc4s_cat)) | where isnull(_cat) OR NOT (_cat IN (${excludedCategories}))`;
+  } else {
+    const hasSensitiveWire = sts.some(
+      (s) => s === "stream:snmp" || s === "stream:ftp",
+    );
+    const redactClause = hasSensitiveWire
+      ? ` | eval command=upper(mvindex(split(trim(coalesce(command, method)), " "), 0)) | eval command=if(in(command, "USER", "PASS", "ACCT"), "AUTH_CMD", command) | eval method=command | fields - _raw community varbind_list value_raw password passwd login authorization`
+      : "";
+    q = `search index=${index} ${stClause} ${targetClause}${redactClause}`;
+  }
   const params = new URLSearchParams({
     q,
     earliest: String(Math.trunc(options.earliest)),
@@ -1999,7 +2014,7 @@ export function buildMgmtPlaneAnalysis(options: {
       ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
       : anyUnavailable
         ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-        : "Search hit row cap or partial source — narrow the UTC window or filter.";
+        : "Sample capped at 256 rows — narrow the UTC window or filter.";
   } else if (unparsedRowCount > 0) {
     bannerState = "partial";
     bannerReason = `${unparsedRowCount} ${unparsedRowCount === 1 ? "row" : "rows"} returned but could not be normalized.`;
@@ -2051,8 +2066,12 @@ export async function investigateMgmtPlane(
   signal: AbortSignal,
   options: InvestigateMgmtPlaneOptions = {},
 ): Promise<MgmtPlaneInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "mgmt_plane" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "mgmt_plane",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

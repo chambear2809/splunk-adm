@@ -4,9 +4,12 @@ import type { ProtocolSource } from "../../data/evidence";
 
 export const PROTOCOL_VERSION = 1 as const;
 export const MAX_WINDOW_SECONDS = 3600;
+export const MAX_METRICS_WINDOW_SECONDS = 7 * 86400;
 export const MAX_INPUT_ROWS = 256;
 export const MAX_EVIDENCE_ROWS = 256;
 export const MAX_PROFILES = 64;
+
+export type ProtocolWindowMode = "events" | "metrics";
 
 export const PROTOCOL_LENS_IDS = [
   "tcp_tls",
@@ -78,6 +81,7 @@ export interface ProtocolRequest {
   scope: string;
   earliest: number;
   latest: number;
+  windowMode?: ProtocolWindowMode;
   filter?: ProtocolFilter;
 }
 
@@ -92,6 +96,11 @@ export interface BaseProtocolProfile {
   validUntil: number;
   /** Optional lens-specific vetted fields validated by the registered per-lens validator. */
   extra?: Record<string, unknown>;
+  /**
+   * Derived at parse time, never read from KV: other scopes whose profiles
+   * read the same events from this index, so results can include theirs.
+   */
+  sharedIndexScopes?: readonly string[];
 }
 
 export type LensProfileValidator = (
@@ -111,6 +120,8 @@ export interface ProtocolSourceOutcome {
   detail?: string;
   inputRows?: number;
   capped?: boolean;
+  /** Other scopes reading the same events from this profile's index. */
+  sharedIndexScopes?: readonly string[];
 }
 
 export interface ProtocolKpi {
@@ -188,6 +199,7 @@ export interface ProtocolLensComponentProps {
   scopes: string[];
   earliest: number;
   latest: number;
+  windowMode?: ProtocolWindowMode;
   view: ProtocolViewMode;
   filter?: ProtocolFilter;
   selectedItem?: string;
@@ -197,6 +209,7 @@ export interface ProtocolLensComponentProps {
     scope?: string;
     earliest?: number;
     latest?: number;
+    windowMode?: ProtocolWindowMode;
     view?: ProtocolViewMode;
     filter?: ProtocolFilter;
     item?: string;

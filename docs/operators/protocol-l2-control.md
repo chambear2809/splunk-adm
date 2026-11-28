@@ -87,6 +87,6 @@ Unknown keys or out-of-bounds values fail closed at profile validation time.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Enabled, no events yet**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** DCN 2.0.10 `w0_n9k_dme_layer2` and NX-OS syslog (`udp://5514`) are enabled; `0` STP, LACP, or DHCP control-plane events arrived in the 60-minute validation window (**None observed**).
+- **Verdict:** **Live verified** (STP + LACP + LLDP via Cisco DCN 2.0.10 DME)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `176 of 176` L2 entities steady (`0` STP TCNs, `0` LACP drops, `0` LLDP alerts, uncapped; DHCP truthfully marked **Not covered**) across all 6 Nexus switches (`stpInst`, `stpVlan`, `pcAggrIf`, `pcRsMbrIfs`, `lldpAdjEp`) via bounded `_index_earliest`/`_index_latest` DME snapshot matching and server-side `| head 2056 | dedup`.
 

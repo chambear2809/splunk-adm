@@ -802,7 +802,8 @@ export function TcpTlsLensPage({
               const next: ProtocolFilter = {
                 src: selectedRow.client,
                 dst: selectedRow.server,
-                ...(selectedRow.destPorts.length === 1
+                ...(selectedRow.destPorts.length === 1 &&
+                selectedRow.destPorts[0] <= 32767
                   ? { port: String(selectedRow.destPorts[0]) }
                   : {}),
                 bidirectional: true,

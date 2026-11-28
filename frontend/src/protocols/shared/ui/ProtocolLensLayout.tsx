@@ -29,8 +29,19 @@ export interface ProtocolTableColumn<RowT> {
   render: (row: RowT) => ReactNode;
 }
 
-function isSafeLink(href: string | undefined): href is string {
+function hasControlOrBackslash(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f || code === 0x5c) return true;
+  }
+  return false;
+}
+
+export function isSafeLink(href: string | undefined): href is string {
   if (!href) return false;
+  // Browsers normalize "\" to "/" and strip tabs/newlines, so "/\host" and
+  // "/\t/host" resolve as protocol-relative off-site URLs.
+  if (hasControlOrBackslash(href)) return false;
   if (href.startsWith("//")) return false;
   return href.startsWith("/") || href.startsWith("https://");
 }
@@ -76,6 +87,13 @@ const MUTE_BODY_STATES = new Set<BannerState>([
 ]);
 
 const WINDOW_PRESETS_MIN = [15, 30, 60] as const;
+const METRICS_WINDOW_PRESETS_MIN = [15, 30, 60, 1440, 10080] as const;
+
+function formatWindowPreset(mins: number): string {
+  if (mins >= 1440 && mins % 1440 === 0) return `${mins / 1440}d`;
+  if (mins >= 60 && mins % 60 === 0 && mins > 60) return `${mins / 60}h`;
+  return `${mins}m`;
+}
 
 /**
  * Shared single-header + verdict + filter bar + KPI strip + Overview/Matrix +
@@ -111,6 +129,7 @@ export function ProtocolLensLayout<
   supportsBidirectional,
   filterSuggestions,
   onApplyFilter,
+  metricsPresets,
   onWindowChange,
   getRowSearchText,
   onFocusFlow,
@@ -162,7 +181,9 @@ export function ProtocolLensLayout<
   >;
   /** Called on explicit Apply/Enter/Clear with validated `ProtocolFilter`. */
   onApplyFilter?: (next: ProtocolFilter | undefined) => void;
-  /** Called when the operator picks a 15m/30m/60m UTC window preset. */
+  /** When true (metrics-only profiles active), adds 24h and 7d window presets. */
+  metricsPresets?: boolean;
+  /** Called when the operator picks a UTC window preset. */
   onWindowChange?: (nextEarliest: number, nextLatest: number) => void;
   /** Optional extractor for instant client-side table search (defaults to row primitives). */
   getRowSearchText?: (row: RowT) => string;
@@ -237,9 +258,22 @@ export function ProtocolLensLayout<
   }, [drawerOpen]);
 
   useEffect(() => {
+    if (!capTipOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setCapTipOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capTipOpen]);
+
+  useEffect(() => {
     if (!drawerOpen || !onCloseDrawer) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (capTipOpen) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -247,7 +281,7 @@ export function ProtocolLensLayout<
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawerOpen, onCloseDrawer]);
+  }, [drawerOpen, onCloseDrawer, capTipOpen]);
 
   const DEFAULT_HEALTHY_PREVIEW_ROWS = 20;
   const safeColumns = columns.slice(0, 8);
@@ -317,7 +351,11 @@ export function ProtocolLensLayout<
             : "not_covered"
           : banner?.state === "blocked"
             ? "unknown"
-            : verdictStatus;
+            : banner?.state === "partial" && verdictStatus === "ok"
+              ? "attention"
+              : banner?.state === "partial" && verdictStatus === "none_observed"
+                ? "unknown"
+                : verdictStatus;
 
   const effectiveVerdict =
     banner?.state === "loading"
@@ -388,15 +426,17 @@ export function ProtocolLensLayout<
     onApplyFilter?.(undefined);
   };
 
+  const maxWindowMin = metricsPresets ? 10080 : 60;
+  const presets: readonly number[] = metricsPresets
+    ? METRICS_WINDOW_PRESETS_MIN
+    : WINDOW_PRESETS_MIN;
   const currentWindowMin = Math.max(
     1,
-    Math.min(60, Math.round((latest - earliest) / 60)),
+    Math.min(maxWindowMin, Math.round((latest - earliest) / 60)),
   );
-  const windowOptions: number[] = WINDOW_PRESETS_MIN.includes(
-    currentWindowMin as (typeof WINDOW_PRESETS_MIN)[number],
-  )
-    ? [...WINDOW_PRESETS_MIN]
-    : [...WINDOW_PRESETS_MIN, currentWindowMin].sort((a, b) => a - b);
+  const windowOptions: number[] = presets.includes(currentWindowMin)
+    ? [...presets]
+    : [...presets, currentWindowMin].sort((a, b) => a - b);
 
   return (
     <main
@@ -441,14 +481,18 @@ export function ProtocolLensLayout<
                 value={currentWindowMin}
                 onChange={(e) => {
                   const mins = Number(e.target.value);
-                  if (Number.isFinite(mins) && mins >= 1 && mins <= 60) {
+                  if (
+                    Number.isFinite(mins) &&
+                    mins >= 1 &&
+                    mins <= maxWindowMin
+                  ) {
                     onWindowChange(latest - mins * 60, latest);
                   }
                 }}
               >
                 {windowOptions.map((mins) => (
                   <option key={mins} value={mins}>
-                    {mins}m
+                    {formatWindowPreset(mins)}
                   </option>
                 ))}
               </select>
@@ -505,7 +549,10 @@ export function ProtocolLensLayout<
             onMouseEnter={() => setCapTipOpen(true)}
             onMouseLeave={() => setCapTipOpen(false)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setCapTipOpen(false);
+              if (e.key === "Escape" && capTipOpen) {
+                e.stopPropagation();
+                setCapTipOpen(false);
+              }
             }}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {

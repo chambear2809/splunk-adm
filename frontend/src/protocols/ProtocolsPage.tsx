@@ -10,8 +10,11 @@ import { pageURL, URL_STATE_CHANGED } from "../app/urlState";
 import type { SearchClient } from "../data/searchClient";
 import {
   parseProtocolLink,
+  protocolItemId,
   protocolLink,
+  protocolScopeName,
   validateProtocolFilter,
+  validateProtocolWindow,
   type ParsedProtocolLink,
 } from "./inputs";
 import {
@@ -19,12 +22,13 @@ import {
   PROTOCOL_LENSES,
   registeredProfileValidators,
 } from "./registry";
-import type {
-  ProtocolConfiguration,
-  ProtocolLensComponentProps,
-  ProtocolLensId,
-  ProtocolLensSummary,
-  ProtocolStatus,
+import {
+  MAX_WINDOW_SECONDS,
+  type ProtocolConfiguration,
+  type ProtocolLensComponentProps,
+  type ProtocolLensId,
+  type ProtocolLensSummary,
+  type ProtocolStatus,
 } from "./shared/contract";
 import { readProtocolConfiguration } from "./shared/runner";
 import {
@@ -72,6 +76,7 @@ export function applyProtocolParamPatch(
   activeScope: string,
   win: { earliest: number; latest: number },
   patch: Parameters<ProtocolLensComponentProps["onChangeParams"]>[0],
+  now = Date.now() / 1000,
 ): ParsedProtocolLink {
   let nextFilter = current.filter;
   if ("filter" in patch) {
@@ -95,14 +100,54 @@ export function applyProtocolParamPatch(
         : undefined;
     }
   }
+  const scope =
+    patch.scope === undefined
+      ? activeScope
+      : (protocolScopeName(patch.scope) ?? activeScope);
+  const nextWindowMode =
+    "windowMode" in patch
+      ? patch.windowMode === "metrics"
+        ? "metrics"
+        : undefined
+      : current.windowMode;
+  let nextWin = win;
+  if (
+    patch.earliest !== undefined ||
+    patch.latest !== undefined ||
+    "windowMode" in patch
+  ) {
+    const candidateLatest = patch.latest ?? win.latest;
+    const rawEarliest = patch.earliest ?? win.earliest;
+    // Only clamp down to MAX_WINDOW_SECONDS when transitioning OUT of metrics
+    // mode; invalid window patches while already in events mode stay rejected.
+    const leavingMetrics =
+      current.windowMode === "metrics" && nextWindowMode !== "metrics";
+    const candidateEarliest = leavingMetrics
+      ? Math.max(rawEarliest, candidateLatest - MAX_WINDOW_SECONDS)
+      : rawEarliest;
+    try {
+      nextWin = validateProtocolWindow(
+        candidateEarliest,
+        candidateLatest,
+        now,
+        nextWindowMode ?? "events",
+      );
+    } catch {
+      // Keep the last valid window rather than dispatching an unbounded search
+    }
+  }
   return {
     lens: activeLensId,
-    scope: patch.scope ?? activeScope,
-    earliest: patch.earliest ?? win.earliest,
-    latest: patch.latest ?? win.latest,
-    view: patch.view ?? current.view,
+    scope,
+    earliest: nextWin.earliest,
+    latest: nextWin.latest,
+    ...(nextWindowMode ? { windowMode: nextWindowMode } : {}),
+    view:
+      patch.view === "overview" || patch.view === "matrix"
+        ? patch.view
+        : current.view,
     filter: nextFilter,
-    item: patch.item,
+    item: protocolItemId(patch.item) ? patch.item : undefined,
   };
 }
 
@@ -117,22 +162,32 @@ export function ProtocolsPage({
   timezone?: string;
   theme?: "light" | "dark";
 }) {
-  const [linkError, setLinkError] = useState<string>();
-  const [params, setParams] = useState<ParsedProtocolLink>(() => {
-    if (typeof location === "undefined") return { view: "overview" };
+  const [initialLink] = useState<{
+    params: ParsedProtocolLink;
+    error?: string;
+  }>(() => {
+    if (typeof location === "undefined")
+      return { params: { view: "overview" } };
     try {
-      return parseProtocolLink(new URLSearchParams(location.search));
+      return {
+        params: parseProtocolLink(new URLSearchParams(location.search)),
+      };
     } catch (error) {
-      setLinkError(
-        error instanceof Error ? error.message : "Invalid protocols link.",
-      );
-      return { view: "overview" };
+      return {
+        params: { view: "overview" },
+        error:
+          error instanceof Error ? error.message : "Invalid protocols link.",
+      };
     }
   });
+  const [linkError, setLinkError] = useState(initialLink.error);
+  const [params, setParams] = useState<ParsedProtocolLink>(initialLink.params);
+  const [fallbackWin] = useState(() => defaultWindow());
   const [config, setConfig] = useState<ProtocolConfiguration>({
     profiles: [],
     fingerprint: "",
   });
+  const [configLoadedOnce, setConfigLoadedOnce] = useState(!live);
   const [configState, setConfigState] = useState<"loading" | "ready" | "error">(
     live ? "loading" : "ready",
   );
@@ -172,7 +227,10 @@ export function ProtocolsPage({
       .then((loaded) => {
         if (!controller.signal.aborted) {
           setConfig(loaded);
+          setConfigLoadedOnce(true);
           setConfigState("ready");
+          setSummaries({});
+          setTrafficMix(undefined);
         }
       })
       .catch((error: unknown) => {
@@ -235,15 +293,24 @@ export function ProtocolsPage({
 
   const openLens = useCallback(
     (lensId: ProtocolLensId) => {
-      const win =
+      checkAbort.current?.abort();
+      mixAbort.current?.abort();
+      setLinkError(undefined);
+      const rawWin =
         params.earliest && params.latest
           ? { earliest: params.earliest, latest: params.latest }
           : defaultWindow();
+      // Always reset to bounded 1-hour event window when opening a lens so a
+      // 7-day metrics window can never spill into an event-backed lens.
+      const clampedEarliest = Math.max(
+        rawWin.earliest,
+        rawWin.latest - MAX_WINDOW_SECONDS,
+      );
       const next: ParsedProtocolLink = {
         lens: lensId,
         scope: params.scope ?? scopes[0],
-        earliest: win.earliest,
-        latest: win.latest,
+        earliest: clampedEarliest,
+        latest: rawWin.latest,
         view: "overview",
       };
       setParams(next);
@@ -253,10 +320,13 @@ export function ProtocolsPage({
   );
 
   const backToHub = useCallback(() => {
-    const next: ParsedProtocolLink = { view: "overview" };
+    const next: ParsedProtocolLink = {
+      view: "overview",
+      ...(params.scope ? { scope: params.scope } : {}),
+    };
     setParams(next);
     writeProtocolParams(next);
-  }, []);
+  }, [params.scope]);
 
   const handleLoadTrafficMix = useCallback(async () => {
     if (!client || !live || loadingMix) return;
@@ -378,7 +448,7 @@ export function ProtocolsPage({
     const win =
       params.earliest && params.latest
         ? { earliest: params.earliest, latest: params.latest }
-        : defaultWindow();
+        : fallbackWin;
     const activeScope = params.scope ?? scopes[0] ?? "";
     if (configState === "error") {
       return (
@@ -402,7 +472,7 @@ export function ProtocolsPage({
         </main>
       );
     }
-    if (lensComponent && configState !== "loading") {
+    if (lensComponent && (configState !== "loading" || configLoadedOnce)) {
       const Lens = lensComponent;
       return (
         <Lens
@@ -414,6 +484,7 @@ export function ProtocolsPage({
           scopes={scopes}
           earliest={win.earliest}
           latest={win.latest}
+          windowMode={params.windowMode}
           view={params.view}
           filter={params.filter}
           selectedItem={params.item}

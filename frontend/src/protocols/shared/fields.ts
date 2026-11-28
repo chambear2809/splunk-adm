@@ -22,6 +22,8 @@ export const FORBIDDEN_SENSITIVE_FIELDS = new Set<string>([
   "payload",
   "src_content",
   "dest_content",
+  "src_user",
+  "dest_user",
   "ssl_session_id",
   "_raw",
 ]);
@@ -31,16 +33,27 @@ export const FORBIDDEN_SENSITIVE_FIELDS = new Set<string>([
  * but FORBIDDEN on SQL lenses (`stream:mysql`, `stream:postgres`, `stream:tds`,
  * `stream:tns`) where it holds SQL statement text.
  */
-export const SQL_FORBIDDEN_FIELDS = new Set<string>(["query"]);
+export const SQL_FORBIDDEN_FIELDS = new Set<string>(["query", "statement"]);
 
 /**
  * Identity fields excluded from overview tables and allowed ONLY in explicit
- * single-row expansion details.
+ * single-row expansion details (stored strictly lowercase to match
+ * `isFieldAllowedForLens` normalization).
  */
 export const ROW_EXPANSION_ONLY_FIELDS = new Set<string>([
   "calling_station_id",
   "user_id",
 ]);
+
+/**
+ * Per-lens row-expansion-only identity fields (lowercase). Allows lenses such
+ * as `network_access` or `remote_sase` to gate `src_mac`, `src_ip`, and TA
+ * username fields strictly to single-row expansion without breaking lenses
+ * like `l2_control` or `endpoint_mobility` where `src_mac` is an operational key.
+ */
+export const LENS_ROW_EXPANSION_ONLY_FIELDS: Partial<
+  Record<ProtocolLensId, ReadonlySet<string>>
+> = {};
 
 const BASE_FIELDS = ["_time", "host", "sourcetype"] as const;
 
@@ -529,6 +542,7 @@ const SAFE_DERIVED_FIELDS = new Set<string>([
   "last_seen",
   "latest_time",
   "bucket",
+  "_pre_dedup_count",
 ]);
 
 export function isFieldAllowedForLens(
@@ -541,7 +555,10 @@ export function isFieldAllowedForLens(
   if (FORBIDDEN_SENSITIVE_FIELDS.has(normalized)) return false;
   if (lens === "app_transactions" && SQL_FORBIDDEN_FIELDS.has(normalized))
     return false;
-  if (ROW_EXPANSION_ONLY_FIELDS.has(normalized))
+  if (
+    ROW_EXPANSION_ONLY_FIELDS.has(normalized) ||
+    LENS_ROW_EXPANSION_ONLY_FIELDS[lens]?.has(normalized)
+  )
     return Boolean(options?.includeRowExpansion);
   if (SAFE_DERIVED_FIELDS.has(normalized)) return true;
   return LENS_FIELD_ALLOWLISTS[lens].some(
@@ -614,9 +631,15 @@ export function assertNoForbiddenFieldsInSpl(
     );
   }
   // Strip double-quoted values only on the right-hand side of `=` predicates
-  // (e.g. host="content-sw01") so quoted field references like `| table "payload"`
-  // or `| rename "_raw" AS ssl_subject` remain blocked.
-  const withoutRhsLiterals = spl.replace(/=\s*"(?:\\.|[^"\\])*"/g, "=");
+  // and inside `IN ("...")` filter lists (e.g. host="content-sw01" or
+  // host IN ("content-sw01", "login-gw1")) so quoted field references like
+  // `| table "payload"` or `| rename "_raw" AS ssl_subject` remain blocked.
+  const withoutRhsLiterals = spl
+    .replace(/=\s*"(?:\\.|[^"\\])*"/g, "=")
+    .replace(
+      /\bIN\s*\(\s*"(?:\\.|[^"\\])*"(?:\s*,\s*"(?:\\.|[^"\\])*")*\s*\)/gi,
+      "IN ()",
+    );
   const tokens =
     withoutRhsLiterals.toLowerCase().match(/[a-z_][a-z0-9_]*/g) ?? [];
   for (const token of tokens) {

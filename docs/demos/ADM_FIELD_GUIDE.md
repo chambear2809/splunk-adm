@@ -42,6 +42,16 @@ A network engineer opens **Device** for a busy exporter and sorts the displayed 
 
 Use the ranked sample to prioritize inspection. Capture the sorted table with the window and cap visible.
 
+## Is it a transport, TLS, routing, or application issue? (Protocols hub)
+
+Open **Protocols** to see **Multicast / IGMP** alongside 13 scoped, on-demand protocol workbenches (zero searches run on page load). Click **Load traffic mix** for an on-demand protocol and IPv4/IPv6 share breakdown, then open the lens matching the symptom:
+
+- **TCP Health & TLS** for Client vs Server RTT p95, retransmits, resets, and expired or legacy TLS posture (`stream:tcp`, or truthful **Not covered** NetFlow fallback).
+- **Routing Control Plane**, **L2 Control Plane**, **Interface & Link Health**, and **State-Change Timeline** for BGP/OSPF/BFD adjacencies, STP/LACP/LLDP state, admin/oper link mismatches and windowed RMON deltas, and deduplicated switch faults/syslog.
+- **HTTP & DB Transactions** for HTTP and SQL golden signals from Splunk Stream or OpenTelemetry (`otel:traces`) without ever projecting SQL query text or cookies.
+
+Use each lens's URL-synced filter bar (`Source IP`, `Dest IP`, `Port`, `A↔B`, `Device`, `Interface`), instant client-side table search, `15m`/`30m`/`60m` UTC window presets, and drawer **Focus flow** pivot to narrow busy scopes below the per-search row cap. Switch to **Matrix** to view `Client × Server` or `Device × Peer` grids with adjacency overlays.
+
 ## Kubernetes topology reference
 
 When the demo includes a Kubernetes workload, show the client-facing Gateway and the serving nodes alongside their physical attachments. Label HTTPRoute backends as configured dependencies. Use matching firewall, host or Hubble observations to confirm individual segments for the selected request. Mark where coverage ends and record any translation boundary where the tuple changes. [Kubernetes telemetry setup and verification](../operators/kubernetes-platform.md)

@@ -21,8 +21,12 @@ import type {
 import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
+  buildDmeDispatchBounds,
+  buildDmeSnapshotWindowPredicate,
+  dmePreDedupLimit,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -193,6 +197,8 @@ export function buildL2DmeSearch(options: {
   index: string;
   filter?: ProtocolFilter;
   maxRows: number;
+  earliest?: number;
+  latest?: number;
 }): string {
   const index = literal(options.index, 80);
   const predicates: string[] = [
@@ -200,19 +206,31 @@ export function buildL2DmeSearch(options: {
     'sourcetype="cisco:dc:nexus9k:dme"',
     '(component="pc*" OR component="stp*" OR component="lldp*" OR dn="sys/intf/aggr-*" OR dn="sys/stp/*" OR dn="sys/lldp/*" OR port_channel=* OR stp_root=*)',
   ];
+  const windowPred = buildDmeSnapshotWindowPredicate(
+    options.earliest,
+    options.latest,
+  );
+  if (windowPred) {
+    predicates.push(windowPred);
+  }
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(host="${dev}" OR device="${dev}")`);
   }
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
-  const tableClause = buildAllowedFieldsClause(
-    "l2_control",
-    DME_L2_PROJECTED_FIELDS,
-  );
+  const preDedupLimit = dmePreDedupLimit(options.maxRows);
+  const tableClause = buildAllowedFieldsClause("l2_control", [
+    ...DME_L2_PROJECTED_FIELDS,
+    "_pre_dedup_count",
+  ]);
   return (
     `search ${predicates.join(" ")} ` +
+    `| head ${preDedupLimit} ` +
+    `| eventstats count AS _pre_dedup_count ` +
+    `| eval _dk_host=coalesce(device, host, "none"), _dk_comp=coalesce(component, sourcetype, "none"), _dk_dn=coalesce(dn, 'Row_info.dn', port_channel, 'Row_info.id', "none") ` +
+    `| dedup _dk_host _dk_comp _dk_dn ` +
     `| head ${headLimit} ` +
-    `| eval dn=coalesce(dn, 'Row_info.dn'), port_channel=coalesce(port_channel, 'Row_info.pcId', if(component=="pcAggrIf", 'Row_info.id', null())), member_interface=coalesce(member_interface, 'Row_info.tSKey', if(component=="pcRsMbrIfs", 'Row_info.tDn', null())), operSt=coalesce(operSt, 'Row_info.operSt'), oper_state=coalesce(oper_state, 'Row_info.operSt', 'Row_info.state'), lacp_state=coalesce(lacp_state, 'Row_info.mode', 'Row_info.lacpState'), stp_root=coalesce(stp_root, 'Row_info.desigRoot', 'Row_info.root'), port_state=coalesce(port_state, 'Row_info.state'), port_role=coalesce(port_role, 'Row_info.role'), vlan=coalesce(vlan, 'Row_info.vlan', 'Row_info.encap'), interface=coalesce(interface, 'Row_info.id', 'Row_info.portIdV'), descr=coalesce(descr, 'Row_info.descr', 'Row_info.operStQual', component) ` +
+    `| eval host=coalesce(device, host), dn=coalesce(dn, 'Row_info.dn'), port_channel=coalesce(port_channel, 'Row_info.pcId', if(component=="pcAggrIf", 'Row_info.id', null())), member_interface=coalesce(member_interface, 'Row_info.tSKey', if(component=="pcRsMbrIfs", 'Row_info.tDn', null())), operSt=coalesce(operSt, 'Row_info.operSt'), oper_state=coalesce(oper_state, 'Row_info.operSt', 'Row_info.state', 'Row_info.adminSt'), lacp_state=coalesce(lacp_state, 'Row_info.mode', 'Row_info.lacpState'), stp_root=coalesce(stp_root, 'Row_info.desigRoot', 'Row_info.root', 'Row_info.rootAddress'), port_state=coalesce(port_state, 'Row_info.state'), port_role=coalesce(port_role, 'Row_info.role'), vlan=coalesce(vlan, 'Row_info.vlan', 'Row_info.encap', if(component=="stpVlan", 'Row_info.id', null())), interface=coalesce(interface, if(component!="stpVlan", 'Row_info.id', null()), 'Row_info.portIdV'), descr=coalesce(descr, 'Row_info.descr', 'Row_info.operStQual', component) ` +
     tableClause
   );
 }
@@ -1506,7 +1524,7 @@ export function buildL2ControlAnalysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   const bannerState: L2ControlInvestigationResult["bannerState"] = anyPartial
     ? "partial"
@@ -1559,8 +1577,12 @@ export async function investigateL2Control(
   signal: AbortSignal,
   options: InvestigateL2ControlOptions = {},
 ): Promise<L2ControlInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "l2_control" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "l2_control",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1679,10 +1701,17 @@ export async function investigateL2Control(
 
       if (runDme) {
         signal.throwIfAborted();
+        const dispatchBounds = buildDmeDispatchBounds(
+          profile,
+          request.earliest,
+          request.latest,
+        );
         const spl = buildL2DmeSearch({
           index: profile.index,
           filter: request.filter,
           maxRows: 256,
+          earliest: request.earliest,
+          latest: request.latest,
         });
         const res = await runBoundedProtocolSearch(client, {
           lens: "l2_control",
@@ -1690,6 +1719,8 @@ export async function investigateL2Control(
           spl,
           earliest: request.earliest,
           latest: request.latest,
+          preDedupLimit: dmePreDedupLimit(256),
+          ...dispatchBounds,
           signal,
           keySuffix: "dme",
         });

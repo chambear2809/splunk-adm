@@ -621,7 +621,151 @@
       "validation_target": "splunk-adm-validation"
     }
   ],
-  "pending": [],
+  "pending": [
+    {
+      "title": "Arista Networks Telemetry For Splunk",
+      "splunkbase_id": "1918",
+      "target_version": "2.0.2",
+      "source_url": "https://splunkbase.splunk.com/app/1918",
+      "status": "pending_authenticated_download",
+      "purpose": "Arista EOS sFlow, LANZ microbursts, interface counters, optical light levels (DOM), hardware table status"
+    },
+    {
+      "title": "Splunk Add-on for Juniper",
+      "splunkbase_id": "2847",
+      "target_version": "1.7.0",
+      "source_url": "https://splunkbase.splunk.com/app/2847",
+      "status": "pending_authenticated_download",
+      "purpose": "Juniper SRX flow/NAT (juniper:junos:firewall, juniper:junos:firewall:structured), netscreen:firewall, juniper:junos:snmp"
+    },
+    {
+      "title": "Splunk Add-on for Palo Alto Networks",
+      "splunkbase_id": "7523",
+      "target_version": "4.0.0",
+      "source_url": "https://splunkbase.splunk.com/app/7523",
+      "status": "pending_authenticated_download",
+      "purpose": "Splunk-supported PAN-OS TA v4.0 (pan:traffic, pan:system, pan:config, pan:globalprotect) alongside legacy 2757"
+    },
+    {
+      "title": "Fortinet FortiGate Add-On for Splunk",
+      "splunkbase_id": "2846",
+      "target_version": "1.6.10",
+      "source_url": "https://splunkbase.splunk.com/app/2846",
+      "status": "pending_authenticated_download",
+      "purpose": "FortiGate traffic/NAT (fortigate_traffic/fgt_traffic) and operational events (fortigate_event/fgt_event)"
+    },
+    {
+      "title": "CCX Unified Splunk Add-on for Checkpoint",
+      "splunkbase_id": "5402",
+      "target_version": "2.1.3",
+      "source_url": "https://splunkbase.splunk.com/app/5402",
+      "status": "pending_authenticated_download",
+      "purpose": "Check Point Log Exporter firewall flows, NAT, drops, VPN"
+    },
+    {
+      "title": "VMware NSX add-on",
+      "splunkbase_id": "6805",
+      "target_version": "1.0.5",
+      "source_url": "https://splunkbase.splunk.com/app/6805",
+      "status": "pending_authenticated_download",
+      "purpose": "VMware NSX Distributed Firewall (dfw) allow/deny flows and syslog"
+    },
+    {
+      "title": "Splunk Add-on for F5 BIG-IP",
+      "splunkbase_id": "2680",
+      "target_version": "7.0.1",
+      "source_url": "https://splunkbase.splunk.com/app/2680",
+      "status": "pending_authenticated_download",
+      "purpose": "F5 BIG-IP LTM iRule HSL, f5:bigip:syslog pool-monitor/HA/SNAT events, and iControl REST metrics/certs"
+    },
+    {
+      "title": "Splunk Add-on for Citrix NetScaler",
+      "splunkbase_id": "2770",
+      "target_version": "8.2.5",
+      "source_url": "https://splunkbase.splunk.com/app/2770",
+      "status": "pending_authenticated_download",
+      "purpose": "Citrix NetScaler AppFlow/IPFIX, syslog, and NITRO API VIP/service-group health"
+    },
+    {
+      "title": "Splunk Add-on for HAProxy",
+      "splunkbase_id": "3135",
+      "source_url": "https://splunkbase.splunk.com/app/3135",
+      "status": "pending_authenticated_download",
+      "purpose": "HAProxy haproxy:http balancer vs backend error attribution"
+    },
+    {
+      "title": "Aruba Networks Add-on for Splunk",
+      "splunkbase_id": "4668",
+      "target_version": "1.1.2",
+      "source_url": "https://splunkbase.splunk.com/app/4668",
+      "status": "pending_authenticated_download",
+      "purpose": "HPE Aruba Wi-Fi controller & campus logs"
+    },
+    {
+      "title": "HPE Aruba Networking EdgeConnect SD-WAN Security App for Splunk",
+      "splunkbase_id": "6302",
+      "target_version": "1.1.2",
+      "source_url": "https://splunkbase.splunk.com/app/6302",
+      "status": "pending_authenticated_download",
+      "purpose": "HPE Aruba EdgeConnect (Silver Peak) SD-WAN tunnel & flow telemetry"
+    },
+    {
+      "title": "Infoblox App for Splunk",
+      "splunkbase_id": "7473",
+      "target_version": "2.0.0",
+      "source_url": "https://splunkbase.splunk.com/app/7473",
+      "status": "pending_authenticated_download",
+      "purpose": "Infoblox NIOS DNS/DHCP/audit parsing alongside SC4S"
+    },
+    {
+      "title": "Splunk Add-on for Microsoft Windows",
+      "splunkbase_id": "742",
+      "target_version": "12.0.0",
+      "source_url": "https://splunkbase.splunk.com/app/742",
+      "status": "pending_authenticated_download",
+      "purpose": "Windows Server AD/DNS and Windows DHCP scope exhaustion/failover"
+    },
+    {
+      "title": "Splunk Add-on for Cisco ASA",
+      "splunkbase_id": "1620",
+      "target_version": "6.1.2",
+      "source_url": "https://splunkbase.splunk.com/app/1620",
+      "status": "pending_authenticated_download",
+      "purpose": "Cisco ASA AnyConnect VPN, NAT/session exhaustion, failover/routing syslog"
+    },
+    {
+      "title": "Cisco Secure Access Add-on for Splunk",
+      "splunkbase_id": "7569",
+      "target_version": "1.0.57",
+      "source_url": "https://splunkbase.splunk.com/app/7569",
+      "status": "pending_authenticated_download",
+      "purpose": "Cisco Secure Access & Umbrella SSE/Zero-Trust DNS/SWG/private access"
+    },
+    {
+      "title": "Zscaler Technical Add-on and App for Splunk",
+      "splunkbase_id": "3865",
+      "target_version": "3.0.22",
+      "source_url": "https://splunkbase.splunk.com/app/3865",
+      "status": "pending_authenticated_download",
+      "purpose": "Zscaler ZIA / ZPA remote-access connector health, tunnels, policy blocks"
+    },
+    {
+      "title": "Splunk Add-on for NGINX",
+      "splunkbase_id": "3258",
+      "target_version": "3.3.2",
+      "source_url": "https://splunkbase.splunk.com/app/3258",
+      "status": "pending_authenticated_download",
+      "purpose": "NGINX reverse proxy / ingress upstream 5xx and latency attribution"
+    },
+    {
+      "title": "Cloudflare App for Splunk",
+      "splunkbase_id": "4501",
+      "target_version": "2.3.1",
+      "source_url": "https://splunkbase.splunk.com/app/4501",
+      "status": "pending_authenticated_download",
+      "purpose": "Cloudflare edge WAF/CDN blocks, 502 origin timeouts, Zero-Trust network sessions"
+    }
+  ],
   "atlas_collector_builds": [
     {
       "version": "0.164.0-atlas-device-evidence-r1",

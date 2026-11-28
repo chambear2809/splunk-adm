@@ -4,7 +4,44 @@ import {
   type SearchClient,
 } from "../../data/searchClient";
 import type { BaseProtocolProfile } from "./contract";
-import { runBoundedProtocolSearch } from "./runner";
+import {
+  buildDmeDispatchBounds,
+  buildDmeWindowPredicate,
+  qualifyVerdictForDegradedSources,
+  runBoundedProtocolSearch,
+  selectActiveProfiles,
+} from "./runner";
+
+describe("qualifyVerdictForDegradedSources", () => {
+  it("downgrades only healthy verdicts when a source is degraded", () => {
+    expect(
+      qualifyVerdictForDegradedSources(
+        "2 of 2 pairs within bounds.",
+        "ok",
+        true,
+      ),
+    ).toEqual({
+      verdict:
+        "2 of 2 pairs within bounds, but one or more sources were capped, blocked, or unavailable.",
+      verdictStatus: "attention",
+    });
+    expect(
+      qualifyVerdictForDegradedSources(
+        "2 of 2 pairs within bounds.",
+        "ok",
+        false,
+      ),
+    ).toEqual({ verdict: "2 of 2 pairs within bounds.", verdictStatus: "ok" });
+    expect(
+      qualifyVerdictForDegradedSources("1 needs attention.", "attention", true)
+        .verdict,
+    ).toBe("1 needs attention.");
+    expect(
+      qualifyVerdictForDegradedSources("Not covered.", "not_covered", true)
+        .verdictStatus,
+    ).toBe("not_covered");
+  });
+});
 
 const NOW = 1800000000;
 
@@ -120,6 +157,93 @@ describe("runBoundedProtocolSearch", () => {
         signal: new AbortController().signal,
       }),
     ).rejects.toThrow(/maxRows/i);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("builds dual _time/_index_earliest predicates and honors dispatchEarliest/dispatchLatest", async () => {
+    expect(buildDmeWindowPredicate(1700000000, 1700003600)).toBe(
+      "((earliest=1700000000 latest=1700003600) OR (_index_earliest=1700000000 _index_latest=1700003600))",
+    );
+    expect(buildDmeWindowPredicate(1700003600, 1700000000)).toBeUndefined();
+    const recentProfile = { ...PROFILE, validFrom: NOW - 3600 };
+    expect(buildDmeDispatchBounds(recentProfile, NOW - 900, NOW - 60)).toEqual({
+      dispatchEarliest: String(NOW - 900 - 180 * 86400),
+      dispatchLatest: String(NOW - 60),
+    });
+    expect(buildDmeDispatchBounds(PROFILE, NOW, NOW - 60)).toEqual({});
+    const search = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          _time: String(NOW - 120),
+          host: "198.18.131.1",
+          _pre_dedup_count: "2056",
+        },
+      ],
+      warnings: [],
+      errors: [],
+    });
+    const client: SearchClient = { search };
+    const bounded = await runBoundedProtocolSearch(client, {
+      lens: "interface_health",
+      profile: {
+        ...PROFILE,
+        source: "protocol_interface_health",
+        lens: "interface_health",
+      },
+      spl: 'search index=cisco_dc sourcetype="cisco:dc:nexus9k:dme" | head 2056 | eventstats count AS _pre_dedup_count | head 257 | table _time host _pre_dedup_count',
+      earliest: NOW - 900,
+      latest: NOW - 60,
+      preDedupLimit: 2056,
+      dispatchEarliest: "0",
+      dispatchLatest: "now",
+      signal: new AbortController().signal,
+    });
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({ earliest: "0", latest: "now" }),
+    );
+    expect(bounded.capped).toBe(true);
+    expect(bounded.outcome.state).toBe("partial");
+    expect(bounded.rows[0]).not.toHaveProperty("_pre_dedup_count");
+
+    // selectActiveProfiles drops expired rotated profiles when a covering one exists
+    const expired: BaseProtocolProfile = {
+      ...PROFILE,
+      id: "tcp-old",
+      validFrom: NOW - 7200,
+      validUntil: NOW - 3600,
+    };
+    const active: BaseProtocolProfile = {
+      ...PROFILE,
+      id: "tcp-new",
+      validFrom: NOW - 3600,
+      validUntil: NOW + 3600,
+    };
+    expect(
+      selectActiveProfiles(
+        [expired, active],
+        "tcp_tls",
+        "lab:dc1",
+        NOW - 900,
+        NOW - 60,
+      ).map((p) => p.id),
+    ).toEqual(["tcp-new"]);
+  });
+
+  it("rejects event searches wider than MAX_WINDOW_SECONDS so metrics windows cannot leak", async () => {
+    const search = vi.fn();
+    await expect(
+      runBoundedProtocolSearch(
+        { search },
+        {
+          lens: "tcp_tls",
+          profile: PROFILE,
+          spl: "search index=netflow | head 10 | table _time src_ip",
+          earliest: NOW - 86400 * 7,
+          latest: NOW,
+          signal: new AbortController().signal,
+        },
+      ),
+    ).rejects.toThrow(/between 1 and 3600 seconds/i);
     expect(search).not.toHaveBeenCalled();
   });
 });

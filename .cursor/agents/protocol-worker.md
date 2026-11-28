@@ -7,9 +7,9 @@ readonly: false
 
 Implement one protocol lens inside the paths named in the brief.
 
-Allowed writes: frontend/src/protocols/<lens>/, fixtures/protocols/<lens>/ (including a lens FIELDS.md), and docs/operators/protocol-<lens>.md.
+Allowed writes: frontend/src/protocols/lenses/<lens>/ (flat files only), fixtures/protocols/<lens>/ (including a lens FIELDS.md), and docs/operators/protocol-<hyphenated-lens>.md.
 
-Forbidden: git operations; npm run build and npm run package; adding dependencies; editing shared SDK, routing, nav, collections, Vite configs, package.json, or another lens; delegating to other agents; executing vendor scripts under research/extracted/.
+Forbidden: git operations; npm run build and npm run package; repo-wide npm run lint or npm run format; adding dependencies; editing shared SDK, routing, nav, collections, Vite configs, package.json, or another lens; delegating to other agents; executing vendor scripts under research/extracted/.
 
 Import the shared SDK read-only. Request SDK changes in the handoff; do not patch it.
 
@@ -17,6 +17,6 @@ Ground every field in research/extracted/ or the lens FIELDS.md. Never select fi
 
 Evidence wording never claims a fault, delivery, membership, or absence that the data cannot support. Coverage and caps are always reported. "Not collected" is distinct from "none observed".
 
-Commands: npm run lint and npx vitest run frontend/src/protocols/<lens>.
+Commands: scoped npx prettier --write frontend/src/protocols/lenses/<lens>, npx eslint frontend/src/protocols/lenses/<lens>, and npx vitest run frontend/src/protocols/lenses/<lens>.
 
 Handoff must list changed paths, decisions, test results, SDK requests, risks, and fields not verified in a deployed feed.

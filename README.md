@@ -52,6 +52,18 @@ The setup screen appears when no multicast profiles are active. See the [Multica
 
 ![Multicast setup state prompting an administrator to configure verified Stream IGMP or NetFlow profiles](docs/screenshots/readme/09-multicast-setup.png)
 
+**8. Analyze network and application protocols.** Open **Protocols** for a unified hub linking standalone **Multicast / IGMP** alongside 13 scoped, on-demand protocol workbenches (**TCP Health & TLS**, **DNS Operations**, **Routing Control Plane**, **L2 Control Plane**, **Interface & Link Health**, **QoS/DSCP & ICMP**, **Enterprise L7**, **Blocked Traffic & Drops**, **Endpoint Mobility & ARP**, **HTTP & DB Transactions**, **State-Change Timeline**, **Management-Plane Hygiene**, and **Load Balancer Pool Health**) plus an on-demand **Traffic & IP mix** strip. Zero searches run on page load, and every lens enforces strict field allowlists (never projecting `_raw`, SQL query text, cookies, SNMP communities, or credentials).
+
+![Protocols hub showing Traffic & IP mix summary, standalone Multicast/IGMP, and 13 protocol analysis lenses](docs/screenshots/readme/14-protocols-hub.png)
+
+Every lens provides a URL-synced SPL filter bar (`Source IP`, `Dest IP`, `Port`, `A↔B` bidirectional toggle, `Device` / `Interface` / `VNI`), instant client-side table search, selectable UTC window presets (`15m`, `30m`, `60m`), and one-click **Focus flow** / **Focus** pivots from the detail drawer so operators can isolate a single conversation below row caps.
+
+![TCP Health & TLS lens showing flow filter bar, Server/Client RTT p95, retransmits, resets, TLS certificate posture, and RTT p50/p95 bars](docs/screenshots/readme/15-protocols-tcp-tls.png)
+
+Switch any lens to **Matrix** to pivot across `Client × Server`, `Device × Peer`, or `Device × Interface` grids (with peer adjacency overlays on **Routing Control Plane**), marking unobserved cells as **None observed** when complete and **Unknown** when capped. See [Protocol analysis workbenches](docs/operators/README.md#protocol-analysis-workbenches) for per-lens operator guides.
+
+![Routing Control Plane Matrix view showing device-to-peer adjacency graph and BGP Established/Down grid](docs/screenshots/readme/16-protocols-routing-matrix.png)
+
 ## Verified on a live lab
 
 Splunk Cloud 10.6 + ACI 6.1 + vSphere VDS + UCS fabric interconnects + Kubernetes, November 2026.
@@ -68,12 +80,12 @@ Splunk is required; add sources for the questions you need answered. Full matrix
 | Source | What it adds |
 | --- | --- |
 | [Splunk Enterprise 10.6.0.5 / Cloud](docs/operators/splunk-platform.md) ([support matrix](docs/operators/SUPPORT_MATRIX.md)) | Search, summaries, correlation and the Atlas UI |
-| [Splunk Stream NetFlow/IPFIX](docs/operators/network-stream.md) | Observed conversations; ACI leaf and port "Seen" |
+| [Splunk Stream NetFlow/IPFIX & wire capture](docs/operators/network-stream.md) | Observed conversations, ACI leaf/port "Seen", plus optional wire TCP RTT/TLS (`stream:tcp`), DNS, ICMP, ARP, and HTTP |
 | [Stream IPFIX from VMware VDS](docs/operators/network-stream.md#vmware-vds-ipfix) | VDS hop observations on traces and Device pages |
 | [Cisco ACI / APIC classes](docs/operators/aci-network.md) | Endpoints, EPG/BD, fabric links, contracts, ACL-log drops, vPC, L3Out |
 | [ACI VMM / adjacency classes](docs/operators/ACI_VMM_ADJACENCY_CLASSES.md) | ESXi hosts, VDS ports, host uplinks, UCS FI hop (via LLDP) |
 | [Splunk Add-on for VMware](docs/operators/INTERSIGHT_VMWARE_LAB_SETUP.md) | VDS port and host uplink (vmnic) names |
-| SC4SNMP (IF-MIB) | Switch interface names for NetFlow ifIndex values |
+| SC4S / SC4SNMP | HEC-backed switch/firewall syslog (`cisco:ios`, `cisco:aci`) and IF-MIB interface names for NetFlow ifIndex values |
 | [Cisco Intersight](docs/operators/INTERSIGHT_VMWARE_LAB_SETUP.md) | Not read yet; FI hop currently comes from APIC LLDP |
 | [Nexus Dashboard / NX-OS](docs/operators/aci-network.md#nexus-dashboard-inputs) | Fabric flows, endpoint history, device and interface context |
 | [Kubernetes + Splunk OTel Collector](docs/operators/kubernetes-platform.md) | Pod, Service and node identity history; service calls |

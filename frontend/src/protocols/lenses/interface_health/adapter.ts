@@ -24,8 +24,13 @@ import type {
 import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
+  buildDmeDispatchBounds,
+  buildDmeSnapshotWindowPredicate,
+  buildDmeWindowPredicate,
+  dmePreDedupLimit,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -114,16 +119,47 @@ export function buildInterfaceDmeSearch(options: {
   index: string;
   filter?: ProtocolFilter;
   maxRows: number;
+  earliest?: number;
+  latest?: number;
+  componentFilter?: "all" | "state";
 }): string {
   const index = literal(options.index, 80);
+  const componentClause =
+    options.componentFilter === "state"
+      ? `(component="l1PhysIf" OR component="ethpmPhysIf")`
+      : `(component="l1PhysIf" OR component="ethpmPhysIf" OR component="rmon*" OR dn="sys/intf/phys-*" OR interface=* OR interface_name=* OR interfaceName=*)`;
+  const windowPred =
+    options.componentFilter === "state"
+      ? buildDmeSnapshotWindowPredicate(options.earliest, options.latest)
+      : buildDmeWindowPredicate(options.earliest, options.latest);
+  const e =
+    options.earliest !== undefined ? Math.trunc(options.earliest) : undefined;
+  const l =
+    options.latest !== undefined ? Math.trunc(options.latest) : undefined;
+  const hasNdWindow =
+    e !== undefined &&
+    l !== undefined &&
+    Number.isFinite(e) &&
+    Number.isFinite(l) &&
+    l > e;
+  const sourcetypeClause =
+    options.componentFilter === "state"
+      ? windowPred
+        ? `(sourcetype="cisco:dc:nexus9k:dme" ${windowPred})`
+        : `sourcetype="cisco:dc:nexus9k:dme"`
+      : windowPred && hasNdWindow
+        ? `((sourcetype="cisco:dc:nexus9k:dme" ${windowPred}) OR (sourcetype="cisco:dc:nd:*" earliest=${e} latest=${l}))`
+        : `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`;
   const predicates: string[] = [
     `index=${index}`,
-    `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`,
-    `(component="l1PhysIf" OR component="ethpmPhysIf" OR component="rmon*" OR dn="sys/intf/phys-*" OR interface=* OR interface_name=* OR interfaceName=*)`,
+    sourcetypeClause,
+    componentClause,
   ];
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
-    predicates.push(`host="${dev}"`);
+    predicates.push(
+      `(host="${dev}" OR device="${dev}" OR nodeName="${dev}" OR switchName="${dev}")`,
+    );
   }
   if (options.filter?.iface) {
     const iface = literal(options.filter.iface, 64);
@@ -150,13 +186,13 @@ export function buildInterfaceDmeSearch(options: {
   }
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
   const evalClause =
-    `| eval host=coalesce(nodeName, switchName, host, device), ` +
+    `| eval host=coalesce(nodeName, switchName, device, host), ` +
     `interface=coalesce(interface, interface_name, interfaceName, interfaceUniqueId, 'Row_info.id'), ` +
     `dn=coalesce(dn, 'Row_info.dn'), ` +
     `descr=coalesce(descr, desc, interfaceDescription, 'Row_info.descr'), ` +
     `admin_state=coalesce(admin_state, adminStatus, adminSt, 'Row_info.adminSt'), ` +
     `oper_state=coalesce(oper_state, operStatus, operSt, 'Row_info.operSt'), ` +
-    `speed=coalesce(speed, portSpeed, eth_speed, 'Row_info.speed'), ` +
+    `speed=coalesce(speed, portSpeed, eth_speed, 'Row_info.operSpeed', 'Row_info.speed'), ` +
     `mtu=coalesce(mtu, eth_mtu, 'Row_info.mtu'), ` +
     `in_errors=coalesce(in_errors, inErrors, eth_inerr, 'Row_info.inErrors', if(component=="rmonIfIn", 'Row_info.errors', null())), ` +
     `out_errors=coalesce(out_errors, outErrors, eth_outerr, 'Row_info.outErrors', if(component=="rmonIfOut", 'Row_info.errors', null())), ` +
@@ -169,11 +205,20 @@ export function buildInterfaceDmeSearch(options: {
     `out_octets=coalesce(out_octets, outOctets, tx_bytes, eth_outbytes, 'Row_info.outOctets', if(component=="rmonIfOut", 'Row_info.octets', null())), ` +
     `utilization_pct=coalesce(utilization_pct, interfaceRateIngress), ` +
     `flap_count=coalesce(flap_count, eth_link_flapped) `;
-  const tableClause = buildAllowedFieldsClause(
-    "interface_health",
-    INTERFACE_DME_PROJECTED_FIELDS,
-  );
-  return `search ${predicates.join(" ")} | head ${headLimit} ${evalClause}${tableClause}`;
+  const tableClause = buildAllowedFieldsClause("interface_health", [
+    ...INTERFACE_DME_PROJECTED_FIELDS,
+    "_pre_dedup_count",
+  ]);
+  const preDedupLimit = dmePreDedupLimit(options.maxRows);
+  const dedupKeyEval =
+    `| head ${preDedupLimit} | eventstats count AS _pre_dedup_count | eval _dk_host=coalesce(nodeName, switchName, device, host, "none"), ` +
+    `_dk_comp=coalesce(component, sourcetype, "none"), ` +
+    `_dk_dn=coalesce(dn, 'Row_info.dn', interface, interface_name, interfaceName, 'Row_info.id', "none")`;
+  const dedupClause =
+    options.componentFilter === "state"
+      ? `${dedupKeyEval} | dedup _dk_host _dk_comp _dk_dn`
+      : `${dedupKeyEval} | eventstats earliest(_time) AS _dk_first_t latest(_time) AS _dk_last_t BY _dk_host _dk_comp _dk_dn | where (_time=_dk_first_t OR _time=_dk_last_t OR isnull(_time)) | eval _dk_edge=if(_time=_dk_first_t, "f", "l") | dedup _dk_host _dk_comp _dk_dn _dk_edge`;
+  return `search ${predicates.join(" ")} ${dedupClause} | head ${headLimit} ${evalClause}${tableClause}`;
 }
 
 /**
@@ -233,7 +278,22 @@ export function buildInterfaceRawEventsUrl(options: {
       : options.sourceMode === "dme"
         ? `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`
         : `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*" OR sourcetype="cisco:ios" OR sourcetype="cisco:dc:nexus9k:syslog" OR sourcetype="cisco:aci" OR sourcetype="cisco:dc:aci:syslog")`;
-  const q = `search index=${index} ${stClause} host="${device}" (interface="${iface}" OR interface_name="${iface}" OR "${iface}")`;
+  const canon = literal(canonicalInterfaceKey(options.iface), 128);
+  const shortEth = canon.startsWith("ethernet")
+    ? literal(`eth${canon.slice("ethernet".length)}`, 128)
+    : undefined;
+  const ifaceVariants = Array.from(
+    new Set([iface, canon, shortEth].filter((v): v is string => Boolean(v))),
+  );
+  const ifaceClause = ifaceVariants
+    .flatMap((v) => [
+      `interface="${v}"`,
+      `interface_name="${v}"`,
+      `Row_info.dn="*[${v}]*"`,
+      `"${v}"`,
+    ])
+    .join(" OR ");
+  const q = `search index=${index} ${stClause} (host="${device}" OR device="${device}" OR nodeName="${device}" OR switchName="${device}") (${ifaceClause})`;
   const params = new URLSearchParams({
     q,
     earliest: String(Math.trunc(options.earliest)),
@@ -1569,8 +1629,12 @@ export async function investigateInterfaceHealth(
   signal: AbortSignal,
   options: InvestigateInterfaceHealthOptions = {},
 ): Promise<InterfaceHealthInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "interface_health" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "interface_health",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1619,10 +1683,17 @@ export async function investigateInterfaceHealth(
 
     for (const profile of dmeProfiles) {
       signal.throwIfAborted();
+      const dispatchBounds = buildDmeDispatchBounds(
+        profile,
+        request.earliest,
+        request.latest,
+      );
       const spl = buildInterfaceDmeSearch({
         index: profile.index,
         filter: request.filter,
         maxRows: 256,
+        earliest: request.earliest,
+        latest: request.latest,
       });
       const res = await runBoundedProtocolSearch(client, {
         lens: "interface_health",
@@ -1630,6 +1701,8 @@ export async function investigateInterfaceHealth(
         spl,
         earliest: request.earliest,
         latest: request.latest,
+        preDedupLimit: dmePreDedupLimit(256),
+        ...dispatchBounds,
         signal,
         keySuffix: "dme",
       });
@@ -1638,11 +1711,48 @@ export async function investigateInterfaceHealth(
       const wantIfaceKey = request.filter?.iface
         ? canonicalInterfaceKey(request.filter.iface)
         : undefined;
+      let sawStateInProfile = false;
       for (const row of res.rows) {
         const norm = normalizeInterfaceDmeRow(row);
         if (!norm) continue;
         if (wantIfaceKey && norm.canonKey !== wantIfaceKey) continue;
+        if (norm.adminState || norm.operState) sawStateInProfile = true;
         dmeEvents.push({ event: norm, indexName: profile.index });
+      }
+      if (res.capped && !sawStateInProfile) {
+        signal.throwIfAborted();
+        const stateSpl = buildInterfaceDmeSearch({
+          index: profile.index,
+          filter: request.filter,
+          maxRows: 256,
+          earliest: request.earliest,
+          latest: request.latest,
+          componentFilter: "state",
+        });
+        const stateRes = await runBoundedProtocolSearch(client, {
+          lens: "interface_health",
+          profile,
+          spl: stateSpl,
+          earliest: request.earliest,
+          latest: request.latest,
+          preDedupLimit: dmePreDedupLimit(256),
+          ...dispatchBounds,
+          signal,
+          keySuffix: "dme_state",
+        });
+        if (
+          stateRes.outcome.state === "blocked" ||
+          stateRes.outcome.state === "unavailable"
+        ) {
+          outcomes.push(stateRes.outcome);
+        }
+        if (stateRes.capped) capped = true;
+        for (const row of stateRes.rows) {
+          const norm = normalizeInterfaceDmeRow(row);
+          if (!norm || (!norm.adminState && !norm.operState)) continue;
+          if (wantIfaceKey && norm.canonKey !== wantIfaceKey) continue;
+          dmeEvents.push({ event: norm, indexName: profile.index });
+        }
       }
     }
 

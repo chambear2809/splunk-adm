@@ -23,6 +23,7 @@ import {
   buildAppTransactionsAnalysis,
   buildAppTransactionsRawEventsUrl,
   buildAppTransactionsSearch,
+  buildOtelTransactionsSearch,
   investigateAppTransactions,
   makeAppTransactionRowId,
   normalizeAppTransactionRow,
@@ -713,5 +714,113 @@ describe("investigateAppTransactions & summarizeAppTransactions", () => {
         { skipConfigRecheck: true },
       ),
     ).rejects.toThrow();
+  });
+
+  it("supports otel:traces HTTP and DB spans without ever selecting SQL query text", async () => {
+    const spl = buildOtelTransactionsSearch({
+      index: "otel_traces",
+      filter: { src: "10.1.175.14", dst: "teastore-webui", port: "8080" },
+      maxRows: 256,
+    });
+    expect(spl).toContain('sourcetype="otel:traces"');
+    expect(spl).toContain("attributes.http.request.method=*");
+    expect(spl).toContain("attributes.http.method=*");
+    expect(spl).toContain("attributes.db.system=*");
+    expect(spl).toContain('service.name="teastore-webui"');
+    expect(spl).toContain('resource.service.name="teastore-webui"');
+    expect(spl).not.toContain("db.statement");
+    expect(spl).not.toContain("url.query");
+    expect(spl.indexOf("| head 257")).toBeLessThan(spl.indexOf("| table "));
+    expect(() =>
+      assertNoForbiddenFieldsInSpl("app_transactions", spl),
+    ).not.toThrow();
+
+    const search = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          _time: EARLIEST + 30,
+          host: "teastore-microk8s",
+          sourcetype: "otel:traces",
+          src_ip: "10.1.175.14",
+          dest_ip: "teastore-persistence",
+          dest_port: 8080,
+          http_method: "GET",
+          status: "ERROR",
+          status_code: 500,
+          error_code: "OTEL_ERROR",
+          uri_path: "/rest/categories",
+          site: "teastore-persistence",
+          time_taken: 4200,
+        },
+        {
+          _time: EARLIEST + 35,
+          host: "teastore-microk8s",
+          sourcetype: "otel:traces",
+          src_ip: "10.1.175.14",
+          dest_ip: "teastore-db",
+          dest_port: 3306,
+          db_type: "mysql",
+          database: "teadb",
+          status: "OK",
+          time_taken: 1800,
+        },
+      ],
+      warnings: [],
+      errors: [],
+    });
+
+    const res = await investigateAppTransactions(
+      { search },
+      makeRequest(),
+      makeConfig([
+        makeProfile({
+          id: "otel-teastore",
+          index: "otel_traces",
+          extra: { sourceKind: "otel" },
+        }),
+      ]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+
+    expect(res.verdictStatus).toBe("attention");
+    expect(res.rows).toHaveLength(2);
+    const httpRow = res.rows.find((r) => r.protocolLabel === "HTTP (OTel)");
+    expect(httpRow?.http5xxCount).toBe(1);
+    expect(httpRow?.errorCount).toBe(1);
+    expect(res.rows.map((r) => r.protocolLabel)).toContain("MYSQL (OTel)");
+
+    // Filtered OTel query keeps only rows matching dst + port
+    const filtered = await investigateAppTransactions(
+      { search },
+      makeRequest({ filter: { dst: "teastore-persistence", port: "8080" } }),
+      makeConfig([
+        makeProfile({
+          id: "otel-teastore",
+          index: "otel_traces",
+          extra: { sourceKind: "otel" },
+        }),
+      ]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    expect(filtered.rows).toHaveLength(1);
+    expect(filtered.rows[0].serverIp).toBe("teastore-persistence");
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "app_transactions",
+        'search index=otel_traces | table _time "attributes.db.statement"',
+      ),
+    ).toThrow(/SQL query text/i);
+    expect(
+      buildAppTransactionsRawEventsUrl({
+        index: "otel_traces",
+        serverIp: "teastore-db",
+        destPort: 3306,
+        sourcetypes: ["otel:traces"],
+        earliest: EARLIEST,
+        latest: NOW,
+      }),
+    ).toContain("attributes.server.address");
   });
 });

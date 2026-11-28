@@ -20,6 +20,7 @@ import { formatBytes, formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1717,7 +1718,7 @@ export function buildDropsAnalysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); drop visibility is incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); drop visibility is incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   return {
     verdict,
@@ -1797,8 +1798,12 @@ export async function investigateDrops(
   signal: AbortSignal,
   options: InvestigateDropsOptions = {},
 ): Promise<DropsInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "drops" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "drops",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

@@ -76,6 +76,6 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Live verified** (NetFlow fallback)
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `125` pairs, `1.6 MiB`, `256` flow records (capped sample) from `stream:netflow`; RTT and TLS posture truthfully reported as **Not covered** (`stream:tcp` kept in Estimate mode under the 80% daily license cap with no SPAN capture NIC). Use **Source IP**, **Dest IP**, **Port**, and **A↔B** (or **Focus flow** in the drawer) to narrow SPL to a specific conversation.
+- **Verdict:** **Live verified** (`stream:tcp` primary + `stream:netflow` fallback)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** Scoped independent `streamfwd` capture (`atlas-streamfwd-wire.service` on `ens160`, BPF excluding NetFlow/syslog/HEC, payload fields disabled) feeds `stream:tcp` into `index=netflow` at ~`0.37 MiB/hr`: live `Server RTT p95`, `Client RTT p95`, TCP resets, and TLS posture (`TLS 1.2 · expired` on the 6 Nexus 9000 switches, `TLS 1.2 · 191d` on valid external endpoints, **Not covered** on cleartext `0.0` flows). Drawer **Focus flow** pivot (skipping ephemeral ports `> 32767`) isolates bidirectional pairs (`A↔B`) cleanly. NetFlow-only fallback mode also verified (`Source`/`Destination` headers, port truncation, **Not covered** RTT & TLS).
 

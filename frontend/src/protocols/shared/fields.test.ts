@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  LENS_ROW_EXPANSION_ONLY_FIELDS,
+  ROW_EXPANSION_ONLY_FIELDS,
   assertNoForbiddenFieldsInSpl,
   buildAllowedFieldsClause,
   isFieldAllowedForLens,
@@ -84,5 +86,39 @@ describe("protocol field allowlists and sensitive-field guards", () => {
         'search index=netflow | table "payload"',
       ),
     ).toThrow(/forbidden sensitive field/i);
+  });
+
+  it("blocks sFlow user fields without colliding with lb_health F5 rex patterns", () => {
+    expect(isFieldAllowedForLens("tcp_tls", "src_user")).toBe(false);
+    expect(isFieldAllowedForLens("tcp_tls", "dest_user")).toBe(false);
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "tcp_tls",
+        "search index=netflow | table _time src_ip src_user",
+      ),
+    ).toThrow(/forbidden sensitive field/i);
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "lb_health",
+        'search index=lb | rex "http_url=[^,\\"]{0,8192}" | head 10 | table _time host',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertNoForbiddenFieldsInSpl(
+        "interface_health",
+        '| mstats avg(m) AS in_errors WHERE index=netmetrics AND host IN ("content-sw01", "login-gw1") BY host | head 10',
+      ),
+    ).not.toThrow();
+  });
+
+  it("keeps all row-expansion-only field entries strictly lowercase", () => {
+    for (const f of ROW_EXPANSION_ONLY_FIELDS) {
+      expect(f).toBe(f.toLowerCase());
+    }
+    for (const set of Object.values(LENS_ROW_EXPANSION_ONLY_FIELDS)) {
+      for (const f of set ?? []) {
+        expect(f).toBe(f.toLowerCase());
+      }
+    }
   });
 });

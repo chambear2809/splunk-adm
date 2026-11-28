@@ -17,8 +17,11 @@ export const PROTOCOLS_CORE_SDK_MODULES = {
   "frontend/src/protocols/shared/filterSpl": "filterSpl",
   "frontend/src/protocols/shared/format": "format",
   "frontend/src/protocols/shared/runner": "runner",
+  "frontend/src/protocols/shared/metricsRunner": "metricsRunner",
   "frontend/src/protocols/shared/streamReadiness": "streamReadiness",
   "frontend/src/protocols/shared/adapters/nxosSyslog": "nxosSyslog",
+  "frontend/src/protocols/shared/adapters/multiVendorSyslog":
+    "multiVendorSyslog",
   "frontend/src/protocols/shared/ui": "ui",
   "frontend/src/protocols/shared/ui/index": "ui",
 };
