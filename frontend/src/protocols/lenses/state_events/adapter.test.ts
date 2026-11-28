@@ -211,8 +211,9 @@ describe("SPL builders & sensitive-field guards", () => {
     expect(spl).toContain('component="faultInst"');
     expect(spl).toContain('component="eventRecord"');
     expect(spl).toContain(
-      '(host="apic-01.dc1.local" OR apic_host="apic-01.dc1.local")',
+      '(host="apic-01.dc1.local" OR device="apic-01.dc1.local" OR apic_host="apic-01.dc1.local")',
     );
+    expect(spl).toContain('sourcetype="cisco:dc:nexus9k:dme"');
     expect(spl).toContain("| head 257");
     expect(spl).toContain("| table ");
     expect(spl.indexOf("| head 257")).toBeLessThan(spl.indexOf("| table "));
@@ -766,5 +767,52 @@ describe("fixture aggregation, timelines, coverage & config recheck", () => {
     expect(res.rows).toHaveLength(1);
     expect(res.rows[0].eventCount).toBe(1);
     expect(res.rows[0].transitions[0].interfaceOrDn).toBe("Ethernet1/1");
+  });
+
+  it("scopes _index_earliest only to nexus9k:dme faults and dedupes repeated polled NX-OS faults", async () => {
+    const spl = buildAciFaultEventSearch({
+      index: "cisco_dc",
+      maxRows: 256,
+      earliest: EARLIEST,
+      latest: NOW,
+    });
+    expect(spl).toContain(
+      `sourcetype="cisco:dc:aci:fault" OR sourcetype="cisco:dc:aci:event"`,
+    );
+    expect(spl).toContain(`earliest=${EARLIEST} latest=${NOW}`);
+    expect(spl).toContain(
+      `sourcetype="cisco:dc:nexus9k:dme" (component="faultInst" OR component="eventRecord") ((earliest=${EARLIEST} latest=${NOW}) OR (_index_earliest=${EARLIEST} _index_latest=${NOW}))`,
+    );
+    expect(spl.indexOf("| dedup ")).toBeGreaterThan(-1);
+    expect(spl.indexOf("| dedup ")).toBeLessThan(spl.indexOf("| head 257"));
+
+    const repeatedFault = {
+      _time: EARLIEST - 86400,
+      host: "198.18.131.4",
+      sourcetype: "cisco:dc:nexus9k:dme",
+      component: "faultInst",
+      dn: "sys/intf/encrtd-[spo512.10]/rtvrfMbr/fault-F1680",
+      code: "F1680",
+      severity: "warning",
+      lifecycle: "raised",
+      cause: "config-failure",
+      descr: "RtVrfMbr configuration failure.",
+    };
+    const search = vi.fn().mockResolvedValue({
+      rows: [repeatedFault, repeatedFault, repeatedFault],
+      warnings: [],
+      errors: [],
+    });
+
+    const res = await investigateStateEvents(
+      { search },
+      makeRequest(),
+      makeConfig([makeProfile({ extra: { sourceKind: "aci_faults" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].eventCount).toBe(1);
+    expect(res.rows[0].transitions[0].domainLabel).toBe("NX-OS Faults");
   });
 });

@@ -54,10 +54,61 @@ export interface BoundedSearchOptions {
   spl: string;
   earliest: number;
   latest: number;
+  /**
+   * Optional override for Splunk job dispatch `earliest` / `latest` bounds
+   * (e.g. a bounded lookback window when SPL embeds explicit `earliest=` /
+   * `_index_earliest=` predicates for polled DME snapshots whose `_time` carries
+   * historical `modTs`).
+   */
+  dispatchEarliest?: string;
+  dispatchLatest?: string;
   maxRows?: number;
   includeRowExpansion?: boolean;
   signal: AbortSignal;
   keySuffix?: string;
+}
+
+/**
+ * Builds an explicit dual-window SPL predicate matching events whose `_time` OR
+ * `_indextime` falls inside `[earliest, latest]`. Cisco DCN 2.0.10 DME inputs
+ * stamp `_time` from NX-OS `modTs` (which can be days or months old for stable
+ * interfaces, STP roots, port-channels, and OSPF adjacencies) while polling
+ * continuously at `_indextime`; matching either ensures both live DME polls and
+ * historical fixtures within the UTC window are returned.
+ */
+export function buildDmeWindowPredicate(
+  earliest?: number,
+  latest?: number,
+): string | undefined {
+  if (earliest === undefined || latest === undefined) return undefined;
+  const e = Math.trunc(earliest);
+  const l = Math.trunc(latest);
+  if (!Number.isFinite(e) || !Number.isFinite(l) || l <= e) return undefined;
+  return `((earliest=${e} latest=${l}) OR (_index_earliest=${e} _index_latest=${l}))`;
+}
+
+const DME_MAX_MODTS_LOOKBACK_SEC = 180 * 86400;
+
+/**
+ * Computes bounded Splunk job dispatch `earliest` / `latest` bounds for DME
+ * snapshot searches so `_index_earliest` catches stable objects with older
+ * `modTs` (up to 180 days before the requested window, even when the profile
+ * itself was created more recently) without scanning back to epoch 0.
+ */
+export function buildDmeDispatchBounds(
+  _profile: BaseProtocolProfile,
+  earliest: number,
+  latest: number,
+): { dispatchEarliest?: string; dispatchLatest?: string } {
+  if (!buildDmeWindowPredicate(earliest, latest)) return {};
+  const boundedEarliest = Math.max(
+    0,
+    Math.trunc(earliest) - DME_MAX_MODTS_LOOKBACK_SEC,
+  );
+  return {
+    dispatchEarliest: String(boundedEarliest),
+    dispatchLatest: String(Math.trunc(latest)),
+  };
 }
 
 export interface BoundedSearchResult {
@@ -120,8 +171,8 @@ export async function runBoundedProtocolSearch(
   try {
     const result = await optionalJobs.run(sourceForLens(lens), key, client, {
       search: spl,
-      earliest: String(earliest),
-      latest: String(latest),
+      earliest: options.dispatchEarliest ?? String(earliest),
+      latest: options.dispatchLatest ?? String(latest),
       maxRows,
       allowEmpty: true,
       overflow: "truncate",

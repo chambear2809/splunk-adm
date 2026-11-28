@@ -411,7 +411,7 @@ export function AppTransactionsLensPage({
       render: (r) => (
         <span className="pl-cell-stack">
           <CopyableIp value={r.serverIp} label="server" />
-          {r.serviceName ? (
+          {r.serviceName && r.serviceName !== r.serverIp ? (
             <span className="pl-muted-note pl-mono">{r.serviceName}</span>
           ) : null}
         </span>
@@ -682,7 +682,8 @@ export function AppTransactionsLensPage({
             </dd>
             <dt>Protocol / DB</dt>
             <dd className="pl-mono">{selectedRow.protocolDisplay}</dd>
-            {selectedRow.serviceName ? (
+            {selectedRow.serviceName &&
+            selectedRow.serviceName !== selectedRow.serverIp ? (
               <>
                 <dt>{selectedRow.kind === "http" ? "Site" : "Database"}</dt>
                 <dd className="pl-mono">{selectedRow.serviceName}</dd>

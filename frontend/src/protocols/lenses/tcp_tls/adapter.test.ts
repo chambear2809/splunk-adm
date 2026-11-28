@@ -903,4 +903,49 @@ describe("investigateTcpTls (runner, NetFlow fallback, Estimate mode, security)"
     expect(spl).toContain('(dest_port="443" OR src_port="443")');
     expect(spl.indexOf('dest_port="443"')).toBeLessThan(spl.indexOf("| head"));
   });
+
+  it("ignores cleartext ssl_version=0.0 sentinel and maps Stream wire codes (3.3 -> TLS 1.2)", () => {
+    const cleartext = normalizeTcpTlsRow(
+      {
+        _time: EARLIEST + 10,
+        src_ip: "10.64.64.15",
+        dest_ip: "198.18.133.50",
+        dest_port: 8000,
+        ssl_version: "0.0",
+      },
+      "stream:tcp",
+      NOW,
+    )!;
+    expect(cleartext.tlsVersion).toBeUndefined();
+    expect(cleartext.hasTlsData).toBe(false);
+
+    const tls12 = normalizeTcpTlsRow(
+      {
+        _time: EARLIEST + 12,
+        src_ip: "198.18.133.50",
+        dest_ip: "198.18.131.1",
+        dest_port: 443,
+        ssl_version: "3.3",
+      },
+      "stream:tcp",
+      NOW,
+    )!;
+    expect(tls12.tlsVersion).toBe("TLS 1.2");
+    expect(tls12.hasTlsData).toBe(true);
+    expect(tls12.legacyTls).toBe(false);
+
+    const tls10 = normalizeTcpTlsRow(
+      {
+        _time: EARLIEST + 14,
+        src_ip: "198.18.133.50",
+        dest_ip: "198.18.131.2",
+        dest_port: 443,
+        ssl_version: "3.1",
+      },
+      "stream:tcp",
+      NOW,
+    )!;
+    expect(tls10.tlsVersion).toBe("TLS 1.0");
+    expect(tls10.legacyTls).toBe(true);
+  });
 });

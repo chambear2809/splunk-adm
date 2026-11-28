@@ -24,6 +24,8 @@ import type {
 import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
+  buildDmeDispatchBounds,
+  buildDmeWindowPredicate,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
   withProtocolConfigRecheck,
@@ -109,12 +111,38 @@ export function buildRoutingDmeSearch(options: {
   index: string;
   filter?: ProtocolFilter;
   maxRows: number;
+  earliest?: number;
+  latest?: number;
+  componentFilter?: "all" | "ospf";
 }): string {
   const index = literal(options.index, 80);
+  const componentClause =
+    options.componentFilter === "ospf"
+      ? `(component="ospfAdjEp" OR component="ospf*" OR dn="sys/ospf/*")`
+      : `(component="bgp*" OR component="ospf*" OR component="bfd*" OR dn="sys/bgp/*" OR dn="sys/ospf/*" OR dn="sys/bfd/*" OR peer_ip=* OR neighbor_ip=*)`;
+  const windowPred = buildDmeWindowPredicate(options.earliest, options.latest);
+  const e =
+    options.earliest !== undefined ? Math.trunc(options.earliest) : undefined;
+  const l =
+    options.latest !== undefined ? Math.trunc(options.latest) : undefined;
+  const hasNdWindow =
+    e !== undefined &&
+    l !== undefined &&
+    Number.isFinite(e) &&
+    Number.isFinite(l) &&
+    l > e;
+  const sourcetypeClause =
+    options.componentFilter === "ospf"
+      ? windowPred
+        ? `(sourcetype="cisco:dc:nexus9k:dme" ${windowPred})`
+        : `sourcetype="cisco:dc:nexus9k:dme"`
+      : windowPred && hasNdWindow
+        ? `((sourcetype="cisco:dc:nexus9k:dme" ${windowPred}) OR (sourcetype="cisco:dc:nd:*" ("bgp" OR "ospf" OR "bfd") earliest=${e} latest=${l}))`
+        : `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`;
   const predicates: string[] = [
     `index=${index}`,
-    `(sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`,
-    `(component="bgp*" OR component="ospf*" OR component="bfd*" OR dn="sys/bgp/*" OR dn="sys/ospf/*" OR dn="sys/bfd/*" OR peer_ip=* OR neighbor_ip=*)`,
+    sourcetypeClause,
+    componentClause,
   ];
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
@@ -138,6 +166,9 @@ export function buildRoutingDmeSearch(options: {
   const tableClause = buildAllowedFieldsClause("routing", ROUTING_DME_FIELDS);
   return (
     `search ${predicates.join(" ")} ` +
+    `| head 2048 ` +
+    `| eval _dk_host=coalesce(device, nodeName, switchName, host, "none"), _dk_comp=coalesce(component, sourcetype, "none"), _dk_dn=coalesce(dn, 'Row_info.dn', peer_ip, neighbor_ip, 'Row_info.addr', "none") ` +
+    `| dedup _dk_host _dk_comp _dk_dn ` +
     `| head ${headLimit} ` +
     `| eval host=coalesce(device, nodeName, switchName, host), ` +
     `dn=coalesce(dn, 'Row_info.dn'), ` +
@@ -1226,7 +1257,7 @@ export function buildRoutingAnalysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   return {
     verdict,
@@ -1337,10 +1368,17 @@ export async function investigateRouting(
 
       if (runDme) {
         signal.throwIfAborted();
+        const dispatchBounds = buildDmeDispatchBounds(
+          profile,
+          request.earliest,
+          request.latest,
+        );
         const spl = buildRoutingDmeSearch({
           index: profile.index,
           filter: request.filter,
           maxRows: 256,
+          earliest: request.earliest,
+          latest: request.latest,
         });
         const res = await runBoundedProtocolSearch(client, {
           lens: "routing",
@@ -1348,15 +1386,57 @@ export async function investigateRouting(
           spl,
           earliest: request.earliest,
           latest: request.latest,
+          ...dispatchBounds,
           signal,
           keySuffix: "dme",
         });
         outcomes.push(res.outcome);
         if (res.capped) capped = true;
+        let sawOspf = false;
         res.rows.forEach((row, idx) => {
           const norm = normalizeRoutingDmeRow(row, idx);
-          if (norm) collected.push({ event: norm, indexName: profile.index });
+          if (norm) {
+            if (norm.protocol === "OSPF") sawOspf = true;
+            collected.push({ event: norm, indexName: profile.index });
+          }
         });
+        if (
+          res.capped &&
+          !sawOspf &&
+          (thresholds.protocolFilter === "all" ||
+            thresholds.protocolFilter === "ospf")
+        ) {
+          signal.throwIfAborted();
+          const ospfSpl = buildRoutingDmeSearch({
+            index: profile.index,
+            filter: request.filter,
+            maxRows: 256,
+            earliest: request.earliest,
+            latest: request.latest,
+            componentFilter: "ospf",
+          });
+          const ospfRes = await runBoundedProtocolSearch(client, {
+            lens: "routing",
+            profile,
+            spl: ospfSpl,
+            earliest: request.earliest,
+            latest: request.latest,
+            ...dispatchBounds,
+            signal,
+            keySuffix: "dme_ospf",
+          });
+          if (
+            ospfRes.outcome.state === "blocked" ||
+            ospfRes.outcome.state === "unavailable"
+          ) {
+            outcomes.push(ospfRes.outcome);
+          }
+          if (ospfRes.capped) capped = true;
+          ospfRes.rows.forEach((row, idx) => {
+            const norm = normalizeRoutingDmeRow(row, idx);
+            if (norm) collected.push({ event: norm, indexName: profile.index });
+          });
+        }
       }
     }
 

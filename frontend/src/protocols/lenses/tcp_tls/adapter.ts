@@ -488,7 +488,21 @@ export function normalizeTcpTlsRow(
         ? 1
         : 0;
 
-  const tlsVersion = asString(row.tls_version ?? row.ssl_version) || undefined;
+  const rawTlsVersion = asString(row.tls_version ?? row.ssl_version);
+  const tlsVersion =
+    !rawTlsVersion || /^(?:0|0\.0|none|unknown|-)$/i.test(rawTlsVersion)
+      ? undefined
+      : rawTlsVersion === "3.0"
+        ? "SSL 3.0"
+        : rawTlsVersion === "3.1"
+          ? "TLS 1.0"
+          : rawTlsVersion === "3.2"
+            ? "TLS 1.1"
+            : rawTlsVersion === "3.3"
+              ? "TLS 1.2"
+              : rawTlsVersion === "3.4"
+                ? "TLS 1.3"
+                : rawTlsVersion;
   const cipher =
     asString(row.ssl_cipher_name ?? row.ssl_cipher ?? row.cipher_suite) ||
     undefined;
