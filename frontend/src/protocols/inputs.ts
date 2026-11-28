@@ -16,6 +16,7 @@ import {
 
 const SELECTOR = /^[A-Za-z0-9][A-Za-z0-9._:/@-]{0,127}$/;
 const ITEM_ID = /^[A-Za-z0-9][A-Za-z0-9._:/@[\]-]{0,191}$/;
+const IFACE_NAME = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$/;
 
 export function isProtocolLensId(value: unknown): value is ProtocolLensId {
   return (
@@ -102,6 +103,19 @@ export function validateProtocolRequest(
   };
 }
 
+export function validPort(value: unknown): string | undefined {
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 1 || value > 65535)
+      return undefined;
+    return String(value);
+  }
+  if (typeof value !== "string" || !/^[1-9][0-9]{0,4}$/.test(value.trim())) {
+    return undefined;
+  }
+  const n = Number(value.trim());
+  return n >= 1 && n <= 65535 ? String(n) : undefined;
+}
+
 export function validateProtocolFilter(
   value: unknown,
 ): ProtocolFilter | undefined {
@@ -111,14 +125,37 @@ export function validateProtocolFilter(
   for (const key of ["src", "dst", "device"] as const) {
     const raw = value[key];
     if (raw === undefined || raw === "") continue;
-    if (typeof raw !== "string" || !ITEM_ID.test(raw))
+    const trimmed = typeof raw === "string" ? raw.trim() : raw;
+    if (trimmed === "") continue;
+    if (typeof trimmed !== "string" || !ITEM_ID.test(trimmed))
       throw new Error(`Invalid protocol ${key} filter.`);
-    filter[key] = raw;
+    filter[key] = trimmed;
   }
   if (value.vni !== undefined && value.vni !== "") {
-    const vni = validVni(value.vni);
+    const vni = validVni(
+      typeof value.vni === "string" ? value.vni.trim() : value.vni,
+    );
     if (!vni) throw new Error("VNI must be an integer between 1 and 16777215.");
     filter.vni = vni;
+  }
+  if (value.port !== undefined && value.port !== "") {
+    const port = validPort(value.port);
+    if (!port) throw new Error("Port must be an integer between 1 and 65535.");
+    filter.port = port;
+  }
+  if (value.iface !== undefined && value.iface !== "") {
+    const iface = typeof value.iface === "string" ? value.iface.trim() : "";
+    if (!iface || !IFACE_NAME.test(iface))
+      throw new Error("Invalid interface filter.");
+    filter.iface = iface;
+  }
+  if (value.bidirectional === true) {
+    filter.bidirectional = true;
+  } else if (
+    value.bidirectional !== undefined &&
+    value.bidirectional !== false
+  ) {
+    throw new Error("Invalid bidirectional filter flag.");
   }
   return Object.keys(filter).length ? filter : undefined;
 }
@@ -134,6 +171,9 @@ const LINK_KEYS = [
   "p_dst",
   "p_device",
   "p_vni",
+  "p_port",
+  "p_bidir",
+  "p_iface",
   "p_item",
 ] as const;
 
@@ -189,11 +229,17 @@ export function parseProtocolLink(
     validateProtocolWindow(earliest, latest, now);
   }
   const view = parseProtocolView(params);
+  const rawBidir = params.get("p_bidir");
+  if (rawBidir !== null && rawBidir !== "1" && rawBidir !== "0")
+    throw new Error(UNSUPPORTED_LINK);
   const filter = validateProtocolFilter({
     src: params.get("p_src") ?? undefined,
     dst: params.get("p_dst") ?? undefined,
     device: params.get("p_device") ?? undefined,
     vni: params.get("p_vni") ?? undefined,
+    port: params.get("p_port") ?? undefined,
+    iface: params.get("p_iface") ?? undefined,
+    ...(rawBidir === "1" ? { bidirectional: true } : {}),
   });
   const rawItem = params.get("p_item");
   if (rawItem !== null && !ITEM_ID.test(rawItem))
@@ -236,6 +282,9 @@ export function protocolLink(
   if (filter?.dst) params.set("p_dst", filter.dst);
   if (filter?.device) params.set("p_device", filter.device);
   if (filter?.vni) params.set("p_vni", filter.vni);
+  if (filter?.port) params.set("p_port", filter.port);
+  if (filter?.iface) params.set("p_iface", filter.iface);
+  if (filter?.bidirectional) params.set("p_bidir", "1");
   if (input.item) {
     if (!ITEM_ID.test(input.item)) throw new Error(UNSUPPORTED_LINK);
     params.set("p_item", input.item);

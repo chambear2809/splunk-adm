@@ -16,6 +16,7 @@ import {
   type ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -145,12 +146,14 @@ export function buildAppTransactionsSearch(options: {
       `index=${index}`,
       `sourcetype="${APP_TRANSACTIONS_HTTP_SOURCETYPE}"`,
     ];
-    if (options.filter?.src) {
-      predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-    }
-    if (options.filter?.dst) {
-      predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-    }
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields: ["src_ip"],
+        dstFields: ["dest_ip"],
+        portFields: ["dest_port", "src_port"],
+      }),
+    );
     if (options.filter?.device) {
       const dev = literal(options.filter.device, 128);
       predicates.push(`(host="${dev}" OR dest_ip="${dev}" OR site="${dev}")`);
@@ -163,12 +166,14 @@ export function buildAppTransactionsSearch(options: {
   }
 
   const predicates: string[] = [`index=${index}`, buildDbSourcetypePredicate()];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(host="${dev}" OR dest_ip="${dev}")`);

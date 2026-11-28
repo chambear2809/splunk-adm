@@ -34,9 +34,23 @@ export function formatUtcTimestamp(epochSeconds: number): string {
     .replace(/\.\d{3}Z$/, " UTC");
 }
 
-export function formatUtcWindow(earliest: number, latest: number): string {
-  const start = new Date(earliest * 1000).toISOString().slice(11, 19);
-  const end = new Date(latest * 1000).toISOString().slice(11, 19);
+export function formatUtcWindow(
+  earliest: number,
+  latest: number,
+  options?: { includeDuration?: boolean },
+): string {
+  const startIso = new Date(earliest * 1000).toISOString();
+  const endIso = new Date(latest * 1000).toISOString();
+  const crossesDay = startIso.slice(0, 10) !== endIso.slice(0, 10);
+  const start = crossesDay
+    ? `${startIso.slice(5, 10)} ${startIso.slice(11, 16)}`
+    : startIso.slice(11, 19);
+  const end = crossesDay
+    ? `${endIso.slice(5, 10)} ${endIso.slice(11, 16)}`
+    : endIso.slice(11, 19);
+  if (options?.includeDuration === false) {
+    return `${start}–${end} UTC`;
+  }
   const mins = Math.max(1, Math.round((latest - earliest) / 60));
   return `${start}–${end} UTC (${mins}m)`;
 }

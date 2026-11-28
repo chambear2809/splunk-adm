@@ -660,7 +660,7 @@ export function DevicePage({
               >
                 <span className="atlas-protocol-drillins-label">Protocols</span>
                 {deviceProtocolLinks({
-                  device: device?.name ?? device?.mgmt_ip ?? query,
+                  device: device?.mgmt_ip ?? device?.name ?? query,
                   earliest: Number(earliest) || undefined,
                   latest: Number(latest) || undefined,
                 }).map((item) => (

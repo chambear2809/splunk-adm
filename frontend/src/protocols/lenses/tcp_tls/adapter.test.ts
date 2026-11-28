@@ -883,4 +883,24 @@ describe("investigateTcpTls (runner, NetFlow fallback, Estimate mode, security)"
       spy.mockRestore();
     }
   });
+
+  it("builds bidirectional endpoint and port SPL filters before head", () => {
+    const spl = buildTcpTlsSearch({
+      index: "stream_tcp",
+      sourcetype: "stream:tcp",
+      filter: {
+        src: "10.0.0.1",
+        dst: "10.0.0.2",
+        port: "443",
+        bidirectional: true,
+      },
+      maxRows: 256,
+    });
+    expect(spl).toContain('src_ip="10.0.0.1"');
+    expect(spl).toContain('dest_ip="10.0.0.2"');
+    expect(spl).toContain('src_ip="10.0.0.2"');
+    expect(spl).toContain('dest_ip="10.0.0.1"');
+    expect(spl).toContain('(dest_port="443" OR src_port="443")');
+    expect(spl.indexOf('dest_port="443"')).toBeLessThan(spl.indexOf("| head"));
+  });
 });

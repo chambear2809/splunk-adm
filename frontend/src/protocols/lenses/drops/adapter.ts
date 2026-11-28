@@ -15,6 +15,7 @@ import type {
   ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import { formatBytes, formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -228,14 +229,14 @@ export function buildDropsFtdSearch(options: {
     `(AC_RuleAction="*Block*" OR AC_RuleAction="*Drop*" OR AC_RuleAction="*Deny*" OR AC_RuleAction="Reset")`,
     `NOT AC_RuleAction="Allow*"`,
   ];
-  if (options.filter?.src) {
-    const src = literal(options.filter.src, 128);
-    predicates.push(`(InitiatorIP="${src}" OR src_ip="${src}")`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    predicates.push(`(ResponderIP="${dst}" OR dest_ip="${dst}")`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["InitiatorIP", "src_ip"],
+      dstFields: ["ResponderIP", "dest_ip"],
+      portFields: ["ResponderPort", "InitiatorPort", "dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(Device="${dev}" OR DeviceIP="${dev}" OR host="${dev}")`);
@@ -259,14 +260,21 @@ export function buildDropsHubbleSearch(options: {
     `sourcetype="cilium:hubble:flow"`,
     `(flow.verdict="DROPPED" OR verdict="DROPPED")`,
   ];
-  if (options.filter?.src) {
-    const src = literal(options.filter.src, 128);
-    predicates.push(`(src_ip="${src}" OR flow.IP.source="${src}")`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    predicates.push(`(dest_ip="${dst}" OR flow.IP.destination="${dst}")`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip", "flow.IP.source"],
+      dstFields: ["dest_ip", "flow.IP.destination"],
+      portFields: [
+        "dest_port",
+        "src_port",
+        "flow.l4.TCP.destination_port",
+        "flow.l4.TCP.source_port",
+        "flow.l4.UDP.destination_port",
+        "flow.l4.UDP.source_port",
+      ],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -323,14 +331,14 @@ export function buildDropsNdSearch(options: {
     `sourcetype="cisco:dc:nd:flows"`,
     `(stats{}.dropPktCount>0 OR (stats{}.dropReasons{}=* AND stats{}.dropReasons{}!="0" AND stats{}.dropReasons{}!="[]") OR dropPktCount>0)`,
   ];
-  if (options.filter?.src) {
-    const src = literal(options.filter.src, 128);
-    predicates.push(`srcIp="${src}"`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    predicates.push(`dstIp="${dst}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["srcIp"],
+      dstFields: ["dstIp"],
+      portFields: ["dstPort", "srcPort"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -383,14 +391,14 @@ export function buildDropsAciSearch(options: {
         ? `sourcetype="cisco:dc:aci:syslog" (drop_reason=* OR "drop" OR "deny" OR "acllog")`
         : `((sourcetype="cisco:dc:aci:class" component="acllogDropL3Pkt") OR (sourcetype="cisco:dc:aci:syslog" (drop_reason=* OR "drop" OR "deny" OR "acllog")))`;
   const predicates: string[] = [`index=${index}`, stClause];
-  if (options.filter?.src) {
-    const src = literal(options.filter.src, 128);
-    predicates.push(`(src_ip="${src}" OR srcIp="${src}")`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    predicates.push(`(dest_ip="${dst}" OR dstIp="${dst}")`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip", "srcIp"],
+      dstFields: ["dest_ip", "dstIp"],
+      portFields: ["dest_port", "src_port", "dstPort", "srcPort"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -435,14 +443,14 @@ export function buildDropsFirewallSearch(options: {
     stClause,
     `(action IN ("block", "blocked", "deny", "denied", "drop", "dropped", "reject", "rejected", "reset", "reset-client", "reset-server", "reset-both", "client-rst", "server-rst") OR disposition="DROPPED")`,
   ];
-  if (options.filter?.src) {
-    const src = literal(options.filter.src, 128);
-    predicates.push(`(src_ip="${src}" OR srcip="${src}" OR srcaddr="${src}")`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    predicates.push(`(dest_ip="${dst}" OR dstip="${dst}" OR dstaddr="${dst}")`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip", "srcip", "srcaddr"],
+      dstFields: ["dest_ip", "dstip", "dstaddr"],
+      portFields: ["dest_port", "src_port", "dstport", "srcport"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(

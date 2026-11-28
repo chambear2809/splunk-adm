@@ -2973,7 +2973,8 @@
 .atlas-protocol-pill {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  min-height: 24px;
+  padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid var(--adm-line, #d1d5db);
   background: var(--adm-surface, transparent);

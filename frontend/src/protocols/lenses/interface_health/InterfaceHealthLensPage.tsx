@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
   ProtocolTimelineEvent,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import {
   formatBytes,
   formatCount,
@@ -65,6 +68,21 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const INTERFACE_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  {
+    key: "device",
+    label: "Device",
+    placeholder: "Device IP / Host",
+    primary: true,
+  },
+  {
+    key: "iface",
+    label: "Interface (e.g. eth1/1)",
+    placeholder: "Interface",
+    primary: true,
+  },
+];
+
 export function InterfaceHealthLensPage({
   client,
   live,
@@ -114,6 +132,10 @@ export function InterfaceHealthLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -123,6 +145,10 @@ export function InterfaceHealthLensPage({
       setMissingCell(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -163,8 +189,8 @@ export function InterfaceHealthLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -228,6 +254,8 @@ export function InterfaceHealthLensPage({
     }
   };
 
+  handleInvestigateRef.current = handleInvestigate;
+
   const handleCancel = () => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -237,6 +265,17 @@ export function InterfaceHealthLensPage({
   const isSyslogOnlyMode =
     result?.sourceMode === "syslog_only" &&
     !result.rows.some((r) => r.hasCounterCoverage);
+
+  const hasAnyState = Boolean(result?.rows.some((r) => r.hasStateCoverage));
+  const hasAnyCounters = Boolean(
+    result?.rows.some((r) => r.hasCounterCoverage),
+  );
+  const hasAnyFlaps = Boolean(
+    result?.rows.some((r) => r.flapCount !== undefined),
+  );
+  const hasAnyUtil = Boolean(
+    result?.rows.some((r) => r.utilizationPct !== undefined),
+  );
 
   const columns: ProtocolTableColumn<InterfaceHealthRow>[] = isSyslogOnlyMode
     ? [
@@ -265,11 +304,6 @@ export function InterfaceHealthLensPage({
           ),
         },
         {
-          key: "counters",
-          header: "Counters & Util",
-          render: () => <StatusChip status="not_covered" />,
-        },
-        {
           key: "status",
           header: "Status",
           render: (r) => (
@@ -291,54 +325,70 @@ export function InterfaceHealthLensPage({
           header: "Interface",
           render: (r) => <span className="pl-mono">{r.interface}</span>,
         },
-        {
-          key: "state",
-          header: "Admin / Oper",
-          render: (r) =>
-            r.hasStateCoverage ? (
-              <span className="pl-mono">
-                {`${r.adminState ?? "—"} / ${r.operState ?? "—"}`}
-              </span>
-            ) : (
-              "Not covered"
-            ),
-        },
-        {
-          key: "errors",
-          header: "Errors",
-          align: "right",
-          render: (r) =>
-            r.hasCounterCoverage && r.totalErrors !== undefined
-              ? formatCount(r.totalErrors)
-              : "Not covered",
-        },
-        {
-          key: "discards",
-          header: "Discards",
-          align: "right",
-          render: (r) =>
-            r.hasCounterCoverage && r.totalDiscards !== undefined
-              ? formatCount(r.totalDiscards)
-              : "Not covered",
-        },
-        {
-          key: "flaps",
-          header: "Flaps",
-          align: "right",
-          render: (r) =>
-            r.flapCount !== undefined
-              ? formatCount(r.flapCount)
-              : "Not covered",
-        },
-        {
-          key: "util",
-          header: "Util",
-          align: "right",
-          render: (r) =>
-            r.utilizationPct !== undefined
-              ? `${r.utilizationPct < 10 ? r.utilizationPct.toFixed(1) : Math.round(r.utilizationPct)}%`
-              : "Not covered",
-        },
+        ...(hasAnyState
+          ? [
+              {
+                key: "state",
+                header: "Admin / Oper",
+                render: (r: InterfaceHealthRow) =>
+                  r.hasStateCoverage ? (
+                    <span className="pl-mono">
+                      {`${r.adminState ?? "—"} / ${r.operState ?? "—"}`}
+                    </span>
+                  ) : (
+                    "Not covered"
+                  ),
+              },
+            ]
+          : []),
+        ...(hasAnyCounters
+          ? [
+              {
+                key: "errors",
+                header: "Errors",
+                align: "right" as const,
+                render: (r: InterfaceHealthRow) =>
+                  r.hasCounterCoverage && r.totalErrors !== undefined
+                    ? formatCount(r.totalErrors)
+                    : "Not covered",
+              },
+              {
+                key: "discards",
+                header: "Discards",
+                align: "right" as const,
+                render: (r: InterfaceHealthRow) =>
+                  r.hasCounterCoverage && r.totalDiscards !== undefined
+                    ? formatCount(r.totalDiscards)
+                    : "Not covered",
+              },
+            ]
+          : []),
+        ...(hasAnyFlaps
+          ? [
+              {
+                key: "flaps",
+                header: "Flaps",
+                align: "right" as const,
+                render: (r: InterfaceHealthRow) =>
+                  r.flapCount !== undefined
+                    ? formatCount(r.flapCount)
+                    : "Not covered",
+              },
+            ]
+          : []),
+        ...(hasAnyUtil
+          ? [
+              {
+                key: "util",
+                header: "Util",
+                align: "right" as const,
+                render: (r: InterfaceHealthRow) =>
+                  r.utilizationPct !== undefined
+                    ? `${r.utilizationPct < 10 ? r.utilizationPct.toFixed(1) : Math.round(r.utilizationPct)}%`
+                    : "Not covered",
+              },
+            ]
+          : []),
         {
           key: "status",
           header: "Status",
@@ -500,6 +550,11 @@ export function InterfaceHealthLensPage({
           <DistributionBar
             title={result.distributionTitle}
             items={result.distribution}
+            mode={
+              result.distributionTitle === "Errors & discards"
+                ? "count"
+                : "percentile"
+            }
           />
         ) : undefined
       }
@@ -636,7 +691,54 @@ export function InterfaceHealthLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={INTERFACE_FILTER_FIELDS}
+      filterSuggestions={{
+        device: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.device),
+        ),
+        iface: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.interface),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                device: selectedRow.device,
+                iface: selectedRow.interface,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
+      focusFlowLabel="Focus interface"
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

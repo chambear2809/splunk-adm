@@ -1706,18 +1706,31 @@ export function buildEndpointMobilityAnalysis(options: {
     (ev) => ev.kind === "port_flap" && ev.anomaly,
   );
 
+  const observedIpCount = rows.reduce((sum, r) => sum + r.ips.length, 0);
+  const dupIpHasObservedIps = dupIpCovered && observedIpCount > 0;
+
   const kpis: ProtocolKpi[] = [
     {
       id: "duplicate-ips",
       label: "Duplicate IPs",
-      value: dupIpCovered ? formatCount(totalDuplicateIps) : "Not covered",
-      ...(dupIpCovered ? { unit: totalDuplicateIps === 1 ? "IP" : "IPs" } : {}),
+      value: !dupIpCovered
+        ? "Not covered"
+        : observedIpCount === 0
+          ? "None observed"
+          : formatCount(totalDuplicateIps),
+      ...(dupIpHasObservedIps
+        ? { unit: totalDuplicateIps === 1 ? "IP" : "IPs" }
+        : {}),
       status: !dupIpCovered
         ? "not_covered"
-        : totalDuplicateIps > 0
-          ? "attention"
-          : "ok",
-      ...(dupIpCovered && dupSpark.length ? { sparkline: dupSpark } : {}),
+        : observedIpCount === 0
+          ? "none_observed"
+          : totalDuplicateIps > 0
+            ? "attention"
+            : "ok",
+      ...(dupIpHasObservedIps && dupSpark.length
+        ? { sparkline: dupSpark }
+        : {}),
     },
     {
       id: "mac-moves",
@@ -1917,7 +1930,28 @@ export function buildEndpointMobilityAnalysis(options: {
     verdict = `${flaggedRows.length} of ${rows.length} ${rows.length === 1 ? "endpoint needs" : "endpoints need"} attention: ${lowerLead}.`;
     verdictStatus = "attention";
   } else {
-    verdict = `${rows.length} of ${rows.length} ${rows.length === 1 ? "endpoint" : "endpoints"} steady with no duplicate IPs, MAC moves, or ARP spikes.`;
+    const checked: string[] = [];
+    const missing: string[] = [];
+    if (dupIpHasObservedIps) checked.push("duplicate IPs");
+    else if (!dupIpCovered) missing.push("duplicate IPs");
+    if (macMoveCovered) checked.push("MAC moves");
+    else missing.push("MAC moves");
+    if (arpSpikeCovered) checked.push("ARP spikes");
+    else missing.push("ARP spikes");
+    if (portFlapCovered) checked.push("port flaps");
+    else missing.push("port flaps");
+    const scopePrefix = capped
+      ? `First ${rows.length} ${rows.length === 1 ? "endpoint" : "endpoints"} (capped)`
+      : `${rows.length} of ${rows.length} ${rows.length === 1 ? "endpoint" : "endpoints"}`;
+    const checkedNote = checked.length ? ` with no ${checked.join(", ")}` : "";
+    const noIpNote =
+      dupIpCovered && observedIpCount === 0
+        ? " (no endpoint IPs reported)"
+        : "";
+    const missingNote = missing.length
+      ? ` — ${missing.join(", ")} not covered`
+      : "";
+    verdict = `${scopePrefix} steady${checkedNote}${noIpNote}${missingNote}.`;
     verdictStatus = "ok";
   }
 

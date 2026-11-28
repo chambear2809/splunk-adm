@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
   ProtocolTimelineEvent,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import { formatCount, formatUtcTimestamp } from "../../shared/format";
 import {
   CopyableIp,
@@ -73,6 +76,16 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const STATE_EVENTS_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "device", label: "Device", placeholder: "Device", primary: true },
+  {
+    key: "iface",
+    label: "Interface or DN",
+    placeholder: "Interface / DN",
+    primary: true,
+  },
+];
+
 export function StateEventsLensPage({
   client,
   live,
@@ -122,6 +135,10 @@ export function StateEventsLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -131,6 +148,10 @@ export function StateEventsLensPage({
       setMissingCell(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -174,8 +195,8 @@ export function StateEventsLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -239,6 +260,8 @@ export function StateEventsLensPage({
       }
     }
   };
+
+  handleInvestigateRef.current = handleInvestigate;
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -538,7 +561,50 @@ export function StateEventsLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={STATE_EVENTS_FILTER_FIELDS}
+      filterSuggestions={{
+        device: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => [r.device, ...r.rawHosts]),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                device: selectedRow.rawHosts[0] ?? selectedRow.device,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
+      focusFlowLabel="Focus device"
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

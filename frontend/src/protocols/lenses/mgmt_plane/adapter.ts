@@ -21,6 +21,7 @@ import {
   type ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import { formatBytes, formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -190,12 +191,14 @@ export function buildMgmtSnmpSearch(options: {
 }): string {
   const index = literal(options.index, 80);
   const predicates: string[] = [`index=${index}`, `sourcetype="stream:snmp"`];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(dest_ip="${dev}" OR host="${dev}" OR device="${dev}")`);
@@ -225,12 +228,14 @@ export function buildMgmtFtpSearch(options: {
 }): string {
   const index = literal(options.index, 80);
   const predicates: string[] = [`index=${index}`, `sourcetype="stream:ftp"`];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(dest_ip="${dev}" OR host="${dev}" OR device="${dev}")`);
@@ -275,12 +280,14 @@ export function buildMgmtNetflowSearch(options: {
     `sourcetype="stream:netflow"`,
     portClause,
   ];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -1798,34 +1805,40 @@ export function buildMgmtPlaneAnalysis(options: {
     },
   ];
 
-  // DistributionBar by hygiene finding category
+  // DistributionBar by hygiene finding category (true category totals in `count`)
   const distribution: ProtocolDistributionMetric[] = [];
   if (snmpLegacyPerTarget.length > 0) {
+    const totalSnmpLegacy = snmpLegacyPerTarget.reduce((sum, v) => sum + v, 0);
     distribution.push({
       id: "snmp_v1_v2c",
       label: "SNMPv1/v2c",
       p50: Math.round(percentile(snmpLegacyPerTarget, 50)),
       p95: Math.round(percentile(snmpLegacyPerTarget, 95)),
+      count: totalSnmpLegacy,
       unit: "events",
       status: "attention",
     });
   }
   if (snmpSetPerTarget.length > 0) {
+    const totalSnmpSet = snmpSetPerTarget.reduce((sum, v) => sum + v, 0);
     distribution.push({
       id: "snmp_set",
       label: "SNMP SET",
       p50: Math.round(percentile(snmpSetPerTarget, 50)),
       p95: Math.round(percentile(snmpSetPerTarget, 95)),
+      count: totalSnmpSet,
       unit: "events",
       status: "attention",
     });
   }
   if (cleartextPerTarget.length > 0) {
+    const totalCleartext = cleartextPerTarget.reduce((sum, v) => sum + v, 0);
     distribution.push({
       id: "cleartext",
-      label: "Cleartext FTP/Telnet/TFTP/HTTP",
+      label: "Cleartext protocols",
       p50: Math.round(percentile(cleartextPerTarget, 50)),
       p95: Math.round(percentile(cleartextPerTarget, 95)),
+      count: totalCleartext,
       unit: "sessions",
       status: "attention",
     });
@@ -1836,7 +1849,8 @@ export function buildMgmtPlaneAnalysis(options: {
       label: "Receipt Gap",
       p50: receiptGapDevices.length,
       p95: receiptGapDevices.length,
-      unit: receiptGapDevices.length === 1 ? "device" : "devices",
+      count: receiptGapDevices.length,
+      unit: "devices",
       status: "attention",
     });
   }

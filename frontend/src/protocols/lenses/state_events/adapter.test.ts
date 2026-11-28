@@ -706,4 +706,65 @@ describe("fixture aggregation, timelines, coverage & config recheck", () => {
     );
     expect(res.verdict).toBe("2 rows returned but could not be normalized.");
   });
+
+  it("pushes canonical interface variants before head and matches Ethernet1/1 without matching Ethernet1/10", async () => {
+    const syslogSpl = buildStateSyslogSearch({
+      index: "cisco_dc",
+      filter: { device: "leaf-01", iface: "eth1/1" },
+      maxRows: 256,
+    });
+    expect(syslogSpl).toContain('"eth1/1"');
+    expect(syslogSpl).toContain('"Ethernet1/1"');
+    expect(syslogSpl.indexOf('"Ethernet1/1"')).toBeLessThan(
+      syslogSpl.indexOf("| head"),
+    );
+
+    const aciSpl = buildAciFaultEventSearch({
+      index: "cisco_dc",
+      filter: { iface: "eth1/1" },
+      maxRows: 256,
+    });
+    expect(aciSpl).toContain('dn="*[eth1/1]*"');
+    expect(aciSpl.indexOf('dn="*[eth1/1]*"')).toBeLessThan(
+      aciSpl.indexOf("| head"),
+    );
+
+    const search = vi.fn().mockResolvedValue({
+      rows: [
+        {
+          _time: EARLIEST + 60,
+          host: "leaf-01.dc1.local",
+          sourcetype: "cisco:dc:nexus9k:syslog",
+          mnemonic: "ETHPORT-3-IF_DOWN_LINK_FAILURE",
+          facility: "ETHPORT",
+          severity: "3",
+          interface: "Ethernet1/1",
+          syslog_msg: "Interface Ethernet1/1 is down (Link failure)",
+        },
+        {
+          _time: EARLIEST + 90,
+          host: "leaf-01.dc1.local",
+          sourcetype: "cisco:dc:nexus9k:syslog",
+          mnemonic: "ETHPORT-3-IF_DOWN_LINK_FAILURE",
+          facility: "ETHPORT",
+          severity: "3",
+          interface: "Ethernet1/10",
+          syslog_msg: "Interface Ethernet1/10 is down (Link failure)",
+        },
+      ],
+      warnings: [],
+      errors: [],
+    });
+
+    const res = await investigateStateEvents(
+      { search },
+      makeRequest({ filter: { iface: "eth1/1" } }),
+      makeConfig([makeProfile({ extra: { sourceKind: "syslog" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].eventCount).toBe(1);
+    expect(res.rows[0].transitions[0].interfaceOrDn).toBe("Ethernet1/1");
+  });
 });

@@ -1468,7 +1468,27 @@ export function buildL2ControlAnalysis(options: {
     verdict = `${flaggedRows.length} of ${rows.length} L2 ${rows.length === 1 ? "entity needs" : "entities need"} attention: ${leadDetail} on ${lead.device} (${lead.subject}).`;
     verdictStatus = "attention";
   } else {
-    verdict = `${rows.length} of ${rows.length} L2 ${rows.length === 1 ? "entity" : "entities"} steady with no NAKs, TCNs, or LACP drops.`;
+    const checked: string[] = [];
+    const missing: string[] = [];
+    if (subsystemCoverage.DHCP) checked.push("DHCP NAKs");
+    else missing.push("DHCP");
+    if (subsystemCoverage.STP) checked.push("STP TCNs");
+    else missing.push("STP");
+    if (subsystemCoverage.LACP) checked.push("LACP drops");
+    else missing.push("LACP");
+    if (subsystemCoverage.ARP || subsystemCoverage.LLDP) {
+      checked.push("ARP/LLDP alerts");
+    } else {
+      missing.push("ARP/LLDP");
+    }
+    const scopePrefix = capped
+      ? `First ${rows.length} L2 ${rows.length === 1 ? "entity" : "entities"} (capped)`
+      : `${rows.length} of ${rows.length} L2 ${rows.length === 1 ? "entity" : "entities"}`;
+    const checkedNote = checked.length ? ` with no ${checked.join(", ")}` : "";
+    const missingNote = missing.length
+      ? ` — ${missing.join(", ")} not covered`
+      : "";
+    verdict = `${scopePrefix} steady${checkedNote}${missingNote}.`;
     verdictStatus = "ok";
   }
 

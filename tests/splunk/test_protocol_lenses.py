@@ -168,6 +168,19 @@ class ProtocolLensesRuntimeTest(unittest.TestCase):
         payload = ("\n".join(json.dumps(e) for e in envelopes) + "\n").encode("utf-8")
         lab._hec_post(payload)
 
+        # Wait until all 3 ingested events (2 drop rows + 1 zero-drop row) are searchable
+        # so the assertion below proves pre-head filtering rather than indexing lag.
+        raw_check = (
+            f'search index="cisco_dc" sourcetype="cisco:dc:nd:flows" nd_host="{nd_host}"'
+            " | head 10 | table flowId"
+        )
+        ingested = _poll_search(raw_check, self.earliest, self.latest, min_rows=3)
+        self.assertEqual(
+            len(ingested),
+            3,
+            f"Expected all 3 synthetic ND flow events indexed, got {ingested!r}",
+        )
+
         spl = _build_spl(
             "drops_nd",
             {
@@ -310,6 +323,29 @@ class ProtocolLensesRuntimeTest(unittest.TestCase):
                 lab.urlopen(write_req)
             with ctx.exception:
                 self.assertEqual(ctx.exception.code, 403)
+
+            create_viewer_req = urllib.request.Request(
+                f"{lab.MGMT}{COLLECTION}",
+                data=json.dumps({**doc, "_key": f"denied-{self.token}"}).encode(
+                    "utf-8"
+                ),
+                method="POST",
+                headers=viewer_auth,
+            )
+            with self.assertRaises(urllib.error.HTTPError) as create_ctx:
+                lab.urlopen(create_viewer_req)
+            with create_ctx.exception:
+                self.assertEqual(create_ctx.exception.code, 403)
+
+            delete_viewer_req = urllib.request.Request(
+                f"{lab.MGMT}{COLLECTION}/{urllib.parse.quote(doc_key, safe='')}",
+                method="DELETE",
+                headers=viewer_auth,
+            )
+            with self.assertRaises(urllib.error.HTTPError) as del_ctx:
+                lab.urlopen(delete_viewer_req)
+            with del_ctx.exception:
+                self.assertEqual(del_ctx.exception.code, 403)
 
             bare_read_req = urllib.request.Request(
                 f"{lab.MGMT}{COLLECTION}/{urllib.parse.quote(doc_key, safe='')}",

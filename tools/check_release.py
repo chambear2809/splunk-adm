@@ -1008,6 +1008,24 @@ DEMO_BUNDLE_MARKERS = (
 )
 
 
+EXPECTED_PROTOCOL_LENS_IDS: frozenset[str] = frozenset(
+    {
+        "tcp_tls",
+        "dns_ops",
+        "routing",
+        "l2_control",
+        "interface_health",
+        "qos_icmp",
+        "enterprise_l7",
+        "drops",
+        "endpoint_mobility",
+        "app_transactions",
+        "state_events",
+        "mgmt_plane",
+        "lb_health",
+    }
+)
+
 # The only web assets a release may ship. Anything else under static/ (demo
 # rows, captured fixtures, source maps, stray files) fails the check.
 STATIC_ALLOWLIST = frozenset(
@@ -1056,21 +1074,7 @@ STATIC_ALLOWLIST = frozenset(
         ENDPOINTS_CSS_PATH,
         *{
             path
-            for lens_id in (
-                "tcp_tls",
-                "dns_ops",
-                "routing",
-                "l2_control",
-                "interface_health",
-                "qos_icmp",
-                "enterprise_l7",
-                "drops",
-                "endpoint_mobility",
-                "app_transactions",
-                "state_events",
-                "mgmt_plane",
-                "lb_health",
-            )
+            for lens_id in EXPECTED_PROTOCOL_LENS_IDS
             for path in (
                 f"splunk_adm/appserver/static/pages/protocol-{lens_id}.js",
                 f"splunk_adm/appserver/static/protocol-{lens_id}-manifest.json",
@@ -1443,21 +1447,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             ).removesuffix(".js")
             for path in lens_bundles
         }
-        expected_lens_ids = {
-            "tcp_tls",
-            "dns_ops",
-            "routing",
-            "l2_control",
-            "interface_health",
-            "qos_icmp",
-            "enterprise_l7",
-            "drops",
-            "endpoint_mobility",
-            "app_transactions",
-            "state_events",
-            "mgmt_plane",
-            "lb_health",
-        }
+        expected_lens_ids = EXPECTED_PROTOCOL_LENS_IDS
         if manifest_ids != expected_lens_ids or bundle_ids != expected_lens_ids:
             raise ValueError(
                 "Protocol lens manifests and bundles do not match all 13 implemented lenses: "

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import { formatCount, formatUtcTimestamp } from "../../shared/format";
 import {
   AdjacencyOverlay,
@@ -69,6 +72,12 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const ROUTING_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "device", label: "Device", placeholder: "Device", primary: true },
+  { key: "dst", label: "Peer IP", placeholder: "Peer IP", primary: true },
+  { key: "src", label: "Source IP", placeholder: "Source IP" },
+];
+
 export function RoutingLensPage({
   client,
   live,
@@ -118,6 +127,10 @@ export function RoutingLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -127,6 +140,10 @@ export function RoutingLensPage({
       setMissingCell(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -167,8 +184,8 @@ export function RoutingLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -232,11 +249,17 @@ export function RoutingLensPage({
     }
   };
 
+  handleInvestigateRef.current = handleInvestigate;
+
   const handleCancel = () => {
     abortRef.current?.abort();
     abortRef.current = null;
     setBusy(false);
   };
+
+  const hasAnyPrefixes = Boolean(
+    result?.rows.some((r) => r.prefixesReceived !== undefined),
+  );
 
   const columns: ProtocolTableColumn<RoutingPeerRow>[] = [
     {
@@ -275,20 +298,24 @@ export function RoutingLensPage({
       align: "right",
       render: (r) => formatCount(r.flapCount),
     },
-    {
-      key: "prefixes",
-      header: "Prefixes",
-      align: "right",
-      render: (r) =>
-        r.prefixesReceived !== undefined ? (
-          formatCount(r.prefixesReceived)
-        ) : (
-          <StatusChip
-            status="not_covered"
-            title="Prefix counts require NX-OS DME state telemetry"
-          />
-        ),
-    },
+    ...(hasAnyPrefixes
+      ? [
+          {
+            key: "prefixes",
+            header: "Prefixes",
+            align: "right" as const,
+            render: (r: RoutingPeerRow) =>
+              r.prefixesReceived !== undefined ? (
+                formatCount(r.prefixesReceived)
+              ) : (
+                <StatusChip
+                  status="not_covered"
+                  title="Prefix counts require NX-OS DME state telemetry"
+                />
+              ),
+          },
+        ]
+      : []),
     {
       key: "status",
       header: "Status",
@@ -565,7 +592,54 @@ export function RoutingLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={ROUTING_FILTER_FIELDS}
+      filterSuggestions={{
+        device: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.device),
+        ),
+        dst: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.peerIp),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                device: selectedRow.device,
+                dst: selectedRow.peerIp,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
+      focusFlowLabel="Focus peer"
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

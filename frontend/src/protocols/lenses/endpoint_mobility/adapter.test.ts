@@ -770,4 +770,38 @@ describe("investigateEndpointMobility & summarizeEndpointMobility (Estimate mode
       spy.mockRestore();
     }
   });
+
+  it("marks Duplicate IPs KPI as none_observed when endpoints have no IP fields and omits uncovered claims from clean verdict", async () => {
+    const client: SearchClient = {
+      search: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            _time: String(EARLIEST + 120),
+            host: "nd-1",
+            sourcetype: "cisco:dc:nd:endpoints",
+            mac: "00:50:56:aa:00:01",
+            switchName: "leaf1",
+            interfaceName: "Eth1/1",
+            vlan: "100",
+          },
+        ],
+        truncated: false,
+        warnings: [],
+        errors: [],
+      }),
+    };
+    const res = await investigateEndpointMobility(
+      client,
+      makeRequest(),
+      makeConfig([makeProfile({ extra: { sourceKind: "nd_endpoints" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    const dupKpi = res.kpis.find((k) => k.id === "duplicate-ips");
+    expect(dupKpi?.value).toBe("None observed");
+    expect(dupKpi?.status).toBe("none_observed");
+    expect(res.verdict).toContain("no endpoint IPs reported");
+    expect(res.verdict).toContain("ARP spikes");
+    expect(res.verdict).toContain("not covered");
+  });
 });

@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import { checkStreamEstimateMode } from "../../shared/streamReadiness";
 import {
@@ -67,6 +70,17 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const DNS_OPS_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "src", label: "Client IP", placeholder: "Client IP", primary: true },
+  {
+    key: "dst",
+    label: "Resolver IP",
+    placeholder: "Resolver IP",
+    primary: true,
+  },
+  { key: "device", label: "Host or node", placeholder: "Host / Node" },
+];
+
 export function DnsOpsLensPage({
   client,
   live,
@@ -121,6 +135,10 @@ export function DnsOpsLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -131,6 +149,10 @@ export function DnsOpsLensPage({
       setStreamModeNotice(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -178,8 +200,8 @@ export function DnsOpsLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -321,6 +343,8 @@ export function DnsOpsLensPage({
       }
     }
   };
+
+  handleInvestigateRef.current = handleInvestigate;
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -668,7 +692,54 @@ export function DnsOpsLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={DNS_OPS_FILTER_FIELDS}
+      supportsBidirectional
+      filterSuggestions={{
+        src: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.client),
+        ),
+        dst: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.resolver),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                src: selectedRow.client,
+                dst: selectedRow.resolver,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

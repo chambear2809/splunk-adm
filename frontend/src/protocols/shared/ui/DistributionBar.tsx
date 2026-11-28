@@ -1,5 +1,22 @@
 import type { ProtocolDistributionMetric } from "../contract";
 
+const SINGULAR_UNITS: Record<string, string> = {
+  events: "event",
+  sessions: "session",
+  reqs: "req",
+  pkts: "pkt",
+  devices: "device",
+  flows: "flow",
+  errors: "error",
+  drops: "drop",
+  findings: "finding",
+};
+
+function formatCountUnit(value: number, unit: string): string {
+  if (value === 1 && SINGULAR_UNITS[unit]) return SINGULAR_UNITS[unit];
+  return unit;
+}
+
 export function DistributionBar({
   title,
   items,
@@ -10,10 +27,15 @@ export function DistributionBar({
   mode?: "percentile" | "count";
 }) {
   if (!items.length) return null;
-  const maxVal = Math.max(
-    ...items.map((item) => Math.max(item.max ?? item.p95, item.p95, item.p50)),
-    1,
-  );
+  const maxVal =
+    mode === "count"
+      ? Math.max(...items.map((item) => item.count ?? item.p95), 1)
+      : Math.max(
+          ...items.map((item) =>
+            Math.max(item.max ?? item.p95, item.p95, item.p50),
+          ),
+          1,
+        );
   const width = 220;
   const height = 16;
 
@@ -34,14 +56,15 @@ export function DistributionBar({
             width - 2,
             Math.max(p50X + 2, (item.p95 / maxVal) * (width - 6)),
           );
-          const countVal = item.p95;
+          const countVal = item.count ?? item.p95;
+          const countUnit = formatCountUnit(countVal, item.unit);
           const countX = Math.min(
             width - 2,
             Math.max(2, (countVal / maxVal) * (width - 6)),
           );
           const ariaLabel =
             mode === "count"
-              ? `${item.label}: ${countVal} ${item.unit}`
+              ? `${item.label}: ${countVal} ${countUnit}`
               : `${item.label}: p50 ${item.p50} ${item.unit}, p95 ${item.p95} ${item.unit}`;
           return (
             <div className="pl-dist-row" key={item.id}>
@@ -96,7 +119,7 @@ export function DistributionBar({
               </svg>
               <span className="pl-dist-nums pl-mono">
                 {mode === "count"
-                  ? `${countVal} ${item.unit}`
+                  ? `${countVal} ${countUnit}`
                   : `p50 ${item.p50} / p95 ${item.p95} ${item.unit}`}
               </span>
             </div>

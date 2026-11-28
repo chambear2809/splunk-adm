@@ -136,4 +136,47 @@ describe("protocol inputs and URL contract", () => {
 
     expect(parseProtocolProfiles(undefined)).toEqual([]);
   });
+
+  it("validates and round-trips port, bidirectional, and interface filters", () => {
+    const urlParams = protocolLink(
+      {
+        lens: "tcp_tls",
+        scope: "prod:dc1",
+        view: "overview",
+        filter: {
+          src: "10.0.0.1",
+          dst: "10.0.0.2",
+          port: "443",
+          bidirectional: true,
+          iface: "eth1/1",
+        },
+      },
+      1800000000,
+    );
+    expect(urlParams.get("p_port")).toBe("443");
+    expect(urlParams.get("p_bidir")).toBe("1");
+    expect(urlParams.get("p_iface")).toBe("eth1/1");
+
+    const parsed = parseProtocolLink(urlParams, 1800000000);
+    expect(parsed.filter).toEqual({
+      src: "10.0.0.1",
+      dst: "10.0.0.2",
+      port: "443",
+      bidirectional: true,
+      iface: "eth1/1",
+    });
+
+    expect(() =>
+      parseProtocolLink(new URLSearchParams("p_port=70000"), 1800000000),
+    ).toThrow(/Port must be/i);
+    expect(() =>
+      parseProtocolLink(new URLSearchParams("p_bidir=2"), 1800000000),
+    ).toThrow(/unsupported/i);
+    expect(() =>
+      parseProtocolLink(
+        new URLSearchParams("p_iface=eth1/1|delete"),
+        1800000000,
+      ),
+    ).toThrow(/Invalid interface/i);
+  });
 });

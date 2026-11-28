@@ -1,16 +1,9 @@
-import {
-  AlertTriangle,
-  CheckCircle2,
-  HelpCircle,
-  Minus,
-  Slash,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, HelpCircle, Minus } from "lucide-react";
 import { STATUS_LABELS, type ProtocolKpi } from "../contract";
 
 const ICONS = {
   ok: CheckCircle2,
   attention: AlertTriangle,
-  not_covered: Slash,
   none_observed: Minus,
   unknown: HelpCircle,
 } as const;
@@ -54,7 +47,10 @@ export function KpiStrip({ tiles }: { tiles: readonly ProtocolKpi[] }) {
       data-testid="protocol-kpi-strip"
     >
       {bounded.map((tile) => {
-        const Icon = tile.status ? ICONS[tile.status] : undefined;
+        const Icon =
+          tile.status && tile.status !== "not_covered"
+            ? ICONS[tile.status]
+            : undefined;
         const statusText = tile.status ? STATUS_LABELS[tile.status] : undefined;
         return (
           <div
@@ -69,7 +65,15 @@ export function KpiStrip({ tiles }: { tiles: readonly ProtocolKpi[] }) {
           >
             <div className="pl-kpi-top">
               <span className="pl-kpi-label">{tile.label}</span>
-              {Icon && tile.status ? (
+              {tile.status === "not_covered" ? (
+                <span
+                  className="pl-kpi-icon-not_covered"
+                  title={statusText}
+                  aria-hidden="true"
+                >
+                  <span className="pl-status-hatch-swatch" />
+                </span>
+              ) : Icon && tile.status ? (
                 <span
                   className={`pl-kpi-icon-${tile.status}`}
                   title={statusText}

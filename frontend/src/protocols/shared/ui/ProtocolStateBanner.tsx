@@ -18,7 +18,6 @@ const DEFAULTS: Record<
     text: "Searching…",
   },
   empty: {
-    status: "none_observed",
     text: "No matching events in this UTC window.",
   },
   partial: {

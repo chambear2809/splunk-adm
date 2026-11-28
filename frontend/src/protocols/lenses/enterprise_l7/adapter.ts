@@ -15,6 +15,10 @@ import type {
   ProtocolStatus,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import {
+  buildFlowEndpointPredicates,
+  matchesFlowEndpoints,
+} from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -293,12 +297,14 @@ export function buildEnterpriseL7Search(options: {
     `index=${index}`,
     buildSourcetypePredicate(sourcetypes),
   ];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -1869,8 +1875,9 @@ export async function investigateEnterpriseL7(
       for (const row of res.rows) {
         const norm = normalizeEnterpriseL7Row(row);
         if (!norm) continue;
-        if (request.filter?.src && norm.srcIp !== request.filter.src) continue;
-        if (request.filter?.dst && norm.server !== request.filter.dst) continue;
+        if (!matchesFlowEndpoints(request.filter, norm.srcIp, norm.server)) {
+          continue;
+        }
         collected.push({ event: norm, indexName: profile.index });
       }
     }

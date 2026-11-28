@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
   ProtocolTimelineEvent,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import { formatCount, formatBytes } from "../../shared/format";
 import { checkStreamEstimateMode } from "../../shared/streamReadiness";
 import {
@@ -65,6 +68,22 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const QOS_ICMP_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "src", label: "Source IP", placeholder: "Source IP", primary: true },
+  {
+    key: "dst",
+    label: "Destination IP",
+    placeholder: "Dest IP",
+    primary: true,
+  },
+  { key: "port", label: "Port", placeholder: "Port", primary: true },
+  {
+    key: "device",
+    label: "Exporter or switch",
+    placeholder: "Exporter / Switch",
+  },
+];
+
 export function QosIcmpLensPage({
   client,
   live,
@@ -119,6 +138,10 @@ export function QosIcmpLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -129,6 +152,10 @@ export function QosIcmpLensPage({
       setStreamModeNotice(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -190,8 +217,8 @@ export function QosIcmpLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -340,6 +367,8 @@ export function QosIcmpLensPage({
       }
     }
   };
+
+  handleInvestigateRef.current = handleInvestigate;
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -751,7 +780,57 @@ export function QosIcmpLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={QOS_ICMP_FILTER_FIELDS}
+      supportsBidirectional
+      filterSuggestions={{
+        src: collectFilterSuggestions((result?.rows ?? []).map((r) => r.srcIp)),
+        dst: collectFilterSuggestions((result?.rows ?? []).map((r) => r.dstIp)),
+        port: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.dstPort),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                src: selectedRow.srcIp,
+                dst: selectedRow.dstIp,
+                ...(selectedRow.dstPort
+                  ? { port: String(selectedRow.dstPort) }
+                  : {}),
+                bidirectional: true,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

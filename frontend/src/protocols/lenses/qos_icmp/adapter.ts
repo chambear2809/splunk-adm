@@ -15,6 +15,7 @@ import type {
   ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import { formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -153,14 +154,14 @@ export function buildQosIcmpSearch(options: {
       `index=${index}`,
       `sourcetype="cisco:dc:nd:flows"`,
     ];
-    if (options.filter?.src) {
-      const src = literal(options.filter.src, 128);
-      predicates.push(`(srcIp="${src}" OR src_ip="${src}")`);
-    }
-    if (options.filter?.dst) {
-      const dst = literal(options.filter.dst, 128);
-      predicates.push(`(dstIp="${dst}" OR dest_ip="${dst}")`);
-    }
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields: ["srcIp", "src_ip"],
+        dstFields: ["dstIp", "dest_ip"],
+        portFields: ["dstPort", "srcPort", "dest_port", "src_port"],
+      }),
+    );
     if (options.filter?.device) {
       const dev = literal(options.filter.device, 128);
       predicates.push(
@@ -186,12 +187,13 @@ export function buildQosIcmpSearch(options: {
 
   if (options.sourcetype === "stream:icmp") {
     const predicates: string[] = [`index=${index}`, `sourcetype="stream:icmp"`];
-    if (options.filter?.src) {
-      predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-    }
-    if (options.filter?.dst) {
-      predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-    }
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields: ["src_ip"],
+        dstFields: ["dest_ip"],
+      }),
+    );
     if (options.filter?.device) {
       predicates.push(`host="${literal(options.filter.device, 128)}"`);
     }
@@ -206,12 +208,14 @@ export function buildQosIcmpSearch(options: {
     `index=${index}`,
     `sourcetype="stream:netflow"`,
   ];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(host="${dev}" OR exporter_ip="${dev}")`);
@@ -1851,10 +1855,25 @@ export function buildQosIcmpAnalysis(options: {
     verdict = `${flaggedRows.length} of ${rows.length} ${rows.length === 1 ? "flow needs" : "flows need"} attention: ${leadDetail} on ${lead.srcIp} → ${lead.dstIp}.`;
     verdictStatus = "attention";
   } else if (!hasActiveNetflow && !hasActiveIcmp && hasActiveNd) {
-    verdict = `Nexus Dashboard flows only (${rows.length} ${rows.length === 1 ? "flow" : "flows"} observed, 0 drops) — DSCP and ICMP are not covered.`;
+    const capPrefix = capped ? `First ${rows.length} ` : "";
+    verdict = `Nexus Dashboard flows only (${capPrefix}${rows.length} ${rows.length === 1 ? "flow" : "flows"} observed${capped ? ", capped" : ""}, 0 drops) — DSCP and ICMP are not covered.`;
     verdictStatus = "not_covered";
   } else {
-    verdict = `${rows.length} of ${rows.length} ${rows.length === 1 ? "flow" : "flows"} healthy with consistent DSCP markings and no ICMP errors or fabric drops.`;
+    const coveredChecks: string[] = [];
+    const missingDims: string[] = [];
+    if (hasActiveNetflow) coveredChecks.push("consistent DSCP markings");
+    else missingDims.push("DSCP");
+    if (hasActiveIcmp) coveredChecks.push("no ICMP errors");
+    else missingDims.push("ICMP");
+    if (hasActiveNd) coveredChecks.push("no fabric drops");
+    else missingDims.push("fabric drops");
+    const scopePrefix = capped
+      ? `First ${rows.length} ${rows.length === 1 ? "flow" : "flows"} (capped)`
+      : `${rows.length} of ${rows.length} ${rows.length === 1 ? "flow" : "flows"}`;
+    const missingNote = missingDims.length
+      ? ` — ${missingDims.join(" and ")} not covered`
+      : "";
+    verdict = `${scopePrefix} healthy with ${coveredChecks.join(", ")}${missingNote}.`;
     verdictStatus = "ok";
   }
 

@@ -17,6 +17,7 @@ import {
   type ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -226,15 +227,14 @@ export function buildLbHealthSearch(options: {
       `index=${index}`,
       `(${F5_LTM_SOURCETYPES.map((st) => `sourcetype="${st}"`).join(" OR ")})`,
     ];
-    if (options.filter?.src) {
-      predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-    }
-    if (options.filter?.dst) {
-      const dst = literal(options.filter.dst, 128);
-      predicates.push(
-        `(vip="${dst}" OR dest_ip="${dst}" OR node="${dst}" OR member_ip="${dst}")`,
-      );
-    }
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields: ["src_ip"],
+        dstFields: ["vip", "dest_ip", "node", "member_ip"],
+        portFields: ["node_port", "dest_port", "src_port"],
+      }),
+    );
     if (options.filter?.device) {
       const dev = literal(options.filter.device, 128);
       predicates.push(
@@ -278,25 +278,20 @@ export function buildLbHealthSearch(options: {
     `index=${index}`,
     `(${sourcetypes.map((st) => `sourcetype="${st}"`).join(" OR ")})`,
   ];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    const dst = literal(options.filter.dst, 128);
-    if (options.target === "aws_nlb") {
-      predicates.push(
-        `(dest_ip="${dst}" OR target_ip="${dst}" OR elb="${dst}" OR listener="${dst}")`,
-      );
-    } else if (options.target === "aws_alb") {
-      predicates.push(
-        `(dest_ip="${dst}" OR vip="${dst}" OR target_ip="${dst}" OR member_ip="${dst}" OR elb="${dst}")`,
-      );
-    } else {
-      predicates.push(
-        `(dest_ip="${dst}" OR vip="${dst}" OR target_ip="${dst}" OR member_ip="${dst}" OR elb="${dst}" OR listener="${dst}")`,
-      );
-    }
-  }
+  const dstFields =
+    options.target === "aws_nlb"
+      ? ["dest_ip", "target_ip", "elb", "listener"]
+      : options.target === "aws_alb"
+        ? ["dest_ip", "vip", "target_ip", "member_ip", "elb"]
+        : ["dest_ip", "vip", "target_ip", "member_ip", "elb", "listener"];
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields,
+      portFields: ["dest_port", "src_port", "target_port", "listener_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(

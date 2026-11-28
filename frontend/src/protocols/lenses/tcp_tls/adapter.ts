@@ -15,6 +15,7 @@ import type {
   ProtocolStatus,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
 import {
   formatBytes,
   formatCount,
@@ -146,12 +147,14 @@ export function buildTcpTlsSearch(options: {
     `index=${index}`,
     `sourcetype="${options.sourcetype}"`,
   ];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(host="${dev}" OR exporter_ip="${dev}")`);
@@ -1020,22 +1023,23 @@ export function buildTcpTlsAnalysis(options: {
   if (sourceMode === "netflow_only") {
     const totalBytesAll = rows.reduce((sum, r) => sum + r.totalBytes, 0);
     const totalFlowsAll = rows.reduce((sum, r) => sum + r.flowCount, 0);
+    const capPrefix = capped ? "≥ " : "";
     kpis = [
       {
         id: "netflow-pairs",
         label: "Observed pairs",
-        value: formatCount(rows.length),
+        value: `${capPrefix}${formatCount(rows.length)}`,
         unit: rows.length === 1 ? "pair" : "pairs",
       },
       {
         id: "netflow-bytes",
         label: "NetFlow volume",
-        value: formatBytes(totalBytesAll),
+        value: `${capPrefix}${formatBytes(totalBytesAll)}`,
       },
       {
         id: "netflow-flows",
         label: "Flow records",
-        value: formatCount(totalFlowsAll),
+        value: `${capPrefix}${formatCount(totalFlowsAll)}`,
         unit: totalFlowsAll === 1 ? "flow" : "flows",
       },
       {
@@ -1203,7 +1207,7 @@ export function buildTcpTlsAnalysis(options: {
   let verdictStatus: ProtocolStatus;
 
   if (sourceMode === "netflow_only") {
-    verdict = `NetFlow fallback only (${rows.length} ${rows.length === 1 ? "pair" : "pairs"} observed) — TCP RTT and TLS posture are not covered.`;
+    verdict = `NetFlow fallback only (${capped ? "≥ " : ""}${rows.length} ${rows.length === 1 ? "pair" : "pairs"} observed) — TCP RTT and TLS posture are not covered.`;
     verdictStatus = "not_covered";
   } else if (flaggedRows.length > 0) {
     const lead = flaggedRows[0];
@@ -1231,11 +1235,13 @@ export function buildTcpTlsAnalysis(options: {
     verdictStatus = "ok";
   }
 
-  const coverageStatus: ProtocolStatus = anyPartial
-    ? "attention"
-    : sourceMode === "netflow_only"
+  const anySourceFailed = anyBlocked || anyUnavailable;
+  const coverageStatus: ProtocolStatus =
+    sourceMode === "netflow_only"
       ? "not_covered"
-      : "ok";
+      : anySourceFailed
+        ? "attention"
+        : "ok";
   const activeCount = outcomes.filter(
     (o) => o.state === "complete" || o.state === "partial",
   ).length;
@@ -1255,7 +1261,7 @@ export function buildTcpTlsAnalysis(options: {
         ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
         : anyUnavailable
           ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-          : "Search hit row cap or partial source — narrow the UTC window or filter.";
+          : "Sample capped at row limit — narrow the UTC window or filter.";
 
   return {
     verdict,

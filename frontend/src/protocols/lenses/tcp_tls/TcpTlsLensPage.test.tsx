@@ -324,25 +324,24 @@ describe("TcpTlsLensPage", () => {
 
   it("renders NetFlow-only fallback without fake RTT or TLS and keeps chrome under 60 words", () => {
     const nfResult = buildTcpTlsAnalysis({
-      events: [
-        {
-          event: normalizeTcpTlsRow(
-            {
-              _time: EARLIEST + 30,
-              host: "stream-hf-01",
-              sourcetype: "stream:netflow",
-              exporter_ip: "198.18.131.1",
-              src_ip: "198.18.38.10",
-              dest_ip: "198.18.38.20",
-              total_bytes: 22600,
-              total_packets: 40,
-            },
-            "stream:netflow",
-            NOW,
-          )!,
-          indexName: "netflow",
-        },
-      ],
+      events: [443, 8443, 49152, 49153].map((destPort, idx) => ({
+        event: normalizeTcpTlsRow(
+          {
+            _time: EARLIEST + 30 + idx,
+            host: "stream-hf-01",
+            sourcetype: "stream:netflow",
+            exporter_ip: "198.18.131.1",
+            src_ip: "198.18.38.10",
+            dest_ip: "198.18.38.20",
+            dest_port: destPort,
+            total_bytes: 22600,
+            total_packets: 40,
+          },
+          "stream:netflow",
+          NOW,
+        )!,
+        indexName: "netflow",
+      })),
       thresholds: resolveTcpTlsThresholds(PROFILE),
       earliest: EARLIEST,
       latest: NOW,
@@ -368,6 +367,10 @@ describe("TcpTlsLensPage", () => {
     );
     expect(html).toContain("NetFlow fallback only");
     expect(html).toContain("Not covered");
+    expect(html).toContain(">Source<");
+    expect(html).toContain(">Destination<");
+    expect(html).toContain("443, 8443 +2");
+    expect(html).toContain('title="443, 8443, 49152, 49153"');
     expect(html).not.toContain('data-testid="protocol-distribution-bar"');
 
     // Measure chrome words using the same rule as tests/browser/protocols.spec.ts

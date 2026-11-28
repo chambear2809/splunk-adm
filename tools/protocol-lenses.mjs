@@ -14,6 +14,7 @@ export const PROTOCOLS_HOST_MODULES = {
 export const PROTOCOLS_CORE_SDK_MODULES = {
   "frontend/src/protocols/shared/contract": "contract",
   "frontend/src/protocols/shared/fields": "fields",
+  "frontend/src/protocols/shared/filterSpl": "filterSpl",
   "frontend/src/protocols/shared/format": "format",
   "frontend/src/protocols/shared/runner": "runner",
   "frontend/src/protocols/shared/streamReadiness": "streamReadiness",

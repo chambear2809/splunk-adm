@@ -712,4 +712,118 @@ describe("investigateInterfaceHealth (runner, degraded coverage, stale config)",
     expect(res.coverageStatus).toBe("not_covered");
     expect(res.verdict).toContain("not covered");
   });
+
+  it("computes window deltas for cumulative RMON counters, ignores single-snapshot lifetime counts, and clamps counter resets to 0", async () => {
+    const client: SearchClient = {
+      search: vi.fn().mockResolvedValue({
+        rows: [
+          // eth1/1: 2 snapshots with +5 in_errors delta -> attention
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/1]/dbgIfIn",
+            in_errors: "1000",
+          },
+          {
+            _time: String(EARLIEST + 360),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/1]/dbgIfIn",
+            in_errors: "1005",
+          },
+          // eth1/2: 1 snapshot with lifetime 50000 errors -> single RMON poll must NOT trigger alert
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/2]/dbgIfIn",
+            in_errors: "50000",
+          },
+          // eth1/3: 2 snapshots with counter reset (500 -> 10) -> clamped to 0, healthy
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/3]/dbgIfIn",
+            in_errors: "500",
+          },
+          {
+            _time: String(EARLIEST + 360),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            dn: "sys/intf/phys-[eth1/3]/dbgIfIn",
+            in_errors: "10",
+          },
+        ],
+        truncated: false,
+        warnings: [],
+        errors: [],
+      }),
+    };
+
+    const res = await investigateInterfaceHealth(
+      client,
+      makeRequest(),
+      makeConfig([makeProfile({ extra: { sourceKind: "dme" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    const byIface = new Map(res.rows.map((r) => [r.interface, r]));
+    expect(byIface.get("eth1/1")?.inErrors).toBe(5);
+    expect(byIface.get("eth1/1")?.status).toBe("attention");
+    expect(byIface.get("eth1/2")?.inErrors).toBeUndefined();
+    expect(byIface.get("eth1/2")?.status).toBe("not_covered");
+    expect(byIface.get("eth1/3")?.inErrors).toBe(0);
+    expect(byIface.get("eth1/3")?.status).toBe("ok");
+  });
+
+  it("pushes interface filter into DME SPL before head and filters rows by canonical interface key", async () => {
+    const spl = buildInterfaceDmeSearch({
+      index: "cisco_dc",
+      filter: { device: "198.18.131.1", iface: "eth1/1" },
+      maxRows: 256,
+    });
+    const baseSearch = spl.split("| head")[0] ?? "";
+    expect(baseSearch).toContain('host="198.18.131.1"');
+    expect(baseSearch).toContain('dn="*[eth1/1]*"');
+    expect(baseSearch).toContain('Row_info.dn="*[eth1/1]*"');
+    expect(baseSearch).not.toContain("'Row_info.dn'");
+    expect(spl.indexOf("eth1/1")).toBeLessThan(spl.indexOf("| head"));
+
+    const client: SearchClient = {
+      search: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            interface: "Ethernet1/1",
+            admin_state: "up",
+            oper_state: "up",
+          },
+          {
+            _time: String(EARLIEST + 60),
+            host: "198.18.131.1",
+            sourcetype: "cisco:dc:nexus9k:dme",
+            interface: "Ethernet1/2",
+            admin_state: "up",
+            oper_state: "up",
+          },
+        ],
+        truncated: false,
+        warnings: [],
+        errors: [],
+      }),
+    };
+    const res = await investigateInterfaceHealth(
+      client,
+      makeRequest({ filter: { device: "198.18.131.1", iface: "eth1/1" } }),
+      makeConfig([makeProfile({ extra: { sourceKind: "dme" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    expect(res.rows).toHaveLength(1);
+    expect(res.rows[0].interface).toBe("Ethernet1/1");
+  });
 });

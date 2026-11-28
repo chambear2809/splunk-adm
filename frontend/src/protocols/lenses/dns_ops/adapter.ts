@@ -15,6 +15,10 @@ import type {
   ProtocolStatus,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
+import {
+  buildFlowEndpointPredicates,
+  matchesFlowEndpoints,
+} from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
@@ -124,18 +128,21 @@ export function buildDnsOpsSearch(options: {
       `sourcetype="cilium:hubble:flow"`,
       `(flow.l7.dns.query=* OR query=*)`,
     ];
-    if (options.filter?.src) {
-      const src = literal(options.filter.src, 128);
-      predicates.push(
-        `(src_ip="${src}" OR flow.IP.source="${src}" OR flow.IP.destination="${src}")`,
-      );
-    }
-    if (options.filter?.dst) {
-      const dst = literal(options.filter.dst, 128);
-      predicates.push(
-        `(dest_ip="${dst}" OR flow.IP.destination="${dst}" OR flow.IP.source="${dst}")`,
-      );
-    }
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields: ["src_ip", "flow.IP.source", "flow.IP.destination"],
+        dstFields: ["dest_ip", "flow.IP.destination", "flow.IP.source"],
+        portFields: [
+          "dest_port",
+          "src_port",
+          "flow.l4.UDP.destination_port",
+          "flow.l4.UDP.source_port",
+          "flow.l4.TCP.destination_port",
+          "flow.l4.TCP.source_port",
+        ],
+      }),
+    );
     if (options.filter?.device) {
       const dev = literal(options.filter.device, 128);
       predicates.push(
@@ -169,12 +176,14 @@ export function buildDnsOpsSearch(options: {
   }
 
   const predicates: string[] = [`index=${index}`, `sourcetype="stream:dns"`];
-  if (options.filter?.src) {
-    predicates.push(`src_ip="${literal(options.filter.src, 128)}"`);
-  }
-  if (options.filter?.dst) {
-    predicates.push(`dest_ip="${literal(options.filter.dst, 128)}"`);
-  }
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: ["src_ip"],
+      dstFields: ["dest_ip"],
+      portFields: ["dest_port", "src_port"],
+    }),
+  );
   if (options.filter?.device) {
     predicates.push(`host="${literal(options.filter.device, 128)}"`);
   }
@@ -1359,11 +1368,8 @@ export async function investigateDnsOps(
     (p) => resolveDnsOpsThresholds(p).sourcetype === "cilium:hubble:flow",
   );
 
-  const matchesDirectionFilter = (ev: NormalizedDnsOpsEvent): boolean => {
-    if (request.filter?.src && ev.client !== request.filter.src) return false;
-    if (request.filter?.dst && ev.resolver !== request.filter.dst) return false;
-    return true;
-  };
+  const matchesDirectionFilter = (ev: NormalizedDnsOpsEvent): boolean =>
+    matchesFlowEndpoints(request.filter, ev.client, ev.resolver);
 
   const runProfiles = async () => {
     const outcomes: ProtocolSourceOutcome[] = [];

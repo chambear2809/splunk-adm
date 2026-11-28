@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import {
   formatBytes,
   formatCount,
@@ -70,6 +73,19 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const TCP_TLS_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "src", label: "Source IP", placeholder: "Source IP", primary: true },
+  {
+    key: "dst",
+    label: "Destination IP",
+    placeholder: "Dest IP",
+    primary: true,
+  },
+  { key: "port", label: "Port", placeholder: "Port", primary: true },
+  { key: "device", label: "Exporter or host", placeholder: "Exporter / Host" },
+  { key: "vni", label: "VXLAN VNI", placeholder: "VNI" },
+];
+
 export function TcpTlsLensPage({
   client,
   live,
@@ -124,6 +140,10 @@ export function TcpTlsLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -134,6 +154,10 @@ export function TcpTlsLensPage({
       setStreamModeNotice(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -181,8 +205,8 @@ export function TcpTlsLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -326,6 +350,8 @@ export function TcpTlsLensPage({
     }
   };
 
+  handleInvestigateRef.current = handleInvestigate;
+
   const handleCancel = () => {
     abortRef.current?.abort();
     abortRef.current = null;
@@ -338,19 +364,29 @@ export function TcpTlsLensPage({
     ? [
         {
           key: "client",
-          header: "Client",
-          render: (r) => <CopyableIp value={r.client} label="client" />,
+          header: "Source",
+          render: (r) => <CopyableIp value={r.client} label="source" />,
         },
         {
           key: "server",
-          header: "Server",
-          render: (r) => <CopyableIp value={r.server} label="server" />,
+          header: "Destination",
+          render: (r) => <CopyableIp value={r.server} label="destination" />,
         },
         {
           key: "destPorts",
           header: "Dest ports",
           align: "right",
-          render: (r) => (r.destPorts.length ? r.destPorts.join(", ") : "—"),
+          render: (r) => {
+            if (!r.destPorts.length) return "—";
+            const shown = r.destPorts.slice(0, 2).join(", ");
+            const extra = r.destPorts.length - 2;
+            const full = r.destPorts.join(", ");
+            return (
+              <span className="pl-mono" title={full}>
+                {extra > 0 ? `${shown} +${extra}` : shown}
+              </span>
+            );
+          },
         },
         {
           key: "flows",
@@ -363,16 +399,6 @@ export function TcpTlsLensPage({
           header: "Bytes",
           align: "right",
           render: (r) => formatBytes(r.totalBytes),
-        },
-        {
-          key: "status",
-          header: "RTT & TLS",
-          render: (r) => (
-            <StatusChip
-              status={r.status}
-              title={r.reasons.length ? r.reasons.join("; ") : undefined}
-            />
-          ),
         },
       ]
     : [
@@ -738,7 +764,62 @@ export function TcpTlsLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={TCP_TLS_FILTER_FIELDS}
+      supportsBidirectional
+      filterSuggestions={{
+        src: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.client),
+        ),
+        dst: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.server),
+        ),
+        port: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => r.destPorts),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        const nextKey = serializeFilter(next);
+        if (nextKey !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                src: selectedRow.client,
+                dst: selectedRow.server,
+                ...(selectedRow.destPorts.length === 1
+                  ? { port: String(selectedRow.destPorts[0]) }
+                  : {}),
+                bidirectional: true,
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

@@ -53,6 +53,23 @@ export interface ProtocolFilter {
   device?: string;
   /** Optional VXLAN VNI facet (1..16777215). */
   vni?: string;
+  /** Optional L4 TCP/UDP port (1..65535). */
+  port?: string;
+  /** Match src/dst in either direction (A ↔ B) on flow lenses. */
+  bidirectional?: boolean;
+  /** Optional interface name filter (e.g., eth1/1, Po100). */
+  iface?: string;
+}
+
+export type ProtocolFilterFieldKey =
+  "src" | "dst" | "device" | "port" | "vni" | "iface";
+
+export interface ProtocolFilterFieldSpec {
+  key: ProtocolFilterFieldKey;
+  label: string;
+  placeholder: string;
+  /** Primary fields render inline; secondary fields expand under "More". */
+  primary?: boolean;
 }
 
 export interface ProtocolRequest {
@@ -131,6 +148,8 @@ export interface ProtocolDistributionMetric {
   p50: number;
   p95: number;
   max?: number;
+  /** Exact aggregate total used when `DistributionBar` renders in `mode="count"`. */
+  count?: number;
   unit: string;
   status?: ProtocolStatus;
 }

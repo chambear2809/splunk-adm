@@ -125,6 +125,29 @@ export function buildInterfaceDmeSearch(options: {
     const dev = literal(options.filter.device, 128);
     predicates.push(`host="${dev}"`);
   }
+  if (options.filter?.iface) {
+    const iface = literal(options.filter.iface, 64);
+    const canon = literal(canonicalInterfaceKey(options.filter.iface), 64);
+    const shortEth = canon.startsWith("ethernet")
+      ? literal(`eth${canon.slice("ethernet".length)}`, 64)
+      : undefined;
+    const variants = Array.from(
+      new Set([iface, canon, shortEth].filter((v): v is string => Boolean(v))),
+    );
+    const ifaceTerms: string[] = [];
+    for (const v of variants) {
+      ifaceTerms.push(
+        `interface="${v}"`,
+        `interface_name="${v}"`,
+        `interfaceName="${v}"`,
+        `interfaceUniqueId="${v}"`,
+        `Row_info.id="${v}"`,
+        `dn="*[${v}]*"`,
+        `Row_info.dn="*[${v}]*"`,
+      );
+    }
+    predicates.push(`(${ifaceTerms.join(" OR ")})`);
+  }
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
   const evalClause =
     `| eval host=coalesce(nodeName, switchName, host, device), ` +
@@ -771,12 +794,18 @@ export function buildInterfaceHealthAnalysis(options: {
         checkedAt: nowSec,
       };
     }
+    const emptyActiveCount = outcomes.filter(
+      (o) => o.state === "complete" || o.state === "partial",
+    ).length;
     return {
       verdict:
         "No matching interface DME counters or link syslog events observed in this UTC window.",
       verdictStatus: "none_observed",
       coverageStatus: "none_observed",
-      coverageLabel: "None observed",
+      coverageLabel:
+        emptyActiveCount > 0
+          ? `${emptyActiveCount} ${emptyActiveCount === 1 ? "source" : "sources"}`
+          : "None observed",
       kpis: [],
       rows: [],
       matrixRows: [],
@@ -789,7 +818,8 @@ export function buildInterfaceHealthAnalysis(options: {
       capped,
       sourceMode: "none",
       bannerState: "empty",
-      bannerReason: "No matching interface events in this UTC window.",
+      bannerReason:
+        "Try widening the UTC window or clearing the device or interface filter.",
       checkedAt: nowSec,
     };
   }
@@ -862,21 +892,61 @@ export function buildInterfaceHealthAnalysis(options: {
       (a, b) => a.timestamp - b.timestamp,
     );
 
-    // Take latest defined value per DME attribute so separate DME object
-    // classes (l1PhysIf, ethpmPhysIf, rmonEtherStats, rmonIfIn, rmonIfOut)
-    // combine cleanly without double-counting cumulative counters across polls.
+    // Combine separate DME object classes (l1PhysIf, ethpmPhysIf,
+    // rmonEtherStats, rmonIfIn, rmonIfOut). Cumulative RMON counter objects
+    // (`/dbgIfIn`, `/dbgIfOut`, `/dbgEtherStats`) report lifetime since-boot
+    // counters; compute window deltas (latest - earliest, clamped >= 0 on
+    // counter reset) when >= 2 snapshots exist, and leave a single RMON
+    // snapshot uncovered rather than comparing lifetime totals to a window
+    // threshold. Non-RMON DME/ND events use their latest reported value.
+    const isCumulativeRmonDn = (dn?: string): boolean =>
+      Boolean(dn && /\/dbg(?:IfIn|IfOut|EtherStats)\b/i.test(dn));
+
+    interface CounterAccumulator {
+      rmonFirst?: number;
+      rmonLast?: number;
+      rmonCount: number;
+      directLast?: number;
+    }
+    const makeAcc = (): CounterAccumulator => ({ rmonCount: 0 });
+    const recordCounter = (
+      acc: CounterAccumulator,
+      val: number | undefined,
+      cumulativeRmon: boolean,
+    ): void => {
+      if (val === undefined) return;
+      if (cumulativeRmon) {
+        if (acc.rmonFirst === undefined) acc.rmonFirst = val;
+        acc.rmonLast = val;
+        acc.rmonCount += 1;
+      } else {
+        acc.directLast = val;
+      }
+    };
+    const resolveCounter = (acc: CounterAccumulator): number | undefined => {
+      if (
+        acc.rmonCount >= 2 &&
+        acc.rmonFirst !== undefined &&
+        acc.rmonLast !== undefined
+      ) {
+        return Math.max(0, acc.rmonLast - acc.rmonFirst);
+      }
+      return acc.directLast;
+    };
+
+    const crcAcc = makeAcc();
+    const inErrAcc = makeAcc();
+    const outErrAcc = makeAcc();
+    const inDiscAcc = makeAcc();
+    const outDiscAcc = makeAcc();
+    const rxDropAcc = makeAcc();
+    const txDropAcc = makeAcc();
+
     let descr: string | undefined;
     let adminState: string | undefined;
     let operState: string | undefined;
     let speed: string | undefined;
     let mtu: number | undefined;
-    let crcErrors: number | undefined;
-    let inErrors: number | undefined;
-    let outErrors: number | undefined;
-    let inDiscards: number | undefined;
-    let outDiscards: number | undefined;
-    let rxDrops: number | undefined;
-    let txDrops: number | undefined;
     let inOctets: number | undefined;
     let outOctets: number | undefined;
     let dmeFlapCount: number | undefined;
@@ -884,19 +954,20 @@ export function buildInterfaceHealthAnalysis(options: {
     let latestDmeTs: number | undefined;
 
     for (const ev of sortedDme) {
+      const rmon = isCumulativeRmonDn(ev.dn);
       if (ev.timestamp !== undefined) latestDmeTs = ev.timestamp;
       if (ev.descr !== undefined) descr = ev.descr;
       if (ev.adminState !== undefined) adminState = ev.adminState;
       if (ev.operState !== undefined) operState = ev.operState;
       if (ev.speed !== undefined) speed = ev.speed;
       if (ev.mtu !== undefined) mtu = ev.mtu;
-      if (ev.crcErrors !== undefined) crcErrors = ev.crcErrors;
-      if (ev.inErrors !== undefined) inErrors = ev.inErrors;
-      if (ev.outErrors !== undefined) outErrors = ev.outErrors;
-      if (ev.inDiscards !== undefined) inDiscards = ev.inDiscards;
-      if (ev.outDiscards !== undefined) outDiscards = ev.outDiscards;
-      if (ev.rxDrops !== undefined) rxDrops = ev.rxDrops;
-      if (ev.txDrops !== undefined) txDrops = ev.txDrops;
+      recordCounter(crcAcc, ev.crcErrors, rmon);
+      recordCounter(inErrAcc, ev.inErrors, rmon);
+      recordCounter(outErrAcc, ev.outErrors, rmon);
+      recordCounter(inDiscAcc, ev.inDiscards, rmon);
+      recordCounter(outDiscAcc, ev.outDiscards, rmon);
+      recordCounter(rxDropAcc, ev.rxDrops, rmon);
+      recordCounter(txDropAcc, ev.txDrops, rmon);
       if (ev.inOctets !== undefined) inOctets = ev.inOctets;
       if (ev.outOctets !== undefined) outOctets = ev.outOctets;
       if (ev.flapCount !== undefined) dmeFlapCount = ev.flapCount;
@@ -907,6 +978,14 @@ export function buildInterfaceHealthAnalysis(options: {
             : Math.max(peakUtilizationPct, ev.utilizationPct);
       }
     }
+
+    const crcErrors = resolveCounter(crcAcc);
+    const inErrors = resolveCounter(inErrAcc);
+    const outErrors = resolveCounter(outErrAcc);
+    const inDiscards = resolveCounter(inDiscAcc);
+    const outDiscards = resolveCounter(outDiscAcc);
+    const rxDrops = resolveCounter(rxDropAcc);
+    const txDrops = resolveCounter(txDropAcc);
 
     const hasErrorCounters =
       crcErrors !== undefined ||
@@ -1102,7 +1181,7 @@ export function buildInterfaceHealthAnalysis(options: {
     if ((b.utilizationPct ?? -1) !== (a.utilizationPct ?? -1)) {
       return (b.utilizationPct ?? -1) - (a.utilizationPct ?? -1);
     }
-    return a.id.localeCompare(b.id);
+    return a.id.localeCompare(b.id, undefined, { numeric: true });
   });
 
   // 4 single-metric KPI tiles
@@ -1249,10 +1328,10 @@ export function buildInterfaceHealthAnalysis(options: {
     const aFlag = flaggedIfaceDevices.has(a);
     const bFlag = flaggedIfaceDevices.has(b);
     if (aFlag !== bFlag) return aFlag ? -1 : 1;
-    return a.localeCompare(b);
+    return a.localeCompare(b, undefined, { numeric: true });
   });
   const matrixCols = [...new Set(rows.map((r) => r.interface))].sort((a, b) =>
-    a.localeCompare(b),
+    a.localeCompare(b, undefined, { numeric: true }),
   );
   const matrixCells: ProtocolMatrixCell[] = rows.map((row) => ({
     row: row.device,
@@ -1319,6 +1398,7 @@ export function buildInterfaceHealthAnalysis(options: {
           label: formatCompactIntfLabel(r.device, r.interface),
           p50: err,
           p95: total,
+          count: total,
           unit: "pkts",
           status: (r.attention ? "attention" : "ok") as ProtocolStatus,
         };
@@ -1375,15 +1455,52 @@ export function buildInterfaceHealthAnalysis(options: {
     verdict = `${rows.length} ${rows.length === 1 ? "interface" : "interfaces"} observed, but error counters, link state, and utilization fields are not covered.`;
     verdictStatus = "not_covered";
   } else {
-    verdict = `${rows.length} of ${rows.length} ${rows.length === 1 ? "interface" : "interfaces"} healthy with no counter, flap, or state exceptions.`;
+    const healthyCount = rows.filter((r) => r.status === "ok").length;
+    const uncoveredCount = rows.filter(
+      (r) => r.status === "not_covered",
+    ).length;
+    const anyStateRows = rows.some((r) => r.hasStateCoverage);
+    const anyFlapRows = rows.some((r) => r.flapCount !== undefined);
+    const anyUtilRows = utilValues.length > 0;
+    const checked: string[] = [];
+    const missing: string[] = [];
+    if (anyCounterRows) checked.push("counters");
+    else missing.push("error counters");
+    if (anyStateRows) checked.push("link state");
+    else missing.push("link state");
+    if (anyFlapRows) checked.push("flaps");
+    else missing.push("flaps");
+    if (anyUtilRows) checked.push("utilization");
+    else missing.push("utilization");
+    const scopePrefix = `${healthyCount} of ${rows.length} ${rows.length === 1 ? "interface" : "interfaces"}`;
+    const checkedClause = checked.length
+      ? `healthy on ${checked.join(", ")}`
+      : "healthy";
+    const uncoveredRowNote =
+      uncoveredCount > 0 ? ` · ${uncoveredCount} without counters` : "";
+    const missingNote = missing.length
+      ? ` — ${missing.join(", ")} not covered`
+      : "";
+    verdict = `${scopePrefix} ${checkedClause}${uncoveredRowNote}${missingNote}.`;
     verdictStatus = "ok";
   }
 
+  const anyStateRowsAll = rows.some((r) => r.hasStateCoverage);
+  const anyFlapRowsAll = rows.some((r) => r.flapCount !== undefined);
+  const anyUtilRowsAll = utilValues.length > 0;
+  const coveredChecksCount =
+    (anyCounterRows ? 1 : 0) +
+    (anyStateRowsAll ? 1 : 0) +
+    (anyFlapRowsAll ? 1 : 0) +
+    (anyUtilRowsAll ? 1 : 0);
   const allRowsUncovered =
     rows.length > 0 && rows.every((r) => r.status === "not_covered");
-  const coverageStatus: ProtocolStatus = anyPartial
+  const anySourceFailed = anyBlocked || anyUnavailable;
+  const coverageStatus: ProtocolStatus = anySourceFailed
     ? "attention"
-    : (sourceMode === "syslog_only" && !anyCounterRows) || allRowsUncovered
+    : (sourceMode === "syslog_only" && !anyCounterRows) ||
+        allRowsUncovered ||
+        (coveredChecksCount > 0 && coveredChecksCount < 4)
       ? "not_covered"
       : "ok";
   const activeCount = outcomes.filter(
@@ -1392,7 +1509,9 @@ export function buildInterfaceHealthAnalysis(options: {
   const coverageLabel =
     sourceMode === "syslog_only"
       ? "Syslog only"
-      : `${activeCount} ${activeCount === 1 ? "source" : "sources"}`;
+      : coveredChecksCount > 0 && coveredChecksCount < 4 && !anySourceFailed
+        ? `${coveredChecksCount}/4 checks`
+        : `${activeCount} ${activeCount === 1 ? "source" : "sources"}`;
 
   const blockedDetail = outcomes.find((o) => o.state === "blocked")?.detail;
   const unavailableDetail = outcomes.find(
@@ -1405,7 +1524,7 @@ export function buildInterfaceHealthAnalysis(options: {
         ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
         : anyUnavailable
           ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-          : "Search hit row cap or partial source — narrow the UTC window or device filter.";
+          : "Sample capped at row limit — narrow the UTC window or device filter.";
 
   return {
     verdict,
@@ -1516,9 +1635,14 @@ export async function investigateInterfaceHealth(
       });
       outcomes.push(res.outcome);
       if (res.capped) capped = true;
+      const wantIfaceKey = request.filter?.iface
+        ? canonicalInterfaceKey(request.filter.iface)
+        : undefined;
       for (const row of res.rows) {
         const norm = normalizeInterfaceDmeRow(row);
-        if (norm) dmeEvents.push({ event: norm, indexName: profile.index });
+        if (!norm) continue;
+        if (wantIfaceKey && norm.canonKey !== wantIfaceKey) continue;
+        dmeEvents.push({ event: norm, indexName: profile.index });
       }
     }
 
@@ -1540,9 +1664,14 @@ export async function investigateInterfaceHealth(
       });
       outcomes.push(res.outcome);
       if (res.capped) capped = true;
+      const wantIfaceKey = request.filter?.iface
+        ? canonicalInterfaceKey(request.filter.iface)
+        : undefined;
       res.rows.forEach((row, idx) => {
         const norm = normalizeInterfaceSyslogRow(row, idx);
-        if (norm) syslogEvents.push({ event: norm, indexName: profile.index });
+        if (!norm) return;
+        if (wantIfaceKey && norm.canonKey !== wantIfaceKey) return;
+        syslogEvents.push({ event: norm, indexName: profile.index });
       });
     }
 

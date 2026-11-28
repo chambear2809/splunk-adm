@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import { formatCount, formatUtcTimestamp } from "../../shared/format";
 import { checkStreamEstimateMode } from "../../shared/streamReadiness";
 import {
@@ -71,6 +74,17 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const ENDPOINT_MOBILITY_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  {
+    key: "src",
+    label: "Endpoint IP or MAC",
+    placeholder: "Endpoint IP / MAC",
+    primary: true,
+  },
+  { key: "device", label: "Switch", placeholder: "Switch", primary: true },
+  { key: "vni", label: "VXLAN VNI", placeholder: "VNI", primary: true },
+];
+
 export function EndpointMobilityLensPage({
   client,
   live,
@@ -125,6 +139,10 @@ export function EndpointMobilityLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -135,6 +153,10 @@ export function EndpointMobilityLensPage({
       setStreamModeNotice(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -186,8 +208,8 @@ export function EndpointMobilityLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -332,6 +354,8 @@ export function EndpointMobilityLensPage({
       }
     }
   };
+
+  handleInvestigateRef.current = handleInvestigate;
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -761,7 +785,63 @@ export function EndpointMobilityLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={ENDPOINT_MOBILITY_FILTER_FIELDS}
+      filterSuggestions={{
+        src: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => [
+            r.primaryMac,
+            ...r.ips,
+            r.endpointLabel,
+          ]),
+        ),
+        device: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => r.switches),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                src:
+                  selectedRow.primaryMac ??
+                  selectedRow.ips[0] ??
+                  selectedRow.endpointLabel,
+                ...(selectedRow.switches[0]
+                  ? { device: selectedRow.switches[0] }
+                  : {}),
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
+      focusFlowLabel="Focus endpoint"
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  ProtocolFilter,
+  ProtocolFilterFieldSpec,
   ProtocolLensComponentProps,
   ProtocolMatrixCell,
   ProtocolStatus,
   ProtocolTimelineEvent,
 } from "../../shared/contract";
+import { collectFilterSuggestions } from "../../shared/filterSpl";
 import {
   formatBytes,
   formatCount,
@@ -68,6 +71,23 @@ function safeRawEventsUrl(options: {
   }
 }
 
+const LB_HEALTH_FILTER_FIELDS: readonly ProtocolFilterFieldSpec[] = [
+  { key: "src", label: "Client IP", placeholder: "Client IP", primary: true },
+  {
+    key: "dst",
+    label: "VIP or member IP",
+    placeholder: "VIP / Member",
+    primary: true,
+  },
+  {
+    key: "device",
+    label: "LB or pool",
+    placeholder: "LB / Pool",
+    primary: true,
+  },
+  { key: "port", label: "Port", placeholder: "Port" },
+];
+
 export function LbHealthLensPage({
   client,
   live,
@@ -117,6 +137,10 @@ export function LbHealthLensPage({
 
   // Abort any in-flight search whenever scope, UTC window, or filters change.
   const prevStampRef = useRef<string>(currentStampKey);
+  const pendingAutoInvestigateRef = useRef(false);
+  const handleInvestigateRef = useRef<(force?: boolean) => Promise<void>>(
+    async () => {},
+  );
   useEffect(() => {
     if (prevStampRef.current !== currentStampKey) {
       prevStampRef.current = currentStampKey;
@@ -126,6 +150,10 @@ export function LbHealthLensPage({
       setMissingCell(undefined);
       if (!initialResult) {
         setStampedResult(undefined);
+      }
+      if (pendingAutoInvestigateRef.current) {
+        pendingAutoInvestigateRef.current = false;
+        void handleInvestigateRef.current(true);
       }
     }
   }, [currentStampKey, initialResult]);
@@ -171,8 +199,8 @@ export function LbHealthLensPage({
       : undefined;
   }, [selectedRow, missingCell]);
 
-  const handleInvestigate = async () => {
-    if (!client || busy) return;
+  const handleInvestigate = async (force = false) => {
+    if (!client || (busy && !force)) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -235,6 +263,8 @@ export function LbHealthLensPage({
       }
     }
   };
+
+  handleInvestigateRef.current = handleInvestigate;
 
   const handleCancel = () => {
     abortRef.current?.abort();
@@ -692,7 +722,60 @@ export function LbHealthLensPage({
         ) : undefined
       }
       rawEventsLink={rawEventsLink}
+      filter={filter}
+      filterFields={LB_HEALTH_FILTER_FIELDS}
+      supportsBidirectional
+      filterSuggestions={{
+        dst: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => [r.vipIp, r.memberIp, r.vip]),
+        ),
+        device: collectFilterSuggestions(
+          (result?.rows ?? []).flatMap((r) => [r.pool, r.vip]),
+        ),
+        port: collectFilterSuggestions(
+          (result?.rows ?? []).map((r) => r.memberPort),
+        ),
+      }}
+      onApplyFilter={(next: ProtocolFilter | undefined) => {
+        if (serializeFilter(next) !== filterKey) {
+          pendingAutoInvestigateRef.current = Boolean(client);
+          onChangeParams({ filter: next, item: undefined });
+        } else {
+          void handleInvestigate();
+        }
+      }}
+      onWindowChange={(nextEarliest, nextLatest) => {
+        if ((result || busy) && client)
+          pendingAutoInvestigateRef.current = true;
+        onChangeParams({
+          earliest: nextEarliest,
+          latest: nextLatest,
+          item: undefined,
+        });
+      }}
+      onFocusFlow={
+        selectedRow
+          ? () => {
+              const next: ProtocolFilter = {
+                dst:
+                  selectedRow.memberIp ?? selectedRow.vipIp ?? selectedRow.vip,
+                ...(selectedRow.memberPort
+                  ? { port: String(selectedRow.memberPort) }
+                  : {}),
+              };
+              setMissingCell(undefined);
+              if (serializeFilter(next) !== filterKey) {
+                pendingAutoInvestigateRef.current = Boolean(client);
+                onChangeParams({ filter: next, item: undefined });
+              } else {
+                onChangeParams({ item: undefined });
+                void handleInvestigate();
+              }
+            }
+          : undefined
+      }
       onScopeChange={(nextScope) => {
+        pendingAutoInvestigateRef.current = false;
         abortRef.current?.abort();
         abortRef.current = null;
         setBusy(false);

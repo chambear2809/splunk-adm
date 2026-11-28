@@ -1,5 +1,6 @@
 import * as contract from "./shared/contract";
 import * as fields from "./shared/fields";
+import * as filterSpl from "./shared/filterSpl";
 import * as format from "./shared/format";
 import * as runner from "./shared/runner";
 import * as streamReadiness from "./shared/streamReadiness";
@@ -22,6 +23,7 @@ if (!runtime.__AtlasProtocolsCore) {
       assetVersion,
       contract,
       fields,
+      filterSpl,
       format,
       runner,
       streamReadiness,

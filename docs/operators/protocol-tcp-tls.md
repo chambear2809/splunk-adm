@@ -77,5 +77,5 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 ## PseudoCo Live Validation
 
 - **Verdict:** **Live verified** (NetFlow fallback)
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `125` pairs, `1.6 MiB`, `256` flow records from `stream:netflow`; RTT and TLS posture truthfully reported as **Not covered** (`stream:tcp` kept in Estimate mode under the 80% daily license cap with no SPAN capture NIC).
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `125` pairs, `1.6 MiB`, `256` flow records (capped sample) from `stream:netflow`; RTT and TLS posture truthfully reported as **Not covered** (`stream:tcp` kept in Estimate mode under the 80% daily license cap with no SPAN capture NIC). Use **Source IP**, **Dest IP**, **Port**, and **A↔B** (or **Focus flow** in the drawer) to narrow SPL to a specific conversation.
 

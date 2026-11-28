@@ -168,6 +168,73 @@ export function formatSeverityLabel(severity: number): string {
   return SEVERITY_LABELS[clamped] ?? `Sev ${clamped}`;
 }
 
+const IFACE_PREFIX_MAP: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^ethernet(?=\d)/i, "eth"],
+  [/^gigabitethernet(?=\d)/i, "gi"],
+  [/^tengigabitethernet(?=\d)/i, "te"],
+  [/^fortygigabitethernet(?=\d)/i, "fo"],
+  [/^hundredgig(?:abit)?ethernet(?=\d)/i, "hu"],
+  [/^port-channel(?=\d)/i, "po"],
+  [/^loopback(?=\d)/i, "lo"],
+  [/^mgmt(?=\d)/i, "mgmt"],
+  [/^vlan(?=\d)/i, "vlan"],
+];
+
+function canonicalStateInterface(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed) return "";
+  for (const [pattern, shortPrefix] of IFACE_PREFIX_MAP) {
+    if (pattern.test(trimmed)) {
+      return trimmed.replace(pattern, shortPrefix);
+    }
+  }
+  return trimmed;
+}
+
+function stateInterfaceVariants(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const canon = canonicalStateInterface(trimmed);
+  const variants = new Set<string>([trimmed, canon]);
+  if (/^eth\d/i.test(canon)) {
+    variants.add(`Ethernet${canon.slice(3)}`);
+  } else if (/^po\d/i.test(canon)) {
+    variants.add(`port-channel${canon.slice(2)}`);
+  }
+  return [...variants].filter(Boolean);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function matchesStateInterface(
+  candidate: string | undefined,
+  summary: string,
+  filterIface: string,
+): boolean {
+  const targetCanon = canonicalStateInterface(filterIface);
+  if (!targetCanon) return true;
+  if (candidate) {
+    if (canonicalStateInterface(candidate) === targetCanon) return true;
+    const bracketMatch = candidate.match(/\[([^\]]+)\]/);
+    if (
+      bracketMatch?.[1] &&
+      canonicalStateInterface(bracketMatch[1]) === targetCanon
+    ) {
+      return true;
+    }
+  }
+  const tokenVariants = stateInterfaceVariants(filterIface).map(escapeRegExp);
+  if (!tokenVariants.length) return false;
+  const boundaryRe = new RegExp(
+    `(?:^|[^A-Za-z0-9/_-])(?:${tokenVariants.join("|")})(?=$|[^A-Za-z0-9/._-])`,
+    "i",
+  );
+  if (candidate && boundaryRe.test(candidate)) return true;
+  return boundaryRe.test(summary);
+}
+
 /**
  * Builds a bounded SPL query for operational syslog events via the shared
  * `nxosSyslog` adapter (`CONFIG_CHANGE_MNEMONICS`, `EXCLUDED_AUTH_CATEGORIES`,
@@ -189,10 +256,19 @@ export function buildStateSyslogSearch(options: {
   const extraExcluded = EXTRA_EXCLUDED_PRIVACY_CATEGORIES.map(
     (c) => `category!="${c}"`,
   ).join(" AND ");
-  return baseSpl.replace(
+  let spl = baseSpl.replace(
     " | head ",
     ` | where (isnull(category) OR (${extraExcluded})) | head `,
   );
+  if (options.filter?.iface) {
+    const terms = stateInterfaceVariants(options.filter.iface).map(
+      (v) => `"${literal(v, 64)}"`,
+    );
+    if (terms.length > 0) {
+      spl = spl.replace(" | rex ", ` (${terms.join(" OR ")}) | rex `);
+    }
+  }
+  return spl;
 }
 
 /**
@@ -214,6 +290,21 @@ export function buildAciFaultEventSearch(options: {
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(`(host="${dev}" OR apic_host="${dev}")`);
+  }
+  if (options.filter?.iface) {
+    const ifaceTerms: string[] = [];
+    for (const variant of stateInterfaceVariants(options.filter.iface)) {
+      const safe = literal(variant, 64);
+      ifaceTerms.push(
+        `dn="*[${safe}]*"`,
+        `affected="*[${safe}]*"`,
+        `dn="*${safe}*"`,
+        `affected="*${safe}*"`,
+      );
+    }
+    if (ifaceTerms.length > 0) {
+      predicates.push(`(${ifaceTerms.join(" OR ")})`);
+    }
   }
   const tableClause = buildAllowedFieldsClause(
     "state_events",
@@ -593,6 +684,11 @@ function matchesRequestFilter(
       !(ev.interfaceOrDn ?? "").toLowerCase().includes(dst) &&
       !ev.summary.toLowerCase().includes(dst)
     ) {
+      return false;
+    }
+  }
+  if (filter.iface) {
+    if (!matchesStateInterface(ev.interfaceOrDn, ev.summary, filter.iface)) {
       return false;
     }
   }
@@ -1138,7 +1234,7 @@ export function buildStateEventsAnalysis(options: {
     },
   );
 
-  // DistributionBar by operational domain (per-device p50 / p95 event counts)
+  // DistributionBar by operational domain (true domain event totals in `count`)
   const distribution: ProtocolDistributionMetric[] = observedDomainKeys
     .map((domainKey) => {
       const domainEvents = allEventsFlat.filter((e) => e.domain === domainKey);
@@ -1155,11 +1251,12 @@ export function buildStateEventsAnalysis(options: {
         total: domainEvents.length,
         metric: {
           id: domainKey,
-          label: `${DOMAIN_LABELS[domainKey]} (${domainEvents.length})`,
+          label: DOMAIN_LABELS[domainKey],
           p50: percentile(counts, 50),
           p95: percentile(counts, 95),
+          count: domainEvents.length,
           max: Math.max(...counts, 1),
-          unit: "ev/dev",
+          unit: "events",
           status: (hasCrit || hasBurst ? "attention" : "ok") as ProtocolStatus,
         },
       };

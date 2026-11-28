@@ -888,4 +888,53 @@ describe("investigateMgmtPlane & summarizeMgmtPlane", () => {
       ),
     ).rejects.toThrow();
   });
+
+  it("populates true category totals in distribution.count and uses concise Cleartext protocols label", async () => {
+    const client: SearchClient = {
+      search: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            _time: String(EARLIEST + 60),
+            sourcetype: "stream:netflow",
+            src_ip: "10.0.0.10",
+            dest_ip: "10.0.0.21",
+            dest_port: "23",
+            protoid: "6",
+            bytes: "1200",
+          },
+          {
+            _time: String(EARLIEST + 120),
+            sourcetype: "stream:netflow",
+            src_ip: "10.0.0.10",
+            dest_ip: "10.0.0.22",
+            dest_port: "21",
+            protoid: "6",
+            bytes: "1400",
+          },
+          {
+            _time: String(EARLIEST + 180),
+            sourcetype: "stream:netflow",
+            src_ip: "10.0.0.10",
+            dest_ip: "10.0.0.23",
+            dest_port: "23",
+            protoid: "6",
+            bytes: "1600",
+          },
+        ],
+        truncated: false,
+        warnings: [],
+        errors: [],
+      }),
+    };
+    const res = await investigateMgmtPlane(
+      client,
+      makeRequest(),
+      makeConfig([makeProfile({ extra: { sourceKind: "netflow" } })]),
+      new AbortController().signal,
+      { skipConfigRecheck: true },
+    );
+    const clear = res.distribution.find((d) => d.id === "cleartext");
+    expect(clear?.label).toBe("Cleartext protocols");
+    expect(clear?.count).toBe(3);
+  });
 });

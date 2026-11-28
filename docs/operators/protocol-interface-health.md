@@ -87,5 +87,5 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 ## PseudoCo Live Validation
 
 - **Verdict:** **Live verified**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `69 of 69` interfaces healthy (`0` CRC/in/out errors, `0` discards) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`rmonIfIn`, `rmonIfOut`, `rmonEtherStats`); admin/oper state, link flaps, and utilization truthfully marked **Not covered**.
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `69 of 69` interfaces healthy across the covered RMON counters (`0` CRC/in/out errors, `0` discards, 256-row capped sample) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`rmonIfIn`, `rmonIfOut`, `rmonEtherStats`); admin/oper state, link flaps, and utilization truthfully marked **Not covered**. Use the **Device** and **Interface** filters (or **Focus interface** in the drawer) to narrow a specific switch port below the 256-row sample cap.
 

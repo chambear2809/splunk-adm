@@ -268,6 +268,33 @@ test.describe("Protocol Lens UX contract", () => {
     await expect(page.getByTestId("protocol-verdict")).toContainText(
       /Click Investigate/i,
     );
+    await expect(page.getByTestId("scope-race-root")).toHaveAttribute(
+      "data-search-count",
+      "1",
+    );
+  });
+
+  test("tcp_tls preempts in-flight first investigation when switching UTC window preset", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=tcp_tls_race&theme=light",
+    );
+    await page.getByRole("button", { name: "Investigate" }).click();
+    // Switch window while the initial search (200ms) is still in flight.
+    await page.getByTestId("protocol-window-select").selectOption("60");
+    await expect(page.getByTestId("scope-race-root")).toHaveAttribute(
+      "data-aborted-count",
+      "1",
+    );
+    await expect(page.getByTestId("scope-race-root")).toHaveAttribute(
+      "data-search-count",
+      "2",
+    );
+    await expect(
+      page.locator("table.pl-table").getByText("198.18.99.1"),
+    ).toBeVisible();
   });
 
   for (const lens of [
@@ -455,4 +482,219 @@ test.describe("Protocol Lens UX contract", () => {
       });
     });
   }
+
+  test("live hub does zero SPL searches on mount, loads traffic mix on click, and gates deep-linked lens on config state", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.route(
+      "**/storage/collections/data/adm_protocol_profiles*",
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              _key: "active",
+              configuration: JSON.stringify({
+                version: 1,
+                profiles: [
+                  {
+                    id: "p-qos-live",
+                    source: "protocol_qos_icmp",
+                    lens: "qos_icmp",
+                    scope: "lab:dc1",
+                    index: "netflow",
+                    observer: "stream-01",
+                    validFrom: 1700000000,
+                    validUntil: 1900000000,
+                    extra: { sourceKind: "stream_netflow" },
+                  },
+                ],
+              }),
+            },
+          ]),
+        });
+      },
+    );
+
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=hub_live&theme=light",
+    );
+    await expect(page.getByText("1/13 configured")).toBeVisible();
+    const mountSearches = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: string[] })
+          .__protocolHarnessSearches ?? [],
+    );
+    expect(mountSearches).toHaveLength(0);
+
+    await page.getByRole("button", { name: "Load traffic mix" }).click();
+    await expect(page.getByText("HTTPS/TLS (443) 60%")).toBeVisible();
+    await expect(page.getByText("Other TCP 20%")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
+    const afterClickSearches = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: string[] })
+          .__protocolHarnessSearches ?? [],
+    );
+    expect(afterClickSearches).toHaveLength(1);
+
+    // Deep-linked lens while KV Store config request is pending -> loading gate,
+    // then config error banner once the held request rejects.
+    await page.unroute("**/storage/collections/data/adm_protocol_profiles*");
+    let releaseConfigRoute!: () => void;
+    const configRouteHold = new Promise<void>((resolve) => {
+      releaseConfigRoute = resolve;
+    });
+    await page.route(
+      "**/storage/collections/data/adm_protocol_profiles*",
+      async (route) => {
+        await configRouteHold;
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ messages: [{ text: "KV Store error" }] }),
+        });
+      },
+    );
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=hub_live&p_lens=tcp_tls&theme=light",
+      { waitUntil: "domcontentloaded" },
+    );
+    await expect(page.getByTestId("protocol-lens-loading")).toBeVisible();
+    releaseConfigRoute();
+    await expect(page.getByTestId("protocol-lens-config-error")).toBeVisible();
+  });
+
+  test("protocol filter bar, instant table search, Focus flow, and window presets work end to end", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(
+      "/tests/browser/protocols.html?scenario=tcp_tls&theme=light",
+    );
+
+    // Zero searches on mount
+    const initialSearches = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: unknown[] })
+          .__protocolHarnessSearches ?? [],
+    );
+    expect(initialSearches).toHaveLength(0);
+
+    // Instant client-side table search filters loaded rows without running SPL
+    const searchInput = page.getByTestId("protocol-table-search");
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill("198.18.38.12");
+    await expect(page.locator("tbody tr")).toHaveCount(1);
+    await expect(page.locator("tbody")).toContainText("198.18.38.12");
+    const afterTableSearch = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: unknown[] })
+          .__protocolHarnessSearches ?? [],
+    );
+    expect(afterTableSearch).toHaveLength(0);
+    await searchInput.fill("");
+    await expect(page.locator("tbody tr")).toHaveCount(2);
+
+    // Inline validation rejects invalid port before issuing SPL
+    await page.getByTestId("protocol-filter-port").fill("99999");
+    await page.getByTestId("protocol-filter-apply").click();
+    await expect(page.getByTestId("protocol-filter-error")).toBeVisible();
+    const afterInvalid = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: unknown[] })
+          .__protocolHarnessSearches ?? [],
+    );
+    expect(afterInvalid).toHaveLength(0);
+
+    // Valid src + dst + port + bidirectional toggle triggers SPL with both directions + port
+    await page.getByTestId("protocol-filter-src").fill("198.18.38.11");
+    await page.getByTestId("protocol-filter-dst").fill("198.18.38.21");
+    await page.getByTestId("protocol-filter-port").fill("443");
+    await page.getByTestId("protocol-filter-bidir").click();
+    await page.getByTestId("protocol-filter-apply").click();
+
+    await expect
+      .poll(async () => {
+        const list = await page.evaluate(
+          () =>
+            (
+              window as unknown as {
+                __protocolHarnessSearches?: Array<{ spl: string }>;
+              }
+            ).__protocolHarnessSearches ?? [],
+        );
+        return list.length;
+      })
+      .toBeGreaterThanOrEqual(1);
+
+    const filterSpl = await page.evaluate(() => {
+      const list =
+        (
+          window as unknown as {
+            __protocolHarnessSearches?: Array<{ spl: string }>;
+          }
+        ).__protocolHarnessSearches ?? [];
+      return list[list.length - 1]?.spl ?? "";
+    });
+    expect(filterSpl).toContain('src_ip="198.18.38.11"');
+    expect(filterSpl).toContain('dest_ip="198.18.38.21"');
+    expect(filterSpl).toContain('src_ip="198.18.38.21"');
+    expect(filterSpl).toContain('dest_ip="198.18.38.11"');
+    expect(filterSpl).toContain('(dest_port="443" OR src_port="443")');
+
+    // Window preset selector switches 15m -> 30m and re-runs SPL with wider earliest
+    const countBeforeWindow = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: unknown[] })
+          .__protocolHarnessSearches?.length ?? 0,
+    );
+    await page.getByTestId("protocol-window-select").selectOption("30");
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __protocolHarnessSearches?: unknown[] })
+              .__protocolHarnessSearches?.length ?? 0,
+        ),
+      )
+      .toBeGreaterThan(countBeforeWindow);
+    const windowSearch = await page.evaluate(() => {
+      const list =
+        (
+          window as unknown as {
+            __protocolHarnessSearches?: Array<{
+              earliest?: string;
+              latest?: string;
+            }>;
+          }
+        ).__protocolHarnessSearches ?? [];
+      return list[list.length - 1];
+    });
+    expect(Number(windowSearch?.latest) - Number(windowSearch?.earliest)).toBe(
+      1800,
+    );
+
+    // Clicking a row opens the drawer with Focus flow button, which populates filter and runs SPL
+    await page.locator("tbody tr").first().click();
+    const focusBtn = page.getByTestId("protocol-focus-flow");
+    await expect(focusBtn).toBeVisible();
+    const countBeforeFocus = await page.evaluate(
+      () =>
+        (window as unknown as { __protocolHarnessSearches?: unknown[] })
+          .__protocolHarnessSearches?.length ?? 0,
+    );
+    await focusBtn.click();
+    await expect
+      .poll(async () =>
+        page.evaluate(
+          () =>
+            (window as unknown as { __protocolHarnessSearches?: unknown[] })
+              .__protocolHarnessSearches?.length ?? 0,
+        ),
+      )
+      .toBeGreaterThan(countBeforeFocus);
+  });
 });

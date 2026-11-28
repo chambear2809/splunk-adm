@@ -11,6 +11,7 @@ import type { SearchClient } from "../data/searchClient";
 import {
   parseProtocolLink,
   protocolLink,
+  validateProtocolFilter,
   type ParsedProtocolLink,
 } from "./inputs";
 import {
@@ -58,6 +59,51 @@ function writeProtocolParams(parsed: ParsedProtocolLink) {
   } catch {
     /* Invalid parameters stay local until fixed. */
   }
+}
+
+/**
+ * Applies a partial parameter update from an active protocol lens, validating
+ * any incoming filter (e.g., from a Focus flow pivot) and clearing filter
+ * fields cleanly when `{ filter: undefined }` is passed.
+ */
+export function applyProtocolParamPatch(
+  current: ParsedProtocolLink,
+  activeLensId: ProtocolLensId,
+  activeScope: string,
+  win: { earliest: number; latest: number },
+  patch: Parameters<ProtocolLensComponentProps["onChangeParams"]>[0],
+): ParsedProtocolLink {
+  let nextFilter = current.filter;
+  if ("filter" in patch) {
+    if (!patch.filter) {
+      nextFilter = undefined;
+    } else {
+      const sanitized: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(patch.filter)) {
+        if (v === undefined || v === "" || v === false) continue;
+        try {
+          const single = validateProtocolFilter({ [k]: v });
+          if (single && k in single) {
+            sanitized[k] = single[k as keyof typeof single];
+          }
+        } catch {
+          // Drop malformed pivot field rather than failing or injecting raw values
+        }
+      }
+      nextFilter = Object.keys(sanitized).length
+        ? validateProtocolFilter(sanitized)
+        : undefined;
+    }
+  }
+  return {
+    lens: activeLensId,
+    scope: patch.scope ?? activeScope,
+    earliest: patch.earliest ?? win.earliest,
+    latest: patch.latest ?? win.latest,
+    view: patch.view ?? current.view,
+    filter: nextFilter,
+    item: patch.item,
+  };
 }
 
 export function ProtocolsPage({
@@ -376,15 +422,13 @@ export function ProtocolsPage({
           onBackToHub={backToHub}
           onRefreshConfig={() => setConfigRevision((v) => v + 1)}
           onChangeParams={(patch) => {
-            const next: ParsedProtocolLink = {
-              lens: activeLens.id,
-              scope: patch.scope ?? activeScope,
-              earliest: patch.earliest ?? win.earliest,
-              latest: patch.latest ?? win.latest,
-              view: patch.view ?? params.view,
-              filter: patch.filter ?? params.filter,
-              item: patch.item,
-            };
+            const next = applyProtocolParamPatch(
+              params,
+              activeLens.id,
+              activeScope,
+              win,
+              patch,
+            );
             setParams(next);
             writeProtocolParams(next);
           }}
@@ -437,7 +481,7 @@ export function ProtocolsPage({
       : checkedSummaries.length > 0
         ? `${checkedSummaries.length} checked lenses reported no active exceptions.`
         : configuredCount > 0
-          ? `${configuredCount} of ${PROTOCOL_LENSES.length} lenses configured; choose one or run Check all.`
+          ? `Choose a lens below or run Check all.`
           : `No protocol profiles configured yet — open Multicast below or add profiles in Admin → Protocols.`;
 
   return (
@@ -513,18 +557,26 @@ export function ProtocolsPage({
         >
           <div className="pl-traffic-mix-head">
             <span className="pl-traffic-mix-title">Traffic &amp; IP mix</span>
-            {trafficMix ? (
-              <StatusChip status={trafficMix.status} />
-            ) : (
+            <div className="pl-header-controls">
+              {trafficMix ? (
+                <StatusChip
+                  status={trafficMix.status}
+                  title={trafficMix.statusReason}
+                />
+              ) : null}
               <button
                 type="button"
                 className="pl-btn-secondary"
                 disabled={!live || !client || loadingMix}
                 onClick={() => void handleLoadTrafficMix()}
               >
-                {loadingMix ? "Loading…" : "Load traffic mix"}
+                {loadingMix
+                  ? "Loading…"
+                  : trafficMix
+                    ? "Refresh"
+                    : "Load traffic mix"}
               </button>
-            )}
+            </div>
           </div>
           {trafficMix ? (
             <div className="pl-traffic-mix-body" data-pl-data="true">

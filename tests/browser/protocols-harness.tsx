@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import ThemeProviderExport from "@splunk/themes/SplunkThemeProvider";
 import { toolkitDefault } from "../../frontend/src/app/interop";
@@ -95,7 +95,10 @@ import {
   SwimlaneTimeline,
   type BannerState,
 } from "../../frontend/src/protocols/shared/ui";
-import type { ProtocolViewMode } from "../../frontend/src/protocols/shared/contract";
+import type {
+  ProtocolFilter,
+  ProtocolViewMode,
+} from "../../frontend/src/protocols/shared/contract";
 import "../../frontend/src/styles.css";
 import "../../frontend/src/protocols/protocols.css";
 
@@ -415,6 +418,11 @@ function TcpTlsShowcase({ mode }: { mode: "stream_tcp" | "netflow" }) {
     params.get("view") === "matrix" ? "matrix" : "overview",
   );
   const [scope, setScope] = useState("lab:dc1");
+  const [filter, setFilter] = useState<ProtocolFilter | undefined>(undefined);
+  const [windowRange, setWindowRange] = useState<{
+    earliest: number;
+    latest: number;
+  }>({ earliest: EARLIEST, latest: NOW });
   const [selectedItem, setSelectedItem] = useState<string | undefined>(
     params.get("drawer") === "open" ? "198.18.38.11__198.18.38.21" : undefined,
   );
@@ -540,15 +548,51 @@ function TcpTlsShowcase({ mode }: { mode: "stream_tcp" | "netflow" }) {
     latest: NOW,
   });
 
+  const harnessClient = useMemo(
+    () => ({
+      search: async (opts: {
+        search: string;
+        earliest?: string;
+        latest?: string;
+      }) => {
+        const w = window as unknown as {
+          __protocolHarnessSearches?: Array<{
+            spl: string;
+            earliest?: string;
+            latest?: string;
+          }>;
+        };
+        w.__protocolHarnessSearches = [
+          ...(w.__protocolHarnessSearches ?? []),
+          { spl: opts.search, earliest: opts.earliest, latest: opts.latest },
+        ];
+        return {
+          rows: rawRows.map((r) =>
+            Object.fromEntries(
+              Object.entries(r).map(([k, v]) => [k, String(v)]),
+            ),
+          ),
+          warnings: [],
+          errors: [],
+        };
+      },
+    }),
+    // rawRows is deterministic for the showcase mode
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mode],
+  );
+
   return (
     <TcpTlsLensPage
       live={false}
+      client={harnessClient}
       theme={theme}
       scope={scope}
       scopes={["lab:dc1"]}
-      earliest={EARLIEST}
-      latest={NOW}
+      earliest={windowRange.earliest}
+      latest={windowRange.latest}
       view={view}
+      filter={filter}
       selectedItem={selectedItem}
       configuration={{
         profiles: [
@@ -574,6 +618,16 @@ function TcpTlsShowcase({ mode }: { mode: "stream_tcp" | "netflow" }) {
         if (patch.scope) setScope(patch.scope);
         if (patch.view) setView(patch.view);
         if ("item" in patch) setSelectedItem(patch.item);
+        if ("filter" in patch) setFilter(patch.filter);
+        if (
+          typeof patch.earliest === "number" ||
+          typeof patch.latest === "number"
+        ) {
+          setWindowRange((prev) => ({
+            earliest: patch.earliest ?? prev.earliest,
+            latest: patch.latest ?? prev.latest,
+          }));
+        }
       }}
     />
   );
@@ -582,10 +636,14 @@ function TcpTlsShowcase({ mode }: { mode: "stream_tcp" | "netflow" }) {
 function TcpTlsScopeRaceShowcase() {
   const [scope, setScope] = useState("lab:dc1");
   const [view, setView] = useState<ProtocolViewMode>("overview");
+  const [earliest, setEarliest] = useState(EARLIEST);
+  const [latest, setLatest] = useState(NOW);
   const [abortedCount, setAbortedCount] = useState(0);
+  const [searchCount, setSearchCount] = useState(0);
   const client = {
-    search: ({ signal }: { signal?: AbortSignal }) =>
-      new Promise<{
+    search: ({ signal }: { signal?: AbortSignal }) => {
+      setSearchCount((n) => n + 1);
+      return new Promise<{
         rows: Record<string, unknown>[];
         warnings: string[];
         errors: string[];
@@ -614,13 +672,15 @@ function TcpTlsScopeRaceShowcase() {
             errors: [],
           });
         }, 200);
-      }),
+      });
+    },
   };
 
   return (
     <div
       data-testid="scope-race-root"
       data-aborted-count={String(abortedCount)}
+      data-search-count={String(searchCount)}
     >
       <TcpTlsLensPage
         client={client}
@@ -628,8 +688,8 @@ function TcpTlsScopeRaceShowcase() {
         theme={theme}
         scope={scope}
         scopes={["lab:dc1", "lab:dc2"]}
-        earliest={EARLIEST}
-        latest={NOW}
+        earliest={earliest}
+        latest={latest}
         view={view}
         configuration={{
           profiles: [
@@ -664,6 +724,8 @@ function TcpTlsScopeRaceShowcase() {
         onChangeParams={(patch) => {
           if (patch.scope) setScope(patch.scope);
           if (patch.view) setView(patch.view);
+          if (patch.earliest !== undefined) setEarliest(patch.earliest);
+          if (patch.latest !== undefined) setLatest(patch.latest);
         }}
       />
     </div>
@@ -2165,11 +2227,54 @@ function LbHealthShowcase() {
   );
 }
 
+function HubLiveShowcase() {
+  const client = {
+    search: async (opts: { search: string }) => {
+      const win = window as unknown as { __protocolHarnessSearches?: string[] };
+      win.__protocolHarnessSearches = [
+        ...(win.__protocolHarnessSearches ?? []),
+        opts.search,
+      ];
+      return {
+        rows: [
+          {
+            proto_num: 6,
+            service_port: 443,
+            ip_family: "IPv4",
+            total_bytes: 600000,
+            flows: 120,
+            grand_bytes: 1000000,
+            grand_flows: 200,
+            grand_ipv6_bytes: 200000,
+            grand_ipv6_flows: 40,
+          },
+          {
+            proto_num: 6,
+            service_port: -1,
+            ip_family: "IPv6",
+            total_bytes: 200000,
+            flows: 40,
+            grand_bytes: 1000000,
+            grand_flows: 200,
+            grand_ipv6_bytes: 200000,
+            grand_ipv6_flows: 40,
+          },
+        ],
+        warnings: [],
+        errors: [],
+      };
+    },
+  };
+  return <ProtocolsPage client={client} live={true} theme={theme} />;
+}
+
 createRoot(document.getElementById("adm-root")!).render(
   <ThemeProvider family="enterprise" colorScheme={theme} density="comfortable">
-    <Shell page="protocols" live={false}>
+    <Shell page="protocols" live={scenario === "hub_live"}>
       {scenario === "hub" ? (
         <ProtocolsPage live={false} theme={theme} />
+      ) : scenario === "hub_live" ? (
+        <HubLiveShowcase />
       ) : scenario === "tcp_tls" ? (
         <TcpTlsShowcase mode="stream_tcp" />
       ) : scenario === "tcp_tls_netflow" ? (
