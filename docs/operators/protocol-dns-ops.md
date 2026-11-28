@@ -76,6 +76,6 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Lab only**
-- **Notes:** `stream:dns` remained in Estimate mode on PseudoCo (no capture NIC / 80% license cap) and `cilium:hubble:flow` had 0 events in the validation window. Production Hubble DNS SPL (`flow.l7.dns.*`) is verified in the Docker Splunk lab (`tests/splunk/test_protocol_lenses.py::test_dns_ops_hubble_search_returns_l7_dns_fields`).
+- **Verdict:** **Live verified** (`stream:dns`)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** Scoped `streamfwd` capture (`atlas-streamfwd-wire.service`) feeds live `stream:dns` into `index=netflow` (~`0.08 MiB/hr`): `7` client → resolver pairs observed (`Resolver Latency p95: 40 ms`, `0.0%` SERVFAIL/NXDOMAIN, `1` high-latency pair `69 ms` flagged with `Resolver latency p50 / p95` bar chart). Production Hubble DNS SPL (`flow.l7.dns.*`) is also verified in the Docker Splunk lab (`tests/splunk/test_protocol_lenses.py::test_dns_ops_hubble_search_returns_l7_dns_fields`).
 

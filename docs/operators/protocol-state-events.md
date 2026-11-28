@@ -86,6 +86,6 @@ Unknown keys or out-of-range values fail closed during profile validation.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Enabled, no events yet**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `udp://5514` (`cisco:dc:nexus9k:syslog`) is active on all 7 switches (`16` initial config/boot syslog events confirmed in Wave 0); `0` link, routing, STP, or HSRP/VRRP state transitions occurred during the quiet 60-minute validation window (**None observed**).
+- **Verdict:** **Live verified** (NX-OS DME `faultInst` + SC4S `cisco:ios` & `udp://5514` syslog)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `3` deduplicated NX-OS DME `faultInst` records (`F1680` across `198.18.131.3` and `198.18.131.4`, deduplicated server-side by `(device, dn, code, lifecycle)` while keeping ACI `faultInst`/`eventRecord` distinct via `_cd|splunk_server|index`). SC4S 3.49.0 (`atlas-sc4s.service`, UDP/TCP `5515` → HEC `atlas-sc4s-syslog`) verified end-to-end routing NX-OS syslog into `index=cisco_dc` with `sourcetype="cisco:ios"` alongside existing `udp://5514` (`cisco:dc:nexus9k:syslog`).
 

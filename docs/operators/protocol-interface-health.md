@@ -86,6 +86,6 @@ Unknown keys or out-of-range values fail closed at profile validation time.
 
 ## PseudoCo Live Validation
 
-- **Verdict:** **Live verified**
-- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** `69 of 69` interfaces healthy across the covered RMON counters (`0` CRC/in/out errors, `0` discards, 256-row capped sample) from live DCN 2.0.10 `cisco:dc:nexus9k:dme` (`rmonIfIn`, `rmonIfOut`, `rmonEtherStats`); admin/oper state, link flaps, and utilization truthfully marked **Not covered**. Use the **Device** and **Interface** filters (or **Focus interface** in the drawer) to narrow a specific switch port below the 256-row sample cap.
+- **Verdict:** **Live verified** (Link state + RMON counters via Cisco DCN 2.0.10 DME)
+- **Observed (as `se_demo_readonly`, scope `pseudoco-dc1`):** Bounded `_index_earliest`/`_index_latest` DME snapshot queries (`| head 2048 | dedup 2` for counters plus bounded `dme_state` fallback for `l1PhysIf`/`ethpmPhysIf`) surface both admin/oper link state and RMON counters across all 6 Nexus switches (`178` interfaces inspected, real `admin up / oper down` mismatches flagged with natural interface sorting `eth1/1`..`eth1/9`, `eth1/10`..`eth1/20` in Overview and Matrix). Filtering by **Device** (`198.18.131.2`) and **Interface** (`eth1/1`) isolates a single port (`1 of 1`) below the row cap.
 
