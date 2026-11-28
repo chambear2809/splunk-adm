@@ -940,12 +940,37 @@ describe("investigateTcpTls (runner, NetFlow fallback, Estimate mode, security)"
         src_ip: "198.18.133.50",
         dest_ip: "198.18.131.2",
         dest_port: 443,
-        ssl_version: "3.1",
+        tls_version: "0.0",
+        ssl_version: ["0.0", "3.1"],
       },
       "stream:tcp",
       NOW,
     )!;
     expect(tls10.tlsVersion).toBe("TLS 1.0");
     expect(tls10.legacyTls).toBe(true);
+  });
+
+  it("does not fall back to NetFlow-only when a filtered stream:tcp query returns zero rows", async () => {
+    const search = vi.fn().mockResolvedValue({
+      rows: [],
+      warnings: [],
+      errors: [],
+    });
+    const res = await investigateTcpTls(
+      { search },
+      makeRequest({ filter: { src: "198.18.99.99" } }),
+      makeConfig([
+        makeProfile({ id: "tcp-primary", extra: { sourcetype: "stream:tcp" } }),
+        makeProfile({
+          id: "tcp-fallback",
+          extra: { sourcetype: "stream:netflow" },
+        }),
+      ]),
+      new AbortController().signal,
+      { skipConfigRecheck: true, skipEstimateCheck: true },
+    );
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(res.sourceMode).toBe("none");
+    expect(res.bannerState).toBe("empty");
   });
 });

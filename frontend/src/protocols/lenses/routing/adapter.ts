@@ -25,9 +25,11 @@ import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
   buildDmeDispatchBounds,
-  buildDmeWindowPredicate,
+  buildDmeSnapshotWindowPredicate,
+  dmePreDedupLimit,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -120,7 +122,10 @@ export function buildRoutingDmeSearch(options: {
     options.componentFilter === "ospf"
       ? `(component="ospfAdjEp" OR component="ospf*" OR dn="sys/ospf/*")`
       : `(component="bgp*" OR component="ospf*" OR component="bfd*" OR dn="sys/bgp/*" OR dn="sys/ospf/*" OR dn="sys/bfd/*" OR peer_ip=* OR neighbor_ip=*)`;
-  const windowPred = buildDmeWindowPredicate(options.earliest, options.latest);
+  const windowPred = buildDmeSnapshotWindowPredicate(
+    options.earliest,
+    options.latest,
+  );
   const e =
     options.earliest !== undefined ? Math.trunc(options.earliest) : undefined;
   const l =
@@ -147,27 +152,32 @@ export function buildRoutingDmeSearch(options: {
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
-      `(host="${dev}" OR device="${dev}" OR exporter_ip="${dev}")`,
+      `(host="${dev}" OR device="${dev}" OR nodeName="${dev}" OR switchName="${dev}" OR exporter_ip="${dev}")`,
     );
   }
   if (options.filter?.src) {
     const src = literal(options.filter.src, 128);
     predicates.push(
-      `(host="${src}" OR peer_ip="${src}" OR neighbor_ip="${src}" OR Row_info.addr="${src}" OR src_ip="${src}")`,
+      `(host="${src}" OR device="${src}" OR peer_ip="${src}" OR neighbor_ip="${src}" OR Row_info.addr="${src}" OR Row_info.peerIp="${src}" OR Row_info.destAddr="${src}" OR ipAddress="${src}" OR src_ip="${src}")`,
     );
   }
   if (options.filter?.dst) {
     const dst = literal(options.filter.dst, 128);
     predicates.push(
-      `(peer_ip="${dst}" OR neighbor_ip="${dst}" OR Row_info.addr="${dst}" OR dest_ip="${dst}")`,
+      `(peer_ip="${dst}" OR neighbor_ip="${dst}" OR Row_info.addr="${dst}" OR Row_info.peerIp="${dst}" OR Row_info.destAddr="${dst}" OR ipAddress="${dst}" OR dest_ip="${dst}")`,
     );
   }
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
-  const tableClause = buildAllowedFieldsClause("routing", ROUTING_DME_FIELDS);
+  const preDedupLimit = dmePreDedupLimit(options.maxRows);
+  const tableClause = buildAllowedFieldsClause("routing", [
+    ...ROUTING_DME_FIELDS,
+    "_pre_dedup_count",
+  ]);
   return (
     `search ${predicates.join(" ")} ` +
-    `| head 2048 ` +
-    `| eval _dk_host=coalesce(device, nodeName, switchName, host, "none"), _dk_comp=coalesce(component, sourcetype, "none"), _dk_dn=coalesce(dn, 'Row_info.dn', peer_ip, neighbor_ip, 'Row_info.addr', "none") ` +
+    `| head ${preDedupLimit} ` +
+    `| eventstats count AS _pre_dedup_count ` +
+    `| eval _dk_host=coalesce(device, nodeName, switchName, host, "none"), _dk_comp=coalesce(component, sourcetype, "none"), _dk_dn=coalesce(dn, 'Row_info.dn', peer_ip, neighbor_ip, 'Row_info.addr', 'Row_info.peerIp', 'Row_info.destAddr', ipAddress, "none") ` +
     `| dedup _dk_host _dk_comp _dk_dn ` +
     `| head ${headLimit} ` +
     `| eval host=coalesce(device, nodeName, switchName, host), ` +
@@ -240,7 +250,7 @@ export function buildRoutingRawEventsUrl(options: {
       : options.sourceCoverage === "syslog_only"
         ? `(sourcetype="cisco:ios" OR sourcetype="cisco:dc:nexus9k:syslog" OR sourcetype="cisco:aci" OR sourcetype="cisco:dc:aci:syslog")`
         : `(sourcetype="cisco:ios" OR sourcetype="cisco:dc:nexus9k:syslog" OR sourcetype="cisco:aci" OR sourcetype="cisco:dc:aci:syslog" OR sourcetype="cisco:dc:nexus9k:dme" OR sourcetype="cisco:dc:nd:*")`;
-  const q = `search index=${index} ${sourcetypes} (host="${device}" OR device="${device}") (peer_ip="${peerIp}" OR neighbor_ip="${peerIp}" OR Row_info.addr="${peerIp}" OR "${peerIp}")`;
+  const q = `search index=${index} ${sourcetypes} (host="${device}" OR device="${device}" OR nodeName="${device}" OR switchName="${device}") (peer_ip="${peerIp}" OR neighbor_ip="${peerIp}" OR Row_info.addr="${peerIp}" OR Row_info.peerIp="${peerIp}" OR Row_info.destAddr="${peerIp}" OR ipAddress="${peerIp}" OR "${peerIp}")`;
   const params = new URLSearchParams({
     q,
     earliest: String(Math.trunc(options.earliest)),
@@ -1302,8 +1312,12 @@ export async function investigateRouting(
   signal: AbortSignal,
   options: InvestigateRoutingOptions = {},
 ): Promise<RoutingInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "routing" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "routing",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1386,6 +1400,7 @@ export async function investigateRouting(
           spl,
           earliest: request.earliest,
           latest: request.latest,
+          preDedupLimit: dmePreDedupLimit(256),
           ...dispatchBounds,
           signal,
           keySuffix: "dme",
@@ -1421,6 +1436,7 @@ export async function investigateRouting(
             spl: ospfSpl,
             earliest: request.earliest,
             latest: request.latest,
+            preDedupLimit: dmePreDedupLimit(256),
             ...dispatchBounds,
             signal,
             keySuffix: "dme_ospf",

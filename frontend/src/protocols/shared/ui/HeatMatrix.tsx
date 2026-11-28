@@ -36,6 +36,10 @@ export function HeatMatrix({
     r: 0,
     c: 0,
   });
+  const clampedActiveR =
+    rows.length > 0 ? Math.min(activePos.r, rows.length - 1) : 0;
+  const clampedActiveC =
+    columns.length > 0 ? Math.min(activePos.c, columns.length - 1) : 0;
 
   const focusCell = (r: number, c: number) => {
     const nextR = Math.max(0, Math.min(rows.length - 1, r));
@@ -108,7 +112,7 @@ export function HeatMatrix({
                 };
                 const isSelected =
                   selectedCell?.row === row && selectedCell?.col === col;
-                const isTabStop = activePos.r === r && activePos.c === c;
+                const isTabStop = clampedActiveR === r && clampedActiveC === c;
                 return (
                   <td
                     key={col}

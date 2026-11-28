@@ -237,9 +237,22 @@ export function ProtocolLensLayout<
   }, [drawerOpen]);
 
   useEffect(() => {
+    if (!capTipOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setCapTipOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [capTipOpen]);
+
+  useEffect(() => {
     if (!drawerOpen || !onCloseDrawer) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (capTipOpen) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName?.toLowerCase();
       if (tag === "input" || tag === "textarea" || tag === "select") return;
@@ -247,7 +260,7 @@ export function ProtocolLensLayout<
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [drawerOpen, onCloseDrawer]);
+  }, [drawerOpen, onCloseDrawer, capTipOpen]);
 
   const DEFAULT_HEALTHY_PREVIEW_ROWS = 20;
   const safeColumns = columns.slice(0, 8);
@@ -505,7 +518,10 @@ export function ProtocolLensLayout<
             onMouseEnter={() => setCapTipOpen(true)}
             onMouseLeave={() => setCapTipOpen(false)}
             onKeyDown={(e) => {
-              if (e.key === "Escape") setCapTipOpen(false);
+              if (e.key === "Escape" && capTipOpen) {
+                e.stopPropagation();
+                setCapTipOpen(false);
+              }
             }}
             onBlur={(e) => {
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {

@@ -71,6 +71,17 @@ Choose one additional variant if useful; always click **Investigate**, then **In
 
 Do not turn a synthetic latency value or fast local render into a performance claim. The harness has a `slow` mode for UI cancellation, but it cannot demonstrate native job cleanup; omit it from a native cancellation claim.
 
+## Optional Protocols hub & lens segment — 5 minutes
+
+With the same browser harness server running (`npx --no-install vite --config tests/browser/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort`), open these synthetic Protocol Lens bookmarks:
+
+| Bookmark | Expected result | Point to make |
+| --- | --- | --- |
+| <http://127.0.0.1:4173/tests/browser/protocols.html?scenario=hub&theme=light> | Protocols hub with standalone Multicast and 13 lens cards | Zero searches run on page load; unconfigured lenses report **Not covered** cleanly. |
+| <http://127.0.0.1:4173/tests/browser/protocols.html?scenario=tcp_tls&theme=light> | TCP Health & TLS Overview with flow filter bar (`Source IP`, `Dest IP`, `Port`, `A↔B`), RTT/retransmit/TLS KPIs, table search, and RTT p50/p95 bars | Operators can focus a single bidirectional conversation below the row cap and spot expired/legacy TLS without payload capture. |
+| <http://127.0.0.1:4173/tests/browser/protocols.html?scenario=routing&view=matrix&theme=light> | Routing Control Plane Matrix with `Device ↔ peer` adjacency overlay and BGP Established/Down grid | Matrix marks missing pairs **None observed** when complete and **Unknown** when capped. |
+| <http://127.0.0.1:4173/tests/browser/protocols.html?scenario=app_transactions&theme=light> | HTTP & DB Transactions Overview with latency bars | Golden signals without SQL query text, cookies, or credentials. |
+
 ## Troubleshooting and cleanup
 
 | Symptom | Presenter action |

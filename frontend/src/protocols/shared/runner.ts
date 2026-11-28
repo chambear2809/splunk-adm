@@ -62,10 +62,38 @@ export interface BoundedSearchOptions {
    */
   dispatchEarliest?: string;
   dispatchLatest?: string;
+  /**
+   * Optional pre-dedup `| head <N>` scan limit embedded in DME snapshot SPL.
+   * When returned rows carry `_pre_dedup_count >= preDedupLimit`, the search is
+   * marked `capped` even if post-dedup rows are fewer than `maxRows`.
+   */
+  preDedupLimit?: number;
   maxRows?: number;
   includeRowExpansion?: boolean;
   signal: AbortSignal;
   keySuffix?: string;
+}
+
+/**
+ * Selects profiles for `(lens, scope)` that cover `[earliest, latest]`.
+ * If one or more profiles cover the window, expired or future rotated profiles
+ * are excluded so they do not inject spurious `unavailable` outcomes. If no
+ * profile covers the window, all scoped profiles are returned so the runner
+ * surfaces the validity-window gap explicitly.
+ */
+export function selectActiveProfiles(
+  profiles: readonly BaseProtocolProfile[],
+  lens: ProtocolLensId,
+  scope: string,
+  earliest: number,
+  latest: number,
+): BaseProtocolProfile[] {
+  const scoped = profiles.filter((p) => p.lens === lens && p.scope === scope);
+  if (scoped.length <= 1) return scoped;
+  const covering = scoped.filter(
+    (p) => earliest >= p.validFrom && latest <= p.validUntil,
+  );
+  return covering.length > 0 ? covering : scoped;
 }
 
 /**
@@ -88,6 +116,34 @@ export function buildDmeWindowPredicate(
 }
 
 const DME_MAX_MODTS_LOOKBACK_SEC = 180 * 86400;
+const DME_STATE_SNAPSHOT_WINDOW_SEC = 1800;
+
+/**
+ * Shared pre-dedup raw-event scan cap for DME snapshot queries so builder SPL
+ * and `runBoundedProtocolSearch` truncation detection always agree.
+ */
+export function dmePreDedupLimit(maxRows: number): number {
+  const headLimit = Math.max(1, Math.trunc(maxRows)) + 1;
+  return Math.max(2048, headLimit * 8);
+}
+
+/**
+ * Builds a snapshot-scoped dual-window predicate whose `_index_earliest`
+ * covers at most the last 10 minutes (`2 × 300s` DCN poll cycles) within
+ * `[earliest, latest]`, preventing repeated 5-minute polls over long windows
+ * from starving older `modTs` objects before `dedup`.
+ */
+export function buildDmeSnapshotWindowPredicate(
+  earliest?: number,
+  latest?: number,
+): string | undefined {
+  if (earliest === undefined || latest === undefined) return undefined;
+  const e = Math.trunc(earliest);
+  const l = Math.trunc(latest);
+  if (!Number.isFinite(e) || !Number.isFinite(l) || l <= e) return undefined;
+  const idxEarliest = Math.max(e, l - DME_STATE_SNAPSHOT_WINDOW_SEC);
+  return `((earliest=${e} latest=${l}) OR (_index_earliest=${idxEarliest} _index_latest=${l}))`;
+}
 
 /**
  * Computes bounded Splunk job dispatch `earliest` / `latest` bounds for DME
@@ -179,14 +235,29 @@ export async function runBoundedProtocolSearch(
       signal: searchSignal,
     });
     requireNoSearchErrors(result, `${lens} (${profile.id})`);
-    const capped = Boolean(result.truncated) || result.rows.length > maxRows;
+    const preDedupCapped =
+      options.preDedupLimit !== undefined &&
+      result.rows.some((row) => {
+        const n = Number(row._pre_dedup_count);
+        return Number.isFinite(n) && n >= options.preDedupLimit!;
+      });
+    const capped =
+      Boolean(result.truncated) ||
+      result.rows.length > maxRows ||
+      preDedupCapped;
     const rawRows =
       result.rows.length > maxRows
         ? result.rows.slice(0, maxRows)
         : result.rows;
-    const rows = rawRows.map((row) =>
-      projectRowToLensAllowlist(lens, row, { includeRowExpansion }),
-    );
+    const rows = rawRows.map((row) => {
+      const projected = projectRowToLensAllowlist(lens, row, {
+        includeRowExpansion,
+      });
+      if ("_pre_dedup_count" in projected) {
+        delete projected._pre_dedup_count;
+      }
+      return projected;
+    });
     return {
       rows,
       capped,
@@ -195,7 +266,13 @@ export async function runBoundedProtocolSearch(
         state: capped ? "partial" : "complete",
         inputRows: rows.length,
         capped,
-        ...(capped ? { detail: `Capped at ${maxRows} rows.` } : {}),
+        ...(capped
+          ? {
+              detail: preDedupCapped
+                ? `Pre-dedup scan capped at ${options.preDedupLimit} events.`
+                : `Capped at ${maxRows} rows.`,
+            }
+          : {}),
       },
     };
   } catch (error) {

@@ -129,10 +129,12 @@ export function ProtocolsPage({
       return { view: "overview" };
     }
   });
+  const [fallbackWin] = useState(() => defaultWindow());
   const [config, setConfig] = useState<ProtocolConfiguration>({
     profiles: [],
     fingerprint: "",
   });
+  const [configLoadedOnce, setConfigLoadedOnce] = useState(!live);
   const [configState, setConfigState] = useState<"loading" | "ready" | "error">(
     live ? "loading" : "ready",
   );
@@ -172,7 +174,10 @@ export function ProtocolsPage({
       .then((loaded) => {
         if (!controller.signal.aborted) {
           setConfig(loaded);
+          setConfigLoadedOnce(true);
           setConfigState("ready");
+          setSummaries({});
+          setTrafficMix(undefined);
         }
       })
       .catch((error: unknown) => {
@@ -235,6 +240,9 @@ export function ProtocolsPage({
 
   const openLens = useCallback(
     (lensId: ProtocolLensId) => {
+      checkAbort.current?.abort();
+      mixAbort.current?.abort();
+      setLinkError(undefined);
       const win =
         params.earliest && params.latest
           ? { earliest: params.earliest, latest: params.latest }
@@ -253,10 +261,13 @@ export function ProtocolsPage({
   );
 
   const backToHub = useCallback(() => {
-    const next: ParsedProtocolLink = { view: "overview" };
+    const next: ParsedProtocolLink = {
+      view: "overview",
+      ...(params.scope ? { scope: params.scope } : {}),
+    };
     setParams(next);
     writeProtocolParams(next);
-  }, []);
+  }, [params.scope]);
 
   const handleLoadTrafficMix = useCallback(async () => {
     if (!client || !live || loadingMix) return;
@@ -378,7 +389,7 @@ export function ProtocolsPage({
     const win =
       params.earliest && params.latest
         ? { earliest: params.earliest, latest: params.latest }
-        : defaultWindow();
+        : fallbackWin;
     const activeScope = params.scope ?? scopes[0] ?? "";
     if (configState === "error") {
       return (
@@ -402,7 +413,7 @@ export function ProtocolsPage({
         </main>
       );
     }
-    if (lensComponent && configState !== "loading") {
+    if (lensComponent && (configState !== "loading" || configLoadedOnce)) {
       const Lens = lensComponent;
       return (
         <Lens

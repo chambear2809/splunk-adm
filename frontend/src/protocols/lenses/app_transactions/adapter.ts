@@ -16,11 +16,15 @@ import {
   type ProtocolTimelineEvent,
 } from "../../shared/contract";
 import { buildAllowedFieldsClause } from "../../shared/fields";
-import { buildFlowEndpointPredicates } from "../../shared/filterSpl";
+import {
+  buildFlowEndpointPredicates,
+  matchesFlowEndpoints,
+} from "../../shared/filterSpl";
 import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -226,22 +230,55 @@ export function buildOtelTransactionsSearch(options: {
 }): string {
   const index = literal(options.index, 80);
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
+  const httpAttrClause = `(attributes.http.request.method=* OR attributes.http.method=*)`;
+  const dbAttrClause = `(attributes.db.system=* OR attributes.db.operation=*)`;
   const predicates: string[] = [
     `index=${index}`,
     `sourcetype="${APP_TRANSACTIONS_OTEL_SOURCETYPE}"`,
-    `((kind="SPAN_KIND_SERVER" attributes.http.request.method=*) OR (kind="SPAN_KIND_CLIENT" (attributes.db.system=* OR attributes.db.operation=*)) OR (NOT kind=* (attributes.http.request.method=* OR attributes.db.system=* OR attributes.db.operation=*)))`,
+    `((kind="SPAN_KIND_SERVER" ${httpAttrClause}) OR (kind="SPAN_KIND_CLIENT" ${dbAttrClause}) OR (NOT kind=* (${httpAttrClause} OR ${dbAttrClause})))`,
   ];
-  predicates.push(
-    ...buildFlowEndpointPredicates({
-      filter: options.filter,
-      srcFields: [
-        "attributes.client.address",
-        "attributes.network.peer.address",
-      ],
-      dstFields: ["attributes.server.address", "host"],
-      portFields: ["attributes.server.port", "attributes.network.peer.port"],
-    }),
-  );
+  const dstFields = [
+    "attributes.server.address",
+    "service.name",
+    "resource.service.name",
+    "host",
+  ] as const;
+  const srcFields = [
+    "attributes.client.address",
+    "attributes.network.peer.address",
+    "host",
+  ] as const;
+  const portFields = [
+    "attributes.server.port",
+    "attributes.network.peer.port",
+  ] as const;
+  if (
+    options.filter?.src &&
+    !options.filter?.dst &&
+    !options.filter?.bidirectional
+  ) {
+    const src = literal(options.filter.src, 128);
+    predicates.push(
+      `((kind="SPAN_KIND_CLIENT" host="${src}") OR (NOT kind="SPAN_KIND_CLIENT" (attributes.client.address="${src}" OR attributes.network.peer.address="${src}" OR host="${src}")))`,
+    );
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: { port: options.filter.port },
+        srcFields,
+        dstFields,
+        portFields,
+      }),
+    );
+  } else {
+    predicates.push(
+      ...buildFlowEndpointPredicates({
+        filter: options.filter,
+        srcFields,
+        dstFields,
+        portFields,
+      }),
+    );
+  }
   if (options.filter?.device) {
     const dev = literal(options.filter.device, 128);
     predicates.push(
@@ -253,13 +290,13 @@ export function buildOtelTransactionsSearch(options: {
     `dest_ip=coalesce('attributes.server.address', 'resource.service.name', 'service.name', host), ` +
     `dest_port='attributes.server.port', ` +
     `src_port='attributes.network.peer.port', ` +
-    `http_method='attributes.http.request.method', ` +
-    `status_code='attributes.http.response.status_code', ` +
-    `uri_path='attributes.http.route', ` +
-    `site='attributes.server.address', ` +
+    `http_method=coalesce('attributes.http.request.method', 'attributes.http.method'), ` +
+    `status_code=coalesce('attributes.http.response.status_code', 'attributes.http.status_code'), ` +
+    `uri_path=coalesce('attributes.http.route', 'attributes.url.path'), ` +
+    `site=coalesce('attributes.server.address', 'resource.service.name', 'service.name'), ` +
     `db_type='attributes.db.system', ` +
     `database='attributes.db.name', ` +
-    `status=coalesce('attributes.http.response.status_code', if('status.code'=="STATUS_CODE_ERROR", "ERROR", "OK")), ` +
+    `status=coalesce('attributes.http.response.status_code', 'attributes.http.status_code', if('status.code'=="STATUS_CODE_ERROR", "ERROR", "OK")), ` +
     `error_code=if('status.code'=="STATUS_CODE_ERROR", "OTEL_ERROR", null()), ` +
     `time_taken=if(isnum(end_time) AND isnum(start_time) AND end_time>=start_time, round((end_time - start_time)/1000, 0), null()) `;
   const tableClause = buildAllowedFieldsClause(
@@ -1692,8 +1729,12 @@ export async function investigateAppTransactions(
   signal: AbortSignal,
   options: InvestigateAppTransactionsOptions = {},
 ): Promise<AppTransactionsInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "app_transactions" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "app_transactions",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1735,6 +1776,8 @@ export async function investigateAppTransactions(
 
   const runProfiles = async () => {
     const outcomes: ProtocolSourceOutcome[] = [];
+    const streamHttpOutcomes: ProtocolSourceOutcome[] = [];
+    const streamDbOutcomes: ProtocolSourceOutcome[] = [];
     const httpOutcomes: ProtocolSourceOutcome[] = [];
     const dbOutcomes: ProtocolSourceOutcome[] = [];
     const collected: {
@@ -1774,6 +1817,7 @@ export async function investigateAppTransactions(
       });
       outcomes.push(res.outcome);
       httpOutcomes.push(res.outcome);
+      streamHttpOutcomes.push(res.outcome);
       if (res.capped) capped = true;
       rawRowCount += res.rows.length;
       httpRawCount += res.rows.length;
@@ -1803,6 +1847,7 @@ export async function investigateAppTransactions(
       });
       outcomes.push(res.outcome);
       dbOutcomes.push(res.outcome);
+      streamDbOutcomes.push(res.outcome);
       if (res.capped) capped = true;
       rawRowCount += res.rows.length;
       dbRawCount += res.rows.length;
@@ -1836,20 +1881,31 @@ export async function investigateAppTransactions(
       rawRowCount += res.rows.length;
       for (const row of res.rows) {
         const norm = normalizeAppTransactionRow(row);
-        if (norm) collected.push({ event: norm, indexName: profile.index });
+        if (!norm) continue;
+        if (
+          request.filter &&
+          !matchesFlowEndpoints(request.filter, norm.srcIp, norm.serverIp, [
+            norm.destPort,
+            norm.srcPort,
+          ])
+        ) {
+          rawRowCount = Math.max(0, rawRowCount - 1);
+          continue;
+        }
+        collected.push({ event: norm, indexName: profile.index });
       }
     }
 
     // Explicit Stream Estimate-mode check ONLY during investigation when a
-    // queried Stream group completed with 0 rows.
+    // queried Stream group completed with 0 rows (never triggered by OTel).
     const httpCompletedEmpty =
       httpProfiles.length > 0 &&
       httpRawCount === 0 &&
-      httpOutcomes.some((o) => o.state === "complete");
+      streamHttpOutcomes.some((o) => o.state === "complete");
     const dbCompletedEmpty =
       dbProfiles.length > 0 &&
       dbRawCount === 0 &&
-      dbOutcomes.some((o) => o.state === "complete");
+      streamDbOutcomes.some((o) => o.state === "complete");
 
     const streamIdsToCheck: AppTransactionsStreamId[] = [
       ...(httpCompletedEmpty ? (["http"] as const) : []),

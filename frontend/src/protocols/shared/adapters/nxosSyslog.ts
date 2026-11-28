@@ -249,7 +249,7 @@ export function buildSyslogStateSearch(options: {
     `search index=${options.index} ${stClause}${hostClause} ` +
     `| rex "%(?<sc4s_cat>[A-Za-z0-9_]+)(?:-[A-Za-z0-9_]+)?-(?<sc4s_sev>[0-7])-(?<sc4s_mnem>[A-Za-z0-9_]+):\\s*(?<sc4s_msg>.+)" ` +
     `| eval category=coalesce(category, facility, sc4s_cat), severity_id=coalesce(severity_id, severity, sc4s_sev), mnemonics=coalesce(mnemonics, mnemonic, code, sc4s_mnem), syslog_msg=coalesce(syslog_msg, descr, sc4s_msg) ` +
-    `| where isnotnull(mnemonics) AND NOT (mnemonics IN (${excludedMnemonics})) AND (isnull(category) OR NOT (category IN (${excludedCategories})))${catFilter} ` +
+    `| where isnotnull(mnemonics) AND NOT (upper(mnemonics) IN (${excludedMnemonics})) AND (isnull(category) OR NOT (upper(category) IN (${excludedCategories})))${catFilter} ` +
     `| head ${options.maxRows + 1} ` +
     `| table _time host sourcetype category severity_id mnemonics dn descr syslog_msg interface neighbor_ip vrf`
   );

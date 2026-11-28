@@ -22,6 +22,7 @@ import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1811,7 +1812,7 @@ export function buildLbHealthAnalysis(options: {
         ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
         : unparsedRowCount > 0 && !capped
           ? `${unparsedRowCount} ${unparsedRowCount === 1 ? "row" : "rows"} returned could not be normalized; results may be incomplete.`
-          : "Search hit row cap or partial source — narrow the UTC window or filter.";
+          : "Sample capped at 256 rows — narrow the UTC window or filter.";
   }
 
   return {
@@ -1861,8 +1862,12 @@ export async function investigateLbHealth(
   signal: AbortSignal,
   options: InvestigateLbHealthOptions = {},
 ): Promise<LbHealthInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "lb_health" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "lb_health",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

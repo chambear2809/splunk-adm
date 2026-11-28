@@ -789,8 +789,9 @@ describe("investigateInterfaceHealth (runner, degraded coverage, stale config)",
     expect(baseSearch).toContain('dn="*[eth1/1]*"');
     expect(baseSearch).toContain('Row_info.dn="*[eth1/1]*"');
     expect(baseSearch).not.toContain("'Row_info.dn'");
-    expect(spl.indexOf("| dedup 2 ")).toBeGreaterThan(-1);
-    expect(spl.indexOf("| dedup 2 ")).toBeLessThan(spl.indexOf("| head 257"));
+    expect(spl.indexOf("| dedup ")).toBeGreaterThan(-1);
+    expect(spl.indexOf("| dedup ")).toBeLessThan(spl.indexOf("| head 257"));
+    expect(spl).toContain('_dk_edge=if(_time=_dk_first_t, "f", "l")');
     expect(spl.indexOf("eth1/1")).toBeLessThan(spl.indexOf("| head"));
 
     const client: SearchClient = {

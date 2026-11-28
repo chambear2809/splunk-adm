@@ -20,6 +20,7 @@ import { formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1906,7 +1907,7 @@ export function buildQosIcmpAnalysis(options: {
       ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
       : anyUnavailable
         ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-        : "Search hit row cap or partial source — narrow the UTC window or filter.";
+        : "Sample capped at 256 rows — narrow the UTC window or filter.";
   } else if (streamReadiness?.state === "estimate_only") {
     bannerState = "estimate_only";
     bannerReason = streamReadiness.detail;
@@ -1956,8 +1957,12 @@ export async function investigateQosIcmp(
   signal: AbortSignal,
   options: InvestigateQosIcmpOptions = {},
 ): Promise<QosIcmpInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "qos_icmp" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "qos_icmp",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

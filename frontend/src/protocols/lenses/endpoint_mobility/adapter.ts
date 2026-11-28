@@ -24,6 +24,7 @@ import { formatCount } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1969,7 +1970,7 @@ export function buildEndpointMobilityAnalysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   const bannerState: EndpointMobilityInvestigationResult["bannerState"] =
     anyPartial
@@ -2063,8 +2064,12 @@ export async function investigateEndpointMobility(
   signal: AbortSignal,
   options: InvestigateEndpointMobilityOptions = {},
 ): Promise<EndpointMobilityInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "endpoint_mobility" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "endpoint_mobility",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

@@ -22,9 +22,11 @@ import { buildAllowedFieldsClause } from "../../shared/fields";
 import { formatCount } from "../../shared/format";
 import {
   buildDmeDispatchBounds,
-  buildDmeWindowPredicate,
+  buildDmeSnapshotWindowPredicate,
+  dmePreDedupLimit,
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -204,7 +206,10 @@ export function buildL2DmeSearch(options: {
     'sourcetype="cisco:dc:nexus9k:dme"',
     '(component="pc*" OR component="stp*" OR component="lldp*" OR dn="sys/intf/aggr-*" OR dn="sys/stp/*" OR dn="sys/lldp/*" OR port_channel=* OR stp_root=*)',
   ];
-  const windowPred = buildDmeWindowPredicate(options.earliest, options.latest);
+  const windowPred = buildDmeSnapshotWindowPredicate(
+    options.earliest,
+    options.latest,
+  );
   if (windowPred) {
     predicates.push(windowPred);
   }
@@ -213,13 +218,15 @@ export function buildL2DmeSearch(options: {
     predicates.push(`(host="${dev}" OR device="${dev}")`);
   }
   const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
-  const tableClause = buildAllowedFieldsClause(
-    "l2_control",
-    DME_L2_PROJECTED_FIELDS,
-  );
+  const preDedupLimit = dmePreDedupLimit(options.maxRows);
+  const tableClause = buildAllowedFieldsClause("l2_control", [
+    ...DME_L2_PROJECTED_FIELDS,
+    "_pre_dedup_count",
+  ]);
   return (
     `search ${predicates.join(" ")} ` +
-    `| head 2048 ` +
+    `| head ${preDedupLimit} ` +
+    `| eventstats count AS _pre_dedup_count ` +
     `| eval _dk_host=coalesce(device, host, "none"), _dk_comp=coalesce(component, sourcetype, "none"), _dk_dn=coalesce(dn, 'Row_info.dn', port_channel, 'Row_info.id', "none") ` +
     `| dedup _dk_host _dk_comp _dk_dn ` +
     `| head ${headLimit} ` +
@@ -1570,8 +1577,12 @@ export async function investigateL2Control(
   signal: AbortSignal,
   options: InvestigateL2ControlOptions = {},
 ): Promise<L2ControlInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "l2_control" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "l2_control",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1708,6 +1719,7 @@ export async function investigateL2Control(
           spl,
           earliest: request.earliest,
           latest: request.latest,
+          preDedupLimit: dmePreDedupLimit(256),
           ...dispatchBounds,
           signal,
           keySuffix: "dme",

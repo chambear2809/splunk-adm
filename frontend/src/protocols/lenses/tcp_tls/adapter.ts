@@ -24,6 +24,7 @@ import {
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -488,21 +489,22 @@ export function normalizeTcpTlsRow(
         ? 1
         : 0;
 
-  const rawTlsVersion = asString(row.tls_version ?? row.ssl_version);
+  const parseOneTls = (raw: unknown): string | undefined => {
+    const items = Array.isArray(raw) ? raw : [raw];
+    for (const item of items) {
+      const s = asString(item);
+      if (!s || /^(?:0|0\.0|none|unknown|-)$/i.test(s)) continue;
+      if (s === "3.0") return "SSL 3.0";
+      if (s === "3.1") return "TLS 1.0";
+      if (s === "3.2") return "TLS 1.1";
+      if (s === "3.3") return "TLS 1.2";
+      if (s === "3.4") return "TLS 1.3";
+      return s;
+    }
+    return undefined;
+  };
   const tlsVersion =
-    !rawTlsVersion || /^(?:0|0\.0|none|unknown|-)$/i.test(rawTlsVersion)
-      ? undefined
-      : rawTlsVersion === "3.0"
-        ? "SSL 3.0"
-        : rawTlsVersion === "3.1"
-          ? "TLS 1.0"
-          : rawTlsVersion === "3.2"
-            ? "TLS 1.1"
-            : rawTlsVersion === "3.3"
-              ? "TLS 1.2"
-              : rawTlsVersion === "3.4"
-                ? "TLS 1.3"
-                : rawTlsVersion;
+    parseOneTls(row.tls_version) ?? parseOneTls(row.ssl_version);
   const cipher =
     asString(row.ssl_cipher_name ?? row.ssl_cipher ?? row.cipher_suite) ||
     undefined;
@@ -1320,8 +1322,12 @@ export async function investigateTcpTls(
   signal: AbortSignal,
   options: InvestigateTcpTlsOptions = {},
 ): Promise<TcpTlsInvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "tcp_tls" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "tcp_tls",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {
@@ -1385,12 +1391,25 @@ export async function investigateTcpTls(
       }
     }
 
-    // Fallback to stream:netflow only when no stream:tcp events were found and
-    // no VNI filter is active (NetFlow records do not carry vxlan_id).
+    // Fallback to stream:netflow only when no stream:tcp events were found, no
+    // VNI filter is active (NetFlow records do not carry vxlan_id), and either
+    // no endpoint/port filter was applied or primary stream:tcp could not run.
+    const hasEndpointFilter = Boolean(
+      request.filter?.src ||
+      request.filter?.dst ||
+      request.filter?.port ||
+      request.filter?.device,
+    );
+    const primarySucceeded = outcomes.some(
+      (o) => o.state === "complete" || o.state === "partial",
+    );
+    const allowNetflowFallback =
+      !tcpProfiles.length || !hasEndpointFilter || !primarySucceeded;
     if (
       collected.length === 0 &&
       netflowProfiles.length > 0 &&
-      !request.filter?.vni
+      !request.filter?.vni &&
+      allowNetflowFallback
     ) {
       for (const profile of netflowProfiles) {
         signal.throwIfAborted();

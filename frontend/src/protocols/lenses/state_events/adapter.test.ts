@@ -780,8 +780,9 @@ describe("fixture aggregation, timelines, coverage & config recheck", () => {
       `sourcetype="cisco:dc:aci:fault" OR sourcetype="cisco:dc:aci:event"`,
     );
     expect(spl).toContain(`earliest=${EARLIEST} latest=${NOW}`);
+    const idxEarliest = Math.max(EARLIEST, NOW - 1800);
     expect(spl).toContain(
-      `sourcetype="cisco:dc:nexus9k:dme" (component="faultInst" OR component="eventRecord") ((earliest=${EARLIEST} latest=${NOW}) OR (_index_earliest=${EARLIEST} _index_latest=${NOW}))`,
+      `sourcetype="cisco:dc:nexus9k:dme" (component="faultInst" OR component="eventRecord") ((earliest=${EARLIEST} latest=${NOW}) OR (_index_earliest=${idxEarliest} _index_latest=${NOW}))`,
     );
     expect(spl.indexOf("| dedup ")).toBeGreaterThan(-1);
     expect(spl.indexOf("| dedup ")).toBeLessThan(spl.indexOf("| head 257"));

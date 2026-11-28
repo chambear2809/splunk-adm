@@ -23,6 +23,7 @@ import { formatCount, formatDurationMs } from "../../shared/format";
 import {
   ProtocolConfigurationChangedError,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
   withProtocolConfigRecheck,
   type ProtocolRow,
 } from "../../shared/runner";
@@ -1771,7 +1772,7 @@ export function buildEnterpriseL7Analysis(options: {
     ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
     : anyUnavailable
       ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-      : "Search hit row cap or partial source — narrow the UTC window or filter.";
+      : "Sample capped at 256 rows — narrow the UTC window or filter.";
 
   return {
     verdict,
@@ -1816,8 +1817,12 @@ export async function investigateEnterpriseL7(
   signal: AbortSignal,
   options: InvestigateEnterpriseL7Options = {},
 ): Promise<EnterpriseL7InvestigationResult> {
-  const scoped = configuration.profiles.filter(
-    (p) => p.lens === "enterprise_l7" && p.scope === request.scope,
+  const scoped = selectActiveProfiles(
+    configuration.profiles,
+    "enterprise_l7",
+    request.scope,
+    request.earliest,
+    request.latest,
   );
   if (!scoped.length) {
     return {

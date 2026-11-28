@@ -529,6 +529,7 @@ const SAFE_DERIVED_FIELDS = new Set<string>([
   "last_seen",
   "latest_time",
   "bucket",
+  "_pre_dedup_count",
 ]);
 
 export function isFieldAllowedForLens(

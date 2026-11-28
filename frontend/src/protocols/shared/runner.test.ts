@@ -8,6 +8,7 @@ import {
   buildDmeDispatchBounds,
   buildDmeWindowPredicate,
   runBoundedProtocolSearch,
+  selectActiveProfiles,
 } from "./runner";
 
 const NOW = 1800000000;
@@ -139,21 +140,28 @@ describe("runBoundedProtocolSearch", () => {
     });
     expect(buildDmeDispatchBounds(PROFILE, NOW, NOW - 60)).toEqual({});
     const search = vi.fn().mockResolvedValue({
-      rows: [],
+      rows: [
+        {
+          _time: String(NOW - 120),
+          host: "198.18.131.1",
+          _pre_dedup_count: "2056",
+        },
+      ],
       warnings: [],
       errors: [],
     });
     const client: SearchClient = { search };
-    await runBoundedProtocolSearch(client, {
+    const bounded = await runBoundedProtocolSearch(client, {
       lens: "interface_health",
       profile: {
         ...PROFILE,
         source: "protocol_interface_health",
         lens: "interface_health",
       },
-      spl: 'search index=cisco_dc sourcetype="cisco:dc:nexus9k:dme" | head 257 | table _time host',
+      spl: 'search index=cisco_dc sourcetype="cisco:dc:nexus9k:dme" | head 2056 | eventstats count AS _pre_dedup_count | head 257 | table _time host _pre_dedup_count',
       earliest: NOW - 900,
       latest: NOW - 60,
+      preDedupLimit: 2056,
       dispatchEarliest: "0",
       dispatchLatest: "now",
       signal: new AbortController().signal,
@@ -161,5 +169,31 @@ describe("runBoundedProtocolSearch", () => {
     expect(search).toHaveBeenCalledWith(
       expect.objectContaining({ earliest: "0", latest: "now" }),
     );
+    expect(bounded.capped).toBe(true);
+    expect(bounded.outcome.state).toBe("partial");
+    expect(bounded.rows[0]).not.toHaveProperty("_pre_dedup_count");
+
+    // selectActiveProfiles drops expired rotated profiles when a covering one exists
+    const expired: BaseProtocolProfile = {
+      ...PROFILE,
+      id: "tcp-old",
+      validFrom: NOW - 7200,
+      validUntil: NOW - 3600,
+    };
+    const active: BaseProtocolProfile = {
+      ...PROFILE,
+      id: "tcp-new",
+      validFrom: NOW - 3600,
+      validUntil: NOW + 3600,
+    };
+    expect(
+      selectActiveProfiles(
+        [expired, active],
+        "tcp_tls",
+        "lab:dc1",
+        NOW - 900,
+        NOW - 60,
+      ).map((p) => p.id),
+    ).toEqual(["tcp-new"]);
   });
 });
