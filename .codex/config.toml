@@ -18,6 +18,16 @@ description = "Independent, read-only GPT-6 Astra adversarial review of implemen
 config_file = "./agents/reviewer.toml"
 nickname_candidates = ["reviewer", "auditor"]
 
+[agents.ux_reviewer]
+description = "Independent, read-only GPT-6 Astra UI/UX review of protocol lens screens against the Protocol Lens UX contract."
+config_file = "./agents/ux_reviewer.toml"
+nickname_candidates = ["ux-reviewer", "ux_reviewer"]
+
+[agents.protocol_worker]
+description = "Bounded protocol-lens worker. Writes only the named lens paths; does not run git or package builds."
+config_file = "./agents/protocol_worker.toml"
+nickname_candidates = ["protocol-worker", "protocol_worker"]
+
 # Operator setup skills (Splunk platform, Cisco DC Networking/ACI, Isovalent,
 # Stream, etc.) vendored at vendor/splunk-cisco-skills (pinned submodule). The
 # path is explicit because `git rev-parse --show-toplevel` from this repo

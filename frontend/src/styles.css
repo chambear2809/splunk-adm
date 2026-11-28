@@ -2958,6 +2958,35 @@
 .adm .atlas-bundle-members button[aria-current] {
   background: var(--adm-select-bg);
 }
+.atlas-protocol-drillins {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.atlas-protocol-drillins-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--adm-ink-2, #6b7785);
+}
+.atlas-protocol-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--adm-line, #d1d5db);
+  background: var(--adm-surface, transparent);
+  color: var(--adm-ink, inherit);
+  font-size: 0.76rem;
+  text-decoration: none;
+}
+.atlas-protocol-pill:hover,
+.atlas-protocol-pill:focus-visible {
+  border-color: var(--adm-focus, #2563eb);
+  text-decoration: underline;
+}
 @media (max-width: 960px) {
   body:has(#atlas-root) {
     min-width: 0;

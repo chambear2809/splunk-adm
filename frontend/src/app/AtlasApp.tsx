@@ -14,6 +14,7 @@ import { ExploreTabs } from "../pages/ExploreTools";
 import { ImpactLazyPage } from "../impact/ImpactLazyPage";
 import { CasesPage } from "../pages/CasesPage";
 import { MulticastLazyPage } from "../multicast/MulticastLazyPage";
+import { ProtocolsLazyPage } from "../protocols/ProtocolsLazyPage";
 import { MigrationLazyPage } from "../migration/MigrationLazyPage";
 import type { SearchClient } from "../data/searchClient";
 import type { Page, UrlState } from "./urlState";
@@ -44,7 +45,11 @@ export function AtlasApp({
   const [mode, setMode] = useState(state.mode);
   const live = !!client && mode === "live";
   const healthLive =
-    live && page !== "help" && page !== "cases" && page !== "multicast";
+    live &&
+    page !== "help" &&
+    page !== "cases" &&
+    page !== "multicast" &&
+    page !== "protocols";
   const deployment =
     deploymentClient ?? (inSplunk ? nativeDeploymentClient : undefined);
   return (
@@ -92,6 +97,14 @@ export function AtlasApp({
             client={client}
             live={live}
             timezone={timezone}
+          />
+        ) : page === "protocols" ? (
+          <ProtocolsLazyPage
+            key={`${user ?? "anonymous"}:${mode}`}
+            client={client}
+            live={live}
+            timezone={timezone}
+            theme={theme}
           />
         ) : page === "applications" ? (
           <ApplicationsPage

@@ -1,5 +1,5 @@
 import { pageURL } from "./app/urlState";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ToolkitTable from "./SimpleTable";
 import { RefreshCw, X } from "lucide-react";
 import {
@@ -12,6 +12,32 @@ import {
 import type { SearchClient } from "./data/searchClient";
 import { formatUtc } from "./time";
 import { useHealthStatus } from "./data/healthStatus";
+import {
+  checkStreamEstimateMode,
+  type StreamReadinessEntry,
+} from "./protocols/shared/streamReadiness";
+
+const PROTOCOL_STREAM_IDS = [
+  "tcp",
+  "dns",
+  "dhcp",
+  "arp",
+  "icmp",
+  "http",
+  "smb",
+  "nfs",
+  "ldap",
+  "radius",
+  "sip",
+  "rtp",
+  "rtcp",
+  "mysql",
+  "postgres",
+  "tds",
+  "tns",
+  "snmp",
+  "ftp",
+] as const;
 const time = (value?: number) =>
   value
     ? `${formatUtc(new Date(value * 1000).toISOString())} UTC`
@@ -54,7 +80,47 @@ function HealthTable({ headers, rows }: HealthTableProps) {
     </div>
   );
 }
-export function HealthResults({ report }: { report: HealthReport }) {
+export function HealthResults({
+  report,
+  client,
+}: {
+  report: HealthReport;
+  client?: SearchClient;
+}) {
+  const [streamReadiness, setStreamReadiness] = useState<
+    StreamReadinessEntry[] | undefined
+  >();
+  const [streamBusy, setStreamBusy] = useState(false);
+  const streamAbort = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      streamAbort.current?.abort();
+    };
+  }, []);
+
+  const checkStreamModes = async () => {
+    if (!client || streamBusy) return;
+    streamAbort.current?.abort();
+    const controller = new AbortController();
+    streamAbort.current = controller;
+    setStreamBusy(true);
+    try {
+      const results = await checkStreamEstimateMode(
+        client,
+        PROTOCOL_STREAM_IDS,
+        controller.signal,
+      );
+      if (!controller.signal.aborted) setStreamReadiness(results);
+    } catch {
+      /* Abort on unmount is expected. */
+    } finally {
+      if (streamAbort.current === controller) {
+        streamAbort.current = null;
+        setStreamBusy(false);
+      }
+    }
+  };
   return (
     <>
       <p className="muted small">
@@ -167,6 +233,37 @@ export function HealthResults({ report }: { report: HealthReport }) {
               ],
             }))}
           />
+          {client ? (
+            <div style={{ marginTop: 12 }}>
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={streamBusy}
+                onClick={() => void checkStreamModes()}
+              >
+                {streamBusy
+                  ? "Checking Stream modes…"
+                  : "Check Stream Estimate mode"}
+              </button>
+              {streamReadiness ? (
+                <HealthTable
+                  headers={["Stream", "Mode", "Detail"]}
+                  rows={streamReadiness.map((entry) => ({
+                    key: entry.streamId,
+                    cells: [
+                      `stream:${entry.streamId}`,
+                      entry.state === "enabled"
+                        ? "Enabled"
+                        : entry.state === "estimate_only"
+                          ? "Estimate mode (statsOnly=true)"
+                          : "Unknown",
+                      entry.detail,
+                    ],
+                  }))}
+                />
+              ) : null}
+            </div>
+          ) : null}
         </section>
       )}
       <p className="muted small">
@@ -327,7 +424,7 @@ export function HealthPanel({
             </p>
           )}
           {error && <p role="alert">{error}</p>}
-          {report && <HealthResults report={report} />}
+          {report && <HealthResults report={report} client={client} />}
         </>
       )}
     </section>

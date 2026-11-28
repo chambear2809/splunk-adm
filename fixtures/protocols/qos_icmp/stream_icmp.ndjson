@@ -1,0 +1,7 @@
+{"_time":1764246630,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.254","dest_ip":"10.42.0.20","type":3,"code":4,"bytes":576,"bytes_in":576,"bytes_out":0,"time_taken":1200}
+{"_time":1764246690,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.253","dest_ip":"10.42.0.60","type":11,"code":0,"bytes":112,"bytes_in":112,"bytes_out":0,"time_taken":800}
+{"_time":1764246720,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.253","dest_ip":"10.42.0.60","type":11,"code":0,"bytes":112,"bytes_in":112,"bytes_out":0,"time_taken":900}
+{"_time":1764246750,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.253","dest_ip":"10.42.0.60","type":11,"code":0,"bytes":112,"bytes_in":112,"bytes_out":0,"time_taken":850}
+{"_time":1764246780,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.253","dest_ip":"10.42.0.60","type":11,"code":0,"bytes":112,"bytes_in":112,"bytes_out":0,"time_taken":920}
+{"_time":1764246810,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"192.0.2.253","dest_ip":"10.42.0.60","type":11,"code":0,"bytes":112,"bytes_in":112,"bytes_out":0,"time_taken":880}
+{"_time":1764246900,"host":"stream-sensor-01","sourcetype":"stream:icmp","src_ip":"10.42.0.20","dest_ip":"10.42.0.40","type":8,"code":0,"bytes":98,"bytes_in":98,"bytes_out":98,"time_taken":420}

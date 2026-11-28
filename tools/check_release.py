@@ -46,6 +46,13 @@ MULTICAST_MANIFEST_PATH = "splunk_adm/appserver/static/multicast-manifest.json"
 MULTICAST_CSS_PATH = "splunk_adm/appserver/static/multicast.css"
 MAX_MULTICAST_GZIP_BYTES = 64 * 1024
 MAX_MULTICAST_CSS_BYTES = 16 * 1024
+PROTOCOLS_CORE_BUNDLE_PATH = "splunk_adm/appserver/static/pages/protocols-core.js"
+PROTOCOLS_CORE_MANIFEST_PATH = (
+    "splunk_adm/appserver/static/protocols-core-manifest.json"
+)
+PROTOCOLS_CORE_CSS_PATH = "splunk_adm/appserver/static/protocols-core.css"
+MAX_PROTOCOLS_CORE_GZIP_BYTES = 64 * 1024
+MAX_PROTOCOLS_CORE_CSS_BYTES = 24 * 1024
 HISTORY_BUNDLE_PATH = "splunk_adm/appserver/static/pages/history.js"
 HISTORY_MANIFEST_PATH = "splunk_adm/appserver/static/history-manifest.json"
 HISTORY_CSS_PATH = "splunk_adm/appserver/static/history.css"
@@ -1001,6 +1008,24 @@ DEMO_BUNDLE_MARKERS = (
 )
 
 
+EXPECTED_PROTOCOL_LENS_IDS: frozenset[str] = frozenset(
+    {
+        "tcp_tls",
+        "dns_ops",
+        "routing",
+        "l2_control",
+        "interface_health",
+        "qos_icmp",
+        "enterprise_l7",
+        "drops",
+        "endpoint_mobility",
+        "app_transactions",
+        "state_events",
+        "mgmt_plane",
+        "lb_health",
+    }
+)
+
 # The only web assets a release may ship. Anything else under static/ (demo
 # rows, captured fixtures, source maps, stray files) fails the check.
 STATIC_ALLOWLIST = frozenset(
@@ -1019,6 +1044,9 @@ STATIC_ALLOWLIST = frozenset(
         MULTICAST_BUNDLE_PATH,
         MULTICAST_MANIFEST_PATH,
         MULTICAST_CSS_PATH,
+        PROTOCOLS_CORE_BUNDLE_PATH,
+        PROTOCOLS_CORE_MANIFEST_PATH,
+        PROTOCOLS_CORE_CSS_PATH,
         HISTORY_BUNDLE_PATH,
         HISTORY_MANIFEST_PATH,
         HISTORY_CSS_PATH,
@@ -1044,6 +1072,14 @@ STATIC_ALLOWLIST = frozenset(
         ENDPOINTS_BUNDLE_PATH,
         ENDPOINTS_MANIFEST_PATH,
         ENDPOINTS_CSS_PATH,
+        *{
+            path
+            for lens_id in EXPECTED_PROTOCOL_LENS_IDS
+            for path in (
+                f"splunk_adm/appserver/static/pages/protocol-{lens_id}.js",
+                f"splunk_adm/appserver/static/protocol-{lens_id}-manifest.json",
+            )
+        },
     }
 )
 
@@ -1102,6 +1138,7 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
                 "map",
                 "endpoints",
                 "multicast",
+                "protocols",
                 "data_health",
                 "setup",
                 "help",
@@ -1338,6 +1375,120 @@ def _required_files(files: dict[str, bytes], version: str, registry: bytes) -> N
             raise ValueError(
                 "Multicast asset version/hash does not match the main bundle"
             ) from exc
+    protocols_core_files = {
+        PROTOCOLS_CORE_BUNDLE_PATH,
+        PROTOCOLS_CORE_MANIFEST_PATH,
+        PROTOCOLS_CORE_CSS_PATH,
+    }
+    protocols_core_registered = any(
+        marker in files[ATLAS_BUNDLE_PATH]
+        for marker in (b"__AtlasProtocolsHost", b"pages/protocols-core.js")
+    )
+    if protocols_core_registered or protocols_core_files.intersection(files):
+        missing = sorted(protocols_core_files - files.keys())
+        if missing:
+            raise ValueError(
+                f"archive missing required Protocols core files: {', '.join(missing)}"
+            )
+        if (
+            len(
+                gzip.compress(
+                    files[PROTOCOLS_CORE_BUNDLE_PATH], compresslevel=9, mtime=0
+                )
+            )
+            > MAX_PROTOCOLS_CORE_GZIP_BYTES
+        ):
+            raise ValueError(
+                "Protocols core optional bundle exceeds its 64 KiB gzip budget"
+            )
+        if len(files[PROTOCOLS_CORE_CSS_PATH]) > MAX_PROTOCOLS_CORE_CSS_BYTES:
+            raise ValueError("Protocols core optional CSS exceeds its 24 KiB budget")
+        try:
+            manifest = json.loads(files[PROTOCOLS_CORE_MANIFEST_PATH])
+            protocols_version = manifest["assetVersion"]
+            if (
+                manifest.get("schemaVersion") != 1
+                or not isinstance(protocols_version, str)
+                or not re.fullmatch(r"[0-9a-f]{24}", protocols_version)
+                or manifest.get("javascriptSha256")
+                != hashlib.sha256(files[PROTOCOLS_CORE_BUNDLE_PATH]).hexdigest()
+                or manifest.get("cssSha256")
+                != hashlib.sha256(files[PROTOCOLS_CORE_CSS_PATH]).hexdigest()
+                or protocols_version.encode() not in files[ATLAS_BUNDLE_PATH]
+                or protocols_version.encode() not in files[PROTOCOLS_CORE_BUNDLE_PATH]
+                or b"__AtlasProtocolsCore" in files[ATLAS_BUNDLE_PATH]
+            ):
+                raise ValueError("mismatch")
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise ValueError(
+                "Protocols core asset version/hash does not match the main bundle"
+            ) from exc
+        lens_manifests = sorted(
+            path
+            for path in files
+            if path.startswith("splunk_adm/appserver/static/protocol-")
+            and path.endswith("-manifest.json")
+        )
+        lens_bundles = sorted(
+            path
+            for path in files
+            if path.startswith("splunk_adm/appserver/static/pages/protocol-")
+            and path.endswith(".js")
+        )
+        manifest_ids = {
+            path.removeprefix("splunk_adm/appserver/static/protocol-").removesuffix(
+                "-manifest.json"
+            )
+            for path in lens_manifests
+        }
+        bundle_ids = {
+            path.removeprefix(
+                "splunk_adm/appserver/static/pages/protocol-"
+            ).removesuffix(".js")
+            for path in lens_bundles
+        }
+        expected_lens_ids = EXPECTED_PROTOCOL_LENS_IDS
+        if manifest_ids != expected_lens_ids or bundle_ids != expected_lens_ids:
+            raise ValueError(
+                "Protocol lens manifests and bundles do not match all 13 implemented lenses: "
+                f"missing_manifests={sorted(expected_lens_ids - manifest_ids)}, "
+                f"missing_bundles={sorted(expected_lens_ids - bundle_ids)}, "
+                f"extra={sorted((manifest_ids | bundle_ids) - expected_lens_ids)}"
+            )
+        for manifest_path in lens_manifests:
+            lens_id = manifest_path.removeprefix(
+                "splunk_adm/appserver/static/protocol-"
+            ).removesuffix("-manifest.json")
+            bundle_path = f"splunk_adm/appserver/static/pages/protocol-{lens_id}.js"
+            if bundle_path not in files:
+                raise ValueError(
+                    f"archive missing protocol lens bundle for {lens_id}: {bundle_path}"
+                )
+            if (
+                len(gzip.compress(files[bundle_path], compresslevel=9, mtime=0))
+                > MAX_PROTOCOLS_CORE_GZIP_BYTES
+            ):
+                raise ValueError(
+                    f"Protocol lens {lens_id} optional bundle exceeds its 64 KiB gzip budget"
+                )
+            try:
+                lens_manifest = json.loads(files[manifest_path])
+                lens_version = lens_manifest["assetVersion"]
+                if (
+                    lens_manifest.get("schemaVersion") != 1
+                    or lens_manifest.get("lens") != lens_id
+                    or not isinstance(lens_version, str)
+                    or not re.fullmatch(r"[0-9a-f]{24}", lens_version)
+                    or lens_manifest.get("javascriptSha256")
+                    != hashlib.sha256(files[bundle_path]).hexdigest()
+                    or lens_version.encode() not in files[PROTOCOLS_CORE_BUNDLE_PATH]
+                    or lens_version.encode() not in files[bundle_path]
+                ):
+                    raise ValueError("mismatch")
+            except (ValueError, TypeError, KeyError, AttributeError) as exc:
+                raise ValueError(
+                    f"Protocol lens {lens_id} asset version/hash does not match protocols-core"
+                ) from exc
     # Configuration history is an independently versioned, live-only asset.
     # Once the main bundle registers its host, or any one asset is present,
     # require and validate the complete set.

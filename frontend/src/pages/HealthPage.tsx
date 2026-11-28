@@ -203,7 +203,7 @@ export function HealthPage({
             </p>
           )}
           {error && <p role="alert">{error}</p>}
-          {report && <HealthResults report={report} />}
+          {report && <HealthResults report={report} client={client} />}
           <SummaryHealthSection
             client={client}
             refresh={report}

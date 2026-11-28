@@ -20,6 +20,7 @@ import {
 import { useRoutingScopes } from "../data/routingScopes";
 import { RoutingScopeSelect } from "../RoutingScopeSelect";
 import { EndpointCombobox } from "../SuggestCombobox";
+import { endpointProtocolLinks } from "../protocols/drillIn";
 
 const localDate = (seconds: number) => {
   const d = new Date(seconds * 1000);
@@ -482,6 +483,27 @@ export function EndpointsPage({
             Directional byte and packet counters are shown per summary observer
             and are not combined across observers.
           </p>
+          <nav
+            className="atlas-protocol-drillins"
+            aria-label="Protocol analysis"
+            data-testid="endpoint-protocol-drillins"
+          >
+            <span className="atlas-protocol-drillins-label">Protocols</span>
+            {endpointProtocolLinks({
+              address: result.selection.address,
+              scope: result.selection.scope,
+              earliest: result.selection.start,
+              latest: result.selection.end,
+            }).map((item) => (
+              <a
+                key={item.lens}
+                className="atlas-protocol-pill"
+                href={item.href}
+              >
+                {item.label}
+              </a>
+            ))}
+          </nav>
           {!result.identityAvailable ? (
             <p role="status">
               Identity history is unavailable; this endpoint remains identified

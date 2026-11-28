@@ -12,6 +12,8 @@ export default defineConfig({
   define: {
     __ADM_SPLUNK_BUILD__: "false",
     __ADM_JOURNEYS_ASSET_VERSION__: JSON.stringify("development"),
+    __ADM_PROTOCOLS_CORE_ASSET_VERSION__: JSON.stringify("development"),
+    __ADM_PROTOCOL_LENS_VERSIONS__: JSON.stringify({}),
   },
   base: "./",
   plugins: [

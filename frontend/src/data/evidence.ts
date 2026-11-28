@@ -30,7 +30,24 @@ export type SupplementalSource =
   | "aws_elb_access"
   | "azure_vnet_flow"
   | "gcp_vpc_flow";
-export type OptionalSource = DnsSource | SupplementalSource | MulticastSource;
+export type ProtocolSource =
+  | "protocol_tcp_tls"
+  | "protocol_dns_ops"
+  | "protocol_routing"
+  | "protocol_l2_control"
+  | "protocol_interface_health"
+  | "protocol_qos_icmp"
+  | "protocol_enterprise_l7"
+  | "protocol_drops"
+  | "protocol_endpoint_mobility"
+  | "protocol_app_transactions"
+  | "protocol_state_events"
+  | "protocol_mgmt_plane"
+  | "protocol_lb_health"
+  | "protocol_stream_readiness"
+  | "protocol_traffic_mix";
+export type OptionalSource =
+  DnsSource | SupplementalSource | MulticastSource | ProtocolSource;
 export type EvidenceWindow = { start: number; end: number };
 export interface TrafficContext {
   client: string;

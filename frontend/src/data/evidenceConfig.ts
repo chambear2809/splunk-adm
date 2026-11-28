@@ -292,6 +292,33 @@ export class ToolkitEvidenceConfigClient implements EvidenceConfigClient {
       );
     return value as Record<string, unknown>[];
   }
+  /** The active document is an administrator attestation for optional protocol-lens reads. */
+  async readProtocolProfileDocument(signal?: AbortSignal): Promise<unknown> {
+    const params = new URLSearchParams({
+      query: JSON.stringify({ _key: "active" }),
+      limit: "2",
+      fields: "_key,configuration",
+    });
+    const value = await this.get(
+      `storage/collections/data/adm_protocol_profiles?${params}`,
+      signal,
+    );
+    if (Array.isArray(value) && value.length === 0) return undefined;
+    if (
+      !Array.isArray(value) ||
+      value.length !== 1 ||
+      !isObject(value[0]) ||
+      value[0]._key !== "active" ||
+      typeof value[0].configuration !== "string" ||
+      value[0].configuration.length > 131072
+    )
+      throw new Error("Shared protocol source configuration is invalid.");
+    try {
+      return JSON.parse(value[0].configuration) as unknown;
+    } catch {
+      throw new Error("Shared protocol source configuration is invalid.");
+    }
+  }
   /** The active document is an administrator attestation for optional multicast reads. */
   async readMulticastProfileDocument(signal?: AbortSignal): Promise<unknown> {
     const params = new URLSearchParams({
@@ -939,3 +966,4 @@ export const evidenceConfigClient: EvidenceConfigClient =
 export const appDynamicsInventoryConfigClient =
   new ToolkitEvidenceConfigClient();
 export const multicastConfigClient = new ToolkitEvidenceConfigClient();
+export const protocolConfigClient = new ToolkitEvidenceConfigClient();

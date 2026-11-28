@@ -1,0 +1,10 @@
+{"_time":1764244760,"host":"leaf-02","sourcetype":"cisco:ios","category":"ETHPORT","facility":"ETHPORT"}
+{"_time":1764244940,"host":"leaf-02","sourcetype":"cisco:ios","category":"BGP","facility":"BGP"}
+{"_time":1764244800,"host":"spine-01","sourcetype":"cisco:ios","category":"BGP","facility":"BGP"}
+{"_time":1764245900,"host":"spine-01","sourcetype":"cisco:ios","category":"OSPF","facility":"OSPF"}
+{"_time":1764247040,"host":"spine-01","sourcetype":"cisco:ios","category":"ETHPORT","facility":"ETHPORT"}
+{"_time":1764244850,"host":"leaf-01","sourcetype":"cisco:dc:nexus9k:syslog","category":"ETHPORT","facility":"ETHPORT"}
+{"_time":1764246000,"host":"leaf-01","sourcetype":"cisco:dc:nexus9k:syslog","category":"BFD","facility":"BFD"}
+{"_time":1764247000,"host":"leaf-01","sourcetype":"cisco:dc:nexus9k:syslog","category":"ETHPORT","facility":"ETHPORT"}
+{"_time":1764245100,"host":"apic-01","sourcetype":"cisco:aci","category":"ACI","facility":"ACI"}
+{"_time":1764246980,"host":"apic-01","sourcetype":"cisco:aci","category":"ACI","facility":"ACI"}

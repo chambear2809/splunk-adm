@@ -16,6 +16,7 @@ import {
   assertPackableTree,
   copyPackableFile,
 } from "./package-tree-safety.mjs";
+import { IMPLEMENTED_PROTOCOL_LENSES } from "./protocol-lenses.mjs";
 
 const root = new URL("../", import.meta.url);
 process.chdir(fileURLToPath(root));
@@ -38,6 +39,7 @@ const optionalBundles = [
   "journeys",
   "impact",
   "multicast",
+  "protocols-core",
   "history",
   "migration",
   "segmentation",
@@ -52,6 +54,12 @@ for (const bundle of optionalBundles)
     `pages/${bundle}.js`,
     `${bundle}.css`,
     `${bundle}-manifest.json`,
+  ])
+    await access(`${app}/appserver/static/${file}`);
+for (const lens of IMPLEMENTED_PROTOCOL_LENSES)
+  for (const file of [
+    `pages/protocol-${lens.id}.js`,
+    `protocol-${lens.id}-manifest.json`,
   ])
     await access(`${app}/appserver/static/${file}`);
 await access(`${app}/default/data/ui/views/map.xml`);

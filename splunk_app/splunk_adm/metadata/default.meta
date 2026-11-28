@@ -11,6 +11,9 @@ access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admi
 [collections/adm_multicast_profiles]
 access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 
+[collections/adm_protocol_profiles]
+access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
+
 [collections/adm_observer_scope]
 access = read : [ adm_investigate, adm_viewer, admin, sc_admin ], write : [ admin, sc_admin ]
 

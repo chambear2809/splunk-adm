@@ -14,6 +14,7 @@ from pathlib import Path
 COLLECTIONS = (
     "adm_deployment_settings",
     "adm_multicast_profiles",
+    "adm_protocol_profiles",
     "adm_observer_scope",
     "adm_network_source_scope",
     "adm_network_client_history",
