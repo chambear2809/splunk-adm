@@ -134,8 +134,8 @@ export const NETFLOW_FALLBACK_FIELDS = [
 
 /**
  * Builds a bounded, allowlisted SPL query for `stream:tcp` or `stream:netflow`.
- * Projects with `| table` before `| head` so `_raw` is dropped server-side
- * without sorting the full index.
+ * Emits `| head` before `| table` so Splunk bounds rows early and drops `_raw`
+ * server-side without sorting the full index.
  */
 export function buildTcpTlsSearch(options: {
   index: string;

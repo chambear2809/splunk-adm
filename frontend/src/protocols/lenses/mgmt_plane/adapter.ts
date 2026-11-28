@@ -394,13 +394,16 @@ export function buildMgmtPlaneRawEventsUrl(options: {
   }
   let q: string;
   if (options.isSyslog) {
-    q = `search index=${index} ${stClause} ${targetClause} | where isnull(category) OR NOT (upper(category) IN ("AAA", "AUTH", "AUTHPRIV", "SEC_LOGIN", "SECURITY", "SECURITYD"))`;
+    const excludedCategories = EXCLUDED_AUTH_CATEGORIES.map(
+      (c) => `"${c}"`,
+    ).join(", ");
+    q = `search index=${index} ${stClause} ${targetClause} | rex "%(?<sc4s_cat>[A-Za-z0-9_]+)(?:-[A-Za-z0-9_]+)?-[0-7]-" | eval _cat=upper(coalesce(category, facility, sc4s_cat)) | where isnull(_cat) OR NOT (_cat IN (${excludedCategories}))`;
   } else {
     const hasSensitiveWire = sts.some(
       (s) => s === "stream:snmp" || s === "stream:ftp",
     );
     const redactClause = hasSensitiveWire
-      ? ` | eval ftp_command=if(match(ftp_command, "(?i)^\\\\s*(PASS|USER)\\\\b"), "REDACTED", ftp_command) | fields - _raw community varbind_list value_raw password passwd login authorization`
+      ? ` | eval command=upper(mvindex(split(trim(coalesce(command, method)), " "), 0)) | eval command=if(in(command, "USER", "PASS", "ACCT"), "AUTH_CMD", command) | eval method=command | fields - _raw community varbind_list value_raw password passwd login authorization`
       : "";
     q = `search index=${index} ${stClause} ${targetClause}${redactClause}`;
   }

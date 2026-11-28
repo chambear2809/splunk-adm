@@ -129,9 +129,10 @@ export function dmePreDedupLimit(maxRows: number): number {
 
 /**
  * Builds a snapshot-scoped dual-window predicate whose `_index_earliest`
- * covers at most the last 10 minutes (`2 × 300s` DCN poll cycles) within
- * `[earliest, latest]`, preventing repeated 5-minute polls over long windows
- * from starving older `modTs` objects before `dedup`.
+ * covers at most the last 30 minutes (`DME_STATE_SNAPSHOT_WINDOW_SEC = 1800`)
+ * within `[earliest, latest]`, accommodating 5m–15m DCN poll intervals plus
+ * ingest lag while preventing repeated polls over long windows from starving
+ * older `modTs` objects before `dedup`.
  */
 export function buildDmeSnapshotWindowPredicate(
   earliest?: number,

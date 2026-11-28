@@ -1505,7 +1505,11 @@ export async function investigateStateEvents(
         const seenNxosDmeFaults = new Set<string>();
         let sawFaultInst = false;
         res.rows.forEach((row, idx) => {
-          if (String(row.component ?? "").toLowerCase() === "faultinst") {
+          const rowSt = String(row.sourcetype ?? "").toLowerCase();
+          if (
+            String(row.component ?? "").toLowerCase() === "faultinst" ||
+            rowSt === "cisco:dc:aci:fault"
+          ) {
             sawFaultInst = true;
           }
           const norm = normalizeAciFaultEventRow(row, idx);

@@ -1148,28 +1148,43 @@ export function buildRoutingAnalysis(options: {
   const matrixCols = [...new Set(rows.map((r) => r.peerIp))].sort((a, b) =>
     a.localeCompare(b),
   );
-  const cellMap = new Map<string, ProtocolMatrixCell>();
+  const groupedByPair = new Map<string, RoutingPeerRow[]>();
   for (const row of rows) {
     const key = `${row.device}\0${row.peerIp}`;
-    if (cellMap.has(key)) continue;
-    const label = row.isDown
-      ? `${row.protocol} ${row.currentState}`
-      : row.flapCount >= thresholds.flapWarnCount
-        ? `${row.flapCount} flaps`
-        : `${row.protocol} ${row.currentState}`;
-    cellMap.set(key, {
-      row: row.device,
-      col: row.peerIp,
-      status: row.status,
+    const list = groupedByPair.get(key);
+    if (list) list.push(row);
+    else groupedByPair.set(key, [row]);
+  }
+  const matrixCells: ProtocolMatrixCell[] = [];
+  for (const group of groupedByPair.values()) {
+    // `rows` is already sorted with flagged/down/flapping sessions first, so
+    // group[0] carries the worst status for this (device, peerIp) pair.
+    const lead = group[0];
+    const baseLabel = lead.isDown
+      ? `${lead.protocol} ${lead.currentState}`
+      : lead.flapCount >= thresholds.flapWarnCount
+        ? `${lead.flapCount} flaps`
+        : `${lead.protocol} ${lead.currentState}`;
+    const label =
+      group.length > 1 ? `${baseLabel} +${group.length - 1}` : baseLabel;
+    const totalFlaps = group.reduce((acc, r) => acc + r.flapCount, 0);
+    const detail = group
+      .map((r) =>
+        r.reasons.length
+          ? `${r.protocol} (${r.vrf}): ${r.reasons.join("; ")}`
+          : `${r.protocol} (${r.vrf}) ${r.currentState}`,
+      )
+      .join(" · ");
+    matrixCells.push({
+      row: lead.device,
+      col: lead.peerIp,
+      status: lead.status,
       value: label,
-      count: row.flapCount,
-      detail: row.reasons.length
-        ? row.reasons.join("; ")
-        : `${row.protocol} (${row.vrf}) ${row.currentState}`,
-      itemId: row.id,
+      count: totalFlaps,
+      detail,
+      itemId: lead.id,
     });
   }
-  const matrixCells = [...cellMap.values()];
 
   // SwimlaneTimeline events (per-device adjacency transitions across UTC window)
   const rowIdByPeerKey = new Map<string, string>();

@@ -937,4 +937,45 @@ describe("investigateMgmtPlane & summarizeMgmtPlane", () => {
     expect(clear?.label).toBe("Cleartext protocols");
     expect(clear?.count).toBe(3);
   });
+
+  it("redacts FTP USER/PASS/ACCT commands and SNMP communities and excludes auth syslog categories in raw-events URLs", () => {
+    const ftpUrl = decodeURIComponent(
+      buildMgmtPlaneRawEventsUrl({
+        index: "stream_mgmt",
+        sourcetypes: ["stream:ftp"],
+        sourceManager: "10.0.0.10",
+        targetDevice: "10.0.0.21",
+        destPort: 21,
+        earliest: EARLIEST,
+        latest: NOW,
+      }),
+    );
+    expect(ftpUrl).toContain('in(command,+"USER",+"PASS",+"ACCT")');
+    expect(ftpUrl).toContain('"AUTH_CMD"');
+    expect(ftpUrl).toContain("fields+-+_raw+community+varbind_list+value_raw");
+
+    const syslogUrl = decodeURIComponent(
+      buildMgmtPlaneRawEventsUrl({
+        index: "cisco_dc",
+        sourcetypes: ["cisco:ios"],
+        sourceManager: "Syslog peer baseline",
+        targetDevice: "leaf1.dc1",
+        isSyslog: true,
+        earliest: EARLIEST,
+        latest: NOW,
+      }),
+    );
+    expect(syslogUrl).toContain("(?<sc4s_cat>");
+    expect(syslogUrl).toContain(
+      "upper(coalesce(category,+facility,+sc4s_cat))",
+    );
+    expect(syslogUrl).toContain('"AAA"');
+    expect(syslogUrl).toContain('"VSHD"');
+    // Verify the exact SC4S rex matches %AUTHPRIV-6-SYSTEM_MSG and %SSH-5-SSH2_USERAUTH
+    const sc4sRex = /%([A-Za-z0-9_]+)(?:-[A-Za-z0-9_]+)?-[0-7]-/;
+    expect("%AUTHPRIV-6-SYSTEM_MSG: login".match(sc4sRex)?.[1]).toBe(
+      "AUTHPRIV",
+    );
+    expect("%SSH-5-SSH2_USERAUTH: user".match(sc4sRex)?.[1]).toBe("SSH");
+  });
 });
