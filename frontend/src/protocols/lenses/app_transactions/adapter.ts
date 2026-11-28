@@ -31,6 +31,7 @@ import {
 import {
   APP_TRANSACTIONS_DB_SOURCETYPES,
   APP_TRANSACTIONS_HTTP_SOURCETYPE,
+  APP_TRANSACTIONS_OTEL_SOURCETYPE,
   APP_TRANSACTIONS_SOURCETYPES,
   APP_TRANSACTIONS_STREAM_IDS,
   DEFAULT_APP_TRANSACTIONS_THRESHOLDS,
@@ -46,6 +47,7 @@ import {
 export {
   APP_TRANSACTIONS_DB_SOURCETYPES,
   APP_TRANSACTIONS_HTTP_SOURCETYPE,
+  APP_TRANSACTIONS_OTEL_SOURCETYPE,
   APP_TRANSACTIONS_SOURCETYPES,
   APP_TRANSACTIONS_STREAM_IDS,
   DEFAULT_APP_TRANSACTIONS_THRESHOLDS,
@@ -192,6 +194,81 @@ export function buildAppTransactionsSearch(options: {
   );
 }
 
+export const OTEL_PROJECTED_FIELDS = [
+  "_time",
+  "host",
+  "sourcetype",
+  "src_ip",
+  "dest_ip",
+  "src_port",
+  "dest_port",
+  "http_method",
+  "status",
+  "status_code",
+  "uri_path",
+  "site",
+  "db_type",
+  "database",
+  "error_code",
+  "time_taken",
+] as const;
+
+/**
+ * Builds a bounded, allowlisted SPL query for OpenTelemetry HTTP and DB trace
+ * spans (`otel:traces`). Projects ONLY route templates (`attributes.http.route`),
+ * HTTP status/method, DB system/name, endpoint host/port, and span latency —
+ * NEVER SQL query text (`db.statement`), URL query parameters, cookies, or `_raw`.
+ */
+export function buildOtelTransactionsSearch(options: {
+  index: string;
+  filter?: ProtocolFilter;
+  maxRows: number;
+}): string {
+  const index = literal(options.index, 80);
+  const headLimit = Math.max(1, Math.trunc(options.maxRows)) + 1;
+  const predicates: string[] = [
+    `index=${index}`,
+    `sourcetype="${APP_TRANSACTIONS_OTEL_SOURCETYPE}"`,
+    `((kind="SPAN_KIND_SERVER" attributes.http.request.method=*) OR (kind="SPAN_KIND_CLIENT" (attributes.db.system=* OR attributes.db.operation=*)) OR (NOT kind=* (attributes.http.request.method=* OR attributes.db.system=* OR attributes.db.operation=*)))`,
+  ];
+  predicates.push(
+    ...buildFlowEndpointPredicates({
+      filter: options.filter,
+      srcFields: [
+        "attributes.client.address",
+        "attributes.network.peer.address",
+      ],
+      dstFields: ["attributes.server.address", "host"],
+      portFields: ["attributes.server.port", "attributes.network.peer.port"],
+    }),
+  );
+  if (options.filter?.device) {
+    const dev = literal(options.filter.device, 128);
+    predicates.push(
+      `(host="${dev}" OR attributes.server.address="${dev}" OR service.name="${dev}" OR resource.service.name="${dev}")`,
+    );
+  }
+  const evalClause =
+    `| eval src_ip=if(kind=="SPAN_KIND_CLIENT", host, coalesce('attributes.client.address', 'attributes.network.peer.address', host)), ` +
+    `dest_ip=coalesce('attributes.server.address', 'resource.service.name', 'service.name', host), ` +
+    `dest_port='attributes.server.port', ` +
+    `src_port='attributes.network.peer.port', ` +
+    `http_method='attributes.http.request.method', ` +
+    `status_code='attributes.http.response.status_code', ` +
+    `uri_path='attributes.http.route', ` +
+    `site='attributes.server.address', ` +
+    `db_type='attributes.db.system', ` +
+    `database='attributes.db.name', ` +
+    `status=coalesce('attributes.http.response.status_code', if('status.code'=="STATUS_CODE_ERROR", "ERROR", "OK")), ` +
+    `error_code=if('status.code'=="STATUS_CODE_ERROR", "OTEL_ERROR", null()), ` +
+    `time_taken=if(isnum(end_time) AND isnum(start_time) AND end_time>=start_time, round((end_time - start_time)/1000, 0), null()) `;
+  const tableClause = buildAllowedFieldsClause(
+    "app_transactions",
+    OTEL_PROJECTED_FIELDS,
+  );
+  return `search ${predicates.join(" ")} | head ${headLimit} ${evalClause}${tableClause}`;
+}
+
 /**
  * Builds a `literal()`-quoted Splunk Search URL for raw events of a selected server.
  */
@@ -213,14 +290,21 @@ export function buildAppTransactionsRawEventsUrl(options: {
     sts.length === 1
       ? `sourcetype="${sts[0]}"`
       : `(${sts.map((s) => `sourcetype="${s}"`).join(" OR ")})`;
+  const isOtelOnly =
+    sts.length === 1 && sts[0] === APP_TRANSACTIONS_OTEL_SOURCETYPE;
+  const dstClause = isOtelOnly
+    ? `(attributes.server.address="${dst}" OR service.name="${dst}" OR resource.service.name="${dst}" OR host="${dst}")`
+    : `dest_ip="${dst}"`;
   const portClause =
     options.destPort !== undefined &&
     Number.isInteger(options.destPort) &&
     options.destPort >= 0 &&
     options.destPort <= 65535
-      ? ` dest_port=${options.destPort}`
+      ? isOtelOnly
+        ? ` attributes.server.port=${options.destPort}`
+        : ` dest_port=${options.destPort}`
       : "";
-  const q = `search index=${index} ${stClause} dest_ip="${dst}"${portClause}`;
+  const q = `search index=${index} ${stClause} ${dstClause}${portClause}`;
   const params = new URLSearchParams({
     q,
     earliest: String(Math.trunc(options.earliest)),
@@ -324,6 +408,8 @@ export function protocolLabelForSource(
       return "TDS / SQL Server";
     case "stream:tns":
       return "TNS / Oracle";
+    case "otel:traces":
+      return "OTel";
   }
 }
 
@@ -437,9 +523,28 @@ export function normalizeAppTransactionRow(
 
   const timestamp = asEpochSeconds(row._time);
   const host = asString(row.host) || "unknown";
+  const isOtelHttp =
+    sourcetype === "otel:traces" &&
+    Boolean(
+      asString(row.http_method ?? row.method) ||
+      asFiniteNumber(row.status_code) !== undefined ||
+      asString(row.uri_path),
+    );
+  const isOtelDb =
+    sourcetype === "otel:traces" &&
+    !isOtelHttp &&
+    Boolean(asString(row.db_type) || asString(row.database ?? row.dbname));
+  if (sourcetype === "otel:traces" && !isOtelHttp && !isOtelDb) {
+    return undefined;
+  }
   const kind: AppTransactionsKind =
-    sourcetype === "stream:http" ? "http" : "db";
-  const protocolLabel = protocolLabelForSource(sourcetype);
+    sourcetype === "stream:http" || isOtelHttp ? "http" : "db";
+  const protocolLabel =
+    sourcetype === "otel:traces"
+      ? isOtelHttp
+        ? "HTTP (OTel)"
+        : `${(asString(row.db_type) || "DB").toUpperCase()} (OTel)`
+      : protocolLabelForSource(sourcetype);
 
   const timeTakenUs = asFiniteNumber(row.time_taken);
   const responseTimeUs = asFiniteNumber(row.response_time);
@@ -458,7 +563,7 @@ export function normalizeAppTransactionRow(
   if (kind === "http") {
     const httpMethod =
       asString(row.http_method ?? row.method).toUpperCase() || undefined;
-    const rawStatus = asFiniteNumber(row.status ?? row.status_code);
+    const rawStatus = asFiniteNumber(row.status_code ?? row.status);
     const httpStatus =
       rawStatus !== undefined &&
       Number.isInteger(rawStatus) &&
@@ -466,19 +571,33 @@ export function normalizeAppTransactionRow(
       rawStatus <= 599
         ? rawStatus
         : undefined;
+    const otelStatusError =
+      sourcetype === "otel:traces" &&
+      (asString(row.error_code) === "OTEL_ERROR" ||
+        asString(row.status).toUpperCase() === "ERROR");
     const uriPath = sanitizeUriPath(row.uri_path);
     const site = asString(row.site) || undefined;
-    const hasStatusSample = httpStatus !== undefined;
-    const isError = httpStatus !== undefined && httpStatus >= 400;
+    const hasStatusSample = httpStatus !== undefined || otelStatusError;
+    const isError =
+      (httpStatus !== undefined && httpStatus >= 400) || otelStatusError;
     const errorKind =
       httpStatus !== undefined
         ? httpStatus >= 500
           ? "http_5xx"
           : httpStatus >= 400
             ? "http_4xx"
-            : undefined
-        : undefined;
-    const errorLabel = isError ? String(httpStatus) : undefined;
+            : otelStatusError
+              ? "http_5xx"
+              : undefined
+        : otelStatusError
+          ? "http_5xx"
+          : undefined;
+    const errorLabel =
+      httpStatus !== undefined && httpStatus >= 400
+        ? String(httpStatus)
+        : otelStatusError
+          ? "OTEL_ERROR"
+          : undefined;
 
     return {
       sourcetype,
@@ -1520,7 +1639,7 @@ export function buildAppTransactionsAnalysis(options: {
       ? `One or more sources denied access (${blockedDetail ?? "access denied"}); results are incomplete.`
       : anyUnavailable
         ? `One or more sources failed (${unavailableDetail ?? "search unavailable"}); results are incomplete.`
-        : "Search hit row cap or partial source — narrow the UTC window or filter.";
+        : "Sample capped at 256 rows — narrow the UTC window or filter.";
   } else if (estimateStreams.length > 0) {
     bannerState = "estimate_only";
     const names = estimateStreams.map((s) => s.streamId).join(", ");
@@ -1609,6 +1728,10 @@ export async function investigateAppTransactions(
     const sk = resolveAppTransactionsThresholds(p).sourceKind;
     return sk === "db" || sk === "auto";
   });
+  const otelProfiles = scoped.filter((p) => {
+    const sk = resolveAppTransactionsThresholds(p).sourceKind;
+    return sk === "otel";
+  });
 
   const runProfiles = async () => {
     const outcomes: ProtocolSourceOutcome[] = [];
@@ -1689,6 +1812,34 @@ export async function investigateAppTransactions(
       }
     }
 
+    for (const profile of otelProfiles) {
+      signal.throwIfAborted();
+      const spl = buildOtelTransactionsSearch({
+        index: profile.index,
+        filter: request.filter,
+        maxRows: MAX_INPUT_ROWS,
+      });
+      const res = await runBoundedProtocolSearch(client, {
+        lens: "app_transactions",
+        profile,
+        spl,
+        earliest: request.earliest,
+        latest: request.latest,
+        maxRows: MAX_INPUT_ROWS,
+        signal,
+        keySuffix: "otel",
+      });
+      outcomes.push(res.outcome);
+      httpOutcomes.push(res.outcome);
+      dbOutcomes.push(res.outcome);
+      if (res.capped) capped = true;
+      rawRowCount += res.rows.length;
+      for (const row of res.rows) {
+        const norm = normalizeAppTransactionRow(row);
+        if (norm) collected.push({ event: norm, indexName: profile.index });
+      }
+    }
+
     // Explicit Stream Estimate-mode check ONLY during investigation when a
     // queried Stream group completed with 0 rows.
     const httpCompletedEmpty =
@@ -1742,8 +1893,8 @@ export async function investigateAppTransactions(
       dbOutcomes,
       capped,
       unparsedRowCount,
-      httpConfigured: httpProfiles.length > 0,
-      dbConfigured: dbProfiles.length > 0,
+      httpConfigured: httpProfiles.length > 0 || otelProfiles.length > 0,
+      dbConfigured: dbProfiles.length > 0 || otelProfiles.length > 0,
       streamReadiness,
     });
   };

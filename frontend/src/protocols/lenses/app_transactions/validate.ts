@@ -1,4 +1,5 @@
 export const APP_TRANSACTIONS_HTTP_SOURCETYPE = "stream:http" as const;
+export const APP_TRANSACTIONS_OTEL_SOURCETYPE = "otel:traces" as const;
 
 export const APP_TRANSACTIONS_DB_SOURCETYPES = [
   "stream:mysql",
@@ -10,6 +11,7 @@ export const APP_TRANSACTIONS_DB_SOURCETYPES = [
 export const APP_TRANSACTIONS_SOURCETYPES = [
   APP_TRANSACTIONS_HTTP_SOURCETYPE,
   ...APP_TRANSACTIONS_DB_SOURCETYPES,
+  APP_TRANSACTIONS_OTEL_SOURCETYPE,
 ] as const;
 
 export const APP_TRANSACTIONS_STREAM_IDS = [
@@ -26,7 +28,7 @@ export type AppTransactionsSourcetype =
 export type AppTransactionsStreamId =
   (typeof APP_TRANSACTIONS_STREAM_IDS)[number];
 
-export type AppTransactionsSourceKind = "auto" | "http" | "db";
+export type AppTransactionsSourceKind = "auto" | "http" | "db" | "otel";
 
 export interface AppTransactionsExtraConfig {
   sourceKind?: AppTransactionsSourceKind;
@@ -47,7 +49,7 @@ export const DEFAULT_APP_TRANSACTIONS_THRESHOLDS: ResolvedAppTransactionsThresho
     latencyWarnMs: 500,
   };
 
-const ALLOWED_SOURCE_KINDS = new Set<string>(["auto", "http", "db"]);
+const ALLOWED_SOURCE_KINDS = new Set<string>(["auto", "http", "db", "otel"]);
 
 const ALLOWED_EXTRA_KEYS = new Set<string>([
   "sourceKind",
@@ -95,7 +97,7 @@ export function validateAppTransactionsExtra(
       !ALLOWED_SOURCE_KINDS.has(extra.sourceKind)
     ) {
       throw new Error(
-        'app_transactions extra.sourceKind must be "auto", "http", or "db".',
+        'app_transactions extra.sourceKind must be "auto", "http", "db", or "otel".',
       );
     }
     out.sourceKind = extra.sourceKind;
@@ -127,6 +129,7 @@ export function resolveAppTransactionsThresholds(profile?: {
     sourceKind:
       extra?.sourceKind === "http" ||
       extra?.sourceKind === "db" ||
+      extra?.sourceKind === "otel" ||
       extra?.sourceKind === "auto"
         ? extra.sourceKind
         : DEFAULT_APP_TRANSACTIONS_THRESHOLDS.sourceKind,

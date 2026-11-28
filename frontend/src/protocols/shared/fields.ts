@@ -31,7 +31,7 @@ export const FORBIDDEN_SENSITIVE_FIELDS = new Set<string>([
  * but FORBIDDEN on SQL lenses (`stream:mysql`, `stream:postgres`, `stream:tds`,
  * `stream:tns`) where it holds SQL statement text.
  */
-export const SQL_FORBIDDEN_FIELDS = new Set<string>(["query"]);
+export const SQL_FORBIDDEN_FIELDS = new Set<string>(["query", "statement"]);
 
 /**
  * Identity fields excluded from overview tables and allowed ONLY in explicit

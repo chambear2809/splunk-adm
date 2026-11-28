@@ -784,11 +784,13 @@ describe("investigateInterfaceHealth (runner, degraded coverage, stale config)",
       filter: { device: "198.18.131.1", iface: "eth1/1" },
       maxRows: 256,
     });
-    const baseSearch = spl.split("| head")[0] ?? "";
+    const baseSearch = spl.split("| eval")[0] ?? "";
     expect(baseSearch).toContain('host="198.18.131.1"');
     expect(baseSearch).toContain('dn="*[eth1/1]*"');
     expect(baseSearch).toContain('Row_info.dn="*[eth1/1]*"');
     expect(baseSearch).not.toContain("'Row_info.dn'");
+    expect(spl.indexOf("| dedup 2 ")).toBeGreaterThan(-1);
+    expect(spl.indexOf("| dedup 2 ")).toBeLessThan(spl.indexOf("| head 257"));
     expect(spl.indexOf("eth1/1")).toBeLessThan(spl.indexOf("| head"));
 
     const client: SearchClient = {

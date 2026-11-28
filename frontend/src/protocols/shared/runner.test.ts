@@ -4,7 +4,11 @@ import {
   type SearchClient,
 } from "../../data/searchClient";
 import type { BaseProtocolProfile } from "./contract";
-import { runBoundedProtocolSearch } from "./runner";
+import {
+  buildDmeDispatchBounds,
+  buildDmeWindowPredicate,
+  runBoundedProtocolSearch,
+} from "./runner";
 
 const NOW = 1800000000;
 
@@ -121,5 +125,41 @@ describe("runBoundedProtocolSearch", () => {
       }),
     ).rejects.toThrow(/maxRows/i);
     expect(search).not.toHaveBeenCalled();
+  });
+
+  it("builds dual _time/_index_earliest predicates and honors dispatchEarliest/dispatchLatest", async () => {
+    expect(buildDmeWindowPredicate(1700000000, 1700003600)).toBe(
+      "((earliest=1700000000 latest=1700003600) OR (_index_earliest=1700000000 _index_latest=1700003600))",
+    );
+    expect(buildDmeWindowPredicate(1700003600, 1700000000)).toBeUndefined();
+    const recentProfile = { ...PROFILE, validFrom: NOW - 3600 };
+    expect(buildDmeDispatchBounds(recentProfile, NOW - 900, NOW - 60)).toEqual({
+      dispatchEarliest: String(NOW - 900 - 180 * 86400),
+      dispatchLatest: String(NOW - 60),
+    });
+    expect(buildDmeDispatchBounds(PROFILE, NOW, NOW - 60)).toEqual({});
+    const search = vi.fn().mockResolvedValue({
+      rows: [],
+      warnings: [],
+      errors: [],
+    });
+    const client: SearchClient = { search };
+    await runBoundedProtocolSearch(client, {
+      lens: "interface_health",
+      profile: {
+        ...PROFILE,
+        source: "protocol_interface_health",
+        lens: "interface_health",
+      },
+      spl: 'search index=cisco_dc sourcetype="cisco:dc:nexus9k:dme" | head 257 | table _time host',
+      earliest: NOW - 900,
+      latest: NOW - 60,
+      dispatchEarliest: "0",
+      dispatchLatest: "now",
+      signal: new AbortController().signal,
+    });
+    expect(search).toHaveBeenCalledWith(
+      expect.objectContaining({ earliest: "0", latest: "now" }),
+    );
   });
 });
