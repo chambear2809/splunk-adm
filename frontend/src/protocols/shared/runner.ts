@@ -9,6 +9,7 @@ import {
 import { parseProtocolProfiles } from "../inputs";
 import {
   MAX_INPUT_ROWS,
+  MAX_WINDOW_SECONDS,
   PROTOCOL_VERSION,
   sourceForLens,
   type BaseProtocolProfile,
@@ -16,6 +17,7 @@ import {
   type ProtocolConfiguration,
   type ProtocolLensId,
   type ProtocolSourceOutcome,
+  type ProtocolStatus,
 } from "./contract";
 import {
   assertNoForbiddenFieldsInSpl,
@@ -94,6 +96,36 @@ export function selectActiveProfiles(
     (p) => earliest >= p.validFrom && latest <= p.validUntil,
   );
   return covering.length > 0 ? covering : scoped;
+}
+
+/**
+ * A healthy verdict is only valid when every configured source answered in
+ * full for this scope alone. When any source was capped, blocked, failed, or
+ * partial, or reads an index shared with another scope, downgrade `ok` to
+ * `attention` and say so in the verdict sentence.
+ */
+export function qualifyVerdictForDegradedSources(
+  verdict: string,
+  verdictStatus: ProtocolStatus,
+  degraded: boolean,
+  outcomes: readonly ProtocolSourceOutcome[] = [],
+): { verdict: string; verdictStatus: ProtocolStatus } {
+  const sharedScopes = [
+    ...new Set(outcomes.flatMap((o) => o.sharedIndexScopes ?? [])),
+  ].sort((a, b) => a.localeCompare(b, "en"));
+  if (verdictStatus !== "ok" || (!degraded && !sharedScopes.length))
+    return { verdict, verdictStatus };
+  const notes: string[] = [];
+  if (degraded)
+    notes.push("one or more sources were capped, blocked, or unavailable");
+  if (sharedScopes.length)
+    notes.push(
+      `the index is shared with scope ${sharedScopes.slice(0, 3).join(", ")}${sharedScopes.length > 3 ? ` and ${sharedScopes.length - 3} more` : ""}, so results can include its events`,
+    );
+  return {
+    verdict: `${verdict.replace(/\.$/, "")}, but ${notes.join(" and ")}.`,
+    verdictStatus: "attention",
+  };
 }
 
 /**
@@ -204,11 +236,24 @@ export async function runBoundedProtocolSearch(
     );
   }
   const maxRows = requestedRows;
+  if (
+    !Number.isFinite(earliest) ||
+    !Number.isFinite(latest) ||
+    latest <= earliest ||
+    latest - earliest > MAX_WINDOW_SECONDS
+  ) {
+    throw new Error(
+      `Protocol event search window must be between 1 and ${MAX_WINDOW_SECONDS} seconds.`,
+    );
+  }
   assertNoForbiddenFieldsInSpl(lens, spl);
   const outcomeBase: ProtocolSourceOutcome = {
     source: profile.source,
     profile: profile.id,
     state: "unavailable",
+    ...(profile.sharedIndexScopes?.length
+      ? { sharedIndexScopes: profile.sharedIndexScopes }
+      : {}),
   };
   if (earliest < profile.validFrom || latest > profile.validUntil) {
     return {

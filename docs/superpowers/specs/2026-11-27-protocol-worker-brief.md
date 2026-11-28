@@ -11,8 +11,8 @@ The orchestrator fills one brief per lens. Workers do not expand the brief or de
 
 ## 2. Allowed and forbidden paths
 
-- Allowed writes: `frontend/src/protocols/lenses/<lens>/`, `fixtures/protocols/<lens>/`, `docs/operators/protocol-<lens>.md`
-- Forbidden: git; `npm run build`; `npm run package`; repo-wide `npm run format` (use scoped `npx prettier --write frontend/src/protocols/lenses/<lens>`); shared SDK; `registry.ts`; routing; nav; collections; Vite; `package.json`; other lenses
+- Allowed writes: `frontend/src/protocols/lenses/<lens>/` (flat files only), `fixtures/protocols/<lens>/`, `docs/operators/protocol-<hyphenated-lens>.md`
+- Forbidden: git; `npm run build`; `npm run package`; repo-wide `npm run lint` or `npm run format` (use scoped `npx prettier --write` and `npx eslint` on your lens dir); shared SDK; `registry.ts`; routing; nav; collections; Vite; `package.json`; other lenses
 
 ## 3. Grounding files and field allowlist
 
@@ -21,7 +21,7 @@ The orchestrator fills one brief per lens. Workers do not expand the brief or de
 - Allowlist (never select outside `LENS_FIELD_ALLOWLISTS.<lens>` in `frontend/src/protocols/shared/fields.ts`; never project `_raw`, `src_content`, `dest_content`, `cookie`, `form_data`, `uri_query`, SQL `query`, `community`, `login`, `password`):
 - Row-expansion fields only (if any):
 - Config recheck testing note: In unit tests exercising `withProtocolConfigRecheck`, spy on `protocolConfigClient.readProtocolProfileDocument` from `../../../data/evidenceConfig` so no real `fetch` runs.
-- Syslog-backed lenses MUST use `frontend/src/protocols/shared/adapters/nxosSyslog.ts` and document **SC4S (Splunk Connect for Syslog)** as the primary recommended collector in `docs/operators/protocol-<lens>.md`.
+- Syslog-backed lenses MUST use `frontend/src/protocols/shared/adapters/nxosSyslog.ts` or `frontend/src/protocols/shared/adapters/multiVendorSyslog.ts` and document **SC4S (Splunk Connect for Syslog)** as the primary recommended collector in `docs/operators/protocol-<hyphenated-lens>.md`.
 - **Standardized correctness & UX rules (from Wave 1 pilot):**
   - Put the profile validator in a tiny `validate.ts` (zero adapter/UI imports) so `registry.ts` stays small.
   - Pair/row IDs MUST match `ITEM_ID` (`^[A-Za-z0-9._:/-]{1,128}$`) — use `__` (e.g. `${src}__${dst}`), NEVER `->`.
@@ -39,7 +39,7 @@ The orchestrator fills one brief per lens. Workers do not expand the brief or de
 
 ```
 npx prettier --write frontend/src/protocols/lenses/<lens>
-npm run lint
+npx eslint frontend/src/protocols/lenses/<lens>
 npx vitest run frontend/src/protocols/lenses/<lens>
 ```
 

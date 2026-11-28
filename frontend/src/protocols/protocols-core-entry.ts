@@ -3,8 +3,10 @@ import * as fields from "./shared/fields";
 import * as filterSpl from "./shared/filterSpl";
 import * as format from "./shared/format";
 import * as runner from "./shared/runner";
+import * as metricsRunner from "./shared/metricsRunner";
 import * as streamReadiness from "./shared/streamReadiness";
 import * as nxosSyslog from "./shared/adapters/nxosSyslog";
+import * as multiVendorSyslog from "./shared/adapters/multiVendorSyslog";
 import * as ui from "./shared/ui";
 
 export { ProtocolsPage } from "./ProtocolsPage";
@@ -26,8 +28,10 @@ if (!runtime.__AtlasProtocolsCore) {
       filterSpl,
       format,
       runner,
+      metricsRunner,
       streamReadiness,
       nxosSyslog,
+      multiVendorSyslog,
       ui,
     }),
   });

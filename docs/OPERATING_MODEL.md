@@ -6,10 +6,11 @@ Cursor project subagents live in `.cursor/agents/`. Codex agents live in `.codex
 
 | Role | Cursor | Codex | Responsibility | Write access |
 | --- | --- | --- | --- | --- |
-| Orchestrator | Gemini Neon (`gemini-4-neon-high`), chosen in the model picker | GPT-6.1 Sol | Understand request, plan, delegate, integrate, verify, report | Workspace, within sandbox |
-| Implementation workers | Gemini Hydrogen (`.cursor/agents/protocol-worker.md`) | GPT-6.1 Terra (medium) (`.codex/agents/protocol_worker.toml`) | Implement bounded, independent subtasks | Workspace, within sandbox |
-| Code, security and evidence reviewer | Claude Opus 5.5 (`.cursor/agents/code-reviewer.md`) | GPT-6 Astra (medium) (`.codex/agents/reviewer.toml`) | Independently inspect the finished diff and report defects | Read-only |
-| UI/UX reviewer | Claude Opus 5.5 (`.cursor/agents/ux-reviewer.md`) | GPT-6 Astra (medium) (`.codex/agents/ux_reviewer.toml`) | Independently inspect screenshots and UI diffs against the Protocol Lens UX contract | Read-only |
+| Distinguished Engineer — Orchestrator | Gemini Neon (`gemini-4-neon-high`), chosen in the model picker | GPT-6.1 Sol | Architecture, plan, delegate, integrate, verify, report | Workspace, within sandbox |
+| Staff Protocol Engineer (`protocol-worker`) | Gemini Hydrogen (`.cursor/agents/protocol-worker.md`) | GPT-6.1 Terra (medium) (`.codex/agents/protocol_worker.toml`) | Implement bounded protocol-lens subtasks | Disjoint lens paths |
+| Staff Ecosystem & Data Engineer (`ecosystem-worker`) | Gemini Hydrogen (`.cursor/agents/ecosystem-worker.md`) | GPT-6.1 Terra (medium) (`.codex/agents/ecosystem_worker.toml`) | Implement bounded non-lens ecosystem, trace, impact, and data-adapter subtasks | Disjoint feature paths |
+| Principal Security & Reliability Reviewer (`code-reviewer`) | Claude Opus 5.5 (`.cursor/agents/code-reviewer.md`) | GPT-6 Astra (medium) (`.codex/agents/reviewer.toml`) | Independently inspect the finished diff and report defects | Read-only |
+| Principal Design & UX Reviewer (`ux-reviewer`) | Claude Opus 5.5 (`.cursor/agents/ux-reviewer.md`) | GPT-6 Astra (medium) (`.codex/agents/ux_reviewer.toml`) | Independently inspect screenshots and UI diffs against the Protocol Lens UX contract | Read-only |
 | Human | You / authorized maintainer | You / authorized maintainer | Resolve product decisions; approve commits, pushes, releases, and merges | Explicitly authorized actions |
 
 The project default requests `gpt-6.1-terra` workers with medium reasoning. The named reviewer configuration requests `gpt-6-astra` with medium reasoning; `review_model` selects Astra for review routing but does not itself establish reasoning effort. Verify the effective model and reasoning effort in the active surface. If a named role pins another model, use an explicitly configured default agent with the requested model and medium reasoning, supplying a bounded task and fresh context. Do not silently substitute models or claim that repository settings changed an already-running agent. The reviewer must remain read-only regardless of the role used to launch it.
@@ -26,7 +27,7 @@ Each worker assignment should state:
 - relevant commands and expected outputs;
 - the required handoff: changed paths, decisions, tests, failures, and unresolved risks.
 
-Protocol-lens workers use the template in [docs/superpowers/specs/2026-11-27-protocol-worker-brief.md](superpowers/specs/2026-11-27-protocol-worker-brief.md). The UI/UX reviewer uses [docs/superpowers/specs/2026-11-27-protocol-lenses-ux.md](superpowers/specs/2026-11-27-protocol-lenses-ux.md).
+Protocol-lens workers use the template in [docs/superpowers/specs/2026-11-27-protocol-worker-brief.md](superpowers/specs/2026-11-27-protocol-worker-brief.md). Ecosystem workers use [docs/superpowers/specs/2026-11-27-ecosystem-worker-brief.md](superpowers/specs/2026-11-27-ecosystem-worker-brief.md). The UI/UX reviewer uses [docs/superpowers/specs/2026-11-27-protocol-lenses-ux.md](superpowers/specs/2026-11-27-protocol-lenses-ux.md).
 
 The default cap is four concurrent subagent threads. The root agent counts separately. Keep nesting disabled so the root owns the task graph and review path.
 

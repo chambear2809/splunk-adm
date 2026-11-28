@@ -34,7 +34,18 @@ export interface NormalizedStateEvent {
   id: string;
   timestamp: number;
   host: string;
-  sourceKind: "sc4s_cisco_ios" | "nxos_syslog" | "aci_syslog" | "aci_fault";
+  sourceKind:
+    | "sc4s_cisco_ios"
+    | "nxos_syslog"
+    | "aci_syslog"
+    | "aci_fault"
+    | "sc4s_arista_eos"
+    | "sc4s_juniper_junos"
+    | "sc4s_pan_system"
+    | "sc4s_fortigate_event"
+    | "sc4s_f5_syslog"
+    | "sc4s_cisco_asa_ftd"
+    | "sc4snmp_trap";
   domain: SyslogOperationalDomain;
   category: string;
   severity: number;

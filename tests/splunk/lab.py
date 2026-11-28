@@ -563,6 +563,31 @@ def load(paths, query: str = "") -> int:
     return count
 
 
+def ingest_metrics(index: str, points: list[dict], query: str = "") -> int:
+    """Send Splunk HEC metric envelopes (`event: 'metric'`) to a metrics index."""
+    count, batch, size = 0, [], 0
+    for point in points:
+        envelope = {
+            "time": point["time"],
+            "event": "metric",
+            "index": index,
+            "host": point.get("host", "lab-switch-01"),
+            "source": point.get("source", "sc4snmp"),
+            "sourcetype": point.get("sourcetype", "sc4snmp:metric"),
+            "fields": point["fields"],
+        }
+        data = json.dumps(envelope, separators=(",", ":")).encode()
+        if batch and size + len(data) > MAX_BATCH_BYTES:
+            _hec_post(b"\n".join(batch), query)
+            batch, size = [], 0
+        batch.append(data)
+        size += len(data) + 1
+        count += 1
+    if batch:
+        _hec_post(b"\n".join(batch), query)
+    return count
+
+
 def _query(spl: str) -> str:
     s = spl.strip()
     return s if s.startswith("|") or s.startswith("search ") else f"search {s}"

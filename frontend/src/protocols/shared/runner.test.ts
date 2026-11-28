@@ -7,9 +7,41 @@ import type { BaseProtocolProfile } from "./contract";
 import {
   buildDmeDispatchBounds,
   buildDmeWindowPredicate,
+  qualifyVerdictForDegradedSources,
   runBoundedProtocolSearch,
   selectActiveProfiles,
 } from "./runner";
+
+describe("qualifyVerdictForDegradedSources", () => {
+  it("downgrades only healthy verdicts when a source is degraded", () => {
+    expect(
+      qualifyVerdictForDegradedSources(
+        "2 of 2 pairs within bounds.",
+        "ok",
+        true,
+      ),
+    ).toEqual({
+      verdict:
+        "2 of 2 pairs within bounds, but one or more sources were capped, blocked, or unavailable.",
+      verdictStatus: "attention",
+    });
+    expect(
+      qualifyVerdictForDegradedSources(
+        "2 of 2 pairs within bounds.",
+        "ok",
+        false,
+      ),
+    ).toEqual({ verdict: "2 of 2 pairs within bounds.", verdictStatus: "ok" });
+    expect(
+      qualifyVerdictForDegradedSources("1 needs attention.", "attention", true)
+        .verdict,
+    ).toBe("1 needs attention.");
+    expect(
+      qualifyVerdictForDegradedSources("Not covered.", "not_covered", true)
+        .verdictStatus,
+    ).toBe("not_covered");
+  });
+});
 
 const NOW = 1800000000;
 
@@ -195,5 +227,23 @@ describe("runBoundedProtocolSearch", () => {
         NOW - 60,
       ).map((p) => p.id),
     ).toEqual(["tcp-new"]);
+  });
+
+  it("rejects event searches wider than MAX_WINDOW_SECONDS so metrics windows cannot leak", async () => {
+    const search = vi.fn();
+    await expect(
+      runBoundedProtocolSearch(
+        { search },
+        {
+          lens: "tcp_tls",
+          profile: PROFILE,
+          spl: "search index=netflow | head 10 | table _time src_ip",
+          earliest: NOW - 86400 * 7,
+          latest: NOW,
+          signal: new AbortController().signal,
+        },
+      ),
+    ).rejects.toThrow(/between 1 and 3600 seconds/i);
+    expect(search).not.toHaveBeenCalled();
   });
 });
